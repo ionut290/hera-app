@@ -806,6 +806,8 @@ async function markImpiantoDone(impianto) {
     await setImpiantoDone(ids, true);
     await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
+    updateImpiantoLocalState(ids, { done: false });
+    await setImpiantoDone(ids, false);
     console.error(error);
     const retried = await retrySheetExport(exportPayload, 2);
     if (!retried) {

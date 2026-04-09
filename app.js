@@ -81,10 +81,12 @@ initGeolocation();
 auth.onAuthStateChanged((user) => {
   currentUser = user || null;
   const loggedIn = Boolean(user);
+  const canManage = canManageData();
 
   ui.loginBtn.disabled = loggedIn;
   ui.logoutBtn.disabled = !loggedIn;
-  ui.driveConnectBtn.disabled = !loggedIn || !canManageData();
+  ui.driveConnectBtn.disabled = !loggedIn || !canManage;
+  ui.driveConnectBtn.classList.toggle("hidden", !loggedIn || !canManage);
   ui.user.textContent = loggedIn
     ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
     : "Non loggato";
@@ -166,7 +168,9 @@ function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
     const data = doc.exists ? doc.data() : null;
     if (!data || !data.accessToken) {
-      ui.driveStatus.textContent = "Drive centralizzato non collegato. Chiedi a ionut29019@gmail.com di collegarlo.";
+      ui.driveStatus.textContent = canManageData()
+        ? "Drive centralizzato non collegato. Premi “Collega Google Drive” per collegarlo."
+        : "Drive centralizzato non collegato.";
       return;
     }
 
@@ -1100,7 +1104,9 @@ function resetDriveState() {
   driveChatFolderId = "";
   driveReportsFolderId = "";
   commessaSheetCache.clear();
-  ui.driveStatus.textContent = "Google Drive non collegato.";
+  ui.driveStatus.textContent = canManageData()
+    ? "Drive centralizzato non collegato."
+    : "Google Drive non collegato.";
 }
 
 async function connectGoogleDrive() {

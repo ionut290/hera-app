@@ -53,6 +53,38 @@
     </section>
   </main>
 
+  <section id="chat-widget" class="chat-widget" aria-label="Chat utenti">
+    <button id="chat-open-btn" class="chat-widget-header" type="button" title="Apri chat completa">
+      <span>💬 Chat operatori</span>
+      <span id="chat-counter" class="chat-counter">0</span>
+    </button>
+    <div id="chat-preview" class="chat-preview">
+      <p class="muted">Fai login per usare la chat.</p>
+    </div>
+  </section>
+
+  <section id="chat-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2>Chat completa</h2>
+        <button id="chat-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+
+      <div id="chat-full-list" class="chat-full-list"></div>
+
+      <form id="chat-send-form" class="chat-send-form">
+        <input id="chat-text" type="text" placeholder="Scrivi un messaggio" maxlength="1000">
+        <div class="chat-send-actions">
+          <button id="chat-send-btn" class="btn btn-primary" type="submit">Invia testo</button>
+          <label class="btn" for="chat-media-input">Foto/Video</label>
+          <input id="chat-media-input" type="file" accept="image/*,video/*" hidden>
+          <button id="chat-voice-btn" class="btn" type="button">🎤 Invia vocale</button>
+        </div>
+        <p id="chat-feedback" class="muted"></p>
+      </form>
+    </div>
+  </section>
+
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>

@@ -15,7 +15,20 @@ const ui = {
   importBtn: document.getElementById("import-btn"),
   importFeedback: document.getElementById("import-feedback"),
   impiantiLista: document.getElementById("impianti-lista"),
-  gpsStatus: document.getElementById("gps-status")
+  gpsStatus: document.getElementById("gps-status"),
+  chatWidget: document.getElementById("chat-widget"),
+  chatOpenBtn: document.getElementById("chat-open-btn"),
+  chatCounter: document.getElementById("chat-counter"),
+  chatPreview: document.getElementById("chat-preview"),
+  chatModal: document.getElementById("chat-modal"),
+  chatCloseBtn: document.getElementById("chat-close-btn"),
+  chatFullList: document.getElementById("chat-full-list"),
+  chatSendForm: document.getElementById("chat-send-form"),
+  chatText: document.getElementById("chat-text"),
+  chatSendBtn: document.getElementById("chat-send-btn"),
+  chatMediaInput: document.getElementById("chat-media-input"),
+  chatVoiceBtn: document.getElementById("chat-voice-btn"),
+  chatFeedback: document.getElementById("chat-feedback")
 };
 
 let pendingRows = [];
@@ -26,6 +39,14 @@ let unsubscribeImpianti = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentUser = null;
+let unsubscribeChat = null;
+let chatMessages = [];
+let mediaRecorder = null;
+let mediaChunks = [];
+let isRecording = false;
+
+const CHAT_PREVIEW_LIMIT = 3;
+const CHAT_MEDIA_MAX_MB = 8;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 
 const map = L.map("map");
@@ -42,6 +63,11 @@ ui.logoutBtn.addEventListener("click", logout);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
+ui.chatOpenBtn.addEventListener("click", openChatModal);
+ui.chatCloseBtn.addEventListener("click", closeChatModal);
+ui.chatSendForm.addEventListener("submit", sendTextMessage);
+ui.chatMediaInput.addEventListener("change", sendMediaMessage);
+ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 
 initGeolocation();
 
@@ -60,6 +86,7 @@ auth.onAuthStateChanged((user) => {
 
   stopCommesseSubscription();
   stopImpiantiSubscription();
+  stopChatSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
@@ -67,8 +94,12 @@ auth.onAuthStateChanged((user) => {
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
   clearMap();
+  renderChat([]);
 
-  if (loggedIn) subscribeCommesse();
+  if (loggedIn) {
+    subscribeCommesse();
+    subscribeChat();
+  }
 });
 
 function updateAdminControls() {
@@ -625,4 +656,281 @@ function escapeHTML(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function subscribeChat() {
+  unsubscribeChat = db
+    .collection("chatMessages")
+    .orderBy("createdAt", "asc")
+    .limit(500)
+    .onSnapshot((snapshot) => {
+      chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderChat(chatMessages);
+    }, (error) => {
+      console.error(error);
+      ui.chatFeedback.textContent = "Errore caricamento chat.";
+    });
+}
+
+function stopChatSubscription() {
+  if (unsubscribeChat) {
+    unsubscribeChat();
+    unsubscribeChat = null;
+  }
+  chatMessages = [];
+}
+
+function renderChat(messages) {
+  ui.chatCounter.textContent = String(messages.length);
+
+  if (!currentUser) {
+    ui.chatPreview.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
+    ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
+    ui.chatSendBtn.disabled = true;
+    ui.chatText.disabled = true;
+    ui.chatMediaInput.disabled = true;
+    ui.chatVoiceBtn.disabled = true;
+    return;
+  }
+
+  ui.chatSendBtn.disabled = false;
+  ui.chatText.disabled = false;
+  ui.chatMediaInput.disabled = false;
+  ui.chatVoiceBtn.disabled = false;
+
+  const lastMessages = messages.slice(-CHAT_PREVIEW_LIMIT);
+  if (!lastMessages.length) {
+    ui.chatPreview.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
+    ui.chatFullList.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
+    return;
+  }
+
+  ui.chatPreview.innerHTML = "";
+  lastMessages.forEach((message) => {
+    ui.chatPreview.appendChild(createChatMessageElement(message, true));
+  });
+
+  ui.chatFullList.innerHTML = "";
+  messages.forEach((message) => {
+    ui.chatFullList.appendChild(createChatMessageElement(message, false));
+  });
+  ui.chatFullList.scrollTop = ui.chatFullList.scrollHeight;
+}
+
+function createChatMessageElement(message, compact) {
+  const item = document.createElement("article");
+  item.className = "chat-message" + (isOwnMessage(message) ? " own" : "");
+
+  const createdAt = message.createdAt && message.createdAt.toDate
+    ? message.createdAt.toDate()
+    : new Date();
+
+  const top = document.createElement("div");
+  top.className = "chat-message-top";
+  top.innerHTML = `
+    <strong>${escapeHTML(message.senderName || "Operatore")}</strong>
+    <span>${createdAt.toLocaleString("it-IT")}</span>
+  `;
+  item.appendChild(top);
+
+  if (message.type === "text") {
+    const p = document.createElement("p");
+    p.className = "chat-text";
+    p.textContent = message.text || "";
+    item.appendChild(p);
+  }
+
+  if (message.type === "image" && message.mediaDataUrl) {
+    const img = document.createElement("img");
+    img.className = "chat-media-preview";
+    img.src = message.mediaDataUrl;
+    img.alt = "Immagine inviata in chat";
+    item.appendChild(img);
+  }
+
+  if (message.type === "video" && message.mediaDataUrl) {
+    const video = document.createElement("video");
+    video.className = "chat-media-preview";
+    video.src = message.mediaDataUrl;
+    video.controls = true;
+    item.appendChild(video);
+  }
+
+  if (message.type === "voice" && message.mediaDataUrl) {
+    const audio = document.createElement("audio");
+    audio.src = message.mediaDataUrl;
+    audio.controls = true;
+    audio.className = "chat-audio";
+    item.appendChild(audio);
+  }
+
+  if (compact && message.type !== "text") {
+    const typeBadge = document.createElement("p");
+    typeBadge.className = "chat-type-badge";
+    typeBadge.textContent = message.type === "voice"
+      ? "🎤 Messaggio vocale"
+      : message.type === "video"
+        ? "🎬 Video"
+        : "📷 Foto";
+    item.appendChild(typeBadge);
+  }
+
+  return item;
+}
+
+function openChatModal() {
+  ui.chatModal.classList.remove("hidden");
+  ui.chatModal.setAttribute("aria-hidden", "false");
+}
+
+function closeChatModal() {
+  ui.chatModal.classList.add("hidden");
+  ui.chatModal.setAttribute("aria-hidden", "true");
+}
+
+async function sendTextMessage(event) {
+  event.preventDefault();
+  const text = ui.chatText.value.trim();
+  if (!text) return;
+
+  await sendChatMessage({
+    type: "text",
+    text
+  });
+
+  ui.chatText.value = "";
+}
+
+async function sendMediaMessage(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  try {
+    enforceMediaSize(file);
+    const mediaDataUrl = await readFileAsDataURL(file);
+    const type = file.type.startsWith("video/") ? "video" : "image";
+
+    await sendChatMessage({
+      type,
+      text: "",
+      mediaDataUrl,
+      mediaMimeType: file.type,
+      mediaName: file.name
+    });
+
+    ui.chatFeedback.textContent = "Media inviato.";
+  } catch (error) {
+    console.error(error);
+    ui.chatFeedback.textContent = error.message || "Errore invio media.";
+  } finally {
+    ui.chatMediaInput.value = "";
+  }
+}
+
+async function toggleVoiceRecording() {
+  if (!currentUser) {
+    alert("Devi fare login.");
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    ui.chatFeedback.textContent = "Registrazione vocale non supportata da questo browser.";
+    return;
+  }
+
+  if (isRecording && mediaRecorder) {
+    mediaRecorder.stop();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) mediaChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      try {
+        const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        enforceMediaSize(blob);
+        const mediaDataUrl = await readBlobAsDataURL(blob);
+
+        await sendChatMessage({
+          type: "voice",
+          text: "",
+          mediaDataUrl,
+          mediaMimeType: blob.type || "audio/webm",
+          mediaName: `vocale-${Date.now()}.webm`
+        });
+
+        ui.chatFeedback.textContent = "Messaggio vocale inviato.";
+      } catch (error) {
+        console.error(error);
+        ui.chatFeedback.textContent = error.message || "Errore invio vocale.";
+      } finally {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorder = null;
+        mediaChunks = [];
+        isRecording = false;
+        ui.chatVoiceBtn.textContent = "🎤 Invia vocale";
+      }
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    ui.chatVoiceBtn.textContent = "⏹️ Stop e invia";
+    ui.chatFeedback.textContent = "Registrazione in corso...";
+  } catch (error) {
+    console.error(error);
+    ui.chatFeedback.textContent = "Impossibile accedere al microfono.";
+  }
+}
+
+async function sendChatMessage(payload) {
+  if (!currentUser) {
+    alert("Devi fare login.");
+    return;
+  }
+
+  const senderName = currentUser.displayName || currentUser.email || "Operatore";
+
+  await db.collection("chatMessages").add({
+    ...payload,
+    senderId: currentUser.uid,
+    senderName,
+    senderEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+function isOwnMessage(message) {
+  return Boolean(currentUser && message.senderId === currentUser.uid);
+}
+
+function enforceMediaSize(fileOrBlob) {
+  const maxBytes = CHAT_MEDIA_MAX_MB * 1024 * 1024;
+  if (fileOrBlob.size > maxBytes) {
+    throw new Error(`File troppo grande. Limite: ${CHAT_MEDIA_MAX_MB}MB.`);
+  }
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Errore lettura file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readBlobAsDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Errore conversione audio."));
+    reader.readAsDataURL(blob);
+  });
 }

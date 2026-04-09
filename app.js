@@ -11,6 +11,7 @@ const ui = {
   driveStatus: document.getElementById("drive-status"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
+  commessaSheet: document.getElementById("commessa-sheet"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   excelFile: document.getElementById("excel-file"),
@@ -51,6 +52,7 @@ let driveRootFolderId = "";
 let driveChatFolderId = "";
 let driveReportsFolderId = "";
 const commessaSheetCache = new Map();
+let commesseById = new Map();
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -103,6 +105,7 @@ auth.onAuthStateChanged((user) => {
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
+  commesseById = new Map();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
@@ -121,8 +124,20 @@ auth.onAuthStateChanged((user) => {
 function updateAdminControls() {
   const canManage = canManageData();
   ui.commessaName.disabled = !canManage;
+  ui.commessaSheet.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
+}
+
+function parseGoogleSheetId(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+
+  const urlMatch = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (urlMatch && urlMatch[1]) return urlMatch[1];
+
+  const idOnly = input.match(/^[a-zA-Z0-9-_]{20,}$/);
+  return idOnly ? input : "";
 }
 
 function loginWithGoogle() {
@@ -165,8 +180,15 @@ async function createCommessa(event) {
     return;
   }
 
+  const parsedSheetId = parseGoogleSheetId(ui.commessaSheet.value);
+  if (ui.commessaSheet.value.trim() && !parsedSheetId) {
+    alert("Inserisci un ID Google Sheet valido oppure un link Fogli Google valido.");
+    return;
+  }
+
   await db.collection("commesse").add({
     nome,
+    reportSheetId: parsedSheetId || "",
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
@@ -208,6 +230,7 @@ function subscribeCommesse() {
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot) => {
       ui.commesseLista.innerHTML = "";
+      commesseById = new Map();
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -216,6 +239,7 @@ function subscribeCommesse() {
 
       snapshot.forEach((doc) => {
         const commessa = doc.data();
+        commesseById.set(doc.id, { id: doc.id, ...commessa });
         const row = document.createElement("div");
         row.className = "commessa-row";
 
@@ -249,7 +273,9 @@ function stopCommesseSubscription() {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
-  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
+  const commessa = commesseById.get(id) || null;
+  const linkedSheet = commessa && commessa.reportSheetId ? ` | Foglio collegato: ${commessa.reportSheetId}` : "";
+  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}${linkedSheet}`;
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
   updateCommessaButtonsActive();
 
@@ -1309,6 +1335,13 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
 }
 
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
+  const commessa = commesseById.get(commessaId) || null;
+  const configuredSheetId = parseGoogleSheetId(commessa && commessa.reportSheetId ? commessa.reportSheetId : "");
+  if (configuredSheetId) {
+    commessaSheetCache.set(commessaId, configuredSheetId);
+    return { id: configuredSheetId };
+  }
+
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 

@@ -1221,6 +1221,18 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
       values: [row]
     })
   });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Errore Google Drive (${response.status}): ${text.slice(0, 180)}`);
+  }
+
+  if (response.status === 204) return {};
+  return response.json();
 }
 
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {

@@ -75,41 +75,53 @@
   <div id="menu-overlay" class="menu-overlay hidden"></div>
 
   <main class="container">
-    <header class="card">
-      <h1>Varga Cantieri</h1>
-      <p class="muted">Commesse, impianti, mappa e navigazione</p>
+    <section id="home-page">
+      <header class="card">
+        <h1>Varga Cantieri</h1>
+        <p class="muted">Commesse, impianti, mappa e navigazione</p>
 
-      <div class="actions-row">
-        <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
-        <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
-        <button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button>
-      </div>
+        <div class="actions-row">
+          <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
+          <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
+          <button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button>
+        </div>
 
-      <p id="user" class="status">Non loggato</p>
-      <p id="user-name" class="muted">Nome utente: -</p>
-      <p id="drive-status" class="muted">Google Drive non collegato.</p>
-    </header>
+        <p id="user" class="status">Non loggato</p>
+        <p id="user-name" class="muted">Nome utente: -</p>
+        <p id="drive-status" class="muted">Google Drive non collegato.</p>
+      </header>
 
-    <section class="card">
-      <h2>Commesse</h2>
-      <div id="commesse-lista" class="commesse-lista"></div>
-      <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
+      <section class="card">
+        <h2>Commesse</h2>
+        <div id="commesse-lista" class="commesse-lista"></div>
+        <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
+      </section>
+
+      <section class="card">
+        <h2>Squadre per commessa</h2>
+        <div id="squadre-lista" class="squadre-lista"></div>
+      </section>
     </section>
 
-    <section class="card">
-      <h2>Squadre per commessa</h2>
-      <div id="squadre-lista" class="squadre-lista"></div>
-    </section>
+    <section id="impianti-page" class="hidden">
+      <section class="card">
+        <div class="page-head">
+          <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
+          <h2 id="impianti-page-title">Impianti commessa</h2>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Mappa impianti</h2>
-      <div id="map"></div>
-      <p id="gps-status" class="muted"></p>
-    </section>
+      <section class="card">
+        <h2>Mappa impianti</h2>
+        <p class="muted">Clicca un marker per vedere i dettagli e andare direttamente alla riga in elenco.</p>
+        <div id="map"></div>
+        <p id="gps-status" class="muted"></p>
+      </section>
 
-    <section class="card">
-      <h2>Impianti (dal più vicino al più lontano)</h2>
-      <div id="impianti-lista" class="impianti-lista"></div>
+      <section class="card">
+        <h2>Impianti (dal più vicino al più lontano)</h2>
+        <div id="impianti-lista" class="impianti-lista"></div>
+      </section>
     </section>
   </main>
 

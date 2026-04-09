@@ -186,6 +186,14 @@ async function importRowsInChunks(rows, user) {
         denominazione: row.denominazione,
         comune: row.comune,
         indirizzo: row.indirizzo,
+        distretto: row.distretto,
+        idSap: row.idSap,
+        voceRiferimento: row.voceRiferimento,
+        sfalciAreeVerdiMqPotaturaSiepiM: row.sfalciAreeVerdiMqPotaturaSiepiM,
+        frequenzaAnnuaMinima: row.frequenzaAnnuaMinima,
+        tipologiaIntervento: row.tipologiaIntervento,
+        coordinateGpsY: row.coordinateGpsY,
+        coordinateGpsX: row.coordinateGpsX,
         creatoDa: user.displayName || "",
         emailOperatore: user.email || "",
         importedFromExcel: true,
@@ -201,18 +209,53 @@ function normalizeRow(row) {
   const normalized = normalizeKeys(row);
 
   return {
-    denominazione: getFirstValue(normalized, ["denominazione", "impianto", "nomeimpianto"]),
-    comune: getFirstValue(normalized, ["comune", "citta", "città"]),
-    indirizzo: getFirstValue(normalized, ["indirizzo", "via", "address"])
+    denominazione: getFirstValue(normalized, [
+      "denominazione",
+      "denominazioneimpianto",
+      "impianto",
+      "nomeimpianto"
+    ]),
+    comune: getFirstValue(normalized, [
+      "comune",
+      "comuneubicazioneimpianto",
+      "citta",
+      "città"
+    ]),
+    indirizzo: getFirstValue(normalized, [
+      "indirizzo",
+      "via",
+      "address",
+      "viaecivicodiubicazioneimpianto"
+    ]),
+    distretto: getFirstValue(normalized, ["distretto"]),
+    idSap: getFirstValue(normalized, ["idsap"]),
+    voceRiferimento: getFirstValue(normalized, ["vocediriferimentoelencoprezzi"]),
+    sfalciAreeVerdiMqPotaturaSiepiM: getFirstValue(normalized, [
+      "sfalciareeverdimqpotaturasiepim"
+    ]),
+    frequenzaAnnuaMinima: getFirstValue(normalized, [
+      "frequenzaannuaminimasfalcieopotaturasiepin"
+    ]),
+    tipologiaIntervento: getFirstValue(normalized, ["tipologiadisfalciointervento"]),
+    coordinateGpsY: getFirstValue(normalized, ["coordinategpsy"]),
+    coordinateGpsX: getFirstValue(normalized, ["coordinategpsx"])
   };
 }
 
 function normalizeKeys(obj) {
   return Object.entries(obj).reduce((acc, [key, value]) => {
-    const compactKey = String(key).toLowerCase().replace(/\s+/g, "").trim();
+    const compactKey = normalizeHeaderKey(key);
     acc[compactKey] = String(value || "").trim();
     return acc;
   }, {});
+}
+
+function normalizeHeaderKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function getFirstValue(obj, keys) {

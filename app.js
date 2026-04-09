@@ -4,10 +4,15 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const ui = {
+  menuToggleBtn: document.getElementById("menu-toggle-btn"),
+  menuCloseBtn: document.getElementById("menu-close-btn"),
+  sideMenu: document.getElementById("side-menu"),
+  menuOverlay: document.getElementById("menu-overlay"),
   loginBtn: document.getElementById("login-btn"),
   logoutBtn: document.getElementById("logout-btn"),
   driveConnectBtn: document.getElementById("drive-connect-btn"),
   user: document.getElementById("user"),
+  userName: document.getElementById("user-name"),
   driveStatus: document.getElementById("drive-status"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
@@ -29,7 +34,21 @@ const ui = {
   chatSendBtn: document.getElementById("chat-send-btn"),
   chatMediaInput: document.getElementById("chat-media-input"),
   chatVoiceBtn: document.getElementById("chat-voice-btn"),
-  chatFeedback: document.getElementById("chat-feedback")
+  chatFeedback: document.getElementById("chat-feedback"),
+  personaleForm: document.getElementById("personale-form"),
+  personaleNome: document.getElementById("personale-nome"),
+  personaleLista: document.getElementById("personale-lista"),
+  mezziForm: document.getElementById("mezzi-form"),
+  mezzoNome: document.getElementById("mezzo-nome"),
+  mezziLista: document.getElementById("mezzi-lista"),
+  squadraForm: document.getElementById("squadra-form"),
+  squadraCommessa: document.getElementById("squadra-commessa"),
+  squadra1: document.getElementById("squadra-1"),
+  squadra2: document.getElementById("squadra-2"),
+  squadra3: document.getElementById("squadra-3"),
+  squadraMezzi: document.getElementById("squadra-mezzi"),
+  squadraHint: document.getElementById("squadra-hint"),
+  squadreLista: document.getElementById("squadre-lista")
 };
 
 let pendingRows = [];
@@ -42,6 +61,9 @@ let currentImpianti = [];
 let currentUser = null;
 let unsubscribeChat = null;
 let unsubscribeDriveBridge = null;
+let unsubscribePersonale = null;
+let unsubscribeMezzi = null;
+let unsubscribeSquadre = null;
 let chatMessages = [];
 let mediaRecorder = null;
 let mediaChunks = [];
@@ -53,6 +75,9 @@ let driveChatFolderId = "";
 let driveReportsFolderId = "";
 const commessaSheetCache = new Map();
 let commesseById = new Map();
+let personaleRecords = [];
+let mezziRecords = [];
+let squadreByCommessa = new Map();
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -69,6 +94,9 @@ map.setView([44.4949, 11.3426], 11);
 const markerLayer = L.layerGroup().addTo(map);
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
+ui.menuToggleBtn.addEventListener("click", openSideMenu);
+ui.menuCloseBtn.addEventListener("click", closeSideMenu);
+ui.menuOverlay.addEventListener("click", closeSideMenu);
 ui.logoutBtn.addEventListener("click", logout);
 ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
@@ -79,6 +107,10 @@ ui.chatCloseBtn.addEventListener("click", closeChatModal);
 ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
+ui.personaleForm.addEventListener("submit", addPersonale);
+ui.mezziForm.addEventListener("submit", addMezzo);
+ui.squadraForm.addEventListener("submit", saveSquadraComposition);
+ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
 
 initGeolocation();
 
@@ -92,8 +124,11 @@ auth.onAuthStateChanged((user) => {
   ui.driveConnectBtn.disabled = !loggedIn || !canManage;
   ui.driveConnectBtn.classList.toggle("hidden", !loggedIn || !canManage);
   ui.user.textContent = loggedIn
-    ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
+    ? `Loggato: ${user.email || "email non disponibile"}`
     : "Non loggato";
+  ui.userName.textContent = loggedIn
+    ? `Nome utente: ${user.displayName || "Nome non disponibile"}`
+    : "Nome utente: -";
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
   updateAdminControls();
@@ -102,9 +137,15 @@ auth.onAuthStateChanged((user) => {
   stopImpiantiSubscription();
   stopChatSubscription();
   stopDriveBridgeSubscription();
+  stopPersonaleSubscription();
+  stopMezziSubscription();
+  stopSquadreSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
+  ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
+  ui.squadreLista.innerHTML = "";
+  squadreByCommessa = new Map();
   commesseById = new Map();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
@@ -118,6 +159,9 @@ auth.onAuthStateChanged((user) => {
     subscribeCommesse();
     subscribeChat();
     subscribeDriveBridge();
+    subscribePersonale();
+    subscribeMezzi();
+    subscribeSquadre();
   }
 });
 
@@ -127,6 +171,31 @@ function updateAdminControls() {
   ui.commessaSheet.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
+  ui.personaleNome.disabled = !canManage;
+  ui.mezzoNome.disabled = !canManage;
+  if (ui.personaleForm.querySelector("button[type='submit']")) ui.personaleForm.querySelector("button[type='submit']").disabled = !canManage;
+  if (ui.mezziForm.querySelector("button[type='submit']")) ui.mezziForm.querySelector("button[type='submit']").disabled = !canManage;
+  ui.squadraCommessa.disabled = !canManage;
+  ui.squadra1.disabled = !canManage;
+  ui.squadra2.disabled = !canManage;
+  ui.squadra3.disabled = !canManage;
+  ui.squadraMezzi.disabled = !canManage;
+  if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
+  ui.squadraHint.textContent = canManage
+    ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
+    : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
+}
+
+function openSideMenu() {
+  ui.sideMenu.classList.remove("hidden");
+  ui.menuOverlay.classList.remove("hidden");
+  ui.sideMenu.setAttribute("aria-hidden", "false");
+}
+
+function closeSideMenu() {
+  ui.sideMenu.classList.add("hidden");
+  ui.menuOverlay.classList.add("hidden");
+  ui.sideMenu.setAttribute("aria-hidden", "true");
 }
 
 function parseGoogleSheetId(value) {
@@ -231,6 +300,7 @@ function subscribeCommesse() {
     .onSnapshot((snapshot) => {
       ui.commesseLista.innerHTML = "";
       commesseById = new Map();
+      ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -256,7 +326,14 @@ function subscribeCommesse() {
         row.appendChild(btn);
         row.appendChild(deleteBtn);
         ui.commesseLista.appendChild(row);
+
+        const option = document.createElement("option");
+        option.value = doc.id;
+        option.textContent = commessa.nome || "Commessa senza nome";
+        ui.squadraCommessa.appendChild(option);
       });
+
+      renderSquadre();
     }, (error) => {
       console.error(error);
       ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
@@ -683,6 +760,195 @@ async function deleteCommessa(commessaId, nome) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa.</p>";
     ui.commessaAttiva.textContent = "Seleziona una commessa.";
   }
+}
+
+async function addPersonale(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può gestire il personale.");
+    return;
+  }
+  const nome = ui.personaleNome.value.trim();
+  if (!nome) return;
+  await db.collection("personale").add({
+    nome,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  ui.personaleForm.reset();
+}
+
+async function addMezzo(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può gestire i mezzi.");
+    return;
+  }
+  const nome = ui.mezzoNome.value.trim();
+  if (!nome) return;
+  await db.collection("mezzi").add({
+    nome,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  ui.mezziForm.reset();
+}
+
+function subscribePersonale() {
+  unsubscribePersonale = db.collection("personale").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
+    personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderSimpleList(ui.personaleLista, personaleRecords, deletePersonale);
+    updateSquadraHintFromSources();
+  }, (error) => {
+    console.error(error);
+    ui.personaleLista.innerHTML = "<p class='muted'>Errore caricamento personale.</p>";
+  });
+}
+
+function subscribeMezzi() {
+  unsubscribeMezzi = db.collection("mezzi").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
+    mezziRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderSimpleList(ui.mezziLista, mezziRecords, deleteMezzo);
+    updateSquadraHintFromSources();
+  }, (error) => {
+    console.error(error);
+    ui.mezziLista.innerHTML = "<p class='muted'>Errore caricamento mezzi.</p>";
+  });
+}
+
+function subscribeSquadre() {
+  unsubscribeSquadre = db.collection("squadreCommesse").onSnapshot((snapshot) => {
+    squadreByCommessa = new Map();
+    snapshot.forEach((doc) => {
+      squadreByCommessa.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+    renderSquadre();
+    autofillSquadraForm();
+  }, (error) => {
+    console.error(error);
+    ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
+  });
+}
+
+function stopPersonaleSubscription() {
+  if (unsubscribePersonale) {
+    unsubscribePersonale();
+    unsubscribePersonale = null;
+  }
+}
+
+function stopMezziSubscription() {
+  if (unsubscribeMezzi) {
+    unsubscribeMezzi();
+    unsubscribeMezzi = null;
+  }
+}
+
+function stopSquadreSubscription() {
+  if (unsubscribeSquadre) {
+    unsubscribeSquadre();
+    unsubscribeSquadre = null;
+  }
+}
+
+function renderSimpleList(container, items, onDelete) {
+  container.innerHTML = "";
+  if (!items.length) {
+    container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const label = document.createElement("span");
+    label.textContent = item.nome || "-";
+    row.appendChild(label);
+    const deleteBtn = createButton("Elimina", () => onDelete(item.id, item.nome || "elemento"));
+    deleteBtn.disabled = !canManageData();
+    row.appendChild(deleteBtn);
+    container.appendChild(row);
+  });
+}
+
+async function deletePersonale(id, nome) {
+  if (!canManageData()) return;
+  if (!window.confirm(`Eliminare ${nome} dal personale?`)) return;
+  await db.collection("personale").doc(id).delete();
+}
+
+async function deleteMezzo(id, nome) {
+  if (!canManageData()) return;
+  if (!window.confirm(`Eliminare ${nome} dai mezzi?`)) return;
+  await db.collection("mezzi").doc(id).delete();
+}
+
+function autofillSquadraForm() {
+  const commessaId = ui.squadraCommessa.value;
+  if (!commessaId) {
+    ui.squadra1.value = "";
+    ui.squadra2.value = "";
+    ui.squadra3.value = "";
+    ui.squadraMezzi.value = "";
+    return;
+  }
+
+  const data = squadreByCommessa.get(commessaId) || {};
+  ui.squadra1.value = data.squadra1 || "";
+  ui.squadra2.value = data.squadra2 || "";
+  ui.squadra3.value = data.squadra3 || "";
+  ui.squadraMezzi.value = data.mezzi || "";
+}
+
+async function saveSquadraComposition(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può compilare la composizione squadre.");
+    return;
+  }
+  const commessaId = ui.squadraCommessa.value;
+  if (!commessaId) {
+    alert("Seleziona una commessa.");
+    return;
+  }
+  await db.collection("squadreCommesse").doc(commessaId).set({
+    commessaId,
+    commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
+    squadra1: ui.squadra1.value.trim(),
+    squadra2: ui.squadra2.value.trim(),
+    squadra3: ui.squadra3.value.trim(),
+    mezzi: ui.squadraMezzi.value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  }, { merge: true });
+}
+
+function renderSquadre() {
+  ui.squadreLista.innerHTML = "";
+
+  const commesse = Array.from(commesseById.values());
+  if (!commesse.length) {
+    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    return;
+  }
+
+  commesse.forEach((commessa) => {
+    const item = document.createElement("article");
+    item.className = "squadra-item";
+    const squad = squadreByCommessa.get(commessa.id) || {};
+    item.innerHTML = `
+      <strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      <p><b>Squadra 1:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
+      <p><b>Squadra 2:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
+      <p><b>Squadra 3:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
+      <p><b>Mezzi:</b> ${escapeHTML(squad.mezzi || "-")}</p>
+    `;
+    ui.squadreLista.appendChild(item);
+  });
+}
+
+function updateSquadraHintFromSources() {
+  if (!canManageData()) return;
+  const personale = personaleRecords.map((p) => p.nome).filter(Boolean).join(", ") || "Nessuno";
+  const mezzi = mezziRecords.map((m) => m.nome).filter(Boolean).join(", ") || "Nessuno";
+  ui.squadraHint.textContent = `Personale disponibile: ${personale}. Mezzi disponibili: ${mezzi}.`;
 }
 
 async function setImpiantoDone(impiantoIds, done) {

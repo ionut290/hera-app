@@ -18,6 +18,55 @@ body {
   background: var(--bg);
 }
 
+.menu-toggle-btn {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1300;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.35);
+  z-index: 1199;
+}
+
+.side-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: min(360px, 92vw);
+  height: 100dvh;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  z-index: 1200;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.side-menu-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.side-menu-body {
+  padding: 12px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
 .container {
   width: min(980px, 100%);
   margin: 0 auto;
@@ -79,6 +128,52 @@ input {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+}
+
+.simple-list {
+  display: grid;
+  gap: 6px;
+}
+
+.simple-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.squadra-form {
+  display: grid;
+  gap: 8px;
+}
+
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.squadre-lista {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.squadra-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.squadra-item p {
+  margin: 5px 0;
 }
 
 .commessa-btn {

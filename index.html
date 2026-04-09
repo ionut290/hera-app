@@ -8,9 +8,35 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <button id="menu-toggle-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu">☰</button>
+
+  <aside id="side-menu" class="side-menu hidden" aria-hidden="true">
+    <div class="side-menu-header">
+      <h2>Menu</h2>
+      <button id="menu-close-btn" class="btn" type="button">Chiudi</button>
+    </div>
+    <div class="side-menu-body">
+      <h3>Personale</h3>
+      <form id="personale-form" class="inline-form">
+        <input type="text" id="personale-nome" placeholder="Nome e cognome personale">
+        <button class="btn btn-primary" type="submit">Aggiungi personale</button>
+      </form>
+      <div id="personale-lista" class="simple-list"></div>
+
+      <h3>Mezzi</h3>
+      <form id="mezzi-form" class="inline-form">
+        <input type="text" id="mezzo-nome" placeholder="Nome mezzo">
+        <button class="btn btn-primary" type="submit">Aggiungi mezzo</button>
+      </form>
+      <div id="mezzi-lista" class="simple-list"></div>
+    </div>
+  </aside>
+
+  <div id="menu-overlay" class="menu-overlay hidden"></div>
+
   <main class="container">
     <header class="card">
-      <h1>Hera App</h1>
+      <h1>Varga Cantieri</h1>
       <p class="muted">Commesse, impianti, mappa e navigazione</p>
 
       <div class="actions-row">
@@ -20,6 +46,7 @@
       </div>
 
       <p id="user" class="status">Non loggato</p>
+      <p id="user-name" class="muted">Nome utente: -</p>
       <p id="drive-status" class="muted">Google Drive non collegato.</p>
     </header>
 
@@ -32,6 +59,23 @@
       </form>
       <div id="commesse-lista" class="commesse-lista"></div>
       <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
+    </section>
+
+    <section class="card">
+      <h2>Composizione squadra (per commessa)</h2>
+      <p class="muted">La compilazione è consentita solo all'admin (ionut29019@gmail.com).</p>
+      <form id="squadra-form" class="squadra-form">
+        <select id="squadra-commessa" required>
+          <option value="">Seleziona commessa</option>
+        </select>
+        <input id="squadra-1" type="text" placeholder="Squadra 1 (nomi personale)">
+        <input id="squadra-2" type="text" placeholder="Squadra 2 (nomi personale)">
+        <input id="squadra-3" type="text" placeholder="Squadra 3 (nomi personale)">
+        <input id="squadra-mezzi" type="text" placeholder="Mezzi assegnati">
+        <button class="btn btn-primary" type="submit">Salva composizione</button>
+      </form>
+      <p id="squadra-hint" class="muted"></p>
+      <div id="squadre-lista" class="squadre-lista"></div>
     </section>
 
     <section class="card">

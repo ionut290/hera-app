@@ -268,6 +268,9 @@ function updateAdminControls() {
   ui.mezzoNome.disabled = !canManage;
   if (ui.personaleForm.querySelector("button[type='submit']")) ui.personaleForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.mezziForm.querySelector("button[type='submit']")) ui.mezziForm.querySelector("button[type='submit']").disabled = !canManage;
+  ui.personaleImportBtn.disabled = !canManage;
+  ui.mezziImportBtn.disabled = !canManage;
+  ui.importBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
   ui.squadraCommessa.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
@@ -1665,7 +1668,7 @@ function renderSquadre() {
 
 function renderMezziButtonsMarkup(rawValue) {
   const parts = String(rawValue || "")
-    .split(/[,;|]/)
+    .split(/[\s,;|]+/)
     .map((value) => value.trim())
     .filter(Boolean);
   if (!parts.length) return "-";
@@ -1841,10 +1844,18 @@ function clearMap() {
 
 function getMezzoByLabel(label) {
   const normalized = String(label || "").trim().toLowerCase();
-  return mezziRecords.find((mezzo) => {
-    const candidates = [mezzo.nId, mezzo.nome, mezzo.marca].map((v) => String(v || "").toLowerCase());
-    return candidates.some((value) => value && (value === normalized || value.includes(normalized) || normalized.includes(value)));
-  }) || null;
+  if (!normalized) return null;
+  const exact = mezziRecords.find((mezzo) => {
+    const nId = String(mezzo.nId || "").toLowerCase();
+    const nome = String(mezzo.nome || "").toLowerCase();
+    return nId === normalized || nome === normalized;
+  });
+  if (exact) return exact;
+  const byNIdContains = mezziRecords.find((mezzo) => {
+    const nId = String(mezzo.nId || "").toLowerCase();
+    return nId && (nId.includes(normalized) || normalized.includes(nId));
+  });
+  return byNIdContains || null;
 }
 
 async function openFuelPage(mezzoLabel) {

@@ -126,7 +126,15 @@ function updateAdminControls() {
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
-  auth.signInWithPopup(provider).catch((error) => {
+  provider.addScope("https://www.googleapis.com/auth/drive.file");
+
+  auth.signInWithPopup(provider).then((result) => {
+    // Gli scope extra (es. Drive) arrivano nel credential del login, non nel profilo utente Firebase.
+    const accessToken = extractGoogleAccessToken(result);
+    if (accessToken) {
+      driveAccessToken = accessToken;
+    }
+  }).catch((error) => {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
       return auth.signInWithRedirect(provider);
     }
@@ -1165,6 +1173,64 @@ function extractGoogleAccessToken(result) {
   }
   return "";
 }
+
+// Salva un oggetto JSON nel Drive dell'utente loggato usando multipart upload.
+// Richiede che il login Google abbia restituito un access token con scope drive.file.
+async function saveToDrive(data) {
+  if (!driveAccessToken) {
+    console.error("Google Drive non autorizzato: manca access token. Rifai login con Google.");
+    return null;
+  }
+
+  const metadata = {
+    name: "test.json",
+    mimeType: "application/json"
+  };
+  const fileContent = JSON.stringify(data, null, 2);
+
+  const boundary = "hera-app-boundary-" + Date.now();
+  const multipartBody = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    "Content-Type: application/json",
+    "",
+    fileContent,
+    `--${boundary}--`
+  ].join("\r\n");
+
+  try {
+    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${driveAccessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Errore upload su Google Drive:", response.status, errorText);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log("Upload completato su Google Drive. fileId:", result.id);
+    return { fileId: result.id };
+  } catch (error) {
+    console.error("Errore durante il salvataggio su Google Drive:", error);
+    return null;
+  }
+}
+
+// Esempio d'uso:
+// saveToDrive({
+//   prova: true,
+//   data: new Date().toISOString()
+// });
 
 async function ensureDriveFolders() {
   driveRootFolderId = await getOrCreateDriveFolder("Hera App - Dati");

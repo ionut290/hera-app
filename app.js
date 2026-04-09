@@ -804,15 +804,22 @@ async function markImpiantoDone(impianto) {
   try {
     updateImpiantoLocalState(ids, { done: true });
     await setImpiantoDone(ids, true);
-    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
     updateImpiantoLocalState(ids, { done: false });
     await setImpiantoDone(ids, false);
     console.error(error);
+    alert("Non sono riuscito a segnare l'impianto come FATTO. Riprova.");
+    return;
+  }
+
+  try {
+    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
+  } catch (error) {
+    console.error(error);
     const retried = await retrySheetExport(exportPayload, 2);
     if (!retried) {
       queuePendingSheetExport(exportPayload);
-      alert("Impianto segnato come FATTO. Scrittura foglio non riuscita ora: il sistema ritenterà automaticamente.");
+      alert("Impianto segnato come FATTO. Il foglio non è stato scritto ora, ma il sistema ritenterà automaticamente.");
     }
   }
 }

@@ -119,6 +119,24 @@ input {
   margin-top: 8px;
 }
 
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.badge-ordinaria {
+  background: #e8f1ff;
+  color: #1d4ed8;
+}
+
+.badge-straordinaria {
+  background: #fff1e8;
+  color: #c2410c;
+}
+
 .marker-pin {
   width: 14px;
   height: 14px;

@@ -236,6 +236,7 @@ async function importPendingRows() {
       const docRef = ref.doc();
       batch.set(docRef, {
         ...row,
+        tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
         done: false,
         doneAt: null,
         doneBy: "",
@@ -262,9 +263,11 @@ function normalizeRow(row) {
     comune: getValue(keys, ["comuneubicazioneimpianto", "comune"]),
     indirizzo: getValue(keys, ["viaecivicodiubicazioneimpianto", "indirizzo", "via"]),
     voceRiferimento: getValue(keys, ["vocediriferimentoelencoprezzi"]),
+    codicePrezzo: getValue(keys, ["vocediriferimentoelencoprezzi", "codiceprezzo"]),
     sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim"]),
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin"]),
-    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento"]),
+    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste"]),
+    lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
     gpsY: parseCoordinate(getValue(keys, ["coordinategpsy"])),
     gpsX: parseCoordinate(getValue(keys, ["coordinategpsx"]))
   };
@@ -296,6 +299,13 @@ function parseCoordinate(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function classifyTipoManutenzione(codicePrezzo) {
+  const code = String(codicePrezzo || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (code === "A11" || code === "A12") return "Ordinaria";
+  if (!code) return "Non specificata";
+  return "Straordinaria";
+}
+
 function renderImpianti() {
   ui.impiantiLista.innerHTML = "";
 
@@ -311,10 +321,15 @@ function renderImpianti() {
     article.className = "impianto-item" + (impianto.done ? " done" : "");
 
     const distance = formatDistance(distanceFromUser(impianto));
+    const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
+    const isStraordinaria = tipo === "Straordinaria";
     article.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
+      <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
+      <p><b>Tipo:</b> <span class="badge ${isStraordinaria ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></p>
+      <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
       <p><b>Distanza:</b> ${distance}</p>
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
     `;
@@ -322,10 +337,12 @@ function renderImpianti() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
+    const doneBtn = createButton("Fatto", () => markImpiantoDone(impianto));
     const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
     const resetBtn = createButton("Reset", () => resetImpianto(impianto));
     const waBtn = createButton("WhatsApp", () => openWhatsApp(impianto));
 
+    actions.appendChild(doneBtn);
     actions.appendChild(navigateBtn);
     actions.appendChild(resetBtn);
     actions.appendChild(waBtn);
@@ -355,10 +372,13 @@ async function navigateToImpianto(impianto) {
     return;
   }
 
-  await setImpiantoDone(impianto.id, true);
-
   const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
   window.open(url, "_blank");
+}
+
+async function markImpiantoDone(impianto) {
+  if (!selectedCommessaId || !impianto.id) return;
+  await setImpiantoDone(impianto.id, true);
 }
 
 async function resetImpianto(impianto) {
@@ -416,7 +436,8 @@ function renderMap() {
       })
     });
 
-    marker.bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "")}`);
+    const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
+    marker.bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "")}<br>${escapeHTML(tipo)}`);
     marker.addTo(markerLayer);
     bounds.push([impianto.gpsY, impianto.gpsX]);
   });

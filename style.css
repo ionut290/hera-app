@@ -109,6 +109,12 @@ h2 { font-size: 1.05rem; }
   padding: 14px;
 }
 
+.menu-title-btn {
+  text-align: left;
+  font-size: 1rem;
+  padding: 14px;
+}
+
 .container {
   width: min(1040px, 100%);
   margin: 0 auto;

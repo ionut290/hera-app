@@ -1083,6 +1083,17 @@ async function navigateToImpianto(impianto) {
 async function markImpiantoDone(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
+  if (!canManageData()) {
+    if (!currentUserPos) {
+      alert("Per segnare FATTO devi attivare la posizione GPS.");
+      return;
+    }
+    const distanceKm = distanceFromUser(impianto);
+    if (!Number.isFinite(distanceKm) || distanceKm > 4) {
+      alert("Puoi segnare FATTO solo entro 4 km dall'impianto.");
+      return;
+    }
+  }
   const exportPayload = {
     commessaId: selectedCommessaId,
     commessaName: selectedCommessaName || "Commessa",
@@ -1870,6 +1881,9 @@ async function openFuelPage(mezzoLabel) {
 
 function toggleFuelMezzoDetails() {
   ui.fuelMezzoDetailsCard.classList.toggle("hidden");
+  if (!ui.fuelMezzoDetailsCard.classList.contains("hidden")) {
+    ui.fuelMezzoDetailsCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function renderFuelMezzoDetails() {

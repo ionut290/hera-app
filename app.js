@@ -93,6 +93,7 @@ let squadreByCommessa = new Map();
 let highlightedImpiantoKey = "";
 let pendingSheetExports = [];
 let sheetRetryTimer = null;
+let isProcessingAdminSheetQueue = false;
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -271,6 +272,7 @@ function startSheetRetryLoop() {
   if (sheetRetryTimer) clearInterval(sheetRetryTimer);
   sheetRetryTimer = setInterval(() => {
     processPendingSheetExports();
+    processAdminSheetExportQueue();
   }, SHEET_RETRY_MS);
 }
 
@@ -281,6 +283,20 @@ function queuePendingSheetExport(payload) {
     nextRetryAt: payload.nextRetryAt || Date.now()
   });
   savePendingSheetExports();
+}
+
+async function queueSheetExportForAdmin(payload) {
+  const createdBy = (currentUser && currentUser.email) ? currentUser.email : "";
+  await db.collection("sheetExportQueue").add({
+    status: "pending",
+    attempts: 0,
+    nextRetryAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy,
+    commessaId: payload.commessaId || "",
+    commessaName: payload.commessaName || "",
+    impianto: payload.impianto || {}
+  });
 }
 
 function parseGoogleSheetId(value) {
@@ -358,14 +374,23 @@ function subscribeDriveBridge() {
       return;
     }
 
-    driveAccessToken = data.accessToken;
-    driveRootFolderId = data.rootFolderId || "";
-    driveChatFolderId = data.chatFolderId || "";
-    driveReportsFolderId = data.reportsFolderId || "";
-
     const owner = data.ownerEmail || ADMIN_EMAIL;
-    ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
-    processPendingSheetExports();
+    if (canManageData()) {
+      driveAccessToken = data.accessToken;
+      driveRootFolderId = data.rootFolderId || "";
+      driveChatFolderId = data.chatFolderId || "";
+      driveReportsFolderId = data.reportsFolderId || "";
+      ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
+      processPendingSheetExports();
+      processAdminSheetExportQueue();
+      return;
+    }
+
+    driveAccessToken = "";
+    driveRootFolderId = "";
+    driveChatFolderId = "";
+    driveReportsFolderId = "";
+    ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
   }, (error) => {
     console.error(error);
     ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
@@ -804,15 +829,31 @@ async function markImpiantoDone(impianto) {
   try {
     updateImpiantoLocalState(ids, { done: true });
     await setImpiantoDone(ids, true);
-    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
     updateImpiantoLocalState(ids, { done: false });
     await setImpiantoDone(ids, false);
     console.error(error);
+    alert("Non sono riuscito a segnare l'impianto come FATTO. Riprova.");
+    return;
+  }
+
+  if (!canManageData()) {
+    try {
+      await queueSheetExportForAdmin(exportPayload);
+    } catch (error) {
+      console.error("Impianto FATTO ma coda admin non salvata:", error);
+    }
+    return;
+  }
+
+  try {
+    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
+  } catch (error) {
+    console.error(error);
     const retried = await retrySheetExport(exportPayload, 2);
     if (!retried) {
       queuePendingSheetExport(exportPayload);
-      alert("Impianto segnato come FATTO. Scrittura foglio non riuscita ora: il sistema ritenterà automaticamente.");
+      alert("Impianto segnato come FATTO. Il foglio non è stato scritto ora, ma il sistema ritenterà automaticamente.");
     }
   }
 }
@@ -830,6 +871,7 @@ async function retrySheetExport(payload, retries = 2) {
 }
 
 async function processPendingSheetExports() {
+  if (!canManageData()) return;
   if (!pendingSheetExports.length) return;
   const now = Date.now();
   const remaining = [];
@@ -857,6 +899,53 @@ async function processPendingSheetExports() {
 
   pendingSheetExports = remaining;
   savePendingSheetExports();
+}
+
+async function processAdminSheetExportQueue() {
+  if (!canManageData()) return;
+  if (!driveAccessToken) return;
+  if (isProcessingAdminSheetQueue) return;
+  isProcessingAdminSheetQueue = true;
+  try {
+    const now = new Date();
+    const snapshot = await db
+      .collection("sheetExportQueue")
+      .where("status", "==", "pending")
+      .where("nextRetryAt", "<=", now)
+      .orderBy("nextRetryAt", "asc")
+      .limit(20)
+      .get();
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data() || {};
+      try {
+        await exportImpiantoDoneToDriveSheet(
+          data.impianto || {},
+          data.commessaId || "",
+          data.commessaName || "Commessa"
+        );
+        await doc.ref.set({
+          status: "done",
+          doneAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastError: firebase.firestore.FieldValue.delete()
+        }, { merge: true });
+      } catch (error) {
+        const attempts = Number(data.attempts || 0) + 1;
+        const retryMs = Math.min(SHEET_RETRY_MS * attempts, 10 * 60 * 1000);
+        await doc.ref.set({
+          status: attempts >= 20 ? "failed" : "pending",
+          attempts,
+          nextRetryAt: new Date(Date.now() + retryMs),
+          lastError: String(error && error.message ? error.message : error).slice(0, 500),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    }
+  } catch (error) {
+    console.error("Errore processamento coda export foglio (admin):", error);
+  } finally {
+    isProcessingAdminSheetQueue = false;
+  }
 }
 
 async function resetImpianto(impianto) {

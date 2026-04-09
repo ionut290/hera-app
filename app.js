@@ -1130,28 +1130,16 @@ async function connectGoogleDrive() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-    provider.addScope("https://www.googleapis.com/auth/spreadsheets");
-
-    const result = await auth.currentUser.linkWithPopup
-      ? await auth.currentUser.linkWithPopup(provider).catch(() => auth.signInWithPopup(provider))
-      : await auth.signInWithPopup(provider);
+    const result = await firebase.auth().signInWithPopup(provider);
 
     const accessToken = extractGoogleAccessToken(result);
     if (!accessToken) {
       throw new Error("Autorizzazione Drive non disponibile. Riprova.");
     }
 
+    window.googleAccessToken = accessToken;
     driveAccessToken = accessToken;
-    await ensureDriveFolders();
-    await db.collection("appConfig").doc("driveBridge").set({
-      ownerEmail: currentUser.email || ADMIN_EMAIL,
-      accessToken: driveAccessToken,
-      rootFolderId: driveRootFolderId,
-      chatFolderId: driveChatFolderId,
-      reportsFolderId: driveReportsFolderId,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    ui.driveStatus.textContent = "Google Drive collegato. Cartelle pronte per report e media chat.";
+    ui.driveStatus.textContent = "Drive collegato";
   } catch (error) {
     console.error(error);
     ui.driveStatus.textContent = error.message || "Errore durante il collegamento a Google Drive.";

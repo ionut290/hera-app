@@ -1028,6 +1028,7 @@ function createButton(label, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn";
+  if (String(label).toLowerCase().includes("whatsapp")) btn.classList.add("btn-whatsapp");
   btn.textContent = label;
   btn.addEventListener("click", onClick);
   return btn;
@@ -2157,6 +2158,7 @@ function resetDriveState() {
 
 function updateDriveStatus(isConnected) {
   const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
+  ui.driveStatus.classList.toggle("status-chip-drive", connected);
   if (!canManageData()) {
     ui.driveStatus.textContent = "Google Drive attivo solo per l'admin.";
     return;

@@ -1,37 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
   <meta charset="UTF-8">
-  <title>Hera App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hera App - Commesse</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <main class="container">
+    <header class="card">
+      <h1>Hera App</h1>
+      <p class="muted">Commesse, impianti, mappa e navigazione</p>
 
-  <h1>Hera App 🚀</h1>
+      <div class="actions-row">
+        <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
+        <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
+      </div>
 
-  <button onclick="login()">Login Google</button>
-  <button onclick="logout()">Logout</button>
+      <p id="user" class="status">Non loggato</p>
+    </header>
 
-  <div id="user">Non loggato</div>
+    <section class="card">
+      <h2>Commesse</h2>
+      <form id="commessa-form" class="inline-form">
+        <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
+        <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
+      </form>
+      <div id="commesse-lista" class="commesse-lista"></div>
+      <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
+    </section>
 
-  <hr>
+    <section class="card">
+      <h2>Mappa impianti</h2>
+      <div id="map"></div>
+      <p id="gps-status" class="muted"></p>
+    </section>
 
-  <h2>Aggiungi impianto</h2>
-  <input type="text" id="denominazione" placeholder="Denominazione impianto">
-  <input type="text" id="comune" placeholder="Comune">
-  <input type="text" id="indirizzo" placeholder="Indirizzo">
-  <button onclick="salvaImpianto()">Salva impianto</button>
+    <section class="card">
+      <h2>Import Excel nella commessa selezionata</h2>
+      <p class="muted">Colonne attese: Distretto, ID SAP, Denominazione Impianto, Comune ubicazione Impianto, Via e civico di ubicazione Impianto, Coordinate GPS(Y), Coordinate GPS(X).</p>
+      <div class="inline-form">
+        <input id="excel-file" type="file" accept=".xlsx,.xls">
+        <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
+      </div>
+      <p id="import-feedback" class="muted"></p>
+    </section>
 
-  <hr>
-
-  <h2>Impianti salvati</h2>
-  <div id="impianti-lista"></div>
+    <section class="card">
+      <h2>Impianti (dal più vicino al più lontano)</h2>
+      <div id="impianti-lista" class="impianti-lista"></div>
+    </section>
+  </main>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>
-
 </body>
 </html>

@@ -16,7 +16,6 @@ const ui = {
   driveStatus: document.getElementById("drive-status"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
-  commessaSheet: document.getElementById("commessa-sheet"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   excelFile: document.getElementById("excel-file"),
@@ -39,6 +38,9 @@ const ui = {
   impiantiPage: document.getElementById("impianti-page"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
+  impiantoSearch: document.getElementById("impianto-search"),
+  viewDoneBtn: document.getElementById("view-done-btn"),
+  viewTodoBtn: document.getElementById("view-todo-btn"),
   personaleForm: document.getElementById("personale-form"),
   personaleNome: document.getElementById("personale-nome"),
   personaleLista: document.getElementById("personale-lista"),
@@ -91,6 +93,8 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let highlightedImpiantoKey = "";
+let impiantiSearchTerm = "";
+let impiantiViewMode = "done";
 let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
@@ -126,6 +130,9 @@ ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
+ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
+ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
 ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
@@ -196,7 +203,6 @@ auth.onAuthStateChanged((user) => {
 function updateAdminControls() {
   const canManage = canManageData();
   ui.commessaName.disabled = !canManage;
-  ui.commessaSheet.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
   ui.personaleNome.disabled = !canManage;
@@ -350,15 +356,8 @@ async function createCommessa(event) {
     return;
   }
 
-  const parsedSheetId = parseGoogleSheetId(ui.commessaSheet.value);
-  if (ui.commessaSheet.value.trim() && !parsedSheetId) {
-    alert("Inserisci un ID Google Sheet valido oppure un link Fogli Google valido.");
-    return;
-  }
-
   await db.collection("commesse").add({
     nome,
-    reportSheetId: parsedSheetId || "",
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
@@ -464,9 +463,7 @@ function stopCommesseSubscription() {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
-  const commessa = commesseById.get(id) || null;
-  const linkedSheet = commessa && commessa.reportSheetId ? ` | Foglio collegato: ${commessa.reportSheetId}` : "";
-  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}${linkedSheet}`;
+  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
   updateCommessaButtonsActive();
 
@@ -779,17 +776,18 @@ async function exportCommessaSummary(commessaId, commessaName) {
       return;
     }
 
-    const rows = doneImpianti.map((impianto) => {
+    const rows = doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((impianto) => {
       const doneInfo = formatDoneDateTime(impianto.doneAt);
       return {
         Commessa: commessaName || "",
+        Cantiere: impianto.cantiereRiga || "",
         Distretto: impianto.distretto || "",
         "ID SAP": impianto.idSap || "",
         Denominazione: impianto.denominazione || "",
         Comune: impianto.comune || "",
         Indirizzo: impianto.indirizzo || "",
         "Voce riferimento": impianto.voceRiferimento || "",
-        "Codice prezzo": impianto.codicePrezzo || "",
+        "Codice prezzo": impianto.codicePrezzoSingolo || impianto.codicePrezzo || "",
         Sfalci: impianto.sfalci || "",
         "Frequenza annua": impianto.frequenzaAnnua || "",
         "Tipologia intervento": impianto.tipologiaIntervento || "",
@@ -828,6 +826,19 @@ function splitCodes(codicePrezzo) {
     .filter(Boolean);
 }
 
+function buildRowsForEachCodicePrezzo(impianto) {
+  const rawCodes = String(impianto.codicePrezzo || impianto.voceRiferimento || "")
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const codes = rawCodes.length ? rawCodes : [""];
+  return codes.map((code, index) => ({
+    ...impianto,
+    codicePrezzoSingolo: code,
+    cantiereRiga: `${impianto.denominazione || "Impianto"}${codes.length > 1 ? ` #${index + 1}` : ""}`
+  }));
+}
+
 function hasOrdinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
   return codes.includes("A11") || codes.includes("A12");
@@ -839,6 +850,31 @@ function hasStraordinario(codicePrezzo) {
   return codes.some((code) => code !== "A11" && code !== "A12");
 }
 
+function onImpiantoSearchInput(event) {
+  impiantiSearchTerm = String(event.target.value || "").trim().toLowerCase();
+  renderImpianti();
+}
+
+function setImpiantiViewMode(mode) {
+  impiantiViewMode = mode === "todo" ? "todo" : "done";
+  ui.viewDoneBtn.classList.toggle("btn-primary", impiantiViewMode === "done");
+  ui.viewTodoBtn.classList.toggle("btn-primary", impiantiViewMode === "todo");
+  renderImpianti();
+}
+
+function matchesImpiantoSearch(impianto) {
+  if (!impiantiSearchTerm) return true;
+  const haystack = [
+    impianto.denominazione,
+    impianto.comune,
+    impianto.indirizzo,
+    impianto.codicePrezzo,
+    impianto.voceRiferimento,
+    impianto.idSap
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  return haystack.includes(impiantiSearchTerm);
+}
+
 function renderImpianti() {
   ui.impiantiLista.innerHTML = "";
 
@@ -847,7 +883,16 @@ function renderImpianti() {
     return;
   }
 
-  const sorted = [...currentImpianti].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+  const filtered = currentImpianti.filter((impianto) => {
+    const viewMatch = impiantiViewMode === "done" ? Boolean(impianto.done) : !impianto.done;
+    return viewMatch && matchesImpiantoSearch(impianto);
+  });
+  const sorted = [...filtered].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+
+  if (!sorted.length) {
+    ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
+    return;
+  }
 
   sorted.forEach((impianto) => {
     const article = document.createElement("article");
@@ -875,6 +920,7 @@ function renderImpianti() {
     actions.className = "item-actions";
 
     const doneBtn = createButton("Fatto", () => markImpiantoDone(impianto));
+    doneBtn.disabled = Boolean(impianto.done);
     const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
     const resetBtn = createButton("Reset", () => resetImpianto(impianto));
     resetBtn.disabled = !canManageData();
@@ -1366,14 +1412,14 @@ function renderSquadre() {
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     item.innerHTML = `
-      <strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-      <p><b>Giorno di riferimento:</b> ${escapeHTML(riferimento)}</p>
-      <p><b>Squadra 1 - Personale:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
-      <p><b>Squadra 1 - Mezzi:</b> ${escapeHTML(squad.squadra1Mezzi || "-")}</p>
-      <p><b>Squadra 2 - Personale:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
-      <p><b>Squadra 2 - Mezzi:</b> ${escapeHTML(squad.squadra2Mezzi || "-")}</p>
-      <p><b>Squadra 3 - Personale:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
-      <p><b>Squadra 3 - Mezzi:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
+      <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
+      <p><b>👥 Squadra 1:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
+      <p><b>🚚 Mezzi 1:</b> ${escapeHTML(squad.squadra1Mezzi || "-")}</p>
+      <p><b>👥 Squadra 2:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
+      <p><b>🚚 Mezzi 2:</b> ${escapeHTML(squad.squadra2Mezzi || "-")}</p>
+      <p><b>👥 Squadra 3:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
+      <p><b>🚚 Mezzi 3:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
     askBtn.disabled = !squad.tecnicoTelefono;
@@ -1410,11 +1456,11 @@ function openWhatsApp(impianto) {
 
   const now = new Date();
   const message = [
-    "Manutenzione eseguita",
-    `Commessa: ${selectedCommessaName || "-"}`,
-    `Impianto: ${impianto.denominazione || "-"}`,
-    `Operatore: ${user.displayName || user.email || "-"}`,
-    `Data/Ora: ${now.toLocaleString("it-IT")}`
+    "✅ Manutenzione eseguita",
+    `📁 Commessa: ${selectedCommessaName || "-"}`,
+    `🏗️ Impianto/Cantiere: ${impianto.denominazione || "-"}`,
+    `👷 Operatore: ${user.displayName || user.email || "-"}`,
+    `🕒 Data/Ora: ${now.toLocaleString("it-IT")}`
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -1429,15 +1475,15 @@ function openSquadraWhatsApp(squad, commessa) {
   }
 
   const message = [
-    "Richiesta conferma squadra",
-    `Commessa: ${commessa.nome || "-"}`,
-    `Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    `Squadra 1 personale: ${squad.squadra1 || "-"}`,
-    `Squadra 1 mezzi: ${squad.squadra1Mezzi || "-"}`,
-    `Squadra 2 personale: ${squad.squadra2 || "-"}`,
-    `Squadra 2 mezzi: ${squad.squadra2Mezzi || "-"}`,
-    `Squadra 3 personale: ${squad.squadra3 || "-"}`,
-    `Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
+    "📣 Richiesta conferma squadre",
+    `📁 Commessa: ${commessa.nome || "-"}`,
+    `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
+    `👥 Squadra 1 personale: ${squad.squadra1 || "-"}`,
+    `🚚 Squadra 1 mezzi: ${squad.squadra1Mezzi || "-"}`,
+    `👥 Squadra 2 personale: ${squad.squadra2 || "-"}`,
+    `🚚 Squadra 2 mezzi: ${squad.squadra2Mezzi || "-"}`,
+    `👥 Squadra 3 personale: ${squad.squadra3 || "-"}`,
+    `🚚 Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
   ].join("\n");
 
   const url = `https://wa.me/${telefono}?text=${encodeURIComponent(message)}`;
@@ -1893,12 +1939,18 @@ function resetDriveState() {
 
 function updateDriveStatus(isConnected) {
   const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
-  ui.driveStatus.textContent = connected
-    ? "Drive collegato."
-    : (canManageData() ? "Drive centralizzato non collegato." : "Google Drive non collegato.");
+  if (!canManageData()) {
+    ui.driveStatus.textContent = "Google Drive attivo solo per l'admin.";
+    return;
+  }
+  ui.driveStatus.textContent = connected ? "Drive admin collegato." : "Drive admin non collegato.";
 }
 
 async function connectGoogleDrive() {
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può collegare Google Drive.");
+    return;
+  }
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
@@ -2052,46 +2104,40 @@ async function exportImpiantoDoneToDriveSheet(impianto, commessaId = selectedCom
   const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
   const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName || "Commessa");
 
-  const row = [
+  const rows = buildRowsForEachCodicePrezzo(impianto).map((rowData) => ([
     commessaName || "",
-    impianto.distretto || "",
-    impianto.idSap || "",
-    impianto.denominazione || "",
-    impianto.comune || "",
-    impianto.indirizzo || "",
-    impianto.voceRiferimento || "",
-    impianto.codicePrezzo || "",
-    impianto.sfalci || "",
-    impianto.frequenzaAnnua || "",
-    impianto.tipologiaIntervento || "",
-    impianto.lavorazioniRichieste || "",
-    impianto.gpsY ?? "",
-    impianto.gpsX ?? "",
-    impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
+    rowData.cantiereRiga || "",
+    rowData.distretto || "",
+    rowData.idSap || "",
+    rowData.denominazione || "",
+    rowData.comune || "",
+    rowData.indirizzo || "",
+    rowData.voceRiferimento || "",
+    rowData.codicePrezzoSingolo || rowData.codicePrezzo || "",
+    rowData.sfalci || "",
+    rowData.frequenzaAnnua || "",
+    rowData.tipologiaIntervento || "",
+    rowData.lavorazioniRichieste || "",
+    rowData.gpsY ?? "",
+    rowData.gpsX ?? "",
+    rowData.tipoManutenzione || classifyTipoManutenzione(rowData.codicePrezzo),
     "Fatto",
     dateIT,
     timeIT,
     operator,
     currentUser?.email || ""
-  ];
+  ]));
 
   await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A1:append?valueInputOption=RAW`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      values: [row]
+      values: rows
     })
   });
 }
 
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
-  const commessa = commesseById.get(commessaId) || null;
-  const configuredSheetId = parseGoogleSheetId(commessa && commessa.reportSheetId ? commessa.reportSheetId : "");
-  if (configuredSheetId) {
-    commessaSheetCache.set(commessaId, configuredSheetId);
-    return { id: configuredSheetId };
-  }
-
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
@@ -2123,7 +2169,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   });
 
   const headers = [[
-    "Commessa", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
+    "Commessa", "Cantiere", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
     "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
     "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
   ]];

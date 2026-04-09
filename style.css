@@ -135,6 +135,36 @@ input {
   gap: 8px;
   margin-top: 10px;
 }
+.impianti-toolbar {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 10px;
+}
+
+.search-box input {
+  border: 0;
+  min-width: 0;
+}
+
+.search-box input:focus {
+  outline: none;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .simple-list {
   display: grid;
@@ -176,6 +206,7 @@ select {
   border-radius: 10px;
   padding: 10px;
   background: #fbfdff;
+  border-left: 5px solid #6366f1;
 }
 
 .squadra-item p {

@@ -3,239 +3,94 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-const ui = {
-  loginBtn: document.getElementById("login-btn"),
-  logoutBtn: document.getElementById("logout-btn"),
-  user: document.getElementById("user"),
-  form: document.getElementById("impianto-form"),
-  denominazione: document.getElementById("denominazione"),
-  comune: document.getElementById("comune"),
-  indirizzo: document.getElementById("indirizzo"),
-  excelFile: document.getElementById("excel-file"),
-  importBtn: document.getElementById("import-btn"),
-  importFeedback: document.getElementById("import-feedback"),
-  lista: document.getElementById("impianti-lista")
-};
-
-let pendingRows = [];
-
-ui.loginBtn.addEventListener("click", loginWithGoogle);
-ui.logoutBtn.addEventListener("click", logout);
-ui.form.addEventListener("submit", onImpiantoSubmit);
-ui.excelFile.addEventListener("change", onExcelSelected);
-ui.importBtn.addEventListener("click", importPendingRows);
-
-function loginWithGoogle() {
+function login() {
   const provider = new firebase.auth.GoogleAuthProvider();
-
-  auth.signInWithPopup(provider).catch((error) => {
-    console.error("Errore login:", error);
-    alert("Errore login Google: " + error.message);
-  });
+  auth.signInWithPopup(provider)
+    .then((result) => {
+      console.log("Login riuscito", result.user.displayName);
+    })
+    .catch((error) => {
+      console.error("Errore login:", error);
+      alert("Errore login: " + error.message);
+    });
 }
 
 function logout() {
-  auth.signOut().catch((error) => {
-    console.error("Errore logout:", error);
-    alert("Errore logout: " + error.message);
-  });
+  auth.signOut();
 }
 
 auth.onAuthStateChanged((user) => {
-  if (user) {
-    ui.user.textContent = `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`;
-    ui.loginBtn.disabled = true;
-    ui.logoutBtn.disabled = false;
-  } else {
-    ui.user.textContent = "Non loggato";
-    ui.loginBtn.disabled = false;
-    ui.logoutBtn.disabled = true;
-  }
+  const el = document.getElementById("user");
+  if (!el) return;
 
-  ui.importBtn.disabled = !user || pendingRows.length === 0;
+  if (user) {
+    el.innerHTML = "Loggato: " + user.displayName + " (" + user.email + ")";
+  } else {
+    el.innerHTML = "Non loggato";
+  }
 });
 
-async function onImpiantoSubmit(event) {
-  event.preventDefault();
-
+function salvaImpianto() {
   const user = auth.currentUser;
   if (!user) {
-    alert("Devi fare login prima di salvare un impianto.");
+    alert("Devi fare login prima.");
     return;
   }
 
-  const payload = {
-    denominazione: ui.denominazione.value.trim(),
-    comune: ui.comune.value.trim(),
-    indirizzo: ui.indirizzo.value.trim()
-  };
+  const denominazione = document.getElementById("denominazione").value.trim();
+  const comune = document.getElementById("comune").value.trim();
+  const indirizzo = document.getElementById("indirizzo").value.trim();
 
-  if (!payload.denominazione) {
-    alert("La denominazione è obbligatoria.");
+  if (!denominazione) {
+    alert("Inserisci la denominazione impianto.");
     return;
   }
 
-  try {
-    await saveImpianto(payload, user);
-    ui.form.reset();
-    alert("Impianto salvato correttamente.");
-  } catch (error) {
-    console.error("Errore salvataggio:", error);
-    alert("Errore salvataggio impianto: " + error.message);
-  }
-}
-
-function saveImpianto(payload, user) {
-  return db.collection("impianti").add({
-    ...payload,
+  db.collection("impianti").add({
+    denominazione: denominazione,
+    comune: comune,
+    indirizzo: indirizzo,
     creatoDa: user.displayName || "",
     emailOperatore: user.email || "",
-    importedFromExcel: false,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })
+  .then(() => {
+    document.getElementById("denominazione").value = "";
+    document.getElementById("comune").value = "";
+    document.getElementById("indirizzo").value = "";
+    alert("Impianto salvato.");
+  })
+  .catch((error) => {
+    console.error("Errore salvataggio:", error);
+    alert("Errore salvataggio: " + error.message);
   });
-}
-
-function onExcelSelected(event) {
-  const file = event.target.files && event.target.files[0];
-  pendingRows = [];
-  ui.importBtn.disabled = true;
-  ui.importFeedback.classList.remove("error");
-
-  if (!file) {
-    ui.importFeedback.textContent = "Nessun file selezionato.";
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.onload = (e) => {
-    try {
-      const workbook = XLSX.read(e.target.result, { type: "array" });
-      const firstSheetName = workbook.SheetNames[0];
-      const firstSheet = workbook.Sheets[firstSheetName];
-
-      const rows = XLSX.utils.sheet_to_json(firstSheet, {
-        defval: "",
-        raw: false
-      });
-
-      pendingRows = rows
-        .map(normalizeRow)
-        .filter((row) => row.denominazione);
-
-      if (!pendingRows.length) {
-        ui.importFeedback.textContent = "Nessuna riga valida trovata. Usa almeno la colonna denominazione.";
-        ui.importBtn.disabled = true;
-        return;
-      }
-
-      ui.importFeedback.textContent = `Righe pronte da importare: ${pendingRows.length}`;
-      ui.importBtn.disabled = !auth.currentUser;
-    } catch (error) {
-      console.error("Errore parsing Excel:", error);
-      ui.importFeedback.textContent = "Errore lettura file Excel.";
-      ui.importFeedback.classList.add("error");
-    }
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-async function importPendingRows() {
-  const user = auth.currentUser;
-  if (!user) {
-    alert("Devi fare login prima di importare.");
-    return;
-  }
-
-  if (!pendingRows.length) {
-    alert("Nessuna riga da importare.");
-    return;
-  }
-
-  ui.importBtn.disabled = true;
-
-  try {
-    const batch = db.batch();
-
-    pendingRows.forEach((row) => {
-      const ref = db.collection("impianti").doc();
-      batch.set(ref, {
-        ...row,
-        creatoDa: user.displayName || "",
-        emailOperatore: user.email || "",
-        importedFromExcel: true,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    });
-
-    await batch.commit();
-
-    ui.excelFile.value = "";
-    pendingRows = [];
-    ui.importFeedback.classList.remove("error");
-    ui.importFeedback.textContent = "Import completato con successo.";
-  } catch (error) {
-    console.error("Errore importazione:", error);
-    ui.importFeedback.classList.add("error");
-    ui.importFeedback.textContent = "Errore durante l'importazione.";
-    alert("Errore importazione Excel: " + error.message);
-  } finally {
-    ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0;
-  }
-}
-
-function normalizeRow(row) {
-  const normalized = lowerCaseKeys(row);
-
-  return {
-    denominazione: String(normalized.denominazione || "").trim(),
-    comune: String(normalized.comune || "").trim(),
-    indirizzo: String(normalized.indirizzo || "").trim()
-  };
-}
-
-function lowerCaseKeys(obj) {
-  return Object.entries(obj).reduce((acc, [key, value]) => {
-    acc[String(key).trim().toLowerCase()] = value;
-    return acc;
-  }, {});
 }
 
 db.collection("impianti")
   .orderBy("createdAt", "desc")
   .onSnapshot((snapshot) => {
-    ui.lista.innerHTML = "";
+    const lista = document.getElementById("impianti-lista");
+    if (!lista) return;
 
-    if (snapshot.empty) {
-      ui.lista.innerHTML = "<p class='muted'>Nessun impianto presente.</p>";
-      return;
-    }
+    lista.innerHTML = "";
 
     snapshot.forEach((doc) => {
       const impianto = doc.data();
-      const item = document.createElement("article");
 
-      item.className = "impianto-item";
-      item.innerHTML = `
-        <strong>${escapeHTML(impianto.denominazione || "(senza denominazione)")}</strong>
-        <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
-        <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
-        <p><b>Operatore:</b> ${escapeHTML(impianto.creatoDa || "-")} (${escapeHTML(impianto.emailOperatore || "-")})</p>
+      const div = document.createElement("div");
+      div.style.border = "1px solid #ccc";
+      div.style.padding = "10px";
+      div.style.marginBottom = "10px";
+
+      div.innerHTML = `
+        <strong>${impianto.denominazione || ""}</strong><br>
+        Comune: ${impianto.comune || ""}<br>
+        Indirizzo: ${impianto.indirizzo || ""}<br>
+        Operatore: ${impianto.creatoDa || ""} (${impianto.emailOperatore || ""})
       `;
 
-      ui.lista.appendChild(item);
+      lista.appendChild(div);
     });
   }, (error) => {
     console.error("Errore lettura impianti:", error);
-    ui.lista.innerHTML = "<p class='error'>Errore nel caricamento degli impianti.</p>";
   });
-
-function escapeHTML(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}

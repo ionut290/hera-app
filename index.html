@@ -1,74 +1,37 @@
 <!DOCTYPE html>
-<html lang="it">
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hera App</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="container">
-    <header class="card">
-      <h1>Hera App</h1>
-      <p class="muted">Gestione impianti con Firebase Authentication + Firestore</p>
 
-      <div class="actions-row">
-        <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
-        <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
-      </div>
+  <h1>Hera App 🚀</h1>
 
-      <p id="user" class="status">Non loggato</p>
-    </header>
+  <button onclick="login()">Login Google</button>
+  <button onclick="logout()">Logout</button>
 
-    <section class="card">
-      <h2>Aggiungi impianto</h2>
-      <form id="impianto-form" class="form-grid">
-        <label>
-          Denominazione
-          <input type="text" id="denominazione" placeholder="Es. Centrale Nord" required>
-        </label>
+  <div id="user">Non loggato</div>
 
-        <label>
-          Comune
-          <input type="text" id="comune" placeholder="Es. Bologna">
-        </label>
+  <hr>
 
-        <label>
-          Indirizzo
-          <input type="text" id="indirizzo" placeholder="Es. Via Roma 1">
-        </label>
+  <h2>Aggiungi impianto</h2>
+  <input type="text" id="denominazione" placeholder="Denominazione impianto">
+  <input type="text" id="comune" placeholder="Comune">
+  <input type="text" id="indirizzo" placeholder="Indirizzo">
+  <button onclick="salvaImpianto()">Salva impianto</button>
 
-        <button class="btn btn-primary" type="submit">Salva impianto</button>
-      </form>
-    </section>
+  <hr>
 
-    <section class="card">
-      <h2>Importazione Excel (.xlsx)</h2>
-      <p class="muted">Colonne supportate: <code>denominazione</code>, <code>comune</code>, <code>indirizzo</code>.</p>
-
-      <div class="form-grid">
-        <label>
-          File Excel
-          <input id="excel-file" type="file" accept=".xlsx,.xls">
-        </label>
-
-        <button id="import-btn" class="btn" type="button" disabled>Importa righe in Firestore</button>
-      </div>
-
-      <p id="import-feedback" class="muted"></p>
-    </section>
-
-    <section class="card">
-      <h2>Impianti salvati</h2>
-      <div id="impianti-lista" class="impianti-lista"></div>
-    </section>
-  </main>
+  <h2>Impianti salvati</h2>
+  <div id="impianti-lista"></div>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>
+
 </body>
 </html>

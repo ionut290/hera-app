@@ -433,8 +433,11 @@ function subscribeCommesse() {
 
         const deleteBtn = createButton("Elimina", () => deleteCommessa(doc.id, commessa.nome || "Commessa"));
         deleteBtn.disabled = !canManageData();
+        const exportBtn = createButton("Esporta riepilogo", () => exportCommessaSummary(doc.id, commessa.nome || "Commessa"));
+        exportBtn.disabled = !auth.currentUser;
 
         row.appendChild(btn);
+        row.appendChild(exportBtn);
         row.appendChild(deleteBtn);
         ui.commesseLista.appendChild(row);
 
@@ -640,6 +643,9 @@ function combineImpiantiForView(impianti) {
     if (!existing) {
       grouped.set(key, {
         ...item,
+        done: Boolean(item.done),
+        doneAt: item.doneAt || null,
+        doneBy: item.doneBy || "",
         sourceIds: [item.id]
       });
       return;
@@ -655,7 +661,17 @@ function combineImpiantiForView(impianti) {
     existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
     existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
     existing.tipoManutenzione = classifyTipoManutenzione(existing.codicePrezzo);
-    existing.done = Boolean(existing.done || item.done);
+    const itemDone = Boolean(item.done);
+    const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
+    const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
+    existing.done = Boolean(existing.done || itemDone);
+
+    if (itemDone && (!existing.doneBy || itemDoneAtMs >= existingDoneAtMs)) {
+      existing.doneBy = item.doneBy || existing.doneBy || "";
+    }
+    if (itemDoneAtMs >= existingDoneAtMs) {
+      existing.doneAt = item.doneAt || existing.doneAt || null;
+    }
 
     if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
     if (!existing.comune && item.comune) existing.comune = item.comune;
@@ -719,6 +735,89 @@ function classifyTipoManutenzione(codicePrezzo) {
   if (ordinario) return "Ordinaria";
   if (straordinario) return "Straordinaria";
   return "Non specificata";
+}
+
+function firestoreDateToMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toDate === "function") {
+    const date = value.toDate();
+    return date instanceof Date ? date.getTime() : 0;
+  }
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDoneDateTime(doneAt) {
+  const millis = firestoreDateToMillis(doneAt);
+  if (!millis) return { date: "-", time: "-" };
+  const date = new Date(millis);
+  return {
+    date: date.toLocaleDateString("it-IT"),
+    time: date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })
+  };
+}
+
+async function exportCommessaSummary(commessaId, commessaName) {
+  if (!auth.currentUser) {
+    alert("Devi fare login per esportare il riepilogo.");
+    return;
+  }
+
+  try {
+    const snapshot = await db
+      .collection("commesse")
+      .doc(commessaId)
+      .collection("impianti")
+      .get();
+
+    const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const doneImpianti = combineImpiantiForView(rawImpianti).filter((impianto) => impianto.done);
+
+    if (!doneImpianti.length) {
+      alert(`Nessun impianto FATTO da esportare per la commessa "${commessaName}".`);
+      return;
+    }
+
+    const rows = doneImpianti.map((impianto) => {
+      const doneInfo = formatDoneDateTime(impianto.doneAt);
+      return {
+        Commessa: commessaName || "",
+        Distretto: impianto.distretto || "",
+        "ID SAP": impianto.idSap || "",
+        Denominazione: impianto.denominazione || "",
+        Comune: impianto.comune || "",
+        Indirizzo: impianto.indirizzo || "",
+        "Voce riferimento": impianto.voceRiferimento || "",
+        "Codice prezzo": impianto.codicePrezzo || "",
+        Sfalci: impianto.sfalci || "",
+        "Frequenza annua": impianto.frequenzaAnnua || "",
+        "Tipologia intervento": impianto.tipologiaIntervento || "",
+        "Lavorazioni richieste": impianto.lavorazioniRichieste || "",
+        "GPS Y": impianto.gpsY ?? "",
+        "GPS X": impianto.gpsX ?? "",
+        "Tipo manutenzione": impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
+        Stato: "Fatto",
+        "Eseguito da": impianto.doneBy || "-",
+        "Data esecuzione": doneInfo.date,
+        "Ora esecuzione (hh:mm)": doneInfo.time
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Riepilogo impianti");
+
+    const safeName = String(commessaName || "commessa")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, "_");
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    XLSX.writeFile(workbook, `riepilogo_impianti_${safeName}_${timestamp}.xlsx`);
+  } catch (error) {
+    console.error(error);
+    alert("Errore durante l'esportazione del riepilogo in Excel.");
+  }
 }
 
 function splitCodes(codicePrezzo) {
@@ -1949,7 +2048,7 @@ async function exportImpiantoDoneToDriveSheet(impianto, commessaId = selectedCom
 
   const now = new Date();
   const dateIT = now.toLocaleDateString("it-IT");
-  const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
   const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
   const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName || "Commessa");
 

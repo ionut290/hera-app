@@ -51,4 +51,5 @@ La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.
 - Token/folder del bridge Drive vengono salvati in `appConfig/driveBridge` su Firestore per essere riusati da tutti gli utenti autenticati.
 - I media chat vengono caricati su Drive e salvati in Firestore come URL.
 - Per ogni commessa viene usato un solo Google Sheet (`Commessa - <nome commessa>`) dentro `Report Impianti`.
+- In creazione commessa puoi impostare opzionalmente un **ID/link Google Sheet** già esistente: da quel momento il pulsante **Fatto** appende sempre lì (senza creare un nuovo file).
 - Quando un impianto viene segnato come **Fatto**, viene aggiunta una nuova riga nel foglio della commessa con i dati dell'impianto, data/ora esecuzione e operatore.

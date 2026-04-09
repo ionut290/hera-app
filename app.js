@@ -46,9 +46,17 @@ const ui = {
   squadra1: document.getElementById("squadra-1"),
   squadra2: document.getElementById("squadra-2"),
   squadra3: document.getElementById("squadra-3"),
-  squadraMezzi: document.getElementById("squadra-mezzi"),
+  squadra1Mezzi: document.getElementById("squadra-1-mezzi"),
+  squadra2Mezzi: document.getElementById("squadra-2-mezzi"),
+  squadra3Mezzi: document.getElementById("squadra-3-mezzi"),
+  squadraRiferimento: document.getElementById("squadra-riferimento"),
+  squadraTecnico: document.getElementById("squadra-tecnico"),
   squadraHint: document.getElementById("squadra-hint"),
-  squadreLista: document.getElementById("squadre-lista")
+  squadreLista: document.getElementById("squadre-lista"),
+  personaleExcelFile: document.getElementById("personale-excel-file"),
+  personaleImportBtn: document.getElementById("personale-import-btn"),
+  mezziExcelFile: document.getElementById("mezzi-excel-file"),
+  mezziImportBtn: document.getElementById("mezzi-import-btn")
 };
 
 let pendingRows = [];
@@ -111,6 +119,8 @@ ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
+ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
+ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
 
 initGeolocation();
 
@@ -179,7 +189,11 @@ function updateAdminControls() {
   ui.squadra1.disabled = !canManage;
   ui.squadra2.disabled = !canManage;
   ui.squadra3.disabled = !canManage;
-  ui.squadraMezzi.disabled = !canManage;
+  ui.squadra1Mezzi.disabled = !canManage;
+  ui.squadra2Mezzi.disabled = !canManage;
+  ui.squadra3Mezzi.disabled = !canManage;
+  ui.squadraRiferimento.disabled = !canManage;
+  ui.squadraTecnico.disabled = !canManage;
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -792,6 +806,75 @@ async function addMezzo(event) {
   ui.mezziForm.reset();
 }
 
+async function importPersonaleFromExcel() {
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può importare il personale.");
+    return;
+  }
+  await importSimpleRegistryFromExcel(ui.personaleExcelFile, "personale");
+}
+
+async function importMezziFromExcel() {
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può importare i mezzi.");
+    return;
+  }
+  await importSimpleRegistryFromExcel(ui.mezziExcelFile, "mezzi");
+}
+
+async function importSimpleRegistryFromExcel(inputEl, collectionName) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) {
+    alert("Seleziona un file Excel.");
+    return;
+  }
+
+  const rows = await parseSimpleExcelRows(file);
+  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))];
+  if (!uniqueNames.length) {
+    alert("Il file Excel non contiene nomi validi.");
+    return;
+  }
+
+  const batch = db.batch();
+  uniqueNames.forEach((nome) => {
+    const ref = db.collection(collectionName).doc();
+    batch.set(ref, {
+      nome,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+  await batch.commit();
+  inputEl.value = "";
+  alert(`Import completato (${uniqueNames.length} elementi).`);
+}
+
+async function parseSimpleExcelRows(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const names = [];
+        jsonRows.forEach((row) => {
+          if (!Array.isArray(row) || !row.length) return;
+          const firstCell = String(row[0] || "").trim();
+          if (firstCell && firstCell.toLowerCase() !== "nome") names.push(firstCell);
+        });
+        resolve(names);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error("Errore lettura file"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 function subscribePersonale() {
   unsubscribePersonale = db.collection("personale").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
     personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -886,7 +969,11 @@ function autofillSquadraForm() {
     ui.squadra1.value = "";
     ui.squadra2.value = "";
     ui.squadra3.value = "";
-    ui.squadraMezzi.value = "";
+    ui.squadra1Mezzi.value = "";
+    ui.squadra2Mezzi.value = "";
+    ui.squadra3Mezzi.value = "";
+    ui.squadraRiferimento.value = "";
+    ui.squadraTecnico.value = "";
     return;
   }
 
@@ -894,7 +981,11 @@ function autofillSquadraForm() {
   ui.squadra1.value = data.squadra1 || "";
   ui.squadra2.value = data.squadra2 || "";
   ui.squadra3.value = data.squadra3 || "";
-  ui.squadraMezzi.value = data.mezzi || "";
+  ui.squadra1Mezzi.value = data.squadra1Mezzi || "";
+  ui.squadra2Mezzi.value = data.squadra2Mezzi || "";
+  ui.squadra3Mezzi.value = data.squadra3Mezzi || "";
+  ui.squadraRiferimento.value = data.riferimentoData || "";
+  ui.squadraTecnico.value = data.tecnicoTelefono || "";
 }
 
 async function saveSquadraComposition(event) {
@@ -911,10 +1002,14 @@ async function saveSquadraComposition(event) {
   await db.collection("squadreCommesse").doc(commessaId).set({
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
+    riferimentoData: ui.squadraRiferimento.value || "",
     squadra1: ui.squadra1.value.trim(),
+    squadra1Mezzi: ui.squadra1Mezzi.value.trim(),
     squadra2: ui.squadra2.value.trim(),
+    squadra2Mezzi: ui.squadra2Mezzi.value.trim(),
     squadra3: ui.squadra3.value.trim(),
-    mezzi: ui.squadraMezzi.value.trim(),
+    squadra3Mezzi: ui.squadra3Mezzi.value.trim(),
+    tecnicoTelefono: ui.squadraTecnico.value.trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   }, { merge: true });
@@ -933,13 +1028,22 @@ function renderSquadre() {
     const item = document.createElement("article");
     item.className = "squadra-item";
     const squad = squadreByCommessa.get(commessa.id) || {};
+    const riferimento = squad.riferimentoData
+      ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
+      : "-";
     item.innerHTML = `
       <strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-      <p><b>Squadra 1:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
-      <p><b>Squadra 2:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
-      <p><b>Squadra 3:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
-      <p><b>Mezzi:</b> ${escapeHTML(squad.mezzi || "-")}</p>
+      <p><b>Giorno di riferimento:</b> ${escapeHTML(riferimento)}</p>
+      <p><b>Squadra 1 - Personale:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
+      <p><b>Squadra 1 - Mezzi:</b> ${escapeHTML(squad.squadra1Mezzi || "-")}</p>
+      <p><b>Squadra 2 - Personale:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
+      <p><b>Squadra 2 - Mezzi:</b> ${escapeHTML(squad.squadra2Mezzi || "-")}</p>
+      <p><b>Squadra 3 - Personale:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
+      <p><b>Squadra 3 - Mezzi:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
     `;
+    const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
+    askBtn.disabled = !squad.tecnicoTelefono;
+    item.appendChild(askBtn);
     ui.squadreLista.appendChild(item);
   });
 }
@@ -948,7 +1052,7 @@ function updateSquadraHintFromSources() {
   if (!canManageData()) return;
   const personale = personaleRecords.map((p) => p.nome).filter(Boolean).join(", ") || "Nessuno";
   const mezzi = mezziRecords.map((m) => m.nome).filter(Boolean).join(", ") || "Nessuno";
-  ui.squadraHint.textContent = `Personale disponibile: ${personale}. Mezzi disponibili: ${mezzi}.`;
+  ui.squadraHint.textContent = `Personale disponibile (assegnalo a Squadra 1/2/3): ${personale}. Mezzi disponibili (assegnali per squadra): ${mezzi}.`;
 }
 
 async function setImpiantoDone(impiantoIds, done) {
@@ -980,6 +1084,29 @@ function openWhatsApp(impianto) {
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank");
+}
+
+function openSquadraWhatsApp(squad, commessa) {
+  const telefono = String(squad.tecnicoTelefono || "").replace(/[^\d]/g, "");
+  if (!telefono) {
+    alert("Inserisci il numero del tecnico nella composizione squadra.");
+    return;
+  }
+
+  const message = [
+    "Richiesta conferma squadra",
+    `Commessa: ${commessa.nome || "-"}`,
+    `Giorno riferimento: ${squad.riferimentoData || "-"}`,
+    `Squadra 1 personale: ${squad.squadra1 || "-"}`,
+    `Squadra 1 mezzi: ${squad.squadra1Mezzi || "-"}`,
+    `Squadra 2 personale: ${squad.squadra2 || "-"}`,
+    `Squadra 2 mezzi: ${squad.squadra2Mezzi || "-"}`,
+    `Squadra 3 personale: ${squad.squadra3 || "-"}`,
+    `Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
+  ].join("\n");
+
+  const url = `https://wa.me/${telefono}?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank");
 }
 

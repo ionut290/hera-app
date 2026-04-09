@@ -431,6 +431,7 @@ async function navigateToImpianto(impianto) {
 
 async function markImpiantoDone(impianto) {
   if (!selectedCommessaId || !impianto.id) return;
+  updateImpiantoLocalState(impianto.id, { done: true });
   await setImpiantoDone(impianto.id, true);
 }
 
@@ -440,6 +441,7 @@ async function resetImpianto(impianto) {
     alert("Solo ionut29019@gmail.com può usare reset.");
     return;
   }
+  updateImpiantoLocalState(impianto.id, { done: false });
   await setImpiantoDone(impianto.id, false);
 }
 
@@ -551,10 +553,17 @@ function renderMap() {
 function getMarkerClass(impianto) {
   const done = Boolean(impianto.done);
   const straordinario = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
-  if (done && straordinario) return "done-straordinario";
   if (done) return "done";
   if (straordinario) return "straordinario";
   return "todo";
+}
+
+function updateImpiantoLocalState(impiantoId, patch) {
+  currentImpianti = currentImpianti.map((item) => (
+    item.id === impiantoId ? { ...item, ...patch } : item
+  ));
+  renderImpianti();
+  renderMap();
 }
 
 function canManageData() {

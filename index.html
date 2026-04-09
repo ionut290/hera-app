@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hera App</title>
+  <title>Hera App - Commesse</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="container">
     <header class="card">
       <h1>Hera App</h1>
-      <p class="muted">Gestione impianti con Firebase Authentication + Firestore</p>
+      <p class="muted">Commesse, impianti, mappa e navigazione</p>
 
       <div class="actions-row">
         <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
@@ -21,49 +22,33 @@
     </header>
 
     <section class="card">
-      <h2>Aggiungi impianto</h2>
-      <form id="impianto-form" class="form-grid">
-        <label>
-          Denominazione
-          <input type="text" id="denominazione" placeholder="Es. Centrale Nord" required>
-        </label>
-
-        <label>
-          Comune
-          <input type="text" id="comune" placeholder="Es. Bologna">
-        </label>
-
-        <label>
-          Indirizzo
-          <input type="text" id="indirizzo" placeholder="Es. Via Roma 1">
-        </label>
-
-        <button class="btn btn-primary" type="submit">Salva impianto</button>
+      <h2>Commesse</h2>
+      <form id="commessa-form" class="inline-form">
+        <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
+        <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
       </form>
+      <div id="commesse-lista" class="commesse-lista"></div>
+      <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
     </section>
 
     <section class="card">
-      <h2>Importazione Excel (.xlsx)</h2>
-      <p class="muted">
-        Colonne supportate: <code>Denominazione Impianto</code>, <code>Comune ubicazione Impianto</code>,
-        <code>Via e civico di ubicazione Impianto</code> (oppure varianti semplici: <code>denominazione</code>,
-        <code>comune</code>, <code>indirizzo</code>).
-      </p>
+      <h2>Mappa impianti</h2>
+      <div id="map"></div>
+      <p id="gps-status" class="muted"></p>
+    </section>
 
-      <div class="form-grid">
-        <label>
-          File Excel
-          <input id="excel-file" type="file" accept=".xlsx,.xls">
-        </label>
-
-        <button id="import-btn" class="btn" type="button" disabled>Importa righe in Firestore</button>
+    <section class="card">
+      <h2>Import Excel nella commessa selezionata</h2>
+      <p class="muted">Colonne attese: Distretto, ID SAP, Denominazione Impianto, Comune ubicazione Impianto, Via e civico di ubicazione Impianto, Coordinate GPS(Y), Coordinate GPS(X).</p>
+      <div class="inline-form">
+        <input id="excel-file" type="file" accept=".xlsx,.xls">
+        <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
       </div>
-
       <p id="import-feedback" class="muted"></p>
     </section>
 
     <section class="card">
-      <h2>Impianti salvati</h2>
+      <h2>Impianti (dal più vicino al più lontano)</h2>
       <div id="impianti-lista" class="impianti-lista"></div>
     </section>
   </main>
@@ -72,6 +57,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>
 </body>

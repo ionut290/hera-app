@@ -7,295 +7,171 @@ const ui = {
   loginBtn: document.getElementById("login-btn"),
   logoutBtn: document.getElementById("logout-btn"),
   user: document.getElementById("user"),
-  form: document.getElementById("impianto-form"),
-  denominazione: document.getElementById("denominazione"),
-  comune: document.getElementById("comune"),
-  indirizzo: document.getElementById("indirizzo"),
+  commessaForm: document.getElementById("commessa-form"),
+  commessaName: document.getElementById("commessa-name"),
+  commesseLista: document.getElementById("commesse-lista"),
+  commessaAttiva: document.getElementById("commessa-attiva"),
   excelFile: document.getElementById("excel-file"),
   importBtn: document.getElementById("import-btn"),
   importFeedback: document.getElementById("import-feedback"),
-  lista: document.getElementById("impianti-lista")
+  impiantiLista: document.getElementById("impianti-lista"),
+  gpsStatus: document.getElementById("gps-status")
 };
 
 let pendingRows = [];
+let selectedCommessaId = "";
+let selectedCommessaName = "";
+let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
+let currentUserPos = null;
+let currentImpianti = [];
+
+const map = L.map("map");
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: "&copy; OpenStreetMap"
+}).addTo(map);
+map.setView([44.4949, 11.3426], 11);
+
+const markerLayer = L.layerGroup().addTo(map);
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.logoutBtn.addEventListener("click", logout);
-ui.form.addEventListener("submit", onImpiantoSubmit);
+ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
 
+initGeolocation();
+
+auth.onAuthStateChanged((user) => {
+  const loggedIn = Boolean(user);
+
+  ui.loginBtn.disabled = loggedIn;
+  ui.logoutBtn.disabled = !loggedIn;
+  ui.user.textContent = loggedIn
+    ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
+    : "Non loggato";
+
+  ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0;
+
+  stopCommesseSubscription();
+  stopImpiantiSubscription();
+  selectedCommessaId = "";
+  selectedCommessaName = "";
+  ui.commesseLista.innerHTML = "";
+  ui.impiantiLista.innerHTML = loggedIn
+    ? "<p class='muted'>Seleziona una commessa.</p>"
+    : "<p class='muted'>Fai login per vedere le commesse.</p>";
+  clearMap();
+
+  if (loggedIn) subscribeCommesse();
+});
+
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: "select_account" });
-
   auth.signInWithPopup(provider).catch((error) => {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
       return auth.signInWithRedirect(provider);
     }
-
-    console.error("Errore login:", error);
-    alert("Errore login Google: " + error.message);
+    alert("Errore login: " + error.message);
   });
 }
 
 function logout() {
-  auth.signOut().catch((error) => {
-    console.error("Errore logout:", error);
-    alert("Errore logout: " + error.message);
-  });
+  auth.signOut();
 }
 
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    ui.user.textContent = `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`;
-    ui.loginBtn.disabled = true;
-    ui.logoutBtn.disabled = false;
-    subscribeImpianti();
-  } else {
-    ui.user.textContent = "Non loggato";
-    ui.loginBtn.disabled = false;
-    ui.logoutBtn.disabled = true;
-    stopImpiantiSubscription();
-    ui.lista.innerHTML = "<p class='muted'>Effettua il login per vedere gli impianti.</p>";
-  }
-
-  ui.importBtn.disabled = !user || pendingRows.length === 0;
-});
-
-async function onImpiantoSubmit(event) {
+async function createCommessa(event) {
   event.preventDefault();
 
   const user = auth.currentUser;
   if (!user) {
-    alert("Devi fare login prima di salvare un impianto.");
+    alert("Devi fare login.");
     return;
   }
 
-  const payload = {
-    denominazione: ui.denominazione.value.trim(),
-    comune: ui.comune.value.trim(),
-    indirizzo: ui.indirizzo.value.trim()
-  };
+  const nome = ui.commessaName.value.trim();
+  if (!nome) return;
 
-  if (!payload.denominazione) {
-    alert("La denominazione è obbligatoria.");
-    return;
-  }
-
-  try {
-    await saveImpianto(payload, user, false);
-    ui.form.reset();
-  } catch (error) {
-    console.error("Errore salvataggio:", error);
-    alert("Errore salvataggio impianto: " + error.message);
-  }
-}
-
-function saveImpianto(payload, user, importedFromExcel) {
-  return db.collection("impianti").add({
-    denominazione: payload.denominazione || "",
-    comune: payload.comune || "",
-    indirizzo: payload.indirizzo || "",
-    creatoDa: user.displayName || "",
-    emailOperatore: user.email || "",
-    importedFromExcel: Boolean(importedFromExcel),
+  await db.collection("commesse").add({
+    nome,
+    creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+
+  ui.commessaForm.reset();
 }
 
-function onExcelSelected(event) {
-  const file = event.target.files && event.target.files[0];
-  pendingRows = [];
-  ui.importBtn.disabled = true;
-  ui.importFeedback.classList.remove("error");
-
-  if (!file) {
-    ui.importFeedback.textContent = "Nessun file selezionato.";
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.onload = (e) => {
-    try {
-      const workbook = XLSX.read(e.target.result, { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
-
-      pendingRows = rows.map(normalizeRow).filter((row) => row.denominazione);
-
-      if (!pendingRows.length) {
-        ui.importFeedback.textContent = "Nessuna riga valida trovata. Servono colonne con denominazione/comune/indirizzo.";
-        return;
-      }
-
-      ui.importFeedback.textContent = `Righe pronte da importare: ${pendingRows.length}`;
-      ui.importBtn.disabled = !auth.currentUser;
-    } catch (error) {
-      console.error("Errore parsing Excel:", error);
-      ui.importFeedback.textContent = "Errore lettura file Excel.";
-      ui.importFeedback.classList.add("error");
-    }
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-async function importPendingRows() {
-  const user = auth.currentUser;
-  if (!user) {
-    alert("Devi fare login prima di importare.");
-    return;
-  }
-
-  if (!pendingRows.length) {
-    alert("Nessuna riga da importare.");
-    return;
-  }
-
-  ui.importBtn.disabled = true;
-
-  try {
-    await importRowsInChunks(pendingRows, user);
-    pendingRows = [];
-    ui.excelFile.value = "";
-    ui.importFeedback.classList.remove("error");
-    ui.importFeedback.textContent = "Import completato con successo.";
-  } catch (error) {
-    console.error("Errore importazione:", error);
-    ui.importFeedback.classList.add("error");
-    ui.importFeedback.textContent = "Errore durante l'importazione.";
-    alert("Errore importazione Excel: " + error.message);
-  } finally {
-    ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0;
-  }
-}
-
-async function importRowsInChunks(rows, user) {
-  const MAX_BATCH = 450;
-
-  for (let i = 0; i < rows.length; i += MAX_BATCH) {
-    const chunk = rows.slice(i, i + MAX_BATCH);
-    const batch = db.batch();
-
-    chunk.forEach((row) => {
-      const ref = db.collection("impianti").doc();
-      batch.set(ref, {
-        denominazione: row.denominazione,
-        comune: row.comune,
-        indirizzo: row.indirizzo,
-        distretto: row.distretto,
-        idSap: row.idSap,
-        voceRiferimento: row.voceRiferimento,
-        sfalciAreeVerdiMqPotaturaSiepiM: row.sfalciAreeVerdiMqPotaturaSiepiM,
-        frequenzaAnnuaMinima: row.frequenzaAnnuaMinima,
-        tipologiaIntervento: row.tipologiaIntervento,
-        coordinateGpsY: row.coordinateGpsY,
-        coordinateGpsX: row.coordinateGpsX,
-        creatoDa: user.displayName || "",
-        emailOperatore: user.email || "",
-        importedFromExcel: true,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    });
-
-    await batch.commit();
-  }
-}
-
-function normalizeRow(row) {
-  const normalized = normalizeKeys(row);
-
-  return {
-    denominazione: getFirstValue(normalized, [
-      "denominazione",
-      "denominazioneimpianto",
-      "impianto",
-      "nomeimpianto"
-    ]),
-    comune: getFirstValue(normalized, [
-      "comune",
-      "comuneubicazioneimpianto",
-      "citta",
-      "città"
-    ]),
-    indirizzo: getFirstValue(normalized, [
-      "indirizzo",
-      "via",
-      "address",
-      "viaecivicodiubicazioneimpianto"
-    ]),
-    distretto: getFirstValue(normalized, ["distretto"]),
-    idSap: getFirstValue(normalized, ["idsap"]),
-    voceRiferimento: getFirstValue(normalized, ["vocediriferimentoelencoprezzi"]),
-    sfalciAreeVerdiMqPotaturaSiepiM: getFirstValue(normalized, [
-      "sfalciareeverdimqpotaturasiepim"
-    ]),
-    frequenzaAnnuaMinima: getFirstValue(normalized, [
-      "frequenzaannuaminimasfalcieopotaturasiepin"
-    ]),
-    tipologiaIntervento: getFirstValue(normalized, ["tipologiadisfalciointervento"]),
-    coordinateGpsY: getFirstValue(normalized, ["coordinategpsy"]),
-    coordinateGpsX: getFirstValue(normalized, ["coordinategpsx"])
-  };
-}
-
-function normalizeKeys(obj) {
-  return Object.entries(obj).reduce((acc, [key, value]) => {
-    const compactKey = normalizeHeaderKey(key);
-    acc[compactKey] = String(value || "").trim();
-    return acc;
-  }, {});
-}
-
-function normalizeHeaderKey(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function getFirstValue(obj, keys) {
-  for (const key of keys) {
-    if (obj[key]) return obj[key];
-  }
-  return "";
-}
-
-function subscribeImpianti() {
-  if (unsubscribeImpianti) return;
-
-  unsubscribeImpianti = db
-    .collection("impianti")
+function subscribeCommesse() {
+  unsubscribeCommesse = db
+    .collection("commesse")
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot) => {
-      ui.lista.innerHTML = "";
+      ui.commesseLista.innerHTML = "";
 
       if (snapshot.empty) {
-        ui.lista.innerHTML = "<p class='muted'>Nessun impianto presente.</p>";
+        ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
         return;
       }
 
       snapshot.forEach((doc) => {
-        const impianto = doc.data();
-        const item = document.createElement("article");
+        const commessa = doc.data();
+        const btn = document.createElement("button");
 
-        item.className = "impianto-item";
-        item.innerHTML = `
-          <strong>${escapeHTML(impianto.denominazione || "(senza denominazione)")}</strong>
-          <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
-          <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
-          <p><b>Operatore:</b> ${escapeHTML(impianto.creatoDa || "-")} (${escapeHTML(impianto.emailOperatore || "-")})</p>
-        `;
+        btn.type = "button";
+        btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
+        btn.dataset.commessaId = doc.id;
+        btn.textContent = commessa.nome || "Commessa senza nome";
+        btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
-        ui.lista.appendChild(item);
+        ui.commesseLista.appendChild(btn);
       });
     }, (error) => {
-      console.error("Errore lettura impianti:", error);
-      ui.lista.innerHTML = "<p class='error'>Errore nel caricamento degli impianti.</p>";
+      console.error(error);
+      ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
+    });
+}
+
+function stopCommesseSubscription() {
+  if (unsubscribeCommesse) {
+    unsubscribeCommesse();
+    unsubscribeCommesse = null;
+  }
+}
+
+function selectCommessa(id, nome) {
+  selectedCommessaId = id;
+  selectedCommessaName = nome;
+  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
+  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0;
+  updateCommessaButtonsActive();
+
+  stopImpiantiSubscription();
+  subscribeImpianti();
+}
+
+function updateCommessaButtonsActive() {
+  const buttons = ui.commesseLista.querySelectorAll(".commessa-btn");
+  buttons.forEach((btn) => {
+    const isActive = btn.dataset.commessaId === selectedCommessaId;
+    btn.classList.toggle("active", isActive);
+  });
+}
+
+function subscribeImpianti() {
+  if (!selectedCommessaId) return;
+
+  unsubscribeImpianti = db
+    .collection("commesse")
+    .doc(selectedCommessaId)
+    .collection("impianti")
+    .onSnapshot((snapshot) => {
+      currentImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderImpianti();
+      renderMap();
+    }, (error) => {
+      console.error(error);
+      ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";
     });
 }
 
@@ -304,10 +180,311 @@ function stopImpiantiSubscription() {
     unsubscribeImpianti();
     unsubscribeImpianti = null;
   }
+  currentImpianti = [];
+  clearMap();
+}
+
+function onExcelSelected(event) {
+  pendingRows = [];
+  ui.importBtn.disabled = true;
+
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    ui.importFeedback.textContent = "Nessun file selezionato.";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const workbook = XLSX.read(e.target.result, { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
+
+      pendingRows = rows.map(normalizeRow).filter((row) => row.denominazione);
+      ui.importFeedback.textContent = `Righe valide trovate: ${pendingRows.length}`;
+      ui.importBtn.disabled = !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
+    } catch (error) {
+      console.error(error);
+      ui.importFeedback.textContent = "Errore lettura Excel.";
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+async function importPendingRows() {
+  const user = auth.currentUser;
+
+  if (!user || !selectedCommessaId) {
+    alert("Fai login e seleziona una commessa.");
+    return;
+  }
+
+  if (!pendingRows.length) {
+    alert("Nessuna riga da importare.");
+    return;
+  }
+
+  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+
+  for (let i = 0; i < pendingRows.length; i += 450) {
+    const chunk = pendingRows.slice(i, i + 450);
+    const batch = db.batch();
+
+    chunk.forEach((row) => {
+      const docRef = ref.doc();
+      batch.set(docRef, {
+        ...row,
+        done: false,
+        doneAt: null,
+        doneBy: "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+  }
+
+  pendingRows = [];
+  ui.excelFile.value = "";
+  ui.importBtn.disabled = true;
+  ui.importFeedback.textContent = "Import completato.";
+}
+
+function normalizeRow(row) {
+  const keys = normalizeKeys(row);
+
+  return {
+    distretto: getValue(keys, ["distretto"]),
+    idSap: getValue(keys, ["idsap"]),
+    denominazione: getValue(keys, ["denominazioneimpianto", "denominazione", "impianto"]),
+    comune: getValue(keys, ["comuneubicazioneimpianto", "comune"]),
+    indirizzo: getValue(keys, ["viaecivicodiubicazioneimpianto", "indirizzo", "via"]),
+    voceRiferimento: getValue(keys, ["vocediriferimentoelencoprezzi"]),
+    sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim"]),
+    frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin"]),
+    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento"]),
+    gpsY: parseCoordinate(getValue(keys, ["coordinategpsy"])),
+    gpsX: parseCoordinate(getValue(keys, ["coordinategpsx"]))
+  };
+}
+
+function normalizeKeys(obj) {
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    const normalizedKey = String(key || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+    acc[normalizedKey] = String(value || "").trim();
+    return acc;
+  }, {});
+}
+
+function getValue(obj, aliases) {
+  for (const alias of aliases) {
+    if (obj[alias]) return obj[alias];
+  }
+  return "";
+}
+
+function parseCoordinate(value) {
+  const normalized = String(value || "").replace(",", ".").trim();
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function renderImpianti() {
+  ui.impiantiLista.innerHTML = "";
+
+  if (!currentImpianti.length) {
+    ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
+    return;
+  }
+
+  const sorted = [...currentImpianti].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+
+  sorted.forEach((impianto) => {
+    const article = document.createElement("article");
+    article.className = "impianto-item" + (impianto.done ? " done" : "");
+
+    const distance = formatDistance(distanceFromUser(impianto));
+    article.innerHTML = `
+      <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
+      <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
+      <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
+      <p><b>Distanza:</b> ${distance}</p>
+      <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
+    `;
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+
+    const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
+    const resetBtn = createButton("Reset", () => resetImpianto(impianto));
+    const waBtn = createButton("WhatsApp", () => openWhatsApp(impianto));
+
+    actions.appendChild(navigateBtn);
+    actions.appendChild(resetBtn);
+    actions.appendChild(waBtn);
+    article.appendChild(actions);
+
+    ui.impiantiLista.appendChild(article);
+  });
+}
+
+function createButton(label, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn";
+  btn.textContent = label;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+async function navigateToImpianto(impianto) {
+  if (!selectedCommessaId || !impianto.id) return;
+
+  const lat = impianto.gpsY;
+  const lng = impianto.gpsX;
+
+  if (lat == null || lng == null) {
+    alert("Coordinate mancanti per questo impianto.");
+    return;
+  }
+
+  await setImpiantoDone(impianto.id, true);
+
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+  window.open(url, "_blank");
+}
+
+async function resetImpianto(impianto) {
+  if (!selectedCommessaId || !impianto.id) return;
+  await setImpiantoDone(impianto.id, false);
+}
+
+async function setImpiantoDone(impiantoId, done) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti").doc(impiantoId);
+
+  await ref.update({
+    done,
+    doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null,
+    doneBy: done ? (user.displayName || user.email || "Operatore") : ""
+  });
+}
+
+function openWhatsApp(impianto) {
+  const user = auth.currentUser;
+  if (!user) {
+    alert("Devi fare login.");
+    return;
+  }
+
+  const now = new Date();
+  const message = [
+    "Manutenzione eseguita",
+    `Commessa: ${selectedCommessaName || "-"}`,
+    `Impianto: ${impianto.denominazione || "-"}`,
+    `Operatore: ${user.displayName || user.email || "-"}`,
+    `Data/Ora: ${now.toLocaleString("it-IT")}`
+  ].join("\n");
+
+  const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank");
+}
+
+function renderMap() {
+  clearMap();
+
+  const bounds = [];
+
+  currentImpianti.forEach((impianto) => {
+    if (impianto.gpsY == null || impianto.gpsX == null) return;
+
+    const marker = L.marker([impianto.gpsY, impianto.gpsX], {
+      icon: L.divIcon({
+        className: "",
+        html: `<div class="marker-pin ${impianto.done ? "done" : "todo"}"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      })
+    });
+
+    marker.bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "")}`);
+    marker.addTo(markerLayer);
+    bounds.push([impianto.gpsY, impianto.gpsX]);
+  });
+
+  if (currentUserPos) {
+    L.circleMarker([currentUserPos.lat, currentUserPos.lng], {
+      radius: 7,
+      color: "#111827",
+      fillColor: "#111827",
+      fillOpacity: 0.85
+    }).addTo(markerLayer).bindPopup("La tua posizione");
+    bounds.push([currentUserPos.lat, currentUserPos.lng]);
+  }
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [24, 24] });
+  }
+}
+
+function clearMap() {
+  markerLayer.clearLayers();
+}
+
+function initGeolocation() {
+  if (!navigator.geolocation) {
+    ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition((pos) => {
+    currentUserPos = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude
+    };
+    ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
+    renderImpianti();
+    renderMap();
+  }, () => {
+    ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+  }, {
+    enableHighAccuracy: true,
+    timeout: 8000
+  });
+}
+
+function distanceFromUser(impianto) {
+  if (!currentUserPos || impianto.gpsY == null || impianto.gpsX == null) return Number.MAX_SAFE_INTEGER;
+  return haversine(currentUserPos.lat, currentUserPos.lng, impianto.gpsY, impianto.gpsX);
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatDistance(km) {
+  if (!Number.isFinite(km) || km > 1e10) return "N/D";
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(2)} km`;
 }
 
 function escapeHTML(value) {
-  return String(value)
+  return String(value || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

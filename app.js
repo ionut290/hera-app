@@ -25,6 +25,8 @@ let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
 let currentUserPos = null;
 let currentImpianti = [];
+let currentUser = null;
+const ADMIN_EMAIL = "ionut29019@gmail.com";
 
 const map = L.map("map");
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -44,6 +46,7 @@ ui.importBtn.addEventListener("click", importPendingRows);
 initGeolocation();
 
 auth.onAuthStateChanged((user) => {
+  currentUser = user || null;
   const loggedIn = Boolean(user);
 
   ui.loginBtn.disabled = loggedIn;
@@ -52,7 +55,8 @@ auth.onAuthStateChanged((user) => {
     ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
     : "Non loggato";
 
-  ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0;
+  ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
+  updateAdminControls();
 
   stopCommesseSubscription();
   stopImpiantiSubscription();
@@ -66,6 +70,13 @@ auth.onAuthStateChanged((user) => {
 
   if (loggedIn) subscribeCommesse();
 });
+
+function updateAdminControls() {
+  const canManage = canManageData();
+  ui.commessaName.disabled = !canManage;
+  const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
+  if (submitBtn) submitBtn.disabled = !canManage;
+}
 
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -92,6 +103,10 @@ async function createCommessa(event) {
 
   const nome = ui.commessaName.value.trim();
   if (!nome) return;
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può aggiungere commesse.");
+    return;
+  }
 
   await db.collection("commesse").add({
     nome,
@@ -116,15 +131,22 @@ function subscribeCommesse() {
 
       snapshot.forEach((doc) => {
         const commessa = doc.data();
-        const btn = document.createElement("button");
+        const row = document.createElement("div");
+        row.className = "commessa-row";
 
+        const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
         btn.dataset.commessaId = doc.id;
         btn.textContent = commessa.nome || "Commessa senza nome";
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
-        ui.commesseLista.appendChild(btn);
+        const deleteBtn = createButton("Elimina", () => deleteCommessa(doc.id, commessa.nome || "Commessa"));
+        deleteBtn.disabled = !canManageData();
+
+        row.appendChild(btn);
+        row.appendChild(deleteBtn);
+        ui.commesseLista.appendChild(row);
       });
     }, (error) => {
       console.error(error);
@@ -143,7 +165,7 @@ function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
-  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0;
+  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
   updateCommessaButtonsActive();
 
   stopImpiantiSubscription();
@@ -225,6 +247,10 @@ async function importPendingRows() {
     alert("Nessuna riga da importare.");
     return;
   }
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può aggiungere impianti.");
+    return;
+  }
 
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
 
@@ -236,6 +262,8 @@ async function importPendingRows() {
       const docRef = ref.doc();
       batch.set(docRef, {
         ...row,
+        hasOrdinario: hasOrdinario(row.codicePrezzo),
+        hasStraordinario: hasStraordinario(row.codicePrezzo),
         tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
         done: false,
         doneAt: null,
@@ -300,10 +328,31 @@ function parseCoordinate(value) {
 }
 
 function classifyTipoManutenzione(codicePrezzo) {
-  const code = String(codicePrezzo || "").trim().toUpperCase().replace(/\s+/g, "");
-  if (code === "A11" || code === "A12") return "Ordinaria";
-  if (!code) return "Non specificata";
-  return "Straordinaria";
+  const ordinario = hasOrdinario(codicePrezzo);
+  const straordinario = hasStraordinario(codicePrezzo);
+  if (ordinario && straordinario) return "Ordinaria + Straordinaria";
+  if (ordinario) return "Ordinaria";
+  if (straordinario) return "Straordinaria";
+  return "Non specificata";
+}
+
+function splitCodes(codicePrezzo) {
+  return String(codicePrezzo || "")
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
+
+function hasOrdinario(codicePrezzo) {
+  const codes = splitCodes(codicePrezzo);
+  return codes.includes("A11") || codes.includes("A12");
+}
+
+function hasStraordinario(codicePrezzo) {
+  const codes = splitCodes(codicePrezzo);
+  if (codes.length === 0) return false;
+  return codes.some((code) => code !== "A11" && code !== "A12");
 }
 
 function renderImpianti() {
@@ -322,13 +371,13 @@ function renderImpianti() {
 
     const distance = formatDistance(distanceFromUser(impianto));
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
-    const isStraordinaria = tipo === "Straordinaria";
+    const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     article.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
-      <p><b>Tipo:</b> <span class="badge ${isStraordinaria ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></p>
+      <p><b>Tipo:</b> <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
       <p><b>Distanza:</b> ${distance}</p>
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
@@ -340,12 +389,16 @@ function renderImpianti() {
     const doneBtn = createButton("Fatto", () => markImpiantoDone(impianto));
     const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
     const resetBtn = createButton("Reset", () => resetImpianto(impianto));
+    resetBtn.disabled = !canManageData();
     const waBtn = createButton("WhatsApp", () => openWhatsApp(impianto));
+    const deleteBtn = createButton("Elimina", () => deleteImpianto(impianto));
+    deleteBtn.disabled = !canManageData();
 
     actions.appendChild(doneBtn);
     actions.appendChild(navigateBtn);
     actions.appendChild(resetBtn);
     actions.appendChild(waBtn);
+    actions.appendChild(deleteBtn);
     article.appendChild(actions);
 
     ui.impiantiLista.appendChild(article);
@@ -383,7 +436,44 @@ async function markImpiantoDone(impianto) {
 
 async function resetImpianto(impianto) {
   if (!selectedCommessaId || !impianto.id) return;
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può usare reset.");
+    return;
+  }
   await setImpiantoDone(impianto.id, false);
+}
+
+async function deleteImpianto(impianto) {
+  if (!selectedCommessaId || !impianto.id) return;
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può eliminare impianti.");
+    return;
+  }
+
+  const ok = window.confirm(`Eliminare impianto ${impianto.denominazione || ""}?`);
+  if (!ok) return;
+
+  await db.collection("commesse").doc(selectedCommessaId).collection("impianti").doc(impianto.id).delete();
+}
+
+async function deleteCommessa(commessaId, nome) {
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può eliminare commesse.");
+    return;
+  }
+
+  const ok = window.confirm(`Eliminare commessa ${nome}? Prima elimina gli impianti associati.`);
+  if (!ok) return;
+
+  await db.collection("commesse").doc(commessaId).delete();
+
+  if (selectedCommessaId === commessaId) {
+    selectedCommessaId = "";
+    selectedCommessaName = "";
+    stopImpiantiSubscription();
+    ui.impiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa.</p>";
+    ui.commessaAttiva.textContent = "Seleziona una commessa.";
+  }
 }
 
 async function setImpiantoDone(impiantoId, done) {
@@ -427,10 +517,11 @@ function renderMap() {
   currentImpianti.forEach((impianto) => {
     if (impianto.gpsY == null || impianto.gpsX == null) return;
 
+    const markerClass = getMarkerClass(impianto);
     const marker = L.marker([impianto.gpsY, impianto.gpsX], {
       icon: L.divIcon({
         className: "",
-        html: `<div class="marker-pin ${impianto.done ? "done" : "todo"}"></div>`,
+        html: `<div class="marker-pin ${markerClass}"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7]
       })
@@ -455,6 +546,20 @@ function renderMap() {
   if (bounds.length > 0) {
     map.fitBounds(bounds, { padding: [24, 24] });
   }
+}
+
+function getMarkerClass(impianto) {
+  const done = Boolean(impianto.done);
+  const straordinario = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
+  if (done && straordinario) return "done-straordinario";
+  if (done) return "done";
+  if (straordinario) return "straordinario";
+  return "todo";
+}
+
+function canManageData() {
+  const email = (currentUser && currentUser.email) ? currentUser.email.toLowerCase() : "";
+  return email === ADMIN_EMAIL;
 }
 
 function clearMap() {

@@ -86,6 +86,12 @@ input {
   width: 100%;
 }
 
+.commessa-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
 .commessa-btn.active {
   border-color: var(--primary);
   color: var(--primary);
@@ -147,6 +153,10 @@ input {
 
 .marker-pin.todo { background: var(--todo); }
 .marker-pin.done { background: var(--done); }
+.marker-pin.straordinario { background: #f97316; }
+.marker-pin.done-straordinario {
+  background: conic-gradient(#0f9d58 0 50%, #f97316 50% 100%);
+}
 
 @media (min-width: 760px) {
   .container { padding: 22px; gap: 14px; }

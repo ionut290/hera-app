@@ -51,12 +51,8 @@ const ui = {
   mezziLista: document.getElementById("mezzi-lista"),
   squadraForm: document.getElementById("squadra-form"),
   squadraCommessa: document.getElementById("squadra-commessa"),
-  squadra1: document.getElementById("squadra-1"),
-  squadra2: document.getElementById("squadra-2"),
-  squadra3: document.getElementById("squadra-3"),
-  squadra1Mezzi: document.getElementById("squadra-1-mezzi"),
-  squadra2Mezzi: document.getElementById("squadra-2-mezzi"),
-  squadra3Mezzi: document.getElementById("squadra-3-mezzi"),
+  squadraRows: document.getElementById("squadra-rows"),
+  addSquadraRowBtn: document.getElementById("add-squadra-row-btn"),
   squadraRiferimento: document.getElementById("squadra-riferimento"),
   squadraHint: document.getElementById("squadra-hint"),
   squadreLista: document.getElementById("squadre-lista"),
@@ -158,6 +154,7 @@ ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
+ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
 ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commesse"));
@@ -174,6 +171,7 @@ ui.weatherCard.addEventListener("keydown", (event) => {
 });
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 
+addSquadraRow();
 initGeolocation();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
@@ -256,13 +254,9 @@ function updateAdminControls() {
   if (ui.personaleForm.querySelector("button[type='submit']")) ui.personaleForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.mezziForm.querySelector("button[type='submit']")) ui.mezziForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraCommessa.disabled = !canManage;
-  ui.squadra1.disabled = !canManage;
-  ui.squadra2.disabled = !canManage;
-  ui.squadra3.disabled = !canManage;
-  ui.squadra1Mezzi.disabled = !canManage;
-  ui.squadra2Mezzi.disabled = !canManage;
-  ui.squadra3Mezzi.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
+  ui.addSquadraRowBtn.disabled = !canManage;
+  ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -1433,24 +1427,69 @@ async function deleteMezzo(id, nome) {
 function autofillSquadraForm() {
   const commessaId = ui.squadraCommessa.value;
   if (!commessaId) {
-    ui.squadra1.value = "";
-    ui.squadra2.value = "";
-    ui.squadra3.value = "";
-    ui.squadra1Mezzi.value = "";
-    ui.squadra2Mezzi.value = "";
-    ui.squadra3Mezzi.value = "";
+    ui.squadraRows.innerHTML = "";
     ui.squadraRiferimento.value = "";
+    addSquadraRow();
     return;
   }
 
   const data = squadreByCommessa.get(commessaId) || {};
-  ui.squadra1.value = data.squadra1 || "";
-  ui.squadra2.value = data.squadra2 || "";
-  ui.squadra3.value = data.squadra3 || "";
-  ui.squadra1Mezzi.value = data.squadra1Mezzi || "";
-  ui.squadra2Mezzi.value = data.squadra2Mezzi || "";
-  ui.squadra3Mezzi.value = data.squadra3Mezzi || "";
   ui.squadraRiferimento.value = data.riferimentoData || "";
+  setSquadraRowsFromData(data);
+}
+
+function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
+  const index = ui.squadraRows.children.length + 1;
+  const row = document.createElement("div");
+  row.className = "squadra-row";
+  row.innerHTML = `
+    <div class="squadra-row-head">
+      <strong>Squadra ${index}</strong>
+      <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
+    </div>
+    <input type="text" class="squadra-personale" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
+    <input type="text" class="squadra-mezzi" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
+  `;
+  row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
+    row.remove();
+    renumberSquadraRows();
+    if (!ui.squadraRows.children.length) addSquadraRow();
+  });
+  ui.squadraRows.appendChild(row);
+  updateAdminControls();
+}
+
+function renumberSquadraRows() {
+  Array.from(ui.squadraRows.children).forEach((row, idx) => {
+    const title = row.querySelector(".squadra-row-head strong");
+    if (title) title.textContent = `Squadra ${idx + 1}`;
+  });
+}
+
+function readSquadraRows() {
+  return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
+    personale: String((row.querySelector(".squadra-personale") || {}).value || "").trim(),
+    mezzi: String((row.querySelector(".squadra-mezzi") || {}).value || "").trim()
+  })).filter((row) => row.personale || row.mezzi);
+}
+
+function getLegacySquadreRows(data) {
+  const rows = [];
+  if (data.squadra1 || data.squadra1Mezzi) rows.push({ personale: data.squadra1 || "", mezzi: data.squadra1Mezzi || "" });
+  if (data.squadra2 || data.squadra2Mezzi) rows.push({ personale: data.squadra2 || "", mezzi: data.squadra2Mezzi || "" });
+  if (data.squadra3 || data.squadra3Mezzi) rows.push({ personale: data.squadra3 || "", mezzi: data.squadra3Mezzi || "" });
+  return rows;
+}
+
+function setSquadraRowsFromData(data) {
+  ui.squadraRows.innerHTML = "";
+  const rows = Array.isArray(data.squadre) ? data.squadre : getLegacySquadreRows(data);
+  if (!rows.length) {
+    addSquadraRow();
+    return;
+  }
+  rows.forEach((row) => addSquadraRow(row));
+  renumberSquadraRows();
 }
 
 async function saveSquadraComposition(event) {
@@ -1468,12 +1507,7 @@ async function saveSquadraComposition(event) {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
     riferimentoData: ui.squadraRiferimento.value || "",
-    squadra1: ui.squadra1.value.trim(),
-    squadra1Mezzi: ui.squadra1Mezzi.value.trim(),
-    squadra2: ui.squadra2.value.trim(),
-    squadra2Mezzi: ui.squadra2Mezzi.value.trim(),
-    squadra3: ui.squadra3.value.trim(),
-    squadra3Mezzi: ui.squadra3Mezzi.value.trim(),
+    squadre: readSquadraRows(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   }, { merge: true });
@@ -1485,10 +1519,8 @@ function renderSquadre() {
   const commesse = Array.from(commesseById.values());
   const commesseConSquadre = commesse.filter((commessa) => {
     const squad = squadreByCommessa.get(commessa.id) || {};
-    return Boolean(
-      squad.squadra1 || squad.squadra2 || squad.squadra3
-      || squad.squadra1Mezzi || squad.squadra2Mezzi || squad.squadra3Mezzi
-    );
+    const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+    return rows.some((row) => row.personale || row.mezzi);
   });
   if (!commesseConSquadre.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -1499,18 +1531,17 @@ function renderSquadre() {
     const item = document.createElement("article");
     item.className = "squadra-item";
     const squad = squadreByCommessa.get(commessa.id) || {};
+    const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
+    const rowsHtml = squadRows.map((row, idx) => (
+      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${escapeHTML(row.mezzi || "-")}</p>`
+    )).join("");
     item.innerHTML = `
       <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
-      <p><b>👥 Squadra 1:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
-      <p><b>🚚 Mezzi 1:</b> ${escapeHTML(squad.squadra1Mezzi || "-")}</p>
-      <p><b>👥 Squadra 2:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
-      <p><b>🚚 Mezzi 2:</b> ${escapeHTML(squad.squadra2Mezzi || "-")}</p>
-      <p><b>👥 Squadra 3:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
-      <p><b>🚚 Mezzi 3:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
+      ${rowsHtml}
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
     item.appendChild(askBtn);
@@ -1522,7 +1553,7 @@ function updateSquadraHintFromSources() {
   if (!canManageData()) return;
   const personale = personaleRecords.map((p) => p.nome).filter(Boolean).join(", ") || "Nessuno";
   const mezzi = mezziRecords.map((m) => m.nome).filter(Boolean).join(", ") || "Nessuno";
-  ui.squadraHint.textContent = `Personale disponibile (assegnalo a Squadra 1/2/3): ${personale}. Mezzi disponibili (assegnali per squadra): ${mezzi}.`;
+  ui.squadraHint.textContent = `Personale disponibile: ${personale}. Mezzi disponibili: ${mezzi}. Usa "Aggiungi squadra" per creare tutte le squadre che vuoi.`;
 }
 
 async function setImpiantoDone(impiantoIds, done) {
@@ -1564,16 +1595,15 @@ function openWhatsApp(impianto) {
 }
 
 function openSquadraWhatsApp(squad, commessa) {
+  const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+  const rowsMessage = squadRows.map((row, idx) => (
+    `👥 Squadra ${idx + 1} personale: ${row.personale || "-"}\n🚚 Squadra ${idx + 1} mezzi: ${row.mezzi || "-"}`
+  )).join("\n");
   const message = [
     "📣 Richiesta conferma squadre",
     `📁 Commessa: ${commessa.nome || "-"}`,
     `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    `👥 Squadra 1 personale: ${squad.squadra1 || "-"}`,
-    `🚚 Squadra 1 mezzi: ${squad.squadra1Mezzi || "-"}`,
-    `👥 Squadra 2 personale: ${squad.squadra2 || "-"}`,
-    `🚚 Squadra 2 mezzi: ${squad.squadra2Mezzi || "-"}`,
-    `👥 Squadra 3 personale: ${squad.squadra3 || "-"}`,
-    `🚚 Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
+    rowsMessage || "Nessuna squadra compilata."
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;

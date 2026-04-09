@@ -15,7 +15,18 @@ const ui = {
   importBtn: document.getElementById("import-btn"),
   importFeedback: document.getElementById("import-feedback"),
   impiantiLista: document.getElementById("impianti-lista"),
-  gpsStatus: document.getElementById("gps-status")
+  gpsStatus: document.getElementById("gps-status"),
+  chatOpenBtn: document.getElementById("chat-open-btn"),
+  chatCounter: document.getElementById("chat-counter"),
+  chatModal: document.getElementById("chat-modal"),
+  chatCloseBtn: document.getElementById("chat-close-btn"),
+  chatFullList: document.getElementById("chat-full-list"),
+  chatSendForm: document.getElementById("chat-send-form"),
+  chatText: document.getElementById("chat-text"),
+  chatSendBtn: document.getElementById("chat-send-btn"),
+  chatMediaInput: document.getElementById("chat-media-input"),
+  chatVoiceBtn: document.getElementById("chat-voice-btn"),
+  chatFeedback: document.getElementById("chat-feedback")
 };
 
 let pendingRows = [];
@@ -26,6 +37,14 @@ let unsubscribeImpianti = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentUser = null;
+let unsubscribeChat = null;
+let chatMessages = [];
+let mediaRecorder = null;
+let mediaChunks = [];
+let isRecording = false;
+let lastReadChatAt = null;
+
+const CHAT_MEDIA_MAX_MB = 8;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 
 const map = L.map("map");
@@ -42,6 +61,11 @@ ui.logoutBtn.addEventListener("click", logout);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
+ui.chatOpenBtn.addEventListener("click", openChatModal);
+ui.chatCloseBtn.addEventListener("click", closeChatModal);
+ui.chatSendForm.addEventListener("submit", sendTextMessage);
+ui.chatMediaInput.addEventListener("change", sendMediaMessage);
+ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 
 initGeolocation();
 
@@ -60,6 +84,7 @@ auth.onAuthStateChanged((user) => {
 
   stopCommesseSubscription();
   stopImpiantiSubscription();
+  stopChatSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
@@ -67,8 +92,13 @@ auth.onAuthStateChanged((user) => {
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
   clearMap();
+  lastReadChatAt = null;
+  renderChat([]);
 
-  if (loggedIn) subscribeCommesse();
+  if (loggedIn) {
+    subscribeCommesse();
+    subscribeChat();
+  }
 });
 
 function updateAdminControls() {
@@ -188,7 +218,8 @@ function subscribeImpianti() {
     .doc(selectedCommessaId)
     .collection("impianti")
     .onSnapshot((snapshot) => {
-      currentImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      currentImpianti = combineImpiantiForView(rawImpianti);
       renderImpianti();
       renderMap();
     }, (error) => {
@@ -223,8 +254,9 @@ function onExcelSelected(event) {
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
 
-      pendingRows = rows.map(normalizeRow).filter((row) => row.denominazione);
-      ui.importFeedback.textContent = `Righe valide trovate: ${pendingRows.length}`;
+      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione);
+      pendingRows = mergeRowsByImpianto(normalizedRows);
+      ui.importFeedback.textContent = `Righe valide: ${normalizedRows.length}. Impianti unici: ${pendingRows.length}`;
       ui.importBtn.disabled = !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
     } catch (error) {
       console.error(error);
@@ -299,6 +331,89 @@ function normalizeRow(row) {
     gpsY: parseCoordinate(getValue(keys, ["coordinategpsy"])),
     gpsX: parseCoordinate(getValue(keys, ["coordinategpsx"]))
   };
+}
+
+function mergeRowsByImpianto(rows) {
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const key = buildImpiantoKey(row);
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { ...row });
+      return;
+    }
+
+    existing.codicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    existing.voceRiferimento = mergeMultiValue(existing.voceRiferimento, row.voceRiferimento);
+    existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
+    existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
+    existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
+
+    if (!existing.distretto && row.distretto) existing.distretto = row.distretto;
+    if (!existing.comune && row.comune) existing.comune = row.comune;
+    if (!existing.indirizzo && row.indirizzo) existing.indirizzo = row.indirizzo;
+    if (!existing.idSap && row.idSap) existing.idSap = row.idSap;
+    if (existing.gpsY == null && row.gpsY != null) existing.gpsY = row.gpsY;
+    if (existing.gpsX == null && row.gpsX != null) existing.gpsX = row.gpsX;
+  });
+
+  return Array.from(grouped.values());
+}
+
+function combineImpiantiForView(impianti) {
+  const grouped = new Map();
+
+  impianti.forEach((item) => {
+    const key = buildImpiantoKey(item);
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        ...item,
+        sourceIds: [item.id]
+      });
+      return;
+    }
+
+    existing.sourceIds.push(item.id);
+    existing.codicePrezzo = mergeMultiValue(existing.codicePrezzo, item.codicePrezzo);
+    existing.voceRiferimento = mergeMultiValue(existing.voceRiferimento, item.voceRiferimento);
+    existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, item.tipologiaIntervento);
+    existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, item.lavorazioniRichieste);
+    existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, item.frequenzaAnnua);
+
+    existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
+    existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
+    existing.tipoManutenzione = classifyTipoManutenzione(existing.codicePrezzo);
+    existing.done = Boolean(existing.done || item.done);
+
+    if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
+    if (!existing.comune && item.comune) existing.comune = item.comune;
+    if (!existing.indirizzo && item.indirizzo) existing.indirizzo = item.indirizzo;
+    if (existing.gpsY == null && item.gpsY != null) existing.gpsY = item.gpsY;
+    if (existing.gpsX == null && item.gpsX != null) existing.gpsX = item.gpsX;
+  });
+
+  return Array.from(grouped.values());
+}
+
+function buildImpiantoKey(row) {
+  const idSap = String(row.idSap || "").trim().toLowerCase();
+  if (idSap) return `sap:${idSap}`;
+
+  const normalizedName = String(row.denominazione || "").trim().toLowerCase();
+  const normalizedComune = String(row.comune || "").trim().toLowerCase();
+  const normalizedAddress = String(row.indirizzo || "").trim().toLowerCase();
+  return `name:${normalizedName}|comune:${normalizedComune}|indirizzo:${normalizedAddress}`;
+}
+
+function mergeMultiValue(oldValue, newValue) {
+  const values = [oldValue, newValue]
+    .flatMap((value) => String(value || "").split("|"))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(values)).join(" | ");
 }
 
 function normalizeKeys(obj) {
@@ -430,23 +545,26 @@ async function navigateToImpianto(impianto) {
 }
 
 async function markImpiantoDone(impianto) {
-  if (!selectedCommessaId || !impianto.id) return;
-  updateImpiantoLocalState(impianto.id, { done: true });
-  await setImpiantoDone(impianto.id, true);
+  const ids = getImpiantoDocIds(impianto);
+  if (!selectedCommessaId || !ids.length) return;
+  updateImpiantoLocalState(ids, { done: true });
+  await setImpiantoDone(ids, true);
 }
 
 async function resetImpianto(impianto) {
-  if (!selectedCommessaId || !impianto.id) return;
+  const ids = getImpiantoDocIds(impianto);
+  if (!selectedCommessaId || !ids.length) return;
   if (!canManageData()) {
     alert("Solo ionut29019@gmail.com può usare reset.");
     return;
   }
-  updateImpiantoLocalState(impianto.id, { done: false });
-  await setImpiantoDone(impianto.id, false);
+  updateImpiantoLocalState(ids, { done: false });
+  await setImpiantoDone(ids, false);
 }
 
 async function deleteImpianto(impianto) {
-  if (!selectedCommessaId || !impianto.id) return;
+  const ids = getImpiantoDocIds(impianto);
+  if (!selectedCommessaId || !ids.length) return;
   if (!canManageData()) {
     alert("Solo ionut29019@gmail.com può eliminare impianti.");
     return;
@@ -455,7 +573,8 @@ async function deleteImpianto(impianto) {
   const ok = window.confirm(`Eliminare impianto ${impianto.denominazione || ""}?`);
   if (!ok) return;
 
-  await db.collection("commesse").doc(selectedCommessaId).collection("impianti").doc(impianto.id).delete();
+  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  await Promise.all(ids.map((id) => ref.doc(id).delete()));
 }
 
 async function deleteCommessa(commessaId, nome) {
@@ -478,17 +597,16 @@ async function deleteCommessa(commessaId, nome) {
   }
 }
 
-async function setImpiantoDone(impiantoId, done) {
+async function setImpiantoDone(impiantoIds, done) {
   const user = auth.currentUser;
   if (!user) return;
 
-  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti").doc(impiantoId);
-
-  await ref.update({
+  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
     done,
     doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null,
     doneBy: done ? (user.displayName || user.email || "Operatore") : ""
-  });
+  })));
 }
 
 function openWhatsApp(impianto) {
@@ -558,12 +676,18 @@ function getMarkerClass(impianto) {
   return "todo";
 }
 
-function updateImpiantoLocalState(impiantoId, patch) {
+function updateImpiantoLocalState(impiantoIds, patch) {
+  const idSet = new Set(impiantoIds);
   currentImpianti = currentImpianti.map((item) => (
-    item.id === impiantoId ? { ...item, ...patch } : item
+    getImpiantoDocIds(item).some((id) => idSet.has(id)) ? { ...item, ...patch } : item
   ));
   renderImpianti();
   renderMap();
+}
+
+function getImpiantoDocIds(impianto) {
+  if (Array.isArray(impianto.sourceIds) && impianto.sourceIds.length) return impianto.sourceIds;
+  return impianto.id ? [impianto.id] : [];
 }
 
 function canManageData() {
@@ -625,4 +749,300 @@ function escapeHTML(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function subscribeChat() {
+  unsubscribeChat = db
+    .collection("chatMessages")
+    .orderBy("createdAt", "asc")
+    .limit(500)
+    .onSnapshot((snapshot) => {
+      chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderChat(chatMessages);
+    }, (error) => {
+      console.error(error);
+      ui.chatFeedback.textContent = "Errore caricamento chat.";
+    });
+}
+
+function stopChatSubscription() {
+  if (unsubscribeChat) {
+    unsubscribeChat();
+    unsubscribeChat = null;
+  }
+  chatMessages = [];
+}
+
+function renderChat(messages) {
+  if (!currentUser) {
+    ui.chatCounter.classList.add("hidden");
+    ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
+    ui.chatSendBtn.disabled = true;
+    ui.chatText.disabled = true;
+    ui.chatMediaInput.disabled = true;
+    ui.chatVoiceBtn.disabled = true;
+    return;
+  }
+
+  ui.chatSendBtn.disabled = false;
+  ui.chatText.disabled = false;
+  ui.chatMediaInput.disabled = false;
+  ui.chatVoiceBtn.disabled = false;
+
+  if (!messages.length) {
+    ui.chatCounter.classList.add("hidden");
+    ui.chatFullList.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
+    return;
+  }
+
+  const unreadCount = countUnreadMessages(messages);
+  if (unreadCount > 0) {
+    ui.chatCounter.classList.remove("hidden");
+    ui.chatCounter.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+  } else {
+    ui.chatCounter.classList.add("hidden");
+  }
+
+  ui.chatFullList.innerHTML = "";
+  messages.forEach((message) => {
+    ui.chatFullList.appendChild(createChatMessageElement(message));
+  });
+  ui.chatFullList.scrollTop = ui.chatFullList.scrollHeight;
+
+  if (!ui.chatModal.classList.contains("hidden")) {
+    markChatAsRead();
+  }
+}
+
+function countUnreadMessages(messages) {
+  return messages.filter((message) => {
+    if (isOwnMessage(message)) return false;
+    const createdAt = message.createdAt && message.createdAt.toDate
+      ? message.createdAt.toDate().getTime()
+      : 0;
+    return !lastReadChatAt || createdAt > lastReadChatAt;
+  }).length;
+}
+
+function markChatAsRead() {
+  if (!chatMessages.length) {
+    ui.chatCounter.classList.add("hidden");
+    return;
+  }
+
+  const latestMessage = chatMessages[chatMessages.length - 1];
+  const createdAt = latestMessage.createdAt && latestMessage.createdAt.toDate
+    ? latestMessage.createdAt.toDate().getTime()
+    : Date.now();
+
+  lastReadChatAt = createdAt;
+  ui.chatCounter.classList.add("hidden");
+}
+
+function createChatMessageElement(message) {
+  const item = document.createElement("article");
+  item.className = "chat-message" + (isOwnMessage(message) ? " own" : "");
+
+  const createdAt = message.createdAt && message.createdAt.toDate
+    ? message.createdAt.toDate()
+    : new Date();
+
+  const top = document.createElement("div");
+  top.className = "chat-message-top";
+  top.innerHTML = `
+    <strong>${escapeHTML(message.senderName || "Operatore")}</strong>
+    <span>${createdAt.toLocaleString("it-IT")}</span>
+  `;
+  item.appendChild(top);
+
+  if (message.type === "text") {
+    const p = document.createElement("p");
+    p.className = "chat-text";
+    p.textContent = message.text || "";
+    item.appendChild(p);
+  }
+
+  if (message.type === "image" && message.mediaDataUrl) {
+    const img = document.createElement("img");
+    img.className = "chat-media-preview";
+    img.src = message.mediaDataUrl;
+    img.alt = "Immagine inviata in chat";
+    item.appendChild(img);
+  }
+
+  if (message.type === "video" && message.mediaDataUrl) {
+    const video = document.createElement("video");
+    video.className = "chat-media-preview";
+    video.src = message.mediaDataUrl;
+    video.controls = true;
+    item.appendChild(video);
+  }
+
+  if (message.type === "voice" && message.mediaDataUrl) {
+    const audio = document.createElement("audio");
+    audio.src = message.mediaDataUrl;
+    audio.controls = true;
+    audio.className = "chat-audio";
+    item.appendChild(audio);
+  }
+
+  return item;
+}
+
+function openChatModal() {
+  ui.chatModal.classList.remove("hidden");
+  ui.chatModal.setAttribute("aria-hidden", "false");
+  markChatAsRead();
+}
+
+function closeChatModal() {
+  ui.chatModal.classList.add("hidden");
+  ui.chatModal.setAttribute("aria-hidden", "true");
+}
+
+async function sendTextMessage(event) {
+  event.preventDefault();
+  const text = ui.chatText.value.trim();
+  if (!text) return;
+
+  await sendChatMessage({
+    type: "text",
+    text
+  });
+
+  ui.chatText.value = "";
+}
+
+async function sendMediaMessage(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  try {
+    enforceMediaSize(file);
+    const mediaDataUrl = await readFileAsDataURL(file);
+    const type = file.type.startsWith("video/") ? "video" : "image";
+
+    await sendChatMessage({
+      type,
+      text: "",
+      mediaDataUrl,
+      mediaMimeType: file.type,
+      mediaName: file.name
+    });
+
+    ui.chatFeedback.textContent = "Media inviato.";
+  } catch (error) {
+    console.error(error);
+    ui.chatFeedback.textContent = error.message || "Errore invio media.";
+  } finally {
+    ui.chatMediaInput.value = "";
+  }
+}
+
+async function toggleVoiceRecording() {
+  if (!currentUser) {
+    alert("Devi fare login.");
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    ui.chatFeedback.textContent = "Registrazione vocale non supportata da questo browser.";
+    return;
+  }
+
+  if (isRecording && mediaRecorder) {
+    mediaRecorder.stop();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) mediaChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      try {
+        const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        enforceMediaSize(blob);
+        const mediaDataUrl = await readBlobAsDataURL(blob);
+
+        await sendChatMessage({
+          type: "voice",
+          text: "",
+          mediaDataUrl,
+          mediaMimeType: blob.type || "audio/webm",
+          mediaName: `vocale-${Date.now()}.webm`
+        });
+
+        ui.chatFeedback.textContent = "Messaggio vocale inviato.";
+      } catch (error) {
+        console.error(error);
+        ui.chatFeedback.textContent = error.message || "Errore invio vocale.";
+      } finally {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorder = null;
+        mediaChunks = [];
+        isRecording = false;
+        ui.chatVoiceBtn.textContent = "🎤 Invia vocale";
+      }
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    ui.chatVoiceBtn.textContent = "⏹️ Stop e invia";
+    ui.chatFeedback.textContent = "Registrazione in corso...";
+  } catch (error) {
+    console.error(error);
+    ui.chatFeedback.textContent = "Impossibile accedere al microfono.";
+  }
+}
+
+async function sendChatMessage(payload) {
+  if (!currentUser) {
+    alert("Devi fare login.");
+    return;
+  }
+
+  const senderName = currentUser.displayName || currentUser.email || "Operatore";
+
+  await db.collection("chatMessages").add({
+    ...payload,
+    senderId: currentUser.uid,
+    senderName,
+    senderEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+function isOwnMessage(message) {
+  return Boolean(currentUser && message.senderId === currentUser.uid);
+}
+
+function enforceMediaSize(fileOrBlob) {
+  const maxBytes = CHAT_MEDIA_MAX_MB * 1024 * 1024;
+  if (fileOrBlob.size > maxBytes) {
+    throw new Error(`File troppo grande. Limite: ${CHAT_MEDIA_MAX_MB}MB.`);
+  }
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Errore lettura file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readBlobAsDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Errore conversione audio."));
+    reader.readAsDataURL(blob);
+  });
 }

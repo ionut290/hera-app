@@ -1122,28 +1122,16 @@ async function connectGoogleDrive() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
-    provider.addScope("https://www.googleapis.com/auth/spreadsheets");
-
-    const result = await auth.currentUser.linkWithPopup
-      ? await auth.currentUser.linkWithPopup(provider).catch(() => auth.signInWithPopup(provider))
-      : await auth.signInWithPopup(provider);
+    const result = await firebase.auth().signInWithPopup(provider);
 
     const accessToken = extractGoogleAccessToken(result);
     if (!accessToken) {
       throw new Error("Autorizzazione Drive non disponibile. Riprova.");
     }
 
+    window.googleAccessToken = accessToken;
     driveAccessToken = accessToken;
-    await ensureDriveFolders();
-    await db.collection("appConfig").doc("driveBridge").set({
-      ownerEmail: currentUser.email || ADMIN_EMAIL,
-      accessToken: driveAccessToken,
-      rootFolderId: driveRootFolderId,
-      chatFolderId: driveChatFolderId,
-      reportsFolderId: driveReportsFolderId,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    ui.driveStatus.textContent = "Google Drive collegato. Cartelle pronte per report e media chat.";
+    ui.driveStatus.textContent = "Drive collegato";
   } catch (error) {
     console.error(error);
     ui.driveStatus.textContent = error.message || "Errore durante il collegamento a Google Drive.";
@@ -1165,6 +1153,64 @@ function extractGoogleAccessToken(result) {
   }
   return "";
 }
+
+// Salva un oggetto JSON nel Drive dell'utente loggato usando multipart upload.
+// Richiede che il login Google abbia restituito un access token con scope drive.file.
+async function saveToDrive(data) {
+  if (!driveAccessToken) {
+    console.error("Google Drive non autorizzato: manca access token. Rifai login con Google.");
+    return null;
+  }
+
+  const metadata = {
+    name: "test.json",
+    mimeType: "application/json"
+  };
+  const fileContent = JSON.stringify(data, null, 2);
+
+  const boundary = "hera-app-boundary-" + Date.now();
+  const multipartBody = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    "Content-Type: application/json",
+    "",
+    fileContent,
+    `--${boundary}--`
+  ].join("\r\n");
+
+  try {
+    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${driveAccessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Errore upload su Google Drive:", response.status, errorText);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log("Upload completato su Google Drive. fileId:", result.id);
+    return { fileId: result.id };
+  } catch (error) {
+    console.error("Errore durante il salvataggio su Google Drive:", error);
+    return null;
+  }
+}
+
+// Esempio d'uso:
+// saveToDrive({
+//   prova: true,
+//   data: new Date().toISOString()
+// });
 
 async function ensureDriveFolders() {
   driveRootFolderId = await getOrCreateDriveFolder("Hera App - Dati");

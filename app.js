@@ -1891,39 +1891,66 @@ async function loadNearbyFuelStations() {
     ui.fuelStationsList.innerHTML = "<p class='muted'>Posizione non disponibile. Attiva GPS per vedere i distributori vicini.</p>";
     return;
   }
+  ui.fuelStationsList.innerHTML = "<p class='muted'>Caricamento distributori...</p>";
+  try {
+    const data = await fetchFuelStationsFromOverpass(currentUserPos.lat, currentUserPos.lng);
+    const stations = (data.elements || []).map((item) => {
+      const lat = item.lat || (item.center && item.center.lat);
+      const lon = item.lon || (item.center && item.center.lon);
+      const brand = String((item.tags && (item.tags.brand || item.tags.name)) || "").toLowerCase();
+      if (!lat || !lon) return null;
+      if (!brand.includes("eni") && !brand.includes("q8")) return null;
+      return {
+        id: item.id,
+        name: item.tags.name || item.tags.brand || "Distributore",
+        brand: item.tags.brand || "-",
+        lat,
+        lon,
+        distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
+      };
+    }).filter(Boolean).sort((a, b) => a.distance - b.distance).slice(0, 20);
+    renderFuelStations(stations);
+  } catch (error) {
+    console.error("Errore caricamento distributori:", error);
+    const retryBtn = createButton("Riprova", () => loadNearbyFuelStations());
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Errore caricamento distributori. Riprova tra pochi secondi.</p>";
+    ui.fuelStationsList.appendChild(retryBtn);
+    if (fuelStationsLayer) fuelStationsLayer.clearLayers();
+  }
+}
+
+async function fetchFuelStationsFromOverpass(lat, lng) {
   const query = `
     [out:json][timeout:25];
     (
-      node[\"amenity\"=\"fuel\"](around:12000,${currentUserPos.lat},${currentUserPos.lng});
-      way[\"amenity\"=\"fuel\"](around:12000,${currentUserPos.lat},${currentUserPos.lng});
+      node[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
+      way[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
     );
     out center 40;
   `;
-  const response = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    body: query
-  });
-  if (!response.ok) {
-    ui.fuelStationsList.innerHTML = "<p class='muted'>Errore caricamento distributori.</p>";
-    return;
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: query,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`Overpass ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
   }
-  const data = await response.json();
-  const stations = (data.elements || []).map((item) => {
-    const lat = item.lat || (item.center && item.center.lat);
-    const lon = item.lon || (item.center && item.center.lon);
-    const brand = String((item.tags && (item.tags.brand || item.tags.name)) || "").toLowerCase();
-    if (!lat || !lon) return null;
-    if (!brand.includes("eni") && !brand.includes("q8")) return null;
-    return {
-      id: item.id,
-      name: item.tags.name || item.tags.brand || "Distributore",
-      brand: item.tags.brand || "-",
-      lat,
-      lon,
-      distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
-    };
-  }).filter(Boolean).sort((a, b) => a.distance - b.distance).slice(0, 20);
-  renderFuelStations(stations);
+  throw lastError || new Error("Overpass non disponibile");
 }
 
 function ensureFuelMap() {

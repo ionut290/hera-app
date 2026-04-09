@@ -42,10 +42,13 @@ La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.
 
 ## Note Google Drive / Google Sheets
 
-- Dopo il login Firebase, usare il bottone **Collega Google Drive**.
+- Il Drive usato è centralizzato: **ionut29019@gmail.com** collega il proprio account una volta, poi tutti gli utenti usano quel bridge.
+- Solo l'utente admin (`ionut29019@gmail.com`) vede attivo il pulsante **Collega Google Drive**.
 - L'app crea (se non esistono) le cartelle:
   - `Hera App - Dati`
   - `Hera App - Dati/Chat Media`
   - `Hera App - Dati/Report Impianti`
+- Token/folder del bridge Drive vengono salvati in `appConfig/driveBridge` su Firestore per essere riusati da tutti gli utenti autenticati.
 - I media chat vengono caricati su Drive e salvati in Firestore come URL.
-- Quando un impianto viene segnato come **Fatto**, viene creato un Google Sheet con i dati dell'impianto, data/ora esecuzione e operatore.
+- Per ogni commessa viene usato un solo Google Sheet (`Commessa - <nome commessa>`) dentro `Report Impianti`.
+- Quando un impianto viene segnato come **Fatto**, viene aggiunta una nuova riga nel foglio della commessa con i dati dell'impianto, data/ora esecuzione e operatore.

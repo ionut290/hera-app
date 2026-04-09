@@ -40,6 +40,7 @@ let currentUserPos = null;
 let currentImpianti = [];
 let currentUser = null;
 let unsubscribeChat = null;
+let unsubscribeDriveBridge = null;
 let chatMessages = [];
 let mediaRecorder = null;
 let mediaChunks = [];
@@ -49,6 +50,7 @@ let driveAccessToken = "";
 let driveRootFolderId = "";
 let driveChatFolderId = "";
 let driveReportsFolderId = "";
+const commessaSheetCache = new Map();
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -82,7 +84,7 @@ auth.onAuthStateChanged((user) => {
 
   ui.loginBtn.disabled = loggedIn;
   ui.logoutBtn.disabled = !loggedIn;
-  ui.driveConnectBtn.disabled = !loggedIn;
+  ui.driveConnectBtn.disabled = !loggedIn || !canManageData();
   ui.user.textContent = loggedIn
     ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
     : "Non loggato";
@@ -93,6 +95,7 @@ auth.onAuthStateChanged((user) => {
   stopCommesseSubscription();
   stopImpiantiSubscription();
   stopChatSubscription();
+  stopDriveBridgeSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
@@ -107,6 +110,7 @@ auth.onAuthStateChanged((user) => {
   if (loggedIn) {
     subscribeCommesse();
     subscribeChat();
+    subscribeDriveBridge();
   }
 });
 
@@ -156,6 +160,34 @@ async function createCommessa(event) {
   });
 
   ui.commessaForm.reset();
+}
+
+function subscribeDriveBridge() {
+  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
+    const data = doc.exists ? doc.data() : null;
+    if (!data || !data.accessToken) {
+      ui.driveStatus.textContent = "Drive centralizzato non collegato. Chiedi a ionut29019@gmail.com di collegarlo.";
+      return;
+    }
+
+    driveAccessToken = data.accessToken;
+    driveRootFolderId = data.rootFolderId || "";
+    driveChatFolderId = data.chatFolderId || "";
+    driveReportsFolderId = data.reportsFolderId || "";
+
+    const owner = data.ownerEmail || ADMIN_EMAIL;
+    ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
+  }, (error) => {
+    console.error(error);
+    ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
+  });
+}
+
+function stopDriveBridgeSubscription() {
+  if (unsubscribeDriveBridge) {
+    unsubscribeDriveBridge();
+    unsubscribeDriveBridge = null;
+  }
 }
 
 function subscribeCommesse() {
@@ -1067,12 +1099,17 @@ function resetDriveState() {
   driveRootFolderId = "";
   driveChatFolderId = "";
   driveReportsFolderId = "";
+  commessaSheetCache.clear();
   ui.driveStatus.textContent = "Google Drive non collegato.";
 }
 
 async function connectGoogleDrive() {
   if (!currentUser) {
     alert("Devi fare login prima di collegare Drive.");
+    return;
+  }
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può collegare il Drive centralizzato.");
     return;
   }
 
@@ -1092,6 +1129,14 @@ async function connectGoogleDrive() {
 
     driveAccessToken = credential.accessToken;
     await ensureDriveFolders();
+    await db.collection("appConfig").doc("driveBridge").set({
+      ownerEmail: currentUser.email || ADMIN_EMAIL,
+      accessToken: driveAccessToken,
+      rootFolderId: driveRootFolderId,
+      chatFolderId: driveChatFolderId,
+      reportsFolderId: driveReportsFolderId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     ui.driveStatus.textContent = "Google Drive collegato. Cartelle pronte per report e media chat.";
   } catch (error) {
     console.error(error);
@@ -1136,28 +1181,15 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
     throw new Error("Collega Google Drive per creare il foglio automatico quando premi Fatto.");
   }
   if (!driveReportsFolderId) await ensureDriveFolders();
+  if (!selectedCommessaId) {
+    throw new Error("Seleziona una commessa prima di segnare l'impianto come fatto.");
+  }
 
   const now = new Date();
   const dateIT = now.toLocaleDateString("it-IT");
   const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
-
-  const spreadsheetName = `Fatto - ${impianto.denominazione || "Impianto"} - ${now.toISOString().slice(0, 19).replaceAll(":", "-")}`;
-  const spreadsheet = await driveApiFetch("https://www.googleapis.com/drive/v3/files", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: spreadsheetName,
-      mimeType: "application/vnd.google-apps.spreadsheet",
-      parents: [driveReportsFolderId]
-    })
-  });
-
-  const headers = [
-    "Commessa", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
-    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
-    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
-  ];
+  const spreadsheet = await getOrCreateCommessaSpreadsheet(selectedCommessaId, selectedCommessaName || "Commessa");
 
   const row = [
     selectedCommessaName || "",
@@ -1186,9 +1218,68 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      values: [headers, row]
+      values: [row]
     })
   });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Errore Google Drive (${response.status}): ${text.slice(0, 180)}`);
+  }
+
+  if (response.status === 204) return {};
+  return response.json();
+}
+
+async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
+  const cachedId = commessaSheetCache.get(commessaId);
+  if (cachedId) return { id: cachedId };
+
+  const safeName = commessaName.replaceAll("'", "\\'");
+  const query = [
+    "mimeType='application/vnd.google-apps.spreadsheet'",
+    "trashed=false",
+    `'${driveReportsFolderId}' in parents`,
+    `name='Commessa - ${safeName}'`
+  ].join(" and ");
+
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
+
+  if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
+    const existing = searchResponse.files[0];
+    commessaSheetCache.set(commessaId, existing.id);
+    return { id: existing.id };
+  }
+
+  const created = await driveApiFetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `Commessa - ${commessaName}`,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [driveReportsFolderId]
+    })
+  });
+
+  const headers = [[
+    "Commessa", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
+    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
+    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
+  ]];
+
+  await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${created.id}/values/A1:append?valueInputOption=RAW`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values: headers })
+  });
+
+  commessaSheetCache.set(commessaId, created.id);
+  return { id: created.id };
 }
 
 async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {

@@ -64,11 +64,6 @@
         <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
       </section>
 
-      <section class="card weather-card" id="weather-card" role="button" tabindex="0">
-        <h2>🌤️ Meteo rapido</h2>
-        <p id="weather-summary" class="muted">Caricamento meteo...</p>
-      </section>
-
       <section class="card">
         <div class="section-head">
           <h2>Squadre per commessa</h2>
@@ -169,6 +164,8 @@
         <button class="btn btn-primary" type="submit">Salva composizione</button>
       </form>
       <p id="squadra-hint" class="muted"></p>
+      <datalist id="personale-options"></datalist>
+      <datalist id="mezzi-options"></datalist>
     </div>
     <div id="panel-personale" class="management-panel hidden">
       <form id="personale-form" class="inline-form">
@@ -202,6 +199,28 @@
       </div>
       <div id="weather-details" class="chat-full-list"></div>
     </div>
+  </section>
+
+  <section id="fuel-page" class="hidden">
+    <section class="card">
+      <div class="page-head">
+        <button id="back-from-fuel-btn" class="btn" type="button">← Torna</button>
+        <h2 id="fuel-page-title">Distributori carburante</h2>
+        <button id="fuel-mezzo-details-btn" class="btn" type="button">Dettagli mezzo</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Mappa distributori Q8 / ENI</h2>
+      <div id="fuel-map"></div>
+    </section>
+    <section class="card">
+      <h2>Più vicini a te</h2>
+      <div id="fuel-stations-list" class="simple-list"></div>
+    </section>
+    <section class="card hidden" id="fuel-mezzo-details-card">
+      <h2>Dettagli mezzo</h2>
+      <div id="fuel-mezzo-details" class="simple-list"></div>
+    </section>
   </section>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>

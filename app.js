@@ -71,11 +71,21 @@ const ui = {
   panelSquadre: document.getElementById("panel-squadre"),
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
+  personaleOptions: document.getElementById("personale-options"),
+  mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
   weatherSummary: document.getElementById("weather-summary"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
-  weatherDetails: document.getElementById("weather-details")
+  weatherDetails: document.getElementById("weather-details"),
+  fuelPage: document.getElementById("fuel-page"),
+  backFromFuelBtn: document.getElementById("back-from-fuel-btn"),
+  fuelPageTitle: document.getElementById("fuel-page-title"),
+  fuelMap: document.getElementById("fuel-map"),
+  fuelStationsList: document.getElementById("fuel-stations-list"),
+  fuelMezzoDetailsBtn: document.getElementById("fuel-mezzo-details-btn"),
+  fuelMezzoDetailsCard: document.getElementById("fuel-mezzo-details-card"),
+  fuelMezzoDetails: document.getElementById("fuel-mezzo-details")
 };
 
 let pendingRows = [];
@@ -114,6 +124,9 @@ let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
 const commessaSheetSyncTimers = new Map();
+let fuelMapInstance = null;
+let fuelStationsLayer = null;
+let selectedFuelMezzo = null;
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -170,6 +183,8 @@ ui.weatherCard.addEventListener("keydown", (event) => {
   }
 });
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
+ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
+ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 
 addSquadraRow();
 initGeolocation();
@@ -300,13 +315,21 @@ function closeManagementPanel() {
 function applyRoute() {
   const hash = window.location.hash || "";
   const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)$/);
+  const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const commessaIdFromHash = match ? match[1] : "";
+  const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
+  ui.fuelPage.classList.toggle("hidden", !showFuel);
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
     setTimeout(() => map.invalidateSize(), 50);
+  }
+  if (showFuel) {
+    setTimeout(() => {
+      if (fuelMapInstance) fuelMapInstance.invalidateSize();
+    }, 50);
   }
 }
 
@@ -319,6 +342,11 @@ function openImpiantiPage() {
 function closeImpiantiPage() {
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
+  applyRoute();
+}
+
+function closeFuelPage() {
+  window.location.hash = "";
   applyRoute();
 }
 
@@ -1246,6 +1274,10 @@ async function addPersonale(event) {
   }
   const nome = ui.personaleNome.value.trim();
   if (!nome) return;
+  if (nome.split(/\s+/).length < 2) {
+    alert("Inserisci Nome e Cognome del personale.");
+    return;
+  }
   await db.collection("personale").add({
     nome,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1281,7 +1313,59 @@ async function importMezziFromExcel() {
     alert("Solo ionut29019@gmail.com può importare i mezzi.");
     return;
   }
-  await importSimpleRegistryFromExcel(ui.mezziExcelFile, "mezzi");
+  const file = ui.mezziExcelFile.files && ui.mezziExcelFile.files[0];
+  if (!file) {
+    alert("Seleziona un file Excel mezzi.");
+    return;
+  }
+  const rows = await parseMezziExcelRows(file);
+  if (!rows.length) {
+    alert("Nessun mezzo valido trovato nel file.");
+    return;
+  }
+  const batch = db.batch();
+  rows.forEach((mezzo) => {
+    const ref = db.collection("mezzi").doc();
+    batch.set(ref, {
+      nome: mezzo.nId || "",
+      nId: mezzo.nId || "",
+      marca: mezzo.marca || "",
+      portataCarico: mezzo.portataCarico || "",
+      massaComplessivaKg: mezzo.massaComplessivaKg || "",
+      alimentazione: mezzo.alimentazione || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+  await batch.commit();
+  ui.mezziExcelFile.value = "";
+  alert(`Import mezzi completato (${rows.length} elementi).`);
+}
+
+async function parseMezziExcelRows(file) {
+  const matrix = await parseSimpleExcelRows(file, true);
+  if (!matrix.length) return [];
+  const header = matrix[0].map((cell) => normalizeHeaderKey(cell));
+  return matrix.slice(1).map((row) => {
+    const get = (aliases) => {
+      const index = header.findIndex((h) => aliases.includes(h));
+      return index >= 0 ? String(row[index] || "").trim() : "";
+    };
+    return {
+      nId: get(["nid", "nid.", "n.id", "n.id.", "id"]),
+      marca: get(["marca"]),
+      portataCarico: get(["portatacarico", "portata"]),
+      massaComplessivaKg: get(["massacomplessivapesodelcamioncaricokg", "massacomplessivakg", "massa"]),
+      alimentazione: get(["alimentazione"])
+    };
+  }).filter((row) => row.nId);
+}
+
+function normalizeHeaderKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 async function importSimpleRegistryFromExcel(inputEl, collectionName) {
@@ -1292,7 +1376,8 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   }
 
   const rows = await parseSimpleExcelRows(file);
-  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))];
+  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))]
+    .filter((name) => (collectionName === "personale" ? name.split(/\s+/).length >= 2 : true));
   if (!uniqueNames.length) {
     alert("Il file Excel non contiene nomi validi.");
     return;
@@ -1311,7 +1396,7 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   alert(`Import completato (${uniqueNames.length} elementi).`);
 }
 
-async function parseSimpleExcelRows(file) {
+async function parseSimpleExcelRows(file, rawRows = false) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -1324,6 +1409,10 @@ async function parseSimpleExcelRows(file) {
         const names = [];
         jsonRows.forEach((row) => {
           if (!Array.isArray(row) || !row.length) return;
+          if (rawRows) {
+            names.push(row);
+            return;
+          }
           const firstCell = String(row[0] || "").trim();
           if (firstCell && firstCell.toLowerCase() !== "nome") names.push(firstCell);
         });
@@ -1342,6 +1431,7 @@ function subscribePersonale() {
     personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSimpleList(ui.personaleLista, personaleRecords, deletePersonale);
     updateSquadraHintFromSources();
+    updateSuggestionLists();
   }, (error) => {
     console.error(error);
     ui.personaleLista.innerHTML = "<p class='muted'>Errore caricamento personale.</p>";
@@ -1353,6 +1443,7 @@ function subscribeMezzi() {
     mezziRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSimpleList(ui.mezziLista, mezziRecords, deleteMezzo);
     updateSquadraHintFromSources();
+    updateSuggestionLists();
   }, (error) => {
     console.error(error);
     ui.mezziLista.innerHTML = "<p class='muted'>Errore caricamento mezzi.</p>";
@@ -1448,16 +1539,35 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
       <strong>Squadra ${index}</strong>
       <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
     </div>
-    <input type="text" class="squadra-personale" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
-    <input type="text" class="squadra-mezzi" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
+    <input type="text" class="squadra-personale" list="personale-options" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
+    <input type="text" class="squadra-mezzi" list="mezzi-options" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
     renumberSquadraRows();
     if (!ui.squadraRows.children.length) addSquadraRow();
   });
+  const personaleInput = row.querySelector(".squadra-personale");
+  const mezziInput = row.querySelector(".squadra-mezzi");
+  personaleInput.addEventListener("blur", () => {
+    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => p.nome));
+  });
+  mezziInput.addEventListener("blur", () => {
+    const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
+    if (suggestion) mezziInput.value = suggestion;
+  });
   ui.squadraRows.appendChild(row);
   updateAdminControls();
+}
+
+function resolveSuggestionValue(rawValue, sourceValues) {
+  const value = String(rawValue || "").trim();
+  if (!value) return "";
+  const exact = sourceValues.find((item) => String(item || "").toLowerCase() === value.toLowerCase());
+  if (exact) return exact;
+  const matches = sourceValues.filter((item) => String(item || "").toLowerCase().includes(value.toLowerCase()));
+  if (matches.length === 1) return matches[0];
+  return value;
 }
 
 function renumberSquadraRows() {
@@ -1537,7 +1647,7 @@ function renderSquadre() {
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     const rowsHtml = squadRows.map((row, idx) => (
-      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${escapeHTML(row.mezzi || "-")}</p>`
+      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
     )).join("");
     item.innerHTML = `
       <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
@@ -1546,15 +1656,40 @@ function renderSquadre() {
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
     item.appendChild(askBtn);
+    item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
     ui.squadreLista.appendChild(item);
   });
 }
 
+function renderMezziButtonsMarkup(rawValue) {
+  const parts = String(rawValue || "")
+    .split(/[,;|]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!parts.length) return "-";
+  return parts.map((mezzo) => `<button type=\"button\" class=\"mezzo-chip-btn\" data-mezzo=\"${escapeHTML(mezzo)}\">${escapeHTML(mezzo)}</button>`).join(" ");
+}
+
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  const personale = personaleRecords.map((p) => p.nome).filter(Boolean).join(", ") || "Nessuno";
-  const mezzi = mezziRecords.map((m) => m.nome).filter(Boolean).join(", ") || "Nessuno";
-  ui.squadraHint.textContent = `Personale disponibile: ${personale}. Mezzi disponibili: ${mezzi}. Usa "Aggiungi squadra" per creare tutte le squadre che vuoi.`;
+  ui.squadraHint.textContent = "Scrivi nel campo Personale/Mezzi per ottenere suggerimenti automatici. Usa “Aggiungi squadra” per creare tutte le squadre che vuoi.";
+}
+
+function updateSuggestionLists() {
+  ui.personaleOptions.innerHTML = "";
+  personaleRecords.forEach((person) => {
+    const option = document.createElement("option");
+    option.value = person.nome || "";
+    ui.personaleOptions.appendChild(option);
+  });
+  ui.mezziOptions.innerHTML = "";
+  mezziRecords.forEach((mezzo) => {
+    const option = document.createElement("option");
+    option.value = mezzo.nId || mezzo.nome || "";
+    ui.mezziOptions.appendChild(option);
+  });
 }
 
 async function setImpiantoDone(impiantoIds, done) {
@@ -1702,6 +1837,117 @@ function canManageData() {
 
 function clearMap() {
   markerLayer.clearLayers();
+}
+
+function getMezzoByLabel(label) {
+  const normalized = String(label || "").trim().toLowerCase();
+  return mezziRecords.find((mezzo) => {
+    const candidates = [mezzo.nId, mezzo.nome, mezzo.marca].map((v) => String(v || "").toLowerCase());
+    return candidates.some((value) => value && (value === normalized || value.includes(normalized) || normalized.includes(value)));
+  }) || null;
+}
+
+async function openFuelPage(mezzoLabel) {
+  selectedFuelMezzo = getMezzoByLabel(mezzoLabel) || { nId: mezzoLabel, nome: mezzoLabel };
+  ui.fuelPageTitle.textContent = `Distributori Q8/ENI • ${selectedFuelMezzo.nId || selectedFuelMezzo.nome || "Mezzo"}`;
+  ui.fuelMezzoDetailsCard.classList.add("hidden");
+  renderFuelMezzoDetails();
+  window.location.hash = `fuel=${encodeURIComponent(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "mezzo")}`;
+  applyRoute();
+  await loadNearbyFuelStations();
+}
+
+function toggleFuelMezzoDetails() {
+  ui.fuelMezzoDetailsCard.classList.toggle("hidden");
+}
+
+function renderFuelMezzoDetails() {
+  if (!selectedFuelMezzo) {
+    ui.fuelMezzoDetails.innerHTML = "<p class='muted'>Nessun mezzo selezionato.</p>";
+    return;
+  }
+  ui.fuelMezzoDetails.innerHTML = `
+    <p><b>N. ID:</b> ${escapeHTML(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "-")}</p>
+    <p><b>Marca:</b> ${escapeHTML(selectedFuelMezzo.marca || "-")}</p>
+    <p><b>Portata (carico):</b> ${escapeHTML(selectedFuelMezzo.portataCarico || "-")}</p>
+    <p><b>Massa complessiva (kg):</b> ${escapeHTML(selectedFuelMezzo.massaComplessivaKg || "-")}</p>
+    <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
+  `;
+}
+
+async function loadNearbyFuelStations() {
+  if (!currentUserPos) {
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Posizione non disponibile. Attiva GPS per vedere i distributori vicini.</p>";
+    return;
+  }
+  const query = `
+    [out:json][timeout:25];
+    (
+      node[\"amenity\"=\"fuel\"](around:12000,${currentUserPos.lat},${currentUserPos.lng});
+      way[\"amenity\"=\"fuel\"](around:12000,${currentUserPos.lat},${currentUserPos.lng});
+    );
+    out center 40;
+  `;
+  const response = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    body: query
+  });
+  if (!response.ok) {
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Errore caricamento distributori.</p>";
+    return;
+  }
+  const data = await response.json();
+  const stations = (data.elements || []).map((item) => {
+    const lat = item.lat || (item.center && item.center.lat);
+    const lon = item.lon || (item.center && item.center.lon);
+    const brand = String((item.tags && (item.tags.brand || item.tags.name)) || "").toLowerCase();
+    if (!lat || !lon) return null;
+    if (!brand.includes("eni") && !brand.includes("q8")) return null;
+    return {
+      id: item.id,
+      name: item.tags.name || item.tags.brand || "Distributore",
+      brand: item.tags.brand || "-",
+      lat,
+      lon,
+      distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
+    };
+  }).filter(Boolean).sort((a, b) => a.distance - b.distance).slice(0, 20);
+  renderFuelStations(stations);
+}
+
+function ensureFuelMap() {
+  if (fuelMapInstance) return;
+  fuelMapInstance = L.map("fuel-map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(fuelMapInstance);
+  fuelStationsLayer = L.layerGroup().addTo(fuelMapInstance);
+}
+
+function renderFuelStations(stations) {
+  ensureFuelMap();
+  fuelStationsLayer.clearLayers();
+  ui.fuelStationsList.innerHTML = "";
+  if (!stations.length) {
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Nessun distributore Q8/ENI trovato vicino a te.</p>";
+    return;
+  }
+  const bounds = [];
+  stations.forEach((station) => {
+    const marker = L.marker([station.lat, station.lon]).addTo(fuelStationsLayer);
+    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.brand)}<br>${formatDistance(station.distance)}`);
+    const navBtn = createButton("Naviga", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lon}`, "_blank"));
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.brand)} • ${formatDistance(station.distance)}</small></span>`;
+    row.appendChild(navBtn);
+    ui.fuelStationsList.appendChild(row);
+    marker.on("click", () => navBtn.focus());
+    bounds.push([station.lat, station.lon]);
+  });
+  if (currentUserPos) bounds.push([currentUserPos.lat, currentUserPos.lng]);
+  fuelMapInstance.fitBounds(bounds, { padding: [24, 24] });
 }
 
 function initGeolocation() {

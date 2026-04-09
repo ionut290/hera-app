@@ -54,6 +54,8 @@ const commessaSheetCache = new Map();
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
+driveAccessToken = window.googleDriveAccessToken || "";
 
 const map = L.map("map");
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -176,9 +178,7 @@ function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
     const data = doc.exists ? doc.data() : null;
     if (!data || !data.accessToken) {
-      ui.driveStatus.textContent = canManageData()
-        ? "Drive centralizzato non collegato. Premi “Collega Google Drive” per collegarlo."
-        : "Drive centralizzato non collegato.";
+      updateDriveStatus(false);
       return;
     }
 
@@ -1112,37 +1112,46 @@ function resetDriveState() {
   driveChatFolderId = "";
   driveReportsFolderId = "";
   commessaSheetCache.clear();
-  ui.driveStatus.textContent = canManageData()
-    ? "Drive centralizzato non collegato."
-    : "Google Drive non collegato.";
+  updateDriveStatus(false);
+}
+
+function updateDriveStatus(isConnected) {
+  const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
+  ui.driveStatus.textContent = connected
+    ? "Drive collegato."
+    : (canManageData() ? "Drive centralizzato non collegato." : "Google Drive non collegato.");
 }
 
 async function connectGoogleDrive() {
-  if (!currentUser) {
-    alert("Devi fare login prima di collegare Drive.");
-    return;
-  }
-  if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può collegare il Drive centralizzato.");
-    return;
-  }
-
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
     const result = await firebase.auth().signInWithPopup(provider);
-
-    const accessToken = extractGoogleAccessToken(result);
+    const credential = result.credential || firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential && credential.accessToken ? credential.accessToken : null;
     if (!accessToken) {
-      throw new Error("Autorizzazione Drive non disponibile. Riprova.");
+      throw new Error("Access token Google Drive non ottenuto");
     }
 
-    window.googleAccessToken = accessToken;
+    window.googleDriveAccessToken = accessToken;
     driveAccessToken = accessToken;
-    ui.driveStatus.textContent = "Drive collegato";
+    localStorage.setItem("googleDriveAccessToken", accessToken);
+    localStorage.setItem("googleDriveConnected", "true");
+    const driveUser = result.user || auth.currentUser || currentUser;
+    await ensureDriveFolders();
+    await db.collection("appConfig").doc("driveBridge").set({
+      ownerEmail: (driveUser && driveUser.email) ? driveUser.email : ADMIN_EMAIL,
+      accessToken: driveAccessToken,
+      rootFolderId: driveRootFolderId,
+      chatFolderId: driveChatFolderId,
+      reportsFolderId: driveReportsFolderId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    updateDriveStatus(true);
+    alert("Google Drive collegato correttamente");
   } catch (error) {
-    console.error(error);
-    ui.driveStatus.textContent = error.message || "Errore durante il collegamento a Google Drive.";
+    console.error("Errore collegamento Google Drive:", error);
+    alert("Errore collegamento Google Drive: " + (error.message || error));
   }
 }
 

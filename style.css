@@ -1,0 +1,161 @@
+:root {
+  --bg: #f5f7fb;
+  --card: #fff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #2563eb;
+  --done: #0f9d58;
+  --todo: #2563eb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.container {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+h1, h2 { margin: 0 0 10px; }
+h1 { font-size: 1.3rem; }
+h2 { font-size: 1.08rem; }
+
+.muted { color: var(--muted); margin: 6px 0 0; }
+.status { margin: 8px 0 0; word-break: break-word; }
+
+.actions-row,
+.inline-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 1rem;
+  min-width: 180px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.commesse-lista,
+.impianti-lista {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.commessa-btn {
+  text-align: left;
+  width: 100%;
+}
+
+.commessa-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.commessa-btn.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+#map {
+  height: 320px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.impianto-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.impianto-item p { margin: 4px 0; }
+
+.impianto-item.done {
+  border-color: #b7ebc6;
+  background: #effcf4;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.badge-ordinaria {
+  background: #e8f1ff;
+  color: #1d4ed8;
+}
+
+.badge-straordinaria {
+  background: #fff1e8;
+  color: #c2410c;
+}
+
+.marker-pin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.15);
+}
+
+.marker-pin.todo { background: var(--todo); }
+.marker-pin.done { background: var(--done); }
+.marker-pin.straordinario { background: #f97316; }
+
+@media (min-width: 760px) {
+  .container { padding: 22px; gap: 14px; }
+  #map { height: 400px; }
+}

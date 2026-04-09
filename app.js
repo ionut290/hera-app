@@ -91,9 +91,13 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let highlightedImpiantoKey = "";
+let pendingSheetExports = [];
+let sheetRetryTimer = null;
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
+const SHEET_RETRY_MS = 30 * 1000;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
@@ -131,6 +135,8 @@ ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
 initGeolocation();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
+loadPendingSheetExports();
+startSheetRetryLoop();
 
 auth.onAuthStateChanged((user) => {
   currentUser = user || null;
@@ -182,6 +188,7 @@ auth.onAuthStateChanged((user) => {
     subscribePersonale();
     subscribeMezzi();
     subscribeSquadre();
+    processPendingSheetExports();
   }
 });
 
@@ -244,6 +251,36 @@ function openImpiantiPage() {
 function closeImpiantiPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function loadPendingSheetExports() {
+  try {
+    const raw = localStorage.getItem(PENDING_SHEET_EXPORTS_KEY);
+    pendingSheetExports = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(pendingSheetExports)) pendingSheetExports = [];
+  } catch (error) {
+    pendingSheetExports = [];
+  }
+}
+
+function savePendingSheetExports() {
+  localStorage.setItem(PENDING_SHEET_EXPORTS_KEY, JSON.stringify(pendingSheetExports));
+}
+
+function startSheetRetryLoop() {
+  if (sheetRetryTimer) clearInterval(sheetRetryTimer);
+  sheetRetryTimer = setInterval(() => {
+    processPendingSheetExports();
+  }, SHEET_RETRY_MS);
+}
+
+function queuePendingSheetExport(payload) {
+  pendingSheetExports.push({
+    ...payload,
+    attempts: Number(payload.attempts || 0),
+    nextRetryAt: payload.nextRetryAt || Date.now()
+  });
+  savePendingSheetExports();
 }
 
 function parseGoogleSheetId(value) {
@@ -328,6 +365,7 @@ function subscribeDriveBridge() {
 
     const owner = data.ownerEmail || ADMIN_EMAIL;
     ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
+    processPendingSheetExports();
   }, (error) => {
     console.error(error);
     ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
@@ -758,16 +796,67 @@ async function navigateToImpianto(impianto) {
 async function markImpiantoDone(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
+  const exportPayload = {
+    commessaId: selectedCommessaId,
+    commessaName: selectedCommessaName || "Commessa",
+    impianto
+  };
   try {
     updateImpiantoLocalState(ids, { done: true });
     await setImpiantoDone(ids, true);
-    await exportImpiantoDoneToDriveSheet(impianto);
+    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
     updateImpiantoLocalState(ids, { done: false });
     await setImpiantoDone(ids, false);
     console.error(error);
-    alert("Non sono riuscito ad aggiungere la riga nel Google Sheet della commessa sul Drive centralizzato.");
+    const retried = await retrySheetExport(exportPayload, 2);
+    if (!retried) {
+      queuePendingSheetExport(exportPayload);
+      alert("Impianto segnato come FATTO. Scrittura foglio non riuscita ora: il sistema ritenterà automaticamente.");
+    }
   }
+}
+
+async function retrySheetExport(payload, retries = 2) {
+  for (let i = 0; i < retries; i += 1) {
+    try {
+      await exportImpiantoDoneToDriveSheet(payload.impianto, payload.commessaId, payload.commessaName);
+      return true;
+    } catch (error) {
+      console.warn(`Tentativo export foglio fallito (${i + 1}/${retries})`, error);
+    }
+  }
+  return false;
+}
+
+async function processPendingSheetExports() {
+  if (!pendingSheetExports.length) return;
+  const now = Date.now();
+  const remaining = [];
+
+  for (const item of pendingSheetExports) {
+    if ((item.nextRetryAt || 0) > now) {
+      remaining.push(item);
+      continue;
+    }
+    try {
+      await exportImpiantoDoneToDriveSheet(item.impianto, item.commessaId, item.commessaName);
+    } catch (error) {
+      const attempts = Number(item.attempts || 0) + 1;
+      if (attempts < 20) {
+        remaining.push({
+          ...item,
+          attempts,
+          nextRetryAt: Date.now() + Math.min(SHEET_RETRY_MS * attempts, 10 * 60 * 1000)
+        });
+      } else {
+        console.error("Export foglio fallito definitivamente dopo più tentativi:", error);
+      }
+    }
+  }
+
+  pendingSheetExports = remaining;
+  savePendingSheetExports();
 }
 
 async function resetImpianto(impianto) {
@@ -1745,12 +1834,12 @@ async function getOrCreateDriveFolder(name, parentId = "") {
   return created.id;
 }
 
-async function exportImpiantoDoneToDriveSheet(impianto) {
+async function exportImpiantoDoneToDriveSheet(impianto, commessaId = selectedCommessaId, commessaName = selectedCommessaName) {
   if (!driveAccessToken) {
     throw new Error("Drive centralizzato non disponibile.");
   }
   if (!driveReportsFolderId) await ensureDriveFolders();
-  if (!selectedCommessaId) {
+  if (!commessaId) {
     throw new Error("Seleziona una commessa prima di segnare l'impianto come fatto.");
   }
 
@@ -1758,10 +1847,10 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
   const dateIT = now.toLocaleDateString("it-IT");
   const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
-  const spreadsheet = await getOrCreateCommessaSpreadsheet(selectedCommessaId, selectedCommessaName || "Commessa");
+  const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName || "Commessa");
 
   const row = [
-    selectedCommessaName || "",
+    commessaName || "",
     impianto.distretto || "",
     impianto.idSap || "",
     impianto.denominazione || "",

@@ -19,9 +19,9 @@
       <h3>Commesse</h3>
       <form id="commessa-form" class="inline-form">
         <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
-        <input type="text" id="commessa-sheet" placeholder="ID o link Google Sheet (opzionale)">
         <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
       </form>
+      <p class="muted">Il foglio Google viene creato automaticamente per ogni commessa.</p>
 
       <h3>Composizione squadra</h3>
       <p class="muted">Solo admin. Imposta personale, mezzi e data di riferimento.</p>
@@ -120,6 +120,16 @@
 
       <section class="card">
         <h2>Impianti (dal più vicino al più lontano)</h2>
+        <div class="impianti-toolbar">
+          <div class="search-box">
+            <span aria-hidden="true">🔎</span>
+            <input id="impianto-search" type="search" placeholder="Cerca impianto, comune, indirizzo, codice prezzo...">
+          </div>
+          <div class="view-tabs" role="tablist" aria-label="Filtro impianti">
+            <button id="view-done-btn" class="btn btn-primary" type="button">✅ Fatti</button>
+            <button id="view-todo-btn" class="btn" type="button">🛠️ Da fare</button>
+          </div>
+        </div>
         <div id="impianti-lista" class="impianti-lista"></div>
       </section>
     </section>

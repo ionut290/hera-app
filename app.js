@@ -98,6 +98,7 @@ let impiantiViewMode = "done";
 let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
+const commessaSheetSyncTimers = new Map();
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -289,6 +290,23 @@ function queuePendingSheetExport(payload) {
     nextRetryAt: payload.nextRetryAt || Date.now()
   });
   savePendingSheetExports();
+}
+
+function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900) {
+  if (!commessaId) return;
+  if (!canManageData() || !driveAccessToken) return;
+  const existingTimer = commessaSheetSyncTimers.get(commessaId);
+  if (existingTimer) clearTimeout(existingTimer);
+  const timer = setTimeout(async () => {
+    try {
+      await syncCommessaDoneImpiantiToDriveSheet(commessaId, commessaName || selectedCommessaName || "Commessa");
+    } catch (error) {
+      console.error("Sync foglio commessa fallita:", error);
+    } finally {
+      commessaSheetSyncTimers.delete(commessaId);
+    }
+  }, delayMs);
+  commessaSheetSyncTimers.set(commessaId, timer);
 }
 
 async function queueSheetExportForAdmin(payload) {
@@ -492,6 +510,7 @@ function subscribeImpianti() {
       currentImpianti = combineImpiantiForView(rawImpianti);
       renderImpianti();
       renderMap();
+      scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
     }, (error) => {
       console.error(error);
       ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";
@@ -832,10 +851,10 @@ function buildRowsForEachCodicePrezzo(impianto) {
     .map((value) => value.trim())
     .filter(Boolean);
   const codes = rawCodes.length ? rawCodes : [""];
-  return codes.map((code, index) => ({
+  return codes.map((code) => ({
     ...impianto,
     codicePrezzoSingolo: code,
-    cantiereRiga: `${impianto.denominazione || "Impianto"}${codes.length > 1 ? ` #${index + 1}` : ""}`
+    cantiereRiga: `${impianto.denominazione || "Impianto"}`
   }));
 }
 
@@ -989,7 +1008,7 @@ async function markImpiantoDone(impianto) {
   }
 
   try {
-    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
+    await syncCommessaDoneImpiantiToDriveSheet(exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
     console.error(error);
     const retried = await retrySheetExport(exportPayload, 2);
@@ -1021,7 +1040,7 @@ async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
 async function retrySheetExport(payload, retries = 2) {
   for (let i = 0; i < retries; i += 1) {
     try {
-      await exportImpiantoDoneToDriveSheet(payload.impianto, payload.commessaId, payload.commessaName);
+      await syncCommessaDoneImpiantiToDriveSheet(payload.commessaId, payload.commessaName);
       return true;
     } catch (error) {
       console.warn(`Tentativo export foglio fallito (${i + 1}/${retries})`, error);
@@ -1042,7 +1061,7 @@ async function processPendingSheetExports() {
       continue;
     }
     try {
-      await exportImpiantoDoneToDriveSheet(item.impianto, item.commessaId, item.commessaName);
+      await syncCommessaDoneImpiantiToDriveSheet(item.commessaId, item.commessaName);
     } catch (error) {
       const attempts = Number(item.attempts || 0) + 1;
       if (attempts < 20) {
@@ -1079,11 +1098,7 @@ async function processAdminSheetExportQueue() {
     for (const doc of snapshot.docs) {
       const data = doc.data() || {};
       try {
-        await exportImpiantoDoneToDriveSheet(
-          data.impianto || {},
-          data.commessaId || "",
-          data.commessaName || "Commessa"
-        );
+        await syncCommessaDoneImpiantiToDriveSheet(data.commessaId || "", data.commessaName || "Commessa");
         await doc.ref.set({
           status: "done",
           doneAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1455,12 +1470,18 @@ function openWhatsApp(impianto) {
   }
 
   const now = new Date();
+  const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
+  const title = isOnlyOrdinaria
+    ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
+    : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
+  const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
   const message = [
-    "✅ Manutenzione eseguita",
-    `📁 Commessa: ${selectedCommessaName || "-"}`,
+    title,
     `🏗️ Impianto/Cantiere: ${impianto.denominazione || "-"}`,
+    ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
-    `🕒 Data/Ora: ${now.toLocaleString("it-IT")}`
+    `📅 Data: ${now.toLocaleDateString("it-IT")}`,
+    `🕒 Ora: ${time}`
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -2089,50 +2110,69 @@ async function getOrCreateDriveFolder(name, parentId = "") {
   return created.id;
 }
 
-async function exportImpiantoDoneToDriveSheet(impianto, commessaId = selectedCommessaId, commessaName = selectedCommessaName) {
+function getCommessaSheetHeaders() {
+  return [[
+    "Commessa", "Cantiere", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
+    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
+    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
+  ]];
+}
+
+function buildSheetRowsFromDoneImpianti(doneImpianti, commessaName, operatorEmail = "") {
+  return doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((rowData) => {
+    const doneInfo = formatDoneDateTime(rowData.doneAt);
+    return [
+      commessaName || "",
+      rowData.cantiereRiga || "",
+      rowData.distretto || "",
+      rowData.idSap || "",
+      rowData.denominazione || "",
+      rowData.comune || "",
+      rowData.indirizzo || "",
+      rowData.voceRiferimento || "",
+      rowData.codicePrezzoSingolo || rowData.codicePrezzo || "",
+      rowData.sfalci || "",
+      rowData.frequenzaAnnua || "",
+      rowData.tipologiaIntervento || "",
+      rowData.lavorazioniRichieste || "",
+      rowData.gpsY ?? "",
+      rowData.gpsX ?? "",
+      rowData.tipoManutenzione || classifyTipoManutenzione(rowData.codicePrezzo),
+      "Fatto",
+      doneInfo.date,
+      doneInfo.time,
+      rowData.doneBy || "",
+      operatorEmail || ""
+    ];
+  });
+}
+
+async function syncCommessaDoneImpiantiToDriveSheet(commessaId = selectedCommessaId, fallbackCommessaName = selectedCommessaName) {
   if (!driveAccessToken) {
     throw new Error("Drive centralizzato non disponibile.");
   }
+  if (!commessaId) return;
   if (!driveReportsFolderId) await ensureDriveFolders();
-  if (!commessaId) {
-    throw new Error("Seleziona una commessa prima di segnare l'impianto come fatto.");
-  }
 
-  const now = new Date();
-  const dateIT = now.toLocaleDateString("it-IT");
-  const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
-  const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
-  const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName || "Commessa");
+  const commessa = commesseById.get(commessaId) || {};
+  const commessaName = commessa.nome || fallbackCommessaName || "Commessa";
+  const snapshot = await db.collection("commesse").doc(commessaId).collection("impianti").get();
+  const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const doneImpianti = combineImpiantiForView(rawImpianti).filter((item) => item.done);
+  const rows = buildSheetRowsFromDoneImpianti(doneImpianti, commessaName, currentUser?.email || "");
+  const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName);
 
-  const rows = buildRowsForEachCodicePrezzo(impianto).map((rowData) => ([
-    commessaName || "",
-    rowData.cantiereRiga || "",
-    rowData.distretto || "",
-    rowData.idSap || "",
-    rowData.denominazione || "",
-    rowData.comune || "",
-    rowData.indirizzo || "",
-    rowData.voceRiferimento || "",
-    rowData.codicePrezzoSingolo || rowData.codicePrezzo || "",
-    rowData.sfalci || "",
-    rowData.frequenzaAnnua || "",
-    rowData.tipologiaIntervento || "",
-    rowData.lavorazioniRichieste || "",
-    rowData.gpsY ?? "",
-    rowData.gpsX ?? "",
-    rowData.tipoManutenzione || classifyTipoManutenzione(rowData.codicePrezzo),
-    "Fatto",
-    dateIT,
-    timeIT,
-    operator,
-    currentUser?.email || ""
-  ]));
+  await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A:Z:clear`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
 
   await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A1:append?valueInputOption=RAW`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      values: rows
+      values: [...getCommessaSheetHeaders(), ...rows]
     })
   });
 }
@@ -2168,11 +2208,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     })
   });
 
-  const headers = [[
-    "Commessa", "Cantiere", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
-    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
-    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
-  ]];
+  const headers = getCommessaSheetHeaders();
 
   await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${created.id}/values/A1:append?valueInputOption=RAW`, {
     method: "POST",

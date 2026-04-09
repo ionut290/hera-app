@@ -830,11 +830,8 @@ async function markImpiantoDone(impianto) {
     updateImpiantoLocalState(ids, { done: true });
     await setImpiantoDone(ids, true);
   } catch (error) {
-    updateImpiantoLocalState(ids, { done: false });
-    await setImpiantoDone(ids, false);
-    console.error(error);
-    alert("Non sono riuscito a segnare l'impianto come FATTO. Riprova.");
-    return;
+    console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
+    retrySetImpiantoDone(ids, true);
   }
 
   if (!canManageData()) {
@@ -853,9 +850,27 @@ async function markImpiantoDone(impianto) {
     const retried = await retrySheetExport(exportPayload, 2);
     if (!retried) {
       queuePendingSheetExport(exportPayload);
-      alert("Impianto segnato come FATTO. Il foglio non è stato scritto ora, ma il sistema ritenterà automaticamente.");
+      try {
+        await queueSheetExportForAdmin(exportPayload);
+      } catch (queueError) {
+        console.error("Impianto FATTO ma coda condivisa non salvata:", queueError);
+      }
+      console.warn("Export foglio in coda: sarà ritentato automaticamente.");
     }
   }
+}
+
+async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
+  for (let i = 0; i < retries; i += 1) {
+    try {
+      await setImpiantoDone(impiantoIds, done);
+      return true;
+    } catch (error) {
+      console.warn(`Tentativo aggiornamento stato FATTO fallito (${i + 1}/${retries})`, error);
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+  return false;
 }
 
 async function retrySheetExport(payload, retries = 2) {

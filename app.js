@@ -6,7 +6,9 @@ const db = firebase.firestore();
 const ui = {
   loginBtn: document.getElementById("login-btn"),
   logoutBtn: document.getElementById("logout-btn"),
+  driveConnectBtn: document.getElementById("drive-connect-btn"),
   user: document.getElementById("user"),
+  driveStatus: document.getElementById("drive-status"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
@@ -38,13 +40,19 @@ let currentUserPos = null;
 let currentImpianti = [];
 let currentUser = null;
 let unsubscribeChat = null;
+let unsubscribeDriveBridge = null;
 let chatMessages = [];
 let mediaRecorder = null;
 let mediaChunks = [];
 let isRecording = false;
 let lastReadChatAt = null;
+let driveAccessToken = "";
+let driveRootFolderId = "";
+let driveChatFolderId = "";
+let driveReportsFolderId = "";
+const commessaSheetCache = new Map();
 
-const CHAT_MEDIA_MAX_MB = 8;
+const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 
 const map = L.map("map");
@@ -58,6 +66,7 @@ const markerLayer = L.layerGroup().addTo(map);
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.logoutBtn.addEventListener("click", logout);
+ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
@@ -75,6 +84,7 @@ auth.onAuthStateChanged((user) => {
 
   ui.loginBtn.disabled = loggedIn;
   ui.logoutBtn.disabled = !loggedIn;
+  ui.driveConnectBtn.disabled = !loggedIn || !canManageData();
   ui.user.textContent = loggedIn
     ? `Loggato: ${user.displayName || "Utente"} (${user.email || "email non disponibile"})`
     : "Non loggato";
@@ -85,6 +95,7 @@ auth.onAuthStateChanged((user) => {
   stopCommesseSubscription();
   stopImpiantiSubscription();
   stopChatSubscription();
+  stopDriveBridgeSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   ui.commesseLista.innerHTML = "";
@@ -93,11 +104,13 @@ auth.onAuthStateChanged((user) => {
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
   clearMap();
   lastReadChatAt = null;
+  resetDriveState();
   renderChat([]);
 
   if (loggedIn) {
     subscribeCommesse();
     subscribeChat();
+    subscribeDriveBridge();
   }
 });
 
@@ -110,6 +123,7 @@ function updateAdminControls() {
 
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope("https://www.googleapis.com/auth/userinfo.email");
   auth.signInWithPopup(provider).catch((error) => {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
       return auth.signInWithRedirect(provider);
@@ -119,6 +133,7 @@ function loginWithGoogle() {
 }
 
 function logout() {
+  resetDriveState();
   auth.signOut();
 }
 
@@ -145,6 +160,34 @@ async function createCommessa(event) {
   });
 
   ui.commessaForm.reset();
+}
+
+function subscribeDriveBridge() {
+  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
+    const data = doc.exists ? doc.data() : null;
+    if (!data || !data.accessToken) {
+      ui.driveStatus.textContent = "Drive centralizzato non collegato. Chiedi a ionut29019@gmail.com di collegarlo.";
+      return;
+    }
+
+    driveAccessToken = data.accessToken;
+    driveRootFolderId = data.rootFolderId || "";
+    driveChatFolderId = data.chatFolderId || "";
+    driveReportsFolderId = data.reportsFolderId || "";
+
+    const owner = data.ownerEmail || ADMIN_EMAIL;
+    ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
+  }, (error) => {
+    console.error(error);
+    ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
+  });
+}
+
+function stopDriveBridgeSubscription() {
+  if (unsubscribeDriveBridge) {
+    unsubscribeDriveBridge();
+    unsubscribeDriveBridge = null;
+  }
 }
 
 function subscribeCommesse() {
@@ -496,6 +539,7 @@ function renderImpianti() {
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
       <p><b>Distanza:</b> ${distance}</p>
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
+      <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
 
     const actions = document.createElement("div");
@@ -549,6 +593,12 @@ async function markImpiantoDone(impianto) {
   if (!selectedCommessaId || !ids.length) return;
   updateImpiantoLocalState(ids, { done: true });
   await setImpiantoDone(ids, true);
+  try {
+    await exportImpiantoDoneToDriveSheet(impianto);
+  } catch (error) {
+    console.error(error);
+    alert("Impianto segnato come fatto, ma non sono riuscito a creare il foglio Google su Drive.");
+  }
 }
 
 async function resetImpianto(impianto) {
@@ -862,25 +912,27 @@ function createChatMessageElement(message) {
     item.appendChild(p);
   }
 
-  if (message.type === "image" && message.mediaDataUrl) {
+  const mediaSource = message.mediaUrl || message.mediaDataUrl || "";
+
+  if (message.type === "image" && mediaSource) {
     const img = document.createElement("img");
     img.className = "chat-media-preview";
-    img.src = message.mediaDataUrl;
+    img.src = mediaSource;
     img.alt = "Immagine inviata in chat";
     item.appendChild(img);
   }
 
-  if (message.type === "video" && message.mediaDataUrl) {
+  if (message.type === "video" && mediaSource) {
     const video = document.createElement("video");
     video.className = "chat-media-preview";
-    video.src = message.mediaDataUrl;
+    video.src = mediaSource;
     video.controls = true;
     item.appendChild(video);
   }
 
-  if (message.type === "voice" && message.mediaDataUrl) {
+  if (message.type === "voice" && mediaSource) {
     const audio = document.createElement("audio");
-    audio.src = message.mediaDataUrl;
+    audio.src = mediaSource;
     audio.controls = true;
     audio.className = "chat-audio";
     item.appendChild(audio);
@@ -918,19 +970,25 @@ async function sendMediaMessage(event) {
   if (!file) return;
 
   try {
-    enforceMediaSize(file);
-    const mediaDataUrl = await readFileAsDataURL(file);
+    if (!driveAccessToken) {
+      throw new Error("Collega Google Drive per inviare foto/video in chat.");
+    }
+
+    enforceMediaSize(file, DRIVE_CHAT_MEDIA_MAX_MB);
     const type = file.type.startsWith("video/") ? "video" : "image";
+    const upload = await uploadBlobToDrive(file, file.name, file.type, driveChatFolderId);
 
     await sendChatMessage({
       type,
       text: "",
-      mediaDataUrl,
+      mediaUrl: upload.directUrl,
       mediaMimeType: file.type,
-      mediaName: file.name
+      mediaName: file.name,
+      mediaDriveFileId: upload.fileId,
+      mediaDriveWebViewLink: upload.webViewLink || ""
     });
 
-    ui.chatFeedback.textContent = "Media inviato.";
+    ui.chatFeedback.textContent = "Media inviato su Google Drive.";
   } catch (error) {
     console.error(error);
     ui.chatFeedback.textContent = error.message || "Errore invio media.";
@@ -966,19 +1024,26 @@ async function toggleVoiceRecording() {
 
     mediaRecorder.onstop = async () => {
       try {
+        if (!driveAccessToken) {
+          throw new Error("Collega Google Drive per inviare vocali.");
+        }
+
         const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-        enforceMediaSize(blob);
-        const mediaDataUrl = await readBlobAsDataURL(blob);
+        enforceMediaSize(blob, DRIVE_CHAT_MEDIA_MAX_MB);
+        const fileName = `vocale-${Date.now()}.webm`;
+        const upload = await uploadBlobToDrive(blob, fileName, blob.type || "audio/webm", driveChatFolderId);
 
         await sendChatMessage({
           type: "voice",
           text: "",
-          mediaDataUrl,
+          mediaUrl: upload.directUrl,
           mediaMimeType: blob.type || "audio/webm",
-          mediaName: `vocale-${Date.now()}.webm`
+          mediaName: fileName,
+          mediaDriveFileId: upload.fileId,
+          mediaDriveWebViewLink: upload.webViewLink || ""
         });
 
-        ui.chatFeedback.textContent = "Messaggio vocale inviato.";
+        ui.chatFeedback.textContent = "Messaggio vocale inviato su Google Drive.";
       } catch (error) {
         console.error(error);
         ui.chatFeedback.textContent = error.message || "Errore invio vocale.";
@@ -1022,27 +1087,261 @@ function isOwnMessage(message) {
   return Boolean(currentUser && message.senderId === currentUser.uid);
 }
 
-function enforceMediaSize(fileOrBlob) {
-  const maxBytes = CHAT_MEDIA_MAX_MB * 1024 * 1024;
+function enforceMediaSize(fileOrBlob, maxMb) {
+  const maxBytes = maxMb * 1024 * 1024;
   if (fileOrBlob.size > maxBytes) {
-    throw new Error(`File troppo grande. Limite: ${CHAT_MEDIA_MAX_MB}MB.`);
+    throw new Error(`File troppo grande. Limite: ${maxMb}MB.`);
   }
 }
 
-function readFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Errore lettura file."));
-    reader.readAsDataURL(file);
+function resetDriveState() {
+  driveAccessToken = "";
+  driveRootFolderId = "";
+  driveChatFolderId = "";
+  driveReportsFolderId = "";
+  commessaSheetCache.clear();
+  ui.driveStatus.textContent = "Google Drive non collegato.";
+}
+
+async function connectGoogleDrive() {
+  if (!currentUser) {
+    alert("Devi fare login prima di collegare Drive.");
+    return;
+  }
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può collegare il Drive centralizzato.");
+    return;
+  }
+
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope("https://www.googleapis.com/auth/drive.file");
+    provider.addScope("https://www.googleapis.com/auth/spreadsheets");
+
+    const result = await auth.currentUser.linkWithPopup
+      ? await auth.currentUser.linkWithPopup(provider).catch(() => auth.signInWithPopup(provider))
+      : await auth.signInWithPopup(provider);
+
+    const accessToken = extractGoogleAccessToken(result);
+    if (!accessToken) {
+      throw new Error("Autorizzazione Drive non disponibile. Riprova.");
+    }
+
+    driveAccessToken = accessToken;
+    await ensureDriveFolders();
+    await db.collection("appConfig").doc("driveBridge").set({
+      ownerEmail: currentUser.email || ADMIN_EMAIL,
+      accessToken: driveAccessToken,
+      rootFolderId: driveRootFolderId,
+      chatFolderId: driveChatFolderId,
+      reportsFolderId: driveReportsFolderId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    ui.driveStatus.textContent = "Google Drive collegato. Cartelle pronte per report e media chat.";
+  } catch (error) {
+    console.error(error);
+    ui.driveStatus.textContent = error.message || "Errore durante il collegamento a Google Drive.";
+  }
+}
+
+function extractGoogleAccessToken(result) {
+  if (result && result.credential && result.credential.accessToken) {
+    return result.credential.accessToken;
+  }
+  if (
+    firebase
+    && firebase.auth
+    && firebase.auth.GoogleAuthProvider
+    && typeof firebase.auth.GoogleAuthProvider.credentialFromResult === "function"
+  ) {
+    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    if (credential && credential.accessToken) return credential.accessToken;
+  }
+  return "";
+}
+
+async function ensureDriveFolders() {
+  driveRootFolderId = await getOrCreateDriveFolder("Hera App - Dati");
+  driveChatFolderId = await getOrCreateDriveFolder("Chat Media", driveRootFolderId);
+  driveReportsFolderId = await getOrCreateDriveFolder("Report Impianti", driveRootFolderId);
+}
+
+async function getOrCreateDriveFolder(name, parentId = "") {
+  const parentQuery = parentId ? ` and '${parentId}' in parents` : "";
+  const safeName = name.replaceAll("'", "\\'");
+  const query = `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${safeName}'${parentQuery}`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
+
+  if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
+    return searchResponse.files[0].id;
+  }
+
+  const createPayload = {
+    name,
+    mimeType: "application/vnd.google-apps.folder"
+  };
+  if (parentId) createPayload.parents = [parentId];
+
+  const created = await driveApiFetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(createPayload)
+  });
+
+  return created.id;
+}
+
+async function exportImpiantoDoneToDriveSheet(impianto) {
+  if (!driveAccessToken) {
+    throw new Error("Collega Google Drive per creare il foglio automatico quando premi Fatto.");
+  }
+  if (!driveReportsFolderId) await ensureDriveFolders();
+  if (!selectedCommessaId) {
+    throw new Error("Seleziona una commessa prima di segnare l'impianto come fatto.");
+  }
+
+  const now = new Date();
+  const dateIT = now.toLocaleDateString("it-IT");
+  const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
+  const spreadsheet = await getOrCreateCommessaSpreadsheet(selectedCommessaId, selectedCommessaName || "Commessa");
+
+  const row = [
+    selectedCommessaName || "",
+    impianto.distretto || "",
+    impianto.idSap || "",
+    impianto.denominazione || "",
+    impianto.comune || "",
+    impianto.indirizzo || "",
+    impianto.voceRiferimento || "",
+    impianto.codicePrezzo || "",
+    impianto.sfalci || "",
+    impianto.frequenzaAnnua || "",
+    impianto.tipologiaIntervento || "",
+    impianto.lavorazioniRichieste || "",
+    impianto.gpsY ?? "",
+    impianto.gpsX ?? "",
+    impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
+    "Fatto",
+    dateIT,
+    timeIT,
+    operator,
+    currentUser?.email || ""
+  ];
+
+  await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A1:append?valueInputOption=RAW`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      values: [row]
+    })
   });
 }
 
-function readBlobAsDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Errore conversione audio."));
-    reader.readAsDataURL(blob);
+async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
+  const cachedId = commessaSheetCache.get(commessaId);
+  if (cachedId) return { id: cachedId };
+
+  const safeName = commessaName.replaceAll("'", "\\'");
+  const query = [
+    "mimeType='application/vnd.google-apps.spreadsheet'",
+    "trashed=false",
+    `'${driveReportsFolderId}' in parents`,
+    `name='Commessa - ${safeName}'`
+  ].join(" and ");
+
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
+
+  if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
+    const existing = searchResponse.files[0];
+    commessaSheetCache.set(commessaId, existing.id);
+    return { id: existing.id };
+  }
+
+  const created = await driveApiFetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `Commessa - ${commessaName}`,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [driveReportsFolderId]
+    })
   });
+
+  const headers = [[
+    "Commessa", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
+    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
+    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
+  ]];
+
+  await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${created.id}/values/A1:append?valueInputOption=RAW`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values: headers })
+  });
+
+  commessaSheetCache.set(commessaId, created.id);
+  return { id: created.id };
+}
+
+async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
+  if (!driveAccessToken) {
+    throw new Error("Google Drive non collegato.");
+  }
+  if (!folderId) await ensureDriveFolders();
+
+  const metadata = {
+    name: fileName,
+    mimeType,
+    parents: [folderId || driveChatFolderId]
+  };
+
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append("file", blob, fileName);
+
+  const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
+    method: "POST",
+    body: form
+  });
+
+  await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${uploaded.id}/permissions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "reader", type: "anyone" })
+  });
+
+  return {
+    fileId: uploaded.id,
+    webViewLink: uploaded.webViewLink || "",
+    directUrl: `https://drive.google.com/uc?export=download&id=${uploaded.id}`
+  };
+}
+
+async function driveApiFetch(url, options = {}) {
+  if (!driveAccessToken) {
+    throw new Error("Google Drive non collegato. Premi 'Collega Google Drive'.");
+  }
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${driveAccessToken}`);
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Errore Google Drive (${response.status}): ${text.slice(0, 180)}`);
+  }
+
+  if (response.status === 204) return {};
+  return response.json();
 }

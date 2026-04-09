@@ -79,6 +79,11 @@ h2 { font-size: 1.05rem; }
   gap: 10px;
   align-content: start;
 }
+.menu-title-btn {
+  text-align: left;
+  font-size: 1rem;
+  padding: 14px;
+}
 
 .menu-title-btn {
   text-align: left;
@@ -141,6 +146,9 @@ h2 { font-size: 1.05rem; }
   background: #f8fbff;
   padding: 8px 10px;
   font-size: 0.92rem;
+}
+.weather-card {
+  cursor: pointer;
 }
 
 .status-chip-drive {
@@ -256,6 +264,36 @@ select:focus-visible {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+}
+.impianti-toolbar {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 10px;
+}
+
+.search-box input {
+  border: 0;
+  min-width: 0;
+}
+
+.search-box input:focus {
+  outline: none;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .impianti-toolbar {
@@ -478,6 +516,31 @@ select:focus-visible {
 }
 
 .chat-modal.hidden { display: none; }
+
+.management-page {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 1250;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.management-page-head {
+  border-bottom: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.management-panel {
+  overflow: auto;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
 
 .management-page {
   position: fixed;

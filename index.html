@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Hera App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>Hera App 🚀</h1>
+
+  <button onclick="login()">Login Google</button>
+  <button onclick="logout()">Logout</button>
+
+  <div id="user">Non loggato</div>
+
+  <hr>
+
+  <h2>Aggiungi impianto</h2>
+  <input type="text" id="denominazione" placeholder="Denominazione impianto">
+  <input type="text" id="comune" placeholder="Comune">
+  <input type="text" id="indirizzo" placeholder="Indirizzo">
+  <button onclick="salvaImpianto()">Salva impianto</button>
+
+  <hr>
+
+  <h2>Impianti salvati</h2>
+  <div id="impianti-lista"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

@@ -1122,12 +1122,12 @@ async function connectGoogleDrive() {
       ? await auth.currentUser.linkWithPopup(provider).catch(() => auth.signInWithPopup(provider))
       : await auth.signInWithPopup(provider);
 
-    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-    if (!credential || !credential.accessToken) {
+    const accessToken = extractGoogleAccessToken(result);
+    if (!accessToken) {
       throw new Error("Autorizzazione Drive non disponibile. Riprova.");
     }
 
-    driveAccessToken = credential.accessToken;
+    driveAccessToken = accessToken;
     await ensureDriveFolders();
     await db.collection("appConfig").doc("driveBridge").set({
       ownerEmail: currentUser.email || ADMIN_EMAIL,
@@ -1142,6 +1142,22 @@ async function connectGoogleDrive() {
     console.error(error);
     ui.driveStatus.textContent = error.message || "Errore durante il collegamento a Google Drive.";
   }
+}
+
+function extractGoogleAccessToken(result) {
+  if (result && result.credential && result.credential.accessToken) {
+    return result.credential.accessToken;
+  }
+  if (
+    firebase
+    && firebase.auth
+    && firebase.auth.GoogleAuthProvider
+    && typeof firebase.auth.GoogleAuthProvider.credentialFromResult === "function"
+  ) {
+    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    if (credential && credential.accessToken) return credential.accessToken;
+  }
+  return "";
 }
 
 async function ensureDriveFolders() {
@@ -1221,18 +1237,6 @@ async function exportImpiantoDoneToDriveSheet(impianto) {
       values: [row]
     })
   });
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Errore Google Drive (${response.status}): ${text.slice(0, 180)}`);
-  }
-
-  if (response.status === 204) return {};
-  return response.json();
 }
 
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {

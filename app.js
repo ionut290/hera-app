@@ -187,6 +187,13 @@ auth.onAuthStateChanged((user) => {
   clearMap();
   lastReadChatAt = null;
   resetDriveState();
+  if (loggedIn && canManage) {
+    const storedToken = getStoredDriveToken();
+    if (storedToken) {
+      driveAccessToken = storedToken;
+      window.googleDriveAccessToken = storedToken;
+    }
+  }
   renderChat([]);
   applyRoute();
 
@@ -292,6 +299,10 @@ function queuePendingSheetExport(payload) {
   savePendingSheetExports();
 }
 
+function getStoredDriveToken() {
+  return localStorage.getItem("googleDriveAccessToken") || "";
+}
+
 function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900) {
   if (!commessaId) return;
   if (!canManageData() || !driveAccessToken) return;
@@ -387,7 +398,14 @@ function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
     const data = doc.exists ? doc.data() : null;
     if (!data || !data.accessToken) {
-      updateDriveStatus(false);
+      if (canManageData()) {
+        const storedToken = getStoredDriveToken();
+        if (storedToken) {
+          driveAccessToken = storedToken;
+          window.googleDriveAccessToken = storedToken;
+        }
+      }
+      updateDriveStatus(Boolean(driveAccessToken));
       return;
     }
 
@@ -1997,6 +2015,9 @@ async function connectGoogleDrive() {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     updateDriveStatus(true);
+    if (selectedCommessaId) {
+      scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 200);
+    }
     alert("Google Drive collegato correttamente");
   } catch (error) {
     console.error("Errore collegamento Google Drive:", error);

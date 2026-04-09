@@ -16,59 +16,10 @@
       <button id="menu-close-btn" class="btn" type="button">Chiudi</button>
     </div>
     <div class="side-menu-body">
-      <h3>Commesse</h3>
-      <form id="commessa-form" class="inline-form">
-        <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
-        <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
-      </form>
-      <p class="muted">Il foglio Google viene creato automaticamente per ogni commessa.</p>
-
-      <h3>Composizione squadra</h3>
-      <p class="muted">Solo admin. Imposta personale, mezzi e data di riferimento.</p>
-      <form id="squadra-form" class="squadra-form">
-        <select id="squadra-commessa" required>
-          <option value="">Seleziona commessa</option>
-        </select>
-        <input id="squadra-riferimento" type="date">
-        <input id="squadra-1" type="text" placeholder="Squadra 1 - Personale">
-        <input id="squadra-1-mezzi" type="text" placeholder="Squadra 1 - Mezzi">
-        <input id="squadra-2" type="text" placeholder="Squadra 2 - Personale">
-        <input id="squadra-2-mezzi" type="text" placeholder="Squadra 2 - Mezzi">
-        <input id="squadra-3" type="text" placeholder="Squadra 3 - Personale">
-        <input id="squadra-3-mezzi" type="text" placeholder="Squadra 3 - Mezzi">
-        <input id="squadra-tecnico" type="text" placeholder="Numero tecnico WhatsApp (es. 393331234567)">
-        <button class="btn btn-primary" type="submit">Salva composizione</button>
-      </form>
-      <p id="squadra-hint" class="muted"></p>
-
-      <h3>Import Excel impianti (commessa selezionata)</h3>
-      <div class="inline-form">
-        <input id="excel-file" type="file" accept=".xlsx,.xls">
-        <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
-      </div>
-      <p id="import-feedback" class="muted"></p>
-
-      <h3>Personale</h3>
-      <form id="personale-form" class="inline-form">
-        <input type="text" id="personale-nome" placeholder="Nome e cognome personale">
-        <button class="btn btn-primary" type="submit">Aggiungi personale</button>
-      </form>
-      <div class="inline-form">
-        <input id="personale-excel-file" type="file" accept=".xlsx,.xls">
-        <button id="personale-import-btn" class="btn" type="button">Importa Excel personale</button>
-      </div>
-      <div id="personale-lista" class="simple-list"></div>
-
-      <h3>Mezzi</h3>
-      <form id="mezzi-form" class="inline-form">
-        <input type="text" id="mezzo-nome" placeholder="Nome mezzo">
-        <button class="btn btn-primary" type="submit">Aggiungi mezzo</button>
-      </form>
-      <div class="inline-form">
-        <input id="mezzi-excel-file" type="file" accept=".xlsx,.xls">
-        <button id="mezzi-import-btn" class="btn" type="button">Importa Excel mezzi</button>
-      </div>
-      <div id="mezzi-lista" class="simple-list"></div>
+      <button id="open-panel-commesse" class="btn menu-title-btn" type="button">Aggiungi commesse</button>
+      <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
+      <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
+      <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
     </div>
   </aside>
 
@@ -97,6 +48,11 @@
         <p id="commessa-attiva" class="muted">Seleziona una commessa.</p>
       </section>
 
+      <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+        <h2>🌤️ Meteo rapido</h2>
+        <p id="weather-summary" class="muted">Caricamento meteo...</p>
+      </section>
+
       <section class="card">
         <h2>Squadre per commessa</h2>
         <div id="squadre-lista" class="squadre-lista"></div>
@@ -108,6 +64,7 @@
         <div class="page-head">
           <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
           <h2 id="impianti-page-title">Impianti commessa</h2>
+          <button id="export-current-commessa-btn" class="btn" type="button">Esporta riepilogo</button>
         </div>
       </section>
 
@@ -150,6 +107,9 @@
       <div id="chat-full-list" class="chat-full-list"></div>
 
       <form id="chat-send-form" class="chat-send-form">
+        <select id="chat-recipient">
+          <option value="">Messaggio per tutti</option>
+        </select>
         <input id="chat-text" type="text" placeholder="Scrivi un messaggio" maxlength="1000">
         <div class="chat-send-actions">
           <button id="chat-send-btn" class="btn btn-primary" type="submit">Invia testo</button>
@@ -159,6 +119,73 @@
         </div>
         <p id="chat-feedback" class="muted"></p>
       </form>
+    </div>
+  </section>
+
+  <section id="management-page" class="management-page hidden" aria-hidden="true">
+    <div class="management-page-head">
+      <h2 id="management-title">Gestione</h2>
+      <button id="management-close-btn" class="btn" type="button">Chiudi</button>
+    </div>
+    <div id="panel-commesse" class="management-panel hidden">
+      <form id="commessa-form" class="inline-form">
+        <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
+        <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
+      </form>
+      <h3>Import Excel impianti (commessa selezionata)</h3>
+      <div class="inline-form">
+        <input id="excel-file" type="file" accept=".xlsx,.xls">
+        <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
+      </div>
+      <p id="import-feedback" class="muted"></p>
+    </div>
+    <div id="panel-squadre" class="management-panel hidden">
+      <form id="squadra-form" class="squadra-form">
+        <select id="squadra-commessa" required>
+          <option value="">Seleziona commessa</option>
+        </select>
+        <input id="squadra-riferimento" type="date">
+        <input id="squadra-1" type="text" placeholder="Squadra 1 - Personale">
+        <input id="squadra-1-mezzi" type="text" placeholder="Squadra 1 - Mezzi">
+        <input id="squadra-2" type="text" placeholder="Squadra 2 - Personale">
+        <input id="squadra-2-mezzi" type="text" placeholder="Squadra 2 - Mezzi">
+        <input id="squadra-3" type="text" placeholder="Squadra 3 - Personale">
+        <input id="squadra-3-mezzi" type="text" placeholder="Squadra 3 - Mezzi">
+        <button class="btn btn-primary" type="submit">Salva composizione</button>
+      </form>
+      <p id="squadra-hint" class="muted"></p>
+    </div>
+    <div id="panel-personale" class="management-panel hidden">
+      <form id="personale-form" class="inline-form">
+        <input type="text" id="personale-nome" placeholder="Nome e cognome personale">
+        <button class="btn btn-primary" type="submit">Aggiungi personale</button>
+      </form>
+      <div class="inline-form">
+        <input id="personale-excel-file" type="file" accept=".xlsx,.xls">
+        <button id="personale-import-btn" class="btn" type="button">Importa Excel personale</button>
+      </div>
+      <div id="personale-lista" class="simple-list"></div>
+    </div>
+    <div id="panel-mezzi" class="management-panel hidden">
+      <form id="mezzi-form" class="inline-form">
+        <input type="text" id="mezzo-nome" placeholder="Nome mezzo">
+        <button class="btn btn-primary" type="submit">Aggiungi mezzo</button>
+      </form>
+      <div class="inline-form">
+        <input id="mezzi-excel-file" type="file" accept=".xlsx,.xls">
+        <button id="mezzi-import-btn" class="btn" type="button">Importa Excel mezzi</button>
+      </div>
+      <div id="mezzi-lista" class="simple-list"></div>
+    </div>
+  </section>
+
+  <section id="weather-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2>Meteo dettagliato</h2>
+        <button id="weather-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <div id="weather-details" class="chat-full-list"></div>
     </div>
   </section>
 

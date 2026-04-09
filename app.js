@@ -29,6 +29,7 @@ const ui = {
   chatCloseBtn: document.getElementById("chat-close-btn"),
   chatFullList: document.getElementById("chat-full-list"),
   chatSendForm: document.getElementById("chat-send-form"),
+  chatRecipient: document.getElementById("chat-recipient"),
   chatText: document.getElementById("chat-text"),
   chatSendBtn: document.getElementById("chat-send-btn"),
   chatMediaInput: document.getElementById("chat-media-input"),
@@ -37,6 +38,7 @@ const ui = {
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
+  exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
@@ -56,13 +58,28 @@ const ui = {
   squadra2Mezzi: document.getElementById("squadra-2-mezzi"),
   squadra3Mezzi: document.getElementById("squadra-3-mezzi"),
   squadraRiferimento: document.getElementById("squadra-riferimento"),
-  squadraTecnico: document.getElementById("squadra-tecnico"),
   squadraHint: document.getElementById("squadra-hint"),
   squadreLista: document.getElementById("squadre-lista"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
   mezziExcelFile: document.getElementById("mezzi-excel-file"),
-  mezziImportBtn: document.getElementById("mezzi-import-btn")
+  mezziImportBtn: document.getElementById("mezzi-import-btn"),
+  openPanelCommesse: document.getElementById("open-panel-commesse"),
+  openPanelSquadre: document.getElementById("open-panel-squadre"),
+  openPanelPersonale: document.getElementById("open-panel-personale"),
+  openPanelMezzi: document.getElementById("open-panel-mezzi"),
+  managementPage: document.getElementById("management-page"),
+  managementTitle: document.getElementById("management-title"),
+  managementCloseBtn: document.getElementById("management-close-btn"),
+  panelCommesse: document.getElementById("panel-commesse"),
+  panelSquadre: document.getElementById("panel-squadre"),
+  panelPersonale: document.getElementById("panel-personale"),
+  panelMezzi: document.getElementById("panel-mezzi"),
+  weatherCard: document.getElementById("weather-card"),
+  weatherSummary: document.getElementById("weather-summary"),
+  weatherModal: document.getElementById("weather-modal"),
+  weatherCloseBtn: document.getElementById("weather-close-btn"),
+  weatherDetails: document.getElementById("weather-details")
 };
 
 let pendingRows = [];
@@ -78,7 +95,9 @@ let unsubscribeDriveBridge = null;
 let unsubscribePersonale = null;
 let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
+let unsubscribeUsers = null;
 let chatMessages = [];
+let platformUsers = [];
 let mediaRecorder = null;
 let mediaChunks = [];
 let isRecording = false;
@@ -131,6 +150,7 @@ ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
@@ -140,6 +160,19 @@ ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
+ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commesse"));
+ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
+ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
+ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
+ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
+ui.weatherCard.addEventListener("click", openWeatherModal);
+ui.weatherCard.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openWeatherModal();
+  }
+});
+ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 
 initGeolocation();
 applyRoute();
@@ -164,6 +197,7 @@ auth.onAuthStateChanged((user) => {
     : "Nome utente: -";
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
+  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId;
   updateAdminControls();
 
   stopCommesseSubscription();
@@ -173,6 +207,7 @@ auth.onAuthStateChanged((user) => {
   stopPersonaleSubscription();
   stopMezziSubscription();
   stopSquadreSubscription();
+  stopUsersSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   window.location.hash = "";
@@ -198,14 +233,17 @@ auth.onAuthStateChanged((user) => {
   applyRoute();
 
   if (loggedIn) {
+    upsertCurrentPlatformUser();
     subscribeCommesse();
     subscribeChat();
+    subscribeUsers();
     subscribeDriveBridge();
     subscribePersonale();
     subscribeMezzi();
     subscribeSquadre();
     processPendingSheetExports();
   }
+  fetchWeather();
 });
 
 function updateAdminControls() {
@@ -225,7 +263,6 @@ function updateAdminControls() {
   ui.squadra2Mezzi.disabled = !canManage;
   ui.squadra3Mezzi.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
-  ui.squadraTecnico.disabled = !canManage;
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -242,6 +279,28 @@ function closeSideMenu() {
   ui.sideMenu.classList.add("hidden");
   ui.menuOverlay.classList.add("hidden");
   ui.sideMenu.setAttribute("aria-hidden", "true");
+}
+
+function openManagementPanel(panel) {
+  const panelMap = {
+    commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
+    squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
+    personale: { el: ui.panelPersonale, title: "Personale" },
+    mezzi: { el: ui.panelMezzi, title: "Mezzi" }
+  };
+  const target = panelMap[panel];
+  if (!target) return;
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi].forEach((el) => el.classList.add("hidden"));
+  target.el.classList.remove("hidden");
+  ui.managementTitle.textContent = target.title;
+  ui.managementPage.classList.remove("hidden");
+  ui.managementPage.setAttribute("aria-hidden", "false");
+  closeSideMenu();
+}
+
+function closeManagementPanel() {
+  ui.managementPage.classList.add("hidden");
+  ui.managementPage.setAttribute("aria-hidden", "true");
 }
 
 function applyRoute() {
@@ -265,6 +324,7 @@ function openImpiantiPage() {
 
 function closeImpiantiPage() {
   window.location.hash = "";
+  ui.exportCurrentCommessaBtn.disabled = true;
   applyRoute();
 }
 
@@ -466,14 +526,7 @@ function subscribeCommesse() {
         btn.textContent = commessa.nome || "Commessa senza nome";
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
-        const deleteBtn = createButton("Elimina", () => deleteCommessa(doc.id, commessa.nome || "Commessa"));
-        deleteBtn.disabled = !canManageData();
-        const exportBtn = createButton("Esporta riepilogo", () => exportCommessaSummary(doc.id, commessa.nome || "Commessa"));
-        exportBtn.disabled = !auth.currentUser;
-
         row.appendChild(btn);
-        row.appendChild(exportBtn);
-        row.appendChild(deleteBtn);
         ui.commesseLista.appendChild(row);
 
         const option = document.createElement("option");
@@ -501,6 +554,7 @@ function selectCommessa(id, nome) {
   selectedCommessaName = nome;
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
+  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
   updateCommessaButtonsActive();
 
   stopImpiantiSubscription();
@@ -1386,7 +1440,6 @@ function autofillSquadraForm() {
     ui.squadra2Mezzi.value = "";
     ui.squadra3Mezzi.value = "";
     ui.squadraRiferimento.value = "";
-    ui.squadraTecnico.value = "";
     return;
   }
 
@@ -1398,7 +1451,6 @@ function autofillSquadraForm() {
   ui.squadra2Mezzi.value = data.squadra2Mezzi || "";
   ui.squadra3Mezzi.value = data.squadra3Mezzi || "";
   ui.squadraRiferimento.value = data.riferimentoData || "";
-  ui.squadraTecnico.value = data.tecnicoTelefono || "";
 }
 
 async function saveSquadraComposition(event) {
@@ -1422,7 +1474,6 @@ async function saveSquadraComposition(event) {
     squadra2Mezzi: ui.squadra2Mezzi.value.trim(),
     squadra3: ui.squadra3.value.trim(),
     squadra3Mezzi: ui.squadra3Mezzi.value.trim(),
-    tecnicoTelefono: ui.squadraTecnico.value.trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   }, { merge: true });
@@ -1432,12 +1483,19 @@ function renderSquadre() {
   ui.squadreLista.innerHTML = "";
 
   const commesse = Array.from(commesseById.values());
-  if (!commesse.length) {
+  const commesseConSquadre = commesse.filter((commessa) => {
+    const squad = squadreByCommessa.get(commessa.id) || {};
+    return Boolean(
+      squad.squadra1 || squad.squadra2 || squad.squadra3
+      || squad.squadra1Mezzi || squad.squadra2Mezzi || squad.squadra3Mezzi
+    );
+  });
+  if (!commesseConSquadre.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
 
-  commesse.forEach((commessa) => {
+  commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
     const squad = squadreByCommessa.get(commessa.id) || {};
@@ -1455,7 +1513,6 @@ function renderSquadre() {
       <p><b>🚚 Mezzi 3:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
-    askBtn.disabled = !squad.tecnicoTelefono;
     item.appendChild(askBtn);
     ui.squadreLista.appendChild(item);
   });
@@ -1507,12 +1564,6 @@ function openWhatsApp(impianto) {
 }
 
 function openSquadraWhatsApp(squad, commessa) {
-  const telefono = String(squad.tecnicoTelefono || "").replace(/[^\d]/g, "");
-  if (!telefono) {
-    alert("Inserisci il numero del tecnico nella composizione squadra.");
-    return;
-  }
-
   const message = [
     "📣 Richiesta conferma squadre",
     `📁 Commessa: ${commessa.nome || "-"}`,
@@ -1525,7 +1576,7 @@ function openSquadraWhatsApp(squad, commessa) {
     `🚚 Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
   ].join("\n");
 
-  const url = `https://wa.me/${telefono}?text=${encodeURIComponent(message)}`;
+  const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank");
 }
 
@@ -1636,12 +1687,52 @@ function initGeolocation() {
     ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
     renderImpianti();
     renderMap();
+    fetchWeather();
   }, () => {
     ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+    fetchWeather();
   }, {
     enableHighAccuracy: true,
     timeout: 8000
   });
+}
+
+async function fetchWeather() {
+  try {
+    const lat = currentUserPos ? currentUserPos.lat : 44.4949;
+    const lon = currentUserPos ? currentUserPos.lng : 11.3426;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=2`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("meteo non disponibile");
+    const data = await response.json();
+    const current = data.current || {};
+    ui.weatherSummary.textContent = `${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
+    renderWeatherDetails(data);
+  } catch (error) {
+    ui.weatherSummary.textContent = "Meteo non disponibile.";
+    ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
+  }
+}
+
+function renderWeatherDetails(data) {
+  const times = (data.hourly && data.hourly.time) || [];
+  const temps = (data.hourly && data.hourly.temperature_2m) || [];
+  const rains = (data.hourly && data.hourly.precipitation_probability) || [];
+  const rows = times.slice(0, 12).map((time, idx) => {
+    const hour = new Date(time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `<p><b>${hour}</b> • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}%</p>`;
+  }).join("");
+  ui.weatherDetails.innerHTML = rows || "<p class='muted'>Nessun dato meteo.</p>";
+}
+
+function openWeatherModal() {
+  ui.weatherModal.classList.remove("hidden");
+  ui.weatherModal.setAttribute("aria-hidden", "false");
+}
+
+function closeWeatherModal() {
+  ui.weatherModal.classList.add("hidden");
+  ui.weatherModal.setAttribute("aria-hidden", "true");
 }
 
 function distanceFromUser(impianto) {
@@ -1688,6 +1779,44 @@ function subscribeChat() {
     });
 }
 
+async function upsertCurrentPlatformUser() {
+  if (!currentUser) return;
+  await db.collection("platformUsers").doc(currentUser.uid).set({
+    uid: currentUser.uid,
+    email: currentUser.email || "",
+    displayName: currentUser.displayName || currentUser.email || "Utente",
+    lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+function subscribeUsers() {
+  unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
+    platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+    renderChatRecipients();
+  });
+}
+
+function stopUsersSubscription() {
+  if (unsubscribeUsers) {
+    unsubscribeUsers();
+    unsubscribeUsers = null;
+  }
+  platformUsers = [];
+  renderChatRecipients();
+}
+
+function renderChatRecipients() {
+  ui.chatRecipient.innerHTML = "<option value=''>Messaggio per tutti</option>";
+  platformUsers.forEach((user) => {
+    if (currentUser && user.id === currentUser.uid) return;
+    const option = document.createElement("option");
+    option.value = user.id;
+    option.textContent = user.displayName || user.email || "Utente";
+    ui.chatRecipient.appendChild(option);
+  });
+}
+
 function stopChatSubscription() {
   if (unsubscribeChat) {
     unsubscribeChat();
@@ -1701,6 +1830,7 @@ function renderChat(messages) {
     ui.chatCounter.classList.add("hidden");
     ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
     ui.chatSendBtn.disabled = true;
+    ui.chatRecipient.disabled = true;
     ui.chatText.disabled = true;
     ui.chatMediaInput.disabled = true;
     ui.chatVoiceBtn.disabled = true;
@@ -1708,17 +1838,20 @@ function renderChat(messages) {
   }
 
   ui.chatSendBtn.disabled = false;
+  ui.chatRecipient.disabled = false;
   ui.chatText.disabled = false;
   ui.chatMediaInput.disabled = false;
   ui.chatVoiceBtn.disabled = false;
 
-  if (!messages.length) {
+  const visibleMessages = messages.filter(canViewMessage);
+
+  if (!visibleMessages.length) {
     ui.chatCounter.classList.add("hidden");
     ui.chatFullList.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
     return;
   }
 
-  const unreadCount = countUnreadMessages(messages);
+  const unreadCount = countUnreadMessages(visibleMessages);
   if (unreadCount > 0) {
     ui.chatCounter.classList.remove("hidden");
     ui.chatCounter.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
@@ -1727,7 +1860,7 @@ function renderChat(messages) {
   }
 
   ui.chatFullList.innerHTML = "";
-  messages.forEach((message) => {
+  visibleMessages.forEach((message) => {
     ui.chatFullList.appendChild(createChatMessageElement(message));
   });
   ui.chatFullList.scrollTop = ui.chatFullList.scrollHeight;
@@ -1745,6 +1878,12 @@ function countUnreadMessages(messages) {
       : 0;
     return !lastReadChatAt || createdAt > lastReadChatAt;
   }).length;
+}
+
+function canViewMessage(message) {
+  if (!currentUser) return false;
+  if (!message.recipientId) return true;
+  return message.recipientId === currentUser.uid || message.senderId === currentUser.uid;
 }
 
 function markChatAsRead() {
@@ -1777,6 +1916,13 @@ function createChatMessageElement(message) {
     <span>${createdAt.toLocaleString("it-IT")}</span>
   `;
   item.appendChild(top);
+
+  if (message.recipientId) {
+    const tag = document.createElement("p");
+    tag.className = "chat-type-badge";
+    tag.textContent = isOwnMessage(message) ? "📩 Messaggio privato" : "🔒 Privato per te";
+    item.appendChild(tag);
+  }
 
   if (message.type === "text") {
     const p = document.createElement("p");
@@ -1832,7 +1978,8 @@ async function sendTextMessage(event) {
 
   await sendChatMessage({
     type: "text",
-    text
+    text,
+    recipientId: ui.chatRecipient.value || ""
   });
 
   ui.chatText.value = "";
@@ -1854,6 +2001,7 @@ async function sendMediaMessage(event) {
     await sendChatMessage({
       type,
       text: "",
+      recipientId: ui.chatRecipient.value || "",
       mediaUrl: upload.directUrl,
       mediaMimeType: file.type,
       mediaName: file.name,
@@ -1909,6 +2057,7 @@ async function toggleVoiceRecording() {
         await sendChatMessage({
           type: "voice",
           text: "",
+          recipientId: ui.chatRecipient.value || "",
           mediaUrl: upload.directUrl,
           mediaMimeType: blob.type || "audio/webm",
           mediaName: fileName,

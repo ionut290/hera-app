@@ -16,7 +16,6 @@ const ui = {
   driveStatus: document.getElementById("drive-status"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
-  commessaSheet: document.getElementById("commessa-sheet"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   excelFile: document.getElementById("excel-file"),
@@ -30,6 +29,7 @@ const ui = {
   chatCloseBtn: document.getElementById("chat-close-btn"),
   chatFullList: document.getElementById("chat-full-list"),
   chatSendForm: document.getElementById("chat-send-form"),
+  chatRecipient: document.getElementById("chat-recipient"),
   chatText: document.getElementById("chat-text"),
   chatSendBtn: document.getElementById("chat-send-btn"),
   chatMediaInput: document.getElementById("chat-media-input"),
@@ -38,7 +38,11 @@ const ui = {
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
+  exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
+  impiantoSearch: document.getElementById("impianto-search"),
+  viewDoneBtn: document.getElementById("view-done-btn"),
+  viewTodoBtn: document.getElementById("view-todo-btn"),
   personaleForm: document.getElementById("personale-form"),
   personaleNome: document.getElementById("personale-nome"),
   personaleLista: document.getElementById("personale-lista"),
@@ -47,20 +51,41 @@ const ui = {
   mezziLista: document.getElementById("mezzi-lista"),
   squadraForm: document.getElementById("squadra-form"),
   squadraCommessa: document.getElementById("squadra-commessa"),
-  squadra1: document.getElementById("squadra-1"),
-  squadra2: document.getElementById("squadra-2"),
-  squadra3: document.getElementById("squadra-3"),
-  squadra1Mezzi: document.getElementById("squadra-1-mezzi"),
-  squadra2Mezzi: document.getElementById("squadra-2-mezzi"),
-  squadra3Mezzi: document.getElementById("squadra-3-mezzi"),
+  squadraRows: document.getElementById("squadra-rows"),
+  addSquadraRowBtn: document.getElementById("add-squadra-row-btn"),
   squadraRiferimento: document.getElementById("squadra-riferimento"),
-  squadraTecnico: document.getElementById("squadra-tecnico"),
   squadraHint: document.getElementById("squadra-hint"),
   squadreLista: document.getElementById("squadre-lista"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
   mezziExcelFile: document.getElementById("mezzi-excel-file"),
-  mezziImportBtn: document.getElementById("mezzi-import-btn")
+  mezziImportBtn: document.getElementById("mezzi-import-btn"),
+  openPanelCommesse: document.getElementById("open-panel-commesse"),
+  openPanelSquadre: document.getElementById("open-panel-squadre"),
+  openPanelPersonale: document.getElementById("open-panel-personale"),
+  openPanelMezzi: document.getElementById("open-panel-mezzi"),
+  managementPage: document.getElementById("management-page"),
+  managementTitle: document.getElementById("management-title"),
+  managementCloseBtn: document.getElementById("management-close-btn"),
+  panelCommesse: document.getElementById("panel-commesse"),
+  panelSquadre: document.getElementById("panel-squadre"),
+  panelPersonale: document.getElementById("panel-personale"),
+  panelMezzi: document.getElementById("panel-mezzi"),
+  personaleOptions: document.getElementById("personale-options"),
+  mezziOptions: document.getElementById("mezzi-options"),
+  weatherCard: document.getElementById("weather-card"),
+  weatherSummary: document.getElementById("weather-summary"),
+  weatherModal: document.getElementById("weather-modal"),
+  weatherCloseBtn: document.getElementById("weather-close-btn"),
+  weatherDetails: document.getElementById("weather-details"),
+  fuelPage: document.getElementById("fuel-page"),
+  backFromFuelBtn: document.getElementById("back-from-fuel-btn"),
+  fuelPageTitle: document.getElementById("fuel-page-title"),
+  fuelMap: document.getElementById("fuel-map"),
+  fuelStationsList: document.getElementById("fuel-stations-list"),
+  fuelMezzoDetailsBtn: document.getElementById("fuel-mezzo-details-btn"),
+  fuelMezzoDetailsCard: document.getElementById("fuel-mezzo-details-card"),
+  fuelMezzoDetails: document.getElementById("fuel-mezzo-details")
 };
 
 let pendingRows = [];
@@ -76,7 +101,9 @@ let unsubscribeDriveBridge = null;
 let unsubscribePersonale = null;
 let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
+let unsubscribeUsers = null;
 let chatMessages = [];
+let platformUsers = [];
 let mediaRecorder = null;
 let mediaChunks = [];
 let isRecording = false;
@@ -91,9 +118,15 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let highlightedImpiantoKey = "";
+let impiantiSearchTerm = "";
+let impiantiViewMode = "done";
 let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
+const commessaSheetSyncTimers = new Map();
+let fuelMapInstance = null;
+let fuelStationsLayer = null;
+let selectedFuelMezzo = null;
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -126,13 +159,34 @@ ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
+ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
+ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
+ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
 ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
+ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
+ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commesse"));
+ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
+ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
+ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
+ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
+ui.weatherCard.addEventListener("click", openWeatherModal);
+ui.weatherCard.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openWeatherModal();
+  }
+});
+ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
+ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
+ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 
+addSquadraRow();
 initGeolocation();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
@@ -156,6 +210,7 @@ auth.onAuthStateChanged((user) => {
     : "Nome utente: -";
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
+  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId;
   updateAdminControls();
 
   stopCommesseSubscription();
@@ -165,6 +220,7 @@ auth.onAuthStateChanged((user) => {
   stopPersonaleSubscription();
   stopMezziSubscription();
   stopSquadreSubscription();
+  stopUsersSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   window.location.hash = "";
@@ -179,39 +235,46 @@ auth.onAuthStateChanged((user) => {
   clearMap();
   lastReadChatAt = null;
   resetDriveState();
+  if (loggedIn && canManage) {
+    const storedToken = getStoredDriveToken();
+    if (storedToken) {
+      driveAccessToken = storedToken;
+      window.googleDriveAccessToken = storedToken;
+    }
+  }
   renderChat([]);
   applyRoute();
 
   if (loggedIn) {
+    upsertCurrentPlatformUser();
     subscribeCommesse();
     subscribeChat();
+    subscribeUsers();
     subscribeDriveBridge();
     subscribePersonale();
     subscribeMezzi();
     subscribeSquadre();
     processPendingSheetExports();
   }
+  fetchWeather();
 });
 
 function updateAdminControls() {
   const canManage = canManageData();
   ui.commessaName.disabled = !canManage;
-  ui.commessaSheet.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
   ui.personaleNome.disabled = !canManage;
   ui.mezzoNome.disabled = !canManage;
   if (ui.personaleForm.querySelector("button[type='submit']")) ui.personaleForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.mezziForm.querySelector("button[type='submit']")) ui.mezziForm.querySelector("button[type='submit']").disabled = !canManage;
+  ui.personaleImportBtn.disabled = !canManage;
+  ui.mezziImportBtn.disabled = !canManage;
+  ui.importBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
   ui.squadraCommessa.disabled = !canManage;
-  ui.squadra1.disabled = !canManage;
-  ui.squadra2.disabled = !canManage;
-  ui.squadra3.disabled = !canManage;
-  ui.squadra1Mezzi.disabled = !canManage;
-  ui.squadra2Mezzi.disabled = !canManage;
-  ui.squadra3Mezzi.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
-  ui.squadraTecnico.disabled = !canManage;
+  ui.addSquadraRowBtn.disabled = !canManage;
+  ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -230,16 +293,46 @@ function closeSideMenu() {
   ui.sideMenu.setAttribute("aria-hidden", "true");
 }
 
+function openManagementPanel(panel) {
+  const panelMap = {
+    commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
+    squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
+    personale: { el: ui.panelPersonale, title: "Personale" },
+    mezzi: { el: ui.panelMezzi, title: "Mezzi" }
+  };
+  const target = panelMap[panel];
+  if (!target) return;
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi].forEach((el) => el.classList.add("hidden"));
+  target.el.classList.remove("hidden");
+  ui.managementTitle.textContent = target.title;
+  ui.managementPage.classList.remove("hidden");
+  ui.managementPage.setAttribute("aria-hidden", "false");
+  closeSideMenu();
+}
+
+function closeManagementPanel() {
+  ui.managementPage.classList.add("hidden");
+  ui.managementPage.setAttribute("aria-hidden", "true");
+}
+
 function applyRoute() {
   const hash = window.location.hash || "";
   const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)$/);
+  const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const commessaIdFromHash = match ? match[1] : "";
+  const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
+  ui.fuelPage.classList.toggle("hidden", !showFuel);
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
     setTimeout(() => map.invalidateSize(), 50);
+  }
+  if (showFuel) {
+    setTimeout(() => {
+      if (fuelMapInstance) fuelMapInstance.invalidateSize();
+    }, 50);
   }
 }
 
@@ -250,6 +343,12 @@ function openImpiantiPage() {
 }
 
 function closeImpiantiPage() {
+  window.location.hash = "";
+  ui.exportCurrentCommessaBtn.disabled = true;
+  applyRoute();
+}
+
+function closeFuelPage() {
   window.location.hash = "";
   applyRoute();
 }
@@ -283,6 +382,27 @@ function queuePendingSheetExport(payload) {
     nextRetryAt: payload.nextRetryAt || Date.now()
   });
   savePendingSheetExports();
+}
+
+function getStoredDriveToken() {
+  return localStorage.getItem("googleDriveAccessToken") || "";
+}
+
+function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900) {
+  if (!commessaId) return;
+  if (!canManageData() || !driveAccessToken) return;
+  const existingTimer = commessaSheetSyncTimers.get(commessaId);
+  if (existingTimer) clearTimeout(existingTimer);
+  const timer = setTimeout(async () => {
+    try {
+      await syncCommessaDoneImpiantiToDriveSheet(commessaId, commessaName || selectedCommessaName || "Commessa");
+    } catch (error) {
+      console.error("Sync foglio commessa fallita:", error);
+    } finally {
+      commessaSheetSyncTimers.delete(commessaId);
+    }
+  }, delayMs);
+  commessaSheetSyncTimers.set(commessaId, timer);
 }
 
 async function queueSheetExportForAdmin(payload) {
@@ -350,15 +470,8 @@ async function createCommessa(event) {
     return;
   }
 
-  const parsedSheetId = parseGoogleSheetId(ui.commessaSheet.value);
-  if (ui.commessaSheet.value.trim() && !parsedSheetId) {
-    alert("Inserisci un ID Google Sheet valido oppure un link Fogli Google valido.");
-    return;
-  }
-
   await db.collection("commesse").add({
     nome,
-    reportSheetId: parsedSheetId || "",
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
@@ -370,7 +483,14 @@ function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
     const data = doc.exists ? doc.data() : null;
     if (!data || !data.accessToken) {
-      updateDriveStatus(false);
+      if (canManageData()) {
+        const storedToken = getStoredDriveToken();
+        if (storedToken) {
+          driveAccessToken = storedToken;
+          window.googleDriveAccessToken = storedToken;
+        }
+      }
+      updateDriveStatus(Boolean(driveAccessToken));
       return;
     }
 
@@ -431,14 +551,7 @@ function subscribeCommesse() {
         btn.textContent = commessa.nome || "Commessa senza nome";
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
-        const deleteBtn = createButton("Elimina", () => deleteCommessa(doc.id, commessa.nome || "Commessa"));
-        deleteBtn.disabled = !canManageData();
-        const exportBtn = createButton("Esporta riepilogo", () => exportCommessaSummary(doc.id, commessa.nome || "Commessa"));
-        exportBtn.disabled = !auth.currentUser;
-
         row.appendChild(btn);
-        row.appendChild(exportBtn);
-        row.appendChild(deleteBtn);
         ui.commesseLista.appendChild(row);
 
         const option = document.createElement("option");
@@ -464,10 +577,9 @@ function stopCommesseSubscription() {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
-  const commessa = commesseById.get(id) || null;
-  const linkedSheet = commessa && commessa.reportSheetId ? ` | Foglio collegato: ${commessa.reportSheetId}` : "";
-  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}${linkedSheet}`;
+  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
+  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
   updateCommessaButtonsActive();
 
   stopImpiantiSubscription();
@@ -495,6 +607,7 @@ function subscribeImpianti() {
       currentImpianti = combineImpiantiForView(rawImpianti);
       renderImpianti();
       renderMap();
+      scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
     }, (error) => {
       console.error(error);
       ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";
@@ -779,17 +892,18 @@ async function exportCommessaSummary(commessaId, commessaName) {
       return;
     }
 
-    const rows = doneImpianti.map((impianto) => {
+    const rows = doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((impianto) => {
       const doneInfo = formatDoneDateTime(impianto.doneAt);
       return {
         Commessa: commessaName || "",
+        Cantiere: impianto.cantiereRiga || "",
         Distretto: impianto.distretto || "",
         "ID SAP": impianto.idSap || "",
         Denominazione: impianto.denominazione || "",
         Comune: impianto.comune || "",
         Indirizzo: impianto.indirizzo || "",
         "Voce riferimento": impianto.voceRiferimento || "",
-        "Codice prezzo": impianto.codicePrezzo || "",
+        "Codice prezzo": impianto.codicePrezzoSingolo || impianto.codicePrezzo || "",
         Sfalci: impianto.sfalci || "",
         "Frequenza annua": impianto.frequenzaAnnua || "",
         "Tipologia intervento": impianto.tipologiaIntervento || "",
@@ -828,6 +942,19 @@ function splitCodes(codicePrezzo) {
     .filter(Boolean);
 }
 
+function buildRowsForEachCodicePrezzo(impianto) {
+  const rawCodes = String(impianto.codicePrezzo || impianto.voceRiferimento || "")
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const codes = rawCodes.length ? rawCodes : [""];
+  return codes.map((code) => ({
+    ...impianto,
+    codicePrezzoSingolo: code,
+    cantiereRiga: `${impianto.denominazione || "Impianto"}`
+  }));
+}
+
 function hasOrdinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
   return codes.includes("A11") || codes.includes("A12");
@@ -839,6 +966,31 @@ function hasStraordinario(codicePrezzo) {
   return codes.some((code) => code !== "A11" && code !== "A12");
 }
 
+function onImpiantoSearchInput(event) {
+  impiantiSearchTerm = String(event.target.value || "").trim().toLowerCase();
+  renderImpianti();
+}
+
+function setImpiantiViewMode(mode) {
+  impiantiViewMode = mode === "todo" ? "todo" : "done";
+  ui.viewDoneBtn.classList.toggle("btn-primary", impiantiViewMode === "done");
+  ui.viewTodoBtn.classList.toggle("btn-primary", impiantiViewMode === "todo");
+  renderImpianti();
+}
+
+function matchesImpiantoSearch(impianto) {
+  if (!impiantiSearchTerm) return true;
+  const haystack = [
+    impianto.denominazione,
+    impianto.comune,
+    impianto.indirizzo,
+    impianto.codicePrezzo,
+    impianto.voceRiferimento,
+    impianto.idSap
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  return haystack.includes(impiantiSearchTerm);
+}
+
 function renderImpianti() {
   ui.impiantiLista.innerHTML = "";
 
@@ -847,7 +999,16 @@ function renderImpianti() {
     return;
   }
 
-  const sorted = [...currentImpianti].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+  const filtered = currentImpianti.filter((impianto) => {
+    const viewMatch = impiantiViewMode === "done" ? Boolean(impianto.done) : !impianto.done;
+    return viewMatch && matchesImpiantoSearch(impianto);
+  });
+  const sorted = [...filtered].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+
+  if (!sorted.length) {
+    ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
+    return;
+  }
 
   sorted.forEach((impianto) => {
     const article = document.createElement("article");
@@ -875,6 +1036,7 @@ function renderImpianti() {
     actions.className = "item-actions";
 
     const doneBtn = createButton("Fatto", () => markImpiantoDone(impianto));
+    doneBtn.disabled = Boolean(impianto.done);
     const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
     const resetBtn = createButton("Reset", () => resetImpianto(impianto));
     resetBtn.disabled = !canManageData();
@@ -897,6 +1059,7 @@ function createButton(label, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn";
+  if (String(label).toLowerCase().includes("whatsapp")) btn.classList.add("btn-whatsapp");
   btn.textContent = label;
   btn.addEventListener("click", onClick);
   return btn;
@@ -943,7 +1106,7 @@ async function markImpiantoDone(impianto) {
   }
 
   try {
-    await exportImpiantoDoneToDriveSheet(exportPayload.impianto, exportPayload.commessaId, exportPayload.commessaName);
+    await syncCommessaDoneImpiantiToDriveSheet(exportPayload.commessaId, exportPayload.commessaName);
   } catch (error) {
     console.error(error);
     const retried = await retrySheetExport(exportPayload, 2);
@@ -975,7 +1138,7 @@ async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
 async function retrySheetExport(payload, retries = 2) {
   for (let i = 0; i < retries; i += 1) {
     try {
-      await exportImpiantoDoneToDriveSheet(payload.impianto, payload.commessaId, payload.commessaName);
+      await syncCommessaDoneImpiantiToDriveSheet(payload.commessaId, payload.commessaName);
       return true;
     } catch (error) {
       console.warn(`Tentativo export foglio fallito (${i + 1}/${retries})`, error);
@@ -996,7 +1159,7 @@ async function processPendingSheetExports() {
       continue;
     }
     try {
-      await exportImpiantoDoneToDriveSheet(item.impianto, item.commessaId, item.commessaName);
+      await syncCommessaDoneImpiantiToDriveSheet(item.commessaId, item.commessaName);
     } catch (error) {
       const attempts = Number(item.attempts || 0) + 1;
       if (attempts < 20) {
@@ -1033,11 +1196,7 @@ async function processAdminSheetExportQueue() {
     for (const doc of snapshot.docs) {
       const data = doc.data() || {};
       try {
-        await exportImpiantoDoneToDriveSheet(
-          data.impianto || {},
-          data.commessaId || "",
-          data.commessaName || "Commessa"
-        );
+        await syncCommessaDoneImpiantiToDriveSheet(data.commessaId || "", data.commessaName || "Commessa");
         await doc.ref.set({
           status: "done",
           doneAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1118,6 +1277,10 @@ async function addPersonale(event) {
   }
   const nome = ui.personaleNome.value.trim();
   if (!nome) return;
+  if (nome.split(/\s+/).length < 2) {
+    alert("Inserisci Nome e Cognome del personale.");
+    return;
+  }
   await db.collection("personale").add({
     nome,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1153,7 +1316,59 @@ async function importMezziFromExcel() {
     alert("Solo ionut29019@gmail.com può importare i mezzi.");
     return;
   }
-  await importSimpleRegistryFromExcel(ui.mezziExcelFile, "mezzi");
+  const file = ui.mezziExcelFile.files && ui.mezziExcelFile.files[0];
+  if (!file) {
+    alert("Seleziona un file Excel mezzi.");
+    return;
+  }
+  const rows = await parseMezziExcelRows(file);
+  if (!rows.length) {
+    alert("Nessun mezzo valido trovato nel file.");
+    return;
+  }
+  const batch = db.batch();
+  rows.forEach((mezzo) => {
+    const ref = db.collection("mezzi").doc();
+    batch.set(ref, {
+      nome: mezzo.nId || "",
+      nId: mezzo.nId || "",
+      marca: mezzo.marca || "",
+      portataCarico: mezzo.portataCarico || "",
+      massaComplessivaKg: mezzo.massaComplessivaKg || "",
+      alimentazione: mezzo.alimentazione || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+  await batch.commit();
+  ui.mezziExcelFile.value = "";
+  alert(`Import mezzi completato (${rows.length} elementi).`);
+}
+
+async function parseMezziExcelRows(file) {
+  const matrix = await parseSimpleExcelRows(file, true);
+  if (!matrix.length) return [];
+  const header = matrix[0].map((cell) => normalizeHeaderKey(cell));
+  return matrix.slice(1).map((row) => {
+    const get = (aliases) => {
+      const index = header.findIndex((h) => aliases.includes(h));
+      return index >= 0 ? String(row[index] || "").trim() : "";
+    };
+    return {
+      nId: get(["nid", "nid.", "n.id", "n.id.", "id"]),
+      marca: get(["marca"]),
+      portataCarico: get(["portatacarico", "portata"]),
+      massaComplessivaKg: get(["massacomplessivapesodelcamioncaricokg", "massacomplessivakg", "massa"]),
+      alimentazione: get(["alimentazione"])
+    };
+  }).filter((row) => row.nId);
+}
+
+function normalizeHeaderKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 async function importSimpleRegistryFromExcel(inputEl, collectionName) {
@@ -1164,7 +1379,8 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   }
 
   const rows = await parseSimpleExcelRows(file);
-  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))];
+  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))]
+    .filter((name) => (collectionName === "personale" ? name.split(/\s+/).length >= 2 : true));
   if (!uniqueNames.length) {
     alert("Il file Excel non contiene nomi validi.");
     return;
@@ -1183,7 +1399,7 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   alert(`Import completato (${uniqueNames.length} elementi).`);
 }
 
-async function parseSimpleExcelRows(file) {
+async function parseSimpleExcelRows(file, rawRows = false) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -1196,6 +1412,10 @@ async function parseSimpleExcelRows(file) {
         const names = [];
         jsonRows.forEach((row) => {
           if (!Array.isArray(row) || !row.length) return;
+          if (rawRows) {
+            names.push(row);
+            return;
+          }
           const firstCell = String(row[0] || "").trim();
           if (firstCell && firstCell.toLowerCase() !== "nome") names.push(firstCell);
         });
@@ -1214,6 +1434,7 @@ function subscribePersonale() {
     personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSimpleList(ui.personaleLista, personaleRecords, deletePersonale);
     updateSquadraHintFromSources();
+    updateSuggestionLists();
   }, (error) => {
     console.error(error);
     ui.personaleLista.innerHTML = "<p class='muted'>Errore caricamento personale.</p>";
@@ -1225,6 +1446,7 @@ function subscribeMezzi() {
     mezziRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSimpleList(ui.mezziLista, mezziRecords, deleteMezzo);
     updateSquadraHintFromSources();
+    updateSuggestionLists();
   }, (error) => {
     console.error(error);
     ui.mezziLista.innerHTML = "<p class='muted'>Errore caricamento mezzi.</p>";
@@ -1300,26 +1522,88 @@ async function deleteMezzo(id, nome) {
 function autofillSquadraForm() {
   const commessaId = ui.squadraCommessa.value;
   if (!commessaId) {
-    ui.squadra1.value = "";
-    ui.squadra2.value = "";
-    ui.squadra3.value = "";
-    ui.squadra1Mezzi.value = "";
-    ui.squadra2Mezzi.value = "";
-    ui.squadra3Mezzi.value = "";
+    ui.squadraRows.innerHTML = "";
     ui.squadraRiferimento.value = "";
-    ui.squadraTecnico.value = "";
+    addSquadraRow();
     return;
   }
 
   const data = squadreByCommessa.get(commessaId) || {};
-  ui.squadra1.value = data.squadra1 || "";
-  ui.squadra2.value = data.squadra2 || "";
-  ui.squadra3.value = data.squadra3 || "";
-  ui.squadra1Mezzi.value = data.squadra1Mezzi || "";
-  ui.squadra2Mezzi.value = data.squadra2Mezzi || "";
-  ui.squadra3Mezzi.value = data.squadra3Mezzi || "";
   ui.squadraRiferimento.value = data.riferimentoData || "";
-  ui.squadraTecnico.value = data.tecnicoTelefono || "";
+  setSquadraRowsFromData(data);
+}
+
+function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
+  const index = ui.squadraRows.children.length + 1;
+  const row = document.createElement("div");
+  row.className = "squadra-row";
+  row.innerHTML = `
+    <div class="squadra-row-head">
+      <strong>Squadra ${index}</strong>
+      <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
+    </div>
+    <input type="text" class="squadra-personale" list="personale-options" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
+    <input type="text" class="squadra-mezzi" list="mezzi-options" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
+  `;
+  row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
+    row.remove();
+    renumberSquadraRows();
+    if (!ui.squadraRows.children.length) addSquadraRow();
+  });
+  const personaleInput = row.querySelector(".squadra-personale");
+  const mezziInput = row.querySelector(".squadra-mezzi");
+  personaleInput.addEventListener("blur", () => {
+    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => p.nome));
+  });
+  mezziInput.addEventListener("blur", () => {
+    const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
+    if (suggestion) mezziInput.value = suggestion;
+  });
+  ui.squadraRows.appendChild(row);
+  updateAdminControls();
+}
+
+function resolveSuggestionValue(rawValue, sourceValues) {
+  const value = String(rawValue || "").trim();
+  if (!value) return "";
+  const exact = sourceValues.find((item) => String(item || "").toLowerCase() === value.toLowerCase());
+  if (exact) return exact;
+  const matches = sourceValues.filter((item) => String(item || "").toLowerCase().includes(value.toLowerCase()));
+  if (matches.length === 1) return matches[0];
+  return value;
+}
+
+function renumberSquadraRows() {
+  Array.from(ui.squadraRows.children).forEach((row, idx) => {
+    const title = row.querySelector(".squadra-row-head strong");
+    if (title) title.textContent = `Squadra ${idx + 1}`;
+  });
+}
+
+function readSquadraRows() {
+  return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
+    personale: String((row.querySelector(".squadra-personale") || {}).value || "").trim(),
+    mezzi: String((row.querySelector(".squadra-mezzi") || {}).value || "").trim()
+  })).filter((row) => row.personale || row.mezzi);
+}
+
+function getLegacySquadreRows(data) {
+  const rows = [];
+  if (data.squadra1 || data.squadra1Mezzi) rows.push({ personale: data.squadra1 || "", mezzi: data.squadra1Mezzi || "" });
+  if (data.squadra2 || data.squadra2Mezzi) rows.push({ personale: data.squadra2 || "", mezzi: data.squadra2Mezzi || "" });
+  if (data.squadra3 || data.squadra3Mezzi) rows.push({ personale: data.squadra3 || "", mezzi: data.squadra3Mezzi || "" });
+  return rows;
+}
+
+function setSquadraRowsFromData(data) {
+  ui.squadraRows.innerHTML = "";
+  const rows = Array.isArray(data.squadre) ? data.squadre : getLegacySquadreRows(data);
+  if (!rows.length) {
+    addSquadraRow();
+    return;
+  }
+  rows.forEach((row) => addSquadraRow(row));
+  renumberSquadraRows();
 }
 
 async function saveSquadraComposition(event) {
@@ -1337,13 +1621,7 @@ async function saveSquadraComposition(event) {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
     riferimentoData: ui.squadraRiferimento.value || "",
-    squadra1: ui.squadra1.value.trim(),
-    squadra1Mezzi: ui.squadra1Mezzi.value.trim(),
-    squadra2: ui.squadra2.value.trim(),
-    squadra2Mezzi: ui.squadra2Mezzi.value.trim(),
-    squadra3: ui.squadra3.value.trim(),
-    squadra3Mezzi: ui.squadra3Mezzi.value.trim(),
-    tecnicoTelefono: ui.squadraTecnico.value.trim(),
+    squadre: readSquadraRows(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   }, { merge: true });
@@ -1353,40 +1631,68 @@ function renderSquadre() {
   ui.squadreLista.innerHTML = "";
 
   const commesse = Array.from(commesseById.values());
-  if (!commesse.length) {
+  const commesseConSquadre = commesse.filter((commessa) => {
+    const squad = squadreByCommessa.get(commessa.id) || {};
+    const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+    return rows.some((row) => row.personale || row.mezzi);
+  });
+  if (!commesseConSquadre.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
 
-  commesse.forEach((commessa) => {
+  commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
     const squad = squadreByCommessa.get(commessa.id) || {};
+    const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
+    const rowsHtml = squadRows.map((row, idx) => (
+      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
+    )).join("");
     item.innerHTML = `
-      <strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-      <p><b>Giorno di riferimento:</b> ${escapeHTML(riferimento)}</p>
-      <p><b>Squadra 1 - Personale:</b> ${escapeHTML(squad.squadra1 || "-")}</p>
-      <p><b>Squadra 1 - Mezzi:</b> ${escapeHTML(squad.squadra1Mezzi || "-")}</p>
-      <p><b>Squadra 2 - Personale:</b> ${escapeHTML(squad.squadra2 || "-")}</p>
-      <p><b>Squadra 2 - Mezzi:</b> ${escapeHTML(squad.squadra2Mezzi || "-")}</p>
-      <p><b>Squadra 3 - Personale:</b> ${escapeHTML(squad.squadra3 || "-")}</p>
-      <p><b>Squadra 3 - Mezzi:</b> ${escapeHTML(squad.squadra3Mezzi || "-")}</p>
+      <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
+      ${rowsHtml}
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
-    askBtn.disabled = !squad.tecnicoTelefono;
     item.appendChild(askBtn);
+    item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
     ui.squadreLista.appendChild(item);
   });
 }
 
+function renderMezziButtonsMarkup(rawValue) {
+  const parts = String(rawValue || "")
+    .split(/[\s,;|]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!parts.length) return "-";
+  return parts.map((mezzo) => `<button type=\"button\" class=\"mezzo-chip-btn\" data-mezzo=\"${escapeHTML(mezzo)}\">${escapeHTML(mezzo)}</button>`).join(" ");
+}
+
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  const personale = personaleRecords.map((p) => p.nome).filter(Boolean).join(", ") || "Nessuno";
-  const mezzi = mezziRecords.map((m) => m.nome).filter(Boolean).join(", ") || "Nessuno";
-  ui.squadraHint.textContent = `Personale disponibile (assegnalo a Squadra 1/2/3): ${personale}. Mezzi disponibili (assegnali per squadra): ${mezzi}.`;
+  ui.squadraHint.textContent = "Scrivi nel campo Personale/Mezzi per ottenere suggerimenti automatici. Usa “Aggiungi squadra” per creare tutte le squadre che vuoi.";
+}
+
+function updateSuggestionLists() {
+  ui.personaleOptions.innerHTML = "";
+  personaleRecords.forEach((person) => {
+    const option = document.createElement("option");
+    option.value = person.nome || "";
+    ui.personaleOptions.appendChild(option);
+  });
+  ui.mezziOptions.innerHTML = "";
+  mezziRecords.forEach((mezzo) => {
+    const option = document.createElement("option");
+    option.value = mezzo.nId || mezzo.nome || "";
+    ui.mezziOptions.appendChild(option);
+  });
 }
 
 async function setImpiantoDone(impiantoIds, done) {
@@ -1409,12 +1715,18 @@ function openWhatsApp(impianto) {
   }
 
   const now = new Date();
+  const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
+  const title = isOnlyOrdinaria
+    ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
+    : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
+  const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
   const message = [
-    "Manutenzione eseguita",
-    `Commessa: ${selectedCommessaName || "-"}`,
-    `Impianto: ${impianto.denominazione || "-"}`,
-    `Operatore: ${user.displayName || user.email || "-"}`,
-    `Data/Ora: ${now.toLocaleString("it-IT")}`
+    title,
+    `🏗️ Impianto/Cantiere: ${impianto.denominazione || "-"}`,
+    ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
+    `👷 Operatore: ${user.displayName || user.email || "-"}`,
+    `📅 Data: ${now.toLocaleDateString("it-IT")}`,
+    `🕒 Ora: ${time}`
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -1422,25 +1734,18 @@ function openWhatsApp(impianto) {
 }
 
 function openSquadraWhatsApp(squad, commessa) {
-  const telefono = String(squad.tecnicoTelefono || "").replace(/[^\d]/g, "");
-  if (!telefono) {
-    alert("Inserisci il numero del tecnico nella composizione squadra.");
-    return;
-  }
-
+  const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+  const rowsMessage = squadRows.map((row, idx) => (
+    `👥 Squadra ${idx + 1} personale: ${row.personale || "-"}\n🚚 Squadra ${idx + 1} mezzi: ${row.mezzi || "-"}`
+  )).join("\n");
   const message = [
-    "Richiesta conferma squadra",
-    `Commessa: ${commessa.nome || "-"}`,
-    `Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    `Squadra 1 personale: ${squad.squadra1 || "-"}`,
-    `Squadra 1 mezzi: ${squad.squadra1Mezzi || "-"}`,
-    `Squadra 2 personale: ${squad.squadra2 || "-"}`,
-    `Squadra 2 mezzi: ${squad.squadra2Mezzi || "-"}`,
-    `Squadra 3 personale: ${squad.squadra3 || "-"}`,
-    `Squadra 3 mezzi: ${squad.squadra3Mezzi || "-"}`
+    "📣 Richiesta conferma squadre",
+    `📁 Commessa: ${commessa.nome || "-"}`,
+    `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
+    rowsMessage || "Nessuna squadra compilata."
   ].join("\n");
 
-  const url = `https://wa.me/${telefono}?text=${encodeURIComponent(message)}`;
+  const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank");
 }
 
@@ -1537,6 +1842,152 @@ function clearMap() {
   markerLayer.clearLayers();
 }
 
+function getMezzoByLabel(label) {
+  const normalized = String(label || "").trim().toLowerCase();
+  if (!normalized) return null;
+  const exact = mezziRecords.find((mezzo) => {
+    const nId = String(mezzo.nId || "").toLowerCase();
+    const nome = String(mezzo.nome || "").toLowerCase();
+    return nId === normalized || nome === normalized;
+  });
+  if (exact) return exact;
+  const byNIdContains = mezziRecords.find((mezzo) => {
+    const nId = String(mezzo.nId || "").toLowerCase();
+    return nId && (nId.includes(normalized) || normalized.includes(nId));
+  });
+  return byNIdContains || null;
+}
+
+async function openFuelPage(mezzoLabel) {
+  selectedFuelMezzo = getMezzoByLabel(mezzoLabel) || { nId: mezzoLabel, nome: mezzoLabel };
+  ui.fuelPageTitle.textContent = `Distributori Q8/ENI • ${selectedFuelMezzo.nId || selectedFuelMezzo.nome || "Mezzo"}`;
+  ui.fuelMezzoDetailsCard.classList.add("hidden");
+  renderFuelMezzoDetails();
+  window.location.hash = `fuel=${encodeURIComponent(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "mezzo")}`;
+  applyRoute();
+  await loadNearbyFuelStations();
+}
+
+function toggleFuelMezzoDetails() {
+  ui.fuelMezzoDetailsCard.classList.toggle("hidden");
+}
+
+function renderFuelMezzoDetails() {
+  if (!selectedFuelMezzo) {
+    ui.fuelMezzoDetails.innerHTML = "<p class='muted'>Nessun mezzo selezionato.</p>";
+    return;
+  }
+  ui.fuelMezzoDetails.innerHTML = `
+    <p><b>N. ID:</b> ${escapeHTML(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "-")}</p>
+    <p><b>Marca:</b> ${escapeHTML(selectedFuelMezzo.marca || "-")}</p>
+    <p><b>Portata (carico):</b> ${escapeHTML(selectedFuelMezzo.portataCarico || "-")}</p>
+    <p><b>Massa complessiva (kg):</b> ${escapeHTML(selectedFuelMezzo.massaComplessivaKg || "-")}</p>
+    <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
+  `;
+}
+
+async function loadNearbyFuelStations() {
+  if (!currentUserPos) {
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Posizione non disponibile. Attiva GPS per vedere i distributori vicini.</p>";
+    return;
+  }
+  ui.fuelStationsList.innerHTML = "<p class='muted'>Caricamento distributori...</p>";
+  try {
+    const data = await fetchFuelStationsFromOverpass(currentUserPos.lat, currentUserPos.lng);
+    const stations = (data.elements || []).map((item) => {
+      const lat = item.lat || (item.center && item.center.lat);
+      const lon = item.lon || (item.center && item.center.lon);
+      const brand = String((item.tags && (item.tags.brand || item.tags.name)) || "").toLowerCase();
+      if (!lat || !lon) return null;
+      if (!brand.includes("eni") && !brand.includes("q8")) return null;
+      return {
+        id: item.id,
+        name: item.tags.name || item.tags.brand || "Distributore",
+        brand: item.tags.brand || "-",
+        lat,
+        lon,
+        distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
+      };
+    }).filter(Boolean).sort((a, b) => a.distance - b.distance).slice(0, 20);
+    renderFuelStations(stations);
+  } catch (error) {
+    console.error("Errore caricamento distributori:", error);
+    const retryBtn = createButton("Riprova", () => loadNearbyFuelStations());
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Errore caricamento distributori. Riprova tra pochi secondi.</p>";
+    ui.fuelStationsList.appendChild(retryBtn);
+    if (fuelStationsLayer) fuelStationsLayer.clearLayers();
+  }
+}
+
+async function fetchFuelStationsFromOverpass(lat, lng) {
+  const query = `
+    [out:json][timeout:25];
+    (
+      node[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
+      way[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
+    );
+    out center 40;
+  `;
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: query,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`Overpass ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Overpass non disponibile");
+}
+
+function ensureFuelMap() {
+  if (fuelMapInstance) return;
+  fuelMapInstance = L.map("fuel-map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(fuelMapInstance);
+  fuelStationsLayer = L.layerGroup().addTo(fuelMapInstance);
+}
+
+function renderFuelStations(stations) {
+  ensureFuelMap();
+  fuelStationsLayer.clearLayers();
+  ui.fuelStationsList.innerHTML = "";
+  if (!stations.length) {
+    ui.fuelStationsList.innerHTML = "<p class='muted'>Nessun distributore Q8/ENI trovato vicino a te.</p>";
+    return;
+  }
+  const bounds = [];
+  stations.forEach((station) => {
+    const marker = L.marker([station.lat, station.lon]).addTo(fuelStationsLayer);
+    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.brand)}<br>${formatDistance(station.distance)}`);
+    const navBtn = createButton("Naviga", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lon}`, "_blank"));
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.brand)} • ${formatDistance(station.distance)}</small></span>`;
+    row.appendChild(navBtn);
+    ui.fuelStationsList.appendChild(row);
+    marker.on("click", () => navBtn.focus());
+    bounds.push([station.lat, station.lon]);
+  });
+  if (currentUserPos) bounds.push([currentUserPos.lat, currentUserPos.lng]);
+  fuelMapInstance.fitBounds(bounds, { padding: [24, 24] });
+}
+
 function initGeolocation() {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
@@ -1551,12 +2002,52 @@ function initGeolocation() {
     ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
     renderImpianti();
     renderMap();
+    fetchWeather();
   }, () => {
     ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+    fetchWeather();
   }, {
     enableHighAccuracy: true,
     timeout: 8000
   });
+}
+
+async function fetchWeather() {
+  try {
+    const lat = currentUserPos ? currentUserPos.lat : 44.4949;
+    const lon = currentUserPos ? currentUserPos.lng : 11.3426;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=2`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("meteo non disponibile");
+    const data = await response.json();
+    const current = data.current || {};
+    ui.weatherSummary.textContent = `${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
+    renderWeatherDetails(data);
+  } catch (error) {
+    ui.weatherSummary.textContent = "Meteo non disponibile.";
+    ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
+  }
+}
+
+function renderWeatherDetails(data) {
+  const times = (data.hourly && data.hourly.time) || [];
+  const temps = (data.hourly && data.hourly.temperature_2m) || [];
+  const rains = (data.hourly && data.hourly.precipitation_probability) || [];
+  const rows = times.slice(0, 12).map((time, idx) => {
+    const hour = new Date(time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `<p><b>${hour}</b> • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}%</p>`;
+  }).join("");
+  ui.weatherDetails.innerHTML = rows || "<p class='muted'>Nessun dato meteo.</p>";
+}
+
+function openWeatherModal() {
+  ui.weatherModal.classList.remove("hidden");
+  ui.weatherModal.setAttribute("aria-hidden", "false");
+}
+
+function closeWeatherModal() {
+  ui.weatherModal.classList.add("hidden");
+  ui.weatherModal.setAttribute("aria-hidden", "true");
 }
 
 function distanceFromUser(impianto) {
@@ -1603,6 +2094,44 @@ function subscribeChat() {
     });
 }
 
+async function upsertCurrentPlatformUser() {
+  if (!currentUser) return;
+  await db.collection("platformUsers").doc(currentUser.uid).set({
+    uid: currentUser.uid,
+    email: currentUser.email || "",
+    displayName: currentUser.displayName || currentUser.email || "Utente",
+    lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+function subscribeUsers() {
+  unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
+    platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+    renderChatRecipients();
+  });
+}
+
+function stopUsersSubscription() {
+  if (unsubscribeUsers) {
+    unsubscribeUsers();
+    unsubscribeUsers = null;
+  }
+  platformUsers = [];
+  renderChatRecipients();
+}
+
+function renderChatRecipients() {
+  ui.chatRecipient.innerHTML = "<option value=''>Messaggio per tutti</option>";
+  platformUsers.forEach((user) => {
+    if (currentUser && user.id === currentUser.uid) return;
+    const option = document.createElement("option");
+    option.value = user.id;
+    option.textContent = user.displayName || user.email || "Utente";
+    ui.chatRecipient.appendChild(option);
+  });
+}
+
 function stopChatSubscription() {
   if (unsubscribeChat) {
     unsubscribeChat();
@@ -1616,6 +2145,7 @@ function renderChat(messages) {
     ui.chatCounter.classList.add("hidden");
     ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
     ui.chatSendBtn.disabled = true;
+    ui.chatRecipient.disabled = true;
     ui.chatText.disabled = true;
     ui.chatMediaInput.disabled = true;
     ui.chatVoiceBtn.disabled = true;
@@ -1623,17 +2153,20 @@ function renderChat(messages) {
   }
 
   ui.chatSendBtn.disabled = false;
+  ui.chatRecipient.disabled = false;
   ui.chatText.disabled = false;
   ui.chatMediaInput.disabled = false;
   ui.chatVoiceBtn.disabled = false;
 
-  if (!messages.length) {
+  const visibleMessages = messages.filter(canViewMessage);
+
+  if (!visibleMessages.length) {
     ui.chatCounter.classList.add("hidden");
     ui.chatFullList.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
     return;
   }
 
-  const unreadCount = countUnreadMessages(messages);
+  const unreadCount = countUnreadMessages(visibleMessages);
   if (unreadCount > 0) {
     ui.chatCounter.classList.remove("hidden");
     ui.chatCounter.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
@@ -1642,7 +2175,7 @@ function renderChat(messages) {
   }
 
   ui.chatFullList.innerHTML = "";
-  messages.forEach((message) => {
+  visibleMessages.forEach((message) => {
     ui.chatFullList.appendChild(createChatMessageElement(message));
   });
   ui.chatFullList.scrollTop = ui.chatFullList.scrollHeight;
@@ -1660,6 +2193,12 @@ function countUnreadMessages(messages) {
       : 0;
     return !lastReadChatAt || createdAt > lastReadChatAt;
   }).length;
+}
+
+function canViewMessage(message) {
+  if (!currentUser) return false;
+  if (!message.recipientId) return true;
+  return message.recipientId === currentUser.uid || message.senderId === currentUser.uid;
 }
 
 function markChatAsRead() {
@@ -1692,6 +2231,13 @@ function createChatMessageElement(message) {
     <span>${createdAt.toLocaleString("it-IT")}</span>
   `;
   item.appendChild(top);
+
+  if (message.recipientId) {
+    const tag = document.createElement("p");
+    tag.className = "chat-type-badge";
+    tag.textContent = isOwnMessage(message) ? "📩 Messaggio privato" : "🔒 Privato per te";
+    item.appendChild(tag);
+  }
 
   if (message.type === "text") {
     const p = document.createElement("p");
@@ -1747,7 +2293,8 @@ async function sendTextMessage(event) {
 
   await sendChatMessage({
     type: "text",
-    text
+    text,
+    recipientId: ui.chatRecipient.value || ""
   });
 
   ui.chatText.value = "";
@@ -1769,6 +2316,7 @@ async function sendMediaMessage(event) {
     await sendChatMessage({
       type,
       text: "",
+      recipientId: ui.chatRecipient.value || "",
       mediaUrl: upload.directUrl,
       mediaMimeType: file.type,
       mediaName: file.name,
@@ -1824,6 +2372,7 @@ async function toggleVoiceRecording() {
         await sendChatMessage({
           type: "voice",
           text: "",
+          recipientId: ui.chatRecipient.value || "",
           mediaUrl: upload.directUrl,
           mediaMimeType: blob.type || "audio/webm",
           mediaName: fileName,
@@ -1893,12 +2442,19 @@ function resetDriveState() {
 
 function updateDriveStatus(isConnected) {
   const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
-  ui.driveStatus.textContent = connected
-    ? "Drive collegato."
-    : (canManageData() ? "Drive centralizzato non collegato." : "Google Drive non collegato.");
+  ui.driveStatus.classList.toggle("status-chip-drive", connected);
+  if (!canManageData()) {
+    ui.driveStatus.textContent = "Google Drive attivo solo per l'admin.";
+    return;
+  }
+  ui.driveStatus.textContent = connected ? "Drive admin collegato." : "Drive admin non collegato.";
 }
 
 async function connectGoogleDrive() {
+  if (!canManageData()) {
+    alert("Solo ionut29019@gmail.com può collegare Google Drive.");
+    return;
+  }
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
@@ -1924,6 +2480,9 @@ async function connectGoogleDrive() {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     updateDriveStatus(true);
+    if (selectedCommessaId) {
+      scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 200);
+    }
     alert("Google Drive collegato correttamente");
   } catch (error) {
     console.error("Errore collegamento Google Drive:", error);
@@ -2037,61 +2596,74 @@ async function getOrCreateDriveFolder(name, parentId = "") {
   return created.id;
 }
 
-async function exportImpiantoDoneToDriveSheet(impianto, commessaId = selectedCommessaId, commessaName = selectedCommessaName) {
+function getCommessaSheetHeaders() {
+  return [[
+    "Commessa", "Cantiere", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
+    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
+    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
+  ]];
+}
+
+function buildSheetRowsFromDoneImpianti(doneImpianti, commessaName, operatorEmail = "") {
+  return doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((rowData) => {
+    const doneInfo = formatDoneDateTime(rowData.doneAt);
+    return [
+      commessaName || "",
+      rowData.cantiereRiga || "",
+      rowData.distretto || "",
+      rowData.idSap || "",
+      rowData.denominazione || "",
+      rowData.comune || "",
+      rowData.indirizzo || "",
+      rowData.voceRiferimento || "",
+      rowData.codicePrezzoSingolo || rowData.codicePrezzo || "",
+      rowData.sfalci || "",
+      rowData.frequenzaAnnua || "",
+      rowData.tipologiaIntervento || "",
+      rowData.lavorazioniRichieste || "",
+      rowData.gpsY ?? "",
+      rowData.gpsX ?? "",
+      rowData.tipoManutenzione || classifyTipoManutenzione(rowData.codicePrezzo),
+      "Fatto",
+      doneInfo.date,
+      doneInfo.time,
+      rowData.doneBy || "",
+      operatorEmail || ""
+    ];
+  });
+}
+
+async function syncCommessaDoneImpiantiToDriveSheet(commessaId = selectedCommessaId, fallbackCommessaName = selectedCommessaName) {
   if (!driveAccessToken) {
     throw new Error("Drive centralizzato non disponibile.");
   }
+  if (!commessaId) return;
   if (!driveReportsFolderId) await ensureDriveFolders();
-  if (!commessaId) {
-    throw new Error("Seleziona una commessa prima di segnare l'impianto come fatto.");
-  }
 
-  const now = new Date();
-  const dateIT = now.toLocaleDateString("it-IT");
-  const timeIT = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
-  const operator = currentUser ? (currentUser.displayName || currentUser.email || "Operatore") : "Operatore";
-  const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName || "Commessa");
+  const commessa = commesseById.get(commessaId) || {};
+  const commessaName = commessa.nome || fallbackCommessaName || "Commessa";
+  const snapshot = await db.collection("commesse").doc(commessaId).collection("impianti").get();
+  const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const doneImpianti = combineImpiantiForView(rawImpianti).filter((item) => item.done);
+  const rows = buildSheetRowsFromDoneImpianti(doneImpianti, commessaName, currentUser?.email || "");
+  const spreadsheet = await getOrCreateCommessaSpreadsheet(commessaId, commessaName);
 
-  const row = [
-    commessaName || "",
-    impianto.distretto || "",
-    impianto.idSap || "",
-    impianto.denominazione || "",
-    impianto.comune || "",
-    impianto.indirizzo || "",
-    impianto.voceRiferimento || "",
-    impianto.codicePrezzo || "",
-    impianto.sfalci || "",
-    impianto.frequenzaAnnua || "",
-    impianto.tipologiaIntervento || "",
-    impianto.lavorazioniRichieste || "",
-    impianto.gpsY ?? "",
-    impianto.gpsX ?? "",
-    impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
-    "Fatto",
-    dateIT,
-    timeIT,
-    operator,
-    currentUser?.email || ""
-  ];
+  await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A:Z:clear`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
 
   await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet.id}/values/A1:append?valueInputOption=RAW`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      values: [row]
+      values: [...getCommessaSheetHeaders(), ...rows]
     })
   });
 }
 
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
-  const commessa = commesseById.get(commessaId) || null;
-  const configuredSheetId = parseGoogleSheetId(commessa && commessa.reportSheetId ? commessa.reportSheetId : "");
-  if (configuredSheetId) {
-    commessaSheetCache.set(commessaId, configuredSheetId);
-    return { id: configuredSheetId };
-  }
-
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
@@ -2122,11 +2694,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     })
   });
 
-  const headers = [[
-    "Commessa", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
-    "Codice prezzo", "Sfalci", "Frequenza annua", "Tipologia intervento", "Lavorazioni richieste",
-    "GPS Y", "GPS X", "Tipo manutenzione", "Stato", "Data esecuzione", "Ora esecuzione", "Eseguito da", "Email operatore"
-  ]];
+  const headers = getCommessaSheetHeaders();
 
   await driveApiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${created.id}/values/A1:append?valueInputOption=RAW`, {
     method: "POST",

@@ -1021,15 +1021,40 @@ function renderImpianti() {
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     article.innerHTML = `
-      <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
-      <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
-      <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
-      <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
-      <p><b>Tipo:</b> <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></p>
-      <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
-      <p><b>Distanza:</b> ${distance}</p>
-      <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
-      <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
+      <div class="impianto-head">
+        <strong class="impianto-name">${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
+        <span class="impianto-status ${impianto.done ? "done" : ""}">${impianto.done ? "Fatto" : "Da fare"}</span>
+      </div>
+      <div class="impianto-grid">
+        <div class="impianto-meta">
+          <span class="meta-label">Comune</span>
+          <span class="meta-value">${escapeHTML(impianto.comune || "-")}</span>
+        </div>
+        <div class="impianto-meta">
+          <span class="meta-label">Indirizzo</span>
+          <span class="meta-value">${escapeHTML(impianto.indirizzo || "-")}</span>
+        </div>
+        <div class="impianto-meta">
+          <span class="meta-label">Codice prezzo</span>
+          <span class="meta-value">${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</span>
+        </div>
+        <div class="impianto-meta">
+          <span class="meta-label">Tipo</span>
+          <span class="meta-value"><span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></span>
+        </div>
+        <div class="impianto-meta">
+          <span class="meta-label">Distanza</span>
+          <span class="meta-value">${distance}</span>
+        </div>
+        <div class="impianto-meta">
+          <span class="meta-label">Eseguito da</span>
+          <span class="meta-value">${escapeHTML(impianto.doneBy || "-")}</span>
+        </div>
+      </div>
+      <div class="impianto-work">
+        <span class="meta-label">Lavorazioni richieste</span>
+        <div class="meta-value">${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</div>
+      </div>
     `;
 
     const actions = document.createElement("div");
@@ -1059,6 +1084,10 @@ function createButton(label, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn";
+  const labelLower = String(label || "").toLowerCase();
+  if (labelLower.includes("fatto")) btn.classList.add("btn-success");
+  if (labelLower.includes("reset") || labelLower.includes("elimina")) btn.classList.add("btn-danger");
+  if (labelLower.includes("naviga")) btn.classList.add("btn-primary");
   if (String(label).toLowerCase().includes("whatsapp")) btn.classList.add("btn-whatsapp");
   btn.textContent = label;
   btn.addEventListener("click", onClick);
@@ -1661,12 +1690,19 @@ function renderSquadre() {
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     const rowsHtml = squadRows.map((row, idx) => (
-      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
+      `<div class="squadra-block">
+        <strong>Squadra ${idx + 1}</strong>
+        <p><b>Tecnici:</b> ${escapeHTML(row.personale || "-")}</p>
+        <p><b>Mezzi:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>
+      </div>`
     )).join("");
     item.innerHTML = `
-      <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
-      ${rowsHtml}
+      <div class="squadra-header">
+        <strong class="squadra-title">${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+        <span class="pill">Operativo</span>
+      </div>
+      <p class="squadra-date"><b>Data:</b> ${escapeHTML(riferimento)}</p>
+      <div class="squadra-grid">${rowsHtml}</div>
     `;
     const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
     item.appendChild(askBtn);

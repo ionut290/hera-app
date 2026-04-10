@@ -8,8 +8,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <button id="menu-toggle-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu">☰</button>
-
   <aside id="side-menu" class="side-menu hidden" aria-hidden="true">
     <div class="side-menu-header">
       <h2>Menu</h2>
@@ -28,10 +26,14 @@
   <main class="container">
     <section id="home-page">
       <header class="card logo-card">
-        <h1>Varga Cantieri</h1>
+        <div class="logo-head">
+          <h1>Varga Cantieri</h1>
+          <button id="menu-toggle-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu">⋮</button>
+        </div>
       </header>
 
-      <section class="card hero-card">
+      <section class="home-top-grid">
+        <section class="card hero-card">
         <button id="user-panel-toggle" class="btn user-panel-toggle" type="button" aria-expanded="false" aria-controls="user-panel-content">
           👤 Utente
         </button>
@@ -51,6 +53,15 @@
             <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
           </div>
         </div>
+        </section>
+
+        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+        <div class="section-head">
+          <h2>🌤️ Meteo rapido</h2>
+          <span class="pill">Live</span>
+        </div>
+        <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
+      </section>
       </section>
 
       <section class="card">
@@ -60,14 +71,6 @@
         </div>
         <div id="commesse-lista" class="commesse-lista"></div>
         <p id="commessa-attiva" class="muted commessa-active-chip">Seleziona una commessa.</p>
-      </section>
-
-      <section class="card weather-card" id="weather-card" role="button" tabindex="0">
-        <div class="section-head">
-          <h2>🌤️ Meteo rapido</h2>
-          <span class="pill">Live</span>
-        </div>
-        <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
       </section>
 
       <section class="card">

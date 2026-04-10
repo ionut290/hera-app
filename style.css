@@ -138,9 +138,84 @@ h2 { font-size: 1.05rem; }
 #home-page,
 #impianti-page,
 #fuel-page,
-#segnalazioni-page {
+#segnalazioni-page,
+#howto-page {
   display: grid;
   gap: 12px;
+}
+
+.howto-card {
+  padding: 14px;
+}
+
+.howto-faq-list {
+  display: grid;
+  gap: 10px;
+}
+
+.howto-faq-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.howto-faq-question {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.howto-faq-question::after {
+  content: "＋";
+  justify-self: end;
+  color: var(--muted);
+}
+
+.howto-faq-question[aria-expanded="true"]::after {
+  content: "－";
+  color: var(--primary);
+}
+
+.howto-faq-item.is-open {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: #fff;
+}
+
+.howto-faq-meta {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.howto-faq-answer {
+  border-top: 1px solid var(--border);
+  padding: 12px 14px 14px;
+}
+
+.howto-faq-brief {
+  margin: 0 0 8px;
+}
+
+.howto-faq-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.howto-faq-tags {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .card {
@@ -1003,6 +1078,9 @@ textarea:focus-visible {
   .impianto-summary-btn strong { font-size: 0.92rem; }
   .item-actions { gap: 6px; }
   .item-actions .btn { font-size: 0.85rem; padding: 6px 8px; min-height: 30px; }
+  .howto-faq-question { padding: 12px; font-size: 0.94rem; }
+  .howto-faq-answer { padding: 10px 12px 12px; }
+  .howto-faq-steps { padding-left: 18px; font-size: 0.93rem; }
 }
 
 @media (max-width: 760px) {

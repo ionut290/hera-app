@@ -69,6 +69,7 @@ const ui = {
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
+  openHowtoBtn: document.getElementById("open-howto-btn"),
   managementPage: document.getElementById("management-page"),
   managementTitle: document.getElementById("management-title"),
   managementCloseBtn: document.getElementById("management-close-btn"),
@@ -102,6 +103,9 @@ const ui = {
   fuelMezzoDetails: document.getElementById("fuel-mezzo-details"),
   segnalazioniPage: document.getElementById("segnalazioni-page"),
   backFromSegnalazioniBtn: document.getElementById("back-from-segnalazioni-btn"),
+  howtoPage: document.getElementById("howto-page"),
+  backFromHowtoBtn: document.getElementById("back-from-howto-btn"),
+  howtoFaqList: document.getElementById("howto-faq-list"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
@@ -171,6 +175,92 @@ let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
+const howtoFaqItems = [
+  {
+    id: "login-google",
+    domanda: "Come faccio il login con Google?",
+    rispostaBreve: "Apri il pannello utente e premi “Login con Google”.",
+    passi: [
+      "Nella home premi l'icona 👤 in alto.",
+      "Tocca “Login con Google” e scegli l'account aziendale.",
+      "Controlla che compaia “Loggato” con email e nome utente."
+    ],
+    tags: ["login", "google", "accesso"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "aggiunta-commessa",
+    domanda: "Come aggiungo una nuova commessa?",
+    rispostaBreve: "Dal menu apri “Aggiungi commesse” e usa il form dedicato.",
+    passi: [
+      "Apri il menu (⋮) e scegli “Aggiungi commesse”.",
+      "Compila il campo “Nuova commessa”.",
+      "Premi “Aggiungi commessa” e verifica che appaia in dashboard."
+    ],
+    tags: ["commesse", "admin", "anagrafica"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "import-excel",
+    domanda: "Come importo un file Excel impianti?",
+    rispostaBreve: "Seleziona commessa, carica il file e avvia l'import.",
+    passi: [
+      "Apri “Aggiungi commesse” dal menu.",
+      "Se necessario scegli la commessa nel selettore “aggiunta impianti”.",
+      "Carica il file .xlsx/.xls e premi “Importa impianti”."
+    ],
+    tags: ["excel", "import", "impianti"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "squadra-composizione",
+    domanda: "Come salvo la composizione di una squadra?",
+    rispostaBreve: "Usa il pannello “Composizione squadre” e salva dopo aver compilato righe e data.",
+    passi: [
+      "Apri menu → “Composizione squadre”.",
+      "Seleziona commessa e data di riferimento.",
+      "Aggiungi righe squadra/personale/mezzi e premi “Salva composizione”."
+    ],
+    tags: ["squadre", "personale", "mezzi"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "segnalazione-pdf",
+    domanda: "Come genero e condivido una segnalazione PDF?",
+    rispostaBreve: "Compila la scheda segnalazione, genera PDF e invia via WhatsApp o Email.",
+    passi: [
+      "Apri menu → “Segnalazioni” e compila tutti i campi obbligatori.",
+      "Seleziona almeno una tipologia di segnalazione.",
+      "Premi “Genera PDF”, poi usa i pulsanti di condivisione."
+    ],
+    tags: ["segnalazioni", "pdf", "sicurezza"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "chat-operatori",
+    domanda: "Come uso la chat operatori?",
+    rispostaBreve: "Apri la chat dal pulsante 💬, scrivi e invia il messaggio al destinatario.",
+    passi: [
+      "Premi il pulsante 💬 in basso a destra.",
+      "Scegli un destinatario o lascia “Messaggio per tutti”.",
+      "Scrivi il testo (o allega media/vocale) e premi invio."
+    ],
+    tags: ["chat", "messaggi", "operatori"],
+    updatedAt: "2026-04-10"
+  },
+  {
+    id: "google-drive",
+    domanda: "Come collego Google Drive?",
+    rispostaBreve: "Dopo il login, usa “Collega Google Drive” nel pannello utente.",
+    passi: [
+      "Esegui login con Google con un account autorizzato.",
+      "Apri il pannello utente e premi “Collega Google Drive”.",
+      "Conferma i permessi richiesti e verifica lo stato collegato."
+    ],
+    tags: ["drive", "google", "integrazione"],
+    updatedAt: "2026-04-10"
+  }
+];
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -227,12 +317,14 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
+ui.openHowtoBtn.addEventListener("click", openHowtoPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
+ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -243,6 +335,7 @@ ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 addSquadraRow();
 initGeolocation();
 prefillSegnalazioneDateTime();
+renderHowtoFaq();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
@@ -444,17 +537,20 @@ function applyRoute() {
   const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)$/);
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const showSegnalazioni = hash === "#segnalazioni";
+  const showHowto = hash === "#howto";
   const commessaIdFromHash = match ? match[1] : "";
   const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
+  ui.howtoPage.classList.toggle("hidden", !showHowto);
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
     setTimeout(() => map.invalidateSize(), 50);
   }
+  if (showHowto) renderHowtoFaq();
   if (showFuel) {
     setTimeout(() => {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
@@ -490,6 +586,57 @@ function openSegnalazioniPage() {
 function closeSegnalazioniPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function openHowtoPage() {
+  window.location.hash = "howto";
+  renderHowtoFaq();
+  applyRoute();
+  closeSideMenu();
+}
+
+function closeHowtoPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function renderHowtoFaq() {
+  if (!ui.howtoFaqList) return;
+  ui.howtoFaqList.innerHTML = "";
+  howtoFaqItems.forEach((faq) => {
+    const item = document.createElement("article");
+    item.className = "howto-faq-item";
+    item.dataset.faqId = faq.id;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "howto-faq-question";
+    toggleBtn.setAttribute("aria-expanded", "false");
+    toggleBtn.innerHTML = `
+      <span>${escapeHTML(faq.domanda)}</span>
+      <span class="howto-faq-meta">Agg. ${escapeHTML(faq.updatedAt)}</span>
+    `;
+
+    const answer = document.createElement("div");
+    answer.className = "howto-faq-answer hidden";
+    answer.innerHTML = `
+      <p class="howto-faq-brief">${escapeHTML(faq.rispostaBreve)}</p>
+      <ol class="howto-faq-steps">
+        ${faq.passi.map((step) => `<li>${escapeHTML(step)}</li>`).join("")}
+      </ol>
+      <p class="howto-faq-tags">${faq.tags.map((tag) => `#${escapeHTML(tag)}`).join(" ")}</p>
+    `;
+
+    toggleBtn.addEventListener("click", () => {
+      const isOpen = toggleBtn.getAttribute("aria-expanded") === "true";
+      toggleBtn.setAttribute("aria-expanded", String(!isOpen));
+      answer.classList.toggle("hidden", isOpen);
+      item.classList.toggle("is-open", !isOpen);
+    });
+
+    item.append(toggleBtn, answer);
+    ui.howtoFaqList.appendChild(item);
+  });
 }
 
 function prefillSegnalazioneDateTime() {

@@ -18,6 +18,7 @@ const ui = {
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
+  commessaTargetSelect: document.getElementById("commessa-target-select"),
   excelFile: document.getElementById("excel-file"),
   importBtn: document.getElementById("import-btn"),
   importFeedback: document.getElementById("import-feedback"),
@@ -191,6 +192,7 @@ ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
+ui.commessaTargetSelect.addEventListener("change", onCommessaTargetChanged);
 ui.chatOpenBtn.addEventListener("click", openChatModal);
 ui.chatCloseBtn.addEventListener("click", closeChatModal);
 ui.chatSendForm.addEventListener("submit", sendTextMessage);
@@ -794,6 +796,7 @@ function subscribeCommesse() {
       ui.commesseLista.innerHTML = "";
       commesseById = new Map();
       ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
+      ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -820,6 +823,7 @@ function subscribeCommesse() {
         option.value = doc.id;
         option.textContent = commessa.nome || "Commessa senza nome";
         ui.squadraCommessa.appendChild(option);
+        ui.commessaTargetSelect.appendChild(option.cloneNode(true));
       });
 
       renderSquadre();
@@ -839,8 +843,11 @@ function stopCommesseSubscription() {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  if (!ui.commessaTargetSelect.value) {
+    ui.commessaTargetSelect.value = id;
+  }
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
-  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !canManageData();
+  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
   updateCommessaButtonsActive();
 
@@ -855,6 +862,25 @@ function updateCommessaButtonsActive() {
     const isActive = btn.dataset.commessaId === selectedCommessaId;
     btn.classList.toggle("active", isActive);
   });
+}
+
+function onCommessaTargetChanged() {
+  const targetId = getTargetCommessaId();
+  const targetName = getTargetCommessaName();
+  ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !targetId || !canManageData();
+  if (targetId) {
+    ui.commessaAttiva.textContent = `Commessa selezionata: ${targetName}`;
+  }
+}
+
+function getTargetCommessaId() {
+  return ui.commessaTargetSelect.value || selectedCommessaId || "";
+}
+
+function getTargetCommessaName() {
+  const targetId = getTargetCommessaId();
+  if (!targetId) return "";
+  return (commesseById.get(targetId) || {}).nome || selectedCommessaName || "Commessa";
 }
 
 function subscribeImpianti() {
@@ -920,7 +946,7 @@ function onExcelSelected(event) {
       const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione);
       pendingRows = mergeRowsByImpianto(normalizedRows);
       ui.importFeedback.textContent = `Righe valide: ${normalizedRows.length}. Impianti unici: ${pendingRows.length}`;
-      ui.importBtn.disabled = !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
+      ui.importBtn.disabled = !auth.currentUser || !getTargetCommessaId() || pendingRows.length === 0 || !canManageData();
     } catch (error) {
       console.error(error);
       ui.importFeedback.textContent = "Errore lettura Excel.";
@@ -932,8 +958,10 @@ function onExcelSelected(event) {
 
 async function importPendingRows() {
   const user = auth.currentUser;
+  const targetCommessaId = getTargetCommessaId();
+  const targetCommessaName = getTargetCommessaName();
 
-  if (!user || !selectedCommessaId) {
+  if (!user || !targetCommessaId) {
     alert("Fai login e seleziona una commessa.");
     return;
   }
@@ -947,38 +975,110 @@ async function importPendingRows() {
     return;
   }
 
-  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  const totalPending = pendingRows.length;
+  const ref = db.collection("commesse").doc(targetCommessaId).collection("impianti");
+  const existingSnapshot = await ref.get();
+  const existingByKey = new Map();
+  existingSnapshot.forEach((doc) => {
+    const data = doc.data() || {};
+    const key = buildImpiantoKey(data);
+    if (!existingByKey.has(key)) {
+      existingByKey.set(key, { id: doc.id, ...data });
+      return;
+    }
+    const merged = existingByKey.get(key);
+    merged.codicePrezzo = mergeMultiValue(merged.codicePrezzo, data.codicePrezzo);
+    merged.voceRiferimento = mergeMultiValue(merged.voceRiferimento, data.voceRiferimento);
+    merged.tipologiaIntervento = mergeMultiValue(merged.tipologiaIntervento, data.tipologiaIntervento);
+    merged.lavorazioniRichieste = mergeMultiValue(merged.lavorazioniRichieste, data.lavorazioniRichieste);
+    merged.frequenzaAnnua = mergeMultiValue(merged.frequenzaAnnua, data.frequenzaAnnua);
+  });
 
-  for (let i = 0; i < pendingRows.length; i += 450) {
-    const chunk = pendingRows.slice(i, i + 450);
-    const batch = db.batch();
-
-    chunk.forEach((row) => {
-      const docRef = ref.doc();
-      batch.set(docRef, {
-        ...row,
-        hasOrdinario: hasOrdinario(row.codicePrezzo),
-        hasStraordinario: hasStraordinario(row.codicePrezzo),
-        tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
-        done: false,
-        doneAt: null,
-        doneBy: "",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+  const rowsToCreate = [];
+  const rowsToUpdate = [];
+  pendingRows.forEach((row) => {
+    const key = buildImpiantoKey(row);
+    const existing = existingByKey.get(key);
+    if (!existing) {
+      rowsToCreate.push(row);
+      return;
+    }
+    const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    const mergedVoceRiferimento = mergeMultiValue(existing.voceRiferimento, row.voceRiferimento);
+    const mergedTipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
+    const mergedLavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
+    const mergedFrequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
+    const changed = mergedCodicePrezzo !== String(existing.codicePrezzo || "")
+      || mergedVoceRiferimento !== String(existing.voceRiferimento || "")
+      || mergedTipologiaIntervento !== String(existing.tipologiaIntervento || "")
+      || mergedLavorazioniRichieste !== String(existing.lavorazioniRichieste || "")
+      || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "");
+    if (!changed) return;
+    rowsToUpdate.push({
+      id: existing.id,
+      codicePrezzo: mergedCodicePrezzo,
+      voceRiferimento: mergedVoceRiferimento,
+      tipologiaIntervento: mergedTipologiaIntervento,
+      lavorazioniRichieste: mergedLavorazioniRichieste,
+      frequenzaAnnua: mergedFrequenzaAnnua
     });
+    existing.codicePrezzo = mergedCodicePrezzo;
+    existing.voceRiferimento = mergedVoceRiferimento;
+    existing.tipologiaIntervento = mergedTipologiaIntervento;
+    existing.lavorazioniRichieste = mergedLavorazioniRichieste;
+    existing.frequenzaAnnua = mergedFrequenzaAnnua;
+  });
 
+  const operations = [
+    ...rowsToCreate.map((row) => ({ type: "create", row })),
+    ...rowsToUpdate.map((row) => ({ type: "update", row }))
+  ];
+  for (let i = 0; i < operations.length; i += 450) {
+    const chunk = operations.slice(i, i + 450);
+    const batch = db.batch();
+    chunk.forEach((operation) => {
+      if (operation.type === "create") {
+        const row = operation.row;
+        const docRef = ref.doc();
+        batch.set(docRef, {
+          ...row,
+          hasOrdinario: hasOrdinario(row.codicePrezzo),
+          hasStraordinario: hasStraordinario(row.codicePrezzo),
+          tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
+          done: false,
+          doneAt: null,
+          doneBy: "",
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        const row = operation.row;
+        batch.update(ref.doc(row.id), {
+          codicePrezzo: row.codicePrezzo,
+          voceRiferimento: row.voceRiferimento,
+          tipologiaIntervento: row.tipologiaIntervento,
+          lavorazioniRichieste: row.lavorazioniRichieste,
+          frequenzaAnnua: row.frequenzaAnnua,
+          hasOrdinario: hasOrdinario(row.codicePrezzo),
+          hasStraordinario: hasStraordinario(row.codicePrezzo),
+          tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo)
+        });
+      }
+    });
     await batch.commit();
   }
 
   pendingRows = [];
   ui.excelFile.value = "";
   ui.importBtn.disabled = true;
-  ui.importFeedback.textContent = "Import completato.";
+  const skippedCount = Math.max(0, totalPending - rowsToCreate.length - rowsToUpdate.length);
+  ui.importFeedback.textContent = `Import completato su "${targetCommessaName}": nuovi ${rowsToCreate.length}, aggiornati ${rowsToUpdate.length}, invariati ${skippedCount}.`;
 }
 
 async function addManualImpianto(event) {
   event.preventDefault();
-  if (!auth.currentUser || !selectedCommessaId) {
+  const targetCommessaId = getTargetCommessaId();
+  const targetCommessaName = getTargetCommessaName();
+  if (!auth.currentUser || !targetCommessaId) {
     ui.manualImpiantoFeedback.textContent = "Seleziona prima una commessa.";
     return;
   }
@@ -1009,7 +1109,29 @@ async function addManualImpianto(event) {
     gpsX: null
   };
 
-  await db.collection("commesse").doc(selectedCommessaId).collection("impianti").add({
+  const ref = db.collection("commesse").doc(targetCommessaId).collection("impianti");
+  const existingSnapshot = await ref.get();
+  const existingDoc = existingSnapshot.docs.find((doc) => buildImpiantoKey(doc.data() || {}) === buildImpiantoKey(row));
+
+  if (existingDoc) {
+    const existingData = existingDoc.data() || {};
+    const mergedCodicePrezzo = mergeMultiValue(existingData.codicePrezzo, row.codicePrezzo);
+    await ref.doc(existingDoc.id).update({
+      codicePrezzo: mergedCodicePrezzo,
+      voceRiferimento: mergeMultiValue(existingData.voceRiferimento, row.voceRiferimento),
+      tipologiaIntervento: mergeMultiValue(existingData.tipologiaIntervento, row.tipologiaIntervento),
+      lavorazioniRichieste: mergeMultiValue(existingData.lavorazioniRichieste, row.lavorazioniRichieste),
+      frequenzaAnnua: mergeMultiValue(existingData.frequenzaAnnua, row.frequenzaAnnua),
+      hasOrdinario: hasOrdinario(mergedCodicePrezzo),
+      hasStraordinario: hasStraordinario(mergedCodicePrezzo),
+      tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo)
+    });
+    ui.manualImpiantoForm.reset();
+    ui.manualImpiantoFeedback.textContent = `Impianto già presente in "${targetCommessaName}": codice prezzo aggiornato senza modificare i precedenti.`;
+    return;
+  }
+
+  await ref.add({
     ...row,
     hasOrdinario: hasOrdinario(row.codicePrezzo),
     hasStraordinario: hasStraordinario(row.codicePrezzo),
@@ -1021,7 +1143,7 @@ async function addManualImpianto(event) {
   });
 
   ui.manualImpiantoForm.reset();
-  ui.manualImpiantoFeedback.textContent = "Impianto aggiunto: i precedenti sono stati mantenuti.";
+  ui.manualImpiantoFeedback.textContent = `Impianto aggiunto in "${targetCommessaName}": i precedenti sono stati mantenuti.`;
 }
 
 function normalizeRow(row) {
@@ -2107,13 +2229,14 @@ function openWhatsApp(impianto) {
   const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
   const message = [
     `${title} - Report operativo`,
-    `🏗️ Impianto/Cantiere: ${impianto.denominazione || "-"}`,
+    `🏗️ Impianto: ${impianto.denominazione || "-"}`,
+    `📍 Comune: ${impianto.comune || "-"}`,
+    `🛣️ Via: ${impianto.indirizzo || "-"}`,
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
     `📅 Data: ${now.toLocaleDateString("it-IT")}`,
-    `🕒 Ora: ${time}`,
-    "Messaggio generato automaticamente da Hera App."
+    `🕒 Ora: ${time}`
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;

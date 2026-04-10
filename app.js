@@ -151,6 +151,7 @@ let driveRootFolderId = "";
 let driveChatFolderId = "";
 let driveReportsFolderId = "";
 let driveSquadreFolderId = "";
+let driveHelpCenterFolderId = "";
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let personaleRecords = [];
@@ -177,6 +178,27 @@ const ADMIN_EMAIL = "ionut29019@gmail.com";
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const SHEET_RETRY_MS = 30 * 1000;
+const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
+const HELP_CENTER_FAQ_FALLBACK = {
+  version: 1,
+  updatedAt: null,
+  updatedBy: "",
+  items: [
+    {
+      id: "faq-import-impianti",
+      domanda: "Come importo un file Excel impianti?",
+      risposta: "Apri il pannello commesse, seleziona la commessa target, carica il file Excel e conferma l'importazione.",
+      passi: ["Apri Gestione commesse", "Seleziona commessa", "Carica file Excel", "Premi Importa"]
+    },
+    {
+      id: "faq-drive-connessione",
+      domanda: "Come collego Google Drive?",
+      risposta: "Solo l'admin deve cliccare su Collega Google Drive: il bridge viene poi condiviso per tutti gli utenti loggati.",
+      passi: ["Login admin", "Premi Collega Google Drive", "Concedi autorizzazioni", "Verifica stato Drive attivo"]
+    }
+  ]
+};
+let faqDataset = HELP_CENTER_FAQ_FALLBACK;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
@@ -247,6 +269,7 @@ applyRoute();
 window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
+initHelpCenterFaq();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
@@ -762,6 +785,7 @@ async function autoConnectDriveBridge(options = {}) {
       chatFolderId: driveChatFolderId,
       reportsFolderId: driveReportsFolderId,
       squadreFolderId: driveSquadreFolderId,
+      helpCenterFolderId: driveHelpCenterFolderId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     updateDriveStatus(true);
@@ -834,6 +858,7 @@ function subscribeDriveBridge() {
       driveChatFolderId = data.chatFolderId || "";
       driveReportsFolderId = data.reportsFolderId || "";
       driveSquadreFolderId = data.squadreFolderId || "";
+      driveHelpCenterFolderId = data.helpCenterFolderId || "";
       ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
       processPendingSheetExports();
       processAdminSheetExportQueue();
@@ -845,6 +870,7 @@ function subscribeDriveBridge() {
     driveChatFolderId = "";
     driveReportsFolderId = "";
     driveSquadreFolderId = "";
+    driveHelpCenterFolderId = "";
     ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
   }, (error) => {
     console.error(error);
@@ -3189,6 +3215,7 @@ function resetDriveState() {
   driveChatFolderId = "";
   driveReportsFolderId = "";
   driveSquadreFolderId = "";
+  driveHelpCenterFolderId = "";
   commessaSheetCache.clear();
   updateDriveStatus(false);
 }
@@ -3309,6 +3336,129 @@ async function ensureDriveFolders() {
   driveChatFolderId = await getOrCreateDriveFolder("Chat Media", driveRootFolderId);
   driveReportsFolderId = await getOrCreateDriveFolder("Report Impianti", driveRootFolderId);
   driveSquadreFolderId = await getOrCreateDriveFolder("Storico Squadre", driveRootFolderId);
+  driveHelpCenterFolderId = await getOrCreateDriveFolder("Help Center", driveReportsFolderId);
+}
+
+function normalizeFaqData(data) {
+  const payload = data && typeof data === "object" ? data : {};
+  const rawItems = Array.isArray(payload.items) ? payload.items : [];
+  const normalizedItems = rawItems.map((item, index) => ({
+    id: String(item.id || `faq-${index + 1}`),
+    domanda: String(item.domanda || item.question || "").trim(),
+    risposta: String(item.risposta || item.answer || "").trim(),
+    passi: Array.isArray(item.passi) ? item.passi.map((step) => String(step || "").trim()).filter(Boolean) : []
+  })).filter((item) => item.domanda && item.risposta);
+
+  return {
+    version: Number(payload.version) > 0 ? Number(payload.version) : HELP_CENTER_FAQ_FALLBACK.version,
+    updatedAt: payload.updatedAt || null,
+    updatedBy: String(payload.updatedBy || ""),
+    items: normalizedItems.length > 0 ? normalizedItems : HELP_CENTER_FAQ_FALLBACK.items
+  };
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toIsoDate(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value.toDate === "function") return value.toDate().toISOString();
+  return "";
+}
+
+async function loadFaqFromFirestore() {
+  try {
+    const doc = await db.collection(HELP_CENTER_CONFIG_PATH.collection).doc(HELP_CENTER_CONFIG_PATH.doc).get();
+    if (!doc.exists) return null;
+    const data = normalizeFaqData(doc.data());
+    faqDataset = data;
+    return data;
+  } catch (error) {
+    console.warn("Help Center Firestore non disponibile, uso fallback locale:", error);
+    return null;
+  }
+}
+
+async function saveFaqToFirestore(faqData) {
+  if (!canManageData()) {
+    throw new Error("Solo un admin può aggiornare le FAQ.");
+  }
+  const normalized = normalizeFaqData(faqData);
+  const existing = await loadFaqFromFirestore();
+  const nextVersion = (existing && Number(existing.version) > 0 ? Number(existing.version) : 0) + 1;
+  const payload = {
+    ...normalized,
+    version: nextVersion,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  };
+  await db.collection(HELP_CENTER_CONFIG_PATH.collection).doc(HELP_CENTER_CONFIG_PATH.doc).set(payload, { merge: true });
+  faqDataset = { ...normalized, version: nextVersion, updatedAt: new Date().toISOString(), updatedBy: currentUser?.email || "" };
+  const snapshot = await exportFaqSnapshotToDrive(faqDataset);
+  return { ...faqDataset, snapshot };
+}
+
+function renderFaqHelpCenter(faqData) {
+  const normalized = normalizeFaqData(faqData);
+  faqDataset = normalized;
+  window.appHelpFaqData = normalized;
+
+  const list = document.getElementById("help-faq-list");
+  if (!list) return;
+  list.innerHTML = normalized.items.map((item) => {
+    const steps = item.passi.length
+      ? `<ol>${item.passi.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>`
+      : "";
+    return `<article class="faq-item"><h3>${escapeHtml(item.domanda)}</h3><p>${escapeHtml(item.risposta)}</p>${steps}</article>`;
+  }).join("");
+}
+
+async function initHelpCenterFaq() {
+  const remoteFaq = await loadFaqFromFirestore();
+  renderFaqHelpCenter(remoteFaq || HELP_CENTER_FAQ_FALLBACK);
+}
+
+window.loadFaqFromFirestore = loadFaqFromFirestore;
+window.saveFaqToFirestore = saveFaqToFirestore;
+window.exportFaqSnapshotToDrive = exportFaqSnapshotToDrive;
+
+async function exportFaqSnapshotToDrive(faqData = faqDataset) {
+  if (!canManageData()) {
+    throw new Error("Solo un admin può esportare snapshot FAQ.");
+  }
+  if (!driveAccessToken) {
+    console.warn("Drive non collegato: salto export snapshot FAQ.");
+    return null;
+  }
+
+  if (!driveHelpCenterFolderId) await ensureDriveFolders();
+  const normalized = normalizeFaqData(faqData);
+  const metadata = {
+    version: Number(normalized.version) || 1,
+    updatedAt: toIsoDate(normalized.updatedAt) || new Date().toISOString(),
+    updatedBy: normalized.updatedBy || currentUser?.email || ""
+  };
+  const payload = { ...metadata, items: normalized.items };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const fileName = `help-center-faq-v${metadata.version}.json`;
+  const uploaded = await uploadBlobToDrive(blob, fileName, "application/json", driveHelpCenterFolderId);
+  await db.collection(HELP_CENTER_CONFIG_PATH.collection).doc(HELP_CENTER_CONFIG_PATH.doc).set({
+    latestSnapshot: {
+      fileId: uploaded.fileId,
+      url: uploaded.webViewLink || uploaded.directUrl || "",
+      exportedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      exportedBy: metadata.updatedBy
+    }
+  }, { merge: true });
+  return uploaded;
 }
 
 async function getOrCreateDriveFolder(name, parentId = "") {

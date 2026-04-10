@@ -3207,6 +3207,13 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
+  const commessaData = commesseById.get(commessaId) || {};
+  const configuredSheetId = String(commessaData.sheetSpreadsheetId || "").trim();
+  if (configuredSheetId) {
+    commessaSheetCache.set(commessaId, configuredSheetId);
+    return { id: configuredSheetId };
+  }
+
   const safeName = commessaName.replaceAll("'", "\\'");
   const query = [
     "mimeType='application/vnd.google-apps.spreadsheet'",
@@ -3221,6 +3228,10 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
     const existing = searchResponse.files[0];
     commessaSheetCache.set(commessaId, existing.id);
+    await db.collection("commesse").doc(commessaId).set({
+      sheetSpreadsheetId: existing.id,
+      sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     return { id: existing.id };
   }
 
@@ -3243,6 +3254,10 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   });
 
   commessaSheetCache.set(commessaId, created.id);
+  await db.collection("commesse").doc(commessaId).set({
+    sheetSpreadsheetId: created.id,
+    sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
   return { id: created.id };
 }
 

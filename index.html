@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hera App - Commesse</title>
+  <title>Varga Cantieri</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
 </head>
@@ -58,7 +58,7 @@
 
       <section class="card weather-card" id="weather-card" role="button" tabindex="0">
         <div class="section-head">
-          <h2>🌤️ Meteo rapido</h2>
+          <h2>Meteo rapido</h2>
           <span class="pill">Live</span>
         </div>
         <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
@@ -83,14 +83,20 @@
       </section>
 
       <section class="card">
-        <h2>Mappa impianti</h2>
-        <p class="muted">Clicca un marker per vedere i dettagli e andare direttamente alla riga in elenco.</p>
+        <div class="section-head">
+          <h2>Mappa impianti</h2>
+          <span class="pill">Live</span>
+        </div>
+        <p class="muted">Panoramica operativa impianti. Tocca un marker per evidenziare la scheda corrispondente.</p>
         <div id="map"></div>
-        <p id="gps-status" class="muted"></p>
+        <p id="gps-status" class="muted">Posizione GPS non disponibile.</p>
       </section>
 
       <section class="card">
-        <h2>Impianti (dal più vicino al più lontano)</h2>
+        <div class="section-head">
+          <h2>Impianti (dal più vicino al più lontano)</h2>
+          <span class="pill">Operativo</span>
+        </div>
         <div class="impianti-toolbar">
           <div class="search-box">
             <span aria-hidden="true">🔎</span>

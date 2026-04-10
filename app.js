@@ -165,6 +165,7 @@ let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
 const commessaSheetSyncTimers = new Map();
+const localSheetMutationAt = new Map();
 let fuelMapInstance = null;
 let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
@@ -665,6 +666,17 @@ function getStoredDriveToken() {
   return localStorage.getItem("googleDriveAccessToken") || "";
 }
 
+function trackLocalSheetMutation(commessaId) {
+  if (!commessaId) return;
+  localSheetMutationAt.set(commessaId, Date.now());
+}
+
+function hasRecentLocalSheetMutation(commessaId, windowMs = 3500) {
+  const ts = Number(localSheetMutationAt.get(commessaId) || 0);
+  if (!ts) return false;
+  return (Date.now() - ts) <= windowMs;
+}
+
 function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900) {
   if (!commessaId) return;
   if (!canManageData() || !driveAccessToken) return;
@@ -675,6 +687,7 @@ function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900)
       await syncCommessaDoneImpiantiToDriveSheet(commessaId, commessaName || selectedCommessaName || "Commessa");
     } catch (error) {
       console.error("Sync foglio commessa fallita:", error);
+      queuePendingSheetExport({ commessaId, commessaName });
     } finally {
       commessaSheetSyncTimers.delete(commessaId);
     }
@@ -910,7 +923,7 @@ function getTargetCommessaName() {
 
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
-  let previousDoneDocIds = null;
+  let previousDoneSignature = null;
 
   unsubscribeImpianti = db
     .collection("commesse")
@@ -922,20 +935,18 @@ function subscribeImpianti() {
       renderImpianti();
       renderMap();
 
-      const currentDoneDocIds = new Set(
-        rawImpianti
-          .filter((impianto) => Boolean(impianto.done))
-          .map((impianto) => impianto.id)
-      );
+      const currentDoneSignature = rawImpianti
+        .filter((impianto) => Boolean(impianto.done))
+        .map((impianto) => `${impianto.id}__${firestoreDateToMillis(impianto.doneAt)}`)
+        .sort()
+        .join("|");
+      const doneStateChanged = previousDoneSignature !== null && currentDoneSignature !== previousDoneSignature;
 
-      const hasNewDoneImpianto = previousDoneDocIds !== null
-        && Array.from(currentDoneDocIds).some((docId) => !previousDoneDocIds.has(docId));
-
-      if (hasNewDoneImpianto) {
-        scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
+      if (doneStateChanged && !hasRecentLocalSheetMutation(selectedCommessaId)) {
+        scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 700);
       }
 
-      previousDoneDocIds = currentDoneDocIds;
+      previousDoneSignature = currentDoneSignature;
     }, (error) => {
       console.error(error);
       ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";
@@ -1590,6 +1601,7 @@ async function markImpiantoDone(impianto) {
   };
   const doneAtLocal = new Date();
   const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  trackLocalSheetMutation(selectedCommessaId);
   try {
     updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
     await setImpiantoDone(ids, true);
@@ -1607,21 +1619,7 @@ async function markImpiantoDone(impianto) {
     return;
   }
 
-  try {
-    await syncCommessaDoneImpiantiToDriveSheet(exportPayload.commessaId, exportPayload.commessaName);
-  } catch (error) {
-    console.error(error);
-    const retried = await retrySheetExport(exportPayload, 2);
-    if (!retried) {
-      queuePendingSheetExport(exportPayload);
-      try {
-        await queueSheetExportForAdmin(exportPayload);
-      } catch (queueError) {
-        console.error("Impianto FATTO ma coda condivisa non salvata:", queueError);
-      }
-      console.warn("Export foglio in coda: sarà ritentato automaticamente.");
-    }
-  }
+  scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
 }
 
 async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
@@ -1632,18 +1630,6 @@ async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
     } catch (error) {
       console.warn(`Tentativo aggiornamento stato FATTO fallito (${i + 1}/${retries})`, error);
       await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
-    }
-  }
-  return false;
-}
-
-async function retrySheetExport(payload, retries = 2) {
-  for (let i = 0; i < retries; i += 1) {
-    try {
-      await syncCommessaDoneImpiantiToDriveSheet(payload.commessaId, payload.commessaName);
-      return true;
-    } catch (error) {
-      console.warn(`Tentativo export foglio fallito (${i + 1}/${retries})`, error);
     }
   }
   return false;
@@ -1730,8 +1716,10 @@ async function resetImpianto(impianto) {
     alert("Solo un admin può usare reset.");
     return;
   }
+  trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, { done: false });
   await setImpiantoDone(ids, false);
+  scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 
 async function deleteImpianto(impianto) {
@@ -1746,7 +1734,9 @@ async function deleteImpianto(impianto) {
   if (!ok) return;
 
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  trackLocalSheetMutation(selectedCommessaId);
   await Promise.all(ids.map((id) => ref.doc(id).delete()));
+  scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 
 async function deleteCommessa(commessaId, nome) {

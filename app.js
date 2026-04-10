@@ -1599,8 +1599,10 @@ async function markImpiantoDone(impianto) {
     commessaName: selectedCommessaName || "Commessa",
     impianto
   };
+  const doneAtLocal = new Date();
+  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   try {
-    updateImpiantoLocalState(ids, { done: true });
+    updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
     await setImpiantoDone(ids, true);
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
@@ -2243,11 +2245,12 @@ function updateSuggestionLists() {
 async function setImpiantoDone(impiantoIds, done) {
   const user = auth.currentUser;
   if (!user) return;
+  const doneAt = done ? firebase.firestore.Timestamp.fromDate(new Date()) : null;
 
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
   await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
     done,
-    doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null,
+    doneAt,
     doneBy: done ? (user.displayName || user.email || "Operatore") : ""
   })));
 }
@@ -2259,12 +2262,13 @@ function openWhatsApp(impianto) {
     return;
   }
 
-  const now = new Date();
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const title = isOnlyOrdinaria
     ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
-  const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const doneInfo = formatDoneDateTime(impianto.doneAt);
+  const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
+  const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
   const message = [
     `${title} - Report operativo`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
@@ -2273,7 +2277,7 @@ function openWhatsApp(impianto) {
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
-    `📅 Data: ${now.toLocaleDateString("it-IT")}`,
+    `📅 Data: ${date}`,
     `🕒 Ora: ${time}`
   ].join("\n");
 

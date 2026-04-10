@@ -177,16 +177,27 @@ h2 { font-size: 1.05rem; }
 }
 
 .logo-head {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.logo-head h1 {
+  text-align: center;
+}
+
+.logo-head .menu-toggle-btn {
+  position: absolute;
+  right: 0;
 }
 
 .home-top-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
   gap: 12px;
+  align-items: start;
 }
 
 .hero-top {
@@ -202,7 +213,7 @@ h2 { font-size: 1.05rem; }
 .weather-status-grid {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -254,13 +265,46 @@ h2 { font-size: 1.05rem; }
     radial-gradient(circle at 12% 90%, rgba(14, 165, 233, 0.12), transparent 42%),
     linear-gradient(165deg, #ffffff 0%, #f8fcff 100%);
 }
+
+.user-card {
+  width: 100%;
+}
 .weather-user-actions {
   margin-top: 12px;
+}
+
+.user-toggle-btn {
+  width: 100%;
+}
+
+.user-details-panel {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
 }
 .weather-summary {
   font-size: 1.05rem;
   font-weight: 600;
   color: #123056;
+}
+
+.weather-risks {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weather-risk-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 10px;
 }
 
 .actions-row,

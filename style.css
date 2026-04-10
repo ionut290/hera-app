@@ -31,15 +31,12 @@ h2 { font-size: 1.05rem; }
 .hidden { display: none !important; }
 
 .menu-toggle-btn {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 1300;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
-  padding: 10px 12px;
-  font-size: 1.15rem;
+  padding: 8px 10px;
+  font-size: 1.35rem;
+  line-height: 1;
   cursor: pointer;
   box-shadow: var(--shadow);
 }
@@ -159,6 +156,19 @@ h2 { font-size: 1.05rem; }
   font-size: 1.35rem;
 }
 
+.logo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-top-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .hero-top {
   display: flex;
   justify-content: space-between;
@@ -227,8 +237,7 @@ h2 { font-size: 1.05rem; }
 
 .weather-card {
   cursor: pointer;
-  justify-self: start;
-  width: min(320px, 100%);
+  width: 100%;
 }
 .weather-summary {
   font-size: 1.05rem;
@@ -682,4 +691,10 @@ select:focus-visible {
   .actions-row { width: 100%; }
   .actions-row .btn { flex: 1 1 auto; }
   .page-head { align-items: stretch; }
+}
+
+@media (max-width: 760px) {
+  .home-top-grid {
+    grid-template-columns: 1fr;
+  }
 }

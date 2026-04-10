@@ -217,13 +217,6 @@ ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
-ui.weatherCard.addEventListener("click", openWeatherModal);
-ui.weatherCard.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    openWeatherModal();
-  }
-});
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);

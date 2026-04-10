@@ -67,6 +67,7 @@ const ui = {
   openPanelSquadre: document.getElementById("open-panel-squadre"),
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
+  openPanelUtenti: document.getElementById("open-panel-utenti"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   managementPage: document.getElementById("management-page"),
   managementTitle: document.getElementById("management-title"),
@@ -75,6 +76,11 @@ const ui = {
   panelSquadre: document.getElementById("panel-squadre"),
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
+  panelUtenti: document.getElementById("panel-utenti"),
+  commesseManageList: document.getElementById("commesse-manage-list"),
+  adminUserForm: document.getElementById("admin-user-form"),
+  adminUserEmail: document.getElementById("admin-user-email"),
+  adminUsersList: document.getElementById("admin-users-list"),
   personaleOptions: document.getElementById("personale-options"),
   mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
@@ -133,6 +139,7 @@ let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeUsers = null;
+let unsubscribeAdminUsers = null;
 let chatMessages = [];
 let platformUsers = [];
 let mediaRecorder = null;
@@ -166,6 +173,7 @@ let lastSegnalazionePdfName = "";
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const SHEET_RETRY_MS = 30 * 1000;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
@@ -216,6 +224,7 @@ ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commes
 ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
 ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
+ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
@@ -228,6 +237,7 @@ ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto)
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
 ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
+ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 
 addSquadraRow();
 initGeolocation();
@@ -308,6 +318,7 @@ auth.onAuthStateChanged((user) => {
   stopMezziSubscription();
   stopSquadreSubscription();
   stopUsersSubscription();
+  stopAdminUsersSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   window.location.hash = "";
@@ -338,6 +349,7 @@ auth.onAuthStateChanged((user) => {
     subscribeCommesse();
     subscribeChat();
     subscribeUsers();
+    subscribeAdminUsers();
     subscribeDriveBridge();
     subscribePersonale();
     subscribeMezzi();
@@ -364,6 +376,8 @@ function updateAdminControls() {
   ui.manualImpiantoIndirizzo.disabled = !canManage;
   ui.manualImpiantoCodice.disabled = !canManage;
   ui.manualImpiantoSubmit.disabled = !canManage;
+  ui.adminUserEmail.disabled = !canManage;
+  if (ui.adminUserForm.querySelector("button[type='submit']")) ui.adminUserForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraCommessa.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
@@ -391,11 +405,12 @@ function openManagementPanel(panel) {
     commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
     personale: { el: ui.panelPersonale, title: "Personale" },
-    mezzi: { el: ui.panelMezzi, title: "Mezzi" }
+    mezzi: { el: ui.panelMezzi, title: "Mezzi" },
+    utenti: { el: ui.panelUtenti, title: "Gestione utenti" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -728,7 +743,7 @@ async function createCommessa(event) {
   const nome = ui.commessaName.value.trim();
   if (!nome) return;
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può aggiungere commesse.");
+    alert("Solo un admin può aggiungere commesse.");
     return;
   }
 
@@ -835,6 +850,7 @@ function subscribeCommesse() {
         ui.commessaTargetSelect.appendChild(option.cloneNode(true));
       });
 
+      renderCommesseManagementList();
       renderSquadre();
     }, (error) => {
       console.error(error);
@@ -1572,8 +1588,10 @@ async function markImpiantoDone(impianto) {
     commessaName: selectedCommessaName || "Commessa",
     impianto
   };
+  const doneAtLocal = new Date();
+  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   try {
-    updateImpiantoLocalState(ids, { done: true });
+    updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
     await setImpiantoDone(ids, true);
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
@@ -1709,7 +1727,7 @@ async function resetImpianto(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può usare reset.");
+    alert("Solo un admin può usare reset.");
     return;
   }
   updateImpiantoLocalState(ids, { done: false });
@@ -1720,7 +1738,7 @@ async function deleteImpianto(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può eliminare impianti.");
+    alert("Solo un admin può eliminare impianti.");
     return;
   }
 
@@ -1733,13 +1751,15 @@ async function deleteImpianto(impianto) {
 
 async function deleteCommessa(commessaId, nome) {
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può eliminare commesse.");
+    alert("Solo un admin può eliminare commesse.");
     return;
   }
 
-  const ok = window.confirm(`Eliminare commessa ${nome}? Prima elimina gli impianti associati.`);
+  const ok = window.confirm(`Eliminare definitivamente la commessa "${nome}" e tutti i suoi impianti?`);
   if (!ok) return;
 
+  const impiantiRef = db.collection("commesse").doc(commessaId).collection("impianti");
+  await deleteCollectionDocs(impiantiRef);
   await db.collection("commesse").doc(commessaId).delete();
 
   if (selectedCommessaId === commessaId) {
@@ -1756,7 +1776,7 @@ async function deleteCommessa(commessaId, nome) {
 async function addPersonale(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può gestire il personale.");
+    alert("Solo un admin può gestire il personale.");
     return;
   }
   const nome = ui.personaleNome.value.trim();
@@ -1775,7 +1795,7 @@ async function addPersonale(event) {
 async function addMezzo(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può gestire i mezzi.");
+    alert("Solo un admin può gestire i mezzi.");
     return;
   }
   const nome = ui.mezzoNome.value.trim();
@@ -2214,11 +2234,12 @@ function updateSuggestionLists() {
 async function setImpiantoDone(impiantoIds, done) {
   const user = auth.currentUser;
   if (!user) return;
+  const doneAt = done ? firebase.firestore.Timestamp.fromDate(new Date()) : null;
 
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
   await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
     done,
-    doneAt: done ? firebase.firestore.FieldValue.serverTimestamp() : null,
+    doneAt,
     doneBy: done ? (user.displayName || user.email || "Operatore") : ""
   })));
 }
@@ -2230,12 +2251,13 @@ function openWhatsApp(impianto) {
     return;
   }
 
-  const now = new Date();
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const title = isOnlyOrdinaria
     ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
-  const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const doneInfo = formatDoneDateTime(impianto.doneAt);
+  const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
+  const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
   const message = [
     `${title} - Report operativo`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
@@ -2244,7 +2266,7 @@ function openWhatsApp(impianto) {
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
-    `📅 Data: ${now.toLocaleDateString("it-IT")}`,
+    `📅 Data: ${date}`,
     `🕒 Ora: ${time}`
   ].join("\n");
 
@@ -2358,7 +2380,11 @@ function getImpiantoDocIds(impianto) {
 
 function canManageData() {
   const email = (currentUser && currentUser.email) ? currentUser.email.toLowerCase() : "";
-  return email === ADMIN_EMAIL;
+  return adminEmails.has(email);
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
 }
 
 function clearMap() {
@@ -2646,8 +2672,38 @@ async function upsertCurrentPlatformUser() {
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
+    isAdmin: canManageData(),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+}
+
+function subscribeAdminUsers() {
+  unsubscribeAdminUsers = db.collection("appConfig").doc("adminUsers").onSnapshot((doc) => {
+    const data = doc.exists ? doc.data() : {};
+    const rawList = Array.isArray(data.emails) ? data.emails : [];
+    const normalized = rawList
+      .map((email) => normalizeEmail(email))
+      .filter(Boolean);
+    adminEmails = new Set([ADMIN_EMAIL, ...normalized]);
+    updateAdminControls();
+    renderCommesseManagementList();
+    renderAdminUsers();
+  }, (error) => {
+    console.error("Errore caricamento admin users:", error);
+    adminEmails = new Set([ADMIN_EMAIL]);
+    updateAdminControls();
+    renderCommesseManagementList();
+    renderAdminUsers();
+  });
+}
+
+function stopAdminUsersSubscription() {
+  if (unsubscribeAdminUsers) {
+    unsubscribeAdminUsers();
+    unsubscribeAdminUsers = null;
+  }
+  adminEmails = new Set([ADMIN_EMAIL]);
+  renderAdminUsers();
 }
 
 function subscribeUsers() {
@@ -2676,6 +2732,132 @@ function renderChatRecipients() {
     option.textContent = user.displayName || user.email || "Utente";
     ui.chatRecipient.appendChild(option);
   });
+}
+
+function renderCommesseManagementList() {
+  if (!ui.commesseManageList) return;
+  if (!canManageData()) {
+    ui.commesseManageList.innerHTML = "<p class='muted'>Solo gli admin possono rinominare, svuotare o eliminare commesse.</p>";
+    return;
+  }
+  const commesse = Array.from(commesseById.values());
+  if (!commesse.length) {
+    ui.commesseManageList.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    return;
+  }
+  ui.commesseManageList.innerHTML = "";
+  commesse.forEach((commessa) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const title = document.createElement("span");
+    title.textContent = commessa.nome || "Commessa senza nome";
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    actions.appendChild(createButton("Rinomina", () => renameCommessa(commessa.id, commessa.nome || "Commessa")));
+    actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
+    actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
+
+    row.appendChild(title);
+    row.appendChild(actions);
+    ui.commesseManageList.appendChild(row);
+  });
+}
+
+async function renameCommessa(commessaId, currentName) {
+  if (!canManageData()) {
+    alert("Solo un admin può rinominare commesse.");
+    return;
+  }
+  const nextName = window.prompt("Nuovo nome commessa:", currentName || "");
+  if (nextName == null) return;
+  const normalized = nextName.trim();
+  if (!normalized) return;
+  await db.collection("commesse").doc(commessaId).set({ nome: normalized }, { merge: true });
+  if (selectedCommessaId === commessaId) {
+    selectedCommessaName = normalized;
+    ui.commessaAttiva.textContent = `Commessa selezionata: ${normalized}`;
+  }
+}
+
+async function clearCommessaImpianti(commessaId, nome) {
+  if (!canManageData()) {
+    alert("Solo un admin può svuotare commesse.");
+    return;
+  }
+  const ok = window.confirm(`Svuotare la commessa "${nome}" eliminando tutti gli impianti?`);
+  if (!ok) return;
+  const impiantiRef = db.collection("commesse").doc(commessaId).collection("impianti");
+  await deleteCollectionDocs(impiantiRef);
+}
+
+async function deleteCollectionDocs(collectionRef, batchSize = 200) {
+  while (true) {
+    const snapshot = await collectionRef.limit(batchSize).get();
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
+function renderAdminUsers() {
+  if (!ui.adminUsersList) return;
+  if (!canManageData()) {
+    ui.adminUsersList.innerHTML = "<p class='muted'>Solo un admin può gestire i permessi admin.</p>";
+    return;
+  }
+  const emails = Array.from(adminEmails).sort((a, b) => a.localeCompare(b, "it"));
+  ui.adminUsersList.innerHTML = "";
+  emails.forEach((email) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const label = document.createElement("span");
+    label.textContent = email;
+    row.appendChild(label);
+    if (email !== ADMIN_EMAIL) {
+      const revokeBtn = createButton("Rimuovi", () => removeAdminEmail(email));
+      row.appendChild(revokeBtn);
+    }
+    ui.adminUsersList.appendChild(row);
+  });
+}
+
+async function addAdminUserByEmail(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo un admin può aggiungere altri admin.");
+    return;
+  }
+  const email = normalizeEmail(ui.adminUserEmail.value);
+  if (!email || !email.includes("@")) {
+    alert("Inserisci un'email valida.");
+    return;
+  }
+  const next = Array.from(new Set([...adminEmails, email]));
+  await db.collection("appConfig").doc("adminUsers").set({
+    emails: next,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
+  ui.adminUserForm.reset();
+}
+
+async function removeAdminEmail(email) {
+  if (!canManageData()) {
+    alert("Solo un admin può rimuovere admin.");
+    return;
+  }
+  const normalized = normalizeEmail(email);
+  if (!normalized || normalized === ADMIN_EMAIL) return;
+  const ok = window.confirm(`Rimuovere i permessi admin per ${normalized}?`);
+  if (!ok) return;
+  const next = Array.from(adminEmails).filter((item) => item !== normalized);
+  await db.collection("appConfig").doc("adminUsers").set({
+    emails: next,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
 }
 
 function stopChatSubscription() {
@@ -2999,7 +3181,7 @@ function updateDriveStatus(isConnected) {
 
 async function connectGoogleDrive() {
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com può collegare Google Drive.");
+    alert("Solo un admin può collegare Google Drive.");
     return;
   }
   try {

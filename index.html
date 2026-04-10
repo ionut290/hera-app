@@ -27,25 +27,31 @@
 
   <main class="container">
     <section id="home-page">
-      <header class="card hero-card">
-        <div class="hero-top">
-          <div>
-            <h1>Varga Cantieri</h1>
-            <p class="muted hero-subtitle">Commesse, impianti, mappa e navigazione</p>
-          </div>
+      <header class="card logo-card">
+        <h1>Varga Cantieri</h1>
+      </header>
+
+      <section class="card hero-card">
+        <button id="user-panel-toggle" class="btn user-panel-toggle" type="button" aria-expanded="false" aria-controls="user-panel-content">
+          👤 Utente
+        </button>
+
+        <div id="user-panel-content" class="user-panel-content hidden">
           <div class="actions-row hero-actions">
             <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
             <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
             <button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button>
           </div>
-        </div>
 
-        <div class="hero-status-grid">
-          <p id="user" class="status status-chip">Non loggato</p>
-          <p id="user-name" class="muted status-chip">Nome utente: -</p>
-          <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
+          <p class="muted hero-subtitle">Commesse, impianti, mappa e navigazione</p>
+
+          <div class="hero-status-grid">
+            <p id="user" class="status status-chip">Non loggato</p>
+            <p id="user-name" class="muted status-chip">Nome utente: -</p>
+            <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
+          </div>
         </div>
-      </header>
+      </section>
 
       <section class="card">
         <div class="section-head">

@@ -146,6 +146,17 @@ h2 { font-size: 1.05rem; }
 
 .hero-card {
   background: linear-gradient(160deg, #ffffff 0%, #f8fbff 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.logo-card {
+  padding: 14px 16px;
+}
+
+.logo-card h1 {
+  margin: 0;
+  font-size: 1.35rem;
 }
 
 .hero-top {
@@ -157,6 +168,15 @@ h2 { font-size: 1.05rem; }
 }
 
 .hero-subtitle { margin-top: 2px; }
+
+.user-panel-toggle {
+  justify-self: start;
+}
+
+.user-panel-content {
+  display: grid;
+  gap: 10px;
+}
 
 .hero-status-grid {
   margin-top: 12px;
@@ -205,7 +225,11 @@ h2 { font-size: 1.05rem; }
   padding: 8px 10px;
 }
 
-.weather-card { cursor: pointer; }
+.weather-card {
+  cursor: pointer;
+  justify-self: start;
+  width: min(320px, 100%);
+}
 .weather-summary {
   font-size: 1.05rem;
   font-weight: 600;
@@ -286,6 +310,22 @@ select:focus-visible {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+}
+
+.commesse-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commessa-row {
+  display: inline-flex;
+}
+
+.commessa-btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
 }
 
 .impianti-toolbar {

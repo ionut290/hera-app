@@ -14,6 +14,8 @@ const ui = {
   user: document.getElementById("user"),
   userName: document.getElementById("user-name"),
   driveStatus: document.getElementById("drive-status"),
+  userPanelToggle: document.getElementById("user-panel-toggle"),
+  userPanelContent: document.getElementById("user-panel-content"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
@@ -150,6 +152,7 @@ ui.menuCloseBtn.addEventListener("click", closeSideMenu);
 ui.menuOverlay.addEventListener("click", closeSideMenu);
 ui.logoutBtn.addEventListener("click", logout);
 ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
+ui.userPanelToggle.addEventListener("click", toggleUserPanel);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
@@ -313,6 +316,12 @@ function openManagementPanel(panel) {
 function closeManagementPanel() {
   ui.managementPage.classList.add("hidden");
   ui.managementPage.setAttribute("aria-hidden", "true");
+}
+
+function toggleUserPanel() {
+  const willOpen = ui.userPanelContent.classList.contains("hidden");
+  ui.userPanelContent.classList.toggle("hidden", !willOpen);
+  ui.userPanelToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
 }
 
 function applyRoute() {

@@ -136,6 +136,7 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let highlightedImpiantoKey = "";
+let expandedImpiantoKey = "";
 let impiantiSearchTerm = "";
 let impiantiViewMode = "done";
 let pendingSheetExports = [];
@@ -1220,23 +1221,40 @@ function renderImpianti() {
     const article = document.createElement("article");
     article.className = "impianto-item" + (impianto.done ? " done" : "");
     const impiantoKey = buildImpiantoKey(impianto);
+    const detailsVisible = expandedImpiantoKey === impiantoKey;
     article.dataset.impiantoKey = impiantoKey;
+    article.classList.toggle("is-expanded", detailsVisible);
     if (highlightedImpiantoKey === impiantoKey) article.classList.add("highlight");
 
     const distance = formatDistance(distanceFromUser(impianto));
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
-    article.innerHTML = `
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "impianto-summary-btn";
+    header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
+      <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
+      <small>${distance}</small>
+    `;
+    header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
+    header.addEventListener("click", () => {
+      expandedImpiantoKey = expandedImpiantoKey === impiantoKey ? "" : impiantoKey;
+      renderImpianti();
+    });
+    article.appendChild(header);
+
+    const details = document.createElement("div");
+    details.className = "impianto-details";
+    details.innerHTML = `
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
-      <p><b>Tipo:</b> <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span></p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
-      <p><b>Distanza:</b> ${distance}</p>
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
+    article.appendChild(details);
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
@@ -2016,6 +2034,8 @@ function renderMap() {
 function focusImpiantoInList(impianto) {
   const key = buildImpiantoKey(impianto);
   highlightedImpiantoKey = key;
+  expandedImpiantoKey = key;
+  renderImpianti();
   const row = ui.impiantiLista.querySelector(`[data-impianto-key=\"${cssEscapeValue(key)}\"]`);
   if (!row) return;
   ui.impiantiLista.querySelectorAll(".impianto-item.highlight").forEach((el) => el.classList.remove("highlight"));

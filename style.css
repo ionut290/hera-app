@@ -680,8 +680,9 @@ textarea:focus-visible {
 
 .commessa-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr auto auto auto;
   gap: 8px;
+  align-items: center;
 }
 
 .commessa-btn.active {
@@ -689,6 +690,11 @@ textarea:focus-visible {
   color: var(--primary);
   background: var(--primary-soft);
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 0.82rem;
 }
 
 #map {

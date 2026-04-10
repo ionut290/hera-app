@@ -14,8 +14,6 @@ const ui = {
   user: document.getElementById("user"),
   userName: document.getElementById("user-name"),
   driveStatus: document.getElementById("drive-status"),
-  userPanelToggle: document.getElementById("user-panel-toggle"),
-  userPanelContent: document.getElementById("user-panel-content"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
@@ -41,6 +39,7 @@ const ui = {
   impiantiPage: document.getElementById("impianti-page"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
+  mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
@@ -56,6 +55,7 @@ const ui = {
   squadraRows: document.getElementById("squadra-rows"),
   addSquadraRowBtn: document.getElementById("add-squadra-row-btn"),
   squadraRiferimento: document.getElementById("squadra-riferimento"),
+  squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
   squadreLista: document.getElementById("squadre-lista"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
@@ -119,6 +119,7 @@ let unsubscribeDriveBridge = null;
 let unsubscribePersonale = null;
 let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
+let unsubscribeSquadreHistory = null;
 let unsubscribeUsers = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -130,11 +131,13 @@ let driveAccessToken = "";
 let driveRootFolderId = "";
 let driveChatFolderId = "";
 let driveReportsFolderId = "";
+let driveSquadreFolderId = "";
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
+let squadreHistoryByDate = new Map();
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 let impiantiSearchTerm = "";
@@ -164,6 +167,9 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 map.setView([44.4949, 11.3426], 11);
 
 const markerLayer = L.layerGroup().addTo(map);
+document.addEventListener("fullscreenchange", () => {
+  setTimeout(() => map.invalidateSize(), 60);
+});
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.menuToggleBtn.addEventListener("click", openSideMenu);
@@ -171,7 +177,6 @@ ui.menuCloseBtn.addEventListener("click", closeSideMenu);
 ui.menuOverlay.addEventListener("click", closeSideMenu);
 ui.logoutBtn.addEventListener("click", logout);
 ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
-ui.userPanelToggle.addEventListener("click", toggleUserPanel);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
@@ -182,6 +187,7 @@ ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
+ui.mapFullscreenBtn.addEventListener("click", toggleMapFullscreen);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
@@ -189,6 +195,7 @@ ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
+ui.squadraCalendarDate.addEventListener("change", renderSquadre);
 ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
@@ -259,6 +266,7 @@ auth.onAuthStateChanged((user) => {
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
   squadreByCommessa = new Map();
+  squadreHistoryByDate = new Map();
   commesseById = new Map();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
@@ -346,10 +354,18 @@ function closeManagementPanel() {
   ui.managementPage.setAttribute("aria-hidden", "true");
 }
 
-function toggleUserPanel() {
-  const willOpen = ui.userPanelContent.classList.contains("hidden");
-  ui.userPanelContent.classList.toggle("hidden", !willOpen);
-  ui.userPanelToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+function toggleMapFullscreen() {
+  const mapContainer = document.getElementById("map");
+  if (!mapContainer) return;
+  if (!document.fullscreenElement) {
+    mapContainer.requestFullscreen().catch((error) => {
+      console.error("Fullscreen mappa non disponibile:", error);
+    });
+    return;
+  }
+  document.exitFullscreen().catch((error) => {
+    console.error("Uscita fullscreen non disponibile:", error);
+  });
 }
 
 function applyRoute() {
@@ -692,6 +708,7 @@ function subscribeDriveBridge() {
       driveRootFolderId = data.rootFolderId || "";
       driveChatFolderId = data.chatFolderId || "";
       driveReportsFolderId = data.reportsFolderId || "";
+      driveSquadreFolderId = data.squadreFolderId || "";
       ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
       processPendingSheetExports();
       processAdminSheetExportQueue();
@@ -702,6 +719,7 @@ function subscribeDriveBridge() {
     driveRootFolderId = "";
     driveChatFolderId = "";
     driveReportsFolderId = "";
+    driveSquadreFolderId = "";
     ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
   }, (error) => {
     console.error(error);
@@ -1700,6 +1718,21 @@ function subscribeSquadre() {
     console.error(error);
     ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
   });
+
+  unsubscribeSquadreHistory = db.collection("squadreStorico").onSnapshot((snapshot) => {
+    squadreHistoryByDate = new Map();
+    snapshot.forEach((doc) => {
+      const data = doc.data() || {};
+      if (!data.dateKey) return;
+      if (!squadreHistoryByDate.has(data.dateKey)) {
+        squadreHistoryByDate.set(data.dateKey, new Map());
+      }
+      squadreHistoryByDate.get(data.dateKey).set(data.commessaId, { id: doc.id, ...data });
+    });
+    renderSquadre();
+  }, (error) => {
+    console.error(error);
+  });
 }
 
 function stopPersonaleSubscription() {
@@ -1720,6 +1753,10 @@ function stopSquadreSubscription() {
   if (unsubscribeSquadre) {
     unsubscribeSquadre();
     unsubscribeSquadre = null;
+  }
+  if (unsubscribeSquadreHistory) {
+    unsubscribeSquadreHistory();
+    unsubscribeSquadreHistory = null;
   }
 }
 
@@ -1852,34 +1889,47 @@ async function saveSquadraComposition(event) {
     alert("Seleziona una commessa.");
     return;
   }
-  await db.collection("squadreCommesse").doc(commessaId).set({
+  const dateKey = ui.squadraRiferimento.value || new Date().toISOString().slice(0, 10);
+  const squadreRows = readSquadraRows();
+  const payload = {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
-    riferimentoData: ui.squadraRiferimento.value || "",
-    squadre: readSquadraRows(),
+    riferimentoData: dateKey,
+    squadre: squadreRows,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  };
+  await db.collection("squadreCommesse").doc(commessaId).set(payload, { merge: true });
+  await db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`).set({
+    ...payload,
+    dateKey
   }, { merge: true });
+  await backupSquadreSnapshotToDrive(dateKey, payload);
+  ui.squadraCalendarDate.value = dateKey;
 }
 
 function renderSquadre() {
   ui.squadreLista.innerHTML = "";
+  const selectedDateKey = ui.squadraCalendarDate.value || "";
+  const storicoDelGiorno = selectedDateKey ? (squadreHistoryByDate.get(selectedDateKey) || new Map()) : null;
 
   const commesse = Array.from(commesseById.values());
   const commesseConSquadre = commesse.filter((commessa) => {
-    const squad = squadreByCommessa.get(commessa.id) || {};
+    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
     const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     return rows.some((row) => row.personale || row.mezzi);
   });
   if (!commesseConSquadre.length) {
-    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    ui.squadreLista.innerHTML = selectedDateKey
+      ? "<p class='muted'>Nessuna composizione trovata per la data selezionata.</p>"
+      : "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
 
   commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
-    const squad = squadreByCommessa.get(commessa.id) || {};
+    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
     const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
@@ -1956,12 +2006,14 @@ function openWhatsApp(impianto) {
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
   const time = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
   const message = [
-    title,
+    `${title} - Report operativo`,
     `🏗️ Impianto/Cantiere: ${impianto.denominazione || "-"}`,
+    `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
     `📅 Data: ${now.toLocaleDateString("it-IT")}`,
-    `🕒 Ora: ${time}`
+    `🕒 Ora: ${time}`,
+    "Messaggio generato automaticamente da Hera App."
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -1974,10 +2026,12 @@ function openSquadraWhatsApp(squad, commessa) {
     `👥 Squadra ${idx + 1} personale: ${row.personale || "-"}\n🚚 Squadra ${idx + 1} mezzi: ${row.mezzi || "-"}`
   )).join("\n");
   const message = [
-    "📣 Richiesta conferma squadre",
+    "📣 Richiesta di conferma composizione squadre",
+    "Gentile tecnico, di seguito la composizione registrata.",
     `📁 Commessa: ${commessa.nome || "-"}`,
     `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    rowsMessage || "Nessuna squadra compilata."
+    rowsMessage || "Nessuna squadra compilata.",
+    "Grazie per la verifica."
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -2676,6 +2730,7 @@ function resetDriveState() {
   driveRootFolderId = "";
   driveChatFolderId = "";
   driveReportsFolderId = "";
+  driveSquadreFolderId = "";
   commessaSheetCache.clear();
   updateDriveStatus(false);
 }
@@ -2717,6 +2772,7 @@ async function connectGoogleDrive() {
       rootFolderId: driveRootFolderId,
       chatFolderId: driveChatFolderId,
       reportsFolderId: driveReportsFolderId,
+      squadreFolderId: driveSquadreFolderId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     updateDriveStatus(true);
@@ -2808,6 +2864,7 @@ async function ensureDriveFolders() {
   driveRootFolderId = await getOrCreateDriveFolder("Hera App - Dati");
   driveChatFolderId = await getOrCreateDriveFolder("Chat Media", driveRootFolderId);
   driveReportsFolderId = await getOrCreateDriveFolder("Report Impianti", driveRootFolderId);
+  driveSquadreFolderId = await getOrCreateDriveFolder("Storico Squadre", driveRootFolderId);
 }
 
 async function getOrCreateDriveFolder(name, parentId = "") {
@@ -2977,6 +3034,37 @@ async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
     fileId: uploaded.id,
     webViewLink: uploaded.webViewLink || "",
     directUrl: `https://drive.google.com/uc?export=download&id=${uploaded.id}`
+  };
+}
+
+async function backupSquadreSnapshotToDrive(dateKey, squadraPayload) {
+  if (!driveAccessToken) return;
+  if (!driveSquadreFolderId) await ensureDriveFolders();
+  const exportData = await buildAppBackupPayload(dateKey, squadraPayload);
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+  const commessaLabel = String(squadraPayload.commessaNome || "Commessa").replace(/[^\w\-]+/g, "_");
+  const fileName = `squadre_${dateKey}_${commessaLabel}.json`;
+  await uploadBlobToDrive(blob, fileName, "application/json", driveSquadreFolderId);
+}
+
+async function buildAppBackupPayload(dateKey, squadraPayload) {
+  const [commesseSnapshot, personaleSnapshot, mezziSnapshot, squadreCorrentiSnapshot, squadreStoricoSnapshot] = await Promise.all([
+    db.collection("commesse").get(),
+    db.collection("personale").get(),
+    db.collection("mezzi").get(),
+    db.collection("squadreCommesse").get(),
+    db.collection("squadreStorico").where("dateKey", "==", dateKey).get()
+  ]);
+  return {
+    exportedAt: new Date().toISOString(),
+    exportedBy: (currentUser && currentUser.email) ? currentUser.email : "",
+    selectedDate: dateKey,
+    savedComposition: squadraPayload,
+    commesse: commesseSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    personale: personaleSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    mezzi: mezziSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    squadreCorrenti: squadreCorrentiSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    squadreStoricoGiorno: squadreStoricoSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
   };
 }
 

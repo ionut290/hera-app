@@ -35,34 +35,26 @@
 
       <section class="home-top-grid">
         <section class="card hero-card">
-        <button id="user-panel-toggle" class="btn user-panel-toggle" type="button" aria-expanded="false" aria-controls="user-panel-content">
-          👤 Utente
-        </button>
+          <p class="muted hero-subtitle">Commesse, impianti, mappa e navigazione</p>
+        </section>
 
-        <div id="user-panel-content" class="user-panel-content hidden">
-          <div class="actions-row hero-actions">
+        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+          <div class="section-head">
+            <h2>🌤️ Meteo rapido</h2>
+            <span class="pill">Live</span>
+          </div>
+          <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
+          <div class="actions-row weather-user-actions">
             <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
             <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
             <button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button>
           </div>
-
-          <p class="muted hero-subtitle">Commesse, impianti, mappa e navigazione</p>
-
-          <div class="hero-status-grid">
+          <div class="weather-status-grid">
             <p id="user" class="status status-chip">Non loggato</p>
             <p id="user-name" class="muted status-chip">Nome utente: -</p>
             <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
           </div>
-        </div>
         </section>
-
-        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
-        <div class="section-head">
-          <h2>🌤️ Meteo rapido</h2>
-          <span class="pill">Live</span>
-        </div>
-        <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
-      </section>
       </section>
 
       <section class="card">
@@ -93,6 +85,7 @@
       </section>
 
       <section class="card">
+        <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa schermo intero</button>
         <div id="map"></div>
         <p id="gps-status" class="muted"></p>
       </section>
@@ -172,6 +165,11 @@
         <button class="btn btn-primary" type="submit">Salva composizione</button>
       </form>
       <p id="squadra-hint" class="muted"></p>
+      <div class="squadra-calendar-box">
+        <h3>Storico composizioni</h3>
+        <input id="squadra-calendar-date" type="date">
+        <p class="muted">Seleziona una data per vedere com'erano le squadre in quel giorno.</p>
+      </div>
       <datalist id="personale-options"></datalist>
       <datalist id="mezzi-options"></datalist>
     </div>

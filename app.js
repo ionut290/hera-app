@@ -66,6 +66,7 @@ const ui = {
   openPanelSquadre: document.getElementById("open-panel-squadre"),
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
+  openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   managementPage: document.getElementById("management-page"),
   managementTitle: document.getElementById("management-title"),
   managementCloseBtn: document.getElementById("management-close-btn"),
@@ -87,7 +88,22 @@ const ui = {
   fuelStationsList: document.getElementById("fuel-stations-list"),
   fuelMezzoDetailsBtn: document.getElementById("fuel-mezzo-details-btn"),
   fuelMezzoDetailsCard: document.getElementById("fuel-mezzo-details-card"),
-  fuelMezzoDetails: document.getElementById("fuel-mezzo-details")
+  fuelMezzoDetails: document.getElementById("fuel-mezzo-details"),
+  segnalazioniPage: document.getElementById("segnalazioni-page"),
+  backFromSegnalazioniBtn: document.getElementById("back-from-segnalazioni-btn"),
+  segnalazioneForm: document.getElementById("segnalazione-form"),
+  segnalazionePreposto: document.getElementById("segnalazione-preposto"),
+  segnalazioneData: document.getElementById("segnalazione-data"),
+  segnalazioneDataFooter: document.getElementById("segnalazione-data-footer"),
+  segnalazioneOra: document.getElementById("segnalazione-ora"),
+  segnalazioneCantiere: document.getElementById("segnalazione-cantiere"),
+  segnalazioneDescrizione: document.getElementById("segnalazione-descrizione"),
+  segnalazionePresaVisione: document.getElementById("segnalazione-presa-visione"),
+  segnalazioneFirmaTec: document.getElementById("segnalazione-firma-tec"),
+  segnalazioneFirmaPreposto: document.getElementById("segnalazione-firma-preposto"),
+  segnalazioneShareWhatsappBtn: document.getElementById("segnalazione-share-whatsapp-btn"),
+  segnalazioneShareEmailBtn: document.getElementById("segnalazione-share-email-btn"),
+  segnalazioneFeedback: document.getElementById("segnalazione-feedback")
 };
 
 let pendingRows = [];
@@ -129,6 +145,8 @@ const commessaSheetSyncTimers = new Map();
 let fuelMapInstance = null;
 let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
+let lastSegnalazionePdfBlob = null;
+let lastSegnalazionePdfName = "";
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -177,6 +195,7 @@ ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commes
 ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
 ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
+ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.weatherCard.addEventListener("click", openWeatherModal);
 ui.weatherCard.addEventListener("keydown", (event) => {
@@ -188,9 +207,15 @@ ui.weatherCard.addEventListener("keydown", (event) => {
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
+ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
+ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
+ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
+ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
+ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 
 addSquadraRow();
 initGeolocation();
+prefillSegnalazioneDateTime();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
@@ -211,6 +236,8 @@ auth.onAuthStateChanged((user) => {
   ui.userName.textContent = loggedIn
     ? `Nome utente: ${user.displayName || "Nome non disponibile"}`
     : "Nome utente: -";
+  prefillSegnalazioneDateTime();
+  syncSegnalazioneFirmaPreposto();
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId;
@@ -328,12 +355,14 @@ function applyRoute() {
   const hash = window.location.hash || "";
   const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)$/);
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
+  const showSegnalazioni = hash === "#segnalazioni";
   const commessaIdFromHash = match ? match[1] : "";
   const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showFuel);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
+  ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
     setTimeout(() => map.invalidateSize(), 50);
@@ -360,6 +389,172 @@ function closeImpiantiPage() {
 function closeFuelPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function openSegnalazioniPage() {
+  prefillSegnalazioneDateTime();
+  syncSegnalazioneFirmaPreposto();
+  window.location.hash = "segnalazioni";
+  applyRoute();
+  closeSideMenu();
+}
+
+function closeSegnalazioniPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function prefillSegnalazioneDateTime() {
+  const now = new Date();
+  const dateValue = now.toLocaleDateString("it-IT");
+  ui.segnalazioneData.value = dateValue;
+  ui.segnalazioneDataFooter.value = dateValue;
+  ui.segnalazioneOra.value = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function syncSegnalazioneFirmaPreposto() {
+  const nameFromInput = (ui.segnalazionePreposto.value || "").trim();
+  const fallback = currentUser?.displayName || currentUser?.email || "";
+  ui.segnalazioneFirmaPreposto.value = nameFromInput || fallback;
+}
+
+function getSegnalazioneData() {
+  const selectedTypes = Array.from(document.querySelectorAll("input[name='segnalazione-tipo']:checked"))
+    .map((input) => input.value);
+  return {
+    preposto: (ui.segnalazionePreposto.value || "").trim(),
+    data: (ui.segnalazioneData.value || "").trim(),
+    ora: (ui.segnalazioneOra.value || "").trim(),
+    cantiere: (ui.segnalazioneCantiere.value || "").trim(),
+    tipi: selectedTypes,
+    descrizione: (ui.segnalazioneDescrizione.value || "").trim(),
+    presaVisioneTec: "",
+    firmaTec: "",
+    firmaPreposto: (ui.segnalazioneFirmaPreposto.value || "").trim()
+  };
+}
+
+function validateSegnalazioneData(data) {
+  const requiredValues = [
+    data.preposto,
+    data.data,
+    data.ora,
+    data.cantiere,
+    data.descrizione,
+    data.firmaPreposto
+  ];
+  if (requiredValues.some((value) => !value)) return "Compila tutti i campi obbligatori.";
+  if (!data.tipi.length) return "Seleziona almeno una voce in 'Segnalazione di'.";
+  return "";
+}
+
+async function generateSegnalazionePdf(event) {
+  event.preventDefault();
+  prefillSegnalazioneDateTime();
+  syncSegnalazioneFirmaPreposto();
+  const data = getSegnalazioneData();
+  const validationError = validateSegnalazioneData(data);
+  if (validationError) {
+    ui.segnalazioneFeedback.textContent = validationError;
+    ui.segnalazioneShareWhatsappBtn.disabled = true;
+    ui.segnalazioneShareEmailBtn.disabled = true;
+    return;
+  }
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    ui.segnalazioneFeedback.textContent = "Generatore PDF non disponibile.";
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  let y = 15;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("SCHEDA SEGNALAZIONE", 105, y, { align: "center" });
+  y += 7;
+  doc.setFontSize(11);
+  doc.text("a cura del PREPOSTO", 105, y, { align: "center" });
+  y += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(`Preposto segnalatore: ${data.preposto}`, 12, y);
+  y += 7;
+  doc.text(`Data: ${data.data}`, 12, y);
+  doc.text(`Ora: ${data.ora}`, 70, y);
+  doc.text(`Cantiere: ${data.cantiere}`, 105, y);
+  y += 9;
+  doc.setFont("helvetica", "bold");
+  doc.text("SEGNALAZIONE DI:", 12, y);
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  data.tipi.forEach((tipo) => {
+    doc.text(`X ${tipo}`, 16, y);
+    y += 6;
+  });
+  y += 2;
+  doc.setFont("helvetica", "bold");
+  doc.text("DESCRIZIONE DELL'ACCADUTO:", 12, y);
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  const wrappedDesc = doc.splitTextToSize(data.descrizione, 180);
+  doc.text(wrappedDesc, 12, y);
+  y += Math.min(120, wrappedDesc.length * 5 + 10);
+  y = Math.max(y, 240);
+
+  doc.line(12, y, 198, y);
+  y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.text(`Data: ${data.data}`, 12, y);
+  doc.text(`Firma PREPOSTO: ${data.firmaPreposto}`, 105, y);
+  y += 10;
+  doc.text("Presa visione TEC: ____________________", 12, y);
+  doc.text("Firma TEC: ____________________", 105, y);
+
+  const safeDate = data.data.replace(/[^\d]/g, "-");
+  lastSegnalazionePdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;
+  lastSegnalazionePdfBlob = doc.output("blob");
+  doc.save(lastSegnalazionePdfName);
+
+  ui.segnalazioneShareWhatsappBtn.disabled = false;
+  ui.segnalazioneShareEmailBtn.disabled = false;
+  ui.segnalazioneFeedback.textContent = "PDF creato. Ora puoi condividerlo con WhatsApp o Email.";
+}
+
+async function shareSegnalazione(channel) {
+  if (!lastSegnalazionePdfBlob) {
+    ui.segnalazioneFeedback.textContent = "Prima genera il PDF.";
+    return;
+  }
+  const file = new File([lastSegnalazionePdfBlob], lastSegnalazionePdfName || "scheda-segnalazione.pdf", {
+    type: "application/pdf"
+  });
+  const shareMessage = "Invio scheda segnalazione in PDF.";
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: "Scheda segnalazione",
+        text: shareMessage,
+        files: [file]
+      });
+      ui.segnalazioneFeedback.textContent = "Condivisione completata.";
+      return;
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        ui.segnalazioneFeedback.textContent = "Condivisione annullata o non disponibile su questo dispositivo.";
+      }
+      return;
+    }
+  }
+
+  if (channel === "whatsapp") {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareMessage} Ho generato il PDF: ${lastSegnalazionePdfName}`)}`, "_blank");
+    ui.segnalazioneFeedback.textContent = "WhatsApp aperto. Allega il PDF scaricato prima di inviare.";
+    return;
+  }
+
+  window.location.href = `mailto:?subject=${encodeURIComponent("Scheda segnalazione PDF")}&body=${encodeURIComponent(`Buongiorno,\n\nin allegato la scheda segnalazione (${lastSegnalazionePdfName}).`)}`;
+  ui.segnalazioneFeedback.textContent = "Email aperta. Allega il PDF scaricato prima di inviare.";
 }
 
 function loadPendingSheetExports() {

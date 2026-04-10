@@ -18,6 +18,7 @@
       <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
+      <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
     </div>
   </aside>
 
@@ -232,10 +233,74 @@
     </section>
   </section>
 
+  <section id="segnalazioni-page" class="hidden">
+    <section class="card">
+      <div class="page-head">
+        <button id="back-from-segnalazioni-btn" class="btn" type="button">← Torna</button>
+        <h2>Scheda segnalazione</h2>
+      </div>
+      <p class="muted">Compila tutti i campi richiesti. Data, ora e firma preposto vengono inseriti automaticamente.</p>
+    </section>
+
+    <section class="card">
+      <form id="segnalazione-form" class="segnalazione-form">
+        <label>Preposto segnalatore
+          <input id="segnalazione-preposto" type="text" required placeholder="Nome preposto">
+        </label>
+        <div class="segnalazione-grid-3">
+          <label>Data
+            <input id="segnalazione-data" type="text" readonly>
+          </label>
+          <label>Ora
+            <input id="segnalazione-ora" type="text" readonly>
+          </label>
+          <label>Cantiere
+            <input id="segnalazione-cantiere" type="text" required placeholder="Nome cantiere">
+          </label>
+        </div>
+
+        <fieldset class="segnalazione-fieldset">
+          <legend>Segnalazione di</legend>
+          <div class="segnalazione-checkboxes">
+            <label><input type="checkbox" name="segnalazione-tipo" value="Comportamento pericoloso"> Comportamento pericoloso</label>
+            <label><input type="checkbox" name="segnalazione-tipo" value="Quasi infortunio"> Quasi infortunio</label>
+            <label><input type="checkbox" name="segnalazione-tipo" value="Situazione pericolosa"> Situazione pericolosa</label>
+            <label><input type="checkbox" name="segnalazione-tipo" value="Infortunio"> Infortunio</label>
+          </div>
+        </fieldset>
+
+        <label>Descrizione dell'accaduto
+          <textarea id="segnalazione-descrizione" rows="8" required placeholder="Descrivi cosa è successo"></textarea>
+        </label>
+
+        <div class="segnalazione-grid-2">
+          <label>Presa visione TEC
+            <input id="segnalazione-presa-visione" type="text" required placeholder="Nome TEC">
+          </label>
+          <label>Firma TEC
+            <input id="segnalazione-firma-tec" type="text" required placeholder="Nome e cognome TEC">
+          </label>
+        </div>
+
+        <label>Firma PREPOSTO (automatica)
+          <input id="segnalazione-firma-preposto" type="text" readonly>
+        </label>
+
+        <div class="item-actions">
+          <button id="segnalazione-genera-pdf-btn" class="btn btn-primary" type="submit">Genera PDF</button>
+          <button id="segnalazione-share-whatsapp-btn" class="btn btn-whatsapp" type="button" disabled>Invia con WhatsApp</button>
+          <button id="segnalazione-share-email-btn" class="btn" type="button" disabled>Invia con Email</button>
+        </div>
+        <p id="segnalazione-feedback" class="muted"></p>
+      </form>
+    </section>
+  </section>
+
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>

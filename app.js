@@ -464,52 +464,39 @@ async function generateSegnalazionePdf(event) {
     ui.segnalazioneFeedback.textContent = "Generatore PDF non disponibile.";
     return;
   }
+  if (!window.html2canvas) {
+    ui.segnalazioneFeedback.textContent = "Motore di acquisizione modulo non disponibile.";
+    return;
+  }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  let y = 15;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("SCHEDA SEGNALAZIONE", 105, y, { align: "center" });
-  y += 7;
-  doc.setFontSize(11);
-  doc.text("a cura del PREPOSTO", 105, y, { align: "center" });
-  y += 10;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Preposto segnalatore: ${data.preposto}`, 12, y);
-  y += 7;
-  doc.text(`Data: ${data.data}`, 12, y);
-  doc.text(`Ora: ${data.ora}`, 70, y);
-  doc.text(`Cantiere: ${data.cantiere}`, 105, y);
-  y += 9;
-  doc.setFont("helvetica", "bold");
-  doc.text("SEGNALAZIONE DI:", 12, y);
-  y += 6;
-  doc.setFont("helvetica", "normal");
-  data.tipi.forEach((tipo) => {
-    doc.text(`X ${tipo}`, 16, y);
-    y += 6;
+  const sheetNode = document.querySelector(".segnalazione-sheet");
+  if (!sheetNode) {
+    ui.segnalazioneFeedback.textContent = "Modulo segnalazione non trovato.";
+    return;
+  }
+  const canvas = await window.html2canvas(sheetNode, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff"
   });
-  y += 2;
-  doc.setFont("helvetica", "bold");
-  doc.text("DESCRIZIONE DELL'ACCADUTO:", 12, y);
-  y += 6;
-  doc.setFont("helvetica", "normal");
-  const wrappedDesc = doc.splitTextToSize(data.descrizione, 180);
-  doc.text(wrappedDesc, 12, y);
-  y += Math.min(120, wrappedDesc.length * 5 + 10);
-  y = Math.max(y, 240);
-
-  doc.line(12, y, 198, y);
-  y += 8;
-  doc.setFont("helvetica", "bold");
-  doc.text(`Data: ${data.data}`, 12, y);
-  doc.text(`Firma PREPOSTO: ${data.firmaPreposto}`, 105, y);
-  y += 10;
-  doc.text("Presa visione TEC: ____________________", 12, y);
-  doc.text("Firma TEC: ____________________", 105, y);
+  const imageData = canvas.toDataURL("image/png");
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 5;
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+  const imageRatio = canvas.width / canvas.height;
+  let renderWidth = maxWidth;
+  let renderHeight = renderWidth / imageRatio;
+  if (renderHeight > maxHeight) {
+    renderHeight = maxHeight;
+    renderWidth = renderHeight * imageRatio;
+  }
+  const x = (pageWidth - renderWidth) / 2;
+  const y = (pageHeight - renderHeight) / 2;
+  doc.addImage(imageData, "PNG", x, y, renderWidth, renderHeight, undefined, "FAST");
 
   const safeDate = data.data.replace(/[^\d]/g, "-");
   lastSegnalazionePdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;

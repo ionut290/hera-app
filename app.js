@@ -732,11 +732,20 @@ async function createCommessa(event) {
     return;
   }
 
-  await db.collection("commesse").add({
+  const commessaRef = await db.collection("commesse").add({
     nome,
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+
+  if (driveAccessToken) {
+    try {
+      if (!driveReportsFolderId) await ensureDriveFolders();
+      await getOrCreateCommessaSpreadsheet(commessaRef.id, nome);
+    } catch (error) {
+      console.error("Commessa creata ma foglio Google non inizializzato subito:", error);
+    }
+  }
 
   ui.commessaForm.reset();
 }
@@ -3207,6 +3216,24 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
+  const commessaData = commesseById.get(commessaId) || {};
+  const configuredSheetId = String(commessaData.sheetSpreadsheetId || "").trim();
+  if (configuredSheetId) {
+    try {
+      const existingSheet = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?fields=id,name,mimeType`, { method: "GET" });
+      if (existingSheet && existingSheet.id) {
+        commessaSheetCache.set(commessaId, configuredSheetId);
+        return { id: configuredSheetId };
+      }
+    } catch (error) {
+      console.warn("Foglio configurato non più disponibile, provo ricreazione automatica:", error);
+      await db.collection("commesse").doc(commessaId).set({
+        sheetSpreadsheetId: firebase.firestore.FieldValue.delete(),
+        sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+  }
+
   const safeName = commessaName.replaceAll("'", "\\'");
   const query = [
     "mimeType='application/vnd.google-apps.spreadsheet'",
@@ -3221,6 +3248,10 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
     const existing = searchResponse.files[0];
     commessaSheetCache.set(commessaId, existing.id);
+    await db.collection("commesse").doc(commessaId).set({
+      sheetSpreadsheetId: existing.id,
+      sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     return { id: existing.id };
   }
 
@@ -3243,6 +3274,10 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   });
 
   commessaSheetCache.set(commessaId, created.id);
+  await db.collection("commesse").doc(commessaId).set({
+    sheetSpreadsheetId: created.id,
+    sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
   return { id: created.id };
 }
 

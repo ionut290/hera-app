@@ -77,6 +77,8 @@ const ui = {
   personaleOptions: document.getElementById("personale-options"),
   mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
+  userToggleBtn: document.getElementById("user-toggle-btn"),
+  userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
@@ -205,13 +207,7 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
-ui.weatherCard.addEventListener("click", openWeatherModal);
-ui.weatherCard.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    openWeatherModal();
-  }
-});
+ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
@@ -228,6 +224,12 @@ applyRoute();
 window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
+
+function toggleUserDetailsPanel() {
+  const isHidden = ui.userDetailsPanel.classList.contains("hidden");
+  ui.userDetailsPanel.classList.toggle("hidden", !isHidden);
+  ui.userToggleBtn.setAttribute("aria-expanded", String(isHidden));
+}
 
 auth.onAuthStateChanged((user) => {
   currentUser = user || null;

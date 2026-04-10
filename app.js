@@ -788,7 +788,7 @@ function updateCommessaButtonsActive() {
 
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
-  let previousDoneKeys = null;
+  let previousDoneDocIds = null;
 
   unsubscribeImpianti = db
     .collection("commesse")
@@ -800,20 +800,20 @@ function subscribeImpianti() {
       renderImpianti();
       renderMap();
 
-      const currentDoneKeys = new Set(
-        currentImpianti
+      const currentDoneDocIds = new Set(
+        rawImpianti
           .filter((impianto) => Boolean(impianto.done))
-          .map((impianto) => buildImpiantoKey(impianto))
+          .map((impianto) => impianto.id)
       );
 
-      const hasNewDoneImpianto = previousDoneKeys !== null
-        && Array.from(currentDoneKeys).some((key) => !previousDoneKeys.has(key));
+      const hasNewDoneImpianto = previousDoneDocIds !== null
+        && Array.from(currentDoneDocIds).some((docId) => !previousDoneDocIds.has(docId));
 
       if (hasNewDoneImpianto) {
         scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
       }
 
-      previousDoneKeys = currentDoneKeys;
+      previousDoneDocIds = currentDoneDocIds;
     }, (error) => {
       console.error(error);
       ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";

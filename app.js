@@ -2230,12 +2230,13 @@ function openWhatsApp(impianto) {
   const message = [
     `${title} - Report operativo`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
+    `📍 Comune: ${impianto.comune || "-"}`,
+    `🛣️ Via: ${impianto.indirizzo || "-"}`,
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
     `📅 Data: ${now.toLocaleDateString("it-IT")}`,
-    `🕒 Ora: ${time}`,
-    "ℹ️ _Messaggio generato automaticamente dall'app Varga cantieri._"
+    `🕒 Ora: ${time}`
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;

@@ -188,8 +188,29 @@ h2 { font-size: 1.05rem; }
   text-align: center;
 }
 
+.header-icon-btn,
 .logo-head .menu-toggle-btn {
   position: absolute;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.header-icon-btn {
+  left: 0;
+}
+
+.logo-head .menu-toggle-btn {
   right: 0;
 }
 
@@ -273,12 +294,8 @@ h2 { font-size: 1.05rem; }
   margin-top: 12px;
 }
 
-.user-toggle-btn {
-  width: 100%;
-}
-
 .user-details-panel {
-  margin-top: 12px;
+  margin-top: 0;
   display: grid;
   gap: 10px;
 }

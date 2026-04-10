@@ -340,6 +340,7 @@ auth.onAuthStateChanged((user) => {
     if (storedToken) {
       driveAccessToken = storedToken;
       window.googleDriveAccessToken = storedToken;
+      autoConnectDriveBridge({ notifyOnError: false });
     }
   }
   renderChat([]);
@@ -729,7 +730,8 @@ function loginWithGoogle() {
     // Gli scope extra (es. Drive) arrivano nel credential del login, non nel profilo utente Firebase.
     const accessToken = extractGoogleAccessToken(result);
     if (accessToken) {
-      driveAccessToken = accessToken;
+      persistDriveAccessToken(accessToken);
+      autoConnectDriveBridge({ notifyOnError: false });
     }
   }).catch((error) => {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
@@ -737,6 +739,38 @@ function loginWithGoogle() {
     }
     alert("Errore login: " + error.message);
   });
+}
+
+function persistDriveAccessToken(accessToken) {
+  if (!accessToken) return;
+  driveAccessToken = accessToken;
+  window.googleDriveAccessToken = accessToken;
+  localStorage.setItem("googleDriveAccessToken", accessToken);
+  localStorage.setItem("googleDriveConnected", "true");
+}
+
+async function autoConnectDriveBridge(options = {}) {
+  if (!canManageData() || !driveAccessToken) return;
+  const { notifyOnError = false } = options;
+  try {
+    await ensureDriveFolders();
+    const driveUser = auth.currentUser || currentUser;
+    await db.collection("appConfig").doc("driveBridge").set({
+      ownerEmail: (driveUser && driveUser.email) ? driveUser.email : ADMIN_EMAIL,
+      accessToken: driveAccessToken,
+      rootFolderId: driveRootFolderId,
+      chatFolderId: driveChatFolderId,
+      reportsFolderId: driveReportsFolderId,
+      squadreFolderId: driveSquadreFolderId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    updateDriveStatus(true);
+  } catch (error) {
+    console.error("Connessione automatica Drive non riuscita:", error);
+    if (notifyOnError) {
+      throw error;
+    }
+  }
 }
 
 function logout() {
@@ -3184,22 +3218,8 @@ async function connectGoogleDrive() {
       throw new Error("Access token Google Drive non ottenuto");
     }
 
-    window.googleDriveAccessToken = accessToken;
-    driveAccessToken = accessToken;
-    localStorage.setItem("googleDriveAccessToken", accessToken);
-    localStorage.setItem("googleDriveConnected", "true");
-    const driveUser = result.user || auth.currentUser || currentUser;
-    await ensureDriveFolders();
-    await db.collection("appConfig").doc("driveBridge").set({
-      ownerEmail: (driveUser && driveUser.email) ? driveUser.email : ADMIN_EMAIL,
-      accessToken: driveAccessToken,
-      rootFolderId: driveRootFolderId,
-      chatFolderId: driveChatFolderId,
-      reportsFolderId: driveReportsFolderId,
-      squadreFolderId: driveSquadreFolderId,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    updateDriveStatus(true);
+    persistDriveAccessToken(accessToken);
+    await autoConnectDriveBridge({ notifyOnError: true });
     if (selectedCommessaId) {
       scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 200);
     }
@@ -3532,6 +3552,9 @@ async function driveApiFetch(url, options = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
+    localStorage.removeItem("googleDriveAccessToken");
+    localStorage.setItem("googleDriveConnected", "false");
+    updateDriveStatus(false);
     throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
   }
 

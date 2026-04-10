@@ -18,6 +18,7 @@
       <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
+      <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
     </div>
   </aside>
@@ -150,6 +151,8 @@
         <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
         <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
       </form>
+      <h3>Gestisci commesse (admin)</h3>
+      <div id="commesse-manage-list" class="simple-list"></div>
       <h3>Seleziona commessa per aggiunta impianti</h3>
       <div class="inline-form">
         <select id="commessa-target-select">
@@ -212,6 +215,14 @@
         <button id="mezzi-import-btn" class="btn" type="button">Importa Excel mezzi</button>
       </div>
       <div id="mezzi-lista" class="simple-list"></div>
+    </div>
+    <div id="panel-utenti" class="management-panel hidden">
+      <h3>Admin autorizzati</h3>
+      <form id="admin-user-form" class="inline-form">
+        <input type="email" id="admin-user-email" placeholder="Email utente da promuovere admin">
+        <button class="btn btn-primary" type="submit">Aggiungi admin</button>
+      </form>
+      <div id="admin-users-list" class="simple-list"></div>
     </div>
   </section>
 
@@ -326,6 +337,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260410-3"></script>
 </body>
 </html>

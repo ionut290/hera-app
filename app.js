@@ -788,6 +788,7 @@ function updateCommessaButtonsActive() {
 
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
+  let previousDoneKeys = null;
 
   unsubscribeImpianti = db
     .collection("commesse")
@@ -798,7 +799,21 @@ function subscribeImpianti() {
       currentImpianti = combineImpiantiForView(rawImpianti);
       renderImpianti();
       renderMap();
-      scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
+
+      const currentDoneKeys = new Set(
+        currentImpianti
+          .filter((impianto) => Boolean(impianto.done))
+          .map((impianto) => buildImpiantoKey(impianto))
+      );
+
+      const hasNewDoneImpianto = previousDoneKeys !== null
+        && Array.from(currentDoneKeys).some((key) => !previousDoneKeys.has(key));
+
+      if (hasNewDoneImpianto) {
+        scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 1200);
+      }
+
+      previousDoneKeys = currentDoneKeys;
     }, (error) => {
       console.error(error);
       ui.impiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti.</p>";

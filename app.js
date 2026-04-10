@@ -94,6 +94,7 @@ const ui = {
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
+  segnalazioneDataFooter: document.getElementById("segnalazione-data-footer"),
   segnalazioneOra: document.getElementById("segnalazione-ora"),
   segnalazioneCantiere: document.getElementById("segnalazione-cantiere"),
   segnalazioneDescrizione: document.getElementById("segnalazione-descrizione"),
@@ -405,7 +406,9 @@ function closeSegnalazioniPage() {
 
 function prefillSegnalazioneDateTime() {
   const now = new Date();
-  ui.segnalazioneData.value = now.toLocaleDateString("it-IT");
+  const dateValue = now.toLocaleDateString("it-IT");
+  ui.segnalazioneData.value = dateValue;
+  ui.segnalazioneDataFooter.value = dateValue;
   ui.segnalazioneOra.value = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
@@ -425,8 +428,8 @@ function getSegnalazioneData() {
     cantiere: (ui.segnalazioneCantiere.value || "").trim(),
     tipi: selectedTypes,
     descrizione: (ui.segnalazioneDescrizione.value || "").trim(),
-    presaVisioneTec: (ui.segnalazionePresaVisione.value || "").trim(),
-    firmaTec: (ui.segnalazioneFirmaTec.value || "").trim(),
+    presaVisioneTec: "",
+    firmaTec: "",
     firmaPreposto: (ui.segnalazioneFirmaPreposto.value || "").trim()
   };
 }
@@ -438,8 +441,6 @@ function validateSegnalazioneData(data) {
     data.ora,
     data.cantiere,
     data.descrizione,
-    data.presaVisioneTec,
-    data.firmaTec,
     data.firmaPreposto
   ];
   if (requiredValues.some((value) => !value)) return "Compila tutti i campi obbligatori.";
@@ -507,8 +508,8 @@ async function generateSegnalazionePdf(event) {
   doc.text(`Data: ${data.data}`, 12, y);
   doc.text(`Firma PREPOSTO: ${data.firmaPreposto}`, 105, y);
   y += 10;
-  doc.text(`Presa visione TEC: ${data.presaVisioneTec}`, 12, y);
-  doc.text(`Firma TEC: ${data.firmaTec}`, 105, y);
+  doc.text("Presa visione TEC: ____________________", 12, y);
+  doc.text("Firma TEC: ____________________", 105, y);
 
   const safeDate = data.data.replace(/[^\d]/g, "-");
   lastSegnalazionePdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;

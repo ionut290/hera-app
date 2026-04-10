@@ -239,52 +239,60 @@
         <button id="back-from-segnalazioni-btn" class="btn" type="button">← Torna</button>
         <h2>Scheda segnalazione</h2>
       </div>
-      <p class="muted">Compila tutti i campi richiesti. Data, ora e firma preposto vengono inseriti automaticamente.</p>
     </section>
 
-    <section class="card">
-      <form id="segnalazione-form" class="segnalazione-form">
-        <label>Preposto segnalatore
-          <input id="segnalazione-preposto" type="text" required placeholder="Nome preposto">
-        </label>
-        <div class="segnalazione-grid-3">
-          <label>Data
-            <input id="segnalazione-data" type="text" readonly>
-          </label>
-          <label>Ora
-            <input id="segnalazione-ora" type="text" readonly>
-          </label>
-          <label>Cantiere
-            <input id="segnalazione-cantiere" type="text" required placeholder="Nome cantiere">
-          </label>
-        </div>
-
-        <fieldset class="segnalazione-fieldset">
-          <legend>Segnalazione di</legend>
-          <div class="segnalazione-checkboxes">
-            <label><input type="checkbox" name="segnalazione-tipo" value="Comportamento pericoloso"> Comportamento pericoloso</label>
-            <label><input type="checkbox" name="segnalazione-tipo" value="Quasi infortunio"> Quasi infortunio</label>
-            <label><input type="checkbox" name="segnalazione-tipo" value="Situazione pericolosa"> Situazione pericolosa</label>
-            <label><input type="checkbox" name="segnalazione-tipo" value="Infortunio"> Infortunio</label>
+    <section class="card segnalazione-card">
+      <form id="segnalazione-form" class="segnalazione-form-classic">
+        <div class="segnalazione-sheet">
+          <div class="seg-header">
+            <div class="seg-logo">avola<br>coop</div>
+            <div class="seg-title">SCHEDA SEGNALAZIONE<br><span>a cura del PREPOSTO</span></div>
+            <div class="seg-rev">SSP<br><small>Data Rev. 20/03/2025<br>Rev. 04</small></div>
           </div>
-        </fieldset>
 
-        <label>Descrizione dell'accaduto
-          <textarea id="segnalazione-descrizione" rows="8" required placeholder="Descrivi cosa è successo"></textarea>
-        </label>
+          <div class="seg-row">
+            <label class="seg-label">Preposto segnalatore:</label>
+            <input id="segnalazione-preposto" class="seg-input" type="text" required>
+          </div>
 
-        <div class="segnalazione-grid-2">
-          <label>Presa visione TEC
-            <input id="segnalazione-presa-visione" type="text" required placeholder="Nome TEC">
-          </label>
-          <label>Firma TEC
-            <input id="segnalazione-firma-tec" type="text" required placeholder="Nome e cognome TEC">
-          </label>
+          <div class="seg-row seg-row-3">
+            <label class="seg-label">Data:</label>
+            <input id="segnalazione-data" class="seg-input" type="text" readonly>
+            <label class="seg-label">Ora:</label>
+            <input id="segnalazione-ora" class="seg-input" type="text" readonly>
+            <label class="seg-label">Cantiere:</label>
+            <input id="segnalazione-cantiere" class="seg-input" type="text" required>
+          </div>
+
+          <fieldset class="seg-box">
+            <legend>SEGNALAZIONE DI:</legend>
+            <div class="seg-options">
+              <label><input type="checkbox" name="segnalazione-tipo" value="Comportamento pericoloso"> COMPORTAMENTO PERICOLOSO</label>
+              <label><input type="checkbox" name="segnalazione-tipo" value="Situazione pericolosa"> SITUAZIONE PERICOLOSA</label>
+              <label><input type="checkbox" name="segnalazione-tipo" value="Quasi infortunio"> QUASI INFORTUNIO</label>
+              <label><input type="checkbox" name="segnalazione-tipo" value="Infortunio"> INFORTUNIO</label>
+            </div>
+          </fieldset>
+
+          <div class="seg-desc">
+            <label>DESCRIZIONE DELL’ACCADUTO <span>(cosa è successo)</span>:</label>
+            <textarea id="segnalazione-descrizione" class="seg-textarea" required></textarea>
+          </div>
+
+          <div class="seg-footer-row">
+            <label>Data</label>
+            <input id="segnalazione-data-footer" class="seg-input" type="text" readonly>
+            <label>Firma PREPOSTO</label>
+            <input id="segnalazione-firma-preposto" class="seg-input" type="text" readonly>
+          </div>
+
+          <div class="seg-footer-row">
+            <label>Presa visione TEC</label>
+            <input id="segnalazione-presa-visione" class="seg-input" type="text" disabled>
+            <label>Firma TEC</label>
+            <input id="segnalazione-firma-tec" class="seg-input" type="text" disabled>
+          </div>
         </div>
-
-        <label>Firma PREPOSTO (automatica)
-          <input id="segnalazione-firma-preposto" type="text" readonly>
-        </label>
 
         <div class="item-actions">
           <button id="segnalazione-genera-pdf-btn" class="btn btn-primary" type="submit">Genera PDF</button>

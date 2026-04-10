@@ -315,52 +315,166 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 
-.segnalazione-form {
+.segnalazione-card {
+  background: #fff;
+}
+
+.segnalazione-form-classic {
   display: grid;
   gap: 12px;
 }
 
-.segnalazione-form label {
+.segnalazione-sheet {
+  border: 2px solid #222;
+  background: #fff;
+  color: #111;
+  font-family: Arial, sans-serif;
+}
+
+.seg-header {
   display: grid;
-  gap: 6px;
-  font-weight: 600;
+  grid-template-columns: 1.1fr 2.8fr 1fr;
+  border-bottom: 2px solid #222;
 }
 
-.segnalazione-grid-3 {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.segnalazione-grid-2 {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.segnalazione-fieldset {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-
-.segnalazione-checkboxes {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.segnalazione-checkboxes label {
+.seg-logo,
+.seg-title,
+.seg-rev {
+  min-height: 88px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
+  justify-content: center;
+  border-right: 2px solid #222;
+  text-align: center;
+  font-weight: 700;
+}
+.seg-rev { border-right: 0; }
+.seg-logo { font-size: 2rem; line-height: 0.9; font-family: serif; font-style: italic; }
+.seg-title { font-size: 2.8rem; line-height: 1.1; }
+.seg-title span { font-size: 1.9rem; font-weight: 600; }
+.seg-rev { font-size: 1.9rem; line-height: 1.2; }
+.seg-rev small { font-size: 1.2rem; font-weight: 600; }
+
+.seg-row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  border-bottom: 2px solid #222;
 }
 
-.segnalazione-checkboxes input {
-  width: 18px;
-  height: 18px;
-  min-width: auto;
+.seg-row-3 {
+  grid-template-columns: 120px 1fr 80px 1fr 130px 2fr;
+}
+
+.seg-label {
+  border-right: 2px solid #222;
+  padding: 10px;
+  font-size: 2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+}
+
+.seg-row-3 .seg-label:nth-of-type(2),
+.seg-row-3 .seg-label:nth-of-type(3) {
+  border-left: 2px solid #222;
+}
+
+.seg-input,
+.seg-textarea {
+  border: 0;
+  border-radius: 0;
+  padding: 10px;
+  font-size: 1.8rem;
+  min-width: 0;
+}
+
+.seg-input:disabled {
+  background: #fff;
+  color: #111;
+}
+
+.seg-box {
+  border: 0;
+  border-bottom: 2px solid #222;
+  margin: 0;
+  padding: 12px 10px 14px;
+}
+
+.seg-box legend {
+  font-size: 2rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.seg-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 40px;
+  margin-top: 8px;
+}
+
+.seg-options label {
+  font-size: 2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seg-options input {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+}
+
+.seg-desc {
+  border-bottom: 2px solid #222;
+  min-height: 740px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.seg-desc label {
+  padding: 10px;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.seg-desc label span {
+  font-weight: 400;
+  font-style: italic;
+}
+
+.seg-textarea {
+  resize: none;
+  padding: 0 10px 10px;
+}
+
+.seg-footer-row {
+  display: grid;
+  grid-template-columns: 250px 1fr 240px 1fr;
+  border-bottom: 2px solid #222;
+}
+
+.seg-footer-row:last-of-type {
+  border-bottom: 0;
+}
+
+.seg-footer-row label {
+  padding: 8px 10px;
+  font-size: 2rem;
+  font-weight: 700;
+  border-right: 2px solid #222;
+  display: flex;
+  align-items: center;
+}
+
+.seg-footer-row input {
+  border-right: 2px solid #222;
+}
+
+.seg-footer-row input:last-child {
+  border-right: 0;
 }
 
 .commesse-lista,
@@ -748,9 +862,7 @@ textarea:focus-visible {
   .home-top-grid {
     grid-template-columns: 1fr;
   }
-  .segnalazione-grid-3,
-  .segnalazione-grid-2,
-  .segnalazione-checkboxes {
-    grid-template-columns: 1fr;
+  .segnalazione-sheet {
+    zoom: 0.28;
   }
 }

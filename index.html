@@ -34,7 +34,16 @@
       </header>
 
       <section class="home-top-grid">
-        <section class="card weather-card" id="weather-card">
+        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+          <div class="section-head">
+            <h2>🌦️ Meteo operativo</h2>
+            <span class="pill">Pioggia/Neve/Nebbia</span>
+          </div>
+          <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
+          <div id="weather-risks" class="weather-risks"></div>
+        </section>
+
+        <section class="card user-card" id="user-card">
           <button id="user-toggle-btn" class="btn btn-primary user-toggle-btn" type="button" aria-expanded="false" aria-controls="user-details-panel">Utente</button>
           <div id="user-details-panel" class="user-details-panel hidden">
             <div class="actions-row weather-user-actions">
@@ -47,7 +56,6 @@
               <p id="user-name" class="muted status-chip">Nome utente: -</p>
               <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
             </div>
-            <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
           </div>
         </section>
       </section>
@@ -148,6 +156,15 @@
         <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
       </div>
       <p id="import-feedback" class="muted"></p>
+      <h3>Aggiungi impianto manualmente (senza cancellare i precedenti)</h3>
+      <form id="manual-impianto-form" class="inline-form">
+        <input type="text" id="manual-impianto-denominazione" placeholder="Denominazione impianto" required>
+        <input type="text" id="manual-impianto-comune" placeholder="Comune">
+        <input type="text" id="manual-impianto-indirizzo" placeholder="Indirizzo">
+        <input type="text" id="manual-impianto-codice" placeholder="Codice prezzo">
+        <button id="manual-impianto-submit" class="btn btn-primary" type="submit">Aggiungi impianto</button>
+      </form>
+      <p id="manual-impianto-feedback" class="muted"></p>
     </div>
     <div id="panel-squadre" class="management-panel hidden">
       <form id="squadra-form" class="squadra-form">

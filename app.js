@@ -77,6 +77,8 @@ const ui = {
   personaleOptions: document.getElementById("personale-options"),
   mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
+  weatherRisks: document.getElementById("weather-risks"),
+  userCard: document.getElementById("user-card"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
   userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
@@ -105,7 +107,14 @@ const ui = {
   segnalazioneFirmaPreposto: document.getElementById("segnalazione-firma-preposto"),
   segnalazioneShareWhatsappBtn: document.getElementById("segnalazione-share-whatsapp-btn"),
   segnalazioneShareEmailBtn: document.getElementById("segnalazione-share-email-btn"),
-  segnalazioneFeedback: document.getElementById("segnalazione-feedback")
+  segnalazioneFeedback: document.getElementById("segnalazione-feedback"),
+  manualImpiantoForm: document.getElementById("manual-impianto-form"),
+  manualImpiantoDenominazione: document.getElementById("manual-impianto-denominazione"),
+  manualImpiantoComune: document.getElementById("manual-impianto-comune"),
+  manualImpiantoIndirizzo: document.getElementById("manual-impianto-indirizzo"),
+  manualImpiantoCodice: document.getElementById("manual-impianto-codice"),
+  manualImpiantoSubmit: document.getElementById("manual-impianto-submit"),
+  manualImpiantoFeedback: document.getElementById("manual-impianto-feedback")
 };
 
 let pendingRows = [];
@@ -216,6 +225,7 @@ ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
 ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
+ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 
 addSquadraRow();
 initGeolocation();
@@ -229,6 +239,41 @@ function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
   ui.userDetailsPanel.classList.toggle("hidden", !isHidden);
   ui.userToggleBtn.setAttribute("aria-expanded", String(isHidden));
+}
+
+function weatherCodeLabel(weatherCode) {
+  const code = Number(weatherCode);
+  const weatherMap = {
+    0: "☀️ Sereno",
+    1: "⛅ Poco nuvoloso",
+    2: "☁️ Parzialmente nuvoloso",
+    3: "☁️ Coperto",
+    45: "🌫️ Nebbia",
+    48: "🌫️ Nebbia con brina",
+    51: "🌦️ Pioviggine",
+    53: "🌦️ Pioviggine moderata",
+    55: "🌧️ Pioviggine intensa",
+    56: "🌨️ Pioviggine gelata",
+    57: "🌨️ Pioggia gelata",
+    61: "🌧️ Pioggia debole",
+    63: "🌧️ Pioggia moderata",
+    65: "⛈️ Pioggia forte",
+    66: "🧊 Pioggia gelata debole",
+    67: "🧊 Pioggia gelata forte",
+    71: "🌨️ Neve debole",
+    73: "🌨️ Neve moderata",
+    75: "❄️ Neve intensa",
+    77: "🌨️ Nevischio",
+    80: "🌧️ Rovesci deboli",
+    81: "🌧️ Rovesci moderati",
+    82: "⛈️ Rovesci forti",
+    85: "🌨️ Rovesci di neve",
+    86: "❄️ Rovesci di neve forti",
+    95: "⛈️ Temporale",
+    96: "⛈️ Temporale con grandine",
+    99: "⛈️ Temporale forte con grandine"
+  };
+  return weatherMap[code] || "ℹ️ Condizioni variabili";
 }
 
 auth.onAuthStateChanged((user) => {
@@ -312,6 +357,11 @@ function updateAdminControls() {
   ui.personaleImportBtn.disabled = !canManage;
   ui.mezziImportBtn.disabled = !canManage;
   ui.importBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId || pendingRows.length === 0;
+  ui.manualImpiantoDenominazione.disabled = !canManage;
+  ui.manualImpiantoComune.disabled = !canManage;
+  ui.manualImpiantoIndirizzo.disabled = !canManage;
+  ui.manualImpiantoCodice.disabled = !canManage;
+  ui.manualImpiantoSubmit.disabled = !canManage;
   ui.squadraCommessa.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
@@ -924,6 +974,54 @@ async function importPendingRows() {
   ui.excelFile.value = "";
   ui.importBtn.disabled = true;
   ui.importFeedback.textContent = "Import completato.";
+}
+
+async function addManualImpianto(event) {
+  event.preventDefault();
+  if (!auth.currentUser || !selectedCommessaId) {
+    ui.manualImpiantoFeedback.textContent = "Seleziona prima una commessa.";
+    return;
+  }
+  if (!canManageData()) {
+    ui.manualImpiantoFeedback.textContent = "Solo l'admin può aggiungere impianti.";
+    return;
+  }
+
+  const denominazione = String(ui.manualImpiantoDenominazione.value || "").trim();
+  if (!denominazione) {
+    ui.manualImpiantoFeedback.textContent = "Inserisci almeno la denominazione impianto.";
+    return;
+  }
+
+  const row = {
+    distretto: "",
+    idSap: "",
+    denominazione,
+    comune: String(ui.manualImpiantoComune.value || "").trim(),
+    indirizzo: String(ui.manualImpiantoIndirizzo.value || "").trim(),
+    voceRiferimento: "",
+    codicePrezzo: String(ui.manualImpiantoCodice.value || "").trim(),
+    sfalci: "",
+    frequenzaAnnua: "",
+    tipologiaIntervento: "",
+    lavorazioniRichieste: "",
+    gpsY: null,
+    gpsX: null
+  };
+
+  await db.collection("commesse").doc(selectedCommessaId).collection("impianti").add({
+    ...row,
+    hasOrdinario: hasOrdinario(row.codicePrezzo),
+    hasStraordinario: hasStraordinario(row.codicePrezzo),
+    tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
+    done: false,
+    doneAt: null,
+    doneBy: "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  ui.manualImpiantoForm.reset();
+  ui.manualImpiantoFeedback.textContent = "Impianto aggiunto: i precedenti sono stati mantenuti.";
 }
 
 function normalizeRow(row) {
@@ -2312,15 +2410,17 @@ async function fetchWeather() {
   try {
     const lat = currentUserPos ? currentUserPos.lat : 44.4949;
     const lon = currentUserPos ? currentUserPos.lng : 11.3426;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=2`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability,snowfall,visibility,weather_code&forecast_days=2`;
     const response = await fetch(url);
     if (!response.ok) throw new Error("meteo non disponibile");
     const data = await response.json();
     const current = data.current || {};
-    ui.weatherSummary.textContent = `${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
+    const weatherLabel = weatherCodeLabel(current.weather_code);
+    ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     renderWeatherDetails(data);
   } catch (error) {
     ui.weatherSummary.textContent = "Meteo non disponibile.";
+    ui.weatherRisks.innerHTML = "<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>";
     ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
   }
 }
@@ -2329,9 +2429,27 @@ function renderWeatherDetails(data) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
   const rains = (data.hourly && data.hourly.precipitation_probability) || [];
+  const snows = (data.hourly && data.hourly.snowfall) || [];
+  const visibilities = (data.hourly && data.hourly.visibility) || [];
+  const codes = (data.hourly && data.hourly.weather_code) || [];
+  const maxRain = Math.max(...rains.slice(0, 12).map((value) => Number(value) || 0), 0);
+  const snowSum = snows.slice(0, 12).reduce((acc, value) => acc + (Number(value) || 0), 0);
+  const minVisibility = Math.min(...visibilities.slice(0, 12).map((value) => Number(value) || Number.MAX_SAFE_INTEGER));
+  const hasFogCode = codes.slice(0, 12).some((value) => Number(value) === 45 || Number(value) === 48);
+  const riskIce = temps.slice(0, 12).some((value, idx) => Number(value) <= 1 && Number(rains[idx] || 0) >= 40);
+
+  const risks = [];
+  risks.push(maxRain >= 60 ? "🌧️ Rischio pioggia alta" : "🌧️ Rischio pioggia bassa");
+  if (snowSum > 0) risks.push("❄️ Possibile neve");
+  if (hasFogCode || minVisibility < 1200) risks.push("🌫️ Possibile nebbia");
+  if (riskIce) risks.push("🧊 Possibile ghiaccio");
+  ui.weatherRisks.innerHTML = risks.map((risk) => `<span class='weather-risk-chip'>${risk}</span>`).join("");
+
   const rows = times.slice(0, 12).map((time, idx) => {
     const hour = new Date(time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
-    return `<p><b>${hour}</b> • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}%</p>`;
+    const visKm = ((Number(visibilities[idx]) || 0) / 1000).toFixed(1);
+    const label = weatherCodeLabel(codes[idx]);
+    return `<p><b>${hour}</b> • ${label} • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}% • ❄️ ${Number(snows[idx] || 0).toFixed(1)} mm • 👁️ ${visKm} km</p>`;
   }).join("");
   ui.weatherDetails.innerHTML = rows || "<p class='muted'>Nessun dato meteo.</p>";
 }

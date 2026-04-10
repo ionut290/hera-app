@@ -841,17 +841,6 @@ function subscribeCommesse() {
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
         row.appendChild(btn);
-        if (canManageData()) {
-          const renameBtn = createButton("Rinomina", () => renameCommessa(doc.id, commessa.nome || "Commessa"));
-          const clearBtn = createButton("Svuota", () => clearCommessaImpianti(doc.id, commessa.nome || "Commessa"));
-          const deleteBtn = createButton("Elimina", () => deleteCommessa(doc.id, commessa.nome || "Commessa"));
-          renameBtn.classList.add("btn-small");
-          clearBtn.classList.add("btn-small");
-          deleteBtn.classList.add("btn-small");
-          row.appendChild(renameBtn);
-          row.appendChild(clearBtn);
-          row.appendChild(deleteBtn);
-        }
         ui.commesseLista.appendChild(row);
 
         const option = document.createElement("option");

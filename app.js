@@ -2588,10 +2588,10 @@ async function markImpiantoDone(impianto) {
   trackLocalSheetMutation(selectedCommessaId);
   try {
     updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
-    await setImpiantoDone(ids, true);
+    await setImpiantoDone(selectedCommessaId, ids, true);
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
-    retrySetImpiantoDone(ids, true);
+    retrySetImpiantoDone(selectedCommessaId, ids, true);
   }
 
   if (!canManageData()) {
@@ -2606,10 +2606,10 @@ async function markImpiantoDone(impianto) {
   scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
 }
 
-async function retrySetImpiantoDone(impiantoIds, done, retries = 3) {
+async function retrySetImpiantoDone(commessaId, impiantoIds, done, retries = 3) {
   for (let i = 0; i < retries; i += 1) {
     try {
-      await setImpiantoDone(impiantoIds, done);
+      await setImpiantoDone(commessaId, impiantoIds, done);
       return true;
     } catch (error) {
       console.warn(`Tentativo aggiornamento stato FATTO fallito (${i + 1}/${retries})`, error);
@@ -2702,7 +2702,7 @@ async function resetImpianto(impianto) {
   }
   trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, { done: false });
-  await setImpiantoDone(ids, false);
+  await setImpiantoDone(selectedCommessaId, ids, false);
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 
@@ -3213,12 +3213,13 @@ function updateSuggestionLists() {
   });
 }
 
-async function setImpiantoDone(impiantoIds, done) {
+async function setImpiantoDone(commessaId, impiantoIds, done) {
   const user = auth.currentUser;
   if (!user) return;
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(new Date()) : null;
 
-  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
+  const ref = db.collection("commesse").doc(commessaId).collection("impianti");
   await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
     done,
     doneAt,

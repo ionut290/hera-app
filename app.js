@@ -1223,13 +1223,21 @@ function subscribeDriveBridge() {
       return;
     }
 
-    driveAccessToken = "";
-    driveRootFolderId = "";
-    driveChatFolderId = "";
-    driveReportsFolderId = "";
-    driveSquadreFolderId = "";
-    driveHelpCenterFolderId = "";
-    ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
+    const storedToken = getStoredDriveToken();
+    if (storedToken) {
+      driveAccessToken = storedToken;
+      window.googleDriveAccessToken = storedToken;
+    }
+    driveRootFolderId = data.rootFolderId || driveRootFolderId || "";
+    driveChatFolderId = data.chatFolderId || driveChatFolderId || "";
+    driveReportsFolderId = data.reportsFolderId || driveReportsFolderId || "";
+    driveSquadreFolderId = data.squadreFolderId || driveSquadreFolderId || "";
+    driveHelpCenterFolderId = data.helpCenterFolderId || driveHelpCenterFolderId || "";
+    if (driveAccessToken) {
+      ui.driveStatus.textContent = `Drive collegato (account utente) • report centralizzati (${owner}).`;
+    } else {
+      ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
+    }
   }, (error) => {
     console.error(error);
     ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
@@ -2740,7 +2748,7 @@ async function resetImpianto(impianto) {
     return;
   }
   trackLocalSheetMutation(selectedCommessaId);
-  updateImpiantoLocalState(ids, { done: false });
+  updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "" });
   await setImpiantoDone(selectedCommessaId, ids, false);
   const impiantoKey = buildImpiantoKey(impianto);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);

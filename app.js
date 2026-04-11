@@ -653,20 +653,38 @@ function toggleMapFullscreen() {
 
 function applyRoute() {
   const hash = window.location.hash || "";
-  const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)$/);
+  const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)(?:&resource=(phone|document|note))?$/);
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
   const commessaIdFromHash = match ? match[1] : "";
+  const resourceTypeFromHash = match ? (match[2] || "") : "";
   const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
+  const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
   ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
+  document.body.classList.toggle("resource-view-open", showResourceViewer);
+  ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
+  const mapElement = document.getElementById("map");
+  if (mapElement) mapElement.classList.toggle("hidden", showResourceViewer);
+  if (ui.gpsStatus) ui.gpsStatus.classList.toggle("hidden", showResourceViewer);
+  const impiantiCard = ui.impiantiLista?.closest(".card");
+  if (impiantiCard) impiantiCard.classList.toggle("hidden", showResourceViewer);
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
+    if (showResourceViewer) {
+      activeResourceTypeForViewer = resourceTypeFromHash;
+      renderCommessaResourceViewer();
+      ui.commessaResourceViewer.classList.remove("hidden");
+      ui.commessaResourceViewer.classList.add("page-mode");
+      ui.commessaResourceViewerCloseBtn.textContent = "← Torna alla commessa";
+    } else {
+      closeCommessaResourceViewer();
+    }
     setTimeout(() => map.invalidateSize(), 50);
   }
   if (showHowto) renderHowtoFaq();
@@ -686,6 +704,7 @@ function openImpiantiPage() {
 function closeImpiantiPage() {
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
+  document.body.classList.remove("resource-view-open");
   closeCommessaResourceViewer();
   applyRoute();
 }
@@ -1323,13 +1342,19 @@ function renderResourceButtonsForCommessa() {
 
 function openCommessaResourceWindow(type) {
   activeResourceTypeForViewer = type;
-  renderCommessaResourceViewer();
-  ui.commessaResourceViewer.classList.remove("hidden");
+  if (!selectedCommessaId) return;
+  window.location.hash = `commessa=${selectedCommessaId}&resource=${type}`;
+  applyRoute();
 }
 
 function closeCommessaResourceViewer() {
+  if (window.location.hash.includes("&resource=") && selectedCommessaId) {
+    window.location.hash = `commessa=${selectedCommessaId}`;
+  }
   activeResourceTypeForViewer = "";
+  ui.commessaResourceViewer.classList.remove("page-mode");
   ui.commessaResourceViewer.classList.add("hidden");
+  ui.commessaResourceViewerCloseBtn.textContent = "Chiudi";
 }
 
 function renderCommessaResourceViewer() {
@@ -2428,14 +2453,18 @@ async function addPersonale(event) {
     alert("Solo un admin può gestire il personale.");
     return;
   }
-  const nome = ui.personaleNome.value.trim();
-  if (!nome) return;
-  if (nome.split(/\s+/).length < 2) {
+  const fullName = ui.personaleNome.value.trim().replace(/\s+/g, " ");
+  if (!fullName) return;
+  const [nome, ...cognomeParts] = fullName.split(" ");
+  const cognome = cognomeParts.join(" ").trim();
+  if (!nome || !cognome) {
     alert("Inserisci Nome e Cognome del personale.");
     return;
   }
   await db.collection("personale").add({
     nome,
+    cognome,
+    fullName,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   ui.personaleForm.reset();
@@ -2540,10 +2569,15 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   }
 
   const batch = db.batch();
-  uniqueNames.forEach((nome) => {
+  uniqueNames.forEach((nomeCompleto) => {
     const ref = db.collection(collectionName).doc();
+    const normalized = String(nomeCompleto || "").trim().replace(/\s+/g, " ");
+    const [nome, ...cognomeParts] = normalized.split(" ");
+    const cognome = cognomeParts.join(" ").trim();
     batch.set(ref, {
-      nome,
+      nome: collectionName === "personale" ? nome : normalized,
+      cognome: collectionName === "personale" ? cognome : "",
+      fullName: collectionName === "personale" ? normalized : "",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   });
@@ -2669,10 +2703,11 @@ function renderSimpleList(container, items, onDelete) {
   items.forEach((item) => {
     const row = document.createElement("div");
     row.className = "simple-list-item";
+    const displayLabel = item.fullName || item.nome || "-";
     const label = document.createElement("span");
-    label.textContent = item.nome || "-";
+    label.textContent = displayLabel;
     row.appendChild(label);
-    const deleteBtn = createButton("Elimina", () => onDelete(item.id, item.nome || "elemento"));
+    const deleteBtn = createButton("Elimina", () => onDelete(item.id, displayLabel || "elemento"));
     deleteBtn.disabled = !canManageData();
     row.appendChild(deleteBtn);
     container.appendChild(row);
@@ -2725,7 +2760,7 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   const personaleInput = row.querySelector(".squadra-personale");
   const mezziInput = row.querySelector(".squadra-mezzi");
   personaleInput.addEventListener("blur", () => {
-    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => p.nome));
+    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => p.fullName || p.nome));
   });
   mezziInput.addEventListener("blur", () => {
     const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
@@ -2869,7 +2904,7 @@ function updateSuggestionLists() {
   ui.personaleOptions.innerHTML = "";
   personaleRecords.forEach((person) => {
     const option = document.createElement("option");
-    option.value = person.nome || "";
+    option.value = person.fullName || person.nome || "";
     ui.personaleOptions.appendChild(option);
   });
   ui.mezziOptions.innerHTML = "";

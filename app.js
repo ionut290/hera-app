@@ -97,6 +97,7 @@ const ui = {
   externalAppName: document.getElementById("external-app-name"),
   externalAppUrl: document.getElementById("external-app-url"),
   externalAppsList: document.getElementById("external-apps-list"),
+  gpsRequestsList: document.getElementById("gps-requests-list"),
   resourceForm: document.getElementById("resource-form"),
   resourceType: document.getElementById("resource-type"),
   resourceTitle: document.getElementById("resource-title"),
@@ -203,6 +204,7 @@ let unsubscribeUsers = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
+let unsubscribeGpsRequests = null;
 let chatMessages = [];
 let platformUsers = [];
 let deniedImpiantoActions = new Set();
@@ -239,9 +241,13 @@ let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let privateDocsRecords = [];
+let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
 let editingImpiantoIds = [];
+let chatRetentionTimer = null;
+const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const GPS_APPROVAL_PHONE = "3892352575";
 const howtoFaqItems = [
   {
     id: "login-google",
@@ -331,7 +337,7 @@ const howtoFaqItems = [
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
-const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "edit", "delete"];
+const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "gps-update", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
@@ -520,7 +526,7 @@ auth.onAuthStateChanged((user) => {
   syncSegnalazioneFirmaPreposto();
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
-  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId;
+  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId || !canManageData();
   updateAdminControls();
 
   stopCommesseSubscription();
@@ -534,6 +540,8 @@ auth.onAuthStateChanged((user) => {
   stopAdminUsersSubscription();
   stopResourcesSubscription();
   stopPrivateDocsSubscription();
+  stopGpsRequestsSubscription();
+  stopChatRetentionLoop();
   selectedCommessaId = "";
   selectedCommessaName = "";
   updateCommessaContextUI();
@@ -546,6 +554,7 @@ auth.onAuthStateChanged((user) => {
   commesseById = new Map();
   resourceRecords = [];
   privateDocsRecords = [];
+  gpsUpdateRequests = [];
   renderPrivateDocsList();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
@@ -578,7 +587,9 @@ auth.onAuthStateChanged((user) => {
     subscribeSquadre();
     subscribeResources();
     subscribePrivateDocs();
+    subscribeGpsRequests();
     processPendingSheetExports();
+    startChatRetentionLoop();
   }
   renderExternalApps();
   fetchWeather();
@@ -617,6 +628,13 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   ui.squadreWhatsappAllBtn?.classList.toggle("hidden", !canManage);
+  ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
+  ui.exportCurrentCommessaBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId;
+  if (ui.gpsRequestsList && !canManage) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Solo gli admin possono gestire le richieste GPS.</p>";
+  } else if (ui.gpsRequestsList && canManage) {
+    renderGpsRequests();
+  }
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
   ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
@@ -1791,7 +1809,7 @@ function selectCommessa(id, nome) {
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
   updateCommessaContextUI();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
-  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
+  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser || !canManageData();
   updateCommessaButtonsActive();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
@@ -2308,9 +2326,10 @@ async function exportCommessaSummary(commessaId, commessaName) {
         "GPS X": impianto.gpsX ?? "",
         "Tipo manutenzione": impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
         Stato: "Fatto",
-        "Eseguito da": impianto.doneBy || "-",
         "Data esecuzione": doneInfo.date,
-        "Ora esecuzione (hh:mm)": doneInfo.time
+        "Ora esecuzione": doneInfo.time,
+        "Eseguito da": impianto.doneBy || "-",
+        "Email operatore": auth.currentUser?.email || ""
       };
     });
 
@@ -2465,6 +2484,7 @@ function renderImpianti() {
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
     addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
     addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
+    addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto));
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
@@ -3307,6 +3327,90 @@ function openWhatsApp(impianto) {
   window.open(url, "_blank");
 }
 
+function getCurrentPositionOnce() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocalizzazione non supportata."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          lat: Number(pos.coords.latitude),
+          lng: Number(pos.coords.longitude)
+        });
+      },
+      (error) => reject(error),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+
+async function requestGpsUpdate(impianto) {
+  if (!currentUser || !selectedCommessaId) {
+    alert("Seleziona una commessa ed esegui il login.");
+    return;
+  }
+  const confirmed = window.confirm("Vuoi aggiornare la posizione di questo impianto? Verrà inviata richiesta WhatsApp all'amministratore.");
+  if (!confirmed) return;
+
+  try {
+    const pos = await getCurrentPositionOnce();
+    const impiantoIds = getImpiantoDocIds(impianto);
+    const requestRef = await db.collection("gpsUpdateRequests").add({
+      commessaId: selectedCommessaId,
+      commessaName: selectedCommessaName || "",
+      impiantoKey: buildImpiantoKey(impianto),
+      impiantoIds,
+      impiantoDenominazione: impianto.denominazione || "",
+      impiantoIdSap: impianto.idSap || "",
+      impiantoComune: impianto.comune || "",
+      impiantoIndirizzo: impianto.indirizzo || "",
+      operatorId: currentUser.uid,
+      operatorName: currentUser.displayName || currentUser.email || "Operatore",
+      operatorEmail: currentUser.email || "",
+      operatorLat: pos.lat,
+      operatorLng: pos.lng,
+      status: "pending",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    const mapsUrl = `https://maps.google.com/?q=${pos.lat},${pos.lng}`;
+    const waText = [
+      "📍 Richiesta aggiornamento GPS impianto",
+      `ID richiesta: ${requestRef.id}`,
+      `Commessa: ${selectedCommessaName || "-"}`,
+      `Impianto: ${impianto.denominazione || "-"}`,
+      `ID SAP: ${impianto.idSap || "-"}`,
+      `Operatore: ${currentUser.displayName || currentUser.email || "-"}`,
+      `Coordinate operatore: ${pos.lat}, ${pos.lng}`,
+      `Mappa: ${mapsUrl}`
+    ].join("\n");
+    window.open(`https://wa.me/${GPS_APPROVAL_PHONE}?text=${encodeURIComponent(waText)}`, "_blank");
+
+    await notifyAdminsForGpsRequest(requestRef.id, impianto, pos);
+    alert("Richiesta inviata. In attesa approvazione admin.");
+  } catch (error) {
+    console.error("Errore richiesta aggiornamento GPS:", error);
+    alert("Impossibile inviare la richiesta GPS.");
+  }
+}
+
+async function notifyAdminsForGpsRequest(requestId, impianto, pos) {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const text = `📍 Richiesta GPS ${requestId} per ${impianto.denominazione || "impianto"} (${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}). Apri Gestione > Utenti per accettare/rifiutare.`;
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser.uid,
+    senderName: currentUser.displayName || currentUser.email || "Operatore",
+    senderEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })));
+}
+
 function openSquadraWhatsApp(squad, commessa) {
   const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
   const rowsMessage = squadRows.map((row, idx) => (
@@ -3846,6 +3950,47 @@ function subscribeChat() {
     });
 }
 
+function isChatMessageFresh(message) {
+  const createdAtMs = message?.createdAt && typeof message.createdAt.toDate === "function"
+    ? message.createdAt.toDate().getTime()
+    : 0;
+  if (!createdAtMs) return true;
+  return createdAtMs >= (Date.now() - CHAT_RETENTION_MS);
+}
+
+function startChatRetentionLoop() {
+  stopChatRetentionLoop();
+  purgeOldChatMessages();
+  chatRetentionTimer = setInterval(() => {
+    purgeOldChatMessages();
+  }, 60 * 60 * 1000);
+}
+
+function stopChatRetentionLoop() {
+  if (chatRetentionTimer) {
+    clearInterval(chatRetentionTimer);
+    chatRetentionTimer = null;
+  }
+}
+
+async function purgeOldChatMessages() {
+  if (!canManageData()) return;
+  const cutoffDate = new Date(Date.now() - CHAT_RETENTION_MS);
+  try {
+    const snapshot = await db
+      .collection("chatMessages")
+      .where("createdAt", "<=", firebase.firestore.Timestamp.fromDate(cutoffDate))
+      .limit(200)
+      .get();
+    if (snapshot.empty) return;
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  } catch (error) {
+    console.warn("Pulizia chat 24h non completata:", error);
+  }
+}
+
 async function upsertCurrentPlatformUser() {
   if (!currentUser) return;
   await db.collection("platformUsers").doc(currentUser.uid).set({
@@ -3909,6 +4054,122 @@ function stopUsersSubscription() {
   renderExternalApps();
 }
 
+function subscribeGpsRequests() {
+  if (unsubscribeGpsRequests) unsubscribeGpsRequests();
+  unsubscribeGpsRequests = db
+    .collection("gpsUpdateRequests")
+    .where("status", "==", "pending")
+    .orderBy("createdAt", "desc")
+    .limit(200)
+    .onSnapshot((snapshot) => {
+      gpsUpdateRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderGpsRequests();
+    }, (error) => {
+      console.error("Errore caricamento richieste GPS:", error);
+      if (ui.gpsRequestsList) ui.gpsRequestsList.innerHTML = "<p class='muted'>Errore caricamento richieste GPS.</p>";
+    });
+}
+
+function stopGpsRequestsSubscription() {
+  if (unsubscribeGpsRequests) {
+    unsubscribeGpsRequests();
+    unsubscribeGpsRequests = null;
+  }
+  gpsUpdateRequests = [];
+  renderGpsRequests();
+}
+
+function renderGpsRequests() {
+  if (!ui.gpsRequestsList) return;
+  if (!currentUser) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Fai login per visualizzare le richieste GPS.</p>";
+    return;
+  }
+  if (!canManageData()) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Solo gli admin possono gestire le richieste GPS.</p>";
+    return;
+  }
+  if (!gpsUpdateRequests.length) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Nessuna richiesta GPS.</p>";
+    return;
+  }
+  ui.gpsRequestsList.innerHTML = "";
+  const pendingRequests = gpsUpdateRequests.filter((request) => String(request.status || "pending") === "pending");
+  if (!pendingRequests.length) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Nessuna richiesta GPS.</p>";
+    return;
+  }
+  pendingRequests.forEach((request) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const when = request.createdAt && typeof request.createdAt.toDate === "function"
+      ? request.createdAt.toDate().toLocaleString("it-IT")
+      : "-";
+    const status = String(request.status || "pending").toUpperCase();
+    const info = document.createElement("span");
+    info.innerHTML = `${escapeHTML(request.impiantoDenominazione || "Impianto")} • ${escapeHTML(request.operatorName || "Operatore")}<br><small>${escapeHTML(request.operatorLat)}, ${escapeHTML(request.operatorLng)} • ${when} • ${status}</small>`;
+    row.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    actions.appendChild(createButton("Accetta", () => approveGpsRequest(request)));
+    actions.appendChild(createButton("Rifiuta", () => rejectGpsRequest(request)));
+    row.appendChild(actions);
+    ui.gpsRequestsList.appendChild(row);
+  });
+}
+
+async function approveGpsRequest(request) {
+  if (!canManageData()) return;
+  const impiantoIds = Array.isArray(request.impiantoIds) ? request.impiantoIds.filter(Boolean) : [];
+  if (!request.commessaId || !impiantoIds.length) {
+    alert("Richiesta non valida: impianto non trovato.");
+    return;
+  }
+  await updateImpiantoCoordinates(request.commessaId, impiantoIds, request.operatorLat, request.operatorLng);
+  await db.collection("gpsUpdateRequests").doc(request.id).set({
+    status: "approved",
+    approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    approvedBy: currentUser?.email || ""
+  }, { merge: true });
+  await notifyGpsDecision(request, true);
+}
+
+async function rejectGpsRequest(request) {
+  if (!canManageData()) return;
+  await db.collection("gpsUpdateRequests").doc(request.id).set({
+    status: "rejected",
+    rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    rejectedBy: currentUser?.email || ""
+  }, { merge: true });
+  await notifyGpsDecision(request, false);
+}
+
+async function notifyGpsDecision(request, approved) {
+  if (!request.operatorId) return;
+  await db.collection("chatMessages").add({
+    type: "text",
+    text: approved
+      ? `✅ Richiesta GPS accettata per ${request.impiantoDenominazione || "impianto"}. Coordinate aggiornate.`
+      : `❌ Richiesta GPS rifiutata per ${request.impiantoDenominazione || "impianto"}.`,
+    recipientId: request.operatorId,
+    senderId: currentUser?.uid || "",
+    senderName: currentUser?.displayName || currentUser?.email || "Admin",
+    senderEmail: currentUser?.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function updateImpiantoCoordinates(commessaId, impiantoIds, lat, lng) {
+  const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+  await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
+    gpsY: Number(lat),
+    gpsX: Number(lng),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || "admin"
+  })));
+}
+
 function getDeniedActionsForCurrentUser() {
   if (!currentUser) return new Set();
   const row = platformUsers.find((user) => user.id === currentUser.uid);
@@ -3926,6 +4187,7 @@ function actionLabel(action) {
     navigate: "🧭 Naviga",
     reset: "♻️ Reset",
     whatsapp: "💬 WhatsApp",
+    "gps-update": "📍 Aggiorna GPS",
     edit: "✏️ Modifica",
     delete: "🗑️ Elimina"
   };
@@ -4199,7 +4461,7 @@ function renderChat(messages) {
   ui.chatMediaInput.disabled = false;
   ui.chatVoiceBtn.disabled = false;
 
-  const visibleMessages = messages.filter(canViewMessage);
+  const visibleMessages = messages.filter((message) => canViewMessage(message) && isChatMessageFresh(message));
 
   if (!visibleMessages.length) {
     ui.chatCounter.classList.add("hidden");

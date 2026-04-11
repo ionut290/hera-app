@@ -19,6 +19,9 @@ const ui = {
   user: document.getElementById("user"),
   userName: document.getElementById("user-name"),
   driveStatus: document.getElementById("drive-status"),
+  pwaNotificationStatus: document.getElementById("pwa-notification-status"),
+  enableNotificationsBtn: document.getElementById("enable-notifications-btn"),
+  testNotificationBtn: document.getElementById("test-notification-btn"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
@@ -256,6 +259,8 @@ let chatRetentionTimer = null;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
+const PUSH_PUBLIC_VAPID_KEY = "";
+let serviceWorkerRegistration = null;
 const MENU_HOWTO_CONTENT = {
   "open-panel-commesse": {
     rispostaBreve: "Da qui gestisci commesse e impianti (aggiunta, import Excel e gestione lista).",
@@ -477,6 +482,8 @@ ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
 ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
 ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
+ui.enableNotificationsBtn?.addEventListener("click", enablePushNotifications);
+ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
@@ -500,11 +507,111 @@ initHelpCenterFaq();
 renderResourceManageFilters();
 updateResourceFormByType();
 updateConnectivityStatus();
+initPwaCapabilities();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
   ui.userDetailsPanel.classList.toggle("hidden", !isHidden);
   ui.userToggleBtn.setAttribute("aria-expanded", String(isHidden));
+}
+
+function updateNotificationUi(message, canTest = false) {
+  if (ui.pwaNotificationStatus) ui.pwaNotificationStatus.textContent = message;
+  if (ui.testNotificationBtn) ui.testNotificationBtn.disabled = !canTest;
+}
+
+async function initPwaCapabilities() {
+  if (!("serviceWorker" in navigator)) {
+    updateNotificationUi("Notifiche: browser non supportato.");
+    if (ui.enableNotificationsBtn) ui.enableNotificationsBtn.disabled = true;
+    return;
+  }
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.ready;
+  } catch (error) {
+    console.warn("Service Worker non pronto per notifiche:", error);
+  }
+  if (!("Notification" in window)) {
+    updateNotificationUi("Notifiche: API non disponibile su questo dispositivo.");
+    if (ui.enableNotificationsBtn) ui.enableNotificationsBtn.disabled = true;
+    return;
+  }
+  if (Notification.permission === "granted") {
+    updateNotificationUi("Notifiche attive.");
+    await ensurePushSubscription();
+    return;
+  }
+  if (Notification.permission === "denied") {
+    updateNotificationUi("Notifiche bloccate. Sbloccale dalle impostazioni browser.");
+    if (ui.enableNotificationsBtn) ui.enableNotificationsBtn.disabled = true;
+    return;
+  }
+  updateNotificationUi("Notifiche disattive. Premi 'Attiva notifiche'.");
+}
+
+async function enablePushNotifications() {
+  if (!("Notification" in window)) return;
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    updateNotificationUi("Notifiche non autorizzate.");
+    return;
+  }
+  updateNotificationUi("Notifiche autorizzate.");
+  await ensurePushSubscription();
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+async function ensurePushSubscription() {
+  if (!serviceWorkerRegistration || !("pushManager" in serviceWorkerRegistration)) {
+    updateNotificationUi("Notifiche attive (senza push remoto).", true);
+    return;
+  }
+  try {
+    let subscription = await serviceWorkerRegistration.pushManager.getSubscription();
+    if (!subscription && PUSH_PUBLIC_VAPID_KEY) {
+      subscription = await serviceWorkerRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUSH_PUBLIC_VAPID_KEY)
+      });
+      console.info("Push subscription pronta:", subscription.toJSON());
+    }
+    updateNotificationUi(
+      subscription ? "Notifiche push pronte (configurare backend invio)." : "Notifiche attive. Manca solo chiave VAPID per push remoto.",
+      true
+    );
+  } catch (error) {
+    console.warn("Errore setup push:", error);
+    updateNotificationUi("Notifiche attive ma setup push incompleto.", true);
+  }
+}
+
+async function sendTestNotification() {
+  const title = "Hera App";
+  const options = {
+    body: "Test notifiche completato con successo.",
+    icon: "./icons/hera-icon.svg",
+    badge: "./icons/hera-icon.svg",
+    tag: "hera-test-notification",
+    data: { url: "./index.html" }
+  };
+  if (serviceWorkerRegistration) {
+    await serviceWorkerRegistration.showNotification(title, options);
+    if ("sync" in serviceWorkerRegistration) {
+      try {
+        await serviceWorkerRegistration.sync.register("hera-app-background-check");
+      } catch (error) {
+        console.warn("Background sync non disponibile:", error);
+      }
+    }
+    return;
+  }
+  new Notification(title, options);
 }
 
 function weatherCodeLabel(weatherCode) {

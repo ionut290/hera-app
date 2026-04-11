@@ -68,6 +68,7 @@ const ui = {
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
+  openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   managementPage: document.getElementById("management-page"),
@@ -78,10 +79,23 @@ const ui = {
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
+  panelInfoUtili: document.getElementById("panel-info-utili"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
+  resourceForm: document.getElementById("resource-form"),
+  resourceType: document.getElementById("resource-type"),
+  resourceTitle: document.getElementById("resource-title"),
+  resourceValue: document.getElementById("resource-value"),
+  resourceCommesse: document.getElementById("resource-commesse"),
+  resourceSubmit: document.getElementById("resource-submit"),
+  resourcesList: document.getElementById("resources-list"),
+  commessaResourceButtons: document.getElementById("commessa-resource-buttons"),
+  commessaResourceViewer: document.getElementById("commessa-resource-viewer"),
+  commessaResourceViewerTitle: document.getElementById("commessa-resource-viewer-title"),
+  commessaResourceViewerCloseBtn: document.getElementById("commessa-resource-viewer-close-btn"),
+  commessaResourceViewerList: document.getElementById("commessa-resource-viewer-list"),
   personaleOptions: document.getElementById("personale-options"),
   mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
@@ -144,6 +158,7 @@ let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeUsers = null;
 let unsubscribeAdminUsers = null;
+let unsubscribeResources = null;
 let chatMessages = [];
 let platformUsers = [];
 let mediaRecorder = null;
@@ -176,6 +191,9 @@ let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
+let resourceRecords = [];
+let activeResourceTypeForViewer = "";
+let activeResourceManageFilter = "all";
 const howtoFaqItems = [
   {
     id: "login-google",
@@ -338,6 +356,7 @@ ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre
 ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
+ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
@@ -353,6 +372,15 @@ ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazion
 ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
+ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
+document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activeResourceManageFilter = btn.dataset.resourceFilter || "all";
+    renderResourceManageFilters();
+    renderResourcesList();
+  });
+});
 
 addSquadraRow();
 initGeolocation();
@@ -363,6 +391,7 @@ window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
 initHelpCenterFaq();
+renderResourceManageFilters();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
@@ -436,6 +465,7 @@ auth.onAuthStateChanged((user) => {
   stopSquadreSubscription();
   stopUsersSubscription();
   stopAdminUsersSubscription();
+  stopResourcesSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
   window.location.hash = "";
@@ -445,6 +475,9 @@ auth.onAuthStateChanged((user) => {
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
+  resourceRecords = [];
+  renderResourceButtonsForCommessa();
+  closeCommessaResourceViewer();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
@@ -472,6 +505,7 @@ auth.onAuthStateChanged((user) => {
     subscribePersonale();
     subscribeMezzi();
     subscribeSquadre();
+    subscribeResources();
     processPendingSheetExports();
   }
   fetchWeather();
@@ -496,6 +530,11 @@ function updateAdminControls() {
   ui.manualImpiantoSubmit.disabled = !canManage;
   ui.adminUserEmail.disabled = !canManage;
   if (ui.adminUserForm.querySelector("button[type='submit']")) ui.adminUserForm.querySelector("button[type='submit']").disabled = !canManage;
+  ui.resourceType.disabled = !canManage;
+  ui.resourceTitle.disabled = !canManage;
+  ui.resourceValue.disabled = !canManage;
+  ui.resourceCommesse.disabled = !canManage;
+  ui.resourceSubmit.disabled = !canManage;
   ui.squadraCommessa.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
@@ -524,11 +563,12 @@ function openManagementPanel(panel) {
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
-    utenti: { el: ui.panelUtenti, title: "Gestione utenti" }
+    utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -590,6 +630,7 @@ function openImpiantiPage() {
 function closeImpiantiPage() {
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
+  closeCommessaResourceViewer();
   applyRoute();
 }
 
@@ -1041,6 +1082,7 @@ function subscribeCommesse() {
       commesseById = new Map();
       ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
       ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
+      ui.resourceCommesse.innerHTML = "";
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -1068,10 +1110,13 @@ function subscribeCommesse() {
         option.textContent = commessa.nome || "Commessa senza nome";
         ui.squadraCommessa.appendChild(option);
         ui.commessaTargetSelect.appendChild(option.cloneNode(true));
+        ui.resourceCommesse.appendChild(option.cloneNode(true));
       });
 
       renderCommesseManagementList();
       renderSquadre();
+      renderResourcesList();
+      renderResourceButtonsForCommessa();
     }, (error) => {
       console.error(error);
       ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
@@ -1085,6 +1130,208 @@ function stopCommesseSubscription() {
   }
 }
 
+function subscribeResources() {
+  unsubscribeResources = db
+    .collection("commessaResources")
+    .orderBy("createdAt", "desc")
+    .onSnapshot((snapshot) => {
+      resourceRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderResourcesList();
+      renderResourceButtonsForCommessa();
+      renderCommessaResourceViewer();
+    }, (error) => {
+      console.error("Errore caricamento informazioni utili:", error);
+      ui.resourcesList.innerHTML = "<p class='muted'>Errore caricamento informazioni utili.</p>";
+    });
+}
+
+function stopResourcesSubscription() {
+  if (unsubscribeResources) {
+    unsubscribeResources();
+    unsubscribeResources = null;
+  }
+}
+
+async function addResourceItem(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo l'admin può inserire informazioni utili.");
+    return;
+  }
+  const type = String(ui.resourceType.value || "").trim();
+  const title = String(ui.resourceTitle.value || "").trim();
+  const value = String(ui.resourceValue.value || "").trim();
+  const commessaIds = Array.from(ui.resourceCommesse.selectedOptions || []).map((opt) => opt.value).filter(Boolean);
+  if (!type || !title || !value || !commessaIds.length) {
+    alert("Compila tutti i campi e seleziona almeno una commessa.");
+    return;
+  }
+  await db.collection("commessaResources").add({
+    type,
+    title,
+    value,
+    commessaIds,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: currentUser?.email || ""
+  });
+  ui.resourceForm.reset();
+}
+
+async function deleteResourceItem(resourceId) {
+  if (!canManageData()) return;
+  const ok = window.confirm("Eliminare questa informazione utile?");
+  if (!ok) return;
+  await db.collection("commessaResources").doc(resourceId).delete();
+}
+
+function renderResourcesList() {
+  if (!ui.resourcesList) return;
+  const visibleResources = resourceRecords.filter((item) => activeResourceManageFilter === "all" || item.type === activeResourceManageFilter);
+  if (!visibleResources.length) {
+    ui.resourcesList.innerHTML = "<p class='muted'>Nessuna informazione utile caricata.</p>";
+    return;
+  }
+  ui.resourcesList.innerHTML = "";
+  visibleResources.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const commesseNames = (item.commessaIds || [])
+      .map((id) => (commesseById.get(id) || {}).nome || "Commessa")
+      .join(", ");
+    row.innerHTML = `
+      <div>
+        <strong>${resourceTypeLabel(item.type)} · ${escapeHTML(item.title || "-")}</strong>
+        <p class="muted">${escapeHTML(item.value || "-")}</p>
+        <p class="muted">Commesse: ${escapeHTML(commesseNames || "-")}</p>
+      </div>
+    `;
+    if (canManageData()) {
+      row.appendChild(createButton("Elimina", () => deleteResourceItem(item.id)));
+    }
+    ui.resourcesList.appendChild(row);
+  });
+}
+
+function renderResourceManageFilters() {
+  document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
+    const isActive = (btn.dataset.resourceFilter || "all") === activeResourceManageFilter;
+    btn.classList.toggle("btn-primary", isActive);
+  });
+}
+
+function resourceTypeLabel(type) {
+  if (type === "phone") return "Agenda";
+  if (type === "document") return "Documenti";
+  if (type === "note") return "Note";
+  return "Info";
+}
+
+function getResourcesByCommessa(commessaId, type = "") {
+  if (!commessaId) return [];
+  return resourceRecords.filter((item) => {
+    const linked = Array.isArray(item.commessaIds) && item.commessaIds.includes(commessaId);
+    if (!linked) return false;
+    return type ? item.type === type : true;
+  });
+}
+
+function renderResourceButtonsForCommessa() {
+  if (!ui.commessaResourceButtons) return;
+  ui.commessaResourceButtons.innerHTML = "";
+  if (!selectedCommessaId) return;
+  const types = ["phone", "document", "note"];
+  types.forEach((type) => {
+    const count = getResourcesByCommessa(selectedCommessaId, type).length;
+    if (!count) return;
+    const label = `${resourceTypeLabel(type)} (${count})`;
+    const btn = createButton(label, () => openCommessaResourceViewer(type));
+    ui.commessaResourceButtons.appendChild(btn);
+  });
+}
+
+function openCommessaResourceViewer(type) {
+  activeResourceTypeForViewer = type;
+  renderCommessaResourceViewer();
+  ui.commessaResourceViewer.classList.remove("hidden");
+}
+
+function closeCommessaResourceViewer() {
+  activeResourceTypeForViewer = "";
+  ui.commessaResourceViewer.classList.add("hidden");
+}
+
+function renderCommessaResourceViewer() {
+  if (!selectedCommessaId || !activeResourceTypeForViewer) return;
+  const items = getResourcesByCommessa(selectedCommessaId, activeResourceTypeForViewer);
+  ui.commessaResourceViewerTitle.textContent = `${resourceTypeLabel(activeResourceTypeForViewer)} • ${selectedCommessaName || "Commessa"}`;
+  ui.commessaResourceViewerList.innerHTML = "";
+  if (!items.length) {
+    ui.commessaResourceViewerList.innerHTML = "<p class='muted'>Nessun contenuto disponibile.</p>";
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const info = document.createElement("div");
+    info.innerHTML = `
+      <strong>${escapeHTML(item.title || "-")}</strong>
+      <p class="muted">${escapeHTML(item.value || "-")}</p>
+    `;
+    row.appendChild(info);
+    const actions = document.createElement("div");
+    actions.className = "actions-row";
+    if (activeResourceTypeForViewer === "phone") {
+      actions.appendChild(createButton("Chiama", () => window.open(`tel:${sanitizePhone(item.value)}`, "_self")));
+      actions.appendChild(createButton("SMS", () => window.open(`sms:${sanitizePhone(item.value)}`, "_self")));
+      actions.appendChild(createButton("WhatsApp", () => openPhoneOnWhatsApp(item.value)));
+      actions.appendChild(createButton("Salva contatto", () => downloadVCard(item.title, item.value)));
+    } else if (activeResourceTypeForViewer === "document") {
+      actions.appendChild(createButton("Apri documento", () => openDocumentLink(item.value)));
+    } else {
+      actions.appendChild(createButton("Copia nota", () => navigator.clipboard?.writeText(String(item.value || ""))));
+    }
+    row.appendChild(actions);
+    ui.commessaResourceViewerList.appendChild(row);
+  });
+}
+
+function sanitizePhone(value) {
+  return String(value || "").replace(/[^0-9+]/g, "");
+}
+
+function openPhoneOnWhatsApp(value) {
+  const raw = sanitizePhone(value).replace("+", "");
+  if (!raw) return;
+  window.open(`https://wa.me/${raw}`, "_blank");
+}
+
+function openDocumentLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return;
+  const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  window.open(normalized, "_blank");
+}
+
+function downloadVCard(name, phone) {
+  const contactName = String(name || "Contatto").replace(/\n/g, " ").trim();
+  const cleanPhone = sanitizePhone(phone);
+  const vcf = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${contactName}`,
+    `TEL;TYPE=CELL:${cleanPhone}`,
+    "END:VCARD"
+  ].join("\n");
+  const blob = new Blob([vcf], { type: "text/vcard;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${contactName.replace(/[^\w\-]+/g, "_") || "contatto"}.vcf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
@@ -1096,6 +1343,8 @@ function selectCommessa(id, nome) {
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
   updateCommessaButtonsActive();
+  renderResourceButtonsForCommessa();
+  closeCommessaResourceViewer();
 
   stopImpiantiSubscription();
   subscribeImpianti();

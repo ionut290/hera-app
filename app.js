@@ -424,8 +424,8 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
-ui.segnalazioneForm.addEventListener("submit", submitSegnalazioneImpianto);
-ui.segnalazioneCommessa.addEventListener("change", onSegnalazioneCommessaChange);
+ui.segnalazioneForm?.addEventListener("submit", submitSegnalazioneImpianto);
+ui.segnalazioneCommessa?.addEventListener("change", onSegnalazioneCommessaChange);
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
@@ -1325,7 +1325,7 @@ function subscribeCommesse() {
       renderResourceButtonsForCommessa();
       syncBannerFormFromSelection();
       updateCommessaContextUI();
-      populateSegnalazioneCommesseSelect();
+      if (ui.segnalazioneCommessa) populateSegnalazioneCommesseSelect();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa");

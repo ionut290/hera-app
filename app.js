@@ -13,6 +13,7 @@ const ui = {
   sideMenu: document.getElementById("side-menu"),
   menuOverlay: document.getElementById("menu-overlay"),
   loginBtn: document.getElementById("login-btn"),
+  switchAccountBtn: document.getElementById("switch-account-btn"),
   logoutBtn: document.getElementById("logout-btn"),
   driveConnectBtn: document.getElementById("drive-connect-btn"),
   user: document.getElementById("user"),
@@ -88,6 +89,11 @@ const ui = {
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
+  userPermissionsList: document.getElementById("user-permissions-list"),
+  externalAppForm: document.getElementById("external-app-form"),
+  externalAppName: document.getElementById("external-app-name"),
+  externalAppUrl: document.getElementById("external-app-url"),
+  externalAppsList: document.getElementById("external-apps-list"),
   resourceForm: document.getElementById("resource-form"),
   resourceType: document.getElementById("resource-type"),
   resourceTitle: document.getElementById("resource-title"),
@@ -182,6 +188,8 @@ let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let chatMessages = [];
 let platformUsers = [];
+let deniedImpiantoActions = new Set();
+const usedActionKeys = new Set();
 let mediaRecorder = null;
 let mediaChunks = [];
 let isRecording = false;
@@ -305,6 +313,7 @@ const howtoFaqItems = [
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const SHEET_RETRY_MS = 30 * 1000;
@@ -345,6 +354,7 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
+ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
 ui.menuToggleBtn.addEventListener("click", openSideMenu);
 ui.menuCloseBtn.addEventListener("click", closeSideMenu);
 ui.menuOverlay.addEventListener("click", closeSideMenu);
@@ -394,6 +404,7 @@ ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazion
 ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
+ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.resourceType.addEventListener("change", updateResourceFormByType);
 ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
@@ -466,12 +477,13 @@ function weatherCodeLabel(weatherCode) {
 auth.onAuthStateChanged((user) => {
   currentUser = user || null;
   const loggedIn = Boolean(user);
-  const canManage = canManageData();
 
   ui.loginBtn.disabled = loggedIn;
+  ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
+  ui.switchAccountBtn.disabled = !loggedIn;
   ui.logoutBtn.disabled = !loggedIn;
-  ui.driveConnectBtn.disabled = !loggedIn || !canManage;
-  ui.driveConnectBtn.classList.toggle("hidden", !loggedIn || !canManage);
+  ui.driveConnectBtn.disabled = !loggedIn;
+  ui.driveConnectBtn.classList.toggle("hidden", !loggedIn);
   ui.user.textContent = loggedIn
     ? `Loggato: ${user.email || "email non disponibile"}`
     : "Non loggato";
@@ -513,7 +525,7 @@ auth.onAuthStateChanged((user) => {
   clearMap();
   lastReadChatAt = null;
   resetDriveState();
-  if (loggedIn && canManage) {
+  if (loggedIn) {
     const storedToken = getStoredDriveToken();
     if (storedToken) {
       driveAccessToken = storedToken;
@@ -537,6 +549,7 @@ auth.onAuthStateChanged((user) => {
     subscribeResources();
     processPendingSheetExports();
   }
+  renderExternalApps();
   fetchWeather();
 });
 
@@ -565,6 +578,11 @@ function updateAdminControls() {
   ui.resourceValue.disabled = !canManage;
   ui.resourceCommesse.disabled = !canManage;
   ui.resourceSubmit.disabled = !canManage;
+  if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
+  if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
+  if (ui.externalAppForm && ui.externalAppForm.querySelector("button[type='submit']")) {
+    ui.externalAppForm.querySelector("button[type='submit']").disabled = !auth.currentUser;
+  }
   ui.squadraCommessa.disabled = !canManage;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
@@ -574,6 +592,8 @@ function updateAdminControls() {
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
     : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
   updateResourceFormByType();
+  renderUserPermissionList();
+  renderExternalApps();
 }
 
 function openSideMenu() {
@@ -922,7 +942,7 @@ function hasRecentLocalSheetMutation(commessaId, windowMs = 3500) {
 
 function scheduleCommessaSheetSync(commessaId, commessaName = "", delayMs = 900) {
   if (!commessaId) return;
-  if (!canManageData() || !driveAccessToken) return;
+  if (!driveAccessToken) return;
   const existingTimer = commessaSheetSyncTimers.get(commessaId);
   if (existingTimer) clearTimeout(existingTimer);
   const timer = setTimeout(async () => {
@@ -963,10 +983,11 @@ function parseGoogleSheetId(value) {
   return idOnly ? input : "";
 }
 
-function loginWithGoogle() {
+function loginWithGoogle(forceAccountSelection = false) {
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
   provider.addScope("https://www.googleapis.com/auth/drive.file");
+  if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
 
   auth.signInWithPopup(provider).then((result) => {
     // Gli scope extra (es. Drive) arrivano nel credential del login, non nel profilo utente Firebase.
@@ -983,6 +1004,15 @@ function loginWithGoogle() {
   });
 }
 
+async function switchGoogleAccount() {
+  try {
+    await auth.signOut();
+  } catch (error) {
+    console.warn("Logout durante cambio account non riuscito:", error);
+  }
+  loginWithGoogle(true);
+}
+
 function persistDriveAccessToken(accessToken) {
   if (!accessToken) return;
   driveAccessToken = accessToken;
@@ -992,7 +1022,7 @@ function persistDriveAccessToken(accessToken) {
 }
 
 async function autoConnectDriveBridge(options = {}) {
-  if (!canManageData() || !driveAccessToken) return;
+  if (!driveAccessToken) return;
   const { notifyOnError = false } = options;
   try {
     await ensureDriveFolders();
@@ -1289,16 +1319,7 @@ function renderResourceButtonsForCommessa() {
 function openCommessaResourceWindow(type) {
   activeResourceTypeForViewer = type;
   renderCommessaResourceViewer();
-
-  const popup = window.open("", "_blank", "noopener,noreferrer");
-  if (!popup) {
-    ui.commessaResourceViewer.classList.remove("hidden");
-    return;
-  }
-
-  const title = `${resourceTypeLongLabel(type)} • ${selectedCommessaName || "Commessa"}`;
-  popup.document.write(`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title)}</title><style>body{font-family:Inter,system-ui,sans-serif;background:#f4f7fb;color:#172033;padding:16px;margin:0}h1{font-size:1.1rem;margin:0 0 12px}.item{background:#fff;border:1px solid #d6dfec;border-radius:12px;padding:12px;margin-bottom:10px}.item p{margin:6px 0;color:#60708a;white-space:pre-wrap}</style></head><body><h1>${escapeHTML(title)}</h1>${buildResourcePopupItems(type)}</body></html>`);
-  popup.document.close();
+  ui.commessaResourceViewer.classList.remove("hidden");
 }
 
 function closeCommessaResourceViewer() {
@@ -1339,12 +1360,6 @@ function renderCommessaResourceViewer() {
     row.appendChild(actions);
     ui.commessaResourceViewerList.appendChild(row);
   });
-}
-
-function buildResourcePopupItems(type) {
-  const items = getResourcesByCommessa(selectedCommessaId, type);
-  if (!items.length) return "<p>Nessun contenuto disponibile.</p>";
-  return items.map((item) => `<div class="item"><strong>${escapeHTML(item.title || "-")}</strong><p>${escapeHTML(item.value || "-")}</p></div>`).join("");
 }
 
 function resourceTypeLongLabel(type) {
@@ -2062,23 +2077,23 @@ function renderImpianti() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    const doneBtn = createButton("Fatto", () => markImpiantoDone(impianto));
-    doneBtn.disabled = Boolean(impianto.done);
-    const navigateBtn = createButton("Naviga", () => navigateToImpianto(impianto));
-    const resetBtn = createButton("Reset", () => resetImpianto(impianto));
-    resetBtn.disabled = !canManageData();
-    const waBtn = createButton("WhatsApp", () => openWhatsApp(impianto));
-    const editBtn = createButton("Modifica", () => openImpiantoEditor(impianto));
-    editBtn.disabled = !canManageData();
-    const deleteBtn = createButton("Elimina", () => deleteImpianto(impianto));
-    deleteBtn.disabled = !canManageData();
+    const addAction = (actionKey, icon, title, callback, forceDisabled = false) => {
+      if (isImpiantoActionDenied(actionKey)) return;
+      const actionId = `${selectedCommessaId}:${impiantoKey}:${actionKey}`;
+      const btn = createActionIconButton(icon, title, async () => {
+        await callback();
+        markActionAsUsed(actionId);
+      });
+      if (forceDisabled || isActionUsed(actionId)) setUsedActionButtonState(btn, true);
+      actions.appendChild(btn);
+    };
 
-    actions.appendChild(doneBtn);
-    actions.appendChild(navigateBtn);
-    actions.appendChild(resetBtn);
-    actions.appendChild(waBtn);
-    actions.appendChild(editBtn);
-    actions.appendChild(deleteBtn);
+    addAction("done", "✅", "Segna fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
+    addAction("navigate", "🧭", "Naviga", () => navigateToImpianto(impianto));
+    addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), !canManageData());
+    addAction("whatsapp", "💬", "WhatsApp", () => openWhatsApp(impianto));
+    addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), !canManageData());
+    addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), !canManageData());
     article.appendChild(actions);
 
     ui.impiantiLista.appendChild(article);
@@ -2167,6 +2182,38 @@ function createButton(label, onClick) {
   btn.textContent = label;
   btn.addEventListener("click", onClick);
   return btn;
+}
+
+function createActionIconButton(icon, title, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn action-icon-btn";
+  btn.textContent = icon;
+  btn.title = title;
+  btn.setAttribute("aria-label", title);
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    await onClick();
+  });
+  return btn;
+}
+
+function setUsedActionButtonState(btn, used) {
+  btn.disabled = used;
+  btn.classList.toggle("is-used", used);
+}
+
+function isActionUsed(actionId) {
+  if (!actionId) return false;
+  if (usedActionKeys.has(actionId)) return true;
+  return localStorage.getItem(`usedAction:${actionId}`) === "1";
+}
+
+function markActionAsUsed(actionId) {
+  if (!actionId) return;
+  usedActionKeys.add(actionId);
+  localStorage.setItem(`usedAction:${actionId}`, "1");
+  renderImpianti();
 }
 
 async function navigateToImpianto(impianto) {
@@ -3304,7 +3351,10 @@ function subscribeUsers() {
   unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
     platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+    deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
+    renderUserPermissionList();
+    renderExternalApps();
   });
 }
 
@@ -3314,7 +3364,137 @@ function stopUsersSubscription() {
     unsubscribeUsers = null;
   }
   platformUsers = [];
+  deniedImpiantoActions = new Set();
   renderChatRecipients();
+  renderUserPermissionList();
+  renderExternalApps();
+}
+
+function getDeniedActionsForCurrentUser() {
+  if (!currentUser) return new Set();
+  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  const denied = Array.isArray(row?.deniedImpiantoActions) ? row.deniedImpiantoActions : [];
+  return new Set(denied.filter((action) => IMPIANTO_ACTIONS.includes(action)));
+}
+
+function isImpiantoActionDenied(action) {
+  return deniedImpiantoActions.has(action);
+}
+
+function actionLabel(action) {
+  const map = {
+    done: "✅ Fatto",
+    navigate: "🧭 Naviga",
+    reset: "♻️ Reset",
+    whatsapp: "💬 WhatsApp",
+    edit: "✏️ Modifica",
+    delete: "🗑️ Elimina"
+  };
+  return map[action] || action;
+}
+
+function renderUserPermissionList() {
+  if (!ui.userPermissionsList) return;
+  if (!currentUser) {
+    ui.userPermissionsList.innerHTML = "<p class='muted'>Fai login per gestire i permessi.</p>";
+    return;
+  }
+  if (!canManageData()) {
+    ui.userPermissionsList.innerHTML = "<p class='muted'>Solo gli admin possono cambiare i permessi azione.</p>";
+    return;
+  }
+  const users = platformUsers.filter((user) => !adminEmails.has(normalizeEmail(user.email)));
+  if (!users.length) {
+    ui.userPermissionsList.innerHTML = "<p class='muted'>Nessun utente disponibile.</p>";
+    return;
+  }
+  ui.userPermissionsList.innerHTML = "";
+  users.forEach((user) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item stacked";
+    const title = document.createElement("strong");
+    title.textContent = user.displayName || user.email || user.id;
+    row.appendChild(title);
+    const actionBox = document.createElement("div");
+    actionBox.className = "actions-row";
+    const denied = new Set(Array.isArray(user.deniedImpiantoActions) ? user.deniedImpiantoActions : []);
+    IMPIANTO_ACTIONS.forEach((action) => {
+      const btn = createButton(actionLabel(action), async () => {
+        const next = new Set(denied);
+        if (next.has(action)) next.delete(action);
+        else next.add(action);
+        await db.collection("platformUsers").doc(user.id).set({
+          deniedImpiantoActions: Array.from(next),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: currentUser?.email || ""
+        }, { merge: true });
+      });
+      btn.classList.add("btn-small");
+      if (denied.has(action)) btn.classList.add("btn-primary");
+      actionBox.appendChild(btn);
+    });
+    row.appendChild(actionBox);
+    ui.userPermissionsList.appendChild(row);
+  });
+}
+
+function renderExternalApps() {
+  if (!ui.externalAppsList) return;
+  if (!currentUser) {
+    ui.externalAppsList.innerHTML = "<p class='muted'>Fai login per collegare app esterne.</p>";
+    return;
+  }
+  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  const apps = Array.isArray(row?.externalApps) ? row.externalApps : [];
+  if (!apps.length) {
+    ui.externalAppsList.innerHTML = "<p class='muted'>Nessuna app esterna collegata.</p>";
+    return;
+  }
+  ui.externalAppsList.innerHTML = "";
+  apps.forEach((app, index) => {
+    const item = document.createElement("div");
+    item.className = "simple-list-item";
+    const label = document.createElement("a");
+    label.href = app.url;
+    label.target = "_blank";
+    label.rel = "noopener noreferrer";
+    label.textContent = `🔗 ${app.name || app.url}`;
+    item.appendChild(label);
+    const removeBtn = createButton("Rimuovi", () => removeExternalApp(index));
+    item.appendChild(removeBtn);
+    ui.externalAppsList.appendChild(item);
+  });
+}
+
+async function saveExternalAppForCurrentUser(event) {
+  event.preventDefault();
+  if (!currentUser) return;
+  const name = String(ui.externalAppName.value || "").trim();
+  const rawUrl = String(ui.externalAppUrl.value || "").trim();
+  if (!name || !rawUrl) return;
+  const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  const apps = Array.isArray(row?.externalApps) ? row.externalApps : [];
+  const next = [...apps, { name, url }];
+  await db.collection("platformUsers").doc(currentUser.uid).set({
+    externalApps: next,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser.email || ""
+  }, { merge: true });
+  ui.externalAppForm.reset();
+}
+
+async function removeExternalApp(index) {
+  if (!currentUser) return;
+  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  const apps = Array.isArray(row?.externalApps) ? row.externalApps : [];
+  if (index < 0 || index >= apps.length) return;
+  const next = apps.filter((_, i) => i !== index);
+  await db.collection("platformUsers").doc(currentUser.uid).set({
+    externalApps: next,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser.email || ""
+  }, { merge: true });
 }
 
 function renderChatRecipients() {
@@ -3767,18 +3947,10 @@ function resetDriveState() {
 function updateDriveStatus(isConnected) {
   const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
   ui.driveStatus.classList.toggle("status-chip-drive", connected);
-  if (!canManageData()) {
-    ui.driveStatus.textContent = "Google Drive attivo solo per l'admin.";
-    return;
-  }
-  ui.driveStatus.textContent = connected ? "Drive admin collegato." : "Drive admin non collegato.";
+  ui.driveStatus.textContent = connected ? "Drive collegato." : "Drive non collegato.";
 }
 
 async function connectGoogleDrive() {
-  if (!canManageData()) {
-    alert("Solo un admin può collegare Google Drive.");
-    return;
-  }
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");

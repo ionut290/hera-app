@@ -148,12 +148,17 @@ const ui = {
   privateDocsFeedback: document.getElementById("private-docs-feedback"),
   privateDocsList: document.getElementById("private-docs-list"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
-  segnalazioneOperatore: document.getElementById("segnalazione-operatore"),
-  segnalazioneCommessa: document.getElementById("segnalazione-commessa"),
-  segnalazioneImpianto: document.getElementById("segnalazione-impianto"),
-  segnalazioneTitolo: document.getElementById("segnalazione-titolo"),
-  segnalazioneTesto: document.getElementById("segnalazione-testo"),
-  segnalazioneSendWhatsappBtn: document.getElementById("segnalazione-send-whatsapp-btn"),
+  segnalazionePreposto: document.getElementById("segnalazione-preposto"),
+  segnalazioneData: document.getElementById("segnalazione-data"),
+  segnalazioneDataFooter: document.getElementById("segnalazione-data-footer"),
+  segnalazioneOra: document.getElementById("segnalazione-ora"),
+  segnalazioneCantiere: document.getElementById("segnalazione-cantiere"),
+  segnalazioneDescrizione: document.getElementById("segnalazione-descrizione"),
+  segnalazionePresaVisione: document.getElementById("segnalazione-presa-visione"),
+  segnalazioneFirmaTec: document.getElementById("segnalazione-firma-tec"),
+  segnalazioneFirmaPreposto: document.getElementById("segnalazione-firma-preposto"),
+  segnalazioneShareWhatsappBtn: document.getElementById("segnalazione-share-whatsapp-btn"),
+  segnalazioneShareEmailBtn: document.getElementById("segnalazione-share-email-btn"),
   segnalazioneFeedback: document.getElementById("segnalazione-feedback"),
   manualImpiantoForm: document.getElementById("manual-impianto-form"),
   manualImpiantoDenominazione: document.getElementById("manual-impianto-denominazione"),
@@ -232,7 +237,8 @@ const localSheetMutationAt = new Map();
 let fuelMapInstance = null;
 let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
-let segnalazioneImpiantiCache = [];
+let lastSegnalazionePdfBlob = null;
+let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let privateDocsRecords = [];
 let gpsUpdateRequests = [];
@@ -293,14 +299,14 @@ const howtoFaqItems = [
   },
   {
     id: "segnalazione-pdf",
-    domanda: "Come invio una segnalazione impianto su WhatsApp?",
-    rispostaBreve: "Seleziona commessa e impianto, compila titolo e testo, poi invia su WhatsApp.",
+    domanda: "Come genero e condivido una segnalazione PDF?",
+    rispostaBreve: "Compila la scheda segnalazione, genera PDF e invia via WhatsApp o Email.",
     passi: [
-      "Apri menu → “Segnalazioni” e compila i campi obbligatori.",
-      "Scegli prima la commessa e poi l'impianto dal menu a tendina.",
-      "Premi “Fatto, invia WhatsApp” e scegli il contatto."
+      "Apri menu → “Segnalazioni” e compila tutti i campi obbligatori.",
+      "Seleziona almeno una tipologia di segnalazione.",
+      "Premi “Genera PDF”, poi usa i pulsanti di condivisione."
     ],
-    tags: ["segnalazioni", "whatsapp", "impianti"],
+    tags: ["segnalazioni", "pdf", "sicurezza"],
     updatedAt: "2026-04-10"
   },
   {
@@ -424,8 +430,10 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
-ui.segnalazioneForm?.addEventListener("submit", submitSegnalazioneImpianto);
-ui.segnalazioneCommessa?.addEventListener("change", onSegnalazioneCommessaChange);
+ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
+ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
+ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
+ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
@@ -446,7 +454,7 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
 
 addSquadraRow();
 initGeolocation();
-prefillSegnalazioneForm();
+prefillSegnalazioneDateTime();
 renderHowtoFaq();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
@@ -762,7 +770,8 @@ function closeFuelPage() {
 }
 
 function openSegnalazioniPage() {
-  prefillSegnalazioneForm();
+  prefillSegnalazioneDateTime();
+  syncSegnalazioneFirmaPreposto();
   window.location.hash = "segnalazioni";
   applyRoute();
   closeSideMenu();
@@ -839,158 +848,144 @@ function renderHowtoFaq() {
   });
 }
 
-function prefillSegnalazioneForm() {
-  if (!ui.segnalazioneOperatore) return;
-  const fallback = currentUser?.displayName || currentUser?.email || "";
-  if (!ui.segnalazioneOperatore.value) ui.segnalazioneOperatore.value = fallback;
-  populateSegnalazioneCommesseSelect();
-}
-
-function populateSegnalazioneCommesseSelect() {
-  if (!ui.segnalazioneCommessa) return;
-  const previous = ui.segnalazioneCommessa.value || "";
-  ui.segnalazioneCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
-  const commesse = Array.from(commesseById.values()).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it"));
-  commesse.forEach((commessa) => {
-    const option = document.createElement("option");
-    option.value = commessa.id;
-    option.textContent = commessa.nome || "Commessa senza nome";
-    ui.segnalazioneCommessa.appendChild(option);
-  });
-  if (previous && commesseById.has(previous)) {
-    ui.segnalazioneCommessa.value = previous;
-  } else if (selectedCommessaId && commesseById.has(selectedCommessaId)) {
-    ui.segnalazioneCommessa.value = selectedCommessaId;
-  }
-  onSegnalazioneCommessaChange();
-}
-
-async function onSegnalazioneCommessaChange() {
-  if (!ui.segnalazioneImpianto) return;
-  const commessaId = ui.segnalazioneCommessa.value;
-  ui.segnalazioneImpianto.disabled = true;
-  ui.segnalazioneImpianto.innerHTML = commessaId
-    ? "<option value=''>Caricamento impianti...</option>"
-    : "<option value=''>Seleziona prima una commessa</option>";
-  segnalazioneImpiantiCache = [];
-  if (!commessaId) return;
-  try {
-    const snapshot = await db.collection("commesse").doc(commessaId).collection("impianti").get();
-    segnalazioneImpiantiCache = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const mergedImpianti = combineImpiantiForView(segnalazioneImpiantiCache)
-      .sort((a, b) => String(a.denominazione || "").localeCompare(String(b.denominazione || ""), "it"));
-    ui.segnalazioneImpianto.innerHTML = "<option value=''>Seleziona impianto</option>";
-    mergedImpianti.forEach((impianto) => {
-      const option = document.createElement("option");
-      option.value = buildImpiantoKey(impianto);
-      option.textContent = `${impianto.denominazione || "Impianto"} • ${impianto.comune || "-"}`;
-      ui.segnalazioneImpianto.appendChild(option);
-    });
-    ui.segnalazioneImpianto.disabled = mergedImpianti.length === 0;
-    if (!mergedImpianti.length) {
-      ui.segnalazioneImpianto.innerHTML = "<option value=''>Nessun impianto disponibile</option>";
-    }
-  } catch (error) {
-    console.error("Errore caricamento impianti per segnalazione:", error);
-    ui.segnalazioneImpianto.innerHTML = "<option value=''>Errore caricamento impianti</option>";
-  }
-}
-
-function getSegnalazioneImpiantoData() {
-  const commessaId = ui.segnalazioneCommessa.value || "";
-  const commessa = commesseById.get(commessaId) || {};
-  const impiantoKey = ui.segnalazioneImpianto.value || "";
-  const impiantoList = combineImpiantiForView(segnalazioneImpiantiCache);
-  const impianto = impiantoList.find((item) => buildImpiantoKey(item) === impiantoKey) || null;
+function prefillSegnalazioneDateTime() {
   const now = new Date();
+  const dateValue = now.toLocaleDateString("it-IT");
+  ui.segnalazioneData.value = dateValue;
+  ui.segnalazioneDataFooter.value = dateValue;
+  ui.segnalazioneOra.value = now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function syncSegnalazioneFirmaPreposto() {
+  const nameFromInput = (ui.segnalazionePreposto.value || "").trim();
+  const fallback = currentUser?.displayName || currentUser?.email || "";
+  ui.segnalazioneFirmaPreposto.value = nameFromInput || fallback;
+}
+
+function getSegnalazioneData() {
+  const selectedTypes = Array.from(document.querySelectorAll("input[name='segnalazione-tipo']:checked"))
+    .map((input) => input.value);
   return {
-    operatore: String(ui.segnalazioneOperatore.value || "").trim(),
-    commessaId,
-    commessaNome: commessa.nome || "",
-    impiantoKey,
-    impianto,
-    titolo: String(ui.segnalazioneTitolo.value || "").trim(),
-    testo: String(ui.segnalazioneTesto.value || "").trim(),
-    createdAtIso: now.toISOString(),
-    createdAtLabel: now.toLocaleString("it-IT")
+    preposto: (ui.segnalazionePreposto.value || "").trim(),
+    data: (ui.segnalazioneData.value || "").trim(),
+    ora: (ui.segnalazioneOra.value || "").trim(),
+    cantiere: (ui.segnalazioneCantiere.value || "").trim(),
+    tipi: selectedTypes,
+    descrizione: (ui.segnalazioneDescrizione.value || "").trim(),
+    presaVisioneTec: "",
+    firmaTec: "",
+    firmaPreposto: (ui.segnalazioneFirmaPreposto.value || "").trim()
   };
 }
 
-function validateSegnalazioneImpiantoData(data) {
-  if (!data.operatore || !data.commessaId || !data.impiantoKey || !data.titolo || !data.testo) {
-    return "Compila tutti i campi obbligatori.";
-  }
-  if (!data.impianto) return "Seleziona un impianto valido.";
+function validateSegnalazioneData(data) {
+  const requiredValues = [
+    data.preposto,
+    data.data,
+    data.ora,
+    data.cantiere,
+    data.descrizione,
+    data.firmaPreposto
+  ];
+  if (requiredValues.some((value) => !value)) return "Compila tutti i campi obbligatori.";
+  if (!data.tipi.length) return "Seleziona almeno una voce in 'Segnalazione di'.";
   return "";
 }
 
-function buildProfessionalSegnalazioneMessage(data) {
-  const impianto = data.impianto || {};
-  const locationParts = [impianto.comune || "", impianto.indirizzo || ""].filter(Boolean);
-  const locationLabel = locationParts.length ? locationParts.join(", ") : "n/d";
-  return [
-    "📌 *Segnalazione impianto*",
-    "",
-    `*Titolo:* ${data.titolo}`,
-    `*Data/Ora:* ${data.createdAtLabel}`,
-    `*Operatore:* ${data.operatore}`,
-    "",
-    "*Riferimenti impianto*",
-    `• Commessa: ${data.commessaNome || "-"}`,
-    `• Impianto: ${impianto.denominazione || "-"}`,
-    `• ID SAP: ${impianto.idSap || "-"}`,
-    `• Ubicazione: ${locationLabel}`,
-    "",
-    "*Descrizione segnalazione*",
-    data.testo,
-    "",
-    "Messaggio generato da Hera App."
-  ].join("\n");
-}
-
-async function saveSegnalazioneToDrive(data, whatsappMessage) {
-  if (!driveAccessToken) return null;
-  if (!driveReportsFolderId) await ensureDriveFolders();
-  const safeTitle = (data.titolo || "segnalazione").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
-  const fileName = `segnalazione-impianto-${safeTitle || "nuova"}-${Date.now()}.txt`;
-  const blob = new Blob([whatsappMessage], { type: "text/plain;charset=utf-8" });
-  return uploadBlobToDrive(blob, fileName, "text/plain", driveReportsFolderId);
-}
-
-async function submitSegnalazioneImpianto(event) {
+async function generateSegnalazionePdf(event) {
   event.preventDefault();
-  const data = getSegnalazioneImpiantoData();
-  const validationError = validateSegnalazioneImpiantoData(data);
+  prefillSegnalazioneDateTime();
+  syncSegnalazioneFirmaPreposto();
+  const data = getSegnalazioneData();
+  const validationError = validateSegnalazioneData(data);
   if (validationError) {
     ui.segnalazioneFeedback.textContent = validationError;
+    ui.segnalazioneShareWhatsappBtn.disabled = true;
+    ui.segnalazioneShareEmailBtn.disabled = true;
+    return;
+  }
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    ui.segnalazioneFeedback.textContent = "Generatore PDF non disponibile.";
+    return;
+  }
+  if (!window.html2canvas) {
+    ui.segnalazioneFeedback.textContent = "Motore di acquisizione modulo non disponibile.";
     return;
   }
 
-  const whatsappMessage = buildProfessionalSegnalazioneMessage(data);
-  try {
-    await db.collection("impiantoSegnalazioni").add({
-      ...data,
-      impianto: data.impianto || {},
-      whatsappMessage,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdByUid: currentUser?.uid || "",
-      createdByEmail: currentUser?.email || ""
-    });
-  } catch (error) {
-    console.error("Errore salvataggio segnalazione su Firestore:", error);
+  const { jsPDF } = window.jspdf;
+  const sheetNode = document.querySelector(".segnalazione-sheet");
+  if (!sheetNode) {
+    ui.segnalazioneFeedback.textContent = "Modulo segnalazione non trovato.";
+    return;
   }
+  const canvas = await window.html2canvas(sheetNode, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff"
+  });
+  const imageData = canvas.toDataURL("image/png");
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 5;
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+  const imageRatio = canvas.width / canvas.height;
+  let renderWidth = maxWidth;
+  let renderHeight = renderWidth / imageRatio;
+  if (renderHeight > maxHeight) {
+    renderHeight = maxHeight;
+    renderWidth = renderHeight * imageRatio;
+  }
+  const x = (pageWidth - renderWidth) / 2;
+  const y = (pageHeight - renderHeight) / 2;
+  doc.addImage(imageData, "PNG", x, y, renderWidth, renderHeight, undefined, "FAST");
 
-  try {
-    const upload = await saveSegnalazioneToDrive(data, whatsappMessage);
-    if (upload?.webViewLink) {
-      console.info("Segnalazione salvata su Drive:", upload.webViewLink);
+  const safeDate = data.data.replace(/[^\d]/g, "-");
+  lastSegnalazionePdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;
+  lastSegnalazionePdfBlob = doc.output("blob");
+  doc.save(lastSegnalazionePdfName);
+
+  ui.segnalazioneShareWhatsappBtn.disabled = false;
+  ui.segnalazioneShareEmailBtn.disabled = false;
+  ui.segnalazioneFeedback.textContent = "PDF creato. Ora puoi condividerlo con WhatsApp o Email.";
+}
+
+async function shareSegnalazione(channel) {
+  if (!lastSegnalazionePdfBlob) {
+    ui.segnalazioneFeedback.textContent = "Prima genera il PDF.";
+    return;
+  }
+  const file = new File([lastSegnalazionePdfBlob], lastSegnalazionePdfName || "scheda-segnalazione.pdf", {
+    type: "application/pdf"
+  });
+  const shareMessage = "Invio scheda segnalazione in PDF.";
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: "Scheda segnalazione",
+        text: shareMessage,
+        files: [file]
+      });
+      ui.segnalazioneFeedback.textContent = "Condivisione completata.";
+      return;
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        ui.segnalazioneFeedback.textContent = "Condivisione annullata o non disponibile su questo dispositivo.";
+      }
+      return;
     }
-  } catch (error) {
-    console.error("Errore salvataggio segnalazione su Google Drive:", error);
   }
 
-  window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, "_blank");
-  ui.segnalazioneFeedback.textContent = "WhatsApp aperto. Segnalazione salvata e pronta per l'invio.";
+  if (channel === "whatsapp") {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareMessage} Ho generato il PDF: ${lastSegnalazionePdfName}`)}`, "_blank");
+    ui.segnalazioneFeedback.textContent = "WhatsApp aperto. Allega il PDF scaricato prima di inviare.";
+    return;
+  }
+
+  window.location.href = `mailto:?subject=${encodeURIComponent("Scheda segnalazione PDF")}&body=${encodeURIComponent(`Buongiorno,\n\nin allegato la scheda segnalazione (${lastSegnalazionePdfName}).`)}`;
+  ui.segnalazioneFeedback.textContent = "Email aperta. Allega il PDF scaricato prima di inviare.";
 }
 
 function loadPendingSheetExports() {
@@ -1325,7 +1320,6 @@ function subscribeCommesse() {
       renderResourceButtonsForCommessa();
       syncBannerFormFromSelection();
       updateCommessaContextUI();
-      if (ui.segnalazioneCommessa) populateSegnalazioneCommesseSelect();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa");

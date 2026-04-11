@@ -972,31 +972,6 @@ textarea:focus-visible {
   text-shadow: 0 0 14px rgba(15, 157, 88, 0.35);
 }
 
-.commessa-ticker {
-  margin-top: 10px;
-  border-radius: 999px;
-  border: 1px solid var(--ticker-border, #fca5a5);
-  background: var(--ticker-bg, linear-gradient(90deg, #991b1b 0%, #dc2626 42%, #ef4444 100%));
-  color: #fff;
-  overflow: hidden;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-}
-
-.commessa-ticker-text {
-  white-space: nowrap;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  padding-left: 100%;
-  animation: commessa-ticker-scroll 18s linear infinite;
-}
-
-@keyframes commessa-ticker-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
-}
-
 .private-docs-warning {
   font-weight: 700;
   color: #166534;

@@ -44,8 +44,6 @@ const ui = {
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
-  commessaTicker: document.getElementById("commessa-ticker"),
-  commessaTickerText: document.getElementById("commessa-ticker-text"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
@@ -78,7 +76,6 @@ const ui = {
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
-  openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
@@ -91,7 +88,6 @@ const ui = {
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
-  panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
@@ -150,10 +146,6 @@ const ui = {
   privateDocsDriveOnly: document.getElementById("private-docs-drive-only"),
   privateDocsFeedback: document.getElementById("private-docs-feedback"),
   privateDocsList: document.getElementById("private-docs-list"),
-  bannerForm: document.getElementById("banner-form"),
-  bannerCommessa: document.getElementById("banner-commessa"),
-  bannerMessage: document.getElementById("banner-message"),
-  bannerColor: document.getElementById("banner-color"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
@@ -418,7 +410,6 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
-ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
@@ -433,8 +424,6 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
-ui.bannerForm.addEventListener("submit", saveBannerFromPanel);
-ui.bannerCommessa.addEventListener("change", syncBannerFormFromSelection);
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -597,7 +586,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili, ui.openPanelBanner]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
@@ -621,10 +610,6 @@ function updateAdminControls() {
   ui.resourceValue.disabled = !canManage;
   ui.resourceCommesse.disabled = !canManage;
   ui.resourceSubmit.disabled = !canManage;
-  ui.bannerCommessa.disabled = !canManage;
-  ui.bannerMessage.disabled = !canManage;
-  ui.bannerColor.disabled = !canManage;
-  if (ui.bannerForm?.querySelector("button[type='submit']")) ui.bannerForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
   if (ui.externalAppForm && ui.externalAppForm.querySelector("button[type='submit']")) {
@@ -667,12 +652,11 @@ function openManagementPanel(panel) {
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
-    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
-    banner: { el: ui.panelBanner, title: "Gestione banner pubblicitari" }
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili, ui.panelBanner].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -1236,7 +1220,6 @@ function subscribeCommesse() {
       ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
       ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
       ui.resourceCommesse.innerHTML = "";
-      if (ui.bannerCommessa) ui.bannerCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -1269,7 +1252,6 @@ function subscribeCommesse() {
         ui.squadraCommessa.appendChild(option);
         ui.commessaTargetSelect.appendChild(option.cloneNode(true));
         ui.resourceCommesse.appendChild(option.cloneNode(true));
-        ui.bannerCommessa?.appendChild(option.cloneNode(true));
         if (!selectedCommessaId && activeStoredId && activeStoredId === doc.id) shouldRestoreOpenCommessa = true;
       });
 
@@ -1782,19 +1764,6 @@ function updateCommessaContextUI() {
   if (ui.commessaFocusLabel) {
     ui.commessaFocusLabel.textContent = (selectedCommessaName || "Commessa").toUpperCase();
   }
-  const commessa = commesseById.get(selectedCommessaId) || {};
-  const tickerText = String(commessa.tickerMessage || "").trim();
-  const tickerColor = normalizeHexColor(commessa.tickerColor || "#dc2626");
-  if (!ui.commessaTicker || !ui.commessaTickerText) return;
-  ui.commessaTicker.classList.toggle("hidden", !tickerText);
-  ui.commessaTickerText.textContent = tickerText || "";
-  ui.commessaTicker.style.setProperty("--ticker-bg", tickerColor);
-  ui.commessaTicker.style.setProperty("--ticker-border", tickerColor);
-}
-
-function normalizeHexColor(value) {
-  const raw = String(value || "").trim();
-  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#dc2626";
 }
 
 function updateCommessaButtonsActive() {
@@ -4047,7 +4016,6 @@ function renderCommesseManagementList() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
-    actions.appendChild(createButton("Banner", () => editCommessaTicker(commessa.id, commessa.nome || "Commessa", commessa.tickerMessage || "")));
     actions.appendChild(createButton("Rinomina", () => renameCommessa(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
@@ -4056,48 +4024,6 @@ function renderCommesseManagementList() {
     row.appendChild(actions);
     ui.commesseManageList.appendChild(row);
   });
-}
-
-async function editCommessaTicker(commessaId, commessaName, currentMessage) {
-  if (!canManageData()) return;
-  const next = window.prompt(`Messaggio banner per ${commessaName} (vuoto per rimuovere):`, currentMessage || "");
-  if (next === null) return;
-  await db.collection("commesse").doc(commessaId).set({
-    tickerMessage: String(next || "").trim(),
-    tickerColor: normalizeHexColor(commesseById.get(commessaId)?.tickerColor || "#dc2626"),
-    tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    tickerUpdatedBy: currentUser?.email || ""
-  }, { merge: true });
-}
-
-function syncBannerFormFromSelection() {
-  if (!ui.bannerCommessa || !ui.bannerMessage || !ui.bannerColor) return;
-  const commessaId = ui.bannerCommessa.value;
-  const commessa = commesseById.get(commessaId) || {};
-  ui.bannerMessage.value = String(commessa.tickerMessage || "");
-  ui.bannerColor.value = normalizeHexColor(commessa.tickerColor || "#dc2626");
-}
-
-async function saveBannerFromPanel(event) {
-  event.preventDefault();
-  if (!canManageData()) {
-    alert("Solo un admin può gestire i banner.");
-    return;
-  }
-  const commessaId = String(ui.bannerCommessa.value || "").trim();
-  if (!commessaId) {
-    alert("Seleziona una commessa.");
-    return;
-  }
-  const message = String(ui.bannerMessage.value || "").trim();
-  const color = normalizeHexColor(ui.bannerColor.value || "#dc2626");
-  await db.collection("commesse").doc(commessaId).set({
-    tickerMessage: message,
-    tickerColor: color,
-    tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    tickerUpdatedBy: currentUser?.email || ""
-  }, { merge: true });
-  ui.bannerMessage.value = message;
 }
 
 async function renameCommessa(commessaId, currentName) {

@@ -446,6 +446,21 @@
     </div>
   </section>
 
+  <section id="impianto-report-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2>Segnala problema impianto</h2>
+        <button id="impianto-report-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <form id="impianto-report-form" class="resource-form">
+        <input id="impianto-report-title" type="text" placeholder="Titolo segnalazione" maxlength="120" required>
+        <textarea id="impianto-report-text" placeholder="Testo segnalazione" maxlength="1500" required></textarea>
+        <button id="impianto-report-submit-btn" class="btn btn-primary" type="submit">Invia WhatsApp</button>
+      </form>
+      <p id="impianto-report-feedback" class="muted"></p>
+    </div>
+  </section>
+
   <section id="howto-page" class="hidden">
     <section class="card">
       <div class="page-head">

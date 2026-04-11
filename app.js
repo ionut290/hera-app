@@ -171,6 +171,12 @@ const ui = {
   impiantoEditCloseBtn: document.getElementById("impianto-edit-close-btn"),
   impiantoEditForm: document.getElementById("impianto-edit-form"),
   impiantoEditFeedback: document.getElementById("impianto-edit-feedback"),
+  impiantoReportModal: document.getElementById("impianto-report-modal"),
+  impiantoReportCloseBtn: document.getElementById("impianto-report-close-btn"),
+  impiantoReportForm: document.getElementById("impianto-report-form"),
+  impiantoReportTitle: document.getElementById("impianto-report-title"),
+  impiantoReportText: document.getElementById("impianto-report-text"),
+  impiantoReportFeedback: document.getElementById("impianto-report-feedback"),
   editDistretto: document.getElementById("edit-distretto"),
   editIdSap: document.getElementById("edit-id-sap"),
   editDenominazione: document.getElementById("edit-denominazione"),
@@ -245,6 +251,7 @@ let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
 let editingImpiantoIds = [];
+let reportingImpianto = null;
 let chatRetentionTimer = null;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
@@ -337,7 +344,7 @@ const howtoFaqItems = [
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
-const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "gps-update", "edit", "delete"];
+const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
@@ -441,6 +448,8 @@ ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.resourceType.addEventListener("change", updateResourceFormByType);
 ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
+ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
+ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
@@ -2484,6 +2493,7 @@ function renderImpianti() {
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
     addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
     addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
+    addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto));
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
@@ -3325,6 +3335,56 @@ function openWhatsApp(impianto) {
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank");
+}
+
+function openImpiantoReportModal(impianto) {
+  reportingImpianto = impianto || null;
+  ui.impiantoReportForm.reset();
+  ui.impiantoReportFeedback.textContent = "";
+  ui.impiantoReportModal.classList.remove("hidden");
+}
+
+function closeImpiantoReportModal() {
+  reportingImpianto = null;
+  ui.impiantoReportForm.reset();
+  ui.impiantoReportFeedback.textContent = "";
+  ui.impiantoReportModal.classList.add("hidden");
+}
+
+async function submitImpiantoReport(event) {
+  event.preventDefault();
+  if (!reportingImpianto) {
+    ui.impiantoReportFeedback.textContent = "Impianto non disponibile per la segnalazione.";
+    return;
+  }
+  const user = auth.currentUser;
+  if (!user) {
+    ui.impiantoReportFeedback.textContent = "Devi fare login prima di inviare una segnalazione.";
+    return;
+  }
+  const titolo = String(ui.impiantoReportTitle.value || "").trim();
+  const testo = String(ui.impiantoReportText.value || "").trim();
+  if (!titolo || !testo) {
+    ui.impiantoReportFeedback.textContent = "Compila titolo e testo della segnalazione.";
+    return;
+  }
+  const now = new Date();
+  const message = [
+    "⚠️ SEGNALAZIONE PROBLEMA IMPIANTO - Report operativo",
+    `🏗️ Impianto: ${reportingImpianto.denominazione || "-"}`,
+    `📍 Comune: ${reportingImpianto.comune || "-"}`,
+    `🛣️ Via: ${reportingImpianto.indirizzo || "-"}`,
+    `🆔 ID SAP: ${reportingImpianto.idSap || "-"}`,
+    `📝 Oggetto segnalazione: ${titolo}`,
+    `📋 Dettaglio problema segnalato: ${testo}`,
+    `👷 Operatore segnalante: ${user.displayName || user.email || "-"}`,
+    `📅 Data segnalazione: ${now.toLocaleDateString("it-IT")}`,
+    `🕒 Ora segnalazione: ${now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })}`,
+    "✅ Conferma: stiamo segnalando al cliente il problema riscontrato e il relativo intervento richiesto."
+  ].join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+  ui.impiantoReportFeedback.textContent = "WhatsApp aperto con la segnalazione pronta da inviare.";
+  setTimeout(closeImpiantoReportModal, 200);
 }
 
 function getCurrentPositionOnce() {
@@ -4182,6 +4242,7 @@ function actionLabel(action) {
     navigate: "🧭 Naviga",
     reset: "♻️ Reset",
     whatsapp: "💬 WhatsApp",
+    "problem-report": "🚨 Segnala problema",
     "gps-update": "📍 Aggiorna GPS",
     edit: "✏️ Modifica",
     delete: "🗑️ Elimina"

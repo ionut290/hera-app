@@ -43,6 +43,9 @@ const ui = {
   chatFeedback: document.getElementById("chat-feedback"),
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
+  commessaFocusLabel: document.getElementById("commessa-focus-label"),
+  commessaTicker: document.getElementById("commessa-ticker"),
+  commessaTickerText: document.getElementById("commessa-ticker-text"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
@@ -75,6 +78,7 @@ const ui = {
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   managementPage: document.getElementById("management-page"),
@@ -131,6 +135,18 @@ const ui = {
   howtoPage: document.getElementById("howto-page"),
   backFromHowtoBtn: document.getElementById("back-from-howto-btn"),
   howtoFaqList: document.getElementById("howto-faq-list"),
+  privateDocsPage: document.getElementById("private-docs-page"),
+  backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
+  privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
+  privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
+  privateDocsForm: document.getElementById("private-docs-form"),
+  privateDocsName: document.getElementById("private-docs-name"),
+  privateDocsNote: document.getElementById("private-docs-note"),
+  privateDocsFile: document.getElementById("private-docs-file"),
+  privateDocsCamera: document.getElementById("private-docs-camera"),
+  privateDocsSaveBtn: document.getElementById("private-docs-save-btn"),
+  privateDocsFeedback: document.getElementById("private-docs-feedback"),
+  privateDocsList: document.getElementById("private-docs-list"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
@@ -187,6 +203,7 @@ let unsubscribeSquadreHistory = null;
 let unsubscribeUsers = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
+let unsubscribePrivateDocs = null;
 let chatMessages = [];
 let platformUsers = [];
 let deniedImpiantoActions = new Set();
@@ -222,6 +239,7 @@ let selectedFuelMezzo = null;
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
+let privateDocsRecords = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
 let editingImpiantoIds = [];
@@ -393,6 +411,7 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
@@ -402,6 +421,10 @@ ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
+ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
+ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
+ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
+ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -511,8 +534,10 @@ auth.onAuthStateChanged((user) => {
   stopUsersSubscription();
   stopAdminUsersSubscription();
   stopResourcesSubscription();
+  stopPrivateDocsSubscription();
   selectedCommessaId = "";
   selectedCommessaName = "";
+  updateCommessaContextUI();
   window.location.hash = "";
   ui.commesseLista.innerHTML = "";
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
@@ -521,6 +546,8 @@ auth.onAuthStateChanged((user) => {
   squadreHistoryByDate = new Map();
   commesseById = new Map();
   resourceRecords = [];
+  privateDocsRecords = [];
+  renderPrivateDocsList();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
   ui.impiantiLista.innerHTML = loggedIn
@@ -551,6 +578,7 @@ auth.onAuthStateChanged((user) => {
     subscribeMezzi();
     subscribeSquadre();
     subscribeResources();
+    subscribePrivateDocs();
     processPendingSheetExports();
   }
   renderExternalApps();
@@ -662,16 +690,18 @@ function applyRoute() {
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
+  const showPrivateDocs = hash === "#documenti";
   const commessaIdFromHash = match ? match[1] : "";
   const resourceTypeFromHash = match ? (match[2] || "") : "";
   const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
+  ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
   const mapElement = document.getElementById("map");
@@ -693,6 +723,7 @@ function applyRoute() {
     setTimeout(() => map.invalidateSize(), 50);
   }
   if (showHowto) renderHowtoFaq();
+  if (showPrivateDocs) renderPrivateDocsList();
   if (showFuel) {
     setTimeout(() => {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
@@ -742,6 +773,21 @@ function openHowtoPage() {
 }
 
 function closeHowtoPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function openPrivateDocsPage() {
+  if (!currentUser) {
+    alert("Devi fare login per usare i documenti personali.");
+    return;
+  }
+  window.location.hash = "documenti";
+  applyRoute();
+  closeSideMenu();
+}
+
+function closePrivateDocsPage() {
   window.location.hash = "";
   applyRoute();
 }
@@ -1178,6 +1224,7 @@ function subscribeCommesse() {
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+        updateCommessaContextUI();
         return;
       }
 
@@ -1213,6 +1260,7 @@ function subscribeCommesse() {
       renderSquadre();
       renderResourcesList();
       renderResourceButtonsForCommessa();
+      updateCommessaContextUI();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa");
@@ -1250,6 +1298,129 @@ function stopResourcesSubscription() {
     unsubscribeResources();
     unsubscribeResources = null;
   }
+}
+
+function subscribePrivateDocs() {
+  if (!currentUser) return;
+  unsubscribePrivateDocs = db
+    .collection("privateDocuments")
+    .doc(currentUser.uid)
+    .collection("items")
+    .orderBy("createdAt", "desc")
+    .onSnapshot((snapshot) => {
+      privateDocsRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderPrivateDocsList();
+    }, (error) => {
+      console.error("Errore caricamento documenti personali:", error);
+      ui.privateDocsFeedback.textContent = "Errore caricamento documenti personali.";
+    });
+}
+
+function stopPrivateDocsSubscription() {
+  if (unsubscribePrivateDocs) {
+    unsubscribePrivateDocs();
+    unsubscribePrivateDocs = null;
+  }
+}
+
+function applyPrivateDocPreset(type) {
+  if (!ui.privateDocsName || !ui.privateDocsNote) return;
+  if (type === "pin") {
+    ui.privateDocsName.value = "PIN carburante";
+    ui.privateDocsNote.value = "Inserisci qui il PIN della carta carburante.";
+    return;
+  }
+  if (type === "tessera") {
+    ui.privateDocsName.value = "Tessera di riconoscimento";
+    ui.privateDocsNote.value = "Documento personale di riconoscimento.";
+  }
+}
+
+async function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Lettura file non riuscita"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function savePrivateDocument(event) {
+  event.preventDefault();
+  if (!currentUser) return;
+  const name = String(ui.privateDocsName.value || "").trim();
+  const note = String(ui.privateDocsNote.value || "").trim();
+  const file = ui.privateDocsFile.files?.[0] || ui.privateDocsCamera.files?.[0] || null;
+  if (!name) {
+    ui.privateDocsFeedback.textContent = "La denominazione è obbligatoria.";
+    return;
+  }
+  let fileDataUrl = "";
+  let fileName = "";
+  let fileType = "";
+  let fileSize = 0;
+  if (file) {
+    fileSize = Number(file.size || 0);
+    if (fileSize > 700 * 1024) {
+      ui.privateDocsFeedback.textContent = "File troppo grande: usa file sotto 700KB.";
+      return;
+    }
+    fileDataUrl = await readFileAsDataUrl(file);
+    fileName = file.name || "documento";
+    fileType = file.type || "application/octet-stream";
+  }
+  await db.collection("privateDocuments").doc(currentUser.uid).collection("items").add({
+    name,
+    note,
+    fileName,
+    fileType,
+    fileSize,
+    fileDataUrl,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  ui.privateDocsForm.reset();
+  ui.privateDocsFeedback.textContent = "Documento personale salvato.";
+}
+
+async function deletePrivateDocument(docId) {
+  if (!currentUser || !docId) return;
+  const ok = window.confirm("Eliminare questo documento personale?");
+  if (!ok) return;
+  await db.collection("privateDocuments").doc(currentUser.uid).collection("items").doc(docId).delete();
+}
+
+function renderPrivateDocsList() {
+  if (!ui.privateDocsList) return;
+  if (!currentUser) {
+    ui.privateDocsList.innerHTML = "<p class='muted'>Fai login per usare i documenti personali.</p>";
+    return;
+  }
+  if (!privateDocsRecords.length) {
+    ui.privateDocsList.innerHTML = "<p class='muted'>Nessun documento personale salvato.</p>";
+    return;
+  }
+  ui.privateDocsList.innerHTML = "";
+  privateDocsRecords.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item stacked";
+    const createdAt = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString("it-IT") : "-";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHTML(item.name || "Documento")}</strong>
+        <p class="muted">${escapeHTML(item.note || "-")}</p>
+        <p class="muted">Data inserimento: ${escapeHTML(createdAt)}</p>
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.className = "actions-row";
+    if (item.fileDataUrl) {
+      actions.appendChild(createButton("Apri allegato", () => window.open(item.fileDataUrl, "_blank")));
+    }
+    actions.appendChild(createButton("Elimina", () => deletePrivateDocument(item.id)));
+    row.appendChild(actions);
+    ui.privateDocsList.appendChild(row);
+  });
 }
 
 async function addResourceItem(event) {
@@ -1471,6 +1642,7 @@ function selectCommessa(id, nome) {
     ui.commessaTargetSelect.value = id;
   }
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
+  updateCommessaContextUI();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
   updateCommessaButtonsActive();
@@ -1480,6 +1652,17 @@ function selectCommessa(id, nome) {
   stopImpiantiSubscription();
   subscribeImpianti();
   openImpiantiPage();
+}
+
+function updateCommessaContextUI() {
+  if (ui.commessaFocusLabel) {
+    ui.commessaFocusLabel.textContent = (selectedCommessaName || "Commessa").toUpperCase();
+  }
+  const commessa = commesseById.get(selectedCommessaId) || {};
+  const tickerText = String(commessa.tickerMessage || "").trim();
+  if (!ui.commessaTicker || !ui.commessaTickerText) return;
+  ui.commessaTicker.classList.toggle("hidden", !tickerText);
+  ui.commessaTickerText.textContent = tickerText || "";
 }
 
 function updateCommessaButtonsActive() {
@@ -3732,6 +3915,7 @@ function renderCommesseManagementList() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
+    actions.appendChild(createButton("Banner", () => editCommessaTicker(commessa.id, commessa.nome || "Commessa", commessa.tickerMessage || "")));
     actions.appendChild(createButton("Rinomina", () => renameCommessa(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
@@ -3740,6 +3924,17 @@ function renderCommesseManagementList() {
     row.appendChild(actions);
     ui.commesseManageList.appendChild(row);
   });
+}
+
+async function editCommessaTicker(commessaId, commessaName, currentMessage) {
+  if (!canManageData()) return;
+  const next = window.prompt(`Messaggio banner per ${commessaName} (vuoto per rimuovere):`, currentMessage || "");
+  if (next === null) return;
+  await db.collection("commesse").doc(commessaId).set({
+    tickerMessage: String(next || "").trim(),
+    tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    tickerUpdatedBy: currentUser?.email || ""
+  }, { merge: true });
 }
 
 async function renameCommessa(commessaId, currentName) {

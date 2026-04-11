@@ -785,15 +785,18 @@ textarea:focus-visible {
 
 .commessa-tools-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-bottom: 10px;
+  align-items: center;
+  overflow-x: auto;
 }
 
 .commessa-resource-buttons {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  margin-left: auto;
 }
 
 .commessa-resource-viewer {

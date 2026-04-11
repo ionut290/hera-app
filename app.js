@@ -193,7 +193,7 @@ let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let activeResourceTypeForViewer = "";
-let activeResourceManageFilter = "all";
+let activeResourceManageFilter = "";
 const howtoFaqItems = [
   {
     id: "login-google",
@@ -373,10 +373,11 @@ ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.resourceType.addEventListener("change", updateResourceFormByType);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    activeResourceManageFilter = btn.dataset.resourceFilter || "all";
+    activeResourceManageFilter = btn.dataset.resourceFilter || "";
     renderResourceManageFilters();
     renderResourcesList();
   });
@@ -392,6 +393,7 @@ loadPendingSheetExports();
 startSheetRetryLoop();
 initHelpCenterFaq();
 renderResourceManageFilters();
+updateResourceFormByType();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
@@ -513,6 +515,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
+  ui.openPanelInfoUtili.classList.toggle("hidden", !canManage);
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
@@ -543,6 +546,7 @@ function updateAdminControls() {
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
     : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
+  updateResourceFormByType();
 }
 
 function openSideMenu() {
@@ -1186,7 +1190,11 @@ async function deleteResourceItem(resourceId) {
 
 function renderResourcesList() {
   if (!ui.resourcesList) return;
-  const visibleResources = resourceRecords.filter((item) => activeResourceManageFilter === "all" || item.type === activeResourceManageFilter);
+  if (!activeResourceManageFilter) {
+    ui.resourcesList.innerHTML = "<p class='muted'>Seleziona una categoria (📞 / 📄 / 📝) per vedere l'archivio.</p>";
+    return;
+  }
+  const visibleResources = resourceRecords.filter((item) => item.type === activeResourceManageFilter);
   if (!visibleResources.length) {
     ui.resourcesList.innerHTML = "<p class='muted'>Nessuna informazione utile caricata.</p>";
     return;
@@ -1214,15 +1222,15 @@ function renderResourcesList() {
 
 function renderResourceManageFilters() {
   document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
-    const isActive = (btn.dataset.resourceFilter || "all") === activeResourceManageFilter;
+    const isActive = (btn.dataset.resourceFilter || "") === activeResourceManageFilter;
     btn.classList.toggle("btn-primary", isActive);
   });
 }
 
 function resourceTypeLabel(type) {
-  if (type === "phone") return "Agenda";
-  if (type === "document") return "Documenti";
-  if (type === "note") return "Note";
+  if (type === "phone") return "📞";
+  if (type === "document") return "📄";
+  if (type === "note") return "📝";
   return "Info";
 }
 
@@ -1243,8 +1251,10 @@ function renderResourceButtonsForCommessa() {
   types.forEach((type) => {
     const count = getResourcesByCommessa(selectedCommessaId, type).length;
     if (!count) return;
-    const label = `${resourceTypeLabel(type)} (${count})`;
+    const label = `${resourceTypeLabel(type)} ${count}`;
     const btn = createButton(label, () => openCommessaResourceViewer(type));
+    btn.title = resourceTypeLongLabel(type);
+    btn.setAttribute("aria-label", `${resourceTypeLongLabel(type)} (${count})`);
     ui.commessaResourceButtons.appendChild(btn);
   });
 }
@@ -1263,7 +1273,7 @@ function closeCommessaResourceViewer() {
 function renderCommessaResourceViewer() {
   if (!selectedCommessaId || !activeResourceTypeForViewer) return;
   const items = getResourcesByCommessa(selectedCommessaId, activeResourceTypeForViewer);
-  ui.commessaResourceViewerTitle.textContent = `${resourceTypeLabel(activeResourceTypeForViewer)} • ${selectedCommessaName || "Commessa"}`;
+  ui.commessaResourceViewerTitle.textContent = `${resourceTypeLongLabel(activeResourceTypeForViewer)} • ${selectedCommessaName || "Commessa"}`;
   ui.commessaResourceViewerList.innerHTML = "";
   if (!items.length) {
     ui.commessaResourceViewerList.innerHTML = "<p class='muted'>Nessun contenuto disponibile.</p>";
@@ -1292,6 +1302,24 @@ function renderCommessaResourceViewer() {
     }
     row.appendChild(actions);
     ui.commessaResourceViewerList.appendChild(row);
+  });
+}
+
+function resourceTypeLongLabel(type) {
+  if (type === "phone") return "Agenda";
+  if (type === "document") return "Documenti";
+  if (type === "note") return "Note";
+  return "Informazioni";
+}
+
+function updateResourceFormByType() {
+  const hasCategory = Boolean(String(ui.resourceType?.value || "").trim());
+  [ui.resourceTitle, ui.resourceValue, ui.resourceCommesse, ui.resourceSubmit].forEach((el) => {
+    if (!el) return;
+    el.classList.toggle("hidden", !hasCategory);
+    if (!hasCategory && el.tagName === "SELECT" && el.hasAttribute("multiple")) {
+      Array.from(el.options || []).forEach((opt) => { opt.selected = false; });
+    }
   });
 }
 

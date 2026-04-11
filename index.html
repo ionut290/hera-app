@@ -94,7 +94,6 @@
           <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
           <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
           <h2 id="impianti-page-title" class="sr-only">Impianti commessa</h2>
-          <button id="export-current-commessa-btn" class="btn hidden" type="button">Esporta riepilogo</button>
         </div>
       </section>
 
@@ -124,6 +123,7 @@
           <div class="view-tabs" role="tablist" aria-label="Filtro impianti">
             <button id="view-done-btn" class="btn" type="button">✅ Fatti</button>
             <button id="view-todo-btn" class="btn btn-primary" type="button">🛠️ Da fare</button>
+            <button id="export-current-commessa-btn" class="btn hidden" type="button">📤 Esporta fatti</button>
           </div>
         </div>
         <div id="impianti-lista" class="impianti-lista"></div>
@@ -244,7 +244,7 @@
       </form>
       <div id="admin-users-list" class="simple-list"></div>
       <h3>Permessi azioni impianti</h3>
-      <p class="muted">Per ogni utente puoi nascondere pulsanti: ✅, 🧭, ♻️, 💬, ✏️, 🗑️.</p>
+      <p class="muted">Per ogni utente puoi nascondere pulsanti: ✅, 🧭, ♻️, 💬, 📍, ✏️, 🗑️.</p>
       <div id="user-permissions-list" class="simple-list"></div>
       <h3>App esterne (utente corrente)</h3>
       <form id="external-app-form" class="inline-form">
@@ -253,6 +253,9 @@
         <button class="btn" type="submit">Collega app</button>
       </form>
       <div id="external-apps-list" class="simple-list"></div>
+      <h3>Richieste aggiornamento GPS impianti</h3>
+      <p class="muted">L'operatore invia richiesta via WhatsApp + app. L'admin può accettare o rifiutare.</p>
+      <div id="gps-requests-list" class="simple-list"></div>
     </div>
     <div id="panel-info-utili" class="management-panel hidden">
       <h3>Nuova informazione utile</h3>

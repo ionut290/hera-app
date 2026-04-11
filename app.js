@@ -2457,7 +2457,7 @@ function renderImpianti() {
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
     addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
     addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
-    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto));
+    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
     if (actions.childElementCount > 0) article.appendChild(actions);
@@ -2580,6 +2580,12 @@ function markActionAsUsed(actionId) {
   usedActionKeys.add(actionId);
   localStorage.setItem(`usedAction:${actionId}`, "1");
   renderImpianti();
+}
+
+function clearActionUsed(actionId) {
+  if (!actionId) return;
+  usedActionKeys.delete(actionId);
+  localStorage.removeItem(`usedAction:${actionId}`);
 }
 
 async function navigateToImpianto(impianto) {
@@ -2736,6 +2742,9 @@ async function resetImpianto(impianto) {
   trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, { done: false });
   await setImpiantoDone(selectedCommessaId, ids, false);
+  const impiantoKey = buildImpiantoKey(impianto);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:reset`);
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 

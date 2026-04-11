@@ -19,6 +19,7 @@
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
+      <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
     </div>
@@ -90,7 +91,17 @@
       </section>
 
       <section class="card">
-        <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa schermo intero</button>
+        <div class="commessa-tools-bar">
+          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa schermo intero</button>
+          <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
+        </div>
+        <section id="commessa-resource-viewer" class="commessa-resource-viewer hidden">
+          <div class="section-head">
+            <h3 id="commessa-resource-viewer-title">Informazioni utili</h3>
+            <button id="commessa-resource-viewer-close-btn" class="btn" type="button">Chiudi</button>
+          </div>
+          <div id="commessa-resource-viewer-list" class="simple-list"></div>
+        </section>
         <div id="map"></div>
         <p id="gps-status" class="muted"></p>
       </section>
@@ -224,6 +235,24 @@
         <button class="btn btn-primary" type="submit">Aggiungi admin</button>
       </form>
       <div id="admin-users-list" class="simple-list"></div>
+    </div>
+    <div id="panel-info-utili" class="management-panel hidden">
+      <h3>Nuova informazione utile</h3>
+      <form id="resource-form" class="resource-form">
+        <select id="resource-type" required>
+          <option value="">Tipo contenuto</option>
+          <option value="phone">Numero di telefono</option>
+          <option value="document">Documento / link</option>
+          <option value="note">Nota</option>
+        </select>
+        <input id="resource-title" type="text" placeholder="Titolo (es. Ufficio acquisti)" required>
+        <input id="resource-value" type="text" placeholder="Numero, link o testo" required>
+        <select id="resource-commesse" multiple></select>
+        <p class="muted">Puoi selezionare una o più commesse (Ctrl/Cmd + click).</p>
+        <button id="resource-submit" class="btn btn-primary" type="submit">Salva informazione</button>
+      </form>
+      <h3>Archivio informazioni utili</h3>
+      <div id="resources-list" class="simple-list"></div>
     </div>
   </section>
 

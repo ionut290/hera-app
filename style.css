@@ -987,7 +987,7 @@ textarea:focus-visible {
   border-color: #93c5fd;
 }
 
-.action-icon-btn[aria-label="WhatsApp"] {
+.action-icon-btn[aria-label="Invia messaggio"] {
   background: #dcfce7;
   border-color: #86efac;
   color: #15803d;

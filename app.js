@@ -64,6 +64,7 @@ const ui = {
   squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
   squadreLista: document.getElementById("squadre-lista"),
+  squadreWhatsappAllBtn: document.getElementById("squadre-whatsapp-all-btn"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
   mezziExcelFile: document.getElementById("mezzi-excel-file"),
@@ -372,6 +373,7 @@ ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", toggleMapFullscreen);
+ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
@@ -2110,20 +2112,20 @@ function renderImpianti() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    const addAction = (actionKey, icon, title, callback, forceDisabled = false) => {
+    const addAction = (actionKey, icon, title, callback, forceDisabled = false, trackAsUsed = true) => {
       if (isImpiantoActionDenied(actionKey)) return;
       const actionId = `${selectedCommessaId}:${impiantoKey}:${actionKey}`;
       const btn = createActionIconButton(icon, title, async () => {
         await callback();
-        markActionAsUsed(actionId);
+        if (trackAsUsed) markActionAsUsed(actionId);
       });
-      if (forceDisabled || isActionUsed(actionId)) setUsedActionButtonState(btn, true);
+      if (forceDisabled || (trackAsUsed && isActionUsed(actionId))) setUsedActionButtonState(btn, true);
       actions.appendChild(btn);
     };
 
-    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto));
+    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
     addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
-    addAction("whatsapp", "🟢", "WhatsApp", () => openWhatsApp(impianto));
+    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto));
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
@@ -2877,8 +2879,6 @@ function renderSquadre() {
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
-    const askBtn = createButton("WhatsApp al tecnico", () => openSquadraWhatsApp(squad, commessa));
-    item.appendChild(askBtn);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });
@@ -2974,6 +2974,100 @@ function openSquadraWhatsApp(squad, commessa) {
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank");
+}
+
+function getSquadrePackageEntries() {
+  const selectedDateKey = ui.squadraCalendarDate.value || "";
+  const storicoDelGiorno = selectedDateKey ? (squadreHistoryByDate.get(selectedDateKey) || new Map()) : null;
+  const commesse = Array.from(commesseById.values());
+  return commesse.map((commessa) => {
+    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
+    const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+    const hasRows = squadRows.some((row) => row.personale || row.mezzi);
+    return {
+      commessa,
+      squad,
+      squadRows,
+      hasRows
+    };
+  }).filter((entry) => entry.hasRows);
+}
+
+async function buildSquadrePackagePdfBlob(entries) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Libreria PDF non disponibile.");
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const marginX = 12;
+  const pageHeight = 297;
+  const maxY = pageHeight - 12;
+  let y = 16;
+  doc.setFontSize(15);
+  doc.text("Pacchetto squadre per commessa", marginX, y);
+  y += 7;
+  doc.setFontSize(10);
+  doc.text(`Data export: ${new Date().toLocaleString("it-IT")}`, marginX, y);
+  y += 7;
+
+  const addWrappedLine = (text, indent = 0) => {
+    const lines = doc.splitTextToSize(String(text || "-"), 180 - indent);
+    lines.forEach((line) => {
+      if (y > maxY) {
+        doc.addPage();
+        y = 16;
+      }
+      doc.text(line, marginX + indent, y);
+      y += 5;
+    });
+  };
+
+  entries.forEach((entry, idx) => {
+    if (y > maxY - 18) {
+      doc.addPage();
+      y = 16;
+    }
+    doc.setFontSize(12);
+    doc.text(`${idx + 1}) ${entry.commessa.nome || "Commessa senza nome"}`, marginX, y);
+    y += 5;
+    doc.setFontSize(10);
+    addWrappedLine(`Giorno riferimento: ${entry.squad.riferimentoData || "-"}`);
+    entry.squadRows.forEach((row, rowIdx) => {
+      addWrappedLine(`Squadra ${rowIdx + 1} personale: ${row.personale || "-"}`, 4);
+      addWrappedLine(`Squadra ${rowIdx + 1} mezzi: ${row.mezzi || "-"}`, 4);
+      y += 1;
+    });
+    y += 2;
+  });
+  return doc.output("blob");
+}
+
+async function shareAllSquadreToWhatsApp() {
+  const entries = getSquadrePackageEntries();
+  if (!entries.length) {
+    alert("Nessuna composizione squadre disponibile da inviare.");
+    return;
+  }
+
+  try {
+    const blob = await buildSquadrePackagePdfBlob(entries);
+    const dateLabel = ui.squadraCalendarDate.value || new Date().toISOString().slice(0, 10);
+    const fileName = `pacchetto-squadre-${dateLabel}.pdf`;
+    const file = new File([blob], fileName, { type: "application/pdf" });
+    const message = `Invio pacchetto squadre in PDF (${entries.length} commesse).`;
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text: message, title: "Squadre per commessa" });
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${message} Ho scaricato il PDF e lo allego qui.`)}`, "_blank");
+    alert("PDF scaricato. In WhatsApp allega il file appena scaricato.");
+  } catch (error) {
+    console.error("Invio pacchetto squadre non riuscito:", error);
+    alert("Impossibile generare/inviare il PDF delle squadre.");
+  }
 }
 
 function renderMap() {

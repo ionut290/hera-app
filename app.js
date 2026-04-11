@@ -193,6 +193,7 @@ let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let activeResourceTypeForViewer = "";
+let activeResourceManageFilter = "all";
 const howtoFaqItems = [
   {
     id: "login-google",
@@ -373,6 +374,13 @@ ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
+document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activeResourceManageFilter = btn.dataset.resourceFilter || "all";
+    renderResourceManageFilters();
+    renderResourcesList();
+  });
+});
 
 addSquadraRow();
 initGeolocation();
@@ -383,6 +391,7 @@ window.addEventListener("hashchange", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
 initHelpCenterFaq();
+renderResourceManageFilters();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
@@ -1177,12 +1186,13 @@ async function deleteResourceItem(resourceId) {
 
 function renderResourcesList() {
   if (!ui.resourcesList) return;
-  if (!resourceRecords.length) {
+  const visibleResources = resourceRecords.filter((item) => activeResourceManageFilter === "all" || item.type === activeResourceManageFilter);
+  if (!visibleResources.length) {
     ui.resourcesList.innerHTML = "<p class='muted'>Nessuna informazione utile caricata.</p>";
     return;
   }
   ui.resourcesList.innerHTML = "";
-  resourceRecords.forEach((item) => {
+  visibleResources.forEach((item) => {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const commesseNames = (item.commessaIds || [])
@@ -1199,6 +1209,13 @@ function renderResourcesList() {
       row.appendChild(createButton("Elimina", () => deleteResourceItem(item.id)));
     }
     ui.resourcesList.appendChild(row);
+  });
+}
+
+function renderResourceManageFilters() {
+  document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
+    const isActive = (btn.dataset.resourceFilter || "all") === activeResourceManageFilter;
+    btn.classList.toggle("btn-primary", isActive);
   });
 }
 

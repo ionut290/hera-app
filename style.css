@@ -1146,3 +1146,8 @@ textarea:focus-visible {
     zoom: 0.28;
   }
 }
+
+#impianto-edit-form {
+  display: grid;
+  gap: 8px;
+}

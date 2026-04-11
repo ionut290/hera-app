@@ -3,6 +3,10 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
+  console.warn("Persistenza offline Firestore non disponibile:", error && error.code ? error.code : error);
+});
+
 const ui = {
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
@@ -139,7 +143,24 @@ const ui = {
   manualImpiantoIndirizzo: document.getElementById("manual-impianto-indirizzo"),
   manualImpiantoCodice: document.getElementById("manual-impianto-codice"),
   manualImpiantoSubmit: document.getElementById("manual-impianto-submit"),
-  manualImpiantoFeedback: document.getElementById("manual-impianto-feedback")
+  manualImpiantoFeedback: document.getElementById("manual-impianto-feedback"),
+  impiantoEditModal: document.getElementById("impianto-edit-modal"),
+  impiantoEditCloseBtn: document.getElementById("impianto-edit-close-btn"),
+  impiantoEditForm: document.getElementById("impianto-edit-form"),
+  impiantoEditFeedback: document.getElementById("impianto-edit-feedback"),
+  editDistretto: document.getElementById("edit-distretto"),
+  editIdSap: document.getElementById("edit-id-sap"),
+  editDenominazione: document.getElementById("edit-denominazione"),
+  editComune: document.getElementById("edit-comune"),
+  editIndirizzo: document.getElementById("edit-indirizzo"),
+  editVoceRiferimento: document.getElementById("edit-voce-riferimento"),
+  editCodicePrezzo: document.getElementById("edit-codice-prezzo"),
+  editFrequenzaAnnua: document.getElementById("edit-frequenza-annua"),
+  editTipologiaIntervento: document.getElementById("edit-tipologia-intervento"),
+  editLavorazioniRichieste: document.getElementById("edit-lavorazioni-richieste"),
+  editSfalci: document.getElementById("edit-sfalci"),
+  editGpsY: document.getElementById("edit-gps-y"),
+  editGpsX: document.getElementById("edit-gps-x")
 };
 
 let pendingRows = [];
@@ -194,6 +215,7 @@ let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
+let editingImpiantoIds = [];
 const howtoFaqItems = [
   {
     id: "login-google",
@@ -374,6 +396,10 @@ ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.resourceType.addEventListener("change", updateResourceFormByType);
+ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
+ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
+window.addEventListener("online", updateConnectivityStatus);
+window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -394,6 +420,7 @@ startSheetRetryLoop();
 initHelpCenterFaq();
 renderResourceManageFilters();
 updateResourceFormByType();
+updateConnectivityStatus();
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
@@ -1252,17 +1279,26 @@ function renderResourceButtonsForCommessa() {
     const count = getResourcesByCommessa(selectedCommessaId, type).length;
     if (!count) return;
     const label = `${resourceTypeLabel(type)} ${count}`;
-    const btn = createButton(label, () => openCommessaResourceViewer(type));
+    const btn = createButton(label, () => openCommessaResourceWindow(type));
     btn.title = resourceTypeLongLabel(type);
     btn.setAttribute("aria-label", `${resourceTypeLongLabel(type)} (${count})`);
     ui.commessaResourceButtons.appendChild(btn);
   });
 }
 
-function openCommessaResourceViewer(type) {
+function openCommessaResourceWindow(type) {
   activeResourceTypeForViewer = type;
   renderCommessaResourceViewer();
-  ui.commessaResourceViewer.classList.remove("hidden");
+
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) {
+    ui.commessaResourceViewer.classList.remove("hidden");
+    return;
+  }
+
+  const title = `${resourceTypeLongLabel(type)} • ${selectedCommessaName || "Commessa"}`;
+  popup.document.write(`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title)}</title><style>body{font-family:Inter,system-ui,sans-serif;background:#f4f7fb;color:#172033;padding:16px;margin:0}h1{font-size:1.1rem;margin:0 0 12px}.item{background:#fff;border:1px solid #d6dfec;border-radius:12px;padding:12px;margin-bottom:10px}.item p{margin:6px 0;color:#60708a;white-space:pre-wrap}</style></head><body><h1>${escapeHTML(title)}</h1>${buildResourcePopupItems(type)}</body></html>`);
+  popup.document.close();
 }
 
 function closeCommessaResourceViewer() {
@@ -1303,6 +1339,12 @@ function renderCommessaResourceViewer() {
     row.appendChild(actions);
     ui.commessaResourceViewerList.appendChild(row);
   });
+}
+
+function buildResourcePopupItems(type) {
+  const items = getResourcesByCommessa(selectedCommessaId, type);
+  if (!items.length) return "<p>Nessun contenuto disponibile.</p>";
+  return items.map((item) => `<div class="item"><strong>${escapeHTML(item.title || "-")}</strong><p>${escapeHTML(item.value || "-")}</p></div>`).join("");
 }
 
 function resourceTypeLongLabel(type) {
@@ -2026,6 +2068,8 @@ function renderImpianti() {
     const resetBtn = createButton("Reset", () => resetImpianto(impianto));
     resetBtn.disabled = !canManageData();
     const waBtn = createButton("WhatsApp", () => openWhatsApp(impianto));
+    const editBtn = createButton("Modifica", () => openImpiantoEditor(impianto));
+    editBtn.disabled = !canManageData();
     const deleteBtn = createButton("Elimina", () => deleteImpianto(impianto));
     deleteBtn.disabled = !canManageData();
 
@@ -2033,11 +2077,86 @@ function renderImpianti() {
     actions.appendChild(navigateBtn);
     actions.appendChild(resetBtn);
     actions.appendChild(waBtn);
+    actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
     article.appendChild(actions);
 
     ui.impiantiLista.appendChild(article);
   });
+}
+
+function openImpiantoEditor(impianto) {
+  if (!canManageData()) return;
+  editingImpiantoIds = getImpiantoDocIds(impianto);
+  ui.editDistretto.value = impianto.distretto || "";
+  ui.editIdSap.value = impianto.idSap || "";
+  ui.editDenominazione.value = impianto.denominazione || "";
+  ui.editComune.value = impianto.comune || "";
+  ui.editIndirizzo.value = impianto.indirizzo || "";
+  ui.editVoceRiferimento.value = impianto.voceRiferimento || "";
+  ui.editCodicePrezzo.value = impianto.codicePrezzo || "";
+  ui.editFrequenzaAnnua.value = impianto.frequenzaAnnua || "";
+  ui.editTipologiaIntervento.value = impianto.tipologiaIntervento || "";
+  ui.editLavorazioniRichieste.value = impianto.lavorazioniRichieste || "";
+  ui.editSfalci.value = impianto.sfalci || "";
+  ui.editGpsY.value = impianto.gpsY == null ? "" : String(impianto.gpsY);
+  ui.editGpsX.value = impianto.gpsX == null ? "" : String(impianto.gpsX);
+  ui.impiantoEditFeedback.textContent = "";
+  ui.impiantoEditModal.classList.remove("hidden");
+}
+
+function closeImpiantoEditor() {
+  editingImpiantoIds = [];
+  ui.impiantoEditForm.reset();
+  ui.impiantoEditFeedback.textContent = "";
+  ui.impiantoEditModal.classList.add("hidden");
+}
+
+async function saveImpiantoEdits(event) {
+  event.preventDefault();
+  if (!selectedCommessaId || !editingImpiantoIds.length || !canManageData()) return;
+  const gpsYValue = String(ui.editGpsY.value || "").trim();
+  const gpsXValue = String(ui.editGpsX.value || "").trim();
+  const gpsY = gpsYValue ? parseCoordinate(gpsYValue) : null;
+  const gpsX = gpsXValue ? parseCoordinate(gpsXValue) : null;
+  if ((gpsYValue && gpsY == null) || (gpsXValue && gpsX == null)) {
+    ui.impiantoEditFeedback.textContent = "Coordinate GPS non valide. Usa numeri decimali.";
+    return;
+  }
+
+  const patch = {
+    distretto: String(ui.editDistretto.value || "").trim(),
+    idSap: String(ui.editIdSap.value || "").trim(),
+    denominazione: String(ui.editDenominazione.value || "").trim(),
+    comune: String(ui.editComune.value || "").trim(),
+    indirizzo: String(ui.editIndirizzo.value || "").trim(),
+    voceRiferimento: String(ui.editVoceRiferimento.value || "").trim(),
+    codicePrezzo: String(ui.editCodicePrezzo.value || "").trim(),
+    frequenzaAnnua: String(ui.editFrequenzaAnnua.value || "").trim(),
+    tipologiaIntervento: String(ui.editTipologiaIntervento.value || "").trim(),
+    lavorazioniRichieste: String(ui.editLavorazioniRichieste.value || "").trim(),
+    sfalci: String(ui.editSfalci.value || "").trim(),
+    gpsY,
+    gpsX,
+    hasOrdinario: hasOrdinario(ui.editCodicePrezzo.value || ""),
+    hasStraordinario: hasStraordinario(ui.editCodicePrezzo.value || ""),
+    tipoManutenzione: classifyTipoManutenzione(ui.editCodicePrezzo.value || "")
+  };
+
+  const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+  trackLocalSheetMutation(selectedCommessaId);
+  await Promise.all(editingImpiantoIds.map((id) => ref.doc(id).set(patch, { merge: true })));
+  ui.impiantoEditFeedback.textContent = "Modifiche salvate. Sincronizzazione per tutti gli utenti in corso...";
+  setTimeout(closeImpiantoEditor, 500);
+}
+
+function updateConnectivityStatus() {
+  if (!ui.gpsStatus) return;
+  if (navigator.onLine) {
+    ui.gpsStatus.textContent = "Online: modifiche sincronizzate con il cloud (cache offline attiva).";
+  } else {
+    ui.gpsStatus.textContent = "Offline: l'app continua in locale, i dati verranno sincronizzati appena torna la rete.";
+  }
 }
 
 function createButton(label, onClick) {

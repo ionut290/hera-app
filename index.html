@@ -364,6 +364,33 @@
     </section>
   </section>
 
+
+  <section id="impianto-edit-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2>Modifica impianto</h2>
+        <button id="impianto-edit-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <form id="impianto-edit-form" class="resource-form">
+        <input id="edit-distretto" type="text" placeholder="Distretto">
+        <input id="edit-id-sap" type="text" placeholder="ID SAP">
+        <input id="edit-denominazione" type="text" placeholder="Denominazione" required>
+        <input id="edit-comune" type="text" placeholder="Comune">
+        <input id="edit-indirizzo" type="text" placeholder="Indirizzo">
+        <input id="edit-voce-riferimento" type="text" placeholder="Voce riferimento">
+        <input id="edit-codice-prezzo" type="text" placeholder="Codice prezzo">
+        <input id="edit-frequenza-annua" type="text" placeholder="Frequenza annua">
+        <input id="edit-tipologia-intervento" type="text" placeholder="Tipologia intervento">
+        <input id="edit-lavorazioni-richieste" type="text" placeholder="Lavorazioni richieste">
+        <input id="edit-sfalci" type="text" placeholder="Sfalci">
+        <input id="edit-gps-y" type="text" inputmode="decimal" placeholder="GPS Y (lat)">
+        <input id="edit-gps-x" type="text" inputmode="decimal" placeholder="GPS X (lng)">
+        <button id="impianto-edit-save-btn" class="btn btn-primary" type="submit">Salva modifiche</button>
+      </form>
+      <p id="impianto-edit-feedback" class="muted"></p>
+    </div>
+  </section>
+
   <section id="howto-page" class="hidden">
     <section class="card">
       <div class="page-head">
@@ -384,6 +411,16 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260410-3"></script>
+  <script src="app.js?v=20260411-1"></script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch((error) => {
+          console.warn("Service Worker non registrato:", error);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

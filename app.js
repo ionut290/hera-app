@@ -165,7 +165,7 @@ let squadreHistoryByDate = new Map();
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 let impiantiSearchTerm = "";
-let impiantiViewMode = "done";
+let impiantiViewMode = "todo";
 let pendingSheetExports = [];
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
@@ -1088,6 +1088,7 @@ function stopCommesseSubscription() {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  setImpiantiViewMode("todo");
   if (!ui.commessaTargetSelect.value) {
     ui.commessaTargetSelect.value = id;
   }

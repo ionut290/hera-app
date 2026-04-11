@@ -2582,6 +2582,12 @@ function markActionAsUsed(actionId) {
   renderImpianti();
 }
 
+function clearActionUsed(actionId) {
+  if (!actionId) return;
+  usedActionKeys.delete(actionId);
+  localStorage.removeItem(`usedAction:${actionId}`);
+}
+
 async function navigateToImpianto(impianto) {
   if (!selectedCommessaId || !impianto.id) return;
 
@@ -2736,6 +2742,9 @@ async function resetImpianto(impianto) {
   trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, { done: false });
   await setImpiantoDone(selectedCommessaId, ids, false);
+  const impiantoKey = buildImpiantoKey(impianto);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:reset`);
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 

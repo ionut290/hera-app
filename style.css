@@ -14,6 +14,12 @@
 
 * { box-sizing: border-box; }
 
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -977,7 +983,7 @@ textarea:focus-visible {
   border-radius: 999px;
   border: 1px solid var(--ticker-border, #fca5a5);
   background: var(--ticker-bg, linear-gradient(90deg, #991b1b 0%, #dc2626 42%, #ef4444 100%));
-  color: #fff;
+  color: var(--ticker-text, #fff);
   overflow: hidden;
   min-height: 28px;
   display: flex;
@@ -985,15 +991,16 @@ textarea:focus-visible {
 }
 
 .commessa-ticker-text {
+  display: inline-block;
   white-space: nowrap;
   font-weight: 800;
   letter-spacing: 0.03em;
-  padding-left: 100%;
+  padding-left: 0;
   animation: commessa-ticker-scroll 18s linear infinite;
 }
 
 @keyframes commessa-ticker-scroll {
-  from { transform: translateX(0); }
+  from { transform: translateX(100%); }
   to { transform: translateX(-100%); }
 }
 

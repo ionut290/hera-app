@@ -154,6 +154,7 @@ const ui = {
   bannerCommessa: document.getElementById("banner-commessa"),
   bannerMessage: document.getElementById("banner-message"),
   bannerColor: document.getElementById("banner-color"),
+  bannerTextColor: document.getElementById("banner-text-color"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
@@ -624,6 +625,7 @@ function updateAdminControls() {
   ui.bannerCommessa.disabled = !canManage;
   ui.bannerMessage.disabled = !canManage;
   ui.bannerColor.disabled = !canManage;
+  if (ui.bannerTextColor) ui.bannerTextColor.disabled = !canManage;
   if (ui.bannerForm?.querySelector("button[type='submit']")) ui.bannerForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
@@ -1785,11 +1787,13 @@ function updateCommessaContextUI() {
   const commessa = commesseById.get(selectedCommessaId) || {};
   const tickerText = String(commessa.tickerMessage || "").trim();
   const tickerColor = normalizeHexColor(commessa.tickerColor || "#dc2626");
+  const tickerTextColor = normalizeHexColor(commessa.tickerTextColor || "#ffffff");
   if (!ui.commessaTicker || !ui.commessaTickerText) return;
   ui.commessaTicker.classList.toggle("hidden", !tickerText);
   ui.commessaTickerText.textContent = tickerText || "";
   ui.commessaTicker.style.setProperty("--ticker-bg", tickerColor);
   ui.commessaTicker.style.setProperty("--ticker-border", tickerColor);
+  ui.commessaTicker.style.setProperty("--ticker-text", tickerTextColor);
 }
 
 function normalizeHexColor(value) {
@@ -4065,17 +4069,19 @@ async function editCommessaTicker(commessaId, commessaName, currentMessage) {
   await db.collection("commesse").doc(commessaId).set({
     tickerMessage: String(next || "").trim(),
     tickerColor: normalizeHexColor(commesseById.get(commessaId)?.tickerColor || "#dc2626"),
+    tickerTextColor: normalizeHexColor(commesseById.get(commessaId)?.tickerTextColor || "#ffffff"),
     tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     tickerUpdatedBy: currentUser?.email || ""
   }, { merge: true });
 }
 
 function syncBannerFormFromSelection() {
-  if (!ui.bannerCommessa || !ui.bannerMessage || !ui.bannerColor) return;
+  if (!ui.bannerCommessa || !ui.bannerMessage || !ui.bannerColor || !ui.bannerTextColor) return;
   const commessaId = ui.bannerCommessa.value;
   const commessa = commesseById.get(commessaId) || {};
   ui.bannerMessage.value = String(commessa.tickerMessage || "");
   ui.bannerColor.value = normalizeHexColor(commessa.tickerColor || "#dc2626");
+  ui.bannerTextColor.value = normalizeHexColor(commessa.tickerTextColor || "#ffffff");
 }
 
 async function saveBannerFromPanel(event) {
@@ -4091,9 +4097,11 @@ async function saveBannerFromPanel(event) {
   }
   const message = String(ui.bannerMessage.value || "").trim();
   const color = normalizeHexColor(ui.bannerColor.value || "#dc2626");
+  const textColor = normalizeHexColor(ui.bannerTextColor.value || "#ffffff");
   await db.collection("commesse").doc(commessaId).set({
     tickerMessage: message,
     tickerColor: color,
+    tickerTextColor: textColor,
     tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     tickerUpdatedBy: currentUser?.email || ""
   }, { merge: true });

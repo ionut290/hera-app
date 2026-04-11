@@ -975,8 +975,8 @@ textarea:focus-visible {
 .commessa-ticker {
   margin-top: 10px;
   border-radius: 999px;
-  border: 1px solid #fca5a5;
-  background: linear-gradient(90deg, #991b1b 0%, #dc2626 42%, #ef4444 100%);
+  border: 1px solid var(--ticker-border, #fca5a5);
+  background: var(--ticker-bg, linear-gradient(90deg, #991b1b 0%, #dc2626 42%, #ef4444 100%));
   color: #fff;
   overflow: hidden;
   min-height: 28px;
@@ -1000,6 +1000,14 @@ textarea:focus-visible {
 .private-docs-warning {
   font-weight: 700;
   color: #166534;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: #334155;
 }
 
 .item-actions {

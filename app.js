@@ -78,6 +78,7 @@ const ui = {
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
@@ -90,6 +91,7 @@ const ui = {
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
+  panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
@@ -145,8 +147,13 @@ const ui = {
   privateDocsFile: document.getElementById("private-docs-file"),
   privateDocsCamera: document.getElementById("private-docs-camera"),
   privateDocsSaveBtn: document.getElementById("private-docs-save-btn"),
+  privateDocsDriveOnly: document.getElementById("private-docs-drive-only"),
   privateDocsFeedback: document.getElementById("private-docs-feedback"),
   privateDocsList: document.getElementById("private-docs-list"),
+  bannerForm: document.getElementById("banner-form"),
+  bannerCommessa: document.getElementById("banner-commessa"),
+  bannerMessage: document.getElementById("banner-message"),
+  bannerColor: document.getElementById("banner-color"),
   segnalazioneForm: document.getElementById("segnalazione-form"),
   segnalazionePreposto: document.getElementById("segnalazione-preposto"),
   segnalazioneData: document.getElementById("segnalazione-data"),
@@ -411,6 +418,7 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
@@ -425,6 +433,8 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
+ui.bannerForm.addEventListener("submit", saveBannerFromPanel);
+ui.bannerCommessa.addEventListener("change", syncBannerFormFromSelection);
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -587,7 +597,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili, ui.openPanelBanner]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
@@ -611,6 +621,10 @@ function updateAdminControls() {
   ui.resourceValue.disabled = !canManage;
   ui.resourceCommesse.disabled = !canManage;
   ui.resourceSubmit.disabled = !canManage;
+  ui.bannerCommessa.disabled = !canManage;
+  ui.bannerMessage.disabled = !canManage;
+  ui.bannerColor.disabled = !canManage;
+  if (ui.bannerForm?.querySelector("button[type='submit']")) ui.bannerForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
   if (ui.externalAppForm && ui.externalAppForm.querySelector("button[type='submit']")) {
@@ -653,11 +667,12 @@ function openManagementPanel(panel) {
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
-    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
+    banner: { el: ui.panelBanner, title: "Gestione banner pubblicitari" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili, ui.panelBanner].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -1221,6 +1236,7 @@ function subscribeCommesse() {
       ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
       ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
       ui.resourceCommesse.innerHTML = "";
+      if (ui.bannerCommessa) ui.bannerCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
@@ -1253,6 +1269,7 @@ function subscribeCommesse() {
         ui.squadraCommessa.appendChild(option);
         ui.commessaTargetSelect.appendChild(option.cloneNode(true));
         ui.resourceCommesse.appendChild(option.cloneNode(true));
+        ui.bannerCommessa?.appendChild(option.cloneNode(true));
         if (!selectedCommessaId && activeStoredId && activeStoredId === doc.id) shouldRestoreOpenCommessa = true;
       });
 
@@ -1260,6 +1277,7 @@ function subscribeCommesse() {
       renderSquadre();
       renderResourcesList();
       renderResourceButtonsForCommessa();
+      syncBannerFormFromSelection();
       updateCommessaContextUI();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
@@ -1345,42 +1363,146 @@ async function readFileAsDataUrl(file) {
   });
 }
 
+function getPrivateDocsDriveToken() {
+  return String(localStorage.getItem("googleDriveAccessToken") || "").trim();
+}
+
+async function driveApiFetchWithToken(token, url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Google Drive API ${response.status}: ${text}`);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+async function getOrCreatePrivateDocsFolder(token, uid) {
+  const query = [
+    "name='Hera App - Documenti privati'",
+    "mimeType='application/vnd.google-apps.folder'",
+    "trashed=false"
+  ].join(" and ");
+  const rootSearch = await driveApiFetchWithToken(token, `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`, { method: "GET" });
+  let rootFolderId = rootSearch?.files?.[0]?.id || "";
+  if (!rootFolderId) {
+    const createdRoot = await driveApiFetchWithToken(token, "https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Hera App - Documenti privati", mimeType: "application/vnd.google-apps.folder" })
+    });
+    rootFolderId = createdRoot.id;
+  }
+
+  const userQuery = [
+    `name='${String(uid || "").replace(/'/g, "\\'")}'`,
+    "mimeType='application/vnd.google-apps.folder'",
+    "trashed=false",
+    `'${rootFolderId}' in parents`
+  ].join(" and ");
+  const userSearch = await driveApiFetchWithToken(token, `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(userQuery)}&fields=files(id,name)&pageSize=1`, { method: "GET" });
+  const existingUserFolder = userSearch?.files?.[0]?.id || "";
+  if (existingUserFolder) return existingUserFolder;
+
+  const createdUserFolder = await driveApiFetchWithToken(token, "https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: uid, mimeType: "application/vnd.google-apps.folder", parents: [rootFolderId] })
+  });
+  return createdUserFolder.id;
+}
+
+async function uploadPrivateDocumentToDrive(file, uid) {
+  const token = getPrivateDocsDriveToken();
+  if (!token) {
+    throw new Error("Google Drive non autorizzato. Rifai il login Google prima di usare il salvataggio Drive.");
+  }
+  const folderId = await getOrCreatePrivateDocsFolder(token, uid);
+  const metadata = {
+    name: file.name || "documento",
+    parents: [folderId]
+  };
+  const boundary = "hera-private-doc-upload";
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    `Content-Type: ${file.type || "application/octet-stream"}`,
+    "",
+    file,
+    `--${boundary}--`
+  ];
+  const payload = new Blob(body, { type: `multipart/related; boundary=${boundary}` });
+  const uploaded = await driveApiFetchWithToken(token, "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
+    method: "POST",
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    body: payload
+  });
+  return {
+    driveFileId: uploaded.id || "",
+    driveFileName: uploaded.name || file.name || "documento",
+    driveWebViewLink: uploaded.webViewLink || `https://drive.google.com/file/d/${uploaded.id}/view`
+  };
+}
+
 async function savePrivateDocument(event) {
   event.preventDefault();
   if (!currentUser) return;
-  const name = String(ui.privateDocsName.value || "").trim();
-  const note = String(ui.privateDocsNote.value || "").trim();
-  const file = ui.privateDocsFile.files?.[0] || ui.privateDocsCamera.files?.[0] || null;
-  if (!name) {
-    ui.privateDocsFeedback.textContent = "La denominazione è obbligatoria.";
-    return;
-  }
-  let fileDataUrl = "";
-  let fileName = "";
-  let fileType = "";
-  let fileSize = 0;
-  if (file) {
-    fileSize = Number(file.size || 0);
-    if (fileSize > 700 * 1024) {
-      ui.privateDocsFeedback.textContent = "File troppo grande: usa file sotto 700KB.";
+  try {
+    const name = String(ui.privateDocsName.value || "").trim();
+    const note = String(ui.privateDocsNote.value || "").trim();
+    const file = ui.privateDocsFile.files?.[0] || ui.privateDocsCamera.files?.[0] || null;
+    if (!name) {
+      ui.privateDocsFeedback.textContent = "La denominazione è obbligatoria.";
       return;
     }
-    fileDataUrl = await readFileAsDataUrl(file);
-    fileName = file.name || "documento";
-    fileType = file.type || "application/octet-stream";
+    let fileDataUrl = "";
+    let fileName = "";
+    let fileType = "";
+    let fileSize = 0;
+    let driveFileId = "";
+    let driveWebViewLink = "";
+    const useDriveUpload = Boolean(ui.privateDocsDriveOnly?.checked);
+    if (file) {
+      fileSize = Number(file.size || 0);
+      if (!useDriveUpload && fileSize > 700 * 1024) {
+        ui.privateDocsFeedback.textContent = "File troppo grande: usa il salvataggio Drive o file sotto 700KB.";
+        return;
+      }
+      fileName = file.name || "documento";
+      fileType = file.type || "application/octet-stream";
+      if (useDriveUpload) {
+        ui.privateDocsFeedback.textContent = "Caricamento su Google Drive personale...";
+        const upload = await uploadPrivateDocumentToDrive(file, currentUser.uid);
+        driveFileId = upload.driveFileId;
+        driveWebViewLink = upload.driveWebViewLink;
+        fileName = upload.driveFileName || fileName;
+      } else {
+        fileDataUrl = await readFileAsDataUrl(file);
+      }
+    }
+    await db.collection("privateDocuments").doc(currentUser.uid).collection("items").add({
+      name,
+      note,
+      fileName,
+      fileType,
+      fileSize,
+      fileDataUrl,
+      driveFileId,
+      driveWebViewLink,
+      storageMode: driveFileId ? "drive" : "firestore",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    ui.privateDocsForm.reset();
+    ui.privateDocsFeedback.textContent = "Documento personale salvato.";
+  } catch (error) {
+    console.error("Salvataggio documento personale non riuscito:", error);
+    ui.privateDocsFeedback.textContent = error?.message || "Errore durante il salvataggio del documento.";
   }
-  await db.collection("privateDocuments").doc(currentUser.uid).collection("items").add({
-    name,
-    note,
-    fileName,
-    fileType,
-    fileSize,
-    fileDataUrl,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  ui.privateDocsForm.reset();
-  ui.privateDocsFeedback.textContent = "Documento personale salvato.";
 }
 
 async function deletePrivateDocument(docId) {
@@ -1414,7 +1536,9 @@ function renderPrivateDocsList() {
     `;
     const actions = document.createElement("div");
     actions.className = "actions-row";
-    if (item.fileDataUrl) {
+    if (item.driveWebViewLink) {
+      actions.appendChild(createButton("Apri su Drive", () => window.open(item.driveWebViewLink, "_blank")));
+    } else if (item.fileDataUrl) {
       actions.appendChild(createButton("Apri allegato", () => window.open(item.fileDataUrl, "_blank")));
     }
     actions.appendChild(createButton("Elimina", () => deletePrivateDocument(item.id)));
@@ -1660,9 +1784,17 @@ function updateCommessaContextUI() {
   }
   const commessa = commesseById.get(selectedCommessaId) || {};
   const tickerText = String(commessa.tickerMessage || "").trim();
+  const tickerColor = normalizeHexColor(commessa.tickerColor || "#dc2626");
   if (!ui.commessaTicker || !ui.commessaTickerText) return;
   ui.commessaTicker.classList.toggle("hidden", !tickerText);
   ui.commessaTickerText.textContent = tickerText || "";
+  ui.commessaTicker.style.setProperty("--ticker-bg", tickerColor);
+  ui.commessaTicker.style.setProperty("--ticker-border", tickerColor);
+}
+
+function normalizeHexColor(value) {
+  const raw = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#dc2626";
 }
 
 function updateCommessaButtonsActive() {
@@ -3932,9 +4064,40 @@ async function editCommessaTicker(commessaId, commessaName, currentMessage) {
   if (next === null) return;
   await db.collection("commesse").doc(commessaId).set({
     tickerMessage: String(next || "").trim(),
+    tickerColor: normalizeHexColor(commesseById.get(commessaId)?.tickerColor || "#dc2626"),
     tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     tickerUpdatedBy: currentUser?.email || ""
   }, { merge: true });
+}
+
+function syncBannerFormFromSelection() {
+  if (!ui.bannerCommessa || !ui.bannerMessage || !ui.bannerColor) return;
+  const commessaId = ui.bannerCommessa.value;
+  const commessa = commesseById.get(commessaId) || {};
+  ui.bannerMessage.value = String(commessa.tickerMessage || "");
+  ui.bannerColor.value = normalizeHexColor(commessa.tickerColor || "#dc2626");
+}
+
+async function saveBannerFromPanel(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo un admin può gestire i banner.");
+    return;
+  }
+  const commessaId = String(ui.bannerCommessa.value || "").trim();
+  if (!commessaId) {
+    alert("Seleziona una commessa.");
+    return;
+  }
+  const message = String(ui.bannerMessage.value || "").trim();
+  const color = normalizeHexColor(ui.bannerColor.value || "#dc2626");
+  await db.collection("commesse").doc(commessaId).set({
+    tickerMessage: message,
+    tickerColor: color,
+    tickerUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    tickerUpdatedBy: currentUser?.email || ""
+  }, { merge: true });
+  ui.bannerMessage.value = message;
 }
 
 async function renameCommessa(commessaId, currentName) {

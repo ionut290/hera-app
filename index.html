@@ -20,6 +20,7 @@
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
+      <button id="open-panel-banner" class="btn menu-title-btn" type="button">Gestione banner pubblicitari</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
@@ -276,6 +277,18 @@
       </div>
       <div id="resources-list" class="simple-list"></div>
     </div>
+    <div id="panel-banner" class="management-panel hidden">
+      <h3>Banner scorrevole per commessa (solo admin)</h3>
+      <form id="banner-form" class="resource-form">
+        <select id="banner-commessa" required>
+          <option value="">Seleziona commessa</option>
+        </select>
+        <textarea id="banner-message" placeholder="Messaggio che deve scorrere nel banner"></textarea>
+        <label>Colore banner <input id="banner-color" type="color" value="#dc2626"></label>
+        <button class="btn btn-primary" type="submit">Salva banner</button>
+      </form>
+      <p class="muted">Lascia il messaggio vuoto e salva per rimuovere il banner della commessa.</p>
+    </div>
   </section>
 
   <section id="weather-modal" class="chat-modal hidden" aria-hidden="true">
@@ -330,6 +343,10 @@
         <textarea id="private-docs-note" placeholder="Descrizione / codice / note"></textarea>
         <input id="private-docs-file" type="file" accept="*/*">
         <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
+        <label class="checkbox-inline">
+          <input id="private-docs-drive-only" type="checkbox" checked>
+          Salva allegato su Google Drive personale (file più grandi, visibile solo al tuo account)
+        </label>
         <button id="private-docs-save-btn" class="btn btn-primary" type="submit">Salva documento</button>
       </form>
       <p id="private-docs-feedback" class="muted"></p>

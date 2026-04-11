@@ -904,13 +904,20 @@ textarea:focus-visible {
 .impianto-item.is-expanded .impianto-details { display: block; }
 
 .impianto-item.done {
-  border-color: #b7ebc6;
-  background: #effcf4;
+  border-color: #d9e2ec;
+  background: #f6f8fb;
+  opacity: 0.75;
 }
 
 .impianto-item.done strong,
 .impianto-item.done p {
-  color: var(--done);
+  color: #5b6b82;
+}
+
+.impianto-item.todo {
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.12);
 }
 
 .impianto-item.highlight {
@@ -950,6 +957,16 @@ textarea:focus-visible {
   background: #dcfce7;
   border-color: #86efac;
   box-shadow: none;
+}
+.action-icon-btn[aria-label="Naviga"] {
+  background: #e8f1ff;
+  border-color: #93c5fd;
+}
+
+.action-icon-btn[aria-label="WhatsApp"] {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
 }
 
 .action-icon-btn.is-used,
@@ -993,6 +1010,20 @@ textarea:focus-visible {
 .marker-pin.todo { background: var(--todo); }
 .marker-pin.done { background: var(--done); }
 .marker-pin.straordinario { background: #f97316; }
+
+.marker-operator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #111827;
+  border: 2px solid #fff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
+}
 
 .chat-fab {
   position: fixed;

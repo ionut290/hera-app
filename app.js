@@ -555,7 +555,8 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  ui.openPanelInfoUtili.classList.toggle("hidden", !canManage);
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili]
+    .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
@@ -609,6 +610,10 @@ function closeSideMenu() {
 }
 
 function openManagementPanel(panel) {
+  if (!canManageData()) {
+    closeSideMenu();
+    return;
+  }
   const panelMap = {
     commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
@@ -2028,7 +2033,10 @@ function renderImpianti() {
     const viewMatch = impiantiViewMode === "done" ? Boolean(impianto.done) : !impianto.done;
     return viewMatch && matchesImpiantoSearch(impianto);
   });
-  const sorted = [...filtered].sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+  const sorted = [...filtered].sort((a, b) => {
+    if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
+    return distanceFromUser(a) - distanceFromUser(b);
+  });
 
   if (!sorted.length) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
@@ -2037,7 +2045,7 @@ function renderImpianti() {
 
   sorted.forEach((impianto) => {
     const article = document.createElement("article");
-    article.className = "impianto-item" + (impianto.done ? " done" : "");
+    article.className = `impianto-item ${impianto.done ? "done" : "todo"}`;
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     article.dataset.impiantoKey = impiantoKey;
@@ -2088,13 +2096,13 @@ function renderImpianti() {
       actions.appendChild(btn);
     };
 
-    addAction("done", "✅", "Segna fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
-    addAction("navigate", "🧭", "Naviga", () => navigateToImpianto(impianto));
-    addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), !canManageData());
-    addAction("whatsapp", "💬", "WhatsApp", () => openWhatsApp(impianto));
-    addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), !canManageData());
-    addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), !canManageData());
-    article.appendChild(actions);
+    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto));
+    addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
+    addAction("whatsapp", "🟢", "WhatsApp", () => openWhatsApp(impianto));
+    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto));
+    if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
+    if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
+    if (actions.childElementCount > 0) article.appendChild(actions);
 
     ui.impiantiLista.appendChild(article);
   });
@@ -2966,12 +2974,14 @@ function renderMap() {
   });
 
   if (currentUserPos) {
-    L.circleMarker([currentUserPos.lat, currentUserPos.lng], {
-      radius: 7,
-      color: "#111827",
-      fillColor: "#111827",
-      fillOpacity: 0.85
-    }).addTo(markerLayer).bindPopup("La tua posizione");
+    L.marker([currentUserPos.lat, currentUserPos.lng], {
+      icon: L.divIcon({
+        className: "",
+        html: "<div class='marker-operator'>👷</div>",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      })
+    }).addTo(markerLayer).bindPopup("Operatore al lavoro");
     bounds.push([currentUserPos.lat, currentUserPos.lng]);
   }
 

@@ -816,6 +816,25 @@ textarea:focus-visible {
   margin-bottom: 8px;
 }
 
+.commessa-resource-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commessa-resource-viewer {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f8fbff;
+}
+
+.resource-form {
+  display: grid;
+  gap: 8px;
+}
+
 #map:fullscreen {
   width: 100vw;
   height: 100vh;

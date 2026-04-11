@@ -1210,19 +1210,21 @@ textarea:focus-visible {
   display: grid;
   gap: 10px;
   align-content: start;
-  background: #f8fafc;
+  background: #e5ddd5;
 }
 
 .chat-message {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 10px;
   padding: 8px;
-  background: #fff;
+  background: #ffffff;
+  max-width: min(560px, 92%);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
 .chat-message.own {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  background: #dcf8c6;
+  margin-left: auto;
 }
 
 .chat-message-top {

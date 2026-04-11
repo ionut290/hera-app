@@ -2997,45 +2997,81 @@ async function buildSquadrePackagePdfBlob(entries) {
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Libreria PDF non disponibile.");
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const marginX = 12;
+  const pageWidth = 210;
   const pageHeight = 297;
-  const maxY = pageHeight - 12;
-  let y = 16;
-  doc.setFontSize(15);
-  doc.text("Pacchetto squadre per commessa", marginX, y);
-  y += 7;
-  doc.setFontSize(10);
-  doc.text(`Data export: ${new Date().toLocaleString("it-IT")}`, marginX, y);
-  y += 7;
+  const margin = 12;
+  const contentWidth = pageWidth - (margin * 2);
+  const maxY = pageHeight - margin;
 
-  const addWrappedLine = (text, indent = 0) => {
-    const lines = doc.splitTextToSize(String(text || "-"), 180 - indent);
-    lines.forEach((line) => {
-      if (y > maxY) {
-        doc.addPage();
-        y = 16;
-      }
-      doc.text(line, marginX + indent, y);
-      y += 5;
-    });
+  const drawHeader = (entry, idx) => {
+    doc.setFillColor(99, 102, 241);
+    doc.roundedRect(margin, margin, contentWidth, 24, 4, 4, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(`Squadre per commessa • ${idx + 1}/${entries.length}`, margin + 6, margin + 9);
+    doc.setFontSize(11);
+    doc.text(entry.commessa.nome || "Commessa senza nome", margin + 6, margin + 16);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text(`Giorno: ${entry.squad.riferimentoData || "-"}`, margin + 6, margin + 21);
+    doc.text(`Export: ${new Date().toLocaleString("it-IT")}`, pageWidth - margin - 46, margin + 21);
+  };
+
+  const drawSquadraCard = (row, rowIdx, yStart) => {
+    let y = yStart;
+    doc.setFillColor(251, 253, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(margin, y, contentWidth, 34, 4, 4, "FD");
+
+    doc.setFillColor(236, 253, 243);
+    doc.setDrawColor(187, 247, 208);
+    doc.roundedRect(margin + 4, y + 4, 30, 7, 3, 3, "FD");
+    doc.setTextColor(22, 101, 52);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(`Squadra ${rowIdx + 1}`, margin + 7, y + 8.8);
+
+    const personaleLabel = "👥 Personale:";
+    const mezziLabel = "🚚 Mezzi:";
+    const personnelLines = doc.splitTextToSize(String(row.personale || "-"), contentWidth - 44);
+    const mezziLines = doc.splitTextToSize(String(row.mezzi || "-"), contentWidth - 44);
+
+    doc.setTextColor(17, 24, 39);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(personaleLabel, margin + 4, y + 16);
+    doc.text(mezziLabel, margin + 4, y + 25);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.3);
+    doc.text(personnelLines.slice(0, 2), margin + 34, y + 16);
+    doc.text(mezziLines.slice(0, 2), margin + 34, y + 25);
+
+    const rowsUsed = Math.max(personnelLines.length, mezziLines.length, 1);
+    return y + Math.max(34, 24 + (rowsUsed * 4.3));
   };
 
   entries.forEach((entry, idx) => {
-    if (y > maxY - 18) {
-      doc.addPage();
-      y = 16;
+    if (idx > 0) doc.addPage();
+    drawHeader(entry, idx);
+    let y = margin + 30;
+
+    if (!entry.squadRows.length) {
+      doc.setTextColor(75, 85, 99);
+      doc.setFontSize(10);
+      doc.text("Nessuna squadra compilata per questa commessa.", margin, y + 8);
+      return;
     }
-    doc.setFontSize(12);
-    doc.text(`${idx + 1}) ${entry.commessa.nome || "Commessa senza nome"}`, marginX, y);
-    y += 5;
-    doc.setFontSize(10);
-    addWrappedLine(`Giorno riferimento: ${entry.squad.riferimentoData || "-"}`);
+
     entry.squadRows.forEach((row, rowIdx) => {
-      addWrappedLine(`Squadra ${rowIdx + 1} personale: ${row.personale || "-"}`, 4);
-      addWrappedLine(`Squadra ${rowIdx + 1} mezzi: ${row.mezzi || "-"}`, 4);
-      y += 1;
+      if (y > maxY - 40) {
+        doc.addPage();
+        drawHeader(entry, idx);
+        y = margin + 30;
+      }
+      y = drawSquadraCard(row, rowIdx, y + 2) + 4;
     });
-    y += 2;
   });
   return doc.output("blob");
 }
@@ -3052,7 +3088,7 @@ async function shareAllSquadreToWhatsApp() {
     const dateLabel = ui.squadraCalendarDate.value || new Date().toISOString().slice(0, 10);
     const fileName = `pacchetto-squadre-${dateLabel}.pdf`;
     const file = new File([blob], fileName, { type: "application/pdf" });
-    const message = `Invio pacchetto squadre in PDF (${entries.length} commesse).`;
+    const message = `Invio PDF squadre completo (${entries.length} commesse, una scheda per foglio).`;
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], text: message, title: "Squadre per commessa" });
       return;
@@ -3062,7 +3098,7 @@ async function shareAllSquadreToWhatsApp() {
     link.download = fileName;
     link.click();
     URL.revokeObjectURL(link.href);
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${message} Ho scaricato il PDF e lo allego qui.`)}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${message} Ho scaricato il PDF con il layout operativo e lo allego qui.`)}`, "_blank");
     alert("PDF scaricato. In WhatsApp allega il file appena scaricato.");
   } catch (error) {
     console.error("Invio pacchetto squadre non riuscito:", error);

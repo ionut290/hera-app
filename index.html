@@ -209,7 +209,7 @@
     </div>
     <div id="panel-personale" class="management-panel hidden">
       <form id="personale-form" class="inline-form">
-        <input type="text" id="personale-nome" placeholder="Nome e cognome personale">
+        <input type="text" id="personale-nome" placeholder="Nome Cognome (obbligatori)">
         <button class="btn btn-primary" type="submit">Aggiungi personale</button>
       </form>
       <div class="inline-form">
@@ -367,7 +367,10 @@
 
         <div class="item-actions">
           <button id="segnalazione-genera-pdf-btn" class="btn btn-primary" type="submit">Genera PDF</button>
-          <button id="segnalazione-share-whatsapp-btn" class="btn btn-whatsapp" type="button" disabled>Invia con WhatsApp</button>
+          <button id="segnalazione-share-whatsapp-btn" class="btn btn-whatsapp" type="button" disabled>
+            <span class="whatsapp-pictogram" aria-hidden="true">☎</span>
+            <span>Invia con WhatsApp</span>
+          </button>
           <button id="segnalazione-share-email-btn" class="btn" type="button" disabled>Invia con Email</button>
         </div>
         <p id="segnalazione-feedback" class="muted"></p>

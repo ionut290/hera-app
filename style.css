@@ -800,11 +800,18 @@ textarea:focus-visible {
 }
 
 .commessa-resource-viewer {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 1250;
+  width: min(540px, calc(100vw - 24px));
+  max-height: 70dvh;
+  overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px;
-  margin-bottom: 10px;
   background: #f8fbff;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.22);
 }
 
 .resource-form {
@@ -826,11 +833,18 @@ textarea:focus-visible {
 }
 
 .commessa-resource-viewer {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 1250;
+  width: min(540px, calc(100vw - 24px));
+  max-height: 70dvh;
+  overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px;
-  margin-bottom: 10px;
   background: #f8fbff;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.22);
 }
 
 .resource-form {
@@ -925,6 +939,29 @@ textarea:focus-visible {
   min-height: 34px;
   padding: 7px 10px;
   white-space: nowrap;
+}
+
+.action-icon-btn {
+  min-width: 34px;
+  min-height: 34px !important;
+  padding: 6px !important;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #dcfce7;
+  border-color: #86efac;
+  box-shadow: none;
+}
+
+.action-icon-btn.is-used,
+.action-icon-btn:disabled {
+  background: #e5e7eb;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+.simple-list-item.stacked {
+  display: grid;
+  gap: 8px;
 }
 
 .badge {

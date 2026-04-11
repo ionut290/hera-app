@@ -51,6 +51,7 @@
           <div id="user-details-panel" class="user-details-panel hidden">
             <div class="actions-row weather-user-actions">
               <button id="login-btn" class="btn btn-primary" type="button">Login con Google</button>
+              <button id="switch-account-btn" class="btn hidden" type="button">Cambia account</button>
               <button id="logout-btn" class="btn" type="button" disabled>Logout</button>
               <button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button>
             </div>
@@ -235,6 +236,16 @@
         <button class="btn btn-primary" type="submit">Aggiungi admin</button>
       </form>
       <div id="admin-users-list" class="simple-list"></div>
+      <h3>Permessi azioni impianti</h3>
+      <p class="muted">Per ogni utente puoi nascondere pulsanti: ✅, 🧭, ♻️, 💬, ✏️, 🗑️.</p>
+      <div id="user-permissions-list" class="simple-list"></div>
+      <h3>App esterne (utente corrente)</h3>
+      <form id="external-app-form" class="inline-form">
+        <input type="text" id="external-app-name" placeholder="Nome app (es. CRM)">
+        <input type="url" id="external-app-url" placeholder="https://...">
+        <button class="btn" type="submit">Collega app</button>
+      </form>
+      <div id="external-apps-list" class="simple-list"></div>
     </div>
     <div id="panel-info-utili" class="management-panel hidden">
       <h3>Nuova informazione utile</h3>

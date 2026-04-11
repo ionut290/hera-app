@@ -40,6 +40,23 @@ firebase deploy --only hosting
 
 La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.
 
+## Notifiche PWA e attività in background
+
+- Nell'area utente è presente il blocco **Notifiche** con:
+  - pulsante **Attiva notifiche** (richiede permesso browser),
+  - pulsante **Test notifica** (invia una notifica locale via Service Worker).
+- `sw.js` ora gestisce:
+  - evento `push` (notifiche remote),
+  - evento `notificationclick` (apertura/focus app),
+  - evento `sync` con tag `hera-app-background-check` (test background sync).
+- Per attivare le push remote reali imposta una chiave VAPID pubblica in `app.js`:
+
+```js
+const PUSH_PUBLIC_VAPID_KEY = "INSERISCI_LA_TUA_CHIAVE";
+```
+
+Senza chiave VAPID l'app continua a funzionare normalmente: avrai notifiche locali di test, ma non invii push server->client.
+
 ## Note Google Drive / Google Sheets
 
 - Il Drive usato è centralizzato: **ionut29019@gmail.com** collega il proprio account una volta, poi tutti gli utenti usano quel bridge.

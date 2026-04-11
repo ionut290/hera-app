@@ -20,6 +20,7 @@
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
+      <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
     </div>
@@ -87,8 +88,12 @@
       <section class="card">
         <div class="page-head">
           <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
+          <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
           <h2 id="impianti-page-title" class="sr-only">Impianti commessa</h2>
           <button id="export-current-commessa-btn" class="btn hidden" type="button">Esporta riepilogo</button>
+        </div>
+        <div id="commessa-ticker" class="commessa-ticker hidden" role="status" aria-live="polite">
+          <div id="commessa-ticker-text" class="commessa-ticker-text"></div>
         </div>
       </section>
 
@@ -302,6 +307,33 @@
     <section class="card">
       <h2>Più vicini a te</h2>
       <div id="fuel-stations-list" class="simple-list"></div>
+    </section>
+  </section>
+
+  <section id="private-docs-page" class="hidden">
+    <section class="card">
+      <div class="page-head">
+        <button id="back-from-private-docs-btn" class="btn" type="button">← Torna</button>
+        <h2>Documenti personali</h2>
+      </div>
+      <p class="muted private-docs-warning">
+        Questi documenti sono visibili solo a te. Gli altri utenti (incluso l'admin) non possono vederli, modificarli o copiarli.
+      </p>
+    </section>
+    <section class="card">
+      <div class="item-actions">
+        <button id="private-docs-preset-pin-btn" class="btn" type="button">+ PIN carburante</button>
+        <button id="private-docs-preset-tessera-btn" class="btn" type="button">+ Tessera riconoscimento</button>
+      </div>
+      <form id="private-docs-form" class="resource-form">
+        <input id="private-docs-name" type="text" placeholder="Denominazione documento (obbligatoria)" required>
+        <textarea id="private-docs-note" placeholder="Descrizione / codice / note"></textarea>
+        <input id="private-docs-file" type="file" accept="*/*">
+        <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
+        <button id="private-docs-save-btn" class="btn btn-primary" type="submit">Salva documento</button>
+      </form>
+      <p id="private-docs-feedback" class="muted"></p>
+      <div id="private-docs-list" class="simple-list"></div>
     </section>
   </section>
 

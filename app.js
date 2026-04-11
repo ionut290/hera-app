@@ -248,7 +248,82 @@ let editingImpiantoIds = [];
 let chatRetentionTimer = null;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
-const howtoFaqItems = [
+const HOWTO_UPDATED_AT = "2026-04-11";
+const MENU_HOWTO_CONTENT = {
+  "open-panel-commesse": {
+    rispostaBreve: "Da qui gestisci commesse e impianti (aggiunta, import Excel e gestione lista).",
+    passi: [
+      "Apri il menu (⋮) e premi “Aggiungi commesse”.",
+      "Inserisci il nome commessa oppure seleziona una commessa per import/aggiunte impianto.",
+      "Usa i form della pagina per completare l'operazione."
+    ],
+    tags: ["commesse", "impianti", "excel", "admin"]
+  },
+  "open-panel-squadre": {
+    rispostaBreve: "Serve per creare e salvare la composizione giornaliera delle squadre.",
+    passi: [
+      "Apri il menu (⋮) e premi “Composizione squadre”.",
+      "Scegli commessa e data, poi aggiungi le righe squadra.",
+      "Premi “Salva composizione” e verifica lo storico sotto al form."
+    ],
+    tags: ["squadre", "operativo", "personale", "mezzi"]
+  },
+  "open-panel-personale": {
+    rispostaBreve: "Da qui inserisci o importi l'anagrafica personale.",
+    passi: [
+      "Apri il menu (⋮) e premi “Personale”.",
+      "Aggiungi un nominativo singolo o importa il file Excel.",
+      "Controlla la lista aggiornata subito sotto."
+    ],
+    tags: ["personale", "anagrafica", "excel"]
+  },
+  "open-panel-mezzi": {
+    rispostaBreve: "Da qui inserisci o importi l'elenco mezzi disponibili.",
+    passi: [
+      "Apri il menu (⋮) e premi “Mezzi”.",
+      "Aggiungi un mezzo manualmente o importa da Excel.",
+      "Controlla che il mezzo compaia in elenco."
+    ],
+    tags: ["mezzi", "flotta", "excel"]
+  },
+  "open-panel-utenti": {
+    rispostaBreve: "Permette la gestione admin, permessi utente e app collegate.",
+    passi: [
+      "Apri il menu (⋮) e premi “Gestione utenti”.",
+      "Aggiungi/rimuovi admin oppure aggiorna i permessi azione per utente.",
+      "Salva le modifiche e verifica l'elenco utenti."
+    ],
+    tags: ["utenti", "permessi", "admin"]
+  },
+  "open-panel-info-utili": {
+    rispostaBreve: "Consente di pubblicare risorse utili (contatti, note, documenti) per commessa.",
+    passi: [
+      "Apri il menu (⋮) e premi “Informazioni utili”.",
+      "Seleziona tipo risorsa, titolo e contenuto/link.",
+      "Salva e verifica che la risorsa sia disponibile nella commessa."
+    ],
+    tags: ["risorse", "contatti", "note", "documenti"]
+  },
+  "open-private-docs-btn": {
+    rispostaBreve: "Area personale per caricare e consultare documenti individuali.",
+    passi: [
+      "Apri il menu (⋮) e premi “Documenti personali”.",
+      "Compila nome/note e allega file o foto.",
+      "Salva e verifica la presenza del documento nell'elenco."
+    ],
+    tags: ["documenti", "personale", "drive"]
+  },
+  "open-segnalazioni-btn": {
+    rispostaBreve: "Compili la segnalazione sicurezza e generi il PDF da condividere.",
+    passi: [
+      "Apri il menu (⋮) e premi “Segnalazioni”.",
+      "Compila i campi obbligatori e scegli il tipo di segnalazione.",
+      "Genera il PDF e condividilo via WhatsApp o email."
+    ],
+    tags: ["segnalazioni", "pdf", "sicurezza"]
+  }
+};
+const STATIC_HOWTO_ITEMS = [
   {
     id: "login-google",
     domanda: "Come faccio il login con Google?",
@@ -259,55 +334,7 @@ const howtoFaqItems = [
       "Controlla che compaia “Loggato” con email e nome utente."
     ],
     tags: ["login", "google", "accesso"],
-    updatedAt: "2026-04-10"
-  },
-  {
-    id: "aggiunta-commessa",
-    domanda: "Come aggiungo una nuova commessa?",
-    rispostaBreve: "Dal menu apri “Aggiungi commesse” e usa il form dedicato.",
-    passi: [
-      "Apri il menu (⋮) e scegli “Aggiungi commesse”.",
-      "Compila il campo “Nuova commessa”.",
-      "Premi “Aggiungi commessa” e verifica che appaia in dashboard."
-    ],
-    tags: ["commesse", "admin", "anagrafica"],
-    updatedAt: "2026-04-10"
-  },
-  {
-    id: "import-excel",
-    domanda: "Come importo un file Excel impianti?",
-    rispostaBreve: "Seleziona commessa, carica il file e avvia l'import.",
-    passi: [
-      "Apri “Aggiungi commesse” dal menu.",
-      "Se necessario scegli la commessa nel selettore “aggiunta impianti”.",
-      "Carica il file .xlsx/.xls e premi “Importa impianti”."
-    ],
-    tags: ["excel", "import", "impianti"],
-    updatedAt: "2026-04-10"
-  },
-  {
-    id: "squadra-composizione",
-    domanda: "Come salvo la composizione di una squadra?",
-    rispostaBreve: "Usa il pannello “Composizione squadre” e salva dopo aver compilato righe e data.",
-    passi: [
-      "Apri menu → “Composizione squadre”.",
-      "Seleziona commessa e data di riferimento.",
-      "Aggiungi righe squadra/personale/mezzi e premi “Salva composizione”."
-    ],
-    tags: ["squadre", "personale", "mezzi"],
-    updatedAt: "2026-04-10"
-  },
-  {
-    id: "segnalazione-pdf",
-    domanda: "Come genero e condivido una segnalazione PDF?",
-    rispostaBreve: "Compila la scheda segnalazione, genera PDF e invia via WhatsApp o Email.",
-    passi: [
-      "Apri menu → “Segnalazioni” e compila tutti i campi obbligatori.",
-      "Seleziona almeno una tipologia di segnalazione.",
-      "Premi “Genera PDF”, poi usa i pulsanti di condivisione."
-    ],
-    tags: ["segnalazioni", "pdf", "sicurezza"],
-    updatedAt: "2026-04-10"
+    updatedAt: HOWTO_UPDATED_AT
   },
   {
     id: "chat-operatori",
@@ -319,7 +346,7 @@ const howtoFaqItems = [
       "Scrivi il testo (o allega media/vocale) e premi invio."
     ],
     tags: ["chat", "messaggi", "operatori"],
-    updatedAt: "2026-04-10"
+    updatedAt: HOWTO_UPDATED_AT
   },
   {
     id: "google-drive",
@@ -331,7 +358,7 @@ const howtoFaqItems = [
       "Conferma i permessi richiesti e verifica lo stato collegato."
     ],
     tags: ["drive", "google", "integrazione"],
-    updatedAt: "2026-04-10"
+    updatedAt: HOWTO_UPDATED_AT
   }
 ];
 
@@ -794,6 +821,29 @@ function closeHowtoPage() {
   applyRoute();
 }
 
+function buildHowtoFaqItems() {
+  const menuButtons = Array.from(document.querySelectorAll("#side-menu .menu-title-btn"));
+  const menuFaqItems = menuButtons.map((button, index) => {
+    const buttonId = button.id || `menu-item-${index + 1}`;
+    const menuTitle = (button.textContent || "").trim() || "Voce menu";
+    const config = MENU_HOWTO_CONTENT[buttonId] || {};
+    const fallbackPassi = [
+      "Apri il menu (⋮) nella home.",
+      `Premi “${menuTitle}”.`,
+      "Segui i campi/pulsanti del pannello e conferma l'azione."
+    ];
+    return {
+      id: `menu-${buttonId}`,
+      domanda: `Come si usa “${menuTitle}”?`,
+      rispostaBreve: config.rispostaBreve || `Questa voce apre “${menuTitle}” con tutte le azioni disponibili.`,
+      passi: config.passi || fallbackPassi,
+      tags: config.tags || ["menu", "funzione"],
+      updatedAt: HOWTO_UPDATED_AT
+    };
+  });
+  return [...menuFaqItems, ...STATIC_HOWTO_ITEMS];
+}
+
 function openPrivateDocsPage() {
   if (!currentUser) {
     alert("Devi fare login per usare i documenti personali.");
@@ -812,6 +862,7 @@ function closePrivateDocsPage() {
 function renderHowtoFaq() {
   if (!ui.howtoFaqList) return;
   ui.howtoFaqList.innerHTML = "";
+  const howtoFaqItems = buildHowtoFaqItems();
   howtoFaqItems.forEach((faq) => {
     const item = document.createElement("article");
     item.className = "howto-faq-item";

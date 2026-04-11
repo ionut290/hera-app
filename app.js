@@ -1059,12 +1059,45 @@ function parseGoogleSheetId(value) {
   return idOnly ? input : "";
 }
 
+function isAndroidWebViewRuntime() {
+  // Flusso Android/WebView/Capacitor: qui evitiamo il redirect Firebase
+  // perché in WebView può fallire con errore "missing initial state".
+  const capacitorPlatform = (window.Capacitor && typeof window.Capacitor.getPlatform === "function")
+    ? window.Capacitor.getPlatform()
+    : "";
+  const isCapacitorNative = Boolean(
+    window.Capacitor
+    && typeof window.Capacitor.isNativePlatform === "function"
+    && window.Capacitor.isNativePlatform()
+  );
+  const ua = navigator.userAgent || "";
+  const isAndroidUa = /Android/i.test(ua);
+  const isWebViewUa = /; wv\)/i.test(ua) || /\bVersion\/[\d.]+ Chrome\/[\d.]+ Mobile\b/i.test(ua);
+  return capacitorPlatform === "android" || isCapacitorNative || (isAndroidUa && isWebViewUa);
+}
+
 function loginWithGoogle(forceAccountSelection = false) {
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
   provider.addScope("https://www.googleapis.com/auth/drive.file");
   if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
 
+  // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
+  if (isAndroidWebViewRuntime()) {
+    auth.signInWithPopup(provider).then((result) => {
+      const accessToken = extractGoogleAccessToken(result);
+      if (accessToken) {
+        persistDriveAccessToken(accessToken);
+        autoConnectDriveBridge({ notifyOnError: false });
+      }
+    }).catch((error) => {
+      console.error("Login Google Android/WebView fallito:", error);
+      alert("Errore login Android/WebView: " + error.message);
+    });
+    return;
+  }
+
+  // Flusso web desktop/browser standard: manteniamo comportamento esistente.
   auth.signInWithPopup(provider).then((result) => {
     // Gli scope extra (es. Drive) arrivano nel credential del login, non nel profilo utente Firebase.
     const accessToken = extractGoogleAccessToken(result);

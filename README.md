@@ -57,3 +57,32 @@ La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.
 ## Checklist manutenzione
 
 - Quando si aggiunge/modifica una feature, aggiornare `appConfig/helpCenter` (oppure `appHelpFaq`) con domanda/risposta/passi e pubblicare un nuovo snapshot Drive.
+
+## Passo-passo: mantenere web app intatta + pubblicare su Play Store
+
+Questa procedura mantiene la versione web invariata: **la web app resta la sorgente principale**, Android è solo un contenitore.
+
+1. Verifica PWA base (già predisposta in questo repo): `manifest.webmanifest`, icona SVG e `sw.js`.
+2. Continua a distribuire la web app su Firebase Hosting come sempre.
+3. Usa Capacitor (config già pronta in `capacitor.config.ts`) per creare il wrapper Android in `android/`.
+4. Genera il file `.aab` da Android Studio e caricalo in Play Console.
+
+### Comandi consigliati (quando vuoi attivare Android)
+
+```bash
+npm install
+npm run android:add
+npm run android:sync
+npm run android:open
+```
+
+`capacitor.config.ts` è già incluso nel repository con `appId` `it.vargacantieri.hera`, quindi non devi inizializzarlo manualmente.
+
+In Android Studio:
+- Build > Generate Signed Bundle / APK
+- Seleziona **Android App Bundle (AAB)**
+- Firma e pubblica su Play Console
+
+### Nota importante
+
+Per mantenere la web app intatta, evita refactor lato UI/rotte solo per Android: usa plugin Capacitor solo se servono feature native (camera, notifiche, file).

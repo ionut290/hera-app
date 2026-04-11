@@ -1,0 +1,19 @@
+{
+  "name": "Hera App - Commesse",
+  "short_name": "Hera App",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1d4ed8",
+  "description": "Gestione commesse e impianti per Varga Cantieri.",
+  "lang": "it-IT",
+  "icons": [
+    {
+      "src": "./icons/hera-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

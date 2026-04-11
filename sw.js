@@ -1,10 +1,12 @@
-const CACHE_NAME = "hera-app-shell-v1";
+const CACHE_NAME = "hera-app-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./firebase-config.js"
+  "./firebase-config.js",
+  "./manifest.webmanifest",
+  "./icons/hera-icon.svg"
 ];
 
 self.addEventListener("install", (event) => {

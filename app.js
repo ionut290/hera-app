@@ -317,6 +317,8 @@ const ADMIN_EMAIL = "ionut29019@gmail.com";
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
+const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
+const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const HELP_CENTER_FAQ_FALLBACK = {
@@ -587,6 +589,7 @@ function updateAdminControls() {
     ui.externalAppForm.querySelector("button[type='submit']").disabled = !auth.currentUser;
   }
   ui.squadraCommessa.disabled = !canManage;
+  ui.squadreWhatsappAllBtn?.classList.toggle("hidden", !canManage);
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
   ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
@@ -699,11 +702,13 @@ function applyRoute() {
 
 function openImpiantiPage() {
   if (!selectedCommessaId) return;
+  localStorage.setItem(LAST_OPENED_COMMESSA_KEY, selectedCommessaId);
   window.location.hash = `commessa=${selectedCommessaId}`;
   applyRoute();
 }
 
 function closeImpiantiPage() {
+  localStorage.removeItem(LAST_OPENED_COMMESSA_KEY);
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
   document.body.classList.remove("resource-view-open");
@@ -1176,7 +1181,9 @@ function subscribeCommesse() {
         return;
       }
 
-      snapshot.forEach((doc) => {
+      const activeStoredId = localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
+      let shouldRestoreOpenCommessa = false;
+      snapshot.forEach((doc, idx) => {
         const commessa = doc.data();
         commesseById.set(doc.id, { id: doc.id, ...commessa });
         const row = document.createElement("div");
@@ -1186,6 +1193,7 @@ function subscribeCommesse() {
         btn.type = "button";
         btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
         btn.dataset.commessaId = doc.id;
+        btn.style.setProperty("--commessa-accent", getCommessaAccentColor(doc.id, idx));
         btn.textContent = commessa.nome || "Commessa senza nome";
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
 
@@ -1198,12 +1206,17 @@ function subscribeCommesse() {
         ui.squadraCommessa.appendChild(option);
         ui.commessaTargetSelect.appendChild(option.cloneNode(true));
         ui.resourceCommesse.appendChild(option.cloneNode(true));
+        if (!selectedCommessaId && activeStoredId && activeStoredId === doc.id) shouldRestoreOpenCommessa = true;
       });
 
       renderCommesseManagementList();
       renderSquadre();
       renderResourcesList();
       renderResourceButtonsForCommessa();
+      if (!selectedCommessaId && shouldRestoreOpenCommessa) {
+        const restored = commesseById.get(activeStoredId);
+        if (restored) selectCommessa(restored.id, restored.nome || "Commessa");
+      }
     }, (error) => {
       console.error(error);
       ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
@@ -1452,6 +1465,7 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
   setImpiantiViewMode("todo");
   if (!ui.commessaTargetSelect.value) {
     ui.commessaTargetSelect.value = id;
@@ -3083,27 +3097,42 @@ async function shareAllSquadreToWhatsApp() {
     return;
   }
 
-  try {
-    const blob = await buildSquadrePackagePdfBlob(entries);
-    const dateLabel = ui.squadraCalendarDate.value || new Date().toISOString().slice(0, 10);
-    const fileName = `pacchetto-squadre-${dateLabel}.pdf`;
-    const file = new File([blob], fileName, { type: "application/pdf" });
-    const message = `Invio PDF squadre completo (${entries.length} commesse, una scheda per foglio).`;
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text: message, title: "Squadre per commessa" });
-      return;
-    }
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${message} Ho scaricato il PDF con il layout operativo e lo allego qui.`)}`, "_blank");
-    alert("PDF scaricato. In WhatsApp allega il file appena scaricato.");
-  } catch (error) {
-    console.error("Invio pacchetto squadre non riuscito:", error);
-    alert("Impossibile generare/inviare il PDF delle squadre.");
+  const sortedEntries = [...entries].sort((a, b) => String(a.commessa.nome || "").localeCompare(String(b.commessa.nome || ""), "it"));
+  const groupedLines = sortedEntries.map((entry, entryIdx) => {
+    const dateLabel = entry.squad.riferimentoData
+      ? new Date(`${entry.squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
+      : "-";
+    const squadLines = entry.squadRows.map((row, rowIdx) => ([
+      `   👥 Squadra ${rowIdx + 1}: ${row.personale || "-"}`,
+      `   🚚 Mezzi squadra ${rowIdx + 1}: ${row.mezzi || "-"}`
+    ].join("\n"))).join("\n");
+    return [
+      `📁 COMMESSA ${entryIdx + 1}: ${String(entry.commessa.nome || "Commessa").toUpperCase()}`,
+      `📅 Giorno programmato: ${dateLabel}`,
+      squadLines || "   - Nessuna squadra assegnata -"
+    ].join("\n");
+  });
+
+  const message = [
+    "📣 PROPOSTA SQUADRE OPERATIVE",
+    "Buongiorno, condivido la proposta squadre per la pianificazione operativa.",
+    "",
+    groupedLines.join("\n\n"),
+    "",
+    "✅ Per favore confermare o segnalare eventuali modifiche."
+  ].join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+}
+
+function getCommessaAccentColor(commessaId, index) {
+  const palette = ["#2563eb", "#7c3aed", "#0f766e", "#d97706", "#db2777", "#0891b2", "#4f46e5", "#ca8a04"];
+  const source = String(commessaId || index || "");
+  let hash = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = ((hash << 5) - hash) + source.charCodeAt(i);
+    hash |= 0;
   }
+  return palette[Math.abs(hash) % palette.length];
 }
 
 function renderMap() {

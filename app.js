@@ -2457,7 +2457,7 @@ function renderImpianti() {
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
     addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
     addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
-    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto));
+    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
     if (actions.childElementCount > 0) article.appendChild(actions);

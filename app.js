@@ -520,7 +520,7 @@ auth.onAuthStateChanged((user) => {
   syncSegnalazioneFirmaPreposto();
 
   ui.importBtn.disabled = !loggedIn || !selectedCommessaId || pendingRows.length === 0 || !canManageData();
-  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId;
+  ui.exportCurrentCommessaBtn.disabled = !loggedIn || !selectedCommessaId || !canManageData();
   updateAdminControls();
 
   stopCommesseSubscription();
@@ -617,6 +617,8 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   ui.squadreWhatsappAllBtn?.classList.toggle("hidden", !canManage);
+  ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
+  ui.exportCurrentCommessaBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId;
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
   ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
@@ -1791,7 +1793,7 @@ function selectCommessa(id, nome) {
   ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
   updateCommessaContextUI();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
-  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser;
+  ui.exportCurrentCommessaBtn.disabled = !auth.currentUser || !canManageData();
   updateCommessaButtonsActive();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
@@ -2308,9 +2310,10 @@ async function exportCommessaSummary(commessaId, commessaName) {
         "GPS X": impianto.gpsX ?? "",
         "Tipo manutenzione": impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
         Stato: "Fatto",
-        "Eseguito da": impianto.doneBy || "-",
         "Data esecuzione": doneInfo.date,
-        "Ora esecuzione (hh:mm)": doneInfo.time
+        "Ora esecuzione": doneInfo.time,
+        "Eseguito da": impianto.doneBy || "-",
+        "Email operatore": auth.currentUser?.email || ""
       };
     });
 

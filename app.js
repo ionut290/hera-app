@@ -84,6 +84,7 @@ const ui = {
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
+  openHoursBtn: document.getElementById("open-hours-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   managementPage: document.getElementById("management-page"),
@@ -146,6 +147,16 @@ const ui = {
   howtoFaqList: document.getElementById("howto-faq-list"),
   privateDocsPage: document.getElementById("private-docs-page"),
   backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
+  hoursPage: document.getElementById("hours-page"),
+  backFromHoursBtn: document.getElementById("back-from-hours-btn"),
+  hoursForm: document.getElementById("hours-form"),
+  hoursDate: document.getElementById("hours-date"),
+  hoursCommesseList: document.getElementById("hours-commesse-list"),
+  addHoursCommessaBtn: document.getElementById("add-hours-commessa-btn"),
+  hoursFinalizeBtn: document.getElementById("hours-finalize-btn"),
+  hoursFeedback: document.getElementById("hours-feedback"),
+  hoursSummary: document.getElementById("hours-summary"),
+  hoursOperatoriOptions: document.getElementById("hours-operatori-options"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -258,6 +269,7 @@ let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let privateDocsRecords = [];
+let hoursDraftEntries = [];
 let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
@@ -266,6 +278,7 @@ let reportingImpianto = null;
 let chatRetentionTimer = null;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
+const HOURS_WHATSAPP_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
 const PUSH_PUBLIC_VAPID_KEY = resolvePushPublicVapidKey();
 let serviceWorkerRegistration = null;
@@ -344,6 +357,15 @@ const MENU_HOWTO_CONTENT = {
       "Salva e verifica la presenza del documento nell'elenco."
     ],
     tags: ["documenti", "personale", "drive"]
+  },
+  "open-hours-btn": {
+    rispostaBreve: "Compili ore per commessa e operatore, salvi il resoconto e invii WhatsApp.",
+    passi: [
+      "Apri il menu (⋮) e premi “Gestione ore”.",
+      "Aggiungi una o più commesse, poi operatori con ore e note.",
+      "Premi “Fine: salva e invia” per salvare su Drive e aprire WhatsApp."
+    ],
+    tags: ["ore", "commesse", "operatori", "whatsapp", "drive"]
   },
   "open-segnalazioni-btn": {
     rispostaBreve: "Compili la segnalazione sicurezza e generi il PDF da condividere.",
@@ -482,6 +504,7 @@ ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
+ui.openHoursBtn.addEventListener("click", openHoursPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
@@ -492,6 +515,9 @@ ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
+ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
+ui.hoursForm.addEventListener("submit", finalizeHoursReport);
+ui.addHoursCommessaBtn.addEventListener("click", () => addHoursCommessaBlock());
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
@@ -522,6 +548,7 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
 });
 
 addSquadraRow();
+initHoursPage();
 initGeolocation();
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
@@ -882,17 +909,19 @@ function applyRoute() {
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
   const showPrivateDocs = hash === "#documenti";
+  const showHours = hash === "#ore";
   const commessaIdFromHash = match ? match[1] : "";
   const resourceTypeFromHash = match ? (match[2] || "") : "";
   const showFuel = Boolean(fuelMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
+  ui.hoursPage.classList.toggle("hidden", !showHours);
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
   const mapElement = document.getElementById("map");
@@ -1161,6 +1190,246 @@ function openPrivateDocsPage() {
 function closePrivateDocsPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function initHoursPage() {
+  if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
+  if (!ui.hoursCommesseList) return;
+  if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  renderHoursOperatoriOptions();
+  renderHoursCommessaSelectOptions();
+  renderHoursSummary();
+}
+
+function openHoursPage() {
+  if (!currentUser) {
+    alert("Devi fare login per compilare la gestione ore.");
+    return;
+  }
+  if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
+  if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  window.location.hash = "ore";
+  applyRoute();
+  closeSideMenu();
+}
+
+function closeHoursPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function renderHoursOperatoriOptions() {
+  if (!ui.hoursOperatoriOptions) return;
+  ui.hoursOperatoriOptions.innerHTML = "";
+  personaleRecords.forEach((person) => {
+    const option = document.createElement("option");
+    option.value = person.fullName || `${person.nome || ""} ${person.cognome || ""}`.trim();
+    ui.hoursOperatoriOptions.appendChild(option);
+  });
+}
+
+function renderHoursCommessaSelectOptions() {
+  const selects = ui.hoursCommesseList ? ui.hoursCommesseList.querySelectorAll(".hours-commessa-select") : [];
+  if (!selects.length) return;
+  const commesse = Array.from(commesseById.values());
+  selects.forEach((select) => {
+    const selectedValue = select.value;
+    select.innerHTML = "<option value=''>Seleziona commessa</option>";
+    commesse.forEach((commessa) => {
+      const option = document.createElement("option");
+      option.value = commessa.id;
+      option.textContent = commessa.nome || "Commessa senza nome";
+      select.appendChild(option);
+    });
+    if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
+      select.value = selectedValue;
+    }
+  });
+}
+
+function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }) {
+  const row = document.createElement("div");
+  row.className = "hours-operator-row";
+  row.innerHTML = `
+    <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}">
+    <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
+    <button type="button" class="btn hours-remove-operator-btn">Rimuovi</button>
+  `;
+  const removeBtn = row.querySelector(".hours-remove-operator-btn");
+  removeBtn.addEventListener("click", () => {
+    row.remove();
+    renderHoursSummary();
+  });
+  row.querySelectorAll("input").forEach((input) => input.addEventListener("input", renderHoursSummary));
+  container.appendChild(row);
+}
+
+function addHoursCommessaBlock(blockData = null) {
+  const card = document.createElement("article");
+  card.className = "hours-commessa-card";
+  card.innerHTML = `
+    <div class="hours-commessa-head">
+      <h3>Commessa</h3>
+      <button type="button" class="btn hours-remove-commessa-btn">Rimuovi commessa</button>
+    </div>
+    <select class="hours-commessa-select" required>
+      <option value="">Seleziona commessa</option>
+    </select>
+    <div class="hours-operator-list"></div>
+    <div class="item-actions">
+      <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
+    </div>
+    <textarea class="hours-note" placeholder="Nota (opzionale)"></textarea>
+  `;
+  ui.hoursCommesseList.appendChild(card);
+  renderHoursCommessaSelectOptions();
+
+  const removeBtn = card.querySelector(".hours-remove-commessa-btn");
+  removeBtn.addEventListener("click", () => {
+    card.remove();
+    if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+    renderHoursSummary();
+  });
+  const operatorList = card.querySelector(".hours-operator-list");
+  card.querySelector(".hours-add-operator-btn").addEventListener("click", () => {
+    addHoursOperatoreRow(operatorList);
+    renderHoursSummary();
+  });
+  card.querySelector(".hours-commessa-select").addEventListener("change", renderHoursSummary);
+  card.querySelector(".hours-note").addEventListener("input", renderHoursSummary);
+
+  if (blockData) {
+    if (blockData.commessaId) card.querySelector(".hours-commessa-select").value = blockData.commessaId;
+    card.querySelector(".hours-note").value = blockData.note || "";
+    const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];
+    rows.forEach((row) => addHoursOperatoreRow(operatorList, row));
+  } else {
+    addHoursOperatoreRow(operatorList);
+  }
+  renderHoursSummary();
+}
+
+function collectHoursEntries() {
+  const cards = Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card"));
+  return cards.map((card) => {
+    const commessaId = String(card.querySelector(".hours-commessa-select")?.value || "").trim();
+    const note = String(card.querySelector(".hours-note")?.value || "").trim();
+    const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
+      operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
+      ore: Number(row.querySelector(".hours-ore")?.value || 0)
+    })).filter((row) => row.operatore || row.ore > 0);
+    const commessaName = commesseById.get(commessaId)?.nome || "";
+    return { commessaId, commessaName, note, rows };
+  }).filter((entry) => entry.commessaId || entry.rows.length || entry.note);
+}
+
+function renderHoursSummary(forcedEntries = null) {
+  const entries = forcedEntries || collectHoursEntries();
+  hoursDraftEntries = entries;
+  if (!ui.hoursSummary) return;
+  if (!entries.length) {
+    ui.hoursSummary.innerHTML = "<p class='muted'>Resoconto: aggiungi almeno una commessa.</p>";
+    return;
+  }
+  const html = entries.map((entry, idx) => {
+    const rows = entry.rows.length
+      ? entry.rows.map((row) => `<li>${escapeHTML(row.operatore || "-")}: <b>${escapeHTML(String(row.ore || 0))}h</b></li>`).join("")
+      : "<li>Nessun operatore indicato.</li>";
+    return `
+      <article class="item-card">
+        <h3>${idx + 1}. ${escapeHTML(entry.commessaName || "Commessa non selezionata")}</h3>
+        <ul>${rows}</ul>
+        ${entry.note ? `<p><b>Nota:</b> ${escapeHTML(entry.note)}</p>` : ""}
+      </article>
+    `;
+  }).join("");
+  ui.hoursSummary.innerHTML = html;
+}
+
+function buildHoursWhatsappMessage(reportDate, entries, authorLabel) {
+  const groupedText = entries.map((entry, idx) => {
+    const operatorLines = entry.rows.map((row) => `   - ${row.operatore || "-"}: ${row.ore || 0}h`).join("\n");
+    return [
+      `📁 Commessa ${idx + 1}: ${entry.commessaName || "-"}`,
+      operatorLines || "   - Nessun operatore",
+      entry.note ? `📝 Nota: ${entry.note}` : ""
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+
+  return [
+    "🕒 RESOCONTO ORE LAVORATE",
+    `📅 Data: ${reportDate}`,
+    `👷 Compilato da: ${authorLabel}`,
+    "",
+    groupedText
+  ].join("\n");
+}
+
+async function finalizeHoursReport(event) {
+  event.preventDefault();
+  if (!currentUser) {
+    ui.hoursFeedback.textContent = "Devi fare login prima di salvare.";
+    return;
+  }
+  const dateValue = String(ui.hoursDate.value || "").trim();
+  if (!dateValue) {
+    ui.hoursFeedback.textContent = "Seleziona una data.";
+    return;
+  }
+  const entries = collectHoursEntries();
+  const hasValidEntry = entries.some((entry) => entry.commessaId && entry.rows.some((row) => row.operatore && row.ore > 0));
+  if (!hasValidEntry) {
+    ui.hoursFeedback.textContent = "Inserisci almeno una commessa con un operatore e ore > 0.";
+    return;
+  }
+  const payload = {
+    date: dateValue,
+    entries: entries.map((entry) => ({
+      commessaId: entry.commessaId,
+      commessaName: entry.commessaName,
+      note: entry.note,
+      rows: entry.rows.filter((row) => row.operatore && row.ore > 0)
+    })).filter((entry) => entry.commessaId && entry.rows.length),
+    createdByUid: currentUser.uid,
+    createdByName: currentUser.displayName || currentUser.email || "Operatore",
+    createdByEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  const reportDate = new Date(`${dateValue}T00:00:00`).toLocaleDateString("it-IT");
+  const message = buildHoursWhatsappMessage(reportDate, payload.entries, payload.createdByName);
+  const waUrl = `https://wa.me/${HOURS_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
+  const waWindow = window.open("about:blank", "_blank");
+
+  ui.hoursFinalizeBtn.disabled = true;
+  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso... WhatsApp verrà aperto comunque.";
+  try {
+    const docRef = await db.collection("oreReports").add(payload);
+    let driveLink = "";
+    if (driveAccessToken) {
+      if (!driveReportsFolderId) await ensureDriveFolders();
+      const blob = new Blob([JSON.stringify({ id: docRef.id, ...payload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
+      const fileName = `ore_${dateValue}_${docRef.id}.json`;
+      const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId);
+      driveLink = upload?.webViewLink || "";
+    }
+
+    ui.hoursFeedback.textContent = driveLink
+      ? `Resoconto salvato (ID ${docRef.id}) e backup Drive completato.`
+      : `Resoconto salvato (ID ${docRef.id}). Drive non collegato: backup file saltato.`;
+    ui.hoursCommesseList.innerHTML = "";
+    addHoursCommessaBlock();
+    renderHoursSummary();
+  } catch (error) {
+    console.error("Salvataggio gestione ore non riuscito:", error);
+    ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp comunque disponibile.";
+  } finally {
+    if (waWindow && !waWindow.closed) {
+      waWindow.location.href = waUrl;
+    } else {
+      window.open(waUrl, "_blank");
+    }
+    ui.hoursFinalizeBtn.disabled = false;
+  }
 }
 
 function renderHowtoFaq() {
@@ -1637,6 +1906,7 @@ function subscribeCommesse() {
 
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+        renderHoursCommessaSelectOptions();
         updateCommessaContextUI();
         renderNextActionCard();
         return;
@@ -1671,6 +1941,7 @@ function subscribeCommesse() {
       });
 
       renderCommesseManagementList();
+      renderHoursCommessaSelectOptions();
       renderSquadre();
       renderResourcesList();
       renderResourceButtonsForCommessa();
@@ -3411,6 +3682,7 @@ function subscribePersonale() {
     renderSimpleList(ui.personaleLista, personaleRecords, deletePersonale);
     updateSquadraHintFromSources();
     updateSuggestionLists();
+    renderHoursOperatoriOptions();
   }, (error) => {
     console.error(error);
     ui.personaleLista.innerHTML = "<p class='muted'>Errore caricamento personale.</p>";

@@ -1453,6 +1453,7 @@ textarea:focus-visible {
 
 .hours-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .hours-month-table {
@@ -1482,4 +1483,27 @@ textarea:focus-visible {
   left: 0;
   background: #f8fbff;
   min-width: 170px;
+}
+
+.hours-month-card-full {
+  min-height: 72vh;
+}
+
+#hours-table-month,
+#hours-table-commessa-select {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.hours-value-btn {
+  border: 0;
+  background: #eaf1ff;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font: inherit;
+  cursor: pointer;
+  min-width: 42px;
 }

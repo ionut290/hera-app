@@ -388,12 +388,15 @@
     <section id="hours-tables-view" class="card hidden">
       <div class="page-head">
         <button id="hours-tables-back-btn" class="btn" type="button">← Inserimento ore</button>
-        <h3>Tabella ore mensile</h3>
+        <h3>Tabella ore commessa</h3>
       </div>
       <div class="item-actions">
-        <button id="hours-prev-month-btn" class="btn" type="button">Mese scorso</button>
-        <button id="hours-current-month-btn" class="btn" type="button">Mese selezionato</button>
-        <button id="hours-all-months-btn" class="btn" type="button">Tutte le tabelle</button>
+        <input id="hours-table-month" type="month">
+        <select id="hours-table-commessa-select">
+          <option value="">Seleziona commessa</option>
+        </select>
+        <button id="hours-load-table-btn" class="btn" type="button">Apri foglio</button>
+        <button id="hours-export-table-btn" class="btn" type="button">Scarica Excel</button>
       </div>
       <p id="hours-tables-feedback" class="muted"></p>
       <div id="hours-tables-list" class="simple-list"></div>
@@ -536,7 +539,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260412-ore-table-1"></script>
+  <script src="app.js?v=20260412-ore-table-2"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

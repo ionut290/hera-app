@@ -5782,17 +5782,40 @@ function formatDistance(km) {
 
 function getTrafficIntensityByHour(date = new Date()) {
   const hour = date.getHours();
-  if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) return "intenso";
+  const day = date.getDay();
+  const isWeekend = day === 0 || day === 6;
+
+  if (!isWeekend && ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19))) return "intenso";
   if (hour >= 22 || hour <= 5) return "leggero";
+  if (isWeekend && hour >= 12 && hour <= 14) return "moderato";
   return "moderato";
 }
 
+function getDistanceIntensityOffset(distanceKm) {
+  if (!Number.isFinite(distanceKm)) return 0;
+  if (distanceKm < 1.2) return -1;
+  if (distanceKm < 6) return 0;
+  if (distanceKm < 20) return 1;
+  return 0;
+}
+
+function getRouteVarianceOffset(distanceKm) {
+  if (!Number.isFinite(distanceKm)) return 0;
+  const fingerprint = Math.floor(distanceKm * 1000) % 5;
+  if (fingerprint === 0) return -1;
+  if (fingerprint === 4) return 1;
+  return 0;
+}
+
 function normalizeTrafficIntensity(baseIntensity, distanceKm) {
-  if (!Number.isFinite(distanceKm)) return baseIntensity;
-  if (baseIntensity === "intenso" && distanceKm < 2) return "moderato";
-  if (baseIntensity === "moderato" && distanceKm >= 15) return "intenso";
-  if (baseIntensity === "leggero" && distanceKm >= 25) return "moderato";
-  return baseIntensity;
+  const levels = ["leggero", "moderato", "intenso"];
+  const baseIndex = levels.indexOf(baseIntensity);
+  if (baseIndex === -1) return "moderato";
+
+  const distanceOffset = getDistanceIntensityOffset(distanceKm);
+  const varianceOffset = getRouteVarianceOffset(distanceKm);
+  const normalizedIndex = Math.max(0, Math.min(levels.length - 1, baseIndex + distanceOffset + varianceOffset));
+  return levels[normalizedIndex];
 }
 
 function estimateTravelMeta(distanceKm) {

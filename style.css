@@ -1236,6 +1236,18 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.item-actions-gestione {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.gestione-toggle-btn {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
 .action-icon-btn {
   min-width: 34px;
   min-height: 34px !important;

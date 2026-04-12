@@ -284,6 +284,7 @@ let squadreHistoryByDate = new Map();
 let manualSquadreFilterDateKey = "";
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
+const expandedImpiantoManagementKeys = new Set();
 let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 let pendingSheetExports = [];
@@ -3627,8 +3628,19 @@ function renderImpianti() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
+    const managementActions = document.createElement("div");
+    managementActions.className = "item-actions item-actions-gestione";
+    const isManagementExpanded = expandedImpiantoManagementKeys.has(impiantoKey);
 
-    const addAction = (actionKey, icon, title, callback, forceDisabled = false, trackAsUsed = true) => {
+    const addAction = (
+      actionKey,
+      icon,
+      title,
+      callback,
+      forceDisabled = false,
+      trackAsUsed = true,
+      targetContainer = actions
+    ) => {
       if (isImpiantoActionDenied(actionKey)) return;
       const actionId = `${selectedCommessaId}:${impiantoKey}:${actionKey}`;
       const btn = createActionIconButton(icon, title, async () => {
@@ -3641,18 +3653,32 @@ function renderImpianti() {
         btn.classList.add("next-action-target");
       }
       if (forceDisabled || (trackAsUsed && isActionUsed(actionId))) setUsedActionButtonState(btn, true);
-      actions.appendChild(btn);
+      targetContainer.appendChild(btn);
     };
 
-    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false);
-    addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done));
-    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto));
-    addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false);
-    addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto));
-    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false);
-    if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto));
-    if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto));
+    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, actions);
+    addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done), true, actions);
+    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, actions);
+
+    addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
+    addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
+    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
+    if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
+    if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
+    if (managementActions.childElementCount > 0) {
+      const manageBtn = createButton("⚙️ Gestione", () => {
+        if (expandedImpiantoManagementKeys.has(impiantoKey)) expandedImpiantoManagementKeys.delete(impiantoKey);
+        else expandedImpiantoManagementKeys.add(impiantoKey);
+        renderImpianti();
+      });
+      manageBtn.classList.add("gestione-toggle-btn");
+      manageBtn.setAttribute("aria-expanded", isManagementExpanded ? "true" : "false");
+      actions.appendChild(manageBtn);
+      managementActions.classList.toggle("hidden", !isManagementExpanded);
+    }
+
     if (actions.childElementCount > 0) article.appendChild(actions);
+    if (managementActions.childElementCount > 0) article.appendChild(managementActions);
 
     ui.impiantiLista.appendChild(article);
   });
@@ -6285,7 +6311,9 @@ async function clearCommessaImpianti(commessaId, nome) {
     alert("Solo un admin può svuotare commesse.");
     return;
   }
-  const ok = window.confirm(`Svuotare la commessa "${nome}" eliminando tutti gli impianti?`);
+  const ok = window.confirm(
+    `ATTENZIONE: stai per svuotare la commessa "${nome}" ed eliminare tutti gli impianti.\n\nPremi OK per confermare, Annulla per tornare indietro.`
+  );
   if (!ok) return;
   const impiantiRef = db.collection("commesse").doc(commessaId).collection("impianti");
   await deleteCollectionDocs(impiantiRef);

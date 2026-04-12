@@ -163,6 +163,7 @@ const ui = {
   hoursViewCloseBtn: document.getElementById("hours-view-close-btn"),
   hoursTableMonth: document.getElementById("hours-table-month"),
   hoursTableCommessaSelect: document.getElementById("hours-table-commessa-select"),
+  hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
   hoursTableContainer: document.getElementById("hours-table-container"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
@@ -279,6 +280,7 @@ let resourceRecords = [];
 let privateDocsRecords = [];
 let hoursDraftEntries = [];
 let hoursTableRowsMap = new Map();
+let hoursTableContext = null;
 let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
@@ -534,6 +536,7 @@ ui.hoursViewModal?.addEventListener("click", (event) => {
 });
 ui.hoursTableMonth?.addEventListener("change", loadHoursMonthlyTable);
 ui.hoursTableCommessaSelect?.addEventListener("change", loadHoursMonthlyTable);
+ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
@@ -1218,6 +1221,7 @@ function initHoursPage() {
   renderHoursTableCommessaOptions();
   renderHoursSummary();
   renderSavedHoursReports([]);
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
 }
 
 function openHoursPage() {
@@ -1227,7 +1231,6 @@ function openHoursPage() {
   }
   if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
-  loadSavedHoursReports();
   renderHoursTableCommessaOptions();
   window.location.hash = "ore";
   applyRoute();
@@ -1303,7 +1306,6 @@ function openHoursViewModal() {
   }
   ui.hoursViewModal?.classList.remove("hidden");
   ui.hoursViewModal?.setAttribute("aria-hidden", "false");
-  loadSavedHoursReports();
   loadHoursMonthlyTable();
 }
 
@@ -1324,6 +1326,8 @@ function getMonthMeta(monthValue) {
 
 async function loadHoursMonthlyTable() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  hoursTableContext = null;
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
   const monthValue = String(ui.hoursTableMonth?.value || "").trim();
   const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
   const monthMeta = getMonthMeta(monthValue);
@@ -1365,7 +1369,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
     const day = Number(reportDate.split("-")[2] || 0);
     if (!day || day < 1 || day > monthMeta.daysInMonth) return;
     const entries = Array.isArray(report.entries) ? report.entries : [];
-    entries.forEach((entry) => {
+    entries.forEach((entry, entryIndex) => {
       if (String(entry.commessaId || "") !== commessaId) return;
       (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
         const operatore = String(row.operatore || "").trim();
@@ -1381,6 +1385,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
           reportId: report.id,
           reportDate,
           entryCommessaId: entry.commessaId,
+          entryIndex,
           rowIndex
         });
       });
@@ -1388,14 +1393,9 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   });
 
   const operators = Array.from(operatorsMap.keys()).sort((a, b) => a.localeCompare(b, "it"));
-  if (!operators.length) {
-    ui.hoursTableFeedback.textContent = "Nessuna ora trovata per il mese/commessa selezionati.";
-    ui.hoursTableContainer.innerHTML = "";
-    return;
-  }
-
+  const commessaName = commesseById.get(commessaId)?.nome || "Commessa";
   const daysHeader = Array.from({ length: monthMeta.daysInMonth }, (_, idx) => `<th>${idx + 1}</th>`).join("");
-  const bodyRows = operators.map((operatorName) => {
+  const bodyRowsReal = operators.map((operatorName) => {
     const dayValues = operatorsMap.get(operatorName);
     const total = dayValues.reduce((sum, value) => sum + value, 0);
     const cells = dayValues.map((value, idx) => {
@@ -1403,16 +1403,22 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
       if (value <= 0) return "<td>-</td>";
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
-      const canDelete = canManageData() && sources.length;
-      const title = canDelete
-        ? `Elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}.`
+      const canManage = canManageData() && sources.length;
+      const title = canManage
+        ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}.`
         : `${operatorName} - giorno ${day}`;
       const valueLabel = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(".", ",");
-      return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canDelete ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}h</button></td>`;
+      return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}h</button></td>`;
     }).join("");
     const totalLabel = Number.isInteger(total) ? String(total) : total.toFixed(2).replace(".", ",");
     return `<tr><th scope="row">${escapeHTML(operatorName)}</th>${cells}<td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
-  }).join("");
+  });
+  const emptyRowsNeeded = Math.max(0, 10 - bodyRowsReal.length);
+  const emptyCells = Array.from({ length: monthMeta.daysInMonth }, () => "<td>-</td>").join("");
+  const emptyRows = Array.from({ length: emptyRowsNeeded }, () => (
+    `<tr><th scope="row" class="muted">—</th>${emptyCells}<td class="muted">0h</td></tr>`
+  ));
+  const bodyRows = [...bodyRowsReal, ...emptyRows].join("");
 
   ui.hoursTableContainer.innerHTML = `
     <table class="hours-month-table">
@@ -1426,22 +1432,58 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
       <tbody>${bodyRows}</tbody>
     </table>
   `;
-  ui.hoursTableFeedback.textContent = canManageData()
-    ? "Clicca un valore per eliminare la registrazione ore."
-    : "Vista sola lettura: solo l'amministratore può eliminare le ore.";
+  const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
+  hoursTableContext = {
+    monthLabel,
+    commessaName,
+    monthMeta,
+    operators: operators.map((name) => ({
+      name,
+      dayValues: operatorsMap.get(name) || []
+    }))
+  };
+
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = false;
+  if (!operators.length) {
+    ui.hoursTableFeedback.textContent = "Nessuna ora trovata: mostro una tabella vuota (minimo 10 righe).";
+  } else {
+    ui.hoursTableFeedback.textContent = canManageData()
+      ? "Clicca un valore per modificare o eliminare la registrazione ore."
+      : "Vista sola lettura: solo l'amministratore può modificare o eliminare le ore.";
+  }
 
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn").forEach((btn) => {
-    btn.addEventListener("click", () => handleHoursValueDelete(btn.dataset.hoursKey || ""));
+    btn.addEventListener("click", () => handleHoursValueAction(btn.dataset.hoursKey || ""));
   });
 }
 
-async function handleHoursValueDelete(cellKey) {
+async function handleHoursValueAction(cellKey) {
   if (!canManageData()) return;
   const sources = hoursTableRowsMap.get(String(cellKey || ""));
   if (!sources || !sources.length) return;
-  const confirmed = window.confirm(`Eliminare ${sources.length} registrazione/i ore selezionate?`);
-  if (!confirmed) return;
-  if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Eliminazione ore in corso...";
+  const action = window.prompt("Admin: scrivi M per modificare oppure E per eliminare.", "M");
+  const normalizedAction = String(action || "").trim().toUpperCase();
+  if (!normalizedAction) return;
+  if (!["M", "E"].includes(normalizedAction)) {
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Azione annullata: usa M (modifica) o E (elimina).";
+    return;
+  }
+  let nextHoursValue = null;
+  if (normalizedAction === "M") {
+    const rawValue = window.prompt("Nuovo valore ore (esempio: 4 oppure 7.5).");
+    const parsedValue = Number(String(rawValue || "").replace(",", "."));
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+      if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Modifica annullata: valore ore non valido.";
+      return;
+    }
+    nextHoursValue = parsedValue;
+  } else {
+    const confirmed = window.confirm(`Confermi eliminazione di ${sources.length} registrazione/i?`);
+    if (!confirmed) return;
+  }
+  if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = normalizedAction === "M"
+    ? "Modifica ore in corso..."
+    : "Eliminazione ore in corso...";
   try {
     const groupedByReport = new Map();
     sources.forEach((source) => {
@@ -1453,20 +1495,17 @@ async function handleHoursValueDelete(cellKey) {
       const docSnap = await docRef.get();
       if (!docSnap.exists) continue;
       const data = docSnap.data() || {};
-      const nextEntries = (Array.isArray(data.entries) ? data.entries : []).map((entry) => {
-        const isTarget = reportSources.some((source) => source.entryCommessaId === entry.commessaId);
-        if (!isTarget) return entry;
-        const nextRows = (Array.isArray(entry.rows) ? entry.rows : []).filter((row) => {
-          const rowOperatore = String(row.operatore || "").trim();
-          const rowOre = Number(row.ore || 0);
-          if (rowOre <= 0) return false;
-          return !reportSources.some((source) => {
-            const day = Number(String(source.reportDate || "").split("-")[2] || 0);
-            const dateDay = Number(String(data.date || "").split("-")[2] || 0);
-            const operatorPart = String(cellKey || "").split("__")[0] || "";
-            return dateDay === day && rowOperatore === operatorPart;
-          });
-        });
+      const nextEntries = (Array.isArray(data.entries) ? data.entries : []).map((entry, entryIndex) => {
+        const targetRows = reportSources
+          .filter((source) => Number(source.entryIndex) === entryIndex)
+          .map((source) => Number(source.rowIndex))
+          .filter(Number.isInteger);
+        if (!targetRows.length) return entry;
+        const nextRows = (Array.isArray(entry.rows) ? entry.rows : []).map((row, rowIndex) => {
+          if (!targetRows.includes(rowIndex)) return row;
+          if (normalizedAction === "M") return { ...row, ore: nextHoursValue };
+          return null;
+        }).filter((row) => row && Number(row.ore || 0) > 0);
         return { ...entry, rows: nextRows };
       }).filter((entry) => Array.isArray(entry.rows) && entry.rows.length);
       if (nextEntries.length) {
@@ -1478,9 +1517,40 @@ async function handleHoursValueDelete(cellKey) {
     await loadSavedHoursReports();
     await loadHoursMonthlyTable();
   } catch (error) {
-    console.error("Errore eliminazione ore:", error);
-    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore eliminazione ore.";
+    console.error("Errore aggiornamento ore:", error);
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore modifica/eliminazione ore.";
   }
+}
+
+function exportHoursMonthlyTable() {
+  if (!hoursTableContext || !hoursTableContext.monthMeta) {
+    alert("Nessuna tabella ore disponibile da esportare.");
+    return;
+  }
+  const { monthMeta, monthLabel, commessaName, operators } = hoursTableContext;
+  const headerRow = ["Operatore"];
+  for (let day = 1; day <= monthMeta.daysInMonth; day += 1) headerRow.push(String(day));
+  headerRow.push("Totale");
+  const aoa = [
+    [`Commessa: ${commessaName}`],
+    [`Mese: ${monthLabel}`],
+    [],
+    headerRow
+  ];
+  (operators || []).forEach((operator) => {
+    const values = Array.from({ length: monthMeta.daysInMonth }, (_, idx) => Number(operator.dayValues[idx] || 0));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    aoa.push([operator.name, ...values, total]);
+  });
+  while (aoa.length < 14) {
+    aoa.push(["", ...Array(monthMeta.daysInMonth).fill(""), ""]);
+  }
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Ore mensili");
+  const safeCommessa = String(commessaName || "commessa").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+  const safeMonth = monthLabel.replace("/", "-");
+  XLSX.writeFile(workbook, `ore_${safeCommessa}_${safeMonth}.xlsx`);
 }
 
 function renderHoursOperatoriOptions() {

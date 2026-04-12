@@ -1395,9 +1395,13 @@ async function finalizeHoursReport(event) {
     createdByEmail: currentUser.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  const reportDate = new Date(`${dateValue}T00:00:00`).toLocaleDateString("it-IT");
+  const message = buildHoursWhatsappMessage(reportDate, payload.entries, payload.createdByName);
+  const waUrl = `https://wa.me/${HOURS_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
+  const waWindow = window.open("about:blank", "_blank");
 
   ui.hoursFinalizeBtn.disabled = true;
-  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso...";
+  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso... WhatsApp verrà aperto comunque.";
   try {
     const docRef = await db.collection("oreReports").add(payload);
     let driveLink = "";
@@ -1408,9 +1412,6 @@ async function finalizeHoursReport(event) {
       const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId);
       driveLink = upload?.webViewLink || "";
     }
-    const reportDate = new Date(`${dateValue}T00:00:00`).toLocaleDateString("it-IT");
-    const message = buildHoursWhatsappMessage(reportDate, payload.entries, payload.createdByName);
-    window.open(`https://wa.me/${HOURS_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`, "_blank");
 
     ui.hoursFeedback.textContent = driveLink
       ? `Resoconto salvato (ID ${docRef.id}) e backup Drive completato.`
@@ -1420,8 +1421,13 @@ async function finalizeHoursReport(event) {
     renderHoursSummary();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
-    ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
+    ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp comunque disponibile.";
   } finally {
+    if (waWindow && !waWindow.closed) {
+      waWindow.location.href = waUrl;
+    } else {
+      window.open(waUrl, "_blank");
+    }
     ui.hoursFinalizeBtn.disabled = false;
   }
 }

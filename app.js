@@ -89,6 +89,7 @@ const ui = {
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
+  openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
@@ -145,6 +146,19 @@ const ui = {
   fuelMezzoDetailsBtn: document.getElementById("fuel-mezzo-details-btn"),
   fuelMezzoDetailsCard: document.getElementById("fuel-mezzo-details-card"),
   fuelMezzoDetails: document.getElementById("fuel-mezzo-details"),
+  personalServicesPage: document.getElementById("personal-services-page"),
+  backFromPersonalServicesBtn: document.getElementById("back-from-personal-services-btn"),
+  personalServicesMap: document.getElementById("personal-services-map"),
+  personalServicesPageTitle: document.getElementById("personal-services-page-title"),
+  personalServicesListTitle: document.getElementById("personal-services-list-title"),
+  personalServicesFeedback: document.getElementById("personal-services-feedback"),
+  personalServicesList: document.getElementById("personal-services-list"),
+  personalServicesCategories: document.getElementById("personal-services-categories"),
+  personalServiceDetailsCard: document.getElementById("personal-service-details-card"),
+  personalServiceDetailsBasic: document.getElementById("personal-service-details-basic"),
+  personalServiceNavigateBtn: document.getElementById("personal-service-navigate-btn"),
+  personalServiceMoreBtn: document.getElementById("personal-service-more-btn"),
+  personalServiceDetailsExtended: document.getElementById("personal-service-details-extended"),
   segnalazioniPage: document.getElementById("segnalazioni-page"),
   backFromSegnalazioniBtn: document.getElementById("back-from-segnalazioni-btn"),
   howtoPage: document.getElementById("howto-page"),
@@ -279,6 +293,11 @@ const localSheetMutationAt = new Map();
 let fuelMapInstance = null;
 let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
+let personalServicesMapInstance = null;
+let personalServicesLayer = null;
+let personalServicesResults = [];
+let selectedPersonalService = null;
+let activePersonalServiceCategory = "";
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
@@ -296,6 +315,56 @@ const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
 const HOURS_WHATSAPP_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
+const PERSONAL_SERVICE_CATEGORIES = {
+  breakfast: {
+    title: "Colazione (bar e caffetterie)",
+    icon: "☕",
+    query: "node[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});way[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});relation[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "cuisine", "takeaway", "delivery", "contact:phone", "website", "outdoor_seating"]
+  },
+  lunch: {
+    title: "Pranzo (ristoranti, mense, circoli ARCI)",
+    icon: "🍽️",
+    query: "node[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});way[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});relation[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});node[\"club\"=\"social\"](around:15000,{lat},{lng});way[\"club\"=\"social\"](around:15000,{lat},{lng});relation[\"club\"=\"social\"](around:15000,{lat},{lng});node[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});way[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});",
+    detailFields: ["cuisine", "opening_hours", "opening_hours:covid19", "payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant", "payment:cash", "payment:credit_cards", "diet:vegetarian", "diet:vegan", "takeaway", "delivery", "contact:phone", "website", "addr:street", "addr:housenumber", "addr:city"]
+  },
+  supermarket: {
+    title: "Supermarket",
+    icon: "🛒",
+    query: "node[\"shop\"~\"supermarket|convenience\"](around:7000,{lat},{lng});way[\"shop\"~\"supermarket|convenience\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "brand", "contact:phone", "website"]
+  },
+  tobacco: {
+    title: "Tabaccherie",
+    icon: "🚬",
+    query: "node[\"shop\"=\"tobacco\"](around:7000,{lat},{lng});way[\"shop\"=\"tobacco\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "contact:phone", "website"]
+  },
+  wc: {
+    title: "WC pubblici",
+    icon: "🚻",
+    query: "node[\"amenity\"=\"toilets\"](around:5000,{lat},{lng});way[\"amenity\"=\"toilets\"](around:5000,{lat},{lng});",
+    detailFields: ["fee", "wheelchair", "opening_hours"]
+  },
+  atm: {
+    title: "Bancomat / ATM",
+    icon: "🏧",
+    query: "node[\"amenity\"=\"atm\"](around:7000,{lat},{lng});way[\"amenity\"=\"atm\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "operator", "cash_in", "contactless", "currency:EUR"]
+  },
+  pharmacy: {
+    title: "Farmacie",
+    icon: "💊",
+    query: "node[\"amenity\"=\"pharmacy\"](around:7000,{lat},{lng});way[\"amenity\"=\"pharmacy\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "dispensing", "contact:phone", "website"]
+  },
+  parking: {
+    title: "Parcheggi",
+    icon: "🅿️",
+    query: "node[\"amenity\"=\"parking\"](around:5000,{lat},{lng});way[\"amenity\"=\"parking\"](around:5000,{lat},{lng});",
+    detailFields: ["access", "fee", "capacity", "opening_hours"]
+  }
+};
 const PUSH_PUBLIC_VAPID_KEY = resolvePushPublicVapidKey();
 let serviceWorkerRegistration = null;
 
@@ -373,6 +442,15 @@ const MENU_HOWTO_CONTENT = {
       "Salva e verifica la presenza del documento nell'elenco."
     ],
     tags: ["documenti", "personale", "drive"]
+  },
+  "open-personal-services-btn": {
+    rispostaBreve: "Trovi servizi vicini (colazione, pranzo, market, tabacchi, WC, bancomat e altri) con mappa e navigazione.",
+    passi: [
+      "Apri il menu (⋮) e premi “Servizi personali”.",
+      "Scegli una categoria (es. Colazione o Pranzo).",
+      "Apri un luogo dall'elenco o dalla mappa e usa “Naviga” o “Dettagli”."
+    ],
+    tags: ["servizi", "mappa", "navigazione", "personale"]
   },
   "open-hours-btn": {
     rispostaBreve: "Compili ore per commessa e operatore, salvi il resoconto e invii WhatsApp.",
@@ -520,6 +598,7 @@ ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
+ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
@@ -528,6 +607,7 @@ ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
+ui.backFromPersonalServicesBtn.addEventListener("click", closePersonalServicesPage);
 ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
@@ -545,6 +625,9 @@ ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
+ui.personalServicesCategories?.addEventListener("click", onPersonalServiceCategoryClick);
+ui.personalServiceNavigateBtn?.addEventListener("click", navigateToSelectedPersonalService);
+ui.personalServiceMoreBtn?.addEventListener("click", togglePersonalServiceDetails);
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -938,15 +1021,18 @@ function applyRoute() {
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
   const showPrivateDocs = hash === "#documenti";
+  const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
   const commessaIdFromHash = match ? match[1] : "";
   const resourceTypeFromHash = match ? (match[2] || "") : "";
   const showFuel = Boolean(fuelMatch);
+  const showPersonalServices = Boolean(personalServiceMatch);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours);
+  ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
+  ui.personalServicesPage.classList.toggle("hidden", !showPersonalServices);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
@@ -978,6 +1064,15 @@ function applyRoute() {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
     }, 50);
   }
+  if (showPersonalServices) {
+    const categoryFromHash = personalServiceMatch && personalServiceMatch[1] ? personalServiceMatch[1] : "";
+    if (categoryFromHash && categoryFromHash !== activePersonalServiceCategory) {
+      loadPersonalServicesByCategory(categoryFromHash);
+    }
+    setTimeout(() => {
+      if (personalServicesMapInstance) personalServicesMapInstance.invalidateSize();
+    }, 50);
+  }
   renderNextActionCard();
 }
 
@@ -998,6 +1093,16 @@ function closeImpiantiPage() {
 }
 
 function closeFuelPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function openPersonalServicesPage() {
+  window.location.hash = "servizi-personali";
+  applyRoute();
+}
+
+function closePersonalServicesPage() {
   window.location.hash = "";
   applyRoute();
 }
@@ -5142,6 +5247,353 @@ function createFuelMarkerIcon(brandLabel) {
     iconAnchor: [22, 12],
     popupAnchor: [0, -10]
   });
+}
+
+function onPersonalServiceCategoryClick(event) {
+  const btn = event.target.closest(".personal-service-category-btn");
+  if (!btn) return;
+  const category = btn.dataset.serviceCategory || "";
+  if (!category) return;
+  window.location.hash = `servizi-personali=${category}`;
+  applyRoute();
+}
+
+async function loadPersonalServicesByCategory(category) {
+  if (!PERSONAL_SERVICE_CATEGORIES[category]) return;
+  activePersonalServiceCategory = category;
+  selectedPersonalService = null;
+  personalServicesResults = [];
+  ui.personalServiceDetailsCard.classList.add("hidden");
+  ui.personalServiceDetailsExtended.classList.add("hidden");
+  ui.personalServiceDetailsExtended.innerHTML = "";
+  ui.personalServicesCategories?.querySelectorAll(".personal-service-category-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.serviceCategory === category);
+  });
+  const cfg = PERSONAL_SERVICE_CATEGORIES[category];
+  ui.personalServicesPageTitle.textContent = `${cfg.icon} ${cfg.title}`;
+  ui.personalServicesListTitle.textContent = `Più vicini a te • ${cfg.title}`;
+  if (!currentUserPos) {
+    ui.personalServicesFeedback.textContent = "Posizione non disponibile. Attiva GPS per usare i servizi personali.";
+    ui.personalServicesList.innerHTML = "";
+    clearPersonalServicesMap();
+    return;
+  }
+  ui.personalServicesFeedback.textContent = "Caricamento luoghi in corso...";
+  ui.personalServicesList.innerHTML = "";
+  try {
+    const data = await fetchPersonalServicesFromOverpass(category, currentUserPos.lat, currentUserPos.lng);
+    const places = normalizePersonalServices(data.elements || [], category);
+    personalServicesResults = places;
+    renderPersonalServicesList();
+    renderPersonalServicesMap();
+    if (!places.length) {
+      ui.personalServicesFeedback.textContent = "Nessun risultato trovato nella zona.";
+    } else if (category === "lunch") {
+      const acceptedCount = places.filter((place) => isMealVoucherAccepted(place.tags)).length;
+      ui.personalServicesFeedback.textContent = `Trovati ${places.length} luoghi (${acceptedCount} con buoni pasto).`;
+    } else {
+      ui.personalServicesFeedback.textContent = `Trovati ${places.length} luoghi vicino a te.`;
+    }
+  } catch (error) {
+    console.error("Errore caricamento servizi personali:", error);
+    ui.personalServicesFeedback.textContent = "Errore durante il caricamento. Riprova.";
+    ui.personalServicesList.innerHTML = "";
+    clearPersonalServicesMap();
+  }
+}
+
+function normalizePersonalServices(items, category) {
+  const seen = new Set();
+  return items.map((item) => {
+    const lat = item.lat || (item.center && item.center.lat);
+    const lon = item.lon || (item.center && item.center.lon);
+    if (!lat || !lon) return null;
+    const tags = item.tags || {};
+    const name = tags.name || tags.brand || defaultPersonalServiceName(category);
+    const key = `${name.toLowerCase()}-${Math.round(lat * 10000)}-${Math.round(lon * 10000)}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    return {
+      id: item.id || key,
+      category,
+      name,
+      lat,
+      lon,
+      tags,
+      distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
+    };
+  }).filter(Boolean).sort((a, b) => a.distance - b.distance);
+}
+
+function defaultPersonalServiceName(category) {
+  const cfg = PERSONAL_SERVICE_CATEGORIES[category];
+  return cfg ? cfg.title : "Servizio";
+}
+
+function ensurePersonalServicesMap() {
+  if (personalServicesMapInstance) return;
+  personalServicesMapInstance = L.map("personal-services-map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(personalServicesMapInstance);
+  personalServicesLayer = L.layerGroup().addTo(personalServicesMapInstance);
+}
+
+function clearPersonalServicesMap() {
+  if (!personalServicesLayer) return;
+  personalServicesLayer.clearLayers();
+}
+
+function renderPersonalServicesMap() {
+  ensurePersonalServicesMap();
+  clearPersonalServicesMap();
+  if (!personalServicesResults.length) return;
+  const bounds = [];
+  personalServicesResults.forEach((place) => {
+    const marker = L.marker([place.lat, place.lon], {
+      icon: createPersonalServiceMarkerIcon(place.category)
+    }).addTo(personalServicesLayer);
+    marker.bindPopup(`<b>${escapeHTML(place.name)}</b><br>${formatDistance(place.distance)}`);
+    marker.on("click", () => selectPersonalService(place.id));
+    bounds.push([place.lat, place.lon]);
+  });
+  if (currentUserPos) bounds.push([currentUserPos.lat, currentUserPos.lng]);
+  personalServicesMapInstance.fitBounds(bounds, { padding: [24, 24] });
+}
+
+function createPersonalServiceMarkerIcon(category) {
+  const cfg = PERSONAL_SERVICE_CATEGORIES[category] || {};
+  return L.divIcon({
+    className: "fuel-marker-wrap",
+    html: `<span class="fuel-marker-label">${escapeHTML(cfg.icon || "📍")}</span>`,
+    iconSize: [44, 24],
+    iconAnchor: [22, 12],
+    popupAnchor: [0, -10]
+  });
+}
+
+function renderPersonalServicesList() {
+  ui.personalServicesList.innerHTML = "";
+  if (!personalServicesResults.length) return;
+  if (activePersonalServiceCategory === "lunch") {
+    renderLunchGroupedList();
+    return;
+  }
+  personalServicesResults.forEach((place) => {
+    ui.personalServicesList.appendChild(buildPersonalServiceRow(place));
+  });
+}
+
+function renderLunchGroupedList() {
+  const accepted = personalServicesResults.filter((place) => isMealVoucherAccepted(place.tags));
+  const other = personalServicesResults.filter((place) => !isMealVoucherAccepted(place.tags));
+  const acceptedCard = document.createElement("div");
+  acceptedCard.className = "simple-list-item stacked";
+  acceptedCard.innerHTML = `<strong>✅ Accettano buoni pasto (${accepted.length})</strong>`;
+  const acceptedList = document.createElement("div");
+  acceptedList.className = "simple-list";
+  accepted.forEach((place) => acceptedList.appendChild(buildPersonalServiceRow(place)));
+  acceptedCard.appendChild(acceptedList);
+  ui.personalServicesList.appendChild(acceptedCard);
+
+  const otherCard = document.createElement("div");
+  otherCard.className = "simple-list-item stacked";
+  otherCard.innerHTML = `<strong>ℹ️ Non accettano o non indicato (${other.length})</strong>`;
+  const otherList = document.createElement("div");
+  otherList.className = "simple-list";
+  other.forEach((place) => otherList.appendChild(buildPersonalServiceRow(place)));
+  otherCard.appendChild(otherList);
+  ui.personalServicesList.appendChild(otherCard);
+}
+
+function buildPersonalServiceRow(place) {
+  const row = document.createElement("div");
+  row.className = "simple-list-item";
+  row.dataset.placeId = String(place.id);
+  const iconBtn = createButton(PERSONAL_SERVICE_CATEGORIES[place.category]?.icon || "📍", () => selectPersonalService(place.id));
+  iconBtn.classList.add("action-icon-btn");
+  const nameBtn = createButton(place.name, () => selectPersonalService(place.id));
+  nameBtn.classList.add("personal-service-name-btn");
+  const meta = document.createElement("small");
+  meta.className = "muted";
+  meta.textContent = formatDistance(place.distance);
+  const textWrap = document.createElement("div");
+  textWrap.className = "personal-service-row-main";
+  textWrap.appendChild(nameBtn);
+  textWrap.appendChild(meta);
+  row.appendChild(iconBtn);
+  row.appendChild(textWrap);
+  return row;
+}
+
+function selectPersonalService(placeId) {
+  selectedPersonalService = personalServicesResults.find((place) => String(place.id) === String(placeId)) || null;
+  if (!selectedPersonalService) return;
+  ui.personalServicesList.querySelectorAll(".simple-list-item").forEach((row) => {
+    row.classList.toggle("is-selected", row.dataset.placeId === String(placeId));
+  });
+  renderSelectedPersonalService();
+  ui.personalServiceDetailsCard.classList.remove("hidden");
+}
+
+function renderSelectedPersonalService() {
+  if (!selectedPersonalService) {
+    ui.personalServiceDetailsBasic.innerHTML = "<p class='muted'>Nessun luogo selezionato.</p>";
+    return;
+  }
+  const place = selectedPersonalService;
+  const tags = place.tags || {};
+  ui.personalServiceDetailsBasic.innerHTML = `
+    <p><b>Nome:</b> ${escapeHTML(place.name)}</p>
+    <p><b>Distanza:</b> ${escapeHTML(formatDistance(place.distance))}</p>
+    <p><b>Indirizzo:</b> ${escapeHTML(formatAddress(tags))}</p>
+  `;
+  ui.personalServiceDetailsExtended.classList.add("hidden");
+  ui.personalServiceDetailsExtended.innerHTML = "";
+  ui.personalServiceMoreBtn.textContent = "Dettagli";
+}
+
+function navigateToSelectedPersonalService() {
+  if (!selectedPersonalService) return;
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedPersonalService.lat},${selectedPersonalService.lon}`, "_blank");
+}
+
+function togglePersonalServiceDetails() {
+  if (!selectedPersonalService) return;
+  if (ui.personalServiceDetailsExtended.classList.contains("hidden")) {
+    renderExtendedPersonalServiceDetails(selectedPersonalService);
+    ui.personalServiceDetailsExtended.classList.remove("hidden");
+    ui.personalServiceMoreBtn.textContent = "Chiudi dettagli";
+    return;
+  }
+  ui.personalServiceDetailsExtended.classList.add("hidden");
+  ui.personalServiceMoreBtn.textContent = "Dettagli";
+}
+
+function renderExtendedPersonalServiceDetails(place) {
+  const tags = place.tags || {};
+  const cfg = PERSONAL_SERVICE_CATEGORIES[place.category];
+  const rows = [];
+  if (place.category === "lunch") {
+    rows.push(`<p><b>Buoni pasto:</b> ${escapeHTML(formatMealVoucherStatus(tags))}</p>`);
+  }
+  const detailFields = Array.isArray(cfg?.detailFields) ? cfg.detailFields : [];
+  detailFields.forEach((field) => {
+    const rawValue = tags[field];
+    if (rawValue == null || rawValue === "") return;
+    rows.push(`<p><b>${escapeHTML(formatDetailFieldLabel(field))}:</b> ${escapeHTML(String(rawValue))}</p>`);
+  });
+  const allTagRows = Object.entries(tags)
+    .filter(([key, value]) => value != null && String(value).trim() !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `<p><b>${escapeHTML(formatDetailFieldLabel(key))}:</b> ${escapeHTML(String(value))}</p>`);
+  if (allTagRows.length) {
+    rows.push("<hr>");
+    rows.push("<p><b>Tutti i dati disponibili:</b></p>");
+    rows.push(...allTagRows);
+  }
+  if (!rows.length) rows.push("<p class='muted'>Nessun dettaglio aggiuntivo disponibile.</p>");
+  ui.personalServiceDetailsExtended.innerHTML = rows.join("");
+}
+
+function formatDetailFieldLabel(field) {
+  const labels = {
+    opening_hours: "Orari",
+    cuisine: "Tipo cucina",
+    takeaway: "Take-away",
+    delivery: "Consegna",
+    "contact:phone": "Telefono",
+    website: "Sito web",
+    "payment:meal_voucher": "Buoni pasto",
+    "payment:sodexo": "Sodexo",
+    "payment:edenred": "Edenred",
+    "payment:ticket_restaurant": "Ticket Restaurant",
+    "diet:vegetarian": "Opzioni vegetariane",
+    fee: "A pagamento",
+    wheelchair: "Accessibilità carrozzina",
+    operator: "Operatore",
+    cash_in: "Versamento contanti",
+    contactless: "Contactless",
+    "currency:EUR": "Euro",
+    dispensing: "Dispensazione",
+    access: "Accesso",
+    capacity: "Capacità",
+    brand: "Marchio"
+  };
+  return labels[field] || field;
+}
+
+function formatAddress(tags) {
+  const parts = [
+    tags["addr:street"],
+    tags["addr:housenumber"],
+    tags["addr:city"]
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : "Non disponibile";
+}
+
+function isMealVoucherAccepted(tags) {
+  if (!tags) return false;
+  const positiveFields = ["payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant"];
+  return positiveFields.some((field) => String(tags[field] || "").toLowerCase() === "yes");
+}
+
+function formatMealVoucherStatus(tags) {
+  if (isMealVoucherAccepted(tags)) return "Accettati";
+  const fields = ["payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant"];
+  if (fields.some((field) => String(tags[field] || "").toLowerCase() === "no")) return "Non accettati";
+  return "Non specificato";
+}
+
+async function fetchPersonalServicesFromOverpass(category, lat, lng) {
+  const cfg = PERSONAL_SERVICE_CATEGORIES[category];
+  if (!cfg) return { elements: [] };
+  const fragment = cfg.query.replaceAll("{lat}", String(lat)).replaceAll("{lng}", String(lng));
+  const query = `
+    [out:json][timeout:25];
+    (
+      ${fragment}
+    );
+    out center tags;
+  `;
+  const firstResult = await fetchOverpassWithFallback(query);
+  if (category !== "lunch" || (firstResult.elements || []).length) return firstResult;
+  const broadLunchQuery = `
+    [out:json][timeout:25];
+    (
+      node["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+      way["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+      relation["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+    );
+    out center tags;
+  `;
+  return fetchOverpassWithFallback(broadLunchQuery);
+}
+
+async function fetchOverpassWithFallback(query) {
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: query,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`Overpass ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Overpass non disponibile");
 }
 
 function initGeolocation() {

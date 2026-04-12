@@ -50,6 +50,7 @@ h2 { font-size: 1.05rem; }
 .inline-action-preview {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 2px 8px;
@@ -59,6 +60,46 @@ h2 { font-size: 1.05rem; }
   font-size: 0.84rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.inline-action-preview__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid #86efac;
+  background: #dcfce7;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.inline-action-preview[data-action-key="navigate"] .inline-action-preview__icon {
+  background: #e8f1ff;
+  border-color: #93c5fd;
+}
+
+.inline-action-preview[data-action-key="done"] .inline-action-preview__icon {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.inline-action-preview[data-action-key="whatsapp"] .inline-action-preview__icon {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.inline-action-preview--compact {
+  padding: 2px;
+  margin: 0 2px;
+  border-color: #86efac;
+  border-radius: 8px;
+}
+
+.inline-action-preview--compact .inline-action-preview__icon {
+  width: 20px;
+  height: 20px;
 }
 .status { margin: 0; word-break: break-word; }
 

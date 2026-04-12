@@ -3973,7 +3973,9 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
     return;
   }
 
-  const rows = await parseSimpleExcelRows(file);
+  const rows = collectionName === "personale"
+    ? extractPersonnelNamesFromRawRows(await parseSimpleExcelRows(file, true))
+    : await parseSimpleExcelRows(file);
   const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))]
     .filter((name) => (collectionName === "personale" ? name.split(/\s+/).length >= 2 : true));
   if (!uniqueNames.length) {
@@ -3997,6 +3999,40 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   await batch.commit();
   inputEl.value = "";
   alert(`Import completato (${uniqueNames.length} elementi).`);
+}
+
+function extractPersonnelNamesFromRawRows(rawRows) {
+  if (!Array.isArray(rawRows) || !rawRows.length) return [];
+
+  const firstNonEmptyRow = rawRows.find((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim()));
+  if (!firstNonEmptyRow) return [];
+
+  const headerKeys = firstNonEmptyRow.map((cell) => normalizeHeaderKey(cell));
+  const hasHeader = headerKeys.some((key) => ["nome", "cognome", "nominativo", "nomecognome", "operatore"].includes(key));
+  const nomeIndex = headerKeys.findIndex((key) => ["nome", "firstname"].includes(key));
+  const cognomeIndex = headerKeys.findIndex((key) => ["cognome", "lastname", "surname"].includes(key));
+  const fullNameIndex = headerKeys.findIndex((key) => ["nominativo", "nomecognome", "operatore", "fullName", "fullname"].includes(key));
+  const startIndex = hasHeader ? 1 : 0;
+
+  const names = [];
+  for (let i = startIndex; i < rawRows.length; i += 1) {
+    const row = rawRows[i];
+    if (!Array.isArray(row) || !row.length) continue;
+
+    let value = "";
+    if (fullNameIndex >= 0) {
+      value = String(row[fullNameIndex] || "").trim();
+    } else if (nomeIndex >= 0 || cognomeIndex >= 0) {
+      const nome = nomeIndex >= 0 ? String(row[nomeIndex] || "").trim() : "";
+      const cognome = cognomeIndex >= 0 ? String(row[cognomeIndex] || "").trim() : "";
+      value = `${nome} ${cognome}`.trim();
+    } else {
+      value = String(row[0] || "").trim();
+    }
+
+    if (value) names.push(value.replace(/\s+/g, " "));
+  }
+  return names;
 }
 
 async function parseSimpleExcelRows(file, rawRows = false) {

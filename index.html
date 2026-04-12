@@ -384,7 +384,6 @@
       <div class="item-actions">
         <button id="view-hours-btn" class="btn" type="button">Visualizza ore salvate</button>
       </div>
-      <div id="hours-saved-list" class="simple-list"></div>
       <datalist id="hours-operatori-options"></datalist>
     </section>
   </section>
@@ -396,11 +395,14 @@
         <button id="hours-view-close-btn" class="btn" type="button">✕</button>
       </div>
       <p class="muted">Seleziona mese e commessa per visualizzare la tabella ore.</p>
-      <div class="item-actions">
-        <input id="hours-table-month" type="month">
-        <select id="hours-table-commessa-select">
-          <option value="">Seleziona commessa</option>
-        </select>
+      <div class="hours-view-toolbar">
+        <div class="item-actions">
+          <input id="hours-table-month" type="month">
+          <select id="hours-table-commessa-select">
+            <option value="">Seleziona commessa</option>
+          </select>
+          <button id="hours-table-export-btn" class="btn btn-primary" type="button">Esporta Excel</button>
+        </div>
       </div>
       <p id="hours-table-feedback" class="muted"></p>
       <div id="hours-table-container" class="hours-table-wrap"></div>

@@ -1491,7 +1491,31 @@ textarea:focus-visible {
 
 .hours-view-content {
   width: min(98vw, 1400px);
-  max-height: 92vh;
+  height: min(92vh, 100dvh);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.hours-view-toolbar {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 3;
+  padding: 0 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hours-view-toolbar .item-actions {
+  margin: 0;
+}
+
+.hours-view-content > .muted,
+.hours-view-content > #hours-table-feedback,
+.hours-view-content > #hours-table-container {
+  padding: 0 10px;
 }
 
 #hours-table-month,
@@ -1511,6 +1535,11 @@ textarea:focus-visible {
   font: inherit;
   cursor: pointer;
   min-width: 42px;
+}
+
+#hours-table-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 #hours-page .item-actions {

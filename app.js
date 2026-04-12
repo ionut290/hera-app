@@ -1435,7 +1435,7 @@ async function finalizeHoursReport(event) {
   const waWindow = window.open("about:blank", "_blank");
 
   ui.hoursFinalizeBtn.disabled = true;
-  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso... WhatsApp verrà aperto comunque.";
+  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso...";
   try {
     const docRef = await db.collection("oreReports").add(payload);
     let driveLink = "";
@@ -1455,12 +1455,17 @@ async function finalizeHoursReport(event) {
     renderHoursSummary();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
-    ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp comunque disponibile.";
+    ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp disponibile.";
   } finally {
-    if (waWindow && !waWindow.closed) {
-      waWindow.location.href = waUrl;
-    } else {
-      window.open(waUrl, "_blank");
+    const shouldSendWhatsApp = window.confirm("Vuoi mandare le ore all'amministratore? Premi Sì o No.");
+    if (shouldSendWhatsApp) {
+      if (waWindow && !waWindow.closed) {
+        waWindow.location.href = waUrl;
+      } else {
+        window.open(waUrl, "_blank");
+      }
+    } else if (waWindow && !waWindow.closed) {
+      waWindow.close();
     }
     ui.hoursFinalizeBtn.disabled = false;
   }
@@ -1486,7 +1491,27 @@ function getMonthRange(dateObj) {
 
 function aggregateHoursReports(reports) {
   const months = new Map();
-  reports.forEach((report) => {
+  const getCreatedAtMs = (value) => {
+    if (!value) return 0;
+    if (typeof value.toDate === "function") {
+      const date = value.toDate();
+      return date instanceof Date ? date.getTime() : 0;
+    }
+    if (typeof value.seconds === "number") return value.seconds * 1000;
+    if (typeof value === "string" || value instanceof Date) {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    }
+    return 0;
+  };
+  const getReportOrderMs = (report, index) => {
+    const createdAtMs = getCreatedAtMs(report.createdAt);
+    if (createdAtMs > 0) return createdAtMs;
+    const idMs = getCreatedAtMs(report.updatedAt || report.insertedAt);
+    if (idMs > 0) return idMs;
+    return index;
+  };
+  reports.forEach((report, reportIndex) => {
     const reportDate = String(report.date || "").trim();
     if (!reportDate || !Array.isArray(report.entries)) return;
     const [yearRaw, monthRaw, dayRaw] = reportDate.split("-");
@@ -1522,12 +1547,15 @@ function aggregateHoursReports(reports) {
         const ore = Number(row.ore || 0);
         if (!operatore || ore <= 0) return;
         if (!commessaBucket.operatorRows.has(operatore)) {
-          commessaBucket.operatorRows.set(operatore, { totals: {}, details: {} });
+          commessaBucket.operatorRows.set(operatore, { totals: {}, details: {}, latestOrderByDay: {} });
         }
         const operatorBucket = commessaBucket.operatorRows.get(operatore);
-        operatorBucket.totals[day] = Number((operatorBucket.totals[day] || 0) + ore);
-        if (!operatorBucket.details[day]) operatorBucket.details[day] = [];
-        operatorBucket.details[day].push({
+        const reportOrderMs = getReportOrderMs(report, reportIndex);
+        const previousOrder = Number(operatorBucket.latestOrderByDay[day] || 0);
+        if (reportOrderMs < previousOrder) return;
+        operatorBucket.latestOrderByDay[day] = reportOrderMs;
+        operatorBucket.totals[day] = ore;
+        operatorBucket.details[day] = [{
           reportId: report.id || "",
           insertedBy: report.createdByName || report.createdByEmail || "Utente sconosciuto",
           insertedByEmail: report.createdByEmail || "",
@@ -1535,7 +1563,7 @@ function aggregateHoursReports(reports) {
           reportDate: report.date || "",
           reportCreatedAt: report.createdAt || null,
           hours: ore
-        });
+        }];
       });
     });
   });

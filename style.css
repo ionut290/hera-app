@@ -863,13 +863,26 @@ textarea:focus-visible {
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid #d1d5db;
-  background: #111827;
-  color: #fff;
+  background: #f8fafc;
+  color: #0f172a;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   box-shadow: 0 1px 6px rgba(17, 24, 39, 0.3);
 }
+
+.fuel-marker-q8 { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.fuel-marker-eni { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+.fuel-marker-default { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+.ps-marker-breakfast { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+.ps-marker-lunch { background: #fecaca; color: #991b1b; border-color: #f87171; }
+.ps-marker-supermarket { background: #dcfce7; color: #166534; border-color: #86efac; }
+.ps-marker-tobacco { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.ps-marker-wc { background: #cffafe; color: #155e75; border-color: #67e8f9; }
+.ps-marker-atm { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.ps-marker-pharmacy { background: #dcfce7; color: #14532d; border-color: #4ade80; }
+.ps-marker-parking { background: #f3e8ff; color: #6b21a8; border-color: #d8b4fe; }
+.ps-marker-default { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
 
 .squadra-form {
   display: grid;
@@ -1232,19 +1245,27 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.personal-service-row-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .personal-service-name-btn {
   text-align: left;
   justify-content: flex-start;
 }
 
-.embedded-card {
-  margin-top: 8px;
-  border-style: dashed;
-}
-
 .simple-list-item.is-selected {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.personal-service-expanded {
+  display: grid;
+  gap: 6px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
 }
 
 .action-icon-btn.is-used,

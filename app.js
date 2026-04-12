@@ -153,12 +153,8 @@ const ui = {
   personalServicesListTitle: document.getElementById("personal-services-list-title"),
   personalServicesFeedback: document.getElementById("personal-services-feedback"),
   personalServicesList: document.getElementById("personal-services-list"),
+  personalServicesRadius: document.getElementById("personal-services-radius"),
   personalServicesCategories: document.getElementById("personal-services-categories"),
-  personalServiceDetailsCard: document.getElementById("personal-service-details-card"),
-  personalServiceDetailsBasic: document.getElementById("personal-service-details-basic"),
-  personalServiceNavigateBtn: document.getElementById("personal-service-navigate-btn"),
-  personalServiceMoreBtn: document.getElementById("personal-service-more-btn"),
-  personalServiceDetailsExtended: document.getElementById("personal-service-details-extended"),
   segnalazioniPage: document.getElementById("segnalazioni-page"),
   backFromSegnalazioniBtn: document.getElementById("back-from-segnalazioni-btn"),
   howtoPage: document.getElementById("howto-page"),
@@ -296,7 +292,7 @@ let selectedFuelMezzo = null;
 let personalServicesMapInstance = null;
 let personalServicesLayer = null;
 let personalServicesResults = [];
-let selectedPersonalService = null;
+let expandedPersonalServiceId = "";
 let activePersonalServiceCategory = "";
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
@@ -319,49 +315,49 @@ const PERSONAL_SERVICE_CATEGORIES = {
   breakfast: {
     title: "Colazione (bar e caffetterie)",
     icon: "☕",
-    query: "node[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});way[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});relation[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});",
+    query: "node[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});way[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});relation[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "cuisine", "takeaway", "delivery", "contact:phone", "website", "outdoor_seating"]
   },
   lunch: {
     title: "Pranzo (ristoranti, mense, circoli ARCI)",
     icon: "🍽️",
-    query: "node[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});way[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});relation[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});node[\"club\"=\"social\"](around:15000,{lat},{lng});way[\"club\"=\"social\"](around:15000,{lat},{lng});relation[\"club\"=\"social\"](around:15000,{lat},{lng});node[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});way[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});",
+    query: "node[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});way[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});relation[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});node[\"club\"=\"social\"](around:{radius},{lat},{lng});way[\"club\"=\"social\"](around:{radius},{lat},{lng});relation[\"club\"=\"social\"](around:{radius},{lat},{lng});node[\"social_facility\"=\"canteen\"](around:{radius},{lat},{lng});way[\"social_facility\"=\"canteen\"](around:{radius},{lat},{lng});",
     detailFields: ["cuisine", "opening_hours", "opening_hours:covid19", "payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant", "payment:cash", "payment:credit_cards", "diet:vegetarian", "diet:vegan", "takeaway", "delivery", "contact:phone", "website", "addr:street", "addr:housenumber", "addr:city"]
   },
   supermarket: {
     title: "Supermarket",
     icon: "🛒",
-    query: "node[\"shop\"~\"supermarket|convenience\"](around:7000,{lat},{lng});way[\"shop\"~\"supermarket|convenience\"](around:7000,{lat},{lng});",
+    query: "node[\"shop\"~\"supermarket|convenience\"](around:{radius},{lat},{lng});way[\"shop\"~\"supermarket|convenience\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "brand", "contact:phone", "website"]
   },
   tobacco: {
     title: "Tabaccherie",
     icon: "🚬",
-    query: "node[\"shop\"=\"tobacco\"](around:7000,{lat},{lng});way[\"shop\"=\"tobacco\"](around:7000,{lat},{lng});",
+    query: "node[\"shop\"=\"tobacco\"](around:{radius},{lat},{lng});way[\"shop\"=\"tobacco\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "contact:phone", "website"]
   },
   wc: {
     title: "WC pubblici",
     icon: "🚻",
-    query: "node[\"amenity\"=\"toilets\"](around:5000,{lat},{lng});way[\"amenity\"=\"toilets\"](around:5000,{lat},{lng});",
+    query: "node[\"amenity\"=\"toilets\"](around:{radius},{lat},{lng});way[\"amenity\"=\"toilets\"](around:{radius},{lat},{lng});",
     detailFields: ["fee", "wheelchair", "opening_hours"]
   },
   atm: {
     title: "Bancomat / ATM",
     icon: "🏧",
-    query: "node[\"amenity\"=\"atm\"](around:7000,{lat},{lng});way[\"amenity\"=\"atm\"](around:7000,{lat},{lng});",
+    query: "node[\"amenity\"=\"atm\"](around:{radius},{lat},{lng});way[\"amenity\"=\"atm\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "operator", "cash_in", "contactless", "currency:EUR"]
   },
   pharmacy: {
     title: "Farmacie",
     icon: "💊",
-    query: "node[\"amenity\"=\"pharmacy\"](around:7000,{lat},{lng});way[\"amenity\"=\"pharmacy\"](around:7000,{lat},{lng});",
+    query: "node[\"amenity\"=\"pharmacy\"](around:{radius},{lat},{lng});way[\"amenity\"=\"pharmacy\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "dispensing", "contact:phone", "website"]
   },
   parking: {
     title: "Parcheggi",
     icon: "🅿️",
-    query: "node[\"amenity\"=\"parking\"](around:5000,{lat},{lng});way[\"amenity\"=\"parking\"](around:5000,{lat},{lng});",
+    query: "node[\"amenity\"=\"parking\"](around:{radius},{lat},{lng});way[\"amenity\"=\"parking\"](around:{radius},{lat},{lng});",
     detailFields: ["access", "fee", "capacity", "opening_hours"]
   }
 };
@@ -626,8 +622,9 @@ ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
 ui.personalServicesCategories?.addEventListener("click", onPersonalServiceCategoryClick);
-ui.personalServiceNavigateBtn?.addEventListener("click", navigateToSelectedPersonalService);
-ui.personalServiceMoreBtn?.addEventListener("click", togglePersonalServiceDetails);
+ui.personalServicesRadius?.addEventListener("change", () => {
+  if (activePersonalServiceCategory) loadPersonalServicesByCategory(activePersonalServiceCategory);
+});
 ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
 ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
@@ -5240,13 +5237,21 @@ function renderFuelStations(stations) {
 }
 
 function createFuelMarkerIcon(brandLabel) {
+  const markerClass = getFuelMarkerClass(brandLabel);
   return L.divIcon({
     className: "fuel-marker-wrap",
-    html: `<span class="fuel-marker-label">${escapeHTML(brandLabel || "FUEL")}</span>`,
+    html: `<span class="fuel-marker-label ${markerClass}">${escapeHTML(brandLabel || "FUEL")}</span>`,
     iconSize: [44, 24],
     iconAnchor: [22, 12],
     popupAnchor: [0, -10]
   });
+}
+
+function getFuelMarkerClass(brandLabel) {
+  const normalized = String(brandLabel || "").toLowerCase();
+  if (normalized.includes("q8")) return "fuel-marker-q8";
+  if (normalized.includes("eni")) return "fuel-marker-eni";
+  return "fuel-marker-default";
 }
 
 function onPersonalServiceCategoryClick(event) {
@@ -5261,17 +5266,15 @@ function onPersonalServiceCategoryClick(event) {
 async function loadPersonalServicesByCategory(category) {
   if (!PERSONAL_SERVICE_CATEGORIES[category]) return;
   activePersonalServiceCategory = category;
-  selectedPersonalService = null;
+  expandedPersonalServiceId = "";
   personalServicesResults = [];
-  ui.personalServiceDetailsCard.classList.add("hidden");
-  ui.personalServiceDetailsExtended.classList.add("hidden");
-  ui.personalServiceDetailsExtended.innerHTML = "";
   ui.personalServicesCategories?.querySelectorAll(".personal-service-category-btn").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.serviceCategory === category);
   });
   const cfg = PERSONAL_SERVICE_CATEGORIES[category];
+  const radiusMeters = getSelectedPersonalServicesRadius();
   ui.personalServicesPageTitle.textContent = `${cfg.icon} ${cfg.title}`;
-  ui.personalServicesListTitle.textContent = `Più vicini a te • ${cfg.title}`;
+  ui.personalServicesListTitle.textContent = `Più vicini a te • ${cfg.title} • raggio ${Math.round(radiusMeters / 1000)} km`;
   if (!currentUserPos) {
     ui.personalServicesFeedback.textContent = "Posizione non disponibile. Attiva GPS per usare i servizi personali.";
     ui.personalServicesList.innerHTML = "";
@@ -5281,7 +5284,7 @@ async function loadPersonalServicesByCategory(category) {
   ui.personalServicesFeedback.textContent = "Caricamento luoghi in corso...";
   ui.personalServicesList.innerHTML = "";
   try {
-    const data = await fetchPersonalServicesFromOverpass(category, currentUserPos.lat, currentUserPos.lng);
+    const data = await fetchPersonalServicesFromOverpass(category, currentUserPos.lat, currentUserPos.lng, radiusMeters);
     const places = normalizePersonalServices(data.elements || [], category);
     personalServicesResults = places;
     renderPersonalServicesList();
@@ -5366,11 +5369,25 @@ function createPersonalServiceMarkerIcon(category) {
   const cfg = PERSONAL_SERVICE_CATEGORIES[category] || {};
   return L.divIcon({
     className: "fuel-marker-wrap",
-    html: `<span class="fuel-marker-label">${escapeHTML(cfg.icon || "📍")}</span>`,
+    html: `<span class="fuel-marker-label ${getPersonalServiceMarkerClass(category)}">${escapeHTML(cfg.icon || "📍")}</span>`,
     iconSize: [44, 24],
     iconAnchor: [22, 12],
     popupAnchor: [0, -10]
   });
+}
+
+function getPersonalServiceMarkerClass(category) {
+  const palette = {
+    breakfast: "ps-marker-breakfast",
+    lunch: "ps-marker-lunch",
+    supermarket: "ps-marker-supermarket",
+    tobacco: "ps-marker-tobacco",
+    wc: "ps-marker-wc",
+    atm: "ps-marker-atm",
+    pharmacy: "ps-marker-pharmacy",
+    parking: "ps-marker-parking"
+  };
+  return palette[category] || "ps-marker-default";
 }
 
 function renderPersonalServicesList() {
@@ -5409,8 +5426,10 @@ function renderLunchGroupedList() {
 
 function buildPersonalServiceRow(place) {
   const row = document.createElement("div");
-  row.className = "simple-list-item";
+  row.className = "simple-list-item stacked";
   row.dataset.placeId = String(place.id);
+  const head = document.createElement("div");
+  head.className = "personal-service-row-head";
   const iconBtn = createButton(PERSONAL_SERVICE_CATEGORIES[place.category]?.icon || "📍", () => selectPersonalService(place.id));
   iconBtn.classList.add("action-icon-btn");
   const nameBtn = createButton(place.name, () => selectPersonalService(place.id));
@@ -5422,53 +5441,50 @@ function buildPersonalServiceRow(place) {
   textWrap.className = "personal-service-row-main";
   textWrap.appendChild(nameBtn);
   textWrap.appendChild(meta);
-  row.appendChild(iconBtn);
-  row.appendChild(textWrap);
+  head.appendChild(iconBtn);
+  head.appendChild(textWrap);
+  row.appendChild(head);
+  if (expandedPersonalServiceId === String(place.id)) {
+    row.classList.add("is-selected");
+    row.appendChild(buildExpandedPersonalServiceDetails(place));
+  }
   return row;
 }
 
 function selectPersonalService(placeId) {
-  selectedPersonalService = personalServicesResults.find((place) => String(place.id) === String(placeId)) || null;
-  if (!selectedPersonalService) return;
-  ui.personalServicesList.querySelectorAll(".simple-list-item").forEach((row) => {
-    row.classList.toggle("is-selected", row.dataset.placeId === String(placeId));
-  });
-  renderSelectedPersonalService();
-  ui.personalServiceDetailsCard.classList.remove("hidden");
+  expandedPersonalServiceId = expandedPersonalServiceId === String(placeId) ? "" : String(placeId);
+  renderPersonalServicesList();
 }
 
-function renderSelectedPersonalService() {
-  if (!selectedPersonalService) {
-    ui.personalServiceDetailsBasic.innerHTML = "<p class='muted'>Nessun luogo selezionato.</p>";
-    return;
-  }
-  const place = selectedPersonalService;
+function buildExpandedPersonalServiceDetails(place) {
+  const wrap = document.createElement("div");
+  wrap.className = "personal-service-expanded";
   const tags = place.tags || {};
-  ui.personalServiceDetailsBasic.innerHTML = `
+  const navBtn = createButton("Naviga", () => {
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lon}`, "_blank");
+  });
+  navBtn.classList.add("btn-primary");
+  const googleDetailsBtn = createButton("Google dettagli", () => {
+    const query = encodeURIComponent(`${place.name} ${place.lat},${place.lon}`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+  });
+  const closeBtn = createButton("Chiudi dettagli", () => selectPersonalService(place.id));
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  actions.appendChild(navBtn);
+  actions.appendChild(googleDetailsBtn);
+  actions.appendChild(closeBtn);
+  wrap.innerHTML = `
     <p><b>Nome:</b> ${escapeHTML(place.name)}</p>
     <p><b>Distanza:</b> ${escapeHTML(formatDistance(place.distance))}</p>
     <p><b>Indirizzo:</b> ${escapeHTML(formatAddress(tags))}</p>
   `;
-  ui.personalServiceDetailsExtended.classList.add("hidden");
-  ui.personalServiceDetailsExtended.innerHTML = "";
-  ui.personalServiceMoreBtn.textContent = "Dettagli";
-}
-
-function navigateToSelectedPersonalService() {
-  if (!selectedPersonalService) return;
-  window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedPersonalService.lat},${selectedPersonalService.lon}`, "_blank");
-}
-
-function togglePersonalServiceDetails() {
-  if (!selectedPersonalService) return;
-  if (ui.personalServiceDetailsExtended.classList.contains("hidden")) {
-    renderExtendedPersonalServiceDetails(selectedPersonalService);
-    ui.personalServiceDetailsExtended.classList.remove("hidden");
-    ui.personalServiceMoreBtn.textContent = "Chiudi dettagli";
-    return;
-  }
-  ui.personalServiceDetailsExtended.classList.add("hidden");
-  ui.personalServiceMoreBtn.textContent = "Dettagli";
+  wrap.appendChild(actions);
+  const details = document.createElement("div");
+  details.className = "simple-list";
+  details.innerHTML = renderExtendedPersonalServiceDetails(place);
+  wrap.appendChild(details);
+  return wrap;
 }
 
 function renderExtendedPersonalServiceDetails(place) {
@@ -5494,7 +5510,7 @@ function renderExtendedPersonalServiceDetails(place) {
     rows.push(...allTagRows);
   }
   if (!rows.length) rows.push("<p class='muted'>Nessun dettaglio aggiuntivo disponibile.</p>");
-  ui.personalServiceDetailsExtended.innerHTML = rows.join("");
+  return rows.join("");
 }
 
 function formatDetailFieldLabel(field) {
@@ -5546,10 +5562,19 @@ function formatMealVoucherStatus(tags) {
   return "Non specificato";
 }
 
-async function fetchPersonalServicesFromOverpass(category, lat, lng) {
+function getSelectedPersonalServicesRadius() {
+  const value = Number(ui.personalServicesRadius?.value || 3000);
+  if (!Number.isFinite(value) || value < 500) return 3000;
+  return value;
+}
+
+async function fetchPersonalServicesFromOverpass(category, lat, lng, radiusMeters = 3000) {
   const cfg = PERSONAL_SERVICE_CATEGORIES[category];
   if (!cfg) return { elements: [] };
-  const fragment = cfg.query.replaceAll("{lat}", String(lat)).replaceAll("{lng}", String(lng));
+  const fragment = cfg.query
+    .replaceAll("{lat}", String(lat))
+    .replaceAll("{lng}", String(lng))
+    .replaceAll("{radius}", String(radiusMeters));
   const query = `
     [out:json][timeout:25];
     (
@@ -5562,9 +5587,9 @@ async function fetchPersonalServicesFromOverpass(category, lat, lng) {
   const broadLunchQuery = `
     [out:json][timeout:25];
     (
-      node["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
-      way["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
-      relation["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+      node["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:${Math.max(20000, radiusMeters)},${lat},${lng});
+      way["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:${Math.max(20000, radiusMeters)},${lat},${lng});
+      relation["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:${Math.max(20000, radiusMeters)},${lat},${lng});
     );
     out center tags;
   `;

@@ -1715,12 +1715,24 @@ function bindHoursValueButtons() {
       const detailsText = details.length
         ? details.map((item) => `• ${item.insertedBy || "Utente"}: ${Number(item.hours || 0).toFixed(2)}h`).join("\n")
         : "Nessun dettaglio disponibile.";
-      const newValueRaw = window.prompt(
-        `Operatore: ${operatore}\nGiorno: ${day}\nOre attuali: ${currentValue.toFixed(2)}\n\nInserito da:\n${detailsText}\n\nNuovo totale ore:`,
-        currentValue.toFixed(2)
-      );
-      if (newValueRaw === null) return;
-      const newValue = Number(String(newValueRaw).replace(",", "."));
+      let newValue;
+      const canDeleteHours = canManageData() && currentValue > 0;
+      if (canDeleteHours) {
+        const deleteRequested = window.confirm(
+          `Operatore: ${operatore}\nGiorno: ${day}\nOre attuali: ${currentValue.toFixed(2)}\n\nInserito da:\n${detailsText}\n\nPremi OK per ELIMINARE le ore (0).\nPremi Annulla per modificare il valore.`
+        );
+        if (deleteRequested) {
+          newValue = 0;
+        }
+      }
+      if (!Number.isFinite(newValue)) {
+        const newValueRaw = window.prompt(
+          `Operatore: ${operatore}\nGiorno: ${day}\nOre attuali: ${currentValue.toFixed(2)}\n\nInserito da:\n${detailsText}\n\nNuovo totale ore:`,
+          currentValue.toFixed(2)
+        );
+        if (newValueRaw === null) return;
+        newValue = Number(String(newValueRaw).replace(",", "."));
+      }
       if (!Number.isFinite(newValue) || newValue < 0) {
         alert("Valore non valido.");
         return;
@@ -1771,7 +1783,19 @@ function exportCurrentHoursTableToExcel() {
     ui.hoursTablesFeedback.textContent = "Esportazione Excel non disponibile.";
     return;
   }
-  const workbook = window.XLSX.utils.table_to_book(table, { sheet: "Ore" });
+  const tableSheet = window.XLSX.utils.table_to_sheet(table, { raw: true });
+  const tableRows = window.XLSX.utils.sheet_to_json(tableSheet, { header: 1, raw: true });
+  const monthLabel = currentHoursTableContext.monthData?.monthLabel || currentHoursTableContext.monthValue;
+  const enrichedRows = [
+    ["Testata", "Hera App"],
+    ["Commessa", currentHoursTableContext.commessaName || "Commessa"],
+    ["Mese", monthLabel],
+    [],
+    ...tableRows
+  ];
+  const worksheet = window.XLSX.utils.aoa_to_sheet(enrichedRows);
+  const workbook = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(workbook, worksheet, "Ore");
   const safeCommessa = String(currentHoursTableContext.commessaName || "commessa").replace(/[^\w\d]+/g, "_");
   const fileName = `ore_${currentHoursTableContext.monthValue}_${safeCommessa}.xlsx`;
   window.XLSX.writeFile(workbook, fileName);

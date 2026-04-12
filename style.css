@@ -257,6 +257,15 @@ h2 { font-size: 1.05rem; }
   font-size: 1.35rem;
 }
 
+.logo-meta {
+  margin-top: 8px;
+}
+
+.logo-meta p {
+  margin: 2px 0;
+  font-size: 0.9rem;
+}
+
 .logo-head {
   position: relative;
   display: flex;

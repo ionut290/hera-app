@@ -116,6 +116,8 @@ const ui = {
   personaleOptions: document.getElementById("personale-options"),
   mezziOptions: document.getElementById("mezzi-options"),
   weatherCard: document.getElementById("weather-card"),
+  activeUsersSummary: document.getElementById("active-users-summary"),
+  lastImpiantoActionSummary: document.getElementById("last-impianto-action-summary"),
   weatherRisks: document.getElementById("weather-risks"),
   userCard: document.getElementById("user-card"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
@@ -214,6 +216,7 @@ let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
+let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
 let deniedImpiantoActions = new Set();
@@ -719,6 +722,7 @@ auth.onAuthStateChanged((user) => {
   applyRoute();
 
   if (loggedIn) {
+    startPresenceHeartbeat();
     upsertCurrentPlatformUser();
     subscribeCommesse();
     subscribeChat();
@@ -733,7 +737,10 @@ auth.onAuthStateChanged((user) => {
     subscribeGpsRequests();
     processPendingSheetExports();
     startChatRetentionLoop();
+  } else {
+    stopPresenceHeartbeat();
   }
+  renderHeaderActivitySummary();
   renderExternalApps();
   fetchWeather();
 });
@@ -2030,6 +2037,7 @@ function subscribeImpianti() {
     .onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       currentImpianti = combineImpiantiForView(rawImpianti);
+      renderHeaderActivitySummary();
       renderImpianti();
       renderMap();
 
@@ -2057,6 +2065,7 @@ function stopImpiantiSubscription() {
     unsubscribeImpianti = null;
   }
   currentImpianti = [];
+  renderHeaderActivitySummary();
   clearMap();
 }
 
@@ -2450,6 +2459,46 @@ function formatDoneDateTime(doneAt) {
     date: date.toLocaleDateString("it-IT"),
     time: date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })
   };
+}
+
+function renderHeaderActivitySummary() {
+  if (ui.activeUsersSummary) {
+    const activeUsers = platformUsers.filter((user) => {
+      const lastSeenMs = firestoreDateToMillis(user.lastSeenAt);
+      return lastSeenMs > 0 && (Date.now() - lastSeenMs) <= 10 * 60 * 1000;
+    });
+    ui.activeUsersSummary.textContent = `Utenti attivi: ${activeUsers.length}`;
+  }
+
+  if (ui.lastImpiantoActionSummary) {
+    let latestImpiantoAction = null;
+    currentImpianti.forEach((impianto) => {
+      const doneAtMs = firestoreDateToMillis(impianto.doneAt);
+      if (!doneAtMs) return;
+      if (!latestImpiantoAction || doneAtMs > latestImpiantoAction.doneAtMs) {
+        latestImpiantoAction = {
+          doneAtMs,
+          doneBy: impianto.doneBy || "Operatore",
+          impiantoName: impianto.denominazione || "Impianto"
+        };
+      }
+    });
+
+    if (!latestImpiantoAction) {
+      ui.lastImpiantoActionSummary.textContent = "Ultima azione impianto: -";
+      return;
+    }
+
+    const when = new Date(latestImpiantoAction.doneAtMs).toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
+    ui.lastImpiantoActionSummary.textContent = `Ultima azione impianto: ${latestImpiantoAction.doneBy} ha premuto FATTO su ${latestImpiantoAction.impiantoName} (${when})`;
+  }
 }
 
 async function exportCommessaSummary(commessaId, commessaName) {
@@ -4256,6 +4305,7 @@ function subscribeUsers() {
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
     renderUserPermissionList();
+    renderHeaderActivitySummary();
     renderExternalApps();
   });
 }
@@ -4269,7 +4319,23 @@ function stopUsersSubscription() {
   deniedImpiantoActions = new Set();
   renderChatRecipients();
   renderUserPermissionList();
+  renderHeaderActivitySummary();
   renderExternalApps();
+}
+
+function startPresenceHeartbeat() {
+  stopPresenceHeartbeat();
+  if (!currentUser) return;
+  presenceHeartbeatTimer = setInterval(() => {
+    upsertCurrentPlatformUser();
+  }, 60 * 1000);
+}
+
+function stopPresenceHeartbeat() {
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = null;
+  }
 }
 
 function subscribeGpsRequests() {

@@ -1039,18 +1039,32 @@ function impiantoNextActionLabel(actionKey) {
   return "Invia messaggio WhatsApp";
 }
 
-function buildInlineActionButton(label) {
-  return `<span class="inline-action-preview" aria-hidden="true">${escapeHTML(label)}</span>`;
+function impiantoNextActionIcon(actionKey) {
+  if (actionKey === "navigate") return "🗺️";
+  if (actionKey === "done") return "✅";
+  return "✉️";
+}
+
+function buildInlineActionButton(label, actionKey, compact = false) {
+  const icon = impiantoNextActionIcon(actionKey);
+  const compactClass = compact ? " inline-action-preview--compact" : "";
+  const iconHtml = `<span class="inline-action-preview__icon" aria-hidden="true">${icon}</span>`;
+  if (compact) {
+    return `<span class="inline-action-preview${compactClass}" data-action-key="${escapeHTML(actionKey)}" role="img" aria-label="${escapeHTML(label)}">${iconHtml}</span>`;
+  }
+  return `<span class="inline-action-preview${compactClass}" data-action-key="${escapeHTML(actionKey)}" aria-hidden="true">${iconHtml}${escapeHTML(label)}</span>`;
 }
 
 function renderImpiantoNextActionUI() {
   if (!ui.impiantiNextAction && !ui.showNextActionBtn) return;
   const actionKey = getCurrentImpiantoNextAction();
   const label = impiantoNextActionLabel(actionKey);
-  const showButtonPreview = buildInlineActionButton(`Mostra pulsante ${label}`);
-  const targetButtonPreview = buildInlineActionButton(label);
+  const actionIcon = impiantoNextActionIcon(actionKey);
+  const showButtonPreview = buildInlineActionButton(`Mostra pulsante ${label}`, actionKey, true);
+  const targetButtonPreview = buildInlineActionButton(label, actionKey, true);
   if (ui.showNextActionBtn) {
-    ui.showNextActionBtn.textContent = `Mostra pulsante ${label}`;
+    ui.showNextActionBtn.innerHTML = `Mostra pulsante <span class="inline-action-preview inline-action-preview--compact" data-action-key="${escapeHTML(actionKey)}" aria-hidden="true"><span class="inline-action-preview__icon" aria-hidden="true">${actionIcon}</span></span>`;
+    ui.showNextActionBtn.setAttribute("aria-label", `Mostra pulsante ${label}`);
     ui.showNextActionBtn.classList.toggle("btn-primary", impiantoNextActionHighlightEnabled);
   }
   if (ui.impiantiNextAction) {

@@ -1507,3 +1507,12 @@ textarea:focus-visible {
   cursor: pointer;
   min-width: 42px;
 }
+
+#hours-page .item-actions {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+#hours-page .item-actions > * {
+  flex: 1 1 190px;
+}

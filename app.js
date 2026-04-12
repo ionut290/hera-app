@@ -267,8 +267,20 @@ let chatRetentionTimer = null;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const GPS_APPROVAL_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
-const PUSH_PUBLIC_VAPID_KEY = "";
+const PUSH_PUBLIC_VAPID_KEY = resolvePushPublicVapidKey();
 let serviceWorkerRegistration = null;
+
+function resolvePushPublicVapidKey() {
+  const sources = [
+    window?.HERA_PUSH_PUBLIC_VAPID_KEY,
+    document.querySelector('meta[name="hera-push-vapid-key"]')?.content,
+    localStorage.getItem("heraPushPublicVapidKey")
+  ];
+  for (const value of sources) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
 const MENU_HOWTO_CONTENT = {
   "open-panel-commesse": {
     rispostaBreve: "Da qui gestisci commesse e impianti (aggiunta, import Excel e gestione lista).",

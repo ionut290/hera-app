@@ -1237,6 +1237,16 @@ textarea:focus-visible {
   justify-content: flex-start;
 }
 
+.embedded-card {
+  margin-top: 8px;
+  border-style: dashed;
+}
+
+.simple-list-item.is-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
 .action-icon-btn.is-used,
 .action-icon-btn:disabled {
   background: #e5e7eb;

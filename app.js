@@ -319,14 +319,14 @@ const PERSONAL_SERVICE_CATEGORIES = {
   breakfast: {
     title: "Colazione (bar e caffetterie)",
     icon: "☕",
-    query: "node[\"amenity\"~\"cafe|bar\"](around:5000,{lat},{lng});way[\"amenity\"~\"cafe|bar\"](around:5000,{lat},{lng});",
-    detailFields: ["opening_hours", "cuisine", "takeaway", "delivery", "contact:phone", "website"]
+    query: "node[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});way[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});relation[\"amenity\"~\"^(cafe|bar|pub)$\"](around:7000,{lat},{lng});",
+    detailFields: ["opening_hours", "cuisine", "takeaway", "delivery", "contact:phone", "website", "outdoor_seating"]
   },
   lunch: {
     title: "Pranzo (ristoranti, mense, circoli ARCI)",
     icon: "🍽️",
-    query: "node[\"amenity\"~\"restaurant|fast_food|food_court|canteen\"](around:7000,{lat},{lng});way[\"amenity\"~\"restaurant|fast_food|food_court|canteen\"](around:7000,{lat},{lng});node[\"club\"=\"social\"](around:7000,{lat},{lng});way[\"club\"=\"social\"](around:7000,{lat},{lng});",
-    detailFields: ["cuisine", "opening_hours", "payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant", "diet:vegetarian", "contact:phone", "website"]
+    query: "node[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});way[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});relation[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:15000,{lat},{lng});node[\"club\"=\"social\"](around:15000,{lat},{lng});way[\"club\"=\"social\"](around:15000,{lat},{lng});relation[\"club\"=\"social\"](around:15000,{lat},{lng});node[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});way[\"social_facility\"=\"canteen\"](around:15000,{lat},{lng});",
+    detailFields: ["cuisine", "opening_hours", "opening_hours:covid19", "payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant", "payment:cash", "payment:credit_cards", "diet:vegetarian", "diet:vegan", "takeaway", "delivery", "contact:phone", "website", "addr:street", "addr:housenumber", "addr:city"]
   },
   supermarket: {
     title: "Supermarket",
@@ -5410,6 +5410,7 @@ function renderLunchGroupedList() {
 function buildPersonalServiceRow(place) {
   const row = document.createElement("div");
   row.className = "simple-list-item";
+  row.dataset.placeId = String(place.id);
   const iconBtn = createButton(PERSONAL_SERVICE_CATEGORIES[place.category]?.icon || "📍", () => selectPersonalService(place.id));
   iconBtn.classList.add("action-icon-btn");
   const nameBtn = createButton(place.name, () => selectPersonalService(place.id));
@@ -5429,9 +5430,11 @@ function buildPersonalServiceRow(place) {
 function selectPersonalService(placeId) {
   selectedPersonalService = personalServicesResults.find((place) => String(place.id) === String(placeId)) || null;
   if (!selectedPersonalService) return;
+  ui.personalServicesList.querySelectorAll(".simple-list-item").forEach((row) => {
+    row.classList.toggle("is-selected", row.dataset.placeId === String(placeId));
+  });
   renderSelectedPersonalService();
   ui.personalServiceDetailsCard.classList.remove("hidden");
-  ui.personalServiceDetailsCard.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderSelectedPersonalService() {
@@ -5448,6 +5451,7 @@ function renderSelectedPersonalService() {
   `;
   ui.personalServiceDetailsExtended.classList.add("hidden");
   ui.personalServiceDetailsExtended.innerHTML = "";
+  ui.personalServiceMoreBtn.textContent = "Dettagli";
 }
 
 function navigateToSelectedPersonalService() {
@@ -5460,9 +5464,11 @@ function togglePersonalServiceDetails() {
   if (ui.personalServiceDetailsExtended.classList.contains("hidden")) {
     renderExtendedPersonalServiceDetails(selectedPersonalService);
     ui.personalServiceDetailsExtended.classList.remove("hidden");
+    ui.personalServiceMoreBtn.textContent = "Chiudi dettagli";
     return;
   }
   ui.personalServiceDetailsExtended.classList.add("hidden");
+  ui.personalServiceMoreBtn.textContent = "Dettagli";
 }
 
 function renderExtendedPersonalServiceDetails(place) {
@@ -5478,6 +5484,15 @@ function renderExtendedPersonalServiceDetails(place) {
     if (rawValue == null || rawValue === "") return;
     rows.push(`<p><b>${escapeHTML(formatDetailFieldLabel(field))}:</b> ${escapeHTML(String(rawValue))}</p>`);
   });
+  const allTagRows = Object.entries(tags)
+    .filter(([key, value]) => value != null && String(value).trim() !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `<p><b>${escapeHTML(formatDetailFieldLabel(key))}:</b> ${escapeHTML(String(value))}</p>`);
+  if (allTagRows.length) {
+    rows.push("<hr>");
+    rows.push("<p><b>Tutti i dati disponibili:</b></p>");
+    rows.push(...allTagRows);
+  }
   if (!rows.length) rows.push("<p class='muted'>Nessun dettaglio aggiuntivo disponibile.</p>");
   ui.personalServiceDetailsExtended.innerHTML = rows.join("");
 }
@@ -5542,7 +5557,18 @@ async function fetchPersonalServicesFromOverpass(category, lat, lng) {
     );
     out center tags;
   `;
-  return fetchOverpassWithFallback(query);
+  const firstResult = await fetchOverpassWithFallback(query);
+  if (category !== "lunch" || (firstResult.elements || []).length) return firstResult;
+  const broadLunchQuery = `
+    [out:json][timeout:25];
+    (
+      node["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+      way["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+      relation["amenity"~"restaurant|fast_food|food_court|canteen|cafe|bar"](around:20000,${lat},${lng});
+    );
+    out center tags;
+  `;
+  return fetchOverpassWithFallback(broadLunchQuery);
 }
 
 async function fetchOverpassWithFallback(query) {

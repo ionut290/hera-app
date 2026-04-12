@@ -25,6 +25,7 @@
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
+      <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
       <button id="open-hours-btn" class="btn menu-title-btn" type="button">Gestione ore</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
@@ -333,6 +334,45 @@
     <section class="card">
       <h2>Più vicini a te</h2>
       <div id="fuel-stations-list" class="simple-list"></div>
+    </section>
+  </section>
+
+  <section id="personal-services-page" class="hidden">
+    <section class="card">
+      <div class="page-head">
+        <button id="back-from-personal-services-btn" class="btn" type="button">← Torna</button>
+        <h2>Servizi personali vicino a me</h2>
+      </div>
+      <p class="muted">Seleziona una categoria: apriremo mappa ed elenco dal più vicino al più lontano.</p>
+      <div class="item-actions">
+        <label for="personal-services-radius"><b>Raggio ricerca</b></label>
+        <select id="personal-services-radius">
+          <option value="3000" selected>3 km (predefinito)</option>
+          <option value="5000">5 km</option>
+          <option value="10000">10 km</option>
+          <option value="15000">15 km</option>
+          <option value="20000">20 km</option>
+        </select>
+      </div>
+      <div id="personal-services-categories" class="item-actions">
+        <button type="button" class="btn personal-service-category-btn" data-service-category="breakfast">☕ Colazione</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="lunch">🍽️ Pranzo</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="supermarket">🛒 Supermarket</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="tobacco">🚬 Tabaccheria</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="wc">🚻 WC pubblici</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="atm">🏧 Bancomat</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="pharmacy">💊 Farmacie</button>
+        <button type="button" class="btn personal-service-category-btn" data-service-category="parking">🅿️ Parcheggi</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2 id="personal-services-page-title">Mappa servizi</h2>
+      <div id="personal-services-map"></div>
+    </section>
+    <section class="card">
+      <h2 id="personal-services-list-title">Più vicini a te</h2>
+      <p id="personal-services-feedback" class="muted">Scegli una categoria per caricare i luoghi.</p>
+      <div id="personal-services-list" class="simple-list"></div>
     </section>
   </section>
 

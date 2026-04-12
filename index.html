@@ -389,6 +389,24 @@
     </section>
   </section>
 
+  <section id="hours-view-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content hours-view-content">
+      <div class="chat-modal-header">
+        <h3>Visualizza ore</h3>
+        <button id="hours-view-close-btn" class="btn" type="button">✕</button>
+      </div>
+      <p class="muted">Seleziona mese e commessa per visualizzare la tabella ore.</p>
+      <div class="item-actions">
+        <input id="hours-table-month" type="month">
+        <select id="hours-table-commessa-select">
+          <option value="">Seleziona commessa</option>
+        </select>
+      </div>
+      <p id="hours-table-feedback" class="muted"></p>
+      <div id="hours-table-container" class="hours-table-wrap"></div>
+    </div>
+  </section>
+
   <section id="segnalazioni-page" class="hidden">
     <section class="card">
       <div class="page-head">
@@ -525,7 +543,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260412-ore-1"></script>
+  <script src="app.js?v=20260412-ore-2"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

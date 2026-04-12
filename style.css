@@ -1489,6 +1489,11 @@ textarea:focus-visible {
   min-height: 72vh;
 }
 
+.hours-view-content {
+  width: min(98vw, 1400px);
+  max-height: 92vh;
+}
+
 #hours-table-month,
 #hours-table-commessa-select {
   min-height: 38px;

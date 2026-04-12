@@ -49,10 +49,23 @@ La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.
   - evento `push` (notifiche remote),
   - evento `notificationclick` (apertura/focus app),
   - evento `sync` con tag `hera-app-background-check` (test background sync).
-- Per attivare le push remote reali imposta una chiave VAPID pubblica in `app.js`:
+- Per attivare le push remote reali configura una chiave VAPID pubblica in **uno** di questi modi:
+  1. variabile globale prima di caricare `app.js`:
 
 ```js
-const PUSH_PUBLIC_VAPID_KEY = "INSERISCI_LA_TUA_CHIAVE";
+window.HERA_PUSH_PUBLIC_VAPID_KEY = "INSERISCI_LA_TUA_CHIAVE";
+```
+
+  2. meta tag nell`<head>`:
+
+```html
+<meta name="hera-push-vapid-key" content="INSERISCI_LA_TUA_CHIAVE" />
+```
+
+  3. localStorage (utile per test rapido):
+
+```js
+localStorage.setItem("heraPushPublicVapidKey", "INSERISCI_LA_TUA_CHIAVE");
 ```
 
 Senza chiave VAPID l'app continua a funzionare normalmente: avrai notifiche locali di test, ma non invii push server->client.

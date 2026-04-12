@@ -1611,6 +1611,29 @@ function buildHoursTableMarkup(monthData, commessaData) {
   `;
 }
 
+function scrollHoursTableToToday() {
+  const wrap = ui.hoursTablesList?.querySelector(".hours-table-wrap");
+  const table = ui.hoursTablesList?.querySelector("#hours-active-table");
+  if (!wrap || !table || !currentHoursTableContext?.monthData) return;
+  const today = new Date();
+  const isCurrentMonth = (
+    currentHoursTableContext.monthData.year === today.getFullYear()
+    && currentHoursTableContext.monthData.monthNumber === (today.getMonth() + 1)
+  );
+  if (!isCurrentMonth) {
+    wrap.scrollLeft = 0;
+    return;
+  }
+  const todayDay = today.getDate();
+  const dayHeader = Array.from(table.querySelectorAll("thead th"))
+    .find((th) => Number((th.textContent || "").trim()) === todayDay);
+  if (!dayHeader) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const dayRect = dayHeader.getBoundingClientRect();
+  const delta = dayRect.left - wrapRect.left - ((wrapRect.width - dayRect.width) / 2);
+  wrap.scrollLeft += delta;
+}
+
 async function loadHoursReportsForMonth(baseDate) {
   const range = getMonthRange(baseDate);
   const snapshot = await db.collection("oreReports")
@@ -1667,6 +1690,7 @@ async function renderHoursTables() {
     ui.hoursTablesFeedback.textContent = `Foglio ${monthData.monthLabel} - ${currentHoursTableContext.commessaName}. Tocca un valore per modificarlo e vedere chi lo ha inserito.`;
     ui.hoursTablesList.innerHTML = buildHoursTableMarkup(monthData, commessaData);
     bindHoursValueButtons();
+    requestAnimationFrame(scrollHoursTableToToday);
   } catch (error) {
     console.error("Errore caricamento tabelle ore:", error);
     ui.hoursTablesFeedback.textContent = "Errore nel caricamento delle tabelle ore. Riprova.";
@@ -1699,6 +1723,10 @@ function bindHoursValueButtons() {
       const newValue = Number(String(newValueRaw).replace(",", "."));
       if (!Number.isFinite(newValue) || newValue < 0) {
         alert("Valore non valido.");
+        return;
+      }
+      if (newValue === 0 && !canManageData()) {
+        alert("Solo l'amministratore può eliminare il valore (impostarlo a 0).");
         return;
       }
       const delta = Number((newValue - currentValue).toFixed(2));

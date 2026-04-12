@@ -2084,6 +2084,7 @@ function renderCommessaResourceViewer() {
       <p class="muted">${escapeHTML(item.value || "-")}</p>
     `;
     row.appendChild(info);
+
     const actions = document.createElement("div");
     actions.className = "actions-row";
     if (activeResourceTypeForViewer === "phone") {
@@ -2870,6 +2871,12 @@ function renderImpianti() {
     `;
     article.appendChild(details);
 
+    if (!impianto.done) {
+      clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
+      clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
+      clearActionUsed(`${selectedCommessaId}:${impiantoKey}:whatsapp`);
+    }
+
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
@@ -3181,7 +3188,9 @@ async function resetImpianto(impianto) {
   updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "" });
   await setImpiantoDone(selectedCommessaId, ids, false);
   const impiantoKey = buildImpiantoKey(impianto);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
+  clearActionUsed(`${selectedCommessaId}:${impiantoKey}:whatsapp`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:reset`);
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }

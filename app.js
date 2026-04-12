@@ -3585,7 +3585,9 @@ function renderImpianti() {
     article.classList.toggle("is-expanded", detailsVisible);
     if (highlightedImpiantoKey === impiantoKey) article.classList.add("highlight");
 
-    const distance = formatDistance(distanceFromUser(impianto));
+    const distanceKm = distanceFromUser(impianto);
+    const distance = formatDistance(distanceKm);
+    const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const header = document.createElement("button");
@@ -3594,7 +3596,7 @@ function renderImpianti() {
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
-      <small>${distance}</small>
+      <small>${distance} • Traffico ${travelMeta.intensityLabel} • ETA ${travelMeta.etaLabel}</small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {
@@ -5774,6 +5776,31 @@ function formatDistance(km) {
   if (!Number.isFinite(km) || km > 1e10) return "N/D";
   if (km < 1) return `${Math.round(km * 1000)} m`;
   return `${km.toFixed(2)} km`;
+}
+
+function getTrafficIntensityByHour(date = new Date()) {
+  const hour = date.getHours();
+  if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) return "intenso";
+  if (hour >= 22 || hour <= 5) return "leggero";
+  return "moderato";
+}
+
+function estimateTravelMeta(distanceKm) {
+  if (!Number.isFinite(distanceKm) || distanceKm > 1e10) {
+    return { intensityLabel: "N/D", etaLabel: "N/D" };
+  }
+  const intensityLabel = getTrafficIntensityByHour();
+  const speedByIntensity = {
+    intenso: 25,
+    moderato: 40,
+    leggero: 60
+  };
+  const avgSpeed = speedByIntensity[intensityLabel] || 35;
+  const etaMinutes = Math.max(1, Math.round((Math.max(distanceKm, 0) / avgSpeed) * 60));
+  return {
+    intensityLabel,
+    etaLabel: `${etaMinutes} min`
+  };
 }
 
 function escapeHTML(value) {

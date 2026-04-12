@@ -843,6 +843,12 @@ textarea:focus-visible {
   border: 1px solid var(--border);
 }
 
+#personal-services-map {
+  height: 340px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
 .fuel-marker-wrap {
   background: transparent;
   border: 0;
@@ -1211,6 +1217,24 @@ textarea:focus-visible {
   background: #dcfce7;
   border-color: #86efac;
   color: #15803d;
+}
+
+.personal-service-category-btn.is-active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.personal-service-row-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.personal-service-name-btn {
+  text-align: left;
+  justify-content: flex-start;
 }
 
 .action-icon-btn.is-used,

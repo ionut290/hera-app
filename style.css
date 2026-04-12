@@ -1417,3 +1417,102 @@ textarea:focus-visible {
   display: grid;
   gap: 8px;
 }
+
+.hours-month-group {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.hours-month-card {
+  overflow: hidden;
+}
+
+.hours-month-card-head {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.hours-month-card-head h3 {
+  margin: 0;
+  text-align: center;
+}
+
+.hours-month-side {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-transform: capitalize;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.hours-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.hours-month-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.82rem;
+}
+
+.hours-month-table th,
+.hours-month-table td {
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+  text-align: center;
+  min-width: 34px;
+}
+
+.hours-month-table thead th {
+  background: #eef4ff;
+  position: sticky;
+  top: 0;
+}
+
+.hours-month-table tbody th {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #f8fbff;
+  min-width: 170px;
+}
+
+.hours-month-card-full {
+  min-height: 72vh;
+}
+
+#hours-table-month,
+#hours-table-commessa-select {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.hours-value-btn {
+  border: 0;
+  background: #eaf1ff;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font: inherit;
+  cursor: pointer;
+  min-width: 42px;
+}
+
+#hours-page .item-actions {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+#hours-page .item-actions > * {
+  flex: 1 1 190px;
+}

@@ -78,6 +78,10 @@ const ui = {
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
   squadreWhatsappAllBtn: document.getElementById("squadre-whatsapp-all-btn"),
+  squadreFilterControls: document.getElementById("squadre-filter-controls"),
+  squadreFilterDate: document.getElementById("squadre-filter-date"),
+  squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
+  squadreFilterStatus: document.getElementById("squadre-filter-status"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
   mezziExcelFile: document.getElementById("mezzi-excel-file"),
@@ -277,6 +281,7 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
+let manualSquadreFilterDateKey = "";
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 let impiantiSearchTerm = "";
@@ -583,7 +588,13 @@ ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
-ui.squadraCalendarDate.addEventListener("change", renderSquadre);
+ui.squadraCalendarDate.addEventListener("change", () => {
+  manualSquadreFilterDateKey = ui.squadraCalendarDate.value || "";
+  if (ui.squadreFilterDate) ui.squadreFilterDate.value = manualSquadreFilterDateKey;
+  renderSquadre();
+});
+ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
+ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
 ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
@@ -849,6 +860,8 @@ auth.onAuthStateChanged((user) => {
   ui.commesseLista.innerHTML = "";
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
+  if (ui.squadreFilterDate) ui.squadreFilterDate.value = "";
+  manualSquadreFilterDateKey = "";
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
@@ -938,6 +951,9 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   ui.squadreWhatsappAllBtn?.classList.toggle("hidden", !canManage);
+  ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
+  if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
+  if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;
   ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
   ui.exportCurrentCommessaBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId;
   if (ui.gpsRequestsList && !canManage) {
@@ -4549,28 +4565,64 @@ async function saveSquadraComposition(event) {
   ui.squadraCalendarDate.value = dateKey;
 }
 
+function getDateKeyFromLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getAutomaticSquadreDateKey(now = new Date()) {
+  const base = new Date(now);
+  if (base.getHours() > 17 || (base.getHours() === 17 && base.getMinutes() >= 30)) {
+    base.setDate(base.getDate() + 1);
+  }
+  return getDateKeyFromLocalDate(base);
+}
+
+function getActiveSquadreDateKey() {
+  return manualSquadreFilterDateKey || getAutomaticSquadreDateKey();
+}
+
+function onSquadreFilterDateChange() {
+  manualSquadreFilterDateKey = ui.squadreFilterDate?.value || "";
+  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = manualSquadreFilterDateKey;
+  renderSquadre();
+}
+
+function clearManualSquadreFilterDate() {
+  manualSquadreFilterDateKey = "";
+  if (ui.squadreFilterDate) ui.squadreFilterDate.value = "";
+  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = "";
+  renderSquadre();
+}
+
 function renderSquadre() {
   ui.squadreLista.innerHTML = "";
-  const selectedDateKey = ui.squadraCalendarDate.value || "";
-  const storicoDelGiorno = selectedDateKey ? (squadreHistoryByDate.get(selectedDateKey) || new Map()) : null;
+  const selectedDateKey = getActiveSquadreDateKey();
+  const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
+  if (ui.squadreFilterStatus) {
+    const selectedDateLabel = new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString("it-IT");
+    ui.squadreFilterStatus.textContent = manualSquadreFilterDateKey
+      ? `Filtro admin attivo: mostro le squadre del ${selectedDateLabel}.`
+      : `Filtro automatico attivo: mostro le squadre del ${selectedDateLabel} (dopo le 17:30 passa al giorno successivo).`;
+  }
 
   const commesse = Array.from(commesseById.values());
   const commesseConSquadre = commesse.filter((commessa) => {
-    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
+    const squad = storicoDelGiorno.get(commessa.id) || {};
     const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     return rows.some((row) => row.personale || row.mezzi);
   });
   if (!commesseConSquadre.length) {
-    ui.squadreLista.innerHTML = selectedDateKey
-      ? "<p class='muted'>Nessuna composizione trovata per la data selezionata.</p>"
-      : "<p class='muted'>Nessuna commessa disponibile.</p>";
+    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna composizione trovata per la data selezionata.</p>";
     return;
   }
 
   commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
-    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
+    const squad = storicoDelGiorno.get(commessa.id) || {};
     const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
@@ -4824,11 +4876,11 @@ function openSquadraWhatsApp(squad, commessa) {
 }
 
 function getSquadrePackageEntries() {
-  const selectedDateKey = ui.squadraCalendarDate.value || "";
-  const storicoDelGiorno = selectedDateKey ? (squadreHistoryByDate.get(selectedDateKey) || new Map()) : null;
+  const selectedDateKey = getActiveSquadreDateKey();
+  const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   const commesse = Array.from(commesseById.values());
   return commesse.map((commessa) => {
-    const squad = storicoDelGiorno ? (storicoDelGiorno.get(commessa.id) || {}) : (squadreByCommessa.get(commessa.id) || {});
+    const squad = storicoDelGiorno.get(commessa.id) || {};
     const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const hasRows = squadRows.some((row) => row.personale || row.mezzi);
     return {

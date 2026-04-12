@@ -4297,12 +4297,12 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
     <div class="squadra-multi-field">
       <div class="squadra-multi-field-head"><strong>👥 Personale</strong></div>
       <div class="squadra-personale-list"></div>
-      <button type="button" class="btn add-personale-input-btn">+ Aggiungi persona</button>
+      <button type="button" class="btn btn-small add-personale-input-btn">+ Persona</button>
     </div>
     <div class="squadra-multi-field">
       <div class="squadra-multi-field-head"><strong>🚚 Mezzi</strong></div>
       <div class="squadra-mezzi-list"></div>
-      <button type="button" class="btn add-mezzo-input-btn">+ Aggiungi mezzo</button>
+      <button type="button" class="btn btn-small add-mezzo-input-btn">+ Mezzo</button>
     </div>
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
@@ -4362,7 +4362,7 @@ function addMultiEntryInput({ container, listId, placeholder, value, sourceValue
   wrap.className = "squadra-multi-entry-row";
   wrap.innerHTML = `
     <input type="text" class="squadra-multi-entry-input" list="${escapeHTML(listId)}" placeholder="${escapeHTML(placeholder)}" value="${escapeHTML(value || "")}">
-    <button type="button" class="btn remove-squadra-entry-btn" title="Rimuovi elemento">−</button>
+    <button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi elemento">−</button>
   `;
   const input = wrap.querySelector(".squadra-multi-entry-input");
   const removeBtn = wrap.querySelector(".remove-squadra-entry-btn");
@@ -4499,7 +4499,7 @@ function renderMezziButtonsMarkup(rawValue) {
 
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  ui.squadraHint.textContent = "Usa “+ Aggiungi persona” e “+ Aggiungi mezzo” per inserire più elementi nella stessa squadra. I campi suggeriscono i nomi disponibili.";
+  ui.squadraHint.textContent = "Usa “+ Persona” e “+ Mezzo”: il nuovo campo resta sulla stessa riga del precedente finché c'è spazio.";
 }
 
 function updateSuggestionLists() {

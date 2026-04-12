@@ -153,10 +153,18 @@ const ui = {
   hoursDate: document.getElementById("hours-date"),
   hoursCommesseList: document.getElementById("hours-commesse-list"),
   addHoursCommessaBtn: document.getElementById("add-hours-commessa-btn"),
+  hoursViewTableBtn: document.getElementById("hours-view-table-btn"),
   hoursFinalizeBtn: document.getElementById("hours-finalize-btn"),
   hoursFeedback: document.getElementById("hours-feedback"),
   hoursSummary: document.getElementById("hours-summary"),
   hoursOperatoriOptions: document.getElementById("hours-operatori-options"),
+  hoursTablesView: document.getElementById("hours-tables-view"),
+  hoursTablesBackBtn: document.getElementById("hours-tables-back-btn"),
+  hoursPrevMonthBtn: document.getElementById("hours-prev-month-btn"),
+  hoursCurrentMonthBtn: document.getElementById("hours-current-month-btn"),
+  hoursAllMonthsBtn: document.getElementById("hours-all-months-btn"),
+  hoursTablesFeedback: document.getElementById("hours-tables-feedback"),
+  hoursTablesList: document.getElementById("hours-tables-list"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -270,6 +278,8 @@ let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let privateDocsRecords = [];
 let hoursDraftEntries = [];
+let hoursTableBaseDate = new Date();
+let hoursTableShowAllMonths = false;
 let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
@@ -518,6 +528,25 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
 ui.hoursForm.addEventListener("submit", finalizeHoursReport);
 ui.addHoursCommessaBtn.addEventListener("click", () => addHoursCommessaBlock());
+ui.hoursViewTableBtn?.addEventListener("click", () => openHoursTablesView());
+ui.hoursTablesBackBtn?.addEventListener("click", closeHoursTablesView);
+ui.hoursPrevMonthBtn?.addEventListener("click", () => {
+  hoursTableShowAllMonths = false;
+  hoursTableBaseDate = new Date(hoursTableBaseDate.getFullYear(), hoursTableBaseDate.getMonth() - 1, 1);
+  renderHoursTables();
+});
+ui.hoursCurrentMonthBtn?.addEventListener("click", () => {
+  hoursTableShowAllMonths = false;
+  const dateValue = String(ui.hoursDate?.value || "").trim();
+  const selectedDate = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  if (Number.isNaN(selectedDate.getTime())) return;
+  hoursTableBaseDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+  renderHoursTables();
+});
+ui.hoursAllMonthsBtn?.addEventListener("click", () => {
+  hoursTableShowAllMonths = true;
+  renderHoursTables();
+});
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
@@ -1196,6 +1225,7 @@ function initHoursPage() {
   if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (!ui.hoursCommesseList) return;
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  closeHoursTablesView();
   renderHoursOperatoriOptions();
   renderHoursCommessaSelectOptions();
   renderHoursSummary();
@@ -1208,12 +1238,14 @@ function openHoursPage() {
   }
   if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  closeHoursTablesView();
   window.location.hash = "ore";
   applyRoute();
   closeSideMenu();
 }
 
 function closeHoursPage() {
+  closeHoursTablesView();
   window.location.hash = "";
   applyRoute();
 }
@@ -1430,6 +1462,177 @@ async function finalizeHoursReport(event) {
     }
     ui.hoursFinalizeBtn.disabled = false;
   }
+}
+
+function getMonthKeyFromDate(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getMonthRange(dateObj) {
+  const start = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+  const end = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0);
+  return {
+    startIso: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`,
+    endIso: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`,
+    daysInMonth: end.getDate(),
+    monthLabel: start.toLocaleDateString("it-IT", { month: "long", year: "numeric" }),
+    monthKey: getMonthKeyFromDate(start)
+  };
+}
+
+function aggregateHoursReports(reports) {
+  const months = new Map();
+  reports.forEach((report) => {
+    const reportDate = String(report.date || "").trim();
+    if (!reportDate || !Array.isArray(report.entries)) return;
+    const [yearRaw, monthRaw, dayRaw] = reportDate.split("-");
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    if (!year || !month || !day) return;
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    if (!months.has(monthKey)) {
+      months.set(monthKey, {
+        monthKey,
+        monthLabel: new Date(year, month - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" }),
+        monthNumber: month,
+        year,
+        daysInMonth: new Date(year, month, 0).getDate(),
+        commesse: new Map()
+      });
+    }
+    const monthBucket = months.get(monthKey);
+    report.entries.forEach((entry) => {
+      const commessaId = String(entry.commessaId || "").trim();
+      if (!commessaId) return;
+      if (!monthBucket.commesse.has(commessaId)) {
+        monthBucket.commesse.set(commessaId, {
+          commessaId,
+          commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          operatorRows: new Map()
+        });
+      }
+      const commessaBucket = monthBucket.commesse.get(commessaId);
+      (entry.rows || []).forEach((row) => {
+        const operatore = String(row.operatore || "").trim();
+        const ore = Number(row.ore || 0);
+        if (!operatore || ore <= 0) return;
+        if (!commessaBucket.operatorRows.has(operatore)) {
+          commessaBucket.operatorRows.set(operatore, {});
+        }
+        const dayMap = commessaBucket.operatorRows.get(operatore);
+        dayMap[day] = Number((dayMap[day] || 0) + ore);
+      });
+    });
+  });
+
+  return Array.from(months.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+}
+
+function buildHoursTableMarkup(monthData, commessaData) {
+  const dayHeaders = Array.from({ length: monthData.daysInMonth }, (_, idx) => `<th>${idx + 1}</th>`).join("");
+  const operatorRows = Array.from(commessaData.operatorRows.entries()).sort((a, b) => a[0].localeCompare(b[0], "it")).map(([operatore, days]) => {
+    const dayCells = Array.from({ length: monthData.daysInMonth }, (_, idx) => {
+      const value = days[idx + 1];
+      return `<td>${value ? escapeHTML(String(Number(value.toFixed(2)))) : ""}</td>`;
+    }).join("");
+    return `<tr><th>${escapeHTML(operatore)}</th>${dayCells}</tr>`;
+  }).join("");
+
+  return `
+    <article class="item-card hours-month-card">
+      <div class="hours-month-card-head">
+        <div class="hours-month-side">${escapeHTML(monthData.monthLabel)}</div>
+        <h3>${escapeHTML(commessaData.commessaName || "Commessa")}</h3>
+      </div>
+      <div class="hours-table-wrap">
+        <table class="hours-month-table">
+          <thead>
+            <tr>
+              <th>Operatore</th>
+              ${dayHeaders}
+            </tr>
+          </thead>
+          <tbody>
+            ${operatorRows || `<tr><td colspan="${monthData.daysInMonth + 1}">Nessuna ora registrata.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `;
+}
+
+async function loadHoursReportsForMonth(baseDate) {
+  const range = getMonthRange(baseDate);
+  const snapshot = await db.collection("oreReports")
+    .where("date", ">=", range.startIso)
+    .where("date", "<=", range.endIso)
+    .orderBy("date", "asc")
+    .get();
+  const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return aggregateHoursReports(reports);
+}
+
+async function loadAllHoursReports() {
+  const snapshot = await db.collection("oreReports").orderBy("date", "desc").get();
+  const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return aggregateHoursReports(reports);
+}
+
+async function renderHoursTables() {
+  if (!ui.hoursTablesList || !ui.hoursTablesFeedback) return;
+  ui.hoursTablesFeedback.textContent = "Caricamento tabelle ore in corso...";
+  ui.hoursTablesList.innerHTML = "";
+  try {
+    const monthGroups = hoursTableShowAllMonths
+      ? await loadAllHoursReports()
+      : await loadHoursReportsForMonth(hoursTableBaseDate);
+
+    if (!monthGroups.length) {
+      ui.hoursTablesFeedback.textContent = "Nessuna tabella ore trovata per il periodo selezionato.";
+      ui.hoursTablesList.innerHTML = "<p class='muted'>Quando salvi ore con “Fine: salva e invia”, la tabella mensile viene creata automaticamente.</p>";
+      return;
+    }
+
+    const html = monthGroups.map((monthData) => {
+      const commesseHtml = Array.from(monthData.commesse.values())
+        .sort((a, b) => (a.commessaName || "").localeCompare((b.commessaName || ""), "it"))
+        .map((commessaData) => buildHoursTableMarkup(monthData, commessaData))
+        .join("");
+      return `<section class="hours-month-group"><h4>${escapeHTML(monthData.monthLabel)}</h4>${commesseHtml}</section>`;
+    }).join("");
+
+    ui.hoursTablesFeedback.textContent = hoursTableShowAllMonths
+      ? `Tabelle disponibili: ${monthGroups.length} mesi.`
+      : `Tabella del mese ${getMonthRange(hoursTableBaseDate).monthLabel}.`;
+    ui.hoursTablesList.innerHTML = html;
+  } catch (error) {
+    console.error("Errore caricamento tabelle ore:", error);
+    ui.hoursTablesFeedback.textContent = "Errore nel caricamento delle tabelle ore. Riprova.";
+  }
+}
+
+function openHoursTablesView() {
+  const dateValue = String(ui.hoursDate?.value || "").trim();
+  const selectedDate = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  if (!Number.isNaN(selectedDate.getTime())) {
+    hoursTableBaseDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+  }
+  hoursTableShowAllMonths = false;
+  ui.hoursForm?.classList.add("hidden");
+  ui.hoursSummary?.classList.add("hidden");
+  ui.hoursFeedback?.classList.add("hidden");
+  ui.hoursTablesView?.classList.remove("hidden");
+  renderHoursTables();
+}
+
+function closeHoursTablesView() {
+  ui.hoursTablesView?.classList.add("hidden");
+  ui.hoursForm?.classList.remove("hidden");
+  ui.hoursSummary?.classList.remove("hidden");
+  ui.hoursFeedback?.classList.remove("hidden");
 }
 
 function renderHowtoFaq() {

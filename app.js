@@ -3982,7 +3982,7 @@ async function parseMezziExcelRows(file) {
       nId: get(["nid", "nid.", "n.id", "n.id.", "id"]),
       marca: get(["marca"]),
       modello: get(["modello", "model"]),
-      portataCarico: get(["portatacarico", "portata"]),
+      portataCarico: get(["portatacarico", "portatacaricokg", "portata", "portatakg"]),
       massaComplessivaKg: get(["massacomplessivapesodelcamioncaricokg", "massacomplessivakg", "massa"]),
       alimentazione: get(["alimentazione"])
     };
@@ -4238,11 +4238,13 @@ function renderMezziList(container, items, onDelete) {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const title = item.nId || item.nome || "-";
+    const portataLabel = item.portataCarico || item.portataCaricoKg || item.portata || "";
+    const massaLabel = item.massaComplessivaKg || item.massaComplessiva || item.massa || "";
     const details = [
       item.marca ? `Marca: ${item.marca}` : "",
       item.modello ? `Modello: ${item.modello}` : "",
-      item.portataCarico ? `Portata: ${item.portataCarico}` : "",
-      item.massaComplessivaKg ? `Massa complessiva: ${item.massaComplessivaKg}` : "",
+      portataLabel ? `Portata: ${portataLabel}` : "",
+      massaLabel ? `Massa complessiva: ${massaLabel}` : "",
       item.alimentazione ? `Alimentazione: ${item.alimentazione}` : ""
     ].filter(Boolean).join(" • ");
     const label = document.createElement("span");
@@ -4942,12 +4944,14 @@ function renderFuelMezzoDetails() {
     ui.fuelMezzoDetails.innerHTML = "<p class='muted'>Nessun mezzo selezionato.</p>";
     return;
   }
+  const portataLabel = selectedFuelMezzo.portataCarico || selectedFuelMezzo.portataCaricoKg || selectedFuelMezzo.portata || "-";
+  const massaLabel = selectedFuelMezzo.massaComplessivaKg || selectedFuelMezzo.massaComplessiva || selectedFuelMezzo.massa || "-";
   ui.fuelMezzoDetails.innerHTML = `
     <p><b>N. ID:</b> ${escapeHTML(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "-")}</p>
     <p><b>Marca:</b> ${escapeHTML(selectedFuelMezzo.marca || "-")}</p>
     <p><b>Modello:</b> ${escapeHTML(selectedFuelMezzo.modello || "-")}</p>
-    <p><b>Portata (carico):</b> ${escapeHTML(selectedFuelMezzo.portataCarico || "-")}</p>
-    <p><b>Massa complessiva (kg):</b> ${escapeHTML(selectedFuelMezzo.massaComplessivaKg || "-")}</p>
+    <p><b>Portata (carico):</b> ${escapeHTML(portataLabel)}</p>
+    <p><b>Massa complessiva (kg):</b> ${escapeHTML(massaLabel)}</p>
     <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
   `;
 }

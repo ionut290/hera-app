@@ -47,6 +47,19 @@ h2 { font-size: 1.05rem; }
 }
 
 .muted { color: var(--muted); margin: 6px 0 0; }
+.inline-action-preview {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  margin: 0 4px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .status { margin: 0; word-break: break-word; }
 
 .hidden { display: none !important; }

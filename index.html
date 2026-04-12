@@ -25,6 +25,7 @@
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
+      <button id="open-hours-btn" class="btn menu-title-btn" type="button">Gestione ore</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
     </div>
@@ -361,6 +362,33 @@
     </section>
   </section>
 
+  <section id="hours-page" class="hidden">
+    <section class="card">
+      <div class="page-head">
+        <button id="back-from-hours-btn" class="btn" type="button">← Torna</button>
+        <h2>Gestione ore</h2>
+      </div>
+      <p class="muted">Compila commesse, operatori, ore e note. Premi “Fine” per salvare il resoconto e aprire WhatsApp.</p>
+    </section>
+    <section class="card">
+      <form id="hours-form" class="resource-form">
+        <input id="hours-date" type="date" required>
+        <div id="hours-commesse-list" class="hours-commesse-list"></div>
+        <div class="item-actions">
+          <button id="add-hours-commessa-btn" class="btn" type="button">+ Aggiungi commessa</button>
+          <button id="hours-finalize-btn" class="btn btn-primary" type="submit">Fine: salva e invia</button>
+        </div>
+      </form>
+      <p id="hours-feedback" class="muted"></p>
+      <div id="hours-summary" class="simple-list"></div>
+      <div class="item-actions">
+        <button id="view-hours-btn" class="btn" type="button">Visualizza ore salvate</button>
+      </div>
+      <div id="hours-saved-list" class="simple-list"></div>
+      <datalist id="hours-operatori-options"></datalist>
+    </section>
+  </section>
+
   <section id="segnalazioni-page" class="hidden">
     <section class="card">
       <div class="page-head">
@@ -497,7 +525,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260411-1"></script>
+  <script src="app.js?v=20260412-ore-1"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

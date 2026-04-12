@@ -118,6 +118,10 @@ const ui = {
   weatherCard: document.getElementById("weather-card"),
   activeUsersSummary: document.getElementById("active-users-summary"),
   lastImpiantoActionSummary: document.getElementById("last-impianto-action-summary"),
+  nextActionCard: document.getElementById("next-action-card"),
+  nextActionSummary: document.getElementById("next-action-summary"),
+  nextActionCtaBtn: document.getElementById("next-action-cta-btn"),
+  nextActionSecondary: document.getElementById("next-action-secondary"),
   weatherRisks: document.getElementById("weather-risks"),
   userCard: document.getElementById("user-card"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
@@ -384,6 +388,7 @@ let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
+const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const HELP_CENTER_FAQ_FALLBACK = {
@@ -406,6 +411,7 @@ const HELP_CENTER_FAQ_FALLBACK = {
   ]
 };
 let faqDataset = HELP_CENTER_FAQ_FALLBACK;
+let currentWorkflowStepId = localStorage.getItem(USER_WORKFLOW_STEP_KEY) || "";
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
@@ -485,6 +491,7 @@ ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
 ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
 ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
+ui.nextActionCtaBtn?.addEventListener("click", handleNextActionCtaClick);
 ui.enableNotificationsBtn?.addEventListener("click", enablePushNotifications);
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
 window.addEventListener("online", updateConnectivityStatus);
@@ -743,6 +750,7 @@ auth.onAuthStateChanged((user) => {
   renderHeaderActivitySummary();
   renderExternalApps();
   fetchWeather();
+  renderNextActionCard();
 });
 
 function updateAdminControls() {
@@ -896,6 +904,7 @@ function applyRoute() {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
     }, 50);
   }
+  renderNextActionCard();
 }
 
 function openImpiantiPage() {
@@ -917,6 +926,123 @@ function closeImpiantiPage() {
 function closeFuelPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function setCurrentWorkflowStep(stepId) {
+  currentWorkflowStepId = String(stepId || "").trim();
+  if (!currentWorkflowStepId) {
+    localStorage.removeItem(USER_WORKFLOW_STEP_KEY);
+  } else {
+    localStorage.setItem(USER_WORKFLOW_STEP_KEY, currentWorkflowStepId);
+  }
+  renderNextActionCard();
+}
+
+function getWorkflowSteps() {
+  const routeHash = window.location.hash || "";
+  const hasSelectedCommessa = Boolean(selectedCommessaId);
+  const todoCount = currentImpianti.filter((item) => !item.done).length;
+  const doneCount = currentImpianti.filter((item) => Boolean(item.done)).length;
+  const hasOpenCommessaRoute = hasSelectedCommessa && routeHash === `#commessa=${selectedCommessaId}`;
+  const isLoggedIn = Boolean(currentUser);
+  return [
+    {
+      id: "login",
+      label: "Login con Google",
+      description: "Accedi con il tuo account per sbloccare commesse e strumenti.",
+      available: !isLoggedIn,
+      done: isLoggedIn,
+      action: () => loginWithGoogle()
+    },
+    {
+      id: "select-commessa",
+      label: "Seleziona commessa",
+      description: "Scegli una commessa dalla home per iniziare il turno operativo.",
+      available: isLoggedIn && !hasSelectedCommessa,
+      done: hasSelectedCommessa,
+      action: () => {
+        window.location.hash = "";
+        applyRoute();
+      }
+    },
+    {
+      id: "open-commessa",
+      label: "Apri impianti commessa",
+      description: "Apri la commessa selezionata per lavorare sugli impianti.",
+      available: isLoggedIn && hasSelectedCommessa && !hasOpenCommessaRoute,
+      done: hasOpenCommessaRoute,
+      action: () => openImpiantiPage()
+    },
+    {
+      id: "mark-next-impianto",
+      label: "Completa prossimo impianto",
+      description: todoCount > 0
+        ? `Hai ${todoCount} impianti da fare: apri il primo e premi FATTO.`
+        : "Nessun impianto da completare in questa commessa.",
+      available: isLoggedIn && hasOpenCommessaRoute && todoCount > 0,
+      done: hasOpenCommessaRoute && todoCount === 0,
+      action: () => setImpiantiViewMode("todo")
+    },
+    {
+      id: "review-completed",
+      label: "Controlla impianti fatti",
+      description: doneCount > 0
+        ? `Hai ${doneCount} impianti completati: verifica riepilogo e note finali.`
+        : "Ancora nessun impianto completato da verificare.",
+      available: isLoggedIn && hasOpenCommessaRoute && doneCount > 0,
+      done: false,
+      action: () => setImpiantiViewMode("done")
+    }
+  ];
+}
+
+function renderNextActionCard() {
+  if (!ui.nextActionCard || !ui.nextActionSummary || !ui.nextActionCtaBtn || !ui.nextActionSecondary) return;
+  const steps = getWorkflowSteps();
+  const availableSteps = steps.filter((step) => step.available);
+  const stepMap = new Map(steps.map((step) => [step.id, step]));
+  let primary = stepMap.get(currentWorkflowStepId);
+  if (!primary || !primary.available) primary = availableSteps[0] || steps[steps.length - 1];
+
+  if (primary?.id !== currentWorkflowStepId) {
+    currentWorkflowStepId = primary?.id || "";
+    if (currentWorkflowStepId) localStorage.setItem(USER_WORKFLOW_STEP_KEY, currentWorkflowStepId);
+    else localStorage.removeItem(USER_WORKFLOW_STEP_KEY);
+  }
+
+  if (!primary) {
+    ui.nextActionSummary.textContent = "Nessuna azione disponibile al momento.";
+    ui.nextActionCtaBtn.textContent = "Aggiorna";
+    ui.nextActionCtaBtn.classList.add("btn-primary");
+    ui.nextActionSecondary.innerHTML = "";
+    return;
+  }
+
+  ui.nextActionSummary.textContent = primary.description;
+  ui.nextActionCtaBtn.textContent = primary.label;
+  ui.nextActionCtaBtn.classList.add("btn-primary");
+  ui.nextActionCtaBtn.disabled = !primary.available;
+  ui.nextActionCtaBtn.dataset.stepId = primary.id;
+
+  ui.nextActionSecondary.innerHTML = "";
+  availableSteps
+    .filter((step) => step.id !== primary.id)
+    .forEach((step) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn";
+      btn.textContent = step.label;
+      btn.addEventListener("click", () => setCurrentWorkflowStep(step.id));
+      ui.nextActionSecondary.appendChild(btn);
+    });
+}
+
+function handleNextActionCtaClick() {
+  const stepId = ui.nextActionCtaBtn?.dataset.stepId || "";
+  const step = getWorkflowSteps().find((candidate) => candidate.id === stepId);
+  if (!step || !step.available) return;
+  setCurrentWorkflowStep(step.id);
+  step.action();
 }
 
 function openSegnalazioniPage() {
@@ -1457,6 +1583,7 @@ function subscribeCommesse() {
       if (snapshot.empty) {
         ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
         updateCommessaContextUI();
+        renderNextActionCard();
         return;
       }
 
@@ -1498,9 +1625,11 @@ function subscribeCommesse() {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa");
       }
+      renderNextActionCard();
     }, (error) => {
       console.error(error);
       ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
+      renderNextActionCard();
     });
 }
 
@@ -1990,6 +2119,7 @@ function selectCommessa(id, nome) {
 
   stopImpiantiSubscription();
   subscribeImpianti();
+  setCurrentWorkflowStep("open-commessa");
   openImpiantiPage();
 }
 
@@ -2627,6 +2757,7 @@ function renderImpianti() {
 
   if (!currentImpianti.length) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
+    renderNextActionCard();
     return;
   }
 
@@ -2641,6 +2772,7 @@ function renderImpianti() {
 
   if (!sorted.length) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
+    renderNextActionCard();
     return;
   }
 
@@ -2709,6 +2841,7 @@ function renderImpianti() {
 
     ui.impiantiLista.appendChild(article);
   });
+  renderNextActionCard();
 }
 
 function openImpiantoEditor(impianto) {

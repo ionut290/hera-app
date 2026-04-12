@@ -1558,7 +1558,7 @@ function renderHoursOperatoriOptions() {
   ui.hoursOperatoriOptions.innerHTML = "";
   personaleRecords.forEach((person) => {
     const option = document.createElement("option");
-    option.value = person.fullName || `${person.nome || ""} ${person.cognome || ""}`.trim();
+    option.value = getPersonaleDisplayName(person);
     ui.hoursOperatoriOptions.appendChild(option);
   });
 }
@@ -3868,16 +3868,16 @@ async function addPersonale(event) {
   }
   const fullName = ui.personaleNome.value.trim().replace(/\s+/g, " ");
   if (!fullName) return;
-  const [nome, ...cognomeParts] = fullName.split(" ");
-  const cognome = cognomeParts.join(" ").trim();
+  const [cognome, ...nomeParts] = fullName.split(" ");
+  const nome = nomeParts.join(" ").trim();
   if (!nome || !cognome) {
-    alert("Inserisci Nome e Cognome del personale.");
+    alert("Inserisci Cognome e Nome del personale.");
     return;
   }
   await db.collection("personale").add({
     nome,
     cognome,
-    fullName,
+    fullName: `${cognome} ${nome}`.trim(),
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   ui.personaleForm.reset();
@@ -3987,12 +3987,12 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   uniqueNames.forEach((nomeCompleto) => {
     const ref = db.collection(collectionName).doc();
     const normalized = String(nomeCompleto || "").trim().replace(/\s+/g, " ");
-    const [nome, ...cognomeParts] = normalized.split(" ");
-    const cognome = cognomeParts.join(" ").trim();
+    const [cognome, ...nomeParts] = normalized.split(" ");
+    const nome = nomeParts.join(" ").trim();
     batch.set(ref, {
       nome: collectionName === "personale" ? nome : normalized,
       cognome: collectionName === "personale" ? cognome : "",
-      fullName: collectionName === "personale" ? normalized : "",
+      fullName: collectionName === "personale" ? `${cognome} ${nome}`.trim() : "",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   });
@@ -4025,7 +4025,7 @@ function extractPersonnelNamesFromRawRows(rawRows) {
     } else if (nomeIndex >= 0 || cognomeIndex >= 0) {
       const nome = nomeIndex >= 0 ? String(row[nomeIndex] || "").trim() : "";
       const cognome = cognomeIndex >= 0 ? String(row[cognomeIndex] || "").trim() : "";
-      value = `${nome} ${cognome}`.trim();
+      value = `${cognome} ${nome}`.trim();
     } else {
       value = String(row[0] || "").trim();
     }
@@ -4153,7 +4153,7 @@ function renderSimpleList(container, items, onDelete) {
   items.forEach((item) => {
     const row = document.createElement("div");
     row.className = "simple-list-item";
-    const displayLabel = item.fullName || item.nome || "-";
+    const displayLabel = getPersonaleDisplayName(item);
     const label = document.createElement("span");
     label.textContent = displayLabel;
     row.appendChild(label);
@@ -4210,7 +4210,7 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   const personaleInput = row.querySelector(".squadra-personale");
   const mezziInput = row.querySelector(".squadra-mezzi");
   personaleInput.addEventListener("blur", () => {
-    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => p.fullName || p.nome));
+    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => getPersonaleDisplayName(p)));
   });
   mezziInput.addEventListener("blur", () => {
     const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
@@ -4352,7 +4352,7 @@ function updateSuggestionLists() {
   ui.personaleOptions.innerHTML = "";
   personaleRecords.forEach((person) => {
     const option = document.createElement("option");
-    option.value = person.fullName || person.nome || "";
+    option.value = getPersonaleDisplayName(person);
     ui.personaleOptions.appendChild(option);
   });
   ui.mezziOptions.innerHTML = "";
@@ -4361,6 +4361,14 @@ function updateSuggestionLists() {
     option.value = mezzo.nId || mezzo.nome || "";
     ui.mezziOptions.appendChild(option);
   });
+}
+
+function getPersonaleDisplayName(person) {
+  if (!person) return "";
+  const cognome = String(person.cognome || "").trim();
+  const nome = String(person.nome || "").trim();
+  const composed = `${cognome} ${nome}`.trim();
+  return composed || String(person.fullName || "").trim();
 }
 
 async function setImpiantoDone(commessaId, impiantoIds, done) {

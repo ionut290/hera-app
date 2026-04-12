@@ -4285,6 +4285,8 @@ function autofillSquadraForm() {
 
 function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   const index = ui.squadraRows.children.length + 1;
+  const personaleValues = parseMultiEntryValue(rowData.personale);
+  const mezziValues = parseMultiEntryValue(rowData.mezzi);
   const row = document.createElement("div");
   row.className = "squadra-row";
   row.innerHTML = `
@@ -4292,23 +4294,47 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
       <strong>Squadra ${index}</strong>
       <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
     </div>
-    <input type="text" class="squadra-personale" list="personale-options" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
-    <input type="text" class="squadra-mezzi" list="mezzi-options" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
+    <div class="squadra-multi-field">
+      <div class="squadra-multi-field-head"><strong>👥 Personale</strong></div>
+      <div class="squadra-personale-list"></div>
+      <button type="button" class="btn add-personale-input-btn">+ Aggiungi persona</button>
+    </div>
+    <div class="squadra-multi-field">
+      <div class="squadra-multi-field-head"><strong>🚚 Mezzi</strong></div>
+      <div class="squadra-mezzi-list"></div>
+      <button type="button" class="btn add-mezzo-input-btn">+ Aggiungi mezzo</button>
+    </div>
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
     renumberSquadraRows();
     if (!ui.squadraRows.children.length) addSquadraRow();
   });
-  const personaleInput = row.querySelector(".squadra-personale");
-  const mezziInput = row.querySelector(".squadra-mezzi");
-  personaleInput.addEventListener("blur", () => {
-    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => getPersonaleDisplayName(p)));
+  const personaleList = row.querySelector(".squadra-personale-list");
+  const mezziList = row.querySelector(".squadra-mezzi-list");
+  const addPersonaleBtn = row.querySelector(".add-personale-input-btn");
+  const addMezzoBtn = row.querySelector(".add-mezzo-input-btn");
+
+  const addPersonaleInput = (value = "") => addMultiEntryInput({
+    container: personaleList,
+    listId: "personale-options",
+    placeholder: "Personale squadra",
+    value,
+    sourceValues: personaleRecords.map((p) => getPersonaleDisplayName(p))
   });
-  mezziInput.addEventListener("blur", () => {
-    const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
-    if (suggestion) mezziInput.value = suggestion;
+  const addMezzoInput = (value = "") => addMultiEntryInput({
+    container: mezziList,
+    listId: "mezzi-options",
+    placeholder: "Mezzo squadra",
+    value,
+    sourceValues: mezziRecords.map((m) => m.nId || m.nome)
   });
+
+  (personaleValues.length ? personaleValues : [""]).forEach((value) => addPersonaleInput(value));
+  (mezziValues.length ? mezziValues : [""]).forEach((value) => addMezzoInput(value));
+
+  addPersonaleBtn.addEventListener("click", () => addPersonaleInput(""));
+  addMezzoBtn.addEventListener("click", () => addMezzoInput(""));
   ui.squadraRows.appendChild(row);
   updateAdminControls();
 }
@@ -4323,6 +4349,35 @@ function resolveSuggestionValue(rawValue, sourceValues) {
   return value;
 }
 
+function parseMultiEntryValue(rawValue) {
+  return String(rawValue || "")
+    .split(/[;,\n|]+/)
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+}
+
+function addMultiEntryInput({ container, listId, placeholder, value, sourceValues }) {
+  if (!container) return;
+  const wrap = document.createElement("div");
+  wrap.className = "squadra-multi-entry-row";
+  wrap.innerHTML = `
+    <input type="text" class="squadra-multi-entry-input" list="${escapeHTML(listId)}" placeholder="${escapeHTML(placeholder)}" value="${escapeHTML(value || "")}">
+    <button type="button" class="btn remove-squadra-entry-btn" title="Rimuovi elemento">−</button>
+  `;
+  const input = wrap.querySelector(".squadra-multi-entry-input");
+  const removeBtn = wrap.querySelector(".remove-squadra-entry-btn");
+  input.addEventListener("blur", () => {
+    input.value = resolveSuggestionValue(input.value, sourceValues);
+  });
+  removeBtn.addEventListener("click", () => {
+    wrap.remove();
+    if (!container.children.length) {
+      addMultiEntryInput({ container, listId, placeholder, value: "", sourceValues });
+    }
+  });
+  container.appendChild(wrap);
+}
+
 function renumberSquadraRows() {
   Array.from(ui.squadraRows.children).forEach((row, idx) => {
     const title = row.querySelector(".squadra-row-head strong");
@@ -4332,8 +4387,14 @@ function renumberSquadraRows() {
 
 function readSquadraRows() {
   return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
-    personale: String((row.querySelector(".squadra-personale") || {}).value || "").trim(),
-    mezzi: String((row.querySelector(".squadra-mezzi") || {}).value || "").trim()
+    personale: Array.from(row.querySelectorAll(".squadra-personale-list .squadra-multi-entry-input"))
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean)
+      .join(", "),
+    mezzi: Array.from(row.querySelectorAll(".squadra-mezzi-list .squadra-multi-entry-input"))
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean)
+      .join(", ")
   })).filter((row) => row.personale || row.mezzi);
 }
 
@@ -4438,7 +4499,7 @@ function renderMezziButtonsMarkup(rawValue) {
 
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  ui.squadraHint.textContent = "Scrivi nel campo Personale/Mezzi per ottenere suggerimenti automatici. Usa “Aggiungi squadra” per creare tutte le squadre che vuoi.";
+  ui.squadraHint.textContent = "Usa “+ Aggiungi persona” e “+ Aggiungi mezzo” per inserire più elementi nella stessa squadra. I campi suggeriscono i nomi disponibili.";
 }
 
 function updateSuggestionLists() {

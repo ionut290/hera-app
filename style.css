@@ -862,6 +862,42 @@ textarea:focus-visible {
   background: #f9fbff;
 }
 
+.squadra-multi-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.squadra-multi-field-head {
+  min-width: 92px;
+}
+
+.squadra-personale-list,
+.squadra-mezzi-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1 1 420px;
+}
+
+.squadra-multi-entry-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.squadra-multi-entry-input {
+  width: 170px;
+  margin-bottom: 0;
+}
+
+.remove-squadra-entry-btn {
+  min-width: 30px;
+  padding-inline: 8px;
+}
+
 .squadra-row-head {
   display: flex;
   justify-content: space-between;

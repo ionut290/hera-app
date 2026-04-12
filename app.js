@@ -1024,7 +1024,7 @@ function renderNextActionCard() {
     ui.commesseNextAction.textContent = `Prossima azione consigliata: ${primary.label}.`;
   }
   if (ui.squadreNextAction) {
-    ui.squadreNextAction.textContent = "Per esempio: premi sul tuo mezzo per trovare il distributore.";
+    ui.squadreNextAction.textContent = "Prossima azione consigliata: premi sul tuo mezzo per trovare il distributore.";
   }
   renderImpiantoNextActionUI();
 }
@@ -1039,18 +1039,24 @@ function impiantoNextActionLabel(actionKey) {
   return "Invia messaggio WhatsApp";
 }
 
+function buildInlineActionButton(label) {
+  return `<span class="inline-action-preview" aria-hidden="true">${escapeHTML(label)}</span>`;
+}
+
 function renderImpiantoNextActionUI() {
   if (!ui.impiantiNextAction && !ui.showNextActionBtn) return;
   const actionKey = getCurrentImpiantoNextAction();
   const label = impiantoNextActionLabel(actionKey);
+  const showButtonPreview = buildInlineActionButton(`Mostra pulsante ${label}`);
+  const targetButtonPreview = buildInlineActionButton(label);
   if (ui.showNextActionBtn) {
     ui.showNextActionBtn.textContent = `Mostra pulsante ${label}`;
     ui.showNextActionBtn.classList.toggle("btn-primary", impiantoNextActionHighlightEnabled);
   }
   if (ui.impiantiNextAction) {
-    ui.impiantiNextAction.textContent = impiantoNextActionHighlightEnabled
-      ? `Passaggio consigliato: premi il pulsante ${label}.`
-      : `Premi “Mostra pulsante ${label}” per il prossimo passaggio consigliato.`;
+    ui.impiantiNextAction.innerHTML = impiantoNextActionHighlightEnabled
+      ? `Passaggio consigliato: premi questo pulsante ${targetButtonPreview}.`
+      : `Prossima azione consigliata: premi prima ${showButtonPreview}.`;
   }
 }
 

@@ -766,6 +766,15 @@ textarea:focus-visible {
   margin-top: 10px;
 }
 
+.squadre-filter-controls {
+  align-items: center;
+  margin-top: 10px;
+}
+
+.squadre-filter-controls label {
+  font-weight: 700;
+}
+
 .commesse-lista {
   display: flex;
   flex-wrap: wrap;

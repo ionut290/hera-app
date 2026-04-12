@@ -204,6 +204,44 @@ h2 { font-size: 1.05rem; }
   gap: 12px;
 }
 
+#hours-page {
+  display: grid;
+  gap: 12px;
+}
+
+.hours-commesse-list {
+  display: grid;
+  gap: 12px;
+}
+
+.hours-commessa-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #f8fbff;
+  display: grid;
+  gap: 8px;
+}
+
+.hours-operator-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 2fr) minmax(100px, 1fr) auto;
+  align-items: center;
+}
+
+.hours-operator-list {
+  display: grid;
+  gap: 8px;
+}
+
+.hours-commessa-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
 .howto-card {
   padding: 14px;
 }

@@ -4292,8 +4292,8 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
       <strong>Squadra ${index}</strong>
       <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
     </div>
-    <input type="text" class="squadra-personale" list="personale-options" placeholder="Personale squadra" value="${escapeHTML(rowData.personale || "")}">
-    <input type="text" class="squadra-mezzi" list="mezzi-options" placeholder="Mezzi squadra" value="${escapeHTML(rowData.mezzi || "")}">
+    <input type="text" class="squadra-personale" list="personale-options" placeholder="Personale squadra (anche più nomi)" value="${escapeHTML(rowData.personale || "")}">
+    <input type="text" class="squadra-mezzi" list="mezzi-options" placeholder="Mezzi squadra (anche più mezzi)" value="${escapeHTML(rowData.mezzi || "")}">
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
@@ -4303,11 +4303,10 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   const personaleInput = row.querySelector(".squadra-personale");
   const mezziInput = row.querySelector(".squadra-mezzi");
   personaleInput.addEventListener("blur", () => {
-    personaleInput.value = resolveSuggestionValue(personaleInput.value, personaleRecords.map((p) => getPersonaleDisplayName(p)));
+    personaleInput.value = resolveMultiSuggestionValue(personaleInput.value, personaleRecords.map((p) => getPersonaleDisplayName(p)));
   });
   mezziInput.addEventListener("blur", () => {
-    const suggestion = resolveSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
-    if (suggestion) mezziInput.value = suggestion;
+    mezziInput.value = resolveMultiSuggestionValue(mezziInput.value, mezziRecords.map((m) => m.nId || m.nome));
   });
   ui.squadraRows.appendChild(row);
   updateAdminControls();
@@ -4321,6 +4320,15 @@ function resolveSuggestionValue(rawValue, sourceValues) {
   const matches = sourceValues.filter((item) => String(item || "").toLowerCase().includes(value.toLowerCase()));
   if (matches.length === 1) return matches[0];
   return value;
+}
+
+function resolveMultiSuggestionValue(rawValue, sourceValues) {
+  return String(rawValue || "")
+    .split(/[;,\n|]+/)
+    .map((part) => resolveSuggestionValue(part, sourceValues))
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function renumberSquadraRows() {
@@ -4438,7 +4446,7 @@ function renderMezziButtonsMarkup(rawValue) {
 
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  ui.squadraHint.textContent = "Scrivi nel campo Personale/Mezzi per ottenere suggerimenti automatici. Usa “Aggiungi squadra” per creare tutte le squadre che vuoi.";
+  ui.squadraHint.textContent = "Scrivi nel campo Personale/Mezzi anche più elementi separati da virgola, punto e virgola o invio. Usa “Aggiungi squadra” per creare tutte le squadre che vuoi.";
 }
 
 function updateSuggestionLists() {

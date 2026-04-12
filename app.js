@@ -156,6 +156,8 @@ const ui = {
   hoursFinalizeBtn: document.getElementById("hours-finalize-btn"),
   hoursFeedback: document.getElementById("hours-feedback"),
   hoursSummary: document.getElementById("hours-summary"),
+  viewHoursBtn: document.getElementById("view-hours-btn"),
+  hoursSavedList: document.getElementById("hours-saved-list"),
   hoursOperatoriOptions: document.getElementById("hours-operatori-options"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
@@ -518,6 +520,7 @@ ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
 ui.hoursForm.addEventListener("submit", finalizeHoursReport);
 ui.addHoursCommessaBtn.addEventListener("click", () => addHoursCommessaBlock());
+ui.viewHoursBtn.addEventListener("click", loadSavedHoursReports);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
@@ -1199,6 +1202,7 @@ function initHoursPage() {
   renderHoursOperatoriOptions();
   renderHoursCommessaSelectOptions();
   renderHoursSummary();
+  renderSavedHoursReports([]);
 }
 
 function openHoursPage() {
@@ -1208,6 +1212,7 @@ function openHoursPage() {
   }
   if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  loadSavedHoursReports();
   window.location.hash = "ore";
   applyRoute();
   closeSideMenu();
@@ -1216,6 +1221,59 @@ function openHoursPage() {
 function closeHoursPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function renderSavedHoursReports(records = []) {
+  if (!ui.hoursSavedList) return;
+  if (!records.length) {
+    ui.hoursSavedList.innerHTML = "<p class='muted'>Nessun report ore disponibile.</p>";
+    return;
+  }
+  ui.hoursSavedList.innerHTML = records.map((report) => {
+    const dateLabel = report.date ? new Date(`${report.date}T00:00:00`).toLocaleDateString("it-IT") : "-";
+    const author = report.createdByName || report.createdByEmail || "Operatore";
+    const commesseHtml = (Array.isArray(report.entries) ? report.entries : []).map((entry) => {
+      const rows = (Array.isArray(entry.rows) ? entry.rows : [])
+        .map((row) => `<li>${escapeHTML(row.operatore || "-")}: <b>${escapeHTML(String(row.ore || 0))}h</b></li>`)
+        .join("");
+      return `
+        <div class="item-card">
+          <p><b>Commessa:</b> ${escapeHTML(entry.commessaName || "-")}</p>
+          <ul>${rows || "<li>Nessun operatore</li>"}</ul>
+          ${entry.note ? `<p><b>Nota:</b> ${escapeHTML(entry.note)}</p>` : ""}
+        </div>
+      `;
+    }).join("");
+    return `
+      <article class="item-card">
+        <h3>${escapeHTML(dateLabel)}</h3>
+        <p class="muted">Compilato da: ${escapeHTML(author)}</p>
+        ${commesseHtml || "<p class='muted'>Nessuna commessa nel report.</p>"}
+      </article>
+    `;
+  }).join("");
+}
+
+async function loadSavedHoursReports() {
+  if (!currentUser) {
+    renderSavedHoursReports([]);
+    return;
+  }
+  if (ui.viewHoursBtn) ui.viewHoursBtn.disabled = true;
+  if (ui.hoursSavedList) ui.hoursSavedList.innerHTML = "<p class='muted'>Caricamento ore salvate...</p>";
+  try {
+    const baseQuery = db.collection("oreReports");
+    const snapshot = canManageData()
+      ? await baseQuery.orderBy("createdAt", "desc").limit(40).get()
+      : await baseQuery.where("createdByUid", "==", currentUser.uid).orderBy("createdAt", "desc").limit(40).get();
+    const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderSavedHoursReports(reports);
+  } catch (error) {
+    console.error("Errore caricamento report ore:", error);
+    if (ui.hoursSavedList) ui.hoursSavedList.innerHTML = "<p class='muted'>Errore caricamento ore salvate.</p>";
+  } finally {
+    if (ui.viewHoursBtn) ui.viewHoursBtn.disabled = false;
+  }
 }
 
 function renderHoursOperatoriOptions() {
@@ -1419,6 +1477,7 @@ async function finalizeHoursReport(event) {
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     renderHoursSummary();
+    loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
     ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp comunque disponibile.";

@@ -26,6 +26,7 @@ const ui = {
   commessaName: document.getElementById("commessa-name"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
+  commesseNextAction: document.getElementById("commesse-next-action"),
   commessaTargetSelect: document.getElementById("commessa-target-select"),
   excelFile: document.getElementById("excel-file"),
   importBtn: document.getElementById("import-btn"),
@@ -48,6 +49,8 @@ const ui = {
   impiantiPage: document.getElementById("impianti-page"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
+  showNextActionBtn: document.getElementById("show-next-action-btn"),
+  impiantiNextAction: document.getElementById("impianti-next-action"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
@@ -67,6 +70,7 @@ const ui = {
   squadraRiferimento: document.getElementById("squadra-riferimento"),
   squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
+  squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
   squadreWhatsappAllBtn: document.getElementById("squadre-whatsapp-all-btn"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
@@ -388,6 +392,7 @@ const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
+const IMPIANTO_NEXT_ACTION_FLOW = ["navigate", "done", "whatsapp"];
 const HELP_CENTER_FAQ_FALLBACK = {
   version: 1,
   updatedAt: null,
@@ -409,6 +414,8 @@ const HELP_CENTER_FAQ_FALLBACK = {
 };
 let faqDataset = HELP_CENTER_FAQ_FALLBACK;
 let currentWorkflowStepId = localStorage.getItem(USER_WORKFLOW_STEP_KEY) || "";
+let impiantoNextActionIndex = 0;
+let impiantoNextActionHighlightEnabled = false;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
@@ -441,6 +448,7 @@ ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", toggleMapFullscreen);
 ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
@@ -1012,6 +1020,52 @@ function renderNextActionCard() {
   }
 
   ui.nextActionSummary.textContent = `Prossima azione consigliata: ${primary.label}.`;
+  if (ui.commesseNextAction) {
+    ui.commesseNextAction.textContent = `Prossima azione consigliata: ${primary.label}.`;
+  }
+  if (ui.squadreNextAction) {
+    ui.squadreNextAction.textContent = "Per esempio: premi sul tuo mezzo per trovare il distributore.";
+  }
+  renderImpiantoNextActionUI();
+}
+
+function getCurrentImpiantoNextAction() {
+  return IMPIANTO_NEXT_ACTION_FLOW[impiantoNextActionIndex] || IMPIANTO_NEXT_ACTION_FLOW[0];
+}
+
+function impiantoNextActionLabel(actionKey) {
+  if (actionKey === "navigate") return "Naviga verso l'impianto";
+  if (actionKey === "done") return "Fatto per aggiornare lo stato";
+  return "Invia messaggio WhatsApp";
+}
+
+function renderImpiantoNextActionUI() {
+  if (!ui.impiantiNextAction && !ui.showNextActionBtn) return;
+  const actionKey = getCurrentImpiantoNextAction();
+  const label = impiantoNextActionLabel(actionKey);
+  if (ui.showNextActionBtn) {
+    ui.showNextActionBtn.textContent = `Mostra pulsante ${label}`;
+    ui.showNextActionBtn.classList.toggle("btn-primary", impiantoNextActionHighlightEnabled);
+  }
+  if (ui.impiantiNextAction) {
+    ui.impiantiNextAction.textContent = impiantoNextActionHighlightEnabled
+      ? `Passaggio consigliato: premi il pulsante ${label}.`
+      : `Premi “Mostra pulsante ${label}” per il prossimo passaggio consigliato.`;
+  }
+}
+
+function toggleImpiantoNextActionHighlight() {
+  impiantoNextActionHighlightEnabled = !impiantoNextActionHighlightEnabled;
+  renderImpiantoNextActionUI();
+  renderImpianti();
+}
+
+function registerImpiantoSessionAction(actionKey) {
+  const expectedAction = getCurrentImpiantoNextAction();
+  if (actionKey !== expectedAction) return;
+  impiantoNextActionIndex = (impiantoNextActionIndex + 1) % IMPIANTO_NEXT_ACTION_FLOW.length;
+  impiantoNextActionHighlightEnabled = false;
+  renderImpiantoNextActionUI();
 }
 
 function openSegnalazioniPage() {
@@ -2792,8 +2846,13 @@ function renderImpianti() {
       const actionId = `${selectedCommessaId}:${impiantoKey}:${actionKey}`;
       const btn = createActionIconButton(icon, title, async () => {
         await callback();
+        registerImpiantoSessionAction(actionKey);
         if (trackAsUsed) markActionAsUsed(actionId);
       });
+      btn.dataset.actionKey = actionKey;
+      if (impiantoNextActionHighlightEnabled && actionKey === getCurrentImpiantoNextAction()) {
+        btn.classList.add("next-action-target");
+      }
       if (forceDisabled || (trackAsUsed && isActionUsed(actionId))) setUsedActionButtonState(btn, true);
       actions.appendChild(btn);
     };

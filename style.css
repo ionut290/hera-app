@@ -1070,6 +1070,16 @@ textarea:focus-visible {
   color: #64748b;
 }
 
+.action-icon-btn.next-action-target {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+  animation: next-action-pulse 1s ease-in-out infinite;
+}
+
+@keyframes next-action-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+
 .simple-list-item.stacked {
   display: grid;
   gap: 8px;

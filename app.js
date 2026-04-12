@@ -5028,18 +5028,19 @@ async function loadNearbyFuelStations() {
     const stations = (data.elements || []).map((item) => {
       const lat = item.lat || (item.center && item.center.lat);
       const lon = item.lon || (item.center && item.center.lon);
-      const brand = String((item.tags && (item.tags.brand || item.tags.name)) || "").toLowerCase();
       if (!lat || !lon) return null;
-      if (!brand.includes("eni") && !brand.includes("q8")) return null;
+      const brandLabel = detectFuelBrand(item.tags || {});
+      if (!brandLabel) return null;
       return {
         id: item.id,
         name: item.tags.name || item.tags.brand || "Distributore",
-        brand: item.tags.brand || "-",
+        brand: item.tags.brand || item.tags.operator || brandLabel,
+        brandLabel,
         lat,
         lon,
         distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
       };
-    }).filter(Boolean).sort((a, b) => a.distance - b.distance).slice(0, 20);
+    }).filter(Boolean).sort((a, b) => a.distance - b.distance);
     renderFuelStations(stations);
   } catch (error) {
     console.error("Errore caricamento distributori:", error);
@@ -5050,6 +5051,18 @@ async function loadNearbyFuelStations() {
   }
 }
 
+function detectFuelBrand(tags) {
+  const brandText = [
+    tags.brand,
+    tags.name,
+    tags.operator,
+    tags["brand:it"]
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (brandText.includes("q8")) return "Q8";
+  if (brandText.includes("eni") || brandText.includes("agip")) return "ENI";
+  return "";
+}
+
 async function fetchFuelStationsFromOverpass(lat, lng) {
   const query = `
     [out:json][timeout:25];
@@ -5057,7 +5070,7 @@ async function fetchFuelStationsFromOverpass(lat, lng) {
       node[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
       way[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
     );
-    out center 40;
+    out center;
   `;
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
@@ -5104,7 +5117,9 @@ function renderFuelStations(stations) {
   }
   const bounds = [];
   stations.forEach((station) => {
-    const marker = L.marker([station.lat, station.lon]).addTo(fuelStationsLayer);
+    const marker = L.marker([station.lat, station.lon], {
+      icon: createFuelMarkerIcon(station.brandLabel)
+    }).addTo(fuelStationsLayer);
     marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.brand)}<br>${formatDistance(station.distance)}`);
     const navBtn = createButton("Naviga", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lon}`, "_blank"));
     const row = document.createElement("div");
@@ -5117,6 +5132,16 @@ function renderFuelStations(stations) {
   });
   if (currentUserPos) bounds.push([currentUserPos.lat, currentUserPos.lng]);
   fuelMapInstance.fitBounds(bounds, { padding: [24, 24] });
+}
+
+function createFuelMarkerIcon(brandLabel) {
+  return L.divIcon({
+    className: "fuel-marker-wrap",
+    html: `<span class="fuel-marker-label">${escapeHTML(brandLabel || "FUEL")}</span>`,
+    iconSize: [44, 24],
+    iconAnchor: [22, 12],
+    popupAnchor: [0, -10]
+  });
 }
 
 function initGeolocation() {

@@ -376,30 +376,12 @@
         <div id="hours-commesse-list" class="hours-commesse-list"></div>
         <div class="item-actions">
           <button id="add-hours-commessa-btn" class="btn" type="button">+ Aggiungi commessa</button>
-          <button id="hours-view-table-btn" class="btn" type="button">Visualizza ore</button>
           <button id="hours-finalize-btn" class="btn btn-primary" type="submit">Fine: salva e invia</button>
         </div>
       </form>
       <p id="hours-feedback" class="muted"></p>
       <div id="hours-summary" class="simple-list"></div>
       <datalist id="hours-operatori-options"></datalist>
-    </section>
-
-    <section id="hours-tables-view" class="card hidden">
-      <div class="page-head">
-        <button id="hours-tables-back-btn" class="btn" type="button">← Inserimento ore</button>
-        <h3>Tabella ore commessa</h3>
-      </div>
-      <div class="item-actions">
-        <input id="hours-table-month" type="month">
-        <select id="hours-table-commessa-select">
-          <option value="">Seleziona commessa</option>
-        </select>
-        <button id="hours-load-table-btn" class="btn" type="button">Apri foglio</button>
-        <button id="hours-export-table-btn" class="btn" type="button">Scarica Excel</button>
-      </div>
-      <p id="hours-tables-feedback" class="muted"></p>
-      <div id="hours-tables-list" class="simple-list"></div>
     </section>
   </section>
 
@@ -539,7 +521,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260412-ore-table-2"></script>
+  <script src="app.js?v=20260412-ore-1"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

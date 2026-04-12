@@ -3585,7 +3585,9 @@ function renderImpianti() {
     article.classList.toggle("is-expanded", detailsVisible);
     if (highlightedImpiantoKey === impiantoKey) article.classList.add("highlight");
 
-    const distance = formatDistance(distanceFromUser(impianto));
+    const distanceKm = distanceFromUser(impianto);
+    const distance = formatDistance(distanceKm);
+    const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const header = document.createElement("button");
@@ -3594,7 +3596,9 @@ function renderImpianti() {
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
-      <small>${distance}</small>
+      <small class="impianto-travel-meta">
+        ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
+      </small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {
@@ -5774,6 +5778,42 @@ function formatDistance(km) {
   if (!Number.isFinite(km) || km > 1e10) return "N/D";
   if (km < 1) return `${Math.round(km * 1000)} m`;
   return `${km.toFixed(2)} km`;
+}
+
+function getTrafficIntensityByHour(date = new Date()) {
+  const hour = date.getHours();
+  if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) return "intenso";
+  if (hour >= 22 || hour <= 5) return "leggero";
+  return "moderato";
+}
+
+function normalizeTrafficIntensity(baseIntensity, distanceKm) {
+  if (!Number.isFinite(distanceKm)) return baseIntensity;
+  if (baseIntensity === "intenso" && distanceKm < 2) return "moderato";
+  if (baseIntensity === "moderato" && distanceKm >= 15) return "intenso";
+  if (baseIntensity === "leggero" && distanceKm >= 25) return "moderato";
+  return baseIntensity;
+}
+
+function estimateTravelMeta(distanceKm) {
+  if (!Number.isFinite(distanceKm) || distanceKm > 1e10) {
+    return { intensityKey: "na", intensityLabel: "N/D", etaLabel: "N/D" };
+  }
+  const baseIntensity = getTrafficIntensityByHour();
+  const intensityKey = normalizeTrafficIntensity(baseIntensity, distanceKm);
+  const intensityLabel = intensityKey.charAt(0).toUpperCase() + intensityKey.slice(1);
+  const speedByIntensity = {
+    intenso: 25,
+    moderato: 40,
+    leggero: 60
+  };
+  const avgSpeed = speedByIntensity[intensityKey] || 35;
+  const etaMinutes = Math.max(1, Math.round((Math.max(distanceKm, 0) / avgSpeed) * 60));
+  return {
+    intensityKey,
+    intensityLabel,
+    etaLabel: `${etaMinutes} min`
+  };
 }
 
 function escapeHTML(value) {

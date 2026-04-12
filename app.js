@@ -118,10 +118,7 @@ const ui = {
   weatherCard: document.getElementById("weather-card"),
   activeUsersSummary: document.getElementById("active-users-summary"),
   lastImpiantoActionSummary: document.getElementById("last-impianto-action-summary"),
-  nextActionCard: document.getElementById("next-action-card"),
   nextActionSummary: document.getElementById("next-action-summary"),
-  nextActionCtaBtn: document.getElementById("next-action-cta-btn"),
-  nextActionSecondary: document.getElementById("next-action-secondary"),
   weatherRisks: document.getElementById("weather-risks"),
   userCard: document.getElementById("user-card"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
@@ -491,7 +488,6 @@ ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
 ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
 ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
-ui.nextActionCtaBtn?.addEventListener("click", handleNextActionCtaClick);
 ui.enableNotificationsBtn?.addEventListener("click", enablePushNotifications);
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
 window.addEventListener("online", updateConnectivityStatus);
@@ -997,7 +993,7 @@ function getWorkflowSteps() {
 }
 
 function renderNextActionCard() {
-  if (!ui.nextActionCard || !ui.nextActionSummary || !ui.nextActionCtaBtn || !ui.nextActionSecondary) return;
+  if (!ui.nextActionSummary) return;
   const steps = getWorkflowSteps();
   const availableSteps = steps.filter((step) => step.available);
   const stepMap = new Map(steps.map((step) => [step.id, step]));
@@ -1011,38 +1007,11 @@ function renderNextActionCard() {
   }
 
   if (!primary) {
-    ui.nextActionSummary.textContent = "Nessuna azione disponibile al momento.";
-    ui.nextActionCtaBtn.textContent = "Aggiorna";
-    ui.nextActionCtaBtn.classList.add("btn-primary");
-    ui.nextActionSecondary.innerHTML = "";
+    ui.nextActionSummary.textContent = "Prossima azione consigliata: nessuna azione disponibile al momento.";
     return;
   }
 
-  ui.nextActionSummary.textContent = primary.description;
-  ui.nextActionCtaBtn.textContent = primary.label;
-  ui.nextActionCtaBtn.classList.add("btn-primary");
-  ui.nextActionCtaBtn.disabled = !primary.available;
-  ui.nextActionCtaBtn.dataset.stepId = primary.id;
-
-  ui.nextActionSecondary.innerHTML = "";
-  availableSteps
-    .filter((step) => step.id !== primary.id)
-    .forEach((step) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn";
-      btn.textContent = step.label;
-      btn.addEventListener("click", () => setCurrentWorkflowStep(step.id));
-      ui.nextActionSecondary.appendChild(btn);
-    });
-}
-
-function handleNextActionCtaClick() {
-  const stepId = ui.nextActionCtaBtn?.dataset.stepId || "";
-  const step = getWorkflowSteps().find((candidate) => candidate.id === stepId);
-  if (!step || !step.available) return;
-  setCurrentWorkflowStep(step.id);
-  step.action();
+  ui.nextActionSummary.textContent = `Prossima azione consigliata: ${primary.label}.`;
 }
 
 function openSegnalazioniPage() {

@@ -1741,8 +1741,7 @@ function bindHoursValueButtons() {
         alert("Solo l'amministratore può eliminare il valore (impostarlo a 0).");
         return;
       }
-      const delta = Number((newValue - currentValue).toFixed(2));
-      if (delta === 0) return;
+      if (newValue === currentValue) return;
       const month = currentHoursTableContext.monthData.monthNumber;
       const year = currentHoursTableContext.monthData.year;
       const isoDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -1751,8 +1750,8 @@ function bindHoursValueButtons() {
         entries: [{
           commessaId: currentHoursTableContext.commessaId,
           commessaName: currentHoursTableContext.commessaName,
-          note: `Rettifica manuale su cella ${operatore} giorno ${day}`,
-          rows: [{ operatore, ore: delta }]
+          note: `Rettifica manuale totale su cella ${operatore} giorno ${day}`,
+          rows: [{ operatore, ore: newValue }]
         }],
         createdByUid: currentUser.uid,
         createdByName: currentUser.displayName || currentUser.email || "Operatore",

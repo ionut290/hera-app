@@ -3596,7 +3596,9 @@ function renderImpianti() {
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
-      <small>${distance} • Traffico ${travelMeta.intensityLabel} • ETA ${travelMeta.etaLabel}</small>
+      <small class="impianto-travel-meta">
+        ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
+      </small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {
@@ -5785,19 +5787,30 @@ function getTrafficIntensityByHour(date = new Date()) {
   return "moderato";
 }
 
+function normalizeTrafficIntensity(baseIntensity, distanceKm) {
+  if (!Number.isFinite(distanceKm)) return baseIntensity;
+  if (baseIntensity === "intenso" && distanceKm < 2) return "moderato";
+  if (baseIntensity === "moderato" && distanceKm >= 15) return "intenso";
+  if (baseIntensity === "leggero" && distanceKm >= 25) return "moderato";
+  return baseIntensity;
+}
+
 function estimateTravelMeta(distanceKm) {
   if (!Number.isFinite(distanceKm) || distanceKm > 1e10) {
-    return { intensityLabel: "N/D", etaLabel: "N/D" };
+    return { intensityKey: "na", intensityLabel: "N/D", etaLabel: "N/D" };
   }
-  const intensityLabel = getTrafficIntensityByHour();
+  const baseIntensity = getTrafficIntensityByHour();
+  const intensityKey = normalizeTrafficIntensity(baseIntensity, distanceKm);
+  const intensityLabel = intensityKey.charAt(0).toUpperCase() + intensityKey.slice(1);
   const speedByIntensity = {
     intenso: 25,
     moderato: 40,
     leggero: 60
   };
-  const avgSpeed = speedByIntensity[intensityLabel] || 35;
+  const avgSpeed = speedByIntensity[intensityKey] || 35;
   const etaMinutes = Math.max(1, Math.round((Math.max(distanceKm, 0) / avgSpeed) * 60));
   return {
+    intensityKey,
     intensityLabel,
     etaLabel: `${etaMinutes} min`
   };

@@ -1123,6 +1123,22 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
+.impianto-travel-meta .traffic-level {
+  font-weight: 700;
+}
+
+.impianto-travel-meta .traffic-intenso {
+  color: #dc2626;
+}
+
+.impianto-travel-meta .traffic-moderato {
+  color: #ea580c;
+}
+
+.impianto-travel-meta .traffic-leggero {
+  color: #16a34a;
+}
+
 .impianto-details { display: none; }
 .impianto-item.is-expanded .impianto-details { display: block; }
 

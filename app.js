@@ -61,7 +61,12 @@ const ui = {
   personaleNome: document.getElementById("personale-nome"),
   personaleLista: document.getElementById("personale-lista"),
   mezziForm: document.getElementById("mezzi-form"),
-  mezzoNome: document.getElementById("mezzo-nome"),
+  mezzoNId: document.getElementById("mezzo-n-id"),
+  mezzoMarca: document.getElementById("mezzo-marca"),
+  mezzoModello: document.getElementById("mezzo-modello"),
+  mezzoPortataCarico: document.getElementById("mezzo-portata-carico"),
+  mezzoMassaComplessivaKg: document.getElementById("mezzo-massa-complessiva-kg"),
+  mezzoAlimentazione: document.getElementById("mezzo-alimentazione"),
   mezziLista: document.getElementById("mezzi-lista"),
   squadraForm: document.getElementById("squadra-form"),
   squadraCommessa: document.getElementById("squadra-commessa"),
@@ -823,7 +828,12 @@ function updateAdminControls() {
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
   ui.personaleNome.disabled = !canManage;
-  ui.mezzoNome.disabled = !canManage;
+  ui.mezzoNId.disabled = !canManage;
+  ui.mezzoMarca.disabled = !canManage;
+  ui.mezzoModello.disabled = !canManage;
+  ui.mezzoPortataCarico.disabled = !canManage;
+  ui.mezzoMassaComplessivaKg.disabled = !canManage;
+  ui.mezzoAlimentazione.disabled = !canManage;
   if (ui.personaleForm.querySelector("button[type='submit']")) ui.personaleForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.mezziForm.querySelector("button[type='submit']")) ui.mezziForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.personaleImportBtn.disabled = !canManage;
@@ -1698,25 +1708,6 @@ function renderHoursSummary(forcedEntries = null) {
   ui.hoursSummary.innerHTML = html;
 }
 
-function buildHoursWhatsappMessage(reportDate, entries, authorLabel) {
-  const groupedText = entries.map((entry, idx) => {
-    const operatorLines = entry.rows.map((row) => `   - ${row.operatore || "-"}: ${row.ore || 0}h`).join("\n");
-    return [
-      `📁 Commessa ${idx + 1}: ${entry.commessaName || "-"}`,
-      operatorLines || "   - Nessun operatore",
-      entry.note ? `📝 Nota: ${entry.note}` : ""
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
-
-  return [
-    "🕒 RESOCONTO ORE LAVORATE",
-    `📅 Data: ${reportDate}`,
-    `👷 Compilato da: ${authorLabel}`,
-    "",
-    groupedText
-  ].join("\n");
-}
-
 async function finalizeHoursReport(event) {
   event.preventDefault();
   if (!currentUser) {
@@ -1747,15 +1738,11 @@ async function finalizeHoursReport(event) {
     createdByEmail: currentUser.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  const reportDate = new Date(`${dateValue}T00:00:00`).toLocaleDateString("it-IT");
-  const message = buildHoursWhatsappMessage(reportDate, payload.entries, payload.createdByName);
-  const waUrl = `https://wa.me/${HOURS_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
-  const waWindow = window.open("about:blank", "_blank");
-
   ui.hoursFinalizeBtn.disabled = true;
-  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso... WhatsApp verrà aperto comunque.";
+  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso...";
   try {
     const docRef = await db.collection("oreReports").add(payload);
+    await notifyAdminsForHoursReport(docRef.id, payload);
     let driveLink = "";
     if (driveAccessToken) {
       if (!driveReportsFolderId) await ensureDriveFolders();
@@ -1766,23 +1753,38 @@ async function finalizeHoursReport(event) {
     }
 
     ui.hoursFeedback.textContent = driveLink
-      ? `Resoconto salvato (ID ${docRef.id}) e backup Drive completato.`
-      : `Resoconto salvato (ID ${docRef.id}). Drive non collegato: backup file saltato.`;
+      ? `Le ore sono state salvate (ID ${docRef.id}) e l'admin è stato notificato. Backup Drive completato.`
+      : `Le ore sono state salvate (ID ${docRef.id}) e l'admin è stato notificato. Drive non collegato: backup file saltato.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     renderHoursSummary();
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
-    ui.hoursFeedback.textContent = "Errore salvataggio resoconto: invio WhatsApp comunque disponibile.";
+    ui.hoursFeedback.textContent = "Errore salvataggio resoconto.";
   } finally {
-    if (waWindow && !waWindow.closed) {
-      waWindow.location.href = waUrl;
-    } else {
-      window.open(waUrl, "_blank");
-    }
     ui.hoursFinalizeBtn.disabled = false;
   }
+}
+
+async function notifyAdminsForHoursReport(reportId, payload) {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const dateLabel = payload?.date
+    ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
+    : "-";
+  const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
+  const entriesCount = Array.isArray(payload?.entries) ? payload.entries.length : 0;
+  const text = `🕒 Ore salvate da ${author} il ${dateLabel}. Commesse compilate: ${entriesCount}. ID report: ${reportId}.`;
+
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    text,
+    senderId: currentUser.uid,
+    senderName: currentUser.displayName || currentUser.email || "Operatore",
+    recipientId: adminUser.id,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    kind: "system"
+  })));
 }
 
 function renderHowtoFaq() {
@@ -3889,12 +3891,26 @@ async function addMezzo(event) {
     alert("Solo un admin può gestire i mezzi.");
     return;
   }
-  const nome = ui.mezzoNome.value.trim();
-  if (!nome) return;
-  await db.collection("mezzi").add({
-    nome,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
+  const mezzo = {
+    nId: String(ui.mezzoNId?.value || "").trim(),
+    marca: String(ui.mezzoMarca?.value || "").trim(),
+    modello: String(ui.mezzoModello?.value || "").trim(),
+    portataCarico: String(ui.mezzoPortataCarico?.value || "").trim(),
+    massaComplessivaKg: String(ui.mezzoMassaComplessivaKg?.value || "").trim(),
+    alimentazione: String(ui.mezzoAlimentazione?.value || "").trim()
+  };
+  if (!mezzo.nId) return;
+
+  const existing = findExistingMezzoByNId(mezzo.nId);
+  if (existing) {
+    await db.collection("mezzi").doc(existing.id).set(buildMezzoPatch(existing, mezzo), { merge: true });
+  } else {
+    await db.collection("mezzi").add({
+      nome: mezzo.nId,
+      ...mezzo,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
   ui.mezziForm.reset();
 }
 
@@ -3921,22 +3937,36 @@ async function importMezziFromExcel() {
     alert("Nessun mezzo valido trovato nel file.");
     return;
   }
+  const existingByKey = new Map();
+  mezziRecords.forEach((item) => {
+    const key = normalizeMezzoNId(item.nId || item.nome);
+    if (key) existingByKey.set(key, item);
+  });
+  const importByKey = new Map();
+  rows.forEach((row) => {
+    const key = normalizeMezzoNId(row.nId);
+    if (!key) return;
+    const previous = importByKey.get(key) || {};
+    importByKey.set(key, mergeMezzoData(previous, row));
+  });
+
   const batch = db.batch();
-  rows.forEach((mezzo) => {
+  importByKey.forEach((mezzo, key) => {
+    const existing = existingByKey.get(key);
+    if (existing) {
+      batch.set(db.collection("mezzi").doc(existing.id), buildMezzoPatch(existing, mezzo), { merge: true });
+      return;
+    }
     const ref = db.collection("mezzi").doc();
     batch.set(ref, {
       nome: mezzo.nId || "",
-      nId: mezzo.nId || "",
-      marca: mezzo.marca || "",
-      portataCarico: mezzo.portataCarico || "",
-      massaComplessivaKg: mezzo.massaComplessivaKg || "",
-      alimentazione: mezzo.alimentazione || "",
+      ...mezzo,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    }, { merge: true });
   });
   await batch.commit();
   ui.mezziExcelFile.value = "";
-  alert(`Import mezzi completato (${rows.length} elementi).`);
+  alert(`Import mezzi completato (${importByKey.size} elementi unici).`);
 }
 
 async function parseMezziExcelRows(file) {
@@ -3951,11 +3981,45 @@ async function parseMezziExcelRows(file) {
     return {
       nId: get(["nid", "nid.", "n.id", "n.id.", "id"]),
       marca: get(["marca"]),
-      portataCarico: get(["portatacarico", "portata"]),
+      modello: get(["modello", "model"]),
+      portataCarico: get(["portatacarico", "portatacaricokg", "portata", "portatakg"]),
       massaComplessivaKg: get(["massacomplessivapesodelcamioncaricokg", "massacomplessivakg", "massa"]),
       alimentazione: get(["alimentazione"])
     };
   }).filter((row) => row.nId);
+}
+
+function normalizeMezzoNId(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function mergeMezzoData(base, incoming) {
+  const result = { ...base };
+  ["nId", "marca", "modello", "portataCarico", "massaComplessivaKg", "alimentazione"].forEach((field) => {
+    if (incoming[field]) result[field] = incoming[field];
+  });
+  return result;
+}
+
+function buildMezzoPatch(existing, incoming) {
+  const patch = {};
+  const merged = mergeMezzoData({
+    nId: existing.nId || existing.nome || "",
+    marca: existing.marca || "",
+    modello: existing.modello || "",
+    portataCarico: existing.portataCarico || "",
+    massaComplessivaKg: existing.massaComplessivaKg || "",
+    alimentazione: existing.alimentazione || ""
+  }, incoming);
+  patch.nome = merged.nId || existing.nome || "";
+  Object.assign(patch, merged);
+  return patch;
+}
+
+function findExistingMezzoByNId(nId) {
+  const normalized = normalizeMezzoNId(nId);
+  if (!normalized) return null;
+  return mezziRecords.find((item) => normalizeMezzoNId(item.nId || item.nome) === normalized) || null;
 }
 
 function normalizeHeaderKey(value) {
@@ -4081,7 +4145,7 @@ function subscribePersonale() {
 function subscribeMezzi() {
   unsubscribeMezzi = db.collection("mezzi").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
     mezziRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    renderSimpleList(ui.mezziLista, mezziRecords, deleteMezzo);
+    renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
     updateSquadraHintFromSources();
     updateSuggestionLists();
   }, (error) => {
@@ -4158,6 +4222,35 @@ function renderSimpleList(container, items, onDelete) {
     label.textContent = displayLabel;
     row.appendChild(label);
     const deleteBtn = createButton("Elimina", () => onDelete(item.id, displayLabel || "elemento"));
+    deleteBtn.disabled = !canManageData();
+    row.appendChild(deleteBtn);
+    container.appendChild(row);
+  });
+}
+
+function renderMezziList(container, items, onDelete) {
+  container.innerHTML = "";
+  if (!items.length) {
+    container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const title = item.nId || item.nome || "-";
+    const portataLabel = item.portataCarico || item.portataCaricoKg || item.portata || "";
+    const massaLabel = item.massaComplessivaKg || item.massaComplessiva || item.massa || "";
+    const details = [
+      item.marca ? `Marca: ${item.marca}` : "",
+      item.modello ? `Modello: ${item.modello}` : "",
+      portataLabel ? `Portata: ${portataLabel}` : "",
+      massaLabel ? `Massa complessiva: ${massaLabel}` : "",
+      item.alimentazione ? `Alimentazione: ${item.alimentazione}` : ""
+    ].filter(Boolean).join(" • ");
+    const label = document.createElement("span");
+    label.textContent = details ? `${title} — ${details}` : title;
+    row.appendChild(label);
+    const deleteBtn = createButton("Elimina", () => onDelete(item.id, title || "elemento"));
     deleteBtn.disabled = !canManageData();
     row.appendChild(deleteBtn);
     container.appendChild(row);
@@ -4851,11 +4944,14 @@ function renderFuelMezzoDetails() {
     ui.fuelMezzoDetails.innerHTML = "<p class='muted'>Nessun mezzo selezionato.</p>";
     return;
   }
+  const portataLabel = selectedFuelMezzo.portataCarico || selectedFuelMezzo.portataCaricoKg || selectedFuelMezzo.portata || "-";
+  const massaLabel = selectedFuelMezzo.massaComplessivaKg || selectedFuelMezzo.massaComplessiva || selectedFuelMezzo.massa || "-";
   ui.fuelMezzoDetails.innerHTML = `
     <p><b>N. ID:</b> ${escapeHTML(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "-")}</p>
     <p><b>Marca:</b> ${escapeHTML(selectedFuelMezzo.marca || "-")}</p>
-    <p><b>Portata (carico):</b> ${escapeHTML(selectedFuelMezzo.portataCarico || "-")}</p>
-    <p><b>Massa complessiva (kg):</b> ${escapeHTML(selectedFuelMezzo.massaComplessivaKg || "-")}</p>
+    <p><b>Modello:</b> ${escapeHTML(selectedFuelMezzo.modello || "-")}</p>
+    <p><b>Portata (carico):</b> ${escapeHTML(portataLabel)}</p>
+    <p><b>Massa complessiva (kg):</b> ${escapeHTML(massaLabel)}</p>
     <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
   `;
 }

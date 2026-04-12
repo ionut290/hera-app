@@ -381,29 +381,6 @@ h2 { font-size: 1.05rem; }
   width: 100%;
 }
 
-.next-action-card {
-  border-color: #bfdbfe;
-  background:
-    radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.12), transparent 42%),
-    linear-gradient(160deg, #ffffff 0%, #f4f8ff 100%);
-}
-
-.next-action-primary-row {
-  margin-top: 10px;
-}
-
-.next-action-primary-row .btn {
-  width: 100%;
-}
-
-.next-action-secondary {
-  margin-top: 8px;
-}
-
-.next-action-secondary .btn {
-  background: #fff;
-}
-
 .weather-user-actions {
   margin-top: 12px;
 }

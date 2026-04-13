@@ -1472,14 +1472,21 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta) {
   if (!monthMeta) return [];
   const fromDate = `${monthValue}-01`;
   const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
-  const baseQuery = db.collection("oreReports")
+  const snapshot = await db.collection("oreReports")
     .where("date", ">=", fromDate)
     .where("date", "<=", toDate)
-    .orderBy("date", "asc");
-  const snapshot = canManageData()
-    ? await baseQuery.get()
-    : await baseQuery.where("createdByUid", "==", currentUser?.uid || "__none__").get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    .orderBy("date", "asc")
+    .get();
+  const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  if (canManageData()) return reports;
+  const currentUid = String(currentUser?.uid || "");
+  return reports.filter((report) => String(report.createdByUid || "") === currentUid);
+}
+
+function ensureHoursViewModalOpen() {
+  if (!ui.hoursViewModal || !ui.hoursViewModal.classList.contains("hidden")) return;
+  ui.hoursViewModal.classList.remove("hidden");
+  ui.hoursViewModal.setAttribute("aria-hidden", "false");
 }
 
 async function loadHoursMonthlyTable() {
@@ -1527,6 +1534,7 @@ async function loadHoursTotalByOperator() {
     return;
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore per operatore...";
   ui.hoursTableContainer.innerHTML = "";
   try {
@@ -1594,6 +1602,7 @@ async function loadHoursTotalByOperatorAndCommessa() {
     return;
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore operatore per commessa...";
   ui.hoursTableContainer.innerHTML = "";
   try {

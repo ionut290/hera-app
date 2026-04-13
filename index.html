@@ -419,7 +419,7 @@
         <button id="back-from-hours-btn" class="btn" type="button">← Torna</button>
         <h2>Gestione ore</h2>
       </div>
-      <p class="muted">Compila commesse, operatori, ore e note. Premi “Fine” per salvare il resoconto e notificare l'admin.</p>
+      <p class="muted">Compila commesse, operatori, ore e note. Premi “Fine” per inviare la richiesta: serve doppia approvazione prima del salvataggio definitivo.</p>
     </section>
     <section class="card">
       <form id="hours-form" class="resource-form">
@@ -440,6 +440,11 @@
         <button id="hours-total-operator-btn" class="btn" type="button">Visualizza totale ore per operatore</button>
         <button id="hours-total-operator-commessa-btn" class="btn" type="button">Visualizza ore operatore per commessa</button>
       </div>
+      <section class="hours-approval-box">
+        <h3>Richieste ore in approvazione</h3>
+        <p id="hours-approvals-feedback" class="muted"></p>
+        <div id="hours-approvals-list" class="simple-list"></div>
+      </section>
       <datalist id="hours-operatori-options"></datalist>
     </section>
   </section>

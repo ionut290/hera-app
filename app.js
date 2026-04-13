@@ -188,6 +188,8 @@ const ui = {
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
   hoursTableContainer: document.getElementById("hours-table-container"),
+  hoursApprovalsFeedback: document.getElementById("hours-approvals-feedback"),
+  hoursApprovalsList: document.getElementById("hours-approvals-list"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -263,6 +265,7 @@ let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
+let unsubscribeHoursApprovals = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -310,6 +313,7 @@ let privateDocsRecords = [];
 let hoursDraftEntries = [];
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
+let hoursApprovalRequests = [];
 let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
 let activeResourceManageFilter = "";
@@ -558,8 +562,26 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap"
 }).addTo(map);
 map.setView([44.4949, 11.3426], 11);
+map.doubleClickZoom.disable();
 
 const markerLayer = L.layerGroup().addTo(map);
+const mapElement = document.getElementById("map");
+if (mapElement) {
+  let lastTapAt = 0;
+  mapElement.addEventListener("touchend", () => {
+    const now = Date.now();
+    if (now - lastTapAt < 320) {
+      toggleMapFullscreen();
+      lastTapAt = 0;
+      return;
+    }
+    lastTapAt = now;
+  }, { passive: true });
+  mapElement.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    toggleMapFullscreen();
+  });
+}
 document.addEventListener("fullscreenchange", () => {
   syncMapFullscreenUiState();
   setTimeout(() => map.invalidateSize(), 60);
@@ -866,6 +888,7 @@ auth.onAuthStateChanged((user) => {
   stopResourcesSubscription();
   stopPrivateDocsSubscription();
   stopGpsRequestsSubscription();
+  stopHoursApprovalsSubscription();
   stopChatRetentionLoop();
   selectedCommessaId = "";
   selectedCommessaName = "";
@@ -882,7 +905,9 @@ auth.onAuthStateChanged((user) => {
   resourceRecords = [];
   privateDocsRecords = [];
   gpsUpdateRequests = [];
+  hoursApprovalRequests = [];
   renderPrivateDocsList();
+  renderHoursApprovalRequests();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
   ui.impiantiLista.innerHTML = loggedIn
@@ -916,6 +941,7 @@ auth.onAuthStateChanged((user) => {
     subscribeResources();
     subscribePrivateDocs();
     subscribeGpsRequests();
+    subscribeHoursApprovals();
     processPendingSheetExports();
     startChatRetentionLoop();
   } else {
@@ -1386,6 +1412,7 @@ function initHoursPage() {
   renderHoursTableCommessaOptions();
   renderHoursSummary();
   renderSavedHoursReports([]);
+  renderHoursApprovalRequests();
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
 }
 
@@ -1398,6 +1425,7 @@ function openHoursPage() {
   if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   renderHoursTableCommessaOptions();
+  renderHoursApprovalRequests();
   window.location.hash = "ore";
   applyRoute();
   closeSideMenu();
@@ -2259,7 +2287,7 @@ async function finalizeHoursReport(event) {
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   ui.hoursFinalizeBtn.disabled = true;
-  ui.hoursFeedback.textContent = "Salvataggio resoconto in corso...";
+  ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
     const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
     if (duplicateDraft.length) {
@@ -2275,20 +2303,21 @@ async function finalizeHoursReport(event) {
       return;
     }
 
-    const docRef = await db.collection("oreReports").add(payload);
-    await notifyAdminsForHoursReport(docRef.id, payload);
-    let driveLink = "";
-    if (driveAccessToken) {
-      if (!driveReportsFolderId) await ensureDriveFolders();
-      const blob = new Blob([JSON.stringify({ id: docRef.id, ...payload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
-      const fileName = `ore_${dateValue}_${docRef.id}.json`;
-      const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId);
-      driveLink = upload?.webViewLink || "";
-    }
+    const approvalRef = await db.collection("oreApprovalRequests").add({
+      ...payload,
+      status: "pending_level1",
+      level1ApprovedBy: "",
+      level1ApprovedAt: null,
+      level2ApprovedBy: "",
+      level2ApprovedAt: null,
+      rejectedBy: "",
+      rejectedAt: null,
+      rejectionReason: "",
+      finalizedReportId: ""
+    });
+    await notifyLevel1ForHoursApproval(approvalRef.id, payload);
 
-    ui.hoursFeedback.textContent = driveLink
-      ? `Salvataggio completato (ID ${docRef.id}). Resoconto ore registrato, admin avvisato e backup Drive creato.`
-      : `Salvataggio completato (ID ${docRef.id}). Resoconto ore registrato e admin avvisato. Drive non collegato, nessun backup file.`;
+    ui.hoursFeedback.textContent = `Richiesta inviata (ID ${approvalRef.id}). In attesa primo OK, poi conferma admin finale.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     renderHoursSummary();
@@ -2301,23 +2330,42 @@ async function finalizeHoursReport(event) {
   }
 }
 
-async function notifyAdminsForHoursReport(reportId, payload) {
+async function notifyLevel1ForHoursApproval(requestId, payload) {
   const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
-  if (!adminUsers.length) return;
+  const recipientsMap = new Map(adminUsers.map((user) => [user.id, user]));
+  const requesterUser = platformUsers.find((user) => String(user.uid || "") === String(payload?.createdByUid || ""));
+  if (requesterUser?.id) recipientsMap.set(requesterUser.id, requesterUser);
+  const recipients = Array.from(recipientsMap.values());
+  if (!recipients.length) return;
   const dateLabel = payload?.date
     ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
     : "-";
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const entriesCount = Array.isArray(payload?.entries) ? payload.entries.length : 0;
-  const text = `🕒 Ore salvate da ${author} il ${dateLabel}. Commesse compilate: ${entriesCount}. ID report: ${reportId}.`;
-
-  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+  const text = `🕒 Richiesta ore ${requestId} da ${author} (${dateLabel}). Commesse: ${entriesCount}. Serve primo OK.`;
+  await Promise.all(recipients.map((recipient) => db.collection("chatMessages").add({
     text,
     senderId: currentUser.uid,
     senderName: currentUser.displayName || currentUser.email || "Operatore",
-    recipientId: adminUser.id,
+    recipientId: recipient.id,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     kind: "system"
+  })));
+}
+
+async function notifyAdminsForFinalHoursApproval(requestId, payload, approverName) {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
+  const text = `🕒 Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser.uid,
+    senderName: currentUser.displayName || currentUser.email || "Sistema",
+    senderEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   })));
 }
 
@@ -6440,6 +6488,171 @@ function stopUsersSubscription() {
   renderExternalApps();
 }
 
+function canApproveHoursLevel1(request) {
+  if (!currentUser || !request) return false;
+  if (canManageData()) return true;
+  return String(request.createdByUid || "") === String(currentUser.uid || "");
+}
+
+function renderHoursApprovalRequests() {
+  if (!ui.hoursApprovalsList || !ui.hoursApprovalsFeedback) return;
+  if (!currentUser) {
+    ui.hoursApprovalsFeedback.textContent = "Fai login per vedere le richieste ore.";
+    ui.hoursApprovalsList.innerHTML = "";
+    return;
+  }
+  const visible = hoursApprovalRequests.filter((request) => canManageData() || String(request.createdByUid || "") === String(currentUser.uid || ""));
+  if (!visible.length) {
+    ui.hoursApprovalsFeedback.textContent = "Nessuna richiesta ore in approvazione.";
+    ui.hoursApprovalsList.innerHTML = "";
+    return;
+  }
+  ui.hoursApprovalsFeedback.textContent = `Richieste trovate: ${visible.length}.`;
+  ui.hoursApprovalsList.innerHTML = "";
+  visible.forEach((request) => {
+    const card = document.createElement("article");
+    card.className = "item-card";
+    const dateLabel = request.date ? new Date(`${request.date}T00:00:00`).toLocaleDateString("it-IT") : "-";
+    const statusMap = {
+      pending_level1: "In attesa primo OK",
+      pending_admin: "In attesa OK admin finale",
+      approved: `Approvata ✅ (report ${request.finalizedReportId || "-"})`,
+      rejected: "Rifiutata ❌"
+    };
+    const statusText = statusMap[request.status] || request.status || "-";
+    const author = request.createdByName || request.createdByEmail || "Operatore";
+    const summary = (Array.isArray(request.entries) ? request.entries : []).map((entry) => {
+      const tot = (entry.rows || []).reduce((sum, row) => sum + (Number(row.ore || 0) || 0), 0);
+      return `<li>${escapeHTML(entry.commessaName || "Commessa")}: ${escapeHTML(String(tot))}h</li>`;
+    }).join("");
+    card.innerHTML = `
+      <p><b>ID:</b> ${escapeHTML(request.id || "-")}</p>
+      <p><b>Data:</b> ${escapeHTML(dateLabel)} • <b>Creato da:</b> ${escapeHTML(author)}</p>
+      <p><b>Stato:</b> ${escapeHTML(statusText)}</p>
+      <ul>${summary || "<li>Nessuna commessa</li>"}</ul>
+      ${request.rejectionReason ? `<p><b>Motivo rifiuto:</b> ${escapeHTML(request.rejectionReason)}</p>` : ""}
+    `;
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    if (request.status === "pending_level1" && canApproveHoursLevel1(request)) {
+      actions.appendChild(createButton("OK livello 1", () => approveHoursRequestLevel1(request)));
+      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
+    }
+    if (request.status === "pending_admin" && canManageData()) {
+      actions.appendChild(createButton("OK admin finale", () => approveHoursRequestLevel2(request)));
+      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
+    }
+    if (actions.children.length) card.appendChild(actions);
+    ui.hoursApprovalsList.appendChild(card);
+  });
+}
+
+function subscribeHoursApprovals() {
+  if (!currentUser) {
+    hoursApprovalRequests = [];
+    renderHoursApprovalRequests();
+    return;
+  }
+  if (unsubscribeHoursApprovals) unsubscribeHoursApprovals();
+  unsubscribeHoursApprovals = db.collection("oreApprovalRequests")
+    .orderBy("createdAt", "desc")
+    .limit(80)
+    .onSnapshot((snapshot) => {
+      hoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderHoursApprovalRequests();
+    }, (error) => {
+      console.error("Errore caricamento approvazioni ore:", error);
+      if (ui.hoursApprovalsFeedback) ui.hoursApprovalsFeedback.textContent = "Errore caricamento richieste approvazione ore.";
+    });
+}
+
+function stopHoursApprovalsSubscription() {
+  if (unsubscribeHoursApprovals) {
+    unsubscribeHoursApprovals();
+    unsubscribeHoursApprovals = null;
+  }
+}
+
+async function approveHoursRequestLevel1(request) {
+  if (!canApproveHoursLevel1(request)) {
+    alert("Non autorizzato al primo livello di approvazione.");
+    return;
+  }
+  await db.collection("oreApprovalRequests").doc(request.id).set({
+    status: "pending_admin",
+    level1ApprovedBy: currentUser.email || currentUser.displayName || "utente",
+    level1ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  await notifyAdminsForFinalHoursApproval(request.id, request, currentUser.displayName || currentUser.email || "utente");
+}
+
+async function approveHoursRequestLevel2(request) {
+  if (!canManageData()) {
+    alert("Solo admin può confermare il livello finale.");
+    return;
+  }
+  if (request.status !== "pending_admin") {
+    alert("Questa richiesta non è più in attesa dell'approvazione admin.");
+    return;
+  }
+  const reportPayload = {
+    date: request.date || "",
+    entries: Array.isArray(request.entries) ? request.entries : [],
+    createdByUid: request.createdByUid || "",
+    createdByName: request.createdByName || request.createdByEmail || "Operatore",
+    createdByEmail: request.createdByEmail || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  const docRef = await db.collection("oreReports").add(reportPayload);
+  let driveLink = "";
+  if (driveAccessToken) {
+    if (!driveReportsFolderId) await ensureDriveFolders();
+    const blob = new Blob([JSON.stringify({ id: docRef.id, ...reportPayload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
+    const fileName = `ore_${reportPayload.date}_${docRef.id}.json`;
+    const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId);
+    driveLink = upload?.webViewLink || "";
+  }
+  await db.collection("oreApprovalRequests").doc(request.id).set({
+    status: "approved",
+    level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
+    level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    finalizedReportId: docRef.id,
+    driveBackupLink: driveLink,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
+  if (targetUser?.id) {
+    await db.collection("chatMessages").add({
+      type: "text",
+      text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${docRef.id}.`,
+      recipientId: targetUser.id,
+      senderId: currentUser.uid,
+      senderName: currentUser.displayName || currentUser.email || "Admin",
+      senderEmail: currentUser.email || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  loadSavedHoursReports();
+}
+
+async function rejectHoursRequest(request) {
+  const canReject = (request.status === "pending_level1" && canApproveHoursLevel1(request))
+    || (request.status === "pending_admin" && canManageData());
+  if (!canReject) {
+    alert("Non autorizzato a rifiutare questa richiesta.");
+    return;
+  }
+  const reason = window.prompt("Motivo del rifiuto (opzionale):", "") || "";
+  await db.collection("oreApprovalRequests").doc(request.id).set({
+    status: "rejected",
+    rejectedBy: currentUser.email || currentUser.displayName || "utente",
+    rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    rejectionReason: String(reason).trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
 function startPresenceHeartbeat() {
   stopPresenceHeartbeat();
   if (!currentUser) return;
@@ -6943,7 +7156,7 @@ function createChatMessageElement(message) {
   }
 
   const contentWrap = document.createElement("div");
-  contentWrap.className = "chat-private-content";
+  contentWrap.className = isIncomingPrivate ? "chat-private-content" : "chat-message-content";
 
   const messageText = typeof message.text === "string" && message.text.trim()
     ? message.text

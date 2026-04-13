@@ -308,6 +308,7 @@ let lastSegnalazionePdfName = "";
 let resourceRecords = [];
 let privateDocsRecords = [];
 let hoursDraftEntries = [];
+let hoursFinalizeLocked = false;
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
 let hoursApprovalRequests = [];
@@ -648,7 +649,11 @@ ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
 ui.hoursForm.addEventListener("submit", finalizeHoursReport);
-ui.addHoursCommessaBtn.addEventListener("click", () => addHoursCommessaBlock());
+ui.addHoursCommessaBtn.addEventListener("click", () => {
+  unlockHoursFinalizeButton();
+  addHoursCommessaBlock();
+});
+ui.hoursDate?.addEventListener("input", unlockHoursFinalizeButton);
 ui.viewHoursBtn.addEventListener("click", openHoursViewModal);
 ui.hoursViewCloseBtn?.addEventListener("click", closeHoursViewModal);
 ui.hoursViewModal?.addEventListener("click", (event) => {
@@ -1405,6 +1410,7 @@ function initHoursPage() {
   renderHoursCommessaSelectOptions();
   renderHoursTableCommessaOptions();
   renderHoursSummary();
+  setHoursFinalizeLocked(false);
   renderSavedHoursReports([]);
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
 }
@@ -2090,10 +2096,14 @@ function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }) {
   `;
   const removeBtn = row.querySelector(".hours-remove-operator-btn");
   removeBtn.addEventListener("click", () => {
+    unlockHoursFinalizeButton();
     row.remove();
     renderHoursSummary();
   });
-  row.querySelectorAll("input").forEach((input) => input.addEventListener("input", renderHoursSummary));
+  row.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => {
+    unlockHoursFinalizeButton();
+    renderHoursSummary();
+  }));
   container.appendChild(row);
 }
 
@@ -2119,17 +2129,25 @@ function addHoursCommessaBlock(blockData = null) {
 
   const removeBtn = card.querySelector(".hours-remove-commessa-btn");
   removeBtn.addEventListener("click", () => {
+    unlockHoursFinalizeButton();
     card.remove();
     if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
     renderHoursSummary();
   });
   const operatorList = card.querySelector(".hours-operator-list");
   card.querySelector(".hours-add-operator-btn").addEventListener("click", () => {
+    unlockHoursFinalizeButton();
     addHoursOperatoreRow(operatorList);
     renderHoursSummary();
   });
-  card.querySelector(".hours-commessa-select").addEventListener("change", renderHoursSummary);
-  card.querySelector(".hours-note").addEventListener("input", renderHoursSummary);
+  card.querySelector(".hours-commessa-select").addEventListener("change", () => {
+    unlockHoursFinalizeButton();
+    renderHoursSummary();
+  });
+  card.querySelector(".hours-note").addEventListener("input", () => {
+    unlockHoursFinalizeButton();
+    renderHoursSummary();
+  });
 
   if (blockData) {
     if (blockData.commessaId) card.querySelector(".hours-commessa-select").value = blockData.commessaId;
@@ -2266,8 +2284,27 @@ function renderHoursSummary(forcedEntries = null) {
   ui.hoursSummary.innerHTML = html;
 }
 
+function setHoursFinalizeLocked(locked) {
+  hoursFinalizeLocked = Boolean(locked);
+  if (ui.hoursFinalizeBtn) {
+    ui.hoursFinalizeBtn.disabled = hoursFinalizeLocked;
+  }
+}
+
+function unlockHoursFinalizeButton() {
+  if (!hoursFinalizeLocked) return;
+  setHoursFinalizeLocked(false);
+  if (ui.hoursFeedback?.textContent && ui.hoursFeedback.textContent.includes("Richiesta inviata")) {
+    ui.hoursFeedback.textContent = "Modifiche rilevate. Puoi premere di nuovo “Fine: salva”.";
+  }
+}
+
 async function finalizeHoursReport(event) {
   event.preventDefault();
+  if (hoursFinalizeLocked) {
+    ui.hoursFeedback.textContent = "Richiesta già inviata. Modifica commesse/operatori/ore per riattivare “Fine: salva”.";
+    return;
+  }
   if (!currentUser) {
     ui.hoursFeedback.textContent = "Devi fare login prima di salvare.";
     return;
@@ -2330,13 +2367,14 @@ async function finalizeHoursReport(event) {
     ui.hoursFeedback.textContent = `Richiesta inviata (ID ${approvalRef.id}). In attesa primo OK, poi conferma admin finale.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
+    setHoursFinalizeLocked(true);
     renderHoursSummary();
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
     ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
   } finally {
-    ui.hoursFinalizeBtn.disabled = false;
+    if (!hoursFinalizeLocked) ui.hoursFinalizeBtn.disabled = false;
   }
 }
 
@@ -7215,11 +7253,13 @@ function markChatAsRead() {
 }
 
 function canConfirmHoursFromChat(message) {
-  if (!canManageData()) return false;
   if (String(message?.kind || "") !== "system") return false;
   const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
   if (!metadata) return false;
-  return metadata.type === "hours_approval" && metadata.action === "admin_final_ok" && metadata.approvalRequestId;
+  if (metadata.type !== "hours_approval" || !metadata.approvalRequestId) return false;
+  if (metadata.action === "level1_ok") return true;
+  if (metadata.action === "admin_final_ok") return canManageData();
+  return false;
 }
 
 async function getHoursApprovalRequestById(requestId) {
@@ -7239,6 +7279,7 @@ function setChatHoursActionButtonsState(acceptButton, rejectButton, state) {
 
 async function buildChatMessageActions(message) {
   if (!canConfirmHoursFromChat(message)) return null;
+  const actionType = String(message?.metadata?.action || "").trim();
   const approvalRequestId = String(message?.metadata?.approvalRequestId || "").trim();
   const resolvedRequest = await getHoursApprovalRequestById(approvalRequestId);
   const actions = document.createElement("div");
@@ -7248,24 +7289,37 @@ async function buildChatMessageActions(message) {
     return actions;
   }
 
-  if (resolvedRequest.status !== "pending_admin") {
+  const expectedStatus = actionType === "level1_ok" ? "pending_level1" : "pending_admin";
+  const canAct = actionType === "level1_ok"
+    ? canApproveHoursLevel1(resolvedRequest)
+    : canManageData();
+
+  if (resolvedRequest.status !== expectedStatus) {
     const statusMap = {
+      pending_level1: "In attesa primo OK",
+      pending_admin: "In attesa admin finale",
       approved: "Già approvata",
       rejected: "Già rifiutata"
     };
     actions.appendChild(createButton(statusMap[resolvedRequest.status] || "Già gestita", () => {}, true));
     return actions;
   }
+  if (!canAct) return null;
 
   const acceptButton = createButton("Accetta", async () => {
     setChatHoursActionButtonsState(acceptButton, rejectButton, true);
     try {
-      await approveHoursRequestFromChat(approvalRequestId);
-      ui.chatFeedback.textContent = "Ore risultate confermate.";
+      if (actionType === "level1_ok") {
+        await approveHoursRequestLevel1(resolvedRequest);
+        ui.chatFeedback.textContent = "Primo OK registrato.";
+      } else {
+        await approveHoursRequestFromChat(approvalRequestId);
+        ui.chatFeedback.textContent = "Ore risultate confermate.";
+      }
     } catch (error) {
       console.error("Errore conferma ore da chat:", error);
       const latestState = await getHoursApprovalRequestById(approvalRequestId);
-      if (!latestState || latestState.status !== "pending_admin") {
+      if (!latestState || latestState.status !== expectedStatus) {
         ui.chatFeedback.textContent = "Richiesta già gestita.";
         setChatHoursActionButtonsState(acceptButton, rejectButton, true);
         return;
@@ -7278,12 +7332,16 @@ async function buildChatMessageActions(message) {
   const rejectButton = createButton("Rifiuta", async () => {
     setChatHoursActionButtonsState(acceptButton, rejectButton, true);
     try {
-      await rejectHoursRequestFromChat(approvalRequestId);
+      if (actionType === "level1_ok") {
+        await rejectHoursRequest(resolvedRequest);
+      } else {
+        await rejectHoursRequestFromChat(approvalRequestId);
+      }
       ui.chatFeedback.textContent = "Richiesta ore rifiutata.";
     } catch (error) {
       console.error("Errore rifiuto ore da chat:", error);
       const latestState = await getHoursApprovalRequestById(approvalRequestId);
-      if (!latestState || latestState.status !== "pending_admin") {
+      if (!latestState || latestState.status !== expectedStatus) {
         ui.chatFeedback.textContent = "Richiesta già gestita.";
         setChatHoursActionButtonsState(acceptButton, rejectButton, true);
         return;

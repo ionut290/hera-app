@@ -4298,10 +4298,7 @@ function createActionIconButton(icon, title, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn action-icon-btn";
-  btn.innerHTML = `
-    <span class="action-icon-btn__glyph" aria-hidden="true">${escapeHTML(icon || "")}</span>
-    <span class="sr-only">${escapeHTML(title)}</span>
-  `;
+  btn.textContent = icon || "";
   btn.title = title;
   btn.setAttribute("aria-label", title);
   btn.addEventListener("click", async () => {

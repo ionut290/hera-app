@@ -561,6 +561,11 @@ map.setView([44.4949, 11.3426], 11);
 
 const markerLayer = L.layerGroup().addTo(map);
 document.addEventListener("fullscreenchange", () => {
+  syncMapFullscreenUiState();
+  setTimeout(() => map.invalidateSize(), 60);
+});
+document.addEventListener("webkitfullscreenchange", () => {
+  syncMapFullscreenUiState();
   setTimeout(() => map.invalidateSize(), 60);
 });
 
@@ -1025,15 +1030,37 @@ function closeManagementPanel() {
 function toggleMapFullscreen() {
   const mapContainer = document.getElementById("map");
   if (!mapContainer) return;
+  const canUseNativeFullscreen = typeof mapContainer.requestFullscreen === "function";
+  if (!canUseNativeFullscreen) {
+    toggleMapCssFullscreen(mapContainer);
+    return;
+  }
   if (!document.fullscreenElement) {
     mapContainer.requestFullscreen().catch((error) => {
-      console.error("Fullscreen mappa non disponibile:", error);
+      console.error("Fullscreen mappa non disponibile, uso fallback CSS:", error);
+      toggleMapCssFullscreen(mapContainer);
     });
     return;
   }
   document.exitFullscreen().catch((error) => {
     console.error("Uscita fullscreen non disponibile:", error);
   });
+}
+
+function toggleMapCssFullscreen(mapContainer) {
+  mapContainer.classList.toggle("map-fallback-fullscreen");
+  document.body.classList.toggle("map-fallback-fullscreen-open", mapContainer.classList.contains("map-fallback-fullscreen"));
+  syncMapFullscreenUiState();
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+function syncMapFullscreenUiState() {
+  if (!ui.mapFullscreenBtn) return;
+  const mapContainer = document.getElementById("map");
+  const isCssFullscreen = mapContainer ? mapContainer.classList.contains("map-fallback-fullscreen") : false;
+  const isNativeFullscreen = Boolean(document.fullscreenElement);
+  const isFullscreenOpen = isCssFullscreen || isNativeFullscreen;
+  ui.mapFullscreenBtn.textContent = isFullscreenOpen ? "✕ Chiudi schermo intero" : "⤢ Mappa schermo intero";
 }
 
 function applyRoute() {
@@ -5367,15 +5394,9 @@ function renderMap() {
     });
 
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
-    const popupHtml = [
-      `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
-      `Comune: ${escapeHTML(impianto.comune || "-")}`,
-      `Indirizzo: ${escapeHTML(impianto.indirizzo || "-")}`,
-      `Tipo: ${escapeHTML(tipo)}`,
-      `Stato: ${impianto.done ? "Fatto" : "Da fare"}`
-    ].join("<br>");
+    const popupHtml = buildImpiantoMapPopup(impianto, tipo);
     marker.bindPopup(popupHtml);
-    marker.on("click", () => focusImpiantoInList(impianto));
+    marker.on("click", () => focusImpiantoInList(impianto, false));
     marker.addTo(markerLayer);
     bounds.push([impianto.gpsY, impianto.gpsX]);
   });
@@ -5393,15 +5414,52 @@ function renderMap() {
   }
 
   if (bounds.length > 0) {
-    map.fitBounds(bounds, { padding: [24, 24] });
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
   }
 }
 
-function focusImpiantoInList(impianto) {
+function buildImpiantoMapPopup(impianto, tipo) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  return `
+    <div class="map-popup-card" data-impianto-key="${escapeHTML(impiantoKey)}">
+      <p><b>${escapeHTML(impianto.denominazione || "Impianto")}</b></p>
+      <p>Comune: ${escapeHTML(impianto.comune || "-")}</p>
+      <p>Indirizzo: ${escapeHTML(impianto.indirizzo || "-")}</p>
+      <p>Tipo: ${escapeHTML(tipo)}</p>
+      <p>Stato: ${impianto.done ? "Fatto" : "Da fare"}</p>
+      <div class="map-popup-actions">
+        <button type="button" class="btn btn-small" data-map-popup-action="navigate" data-impianto-key="${escapeHTML(impiantoKey)}">Naviga</button>
+        <button type="button" class="btn btn-small" data-map-popup-action="close">Chiudi</button>
+      </div>
+    </div>
+  `;
+}
+
+map.on("popupopen", (event) => {
+  const popupElement = event.popup?.getElement();
+  if (!popupElement) return;
+  popupElement.querySelectorAll("[data-map-popup-action='navigate']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const key = button.getAttribute("data-impianto-key");
+      const impianto = currentImpianti.find((item) => buildImpiantoKey(item) === key);
+      if (!impianto) return;
+      await navigateToImpianto(impianto);
+    });
+  });
+  popupElement.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
+    button.addEventListener("click", () => {
+      map.closePopup(event.popup);
+      renderMap();
+    });
+  });
+});
+
+function focusImpiantoInList(impianto, scroll = true) {
   const key = buildImpiantoKey(impianto);
   highlightedImpiantoKey = key;
   expandedImpiantoKey = key;
   renderImpianti();
+  if (!scroll) return;
   const row = ui.impiantiLista.querySelector(`[data-impianto-key=\"${cssEscapeValue(key)}\"]`);
   if (!row) return;
   ui.impiantiLista.querySelectorAll(".impianto-item.highlight").forEach((el) => el.classList.remove("highlight"));

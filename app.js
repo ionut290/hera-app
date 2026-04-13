@@ -2343,13 +2343,10 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const entriesCount = Array.isArray(payload?.entries) ? payload.entries.length : 0;
   const text = `🕒 Richiesta ore ${requestId} da ${author} (${dateLabel}). Commesse: ${entriesCount}. Serve primo OK.`;
-  await Promise.all(recipients.map((recipient) => db.collection("chatMessages").add({
-    text,
-    senderId: currentUser.uid,
-    senderName: currentUser.displayName || currentUser.email || "Operatore",
+  await Promise.all(recipients.map((recipient) => sendPrivateChatNotification({
     recipientId: recipient.id,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    kind: "system"
+    text,
+    senderName: currentUser.displayName || currentUser.email || "Operatore"
   })));
 }
 
@@ -2358,15 +2355,25 @@ async function notifyAdminsForFinalHoursApproval(requestId, payload, approverNam
   if (!adminUsers.length) return;
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const text = `🕒 Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
-  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+  await Promise.all(adminUsers.map((adminUser) => sendPrivateChatNotification({
+    recipientId: adminUser.id,
+    text,
+    senderName: currentUser.displayName || currentUser.email || "Sistema"
+  })));
+}
+
+async function sendPrivateChatNotification({ recipientId, text, senderName = "Sistema" }) {
+  if (!recipientId || !text) return;
+  await db.collection("chatMessages").add({
     type: "text",
     text,
-    recipientId: adminUser.id,
-    senderId: currentUser.uid,
-    senderName: currentUser.displayName || currentUser.email || "Sistema",
-    senderEmail: currentUser.email || "",
+    recipientId,
+    senderId: currentUser?.uid || "system",
+    senderName,
+    senderEmail: currentUser?.email || "",
+    kind: "system",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  })));
+  });
 }
 
 function renderHowtoFaq() {
@@ -6585,6 +6592,14 @@ async function approveHoursRequestLevel1(request) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   await notifyAdminsForFinalHoursApproval(request.id, request, currentUser.displayName || currentUser.email || "utente");
+  const requester = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
+  if (requester?.id) {
+    await sendPrivateChatNotification({
+      recipientId: requester.id,
+      text: `✅ Richiesta ore ${request.id}: primo livello approvato. In attesa conferma admin finale.`,
+      senderName: currentUser.displayName || currentUser.email || "Sistema"
+    });
+  }
 }
 
 async function approveHoursRequestLevel2(request) {
@@ -6623,14 +6638,10 @@ async function approveHoursRequestLevel2(request) {
   }, { merge: true });
   const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (targetUser?.id) {
-    await db.collection("chatMessages").add({
-      type: "text",
-      text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${docRef.id}.`,
+    await sendPrivateChatNotification({
       recipientId: targetUser.id,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || currentUser.email || "Admin",
-      senderEmail: currentUser.email || "",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${docRef.id}.`,
+      senderName: currentUser.displayName || currentUser.email || "Admin"
     });
   }
   loadSavedHoursReports();
@@ -6651,6 +6662,14 @@ async function rejectHoursRequest(request) {
     rejectionReason: String(reason).trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
+  if (targetUser?.id) {
+    await sendPrivateChatNotification({
+      recipientId: targetUser.id,
+      text: `❌ Richiesta ore ${request.id} rifiutata.${reason ? ` Motivo: ${String(reason).trim()}` : ""}`,
+      senderName: currentUser.displayName || currentUser.email || "Sistema"
+    });
+  }
 }
 
 function startPresenceHeartbeat() {

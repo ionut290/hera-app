@@ -182,6 +182,7 @@ const ui = {
   hoursViewCloseBtn: document.getElementById("hours-view-close-btn"),
   hoursTableMonth: document.getElementById("hours-table-month"),
   hoursTableCommessaSelect: document.getElementById("hours-table-commessa-select"),
+  hoursTotalOperatorBtn: document.getElementById("hours-total-operator-btn"),
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
   hoursTableContainer: document.getElementById("hours-table-container"),
@@ -629,6 +630,7 @@ ui.hoursViewModal?.addEventListener("click", (event) => {
 });
 ui.hoursTableMonth?.addEventListener("change", loadHoursMonthlyTable);
 ui.hoursTableCommessaSelect?.addEventListener("change", loadHoursMonthlyTable);
+ui.hoursTotalOperatorBtn?.addEventListener("click", loadHoursTotalByOperator);
 ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
@@ -1485,6 +1487,70 @@ async function loadHoursMonthlyTable() {
   } catch (error) {
     console.error("Errore caricamento tabella mensile ore:", error);
     ui.hoursTableFeedback.textContent = "Errore caricamento tabella ore.";
+    ui.hoursTableContainer.innerHTML = "";
+  }
+}
+
+async function loadHoursTotalByOperator() {
+  if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  if (!currentUser) {
+    ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
+    ui.hoursTableContainer.innerHTML = "";
+    return;
+  }
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+  ui.hoursTableFeedback.textContent = "Caricamento totale ore per operatore...";
+  ui.hoursTableContainer.innerHTML = "";
+  try {
+    const baseQuery = db.collection("oreReports");
+    const snapshot = canManageData()
+      ? await baseQuery.orderBy("date", "asc").get()
+      : await baseQuery.where("createdByUid", "==", currentUser.uid).orderBy("date", "asc").get();
+    const operatorTotals = new Map();
+    snapshot.docs.forEach((doc) => {
+      const report = doc.data() || {};
+      const entries = Array.isArray(report.entries) ? report.entries : [];
+      entries.forEach((entry) => {
+        (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+          const displayName = String(row.operatore || "").trim();
+          const ore = Number(row.ore || 0);
+          if (!displayName || ore <= 0) return;
+          const normalizedKey = displayName.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+          if (!operatorTotals.has(normalizedKey)) {
+            operatorTotals.set(normalizedKey, { name: displayName, total: 0 });
+          }
+          operatorTotals.get(normalizedKey).total += ore;
+        });
+      });
+    });
+    const rows = Array.from(operatorTotals.values())
+      .sort((a, b) => a.name.localeCompare(b.name, "it"))
+      .map((item) => {
+        const totalLabel = Number.isInteger(item.total)
+          ? String(item.total)
+          : item.total.toFixed(2).replace(".", ",");
+        return `<tr><th scope="row">${escapeHTML(item.name)}</th><td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
+      });
+    if (!rows.length) {
+      ui.hoursTableFeedback.textContent = "Nessuna ora trovata per calcolare i totali.";
+      ui.hoursTableContainer.innerHTML = "";
+      return;
+    }
+    ui.hoursTableContainer.innerHTML = `
+      <table class="hours-month-table">
+        <thead>
+          <tr>
+            <th>Operatore</th>
+            <th>Totale ore</th>
+          </tr>
+        </thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>
+    `;
+    ui.hoursTableFeedback.textContent = "Totale ore per operatore calcolato (nomi unici).";
+  } catch (error) {
+    console.error("Errore caricamento totale ore per operatore:", error);
+    ui.hoursTableFeedback.textContent = "Errore caricamento totale ore per operatore.";
     ui.hoursTableContainer.innerHTML = "";
   }
 }

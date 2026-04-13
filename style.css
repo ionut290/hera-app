@@ -1518,6 +1518,9 @@ textarea:focus-visible {
 }
 
 .chat-audio { width: min(360px, 100%); }
+.chat-private-content { display: none; margin-top: 8px; }
+.chat-private-content.is-open { display: block; }
+.btn-chat-private-toggle { margin-top: 6px; }
 
 .chat-send-form {
   border-top: 1px solid var(--border);

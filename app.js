@@ -6753,6 +6753,7 @@ function markChatAsRead() {
 function createChatMessageElement(message) {
   const item = document.createElement("article");
   item.className = "chat-message" + (isOwnMessage(message) ? " own" : "");
+  const isIncomingPrivate = Boolean(message.recipientId && !isOwnMessage(message));
 
   const createdAt = message.createdAt && message.createdAt.toDate
     ? message.createdAt.toDate()
@@ -6773,37 +6774,91 @@ function createChatMessageElement(message) {
     item.appendChild(tag);
   }
 
-  if (message.type === "text") {
+  const contentWrap = document.createElement("div");
+  contentWrap.className = "chat-private-content";
+
+  const messageText = typeof message.text === "string" && message.text.trim()
+    ? message.text
+    : typeof message.message === "string" && message.message.trim()
+      ? message.message
+      : typeof message.body === "string" && message.body.trim()
+        ? message.body
+        : typeof message.content === "string" && message.content.trim()
+          ? message.content
+          : "";
+
+  if ((message.type === "text" || (!message.type && messageText)) && messageText) {
     const p = document.createElement("p");
     p.className = "chat-text";
-    p.textContent = message.text || "";
-    item.appendChild(p);
+    p.textContent = messageText;
+    contentWrap.appendChild(p);
   }
 
   const mediaSource = message.mediaUrl || message.mediaDataUrl || "";
+  const mediaMimeType = String(message.mediaMimeType || "").toLowerCase();
+  const hasImageMedia = message.type === "image" || mediaMimeType.startsWith("image/");
+  const hasVideoMedia = message.type === "video" || mediaMimeType.startsWith("video/");
+  const hasVoiceMedia = message.type === "voice" || mediaMimeType.startsWith("audio/");
 
-  if (message.type === "image" && mediaSource) {
+  if (hasImageMedia && mediaSource) {
     const img = document.createElement("img");
     img.className = "chat-media-preview";
     img.src = mediaSource;
     img.alt = "Immagine inviata in chat";
-    item.appendChild(img);
+    contentWrap.appendChild(img);
   }
 
-  if (message.type === "video" && mediaSource) {
+  if (hasVideoMedia && mediaSource) {
     const video = document.createElement("video");
     video.className = "chat-media-preview";
     video.src = mediaSource;
     video.controls = true;
-    item.appendChild(video);
+    contentWrap.appendChild(video);
   }
 
-  if (message.type === "voice" && mediaSource) {
+  if (hasVoiceMedia && mediaSource) {
     const audio = document.createElement("audio");
     audio.src = mediaSource;
     audio.controls = true;
     audio.className = "chat-audio";
-    item.appendChild(audio);
+    contentWrap.appendChild(audio);
+  }
+
+  const webViewLink = String(message.mediaDriveWebViewLink || "").trim();
+  if (!mediaSource && webViewLink) {
+    const openLink = document.createElement("a");
+    openLink.className = "btn";
+    openLink.href = webViewLink;
+    openLink.target = "_blank";
+    openLink.rel = "noopener noreferrer";
+    openLink.textContent = "Apri allegato";
+    contentWrap.appendChild(openLink);
+  }
+
+  const hasContent = contentWrap.childElementCount > 0;
+  if (isIncomingPrivate) {
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "btn btn-chat-private-toggle";
+    toggleBtn.textContent = "Apri messaggio";
+    toggleBtn.addEventListener("click", () => {
+      const opened = contentWrap.classList.toggle("is-open");
+      toggleBtn.textContent = opened ? "Chiudi messaggio" : "Apri messaggio";
+    });
+    item.appendChild(toggleBtn);
+    if (hasContent) {
+      item.appendChild(contentWrap);
+    } else {
+      const fallback = document.createElement("p");
+      fallback.className = "muted";
+      fallback.textContent = "Contenuto non disponibile.";
+      item.appendChild(fallback);
+    }
+    return item;
+  }
+
+  if (hasContent) {
+    item.appendChild(contentWrap);
   }
 
   return item;

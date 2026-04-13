@@ -1669,7 +1669,8 @@ textarea:focus-visible {
 }
 
 #hours-table-month,
-#hours-table-commessa-select {
+#hours-table-commessa-select,
+#hours-stats-month {
   min-height: 38px;
   border: 1px solid var(--border);
   border-radius: 10px;

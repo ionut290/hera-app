@@ -176,6 +176,7 @@ const ui = {
   hoursFeedback: document.getElementById("hours-feedback"),
   hoursSummary: document.getElementById("hours-summary"),
   viewHoursBtn: document.getElementById("view-hours-btn"),
+  hoursStatsMonth: document.getElementById("hours-stats-month"),
   hoursSavedList: document.getElementById("hours-saved-list"),
   hoursOperatoriOptions: document.getElementById("hours-operatori-options"),
   hoursViewModal: document.getElementById("hours-view-modal"),
@@ -183,6 +184,7 @@ const ui = {
   hoursTableMonth: document.getElementById("hours-table-month"),
   hoursTableCommessaSelect: document.getElementById("hours-table-commessa-select"),
   hoursTotalOperatorBtn: document.getElementById("hours-total-operator-btn"),
+  hoursTotalOperatorCommessaBtn: document.getElementById("hours-total-operator-commessa-btn"),
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
   hoursTableContainer: document.getElementById("hours-table-container"),
@@ -628,9 +630,13 @@ ui.hoursViewCloseBtn?.addEventListener("click", closeHoursViewModal);
 ui.hoursViewModal?.addEventListener("click", (event) => {
   if (event.target === ui.hoursViewModal) closeHoursViewModal();
 });
+ui.hoursStatsMonth?.addEventListener("change", () => {
+  if (ui.hoursTableMonth) ui.hoursTableMonth.value = ui.hoursStatsMonth.value || "";
+});
 ui.hoursTableMonth?.addEventListener("change", loadHoursMonthlyTable);
 ui.hoursTableCommessaSelect?.addEventListener("change", loadHoursMonthlyTable);
 ui.hoursTotalOperatorBtn?.addEventListener("click", loadHoursTotalByOperator);
+ui.hoursTotalOperatorCommessaBtn?.addEventListener("click", loadHoursTotalByOperatorAndCommessa);
 ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
@@ -1345,6 +1351,7 @@ function closePrivateDocsPage() {
 function initHoursPage() {
   if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = new Date().toISOString().slice(0, 7);
+  if (ui.hoursStatsMonth) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList) return;
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   renderHoursOperatoriOptions();
@@ -1361,6 +1368,7 @@ function openHoursPage() {
     return;
   }
   if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
+  if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   renderHoursTableCommessaOptions();
   window.location.hash = "ore";
@@ -1432,8 +1440,8 @@ function openHoursViewModal() {
     return;
   }
   renderHoursTableCommessaOptions();
-  if (ui.hoursTableMonth && !ui.hoursTableMonth.value) {
-    ui.hoursTableMonth.value = new Date().toISOString().slice(0, 7);
+  if (ui.hoursTableMonth) {
+    ui.hoursTableMonth.value = ui.hoursStatsMonth?.value || ui.hoursTableMonth.value || new Date().toISOString().slice(0, 7);
   }
   ui.hoursViewModal?.classList.remove("hidden");
   ui.hoursViewModal?.setAttribute("aria-hidden", "false");
@@ -1455,6 +1463,32 @@ function getMonthMeta(monthValue) {
   return { year, month, daysInMonth };
 }
 
+function resolveHoursStatsMonth() {
+  const monthValue = String(ui.hoursStatsMonth?.value || ui.hoursTableMonth?.value || "").trim();
+  return { monthValue, monthMeta: getMonthMeta(monthValue) };
+}
+
+async function fetchHoursReportsForMonth(monthValue, monthMeta) {
+  if (!monthMeta) return [];
+  const fromDate = `${monthValue}-01`;
+  const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
+  const snapshot = await db.collection("oreReports")
+    .where("date", ">=", fromDate)
+    .where("date", "<=", toDate)
+    .orderBy("date", "asc")
+    .get();
+  const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  if (canManageData()) return reports;
+  const currentUid = String(currentUser?.uid || "");
+  return reports.filter((report) => String(report.createdByUid || "") === currentUid);
+}
+
+function ensureHoursViewModalOpen() {
+  if (!ui.hoursViewModal || !ui.hoursViewModal.classList.contains("hidden")) return;
+  ui.hoursViewModal.classList.remove("hidden");
+  ui.hoursViewModal.setAttribute("aria-hidden", "false");
+}
+
 async function loadHoursMonthlyTable() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   hoursTableContext = null;
@@ -1472,17 +1506,11 @@ async function loadHoursMonthlyTable() {
     ui.hoursTableContainer.innerHTML = "";
     return;
   }
-  const fromDate = `${monthValue}-01`;
-  const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
+  if (ui.hoursStatsMonth) ui.hoursStatsMonth.value = monthValue;
   ui.hoursTableFeedback.textContent = "Caricamento tabella ore...";
   ui.hoursTableContainer.innerHTML = "";
   try {
-    const snapshot = await db.collection("oreReports")
-      .where("date", ">=", fromDate)
-      .where("date", "<=", toDate)
-      .orderBy("date", "asc")
-      .get();
-    const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
     renderHoursMonthlyTable(reports, commessaId, monthMeta);
   } catch (error) {
     console.error("Errore caricamento tabella mensile ore:", error);
@@ -1499,16 +1527,20 @@ async function loadHoursTotalByOperator() {
     return;
   }
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+  const { monthValue, monthMeta } = resolveHoursStatsMonth();
+  if (!monthMeta) {
+    ui.hoursTableFeedback.textContent = "Seleziona un mese valido per calcolare i totali.";
+    ui.hoursTableContainer.innerHTML = "";
+    return;
+  }
+  if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore per operatore...";
   ui.hoursTableContainer.innerHTML = "";
   try {
-    const baseQuery = db.collection("oreReports");
-    const snapshot = canManageData()
-      ? await baseQuery.orderBy("date", "asc").get()
-      : await baseQuery.where("createdByUid", "==", currentUser.uid).orderBy("date", "asc").get();
+    const snapshot = await fetchHoursReportsForMonth(monthValue, monthMeta);
     const operatorTotals = new Map();
-    snapshot.docs.forEach((doc) => {
-      const report = doc.data() || {};
+    snapshot.forEach((report) => {
       const entries = Array.isArray(report.entries) ? report.entries : [];
       entries.forEach((entry) => {
         (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
@@ -1547,10 +1579,80 @@ async function loadHoursTotalByOperator() {
         <tbody>${rows.join("")}</tbody>
       </table>
     `;
-    ui.hoursTableFeedback.textContent = "Totale ore per operatore calcolato (nomi unici).";
+    ui.hoursTableFeedback.textContent = `Totale ore per operatore calcolato per ${monthValue}.`;
   } catch (error) {
     console.error("Errore caricamento totale ore per operatore:", error);
     ui.hoursTableFeedback.textContent = "Errore caricamento totale ore per operatore.";
+    ui.hoursTableContainer.innerHTML = "";
+  }
+}
+
+async function loadHoursTotalByOperatorAndCommessa() {
+  if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  if (!currentUser) {
+    ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
+    ui.hoursTableContainer.innerHTML = "";
+    return;
+  }
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+  const { monthValue, monthMeta } = resolveHoursStatsMonth();
+  if (!monthMeta) {
+    ui.hoursTableFeedback.textContent = "Seleziona un mese valido per calcolare i totali per commessa.";
+    ui.hoursTableContainer.innerHTML = "";
+    return;
+  }
+  if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  ensureHoursViewModalOpen();
+  ui.hoursTableFeedback.textContent = "Caricamento totale ore operatore per commessa...";
+  ui.hoursTableContainer.innerHTML = "";
+  try {
+    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
+    const totals = new Map();
+    reports.forEach((report) => {
+      const entries = Array.isArray(report.entries) ? report.entries : [];
+      entries.forEach((entry) => {
+        const commessaId = String(entry.commessaId || "").trim();
+        const commessaName = String(entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa").trim();
+        (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+          const operatore = String(row.operatore || "").trim();
+          const ore = Number(row.ore || 0);
+          if (!operatore || ore <= 0 || !commessaId) return;
+          const key = `${operatore}__${commessaId}`;
+          if (!totals.has(key)) totals.set(key, { operatore, commessaName, total: 0 });
+          totals.get(key).total += ore;
+        });
+      });
+    });
+    const rows = Array.from(totals.values())
+      .sort((a, b) => {
+        const commessaCmp = a.commessaName.localeCompare(b.commessaName, "it");
+        return commessaCmp || a.operatore.localeCompare(b.operatore, "it");
+      })
+      .map((item) => {
+        const totalLabel = Number.isInteger(item.total) ? String(item.total) : item.total.toFixed(2).replace(".", ",");
+        return `<tr><th scope="row">${escapeHTML(item.commessaName)}</th><td>${escapeHTML(item.operatore)}</td><td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
+      });
+    if (!rows.length) {
+      ui.hoursTableFeedback.textContent = "Nessuna ora trovata per calcolare i totali per commessa.";
+      ui.hoursTableContainer.innerHTML = "";
+      return;
+    }
+    ui.hoursTableContainer.innerHTML = `
+      <table class="hours-month-table">
+        <thead>
+          <tr>
+            <th>Commessa</th>
+            <th>Operatore</th>
+            <th>Totale ore</th>
+          </tr>
+        </thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>
+    `;
+    ui.hoursTableFeedback.textContent = `Totale ore operatore per commessa calcolato per ${monthValue}.`;
+  } catch (error) {
+    console.error("Errore caricamento totale ore operatore per commessa:", error);
+    ui.hoursTableFeedback.textContent = "Errore caricamento totale ore operatore per commessa.";
     ui.hoursTableContainer.innerHTML = "";
   }
 }
@@ -1650,6 +1752,17 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn").forEach((btn) => {
     btn.addEventListener("click", () => handleHoursValueAction(btn.dataset.hoursKey || ""));
   });
+  const today = new Date();
+  if (today.getFullYear() === monthMeta.year && (today.getMonth() + 1) === monthMeta.month) {
+    const todayDay = today.getDate();
+    const todayHeaderCell = ui.hoursTableContainer.querySelector(`thead th:nth-child(${todayDay + 1})`);
+    if (todayHeaderCell && typeof todayHeaderCell.offsetLeft === "number") {
+      const left = Math.max(0, todayHeaderCell.offsetLeft - 220);
+      ui.hoursTableContainer.scrollLeft = left;
+    }
+  } else {
+    ui.hoursTableContainer.scrollLeft = 0;
+  }
 }
 
 async function handleHoursValueAction(cellKey) {
@@ -1717,12 +1830,44 @@ async function handleHoursValueAction(cellKey) {
   }
 }
 
-function exportHoursMonthlyTable() {
-  if (!hoursTableContext || !hoursTableContext.monthMeta) {
-    alert("Nessuna tabella ore disponibile da esportare.");
+async function exportHoursMonthlyTable() {
+  const monthValue = String(ui.hoursTableMonth?.value || ui.hoursStatsMonth?.value || "").trim();
+  const monthMeta = getMonthMeta(monthValue);
+  const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
+  if (!monthMeta || !commessaId) {
+    alert("Seleziona mese e commessa prima di esportare Excel.");
     return;
   }
-  const { monthMeta, monthLabel, commessaName, operators } = hoursTableContext;
+  const commessaName = commesseById.get(commessaId)?.nome || "Commessa";
+  const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
+  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
+
+  const operatorDayMap = new Map();
+  const operatorTotals = new Map();
+  const operatorCommessaTotals = new Map();
+  reports.forEach((report) => {
+    const day = Number(String(report.date || "").split("-")[2] || 0);
+    const entries = Array.isArray(report.entries) ? report.entries : [];
+    entries.forEach((entry) => {
+      const entryCommessaId = String(entry.commessaId || "").trim();
+      const entryCommessaName = String(entry.commessaName || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
+      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+        const operatore = String(row.operatore || "").trim();
+        const ore = Number(row.ore || 0);
+        if (!operatore || ore <= 0) return;
+        const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+        if (!operatorTotals.has(operatorNorm)) operatorTotals.set(operatorNorm, { name: operatore, total: 0 });
+        operatorTotals.get(operatorNorm).total += ore;
+        const byCommessaKey = `${operatorNorm}__${entryCommessaId}`;
+        if (!operatorCommessaTotals.has(byCommessaKey)) operatorCommessaTotals.set(byCommessaKey, { operatore, commessaName: entryCommessaName, total: 0 });
+        operatorCommessaTotals.get(byCommessaKey).total += ore;
+        if (entryCommessaId !== commessaId || !day) return;
+        if (!operatorDayMap.has(operatore)) operatorDayMap.set(operatore, Array(monthMeta.daysInMonth).fill(0));
+        operatorDayMap.get(operatore)[day - 1] += ore;
+      });
+    });
+  });
+
   const headerRow = ["Operatore"];
   for (let day = 1; day <= monthMeta.daysInMonth; day += 1) headerRow.push(String(day));
   headerRow.push("Totale");
@@ -1732,17 +1877,33 @@ function exportHoursMonthlyTable() {
     [],
     headerRow
   ];
-  (operators || []).forEach((operator) => {
-    const values = Array.from({ length: monthMeta.daysInMonth }, (_, idx) => Number(operator.dayValues[idx] || 0));
+  const selectedCommessaOperators = Array.from(operatorDayMap.keys()).sort((a, b) => a.localeCompare(b, "it"));
+  selectedCommessaOperators.forEach((name) => {
+    const values = operatorDayMap.get(name) || [];
     const total = values.reduce((sum, value) => sum + value, 0);
-    aoa.push([operator.name, ...values, total]);
+    aoa.push([name, ...values, total]);
   });
   while (aoa.length < 14) {
     aoa.push(["", ...Array(monthMeta.daysInMonth).fill(""), ""]);
   }
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Ore mensili");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), "Ore mensili");
+
+  const operatorTotalsRows = [["Operatore", "Totale ore"]];
+  Array.from(operatorTotals.values())
+    .sort((a, b) => a.name.localeCompare(b.name, "it"))
+    .forEach((item) => operatorTotalsRows.push([item.name, item.total]));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorTotalsRows), "Totale operatori");
+
+  const operatorCommessaRows = [["Commessa", "Operatore", "Totale ore"]];
+  Array.from(operatorCommessaTotals.values())
+    .sort((a, b) => {
+      const c = a.commessaName.localeCompare(b.commessaName, "it");
+      return c || a.operatore.localeCompare(b.operatore, "it");
+    })
+    .forEach((item) => operatorCommessaRows.push([item.commessaName, item.operatore, item.total]));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorCommessaRows), "Operatore x commessa");
+
   const safeCommessa = String(commessaName || "commessa").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
   const safeMonth = monthLabel.replace("/", "-");
   XLSX.writeFile(workbook, `ore_${safeCommessa}_${safeMonth}.xlsx`);

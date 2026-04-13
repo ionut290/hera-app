@@ -435,6 +435,11 @@
       <div class="item-actions">
         <button id="view-hours-btn" class="btn" type="button">Visualizza ore salvate</button>
       </div>
+      <div class="item-actions">
+        <input id="hours-stats-month" type="month" aria-label="Mese per totali ore">
+        <button id="hours-total-operator-btn" class="btn" type="button">Visualizza totale ore per operatore</button>
+        <button id="hours-total-operator-commessa-btn" class="btn" type="button">Visualizza ore operatore per commessa</button>
+      </div>
       <datalist id="hours-operatori-options"></datalist>
     </section>
   </section>
@@ -452,7 +457,6 @@
           <select id="hours-table-commessa-select">
             <option value="">Seleziona commessa</option>
           </select>
-          <button id="hours-total-operator-btn" class="btn" type="button">Visualizza totale ore per operatore</button>
           <button id="hours-table-export-btn" class="btn btn-primary" type="button">Esporta Excel</button>
         </div>
       </div>
@@ -597,7 +601,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260413-ore-totali-operatore"></script>
+  <script src="app.js?v=20260413-ore-export-completo"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

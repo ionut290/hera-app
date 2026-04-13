@@ -6669,13 +6669,12 @@ async function approveHoursRequestFromChat(requestId) {
   if (!requestId) {
     throw new Error("ID richiesta non valido.");
   }
-  const docSnap = await db.collection("oreApprovalRequests").doc(requestId).get();
-  if (!docSnap.exists) {
+  const request = await getHoursApprovalRequestById(requestId);
+  if (!request) {
     throw new Error("Richiesta ore non trovata.");
   }
-  const request = { id: docSnap.id, ...docSnap.data() };
   if (String(request.status || "") !== "pending_admin") {
-    throw new Error("Questa richiesta non è più in attesa di conferma admin.");
+    throw new Error(`Idempotenza: richiesta non pending_admin (stato: ${String(request.status || "sconosciuto")}).`);
   }
   await approveHoursRequestLevel2(request);
 }
@@ -6687,26 +6686,26 @@ async function rejectHoursRequestFromChat(requestId) {
   if (!requestId) {
     throw new Error("ID richiesta non valido.");
   }
-  const docSnap = await db.collection("oreApprovalRequests").doc(requestId).get();
-  if (!docSnap.exists) {
+  const request = await getHoursApprovalRequestById(requestId);
+  if (!request) {
     throw new Error("Richiesta ore non trovata.");
   }
-  const request = { id: docSnap.id, ...docSnap.data() };
   if (String(request.status || "") !== "pending_admin") {
-    throw new Error("Questa richiesta non è più in attesa di conferma admin.");
+    throw new Error(`Idempotenza: richiesta non pending_admin (stato: ${String(request.status || "sconosciuto")}).`);
   }
   await db.collection("oreApprovalRequests").doc(request.id).set({
     status: "rejected",
     rejectedBy: currentUser.email || currentUser.displayName || "admin",
     rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    rejectionReason: "Rifiutata da chat admin",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (targetUser?.id) {
     await sendPrivateChatNotification({
       recipientId: targetUser.id,
-      text: `❌ Richiesta ore ${request.id} rifiutata.`,
-      senderName: currentUser.displayName || currentUser.email || "Sistema"
+      text: `❌ Richiesta ore ${request.id} rifiutata da chat admin.`,
+      senderName: currentUser.displayName || currentUser.email || "Admin"
     });
   }
 }
@@ -7138,7 +7137,7 @@ function stopChatSubscription() {
   chatMessages = [];
 }
 
-function renderChat(messages) {
+async function renderChat(messages) {
   if (!currentUser) {
     ui.chatCounter.classList.add("hidden");
     ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
@@ -7173,8 +7172,9 @@ function renderChat(messages) {
   }
 
   ui.chatFullList.innerHTML = "";
-  visibleMessages.forEach((message) => {
-    ui.chatFullList.appendChild(createChatMessageElement(message));
+  const messageElements = await Promise.all(visibleMessages.map((message) => createChatMessageElement(message)));
+  messageElements.forEach((element) => {
+    if (element) ui.chatFullList.appendChild(element);
   });
   ui.chatFullList.scrollTop = ui.chatFullList.scrollHeight;
 
@@ -7222,42 +7222,82 @@ function canConfirmHoursFromChat(message) {
   return metadata.type === "hours_approval" && metadata.action === "admin_final_ok" && metadata.approvalRequestId;
 }
 
-function buildChatMessageActions(message) {
+async function getHoursApprovalRequestById(requestId) {
+  const normalizedRequestId = String(requestId || "").trim();
+  if (!normalizedRequestId) return null;
+  const docSnap = await db.collection("oreApprovalRequests").doc(normalizedRequestId).get();
+  if (!docSnap.exists) return null;
+  return { id: docSnap.id, ...docSnap.data() };
+}
+
+function setChatHoursActionButtonsState(acceptButton, rejectButton, state) {
+  const bothButtons = [acceptButton, rejectButton].filter(Boolean);
+  bothButtons.forEach((button) => {
+    button.disabled = state;
+  });
+}
+
+async function buildChatMessageActions(message) {
   if (!canConfirmHoursFromChat(message)) return null;
+  const approvalRequestId = String(message?.metadata?.approvalRequestId || "").trim();
+  const resolvedRequest = await getHoursApprovalRequestById(approvalRequestId);
   const actions = document.createElement("div");
   actions.className = "item-actions";
-  const approveButton = createButton("Accetta", async () => {
-    approveButton.disabled = true;
-    rejectButton.disabled = true;
+  if (!resolvedRequest) {
+    actions.appendChild(createButton("Richiesta non trovata", () => {}, true));
+    return actions;
+  }
+
+  if (resolvedRequest.status !== "pending_admin") {
+    const statusMap = {
+      approved: "Già approvata",
+      rejected: "Già rifiutata"
+    };
+    actions.appendChild(createButton(statusMap[resolvedRequest.status] || "Già gestita", () => {}, true));
+    return actions;
+  }
+
+  const acceptButton = createButton("Accetta", async () => {
+    setChatHoursActionButtonsState(acceptButton, rejectButton, true);
     try {
-      await approveHoursRequestFromChat(String(message.metadata.approvalRequestId || "").trim());
-      ui.chatFeedback.textContent = "Richiesta ore accettata.";
+      await approveHoursRequestFromChat(approvalRequestId);
+      ui.chatFeedback.textContent = "Ore risultate confermate.";
     } catch (error) {
       console.error("Errore conferma ore da chat:", error);
+      const latestState = await getHoursApprovalRequestById(approvalRequestId);
+      if (!latestState || latestState.status !== "pending_admin") {
+        ui.chatFeedback.textContent = "Richiesta già gestita.";
+        setChatHoursActionButtonsState(acceptButton, rejectButton, true);
+        return;
+      }
       ui.chatFeedback.textContent = error?.message || "Errore durante la conferma ore dalla chat.";
-      approveButton.disabled = false;
-      rejectButton.disabled = false;
+      setChatHoursActionButtonsState(acceptButton, rejectButton, false);
     }
   });
+
   const rejectButton = createButton("Rifiuta", async () => {
-    approveButton.disabled = true;
-    rejectButton.disabled = true;
+    setChatHoursActionButtonsState(acceptButton, rejectButton, true);
     try {
-      await rejectHoursRequestFromChat(String(message.metadata.approvalRequestId || "").trim());
+      await rejectHoursRequestFromChat(approvalRequestId);
       ui.chatFeedback.textContent = "Richiesta ore rifiutata.";
     } catch (error) {
       console.error("Errore rifiuto ore da chat:", error);
+      const latestState = await getHoursApprovalRequestById(approvalRequestId);
+      if (!latestState || latestState.status !== "pending_admin") {
+        ui.chatFeedback.textContent = "Richiesta già gestita.";
+        setChatHoursActionButtonsState(acceptButton, rejectButton, true);
+        return;
+      }
       ui.chatFeedback.textContent = error?.message || "Errore durante il rifiuto ore dalla chat.";
-      approveButton.disabled = false;
-      rejectButton.disabled = false;
+      setChatHoursActionButtonsState(acceptButton, rejectButton, false);
     }
   });
-  actions.appendChild(approveButton);
+  actions.appendChild(acceptButton);
   actions.appendChild(rejectButton);
   return actions;
 }
 
-function createChatMessageElement(message) {
+async function createChatMessageElement(message) {
   const item = document.createElement("article");
   item.className = "chat-message" + (isOwnMessage(message) ? " own" : "");
   const isIncomingPrivate = Boolean(message.recipientId && !isOwnMessage(message));
@@ -7361,7 +7401,7 @@ function createChatMessageElement(message) {
       fallback.textContent = "Contenuto non disponibile.";
       item.appendChild(fallback);
     }
-    const actions = buildChatMessageActions(message);
+    const actions = await buildChatMessageActions(message);
     if (actions) item.appendChild(actions);
     return item;
   }
@@ -7369,7 +7409,7 @@ function createChatMessageElement(message) {
   if (hasContent) {
     item.appendChild(contentWrap);
   }
-  const actions = buildChatMessageActions(message);
+  const actions = await buildChatMessageActions(message);
   if (actions) item.appendChild(actions);
 
   return item;

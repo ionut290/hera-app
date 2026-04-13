@@ -5359,15 +5359,20 @@ async function notifyAdminsForGpsRequest(requestId, impianto, pos) {
 
 function openSquadraWhatsApp(squad, commessa) {
   const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
-  const rowsMessage = squadRows.map((row, idx) => (
-    `👥 Squadra ${idx + 1} personale: ${row.personale || "-"}\n🚚 Squadra ${idx + 1} mezzi: ${row.mezzi || "-"}`
-  )).join("\n");
+  const rowsMessage = squadRows.map((row, idx) => ([
+    `👥 SQUADRA ${idx + 1}`,
+    `   • Personale: ${row.personale || "-"}`,
+    `   • Mezzi: ${row.mezzi || "-"}`,
+    "────────────────────"
+  ].join("\n"))).join("\n");
   const message = [
     "📣 Richiesta di conferma composizione squadre",
     "Gentile tecnico, di seguito la composizione registrata.",
+    "────────────────────",
     `📁 Commessa: ${commessa.nome || "-"}`,
     `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    rowsMessage || "Nessuna squadra compilata.",
+    "────────────────────",
+    rowsMessage || "Nessuna squadra compilata.\n────────────────────",
     "Grazie per la verifica."
   ].join("\n");
 
@@ -5488,10 +5493,13 @@ async function shareAllSquadreToWhatsApp() {
       ? new Date(`${entry.squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     const squadLines = entry.squadRows.map((row, rowIdx) => ([
-      `   👥 Squadra ${rowIdx + 1}: ${row.personale || "-"}`,
-      `   🚚 Mezzi squadra ${rowIdx + 1}: ${row.mezzi || "-"}`
+      `   👥 SQUADRA ${rowIdx + 1}`,
+      `      • Personale: ${row.personale || "-"}`,
+      `      • Mezzi: ${row.mezzi || "-"}`,
+      "   ────────────────"
     ].join("\n"))).join("\n");
     return [
+      "════════════════════",
       `📁 COMMESSA ${entryIdx + 1}: ${String(entry.commessa.nome || "Commessa").toUpperCase()}`,
       `📅 Giorno programmato: ${dateLabel}`,
       squadLines || "   - Nessuna squadra assegnata -"

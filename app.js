@@ -1492,6 +1492,7 @@ function ensureHoursViewModalOpen() {
 async function loadHoursMonthlyTable() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   hoursTableContext = null;
+  if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = false;
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
   const monthValue = String(ui.hoursTableMonth?.value || "").trim();
   const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
@@ -1521,6 +1522,7 @@ async function loadHoursMonthlyTable() {
 
 async function loadHoursTotalByOperator() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  hoursTableContext = null;
   if (!currentUser) {
     ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
     ui.hoursTableContainer.innerHTML = "";
@@ -1534,6 +1536,7 @@ async function loadHoursTotalByOperator() {
     return;
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = true;
   ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore per operatore...";
   ui.hoursTableContainer.innerHTML = "";
@@ -1580,6 +1583,12 @@ async function loadHoursTotalByOperator() {
       </table>
     `;
     ui.hoursTableFeedback.textContent = `Totale ore per operatore calcolato per ${monthValue}.`;
+    hoursTableContext = {
+      mode: "tot_operator",
+      monthValue,
+      rows: Array.from(operatorTotals.values()).sort((a, b) => a.name.localeCompare(b.name, "it"))
+    };
+    if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = false;
   } catch (error) {
     console.error("Errore caricamento totale ore per operatore:", error);
     ui.hoursTableFeedback.textContent = "Errore caricamento totale ore per operatore.";
@@ -1589,6 +1598,7 @@ async function loadHoursTotalByOperator() {
 
 async function loadHoursTotalByOperatorAndCommessa() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  hoursTableContext = null;
   if (!currentUser) {
     ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
     ui.hoursTableContainer.innerHTML = "";
@@ -1602,6 +1612,7 @@ async function loadHoursTotalByOperatorAndCommessa() {
     return;
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
+  if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = true;
   ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore operatore per commessa...";
   ui.hoursTableContainer.innerHTML = "";
@@ -1650,6 +1661,15 @@ async function loadHoursTotalByOperatorAndCommessa() {
       </table>
     `;
     ui.hoursTableFeedback.textContent = `Totale ore operatore per commessa calcolato per ${monthValue}.`;
+    hoursTableContext = {
+      mode: "tot_operator_commessa",
+      monthValue,
+      rows: Array.from(totals.values()).sort((a, b) => {
+        const c = a.commessaName.localeCompare(b.commessaName, "it");
+        return c || a.operatore.localeCompare(b.operatore, "it");
+      })
+    };
+    if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = false;
   } catch (error) {
     console.error("Errore caricamento totale ore operatore per commessa:", error);
     ui.hoursTableFeedback.textContent = "Errore caricamento totale ore operatore per commessa.";
@@ -1731,6 +1751,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   `;
   const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
   hoursTableContext = {
+    mode: "monthly",
     monthLabel,
     commessaName,
     monthMeta,
@@ -1831,6 +1852,36 @@ async function handleHoursValueAction(cellKey) {
 }
 
 async function exportHoursMonthlyTable() {
+  const mode = String(hoursTableContext?.mode || "monthly");
+  if (mode === "tot_operator") {
+    const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
+    const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
+    if (!rows.length) {
+      alert("Nessun totale operatore da esportare.");
+      return;
+    }
+    const aoa = [["Mese", monthValue], [], ["Operatore", "Totale ore"]];
+    rows.forEach((row) => aoa.push([row.name, row.total]));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Totale operatori");
+    XLSX.writeFile(wb, `totale_operatori_${monthValue}.xlsx`);
+    return;
+  }
+  if (mode === "tot_operator_commessa") {
+    const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
+    const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
+    if (!rows.length) {
+      alert("Nessun totale operatore per commessa da esportare.");
+      return;
+    }
+    const aoa = [["Mese", monthValue], [], ["Commessa", "Operatore", "Totale ore"]];
+    rows.forEach((row) => aoa.push([row.commessaName, row.operatore, row.total]));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Operatore x commessa");
+    XLSX.writeFile(wb, `totale_operatori_commesse_${monthValue}.xlsx`);
+    return;
+  }
+
   const monthValue = String(ui.hoursTableMonth?.value || ui.hoursStatsMonth?.value || "").trim();
   const monthMeta = getMonthMeta(monthValue);
   const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();

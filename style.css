@@ -1082,6 +1082,30 @@ textarea:focus-visible {
   border: 0;
 }
 
+#map.map-fallback-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  border-radius: 0;
+  border: 0;
+  z-index: 2500;
+}
+
+body.map-fallback-fullscreen-open {
+  overflow: hidden;
+}
+
+.map-popup-card p {
+  margin: 4px 0;
+}
+
+.map-popup-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
 .squadra-calendar-box {
   margin-top: 14px;
   border: 1px solid var(--border);

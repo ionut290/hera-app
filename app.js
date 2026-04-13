@@ -2129,6 +2129,82 @@ function collectHoursEntries() {
   }).filter((entry) => entry.commessaId || entry.rows.length || entry.note);
 }
 
+function normalizeHoursOperatorName(value) {
+  return String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+}
+
+function findDuplicateHoursInDraft(entries) {
+  const map = new Map();
+  const duplicates = [];
+  entries.forEach((entry) => {
+    const commessaId = String(entry?.commessaId || "").trim();
+    if (!commessaId) return;
+    (entry.rows || []).forEach((row) => {
+      const operatore = String(row?.operatore || "").trim();
+      const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const ore = Number(row?.ore || 0);
+      if (!normalizedOperator || ore <= 0) return;
+      const key = `${commessaId}__${normalizedOperator}`;
+      if (map.has(key)) {
+        duplicates.push({
+          commessaId,
+          commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          operatore
+        });
+        return;
+      }
+      map.set(key, true);
+    });
+  });
+  return duplicates;
+}
+
+async function findExistingHoursConflicts(dateValue, entries) {
+  const snapshot = await db.collection("oreReports").where("date", "==", dateValue).get();
+  if (snapshot.empty) return [];
+
+  const requestedKeys = new Map();
+  entries.forEach((entry) => {
+    const commessaId = String(entry?.commessaId || "").trim();
+    if (!commessaId) return;
+    (entry.rows || []).forEach((row) => {
+      const operatore = String(row?.operatore || "").trim();
+      const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const ore = Number(row?.ore || 0);
+      if (!normalizedOperator || ore <= 0) return;
+      requestedKeys.set(`${commessaId}__${normalizedOperator}`, {
+        commessaId,
+        commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+        operatore
+      });
+    });
+  });
+  if (!requestedKeys.size) return [];
+
+  const conflicts = [];
+  snapshot.forEach((doc) => {
+    const report = doc.data() || {};
+    const reportEntries = Array.isArray(report.entries) ? report.entries : [];
+    reportEntries.forEach((entry) => {
+      const commessaId = String(entry?.commessaId || "").trim();
+      if (!commessaId) return;
+      (entry.rows || []).forEach((row) => {
+        const operatore = String(row?.operatore || "").trim();
+        const normalizedOperator = normalizeHoursOperatorName(operatore);
+        const ore = Number(row?.ore || 0);
+        if (!normalizedOperator || ore <= 0) return;
+        const match = requestedKeys.get(`${commessaId}__${normalizedOperator}`);
+        if (!match) return;
+        conflicts.push({
+          commessaName: entry.commessaName || match.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          operatore: match.operatore || operatore
+        });
+      });
+    });
+  });
+  return conflicts;
+}
+
 function renderHoursSummary(forcedEntries = null) {
   const entries = forcedEntries || collectHoursEntries();
   hoursDraftEntries = entries;
@@ -2185,6 +2261,20 @@ async function finalizeHoursReport(event) {
   ui.hoursFinalizeBtn.disabled = true;
   ui.hoursFeedback.textContent = "Salvataggio resoconto in corso...";
   try {
+    const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
+    if (duplicateDraft.length) {
+      const first = duplicateDraft[0];
+      ui.hoursFeedback.textContent = `Duplicato bloccato: ${first.operatore || "Operatore"} risulta già inserito nella commessa ${first.commessaName || "Commessa"} per questa data.`;
+      return;
+    }
+
+    const existingConflicts = await findExistingHoursConflicts(dateValue, payload.entries);
+    if (existingConflicts.length) {
+      const first = existingConflicts[0];
+      ui.hoursFeedback.textContent = `Inserimento bloccato: ${first.operatore || "Operatore"} ha già ore salvate nella commessa ${first.commessaName || "Commessa"} in data ${dateValue}. Per reinserire, elimina prima la riga dal visualizzatore ore.`;
+      return;
+    }
+
     const docRef = await db.collection("oreReports").add(payload);
     await notifyAdminsForHoursReport(docRef.id, payload);
     let driveLink = "";
@@ -2197,15 +2287,15 @@ async function finalizeHoursReport(event) {
     }
 
     ui.hoursFeedback.textContent = driveLink
-      ? `Le ore sono state salvate (ID ${docRef.id}) e l'admin è stato notificato. Backup Drive completato.`
-      : `Le ore sono state salvate (ID ${docRef.id}) e l'admin è stato notificato. Drive non collegato: backup file saltato.`;
+      ? `Salvataggio completato (ID ${docRef.id}). Resoconto ore registrato, admin avvisato e backup Drive creato.`
+      : `Salvataggio completato (ID ${docRef.id}). Resoconto ore registrato e admin avvisato. Drive non collegato, nessun backup file.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     renderHoursSummary();
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
-    ui.hoursFeedback.textContent = "Errore salvataggio resoconto.";
+    ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
   } finally {
     ui.hoursFinalizeBtn.disabled = false;
   }

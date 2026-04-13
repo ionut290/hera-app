@@ -4298,7 +4298,7 @@ function createActionIconButton(icon, title, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn action-icon-btn";
-  btn.textContent = icon;
+  btn.textContent = icon || "";
   btn.title = title;
   btn.setAttribute("aria-label", title);
   btn.addEventListener("click", async () => {

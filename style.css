@@ -1276,13 +1276,12 @@ body.map-fallback-fullscreen-open {
 }
 
 .action-icon-btn {
-  min-width: 34px;
-  min-height: 34px !important;
-  padding: 6px !important;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  background: #dcfce7;
-  border-color: #86efac;
+  width: 48px;
+  min-width: 48px;
+  min-height: 48px !important;
+  padding: 0 !important;
+  border-radius: 999px;
+  border: none;
   box-shadow: none;
   display: inline-flex;
   align-items: center;

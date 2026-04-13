@@ -1474,9 +1474,7 @@ async function loadSavedHoursReports() {
   if (ui.hoursSavedList) ui.hoursSavedList.innerHTML = "<p class='muted'>Caricamento ore salvate...</p>";
   try {
     const baseQuery = db.collection("oreReports");
-    const snapshot = canManageData()
-      ? await baseQuery.orderBy("createdAt", "desc").limit(40).get()
-      : await baseQuery.where("createdByUid", "==", currentUser.uid).orderBy("createdAt", "desc").limit(40).get();
+    const snapshot = await baseQuery.orderBy("createdAt", "desc").limit(100).get();
     const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderSavedHoursReports(reports);
   } catch (error) {
@@ -1531,9 +1529,7 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta) {
     .orderBy("date", "asc")
     .get();
   const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  if (canManageData()) return reports;
-  const currentUid = String(currentUser?.uid || "");
-  return reports.filter((report) => String(report.createdByUid || "") === currentUid);
+  return reports;
 }
 
 function ensureHoursViewModalOpen() {

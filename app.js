@@ -1779,9 +1779,16 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
       const canManage = canManageData() && sources.length;
-      const valueLabel = dayItems.map((item) => `${formatHoursValue(item)}h`).join(" + ");
+      const dayTotal = dayItems.reduce((sum, value) => sum + Number(value || 0), 0);
+      const hasDuplicates = dayItems.length > 1;
+      const valueLabel = hasDuplicates ? `⚠ ${dayItems.length} inserimenti` : `${formatHoursValue(dayTotal)}h`;
+      const mergedDetails = hasDuplicates
+        ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. Elimina le righe duplicate.`
+        : "";
       const title = canManage
-        ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
+        ? hasDuplicates
+          ? `${mergedDetails}`
+          : `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
         : `${operatorName} - giorno ${day}`;
       return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
@@ -2187,10 +2194,8 @@ function findDuplicateHoursInDraft(entries) {
   return duplicates;
 }
 
-async function findExistingHoursConflicts(dateValue, entries) {
-  const snapshot = await db.collection("oreReports").where("date", "==", dateValue).get();
-  if (snapshot.empty) return [];
-
+async function findExistingHoursConflicts(dateValue, entries, options = {}) {
+  const skipApprovalRequestId = String(options?.skipApprovalRequestId || "").trim();
   const requestedKeys = new Map();
   entries.forEach((entry) => {
     const commessaId = String(entry?.commessaId || "").trim();
@@ -2209,10 +2214,13 @@ async function findExistingHoursConflicts(dateValue, entries) {
   });
   if (!requestedKeys.size) return [];
 
+  const [reportsSnapshot, approvalsSnapshot] = await Promise.all([
+    db.collection("oreReports").where("date", "==", dateValue).get(),
+    db.collection("oreApprovalRequests").where("date", "==", dateValue).get()
+  ]);
+
   const conflicts = [];
-  snapshot.forEach((doc) => {
-    const report = doc.data() || {};
-    const reportEntries = Array.isArray(report.entries) ? report.entries : [];
+  const collectConflicts = (reportEntries = []) => {
     reportEntries.forEach((entry) => {
       const commessaId = String(entry?.commessaId || "").trim();
       if (!commessaId) return;
@@ -2229,6 +2237,16 @@ async function findExistingHoursConflicts(dateValue, entries) {
         });
       });
     });
+  };
+  reportsSnapshot.forEach((doc) => {
+    const report = doc.data() || {};
+    collectConflicts(Array.isArray(report.entries) ? report.entries : []);
+  });
+  approvalsSnapshot.forEach((doc) => {
+    const request = doc.data() || {};
+    if (skipApprovalRequestId && doc.id === skipApprovalRequestId) return;
+    if (String(request.status || "").trim() === "rejected") return;
+    collectConflicts(Array.isArray(request.entries) ? request.entries : []);
   });
   return conflicts;
 }
@@ -2346,7 +2364,12 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
   await Promise.all(recipients.map((recipient) => sendPrivateChatNotification({
     recipientId: recipient.id,
     text,
-    senderName: currentUser.displayName || currentUser.email || "Operatore"
+    senderName: currentUser.displayName || currentUser.email || "Operatore",
+    metadata: {
+      type: "hours_approval",
+      approvalRequestId: requestId,
+      action: "level1_ok"
+    }
   })));
 }
 
@@ -2358,11 +2381,16 @@ async function notifyAdminsForFinalHoursApproval(requestId, payload, approverNam
   await Promise.all(adminUsers.map((adminUser) => sendPrivateChatNotification({
     recipientId: adminUser.id,
     text,
-    senderName: currentUser.displayName || currentUser.email || "Sistema"
+    senderName: currentUser.displayName || currentUser.email || "Sistema",
+    metadata: {
+      type: "hours_approval",
+      approvalRequestId: requestId,
+      action: "admin_final_ok"
+    }
   })));
 }
 
-async function sendPrivateChatNotification({ recipientId, text, senderName = "Sistema" }) {
+async function sendPrivateChatNotification({ recipientId, text, senderName = "Sistema", metadata = null }) {
   if (!recipientId || !text) return;
   await db.collection("chatMessages").add({
     type: "text",
@@ -2372,6 +2400,7 @@ async function sendPrivateChatNotification({ recipientId, text, senderName = "Si
     senderName,
     senderEmail: currentUser?.email || "",
     kind: "system",
+    metadata: metadata && typeof metadata === "object" ? metadata : null,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 }
@@ -6619,6 +6648,16 @@ async function approveHoursRequestLevel2(request) {
     alert("Questa richiesta non è più in attesa dell'approvazione admin.");
     return;
   }
+  const conflicts = await findExistingHoursConflicts(
+    String(request.date || "").trim(),
+    Array.isArray(request.entries) ? request.entries : [],
+    { skipApprovalRequestId: request.id }
+  );
+  if (conflicts.length) {
+    const first = conflicts[0];
+    alert(`Conferma bloccata: ${first.operatore || "Operatore"} ha già ore inserite nella commessa ${first.commessaName || "Commessa"} per questa data. Elimina prima la riga esistente.`);
+    return;
+  }
   const reportPayload = {
     date: request.date || "",
     entries: Array.isArray(request.entries) ? request.entries : [],
@@ -6653,6 +6692,24 @@ async function approveHoursRequestLevel2(request) {
     });
   }
   loadSavedHoursReports();
+}
+
+async function approveHoursRequestFromChat(requestId) {
+  if (!canManageData()) {
+    throw new Error("Solo admin può confermare le ore da chat.");
+  }
+  if (!requestId) {
+    throw new Error("ID richiesta non valido.");
+  }
+  const docSnap = await db.collection("oreApprovalRequests").doc(requestId).get();
+  if (!docSnap.exists) {
+    throw new Error("Richiesta ore non trovata.");
+  }
+  const request = { id: docSnap.id, ...docSnap.data() };
+  if (String(request.status || "") !== "pending_admin") {
+    throw new Error("Questa richiesta non è più in attesa di conferma admin.");
+  }
+  await approveHoursRequestLevel2(request);
 }
 
 async function rejectHoursRequest(request) {
@@ -7158,6 +7215,33 @@ function markChatAsRead() {
   ui.chatCounter.classList.add("hidden");
 }
 
+function canConfirmHoursFromChat(message) {
+  if (!canManageData()) return false;
+  if (String(message?.kind || "") !== "system") return false;
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) return false;
+  return metadata.type === "hours_approval" && metadata.action === "admin_final_ok" && metadata.approvalRequestId;
+}
+
+function buildChatMessageActions(message) {
+  if (!canConfirmHoursFromChat(message)) return null;
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  const button = createButton("OK", async () => {
+    button.disabled = true;
+    try {
+      await approveHoursRequestFromChat(String(message.metadata.approvalRequestId || "").trim());
+      ui.chatFeedback.textContent = "Ore risultate confermate.";
+    } catch (error) {
+      console.error("Errore conferma ore da chat:", error);
+      ui.chatFeedback.textContent = error?.message || "Errore durante la conferma ore dalla chat.";
+      button.disabled = false;
+    }
+  });
+  actions.appendChild(button);
+  return actions;
+}
+
 function createChatMessageElement(message) {
   const item = document.createElement("article");
   item.className = "chat-message" + (isOwnMessage(message) ? " own" : "");
@@ -7262,12 +7346,16 @@ function createChatMessageElement(message) {
       fallback.textContent = "Contenuto non disponibile.";
       item.appendChild(fallback);
     }
+    const actions = buildChatMessageActions(message);
+    if (actions) item.appendChild(actions);
     return item;
   }
 
   if (hasContent) {
     item.appendChild(contentWrap);
   }
+  const actions = buildChatMessageActions(message);
+  if (actions) item.appendChild(actions);
 
   return item;
 }

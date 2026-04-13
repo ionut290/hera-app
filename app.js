@@ -6530,6 +6530,58 @@ function canApproveHoursLevel1(request) {
   return String(request.createdByUid || "") === String(currentUser.uid || "");
 }
 
+function renderHoursApprovalRequests() {
+  if (!ui.hoursApprovalsList || !ui.hoursApprovalsFeedback) return;
+  if (!currentUser) {
+    ui.hoursApprovalsFeedback.textContent = "Fai login per vedere le richieste ore.";
+    ui.hoursApprovalsList.innerHTML = "";
+    return;
+  }
+  const visible = hoursApprovalRequests.filter((request) => canManageData() || String(request.createdByUid || "") === String(currentUser.uid || ""));
+  if (!visible.length) {
+    ui.hoursApprovalsFeedback.textContent = "Nessuna richiesta ore in approvazione.";
+    ui.hoursApprovalsList.innerHTML = "";
+    return;
+  }
+  ui.hoursApprovalsFeedback.textContent = `Richieste trovate: ${visible.length}.`;
+  ui.hoursApprovalsList.innerHTML = "";
+  visible.forEach((request) => {
+    const card = document.createElement("article");
+    card.className = "item-card";
+    const dateLabel = request.date ? new Date(`${request.date}T00:00:00`).toLocaleDateString("it-IT") : "-";
+    const statusMap = {
+      pending_level1: "In attesa primo OK",
+      pending_admin: "In attesa OK admin finale",
+      approved: `Approvata ✅ (report ${request.finalizedReportId || "-"})`,
+      rejected: "Rifiutata ❌"
+    };
+    const statusText = statusMap[request.status] || request.status || "-";
+    const author = request.createdByName || request.createdByEmail || "Operatore";
+    const summary = (Array.isArray(request.entries) ? request.entries : []).map((entry) => {
+      const tot = (entry.rows || []).reduce((sum, row) => sum + (Number(row.ore || 0) || 0), 0);
+      return `<li>${escapeHTML(entry.commessaName || "Commessa")}: ${escapeHTML(String(tot))}h</li>`;
+    }).join("");
+    card.innerHTML = `
+      <p><b>ID:</b> ${escapeHTML(request.id || "-")}</p>
+      <p><b>Data:</b> ${escapeHTML(dateLabel)} • <b>Creato da:</b> ${escapeHTML(author)}</p>
+      <p><b>Stato:</b> ${escapeHTML(statusText)}</p>
+      <ul>${summary || "<li>Nessuna commessa</li>"}</ul>
+      ${request.rejectionReason ? `<p><b>Motivo rifiuto:</b> ${escapeHTML(request.rejectionReason)}</p>` : ""}
+    `;
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    if (request.status === "pending_level1" && canApproveHoursLevel1(request)) {
+      actions.appendChild(createButton("Accetta livello 1", () => approveHoursRequestLevel1(request)));
+      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
+    }
+    if (request.status === "pending_admin" && canManageData()) {
+      actions.appendChild(createButton("Accetta admin finale", () => approveHoursRequestLevel2(request)));
+      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
+    }
+    if (actions.children.length) card.appendChild(actions);
+    ui.hoursApprovalsList.appendChild(card);
+  });
+}
 
 
 
@@ -6626,6 +6678,37 @@ async function approveHoursRequestFromChat(requestId) {
     throw new Error("Questa richiesta non è più in attesa di conferma admin.");
   }
   await approveHoursRequestLevel2(request);
+}
+
+async function rejectHoursRequestFromChat(requestId) {
+  if (!canManageData()) {
+    throw new Error("Solo admin può rifiutare le ore da chat.");
+  }
+  if (!requestId) {
+    throw new Error("ID richiesta non valido.");
+  }
+  const docSnap = await db.collection("oreApprovalRequests").doc(requestId).get();
+  if (!docSnap.exists) {
+    throw new Error("Richiesta ore non trovata.");
+  }
+  const request = { id: docSnap.id, ...docSnap.data() };
+  if (String(request.status || "") !== "pending_admin") {
+    throw new Error("Questa richiesta non è più in attesa di conferma admin.");
+  }
+  await db.collection("oreApprovalRequests").doc(request.id).set({
+    status: "rejected",
+    rejectedBy: currentUser.email || currentUser.displayName || "admin",
+    rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
+  if (targetUser?.id) {
+    await sendPrivateChatNotification({
+      recipientId: targetUser.id,
+      text: `❌ Richiesta ore ${request.id} rifiutata.`,
+      senderName: currentUser.displayName || currentUser.email || "Sistema"
+    });
+  }
 }
 
 async function rejectHoursRequest(request) {
@@ -7143,18 +7226,34 @@ function buildChatMessageActions(message) {
   if (!canConfirmHoursFromChat(message)) return null;
   const actions = document.createElement("div");
   actions.className = "item-actions";
-  const button = createButton("OK", async () => {
-    button.disabled = true;
+  const approveButton = createButton("Accetta", async () => {
+    approveButton.disabled = true;
+    rejectButton.disabled = true;
     try {
       await approveHoursRequestFromChat(String(message.metadata.approvalRequestId || "").trim());
-      ui.chatFeedback.textContent = "Ore risultate confermate.";
+      ui.chatFeedback.textContent = "Richiesta ore accettata.";
     } catch (error) {
       console.error("Errore conferma ore da chat:", error);
       ui.chatFeedback.textContent = error?.message || "Errore durante la conferma ore dalla chat.";
-      button.disabled = false;
+      approveButton.disabled = false;
+      rejectButton.disabled = false;
     }
   });
-  actions.appendChild(button);
+  const rejectButton = createButton("Rifiuta", async () => {
+    approveButton.disabled = true;
+    rejectButton.disabled = true;
+    try {
+      await rejectHoursRequestFromChat(String(message.metadata.approvalRequestId || "").trim());
+      ui.chatFeedback.textContent = "Richiesta ore rifiutata.";
+    } catch (error) {
+      console.error("Errore rifiuto ore da chat:", error);
+      ui.chatFeedback.textContent = error?.message || "Errore durante il rifiuto ore dalla chat.";
+      approveButton.disabled = false;
+      rejectButton.disabled = false;
+    }
+  });
+  actions.appendChild(approveButton);
+  actions.appendChild(rejectButton);
   return actions;
 }
 

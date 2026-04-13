@@ -188,8 +188,6 @@ const ui = {
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
   hoursTableContainer: document.getElementById("hours-table-container"),
-  hoursApprovalsFeedback: document.getElementById("hours-approvals-feedback"),
-  hoursApprovalsList: document.getElementById("hours-approvals-list"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -265,7 +263,6 @@ let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
-let unsubscribeHoursApprovals = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -888,7 +885,6 @@ auth.onAuthStateChanged((user) => {
   stopResourcesSubscription();
   stopPrivateDocsSubscription();
   stopGpsRequestsSubscription();
-  stopHoursApprovalsSubscription();
   stopChatRetentionLoop();
   selectedCommessaId = "";
   selectedCommessaName = "";
@@ -907,7 +903,6 @@ auth.onAuthStateChanged((user) => {
   gpsUpdateRequests = [];
   hoursApprovalRequests = [];
   renderPrivateDocsList();
-  renderHoursApprovalRequests();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
   ui.impiantiLista.innerHTML = loggedIn
@@ -941,7 +936,6 @@ auth.onAuthStateChanged((user) => {
     subscribeResources();
     subscribePrivateDocs();
     subscribeGpsRequests();
-    subscribeHoursApprovals();
     processPendingSheetExports();
     startChatRetentionLoop();
   } else {
@@ -1412,7 +1406,6 @@ function initHoursPage() {
   renderHoursTableCommessaOptions();
   renderHoursSummary();
   renderSavedHoursReports([]);
-  renderHoursApprovalRequests();
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
 }
 
@@ -1425,7 +1418,6 @@ function openHoursPage() {
   if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   renderHoursTableCommessaOptions();
-  renderHoursApprovalRequests();
   window.location.hash = "ore";
   applyRoute();
   closeSideMenu();
@@ -6538,84 +6530,8 @@ function canApproveHoursLevel1(request) {
   return String(request.createdByUid || "") === String(currentUser.uid || "");
 }
 
-function renderHoursApprovalRequests() {
-  if (!ui.hoursApprovalsList || !ui.hoursApprovalsFeedback) return;
-  if (!currentUser) {
-    ui.hoursApprovalsFeedback.textContent = "Fai login per vedere le richieste ore.";
-    ui.hoursApprovalsList.innerHTML = "";
-    return;
-  }
-  const visible = hoursApprovalRequests.filter((request) => canManageData() || String(request.createdByUid || "") === String(currentUser.uid || ""));
-  if (!visible.length) {
-    ui.hoursApprovalsFeedback.textContent = "Nessuna richiesta ore in approvazione.";
-    ui.hoursApprovalsList.innerHTML = "";
-    return;
-  }
-  ui.hoursApprovalsFeedback.textContent = `Richieste trovate: ${visible.length}.`;
-  ui.hoursApprovalsList.innerHTML = "";
-  visible.forEach((request) => {
-    const card = document.createElement("article");
-    card.className = "item-card";
-    const dateLabel = request.date ? new Date(`${request.date}T00:00:00`).toLocaleDateString("it-IT") : "-";
-    const statusMap = {
-      pending_level1: "In attesa primo OK",
-      pending_admin: "In attesa OK admin finale",
-      approved: `Approvata ✅ (report ${request.finalizedReportId || "-"})`,
-      rejected: "Rifiutata ❌"
-    };
-    const statusText = statusMap[request.status] || request.status || "-";
-    const author = request.createdByName || request.createdByEmail || "Operatore";
-    const summary = (Array.isArray(request.entries) ? request.entries : []).map((entry) => {
-      const tot = (entry.rows || []).reduce((sum, row) => sum + (Number(row.ore || 0) || 0), 0);
-      return `<li>${escapeHTML(entry.commessaName || "Commessa")}: ${escapeHTML(String(tot))}h</li>`;
-    }).join("");
-    card.innerHTML = `
-      <p><b>ID:</b> ${escapeHTML(request.id || "-")}</p>
-      <p><b>Data:</b> ${escapeHTML(dateLabel)} • <b>Creato da:</b> ${escapeHTML(author)}</p>
-      <p><b>Stato:</b> ${escapeHTML(statusText)}</p>
-      <ul>${summary || "<li>Nessuna commessa</li>"}</ul>
-      ${request.rejectionReason ? `<p><b>Motivo rifiuto:</b> ${escapeHTML(request.rejectionReason)}</p>` : ""}
-    `;
-    const actions = document.createElement("div");
-    actions.className = "item-actions";
-    if (request.status === "pending_level1" && canApproveHoursLevel1(request)) {
-      actions.appendChild(createButton("OK livello 1", () => approveHoursRequestLevel1(request)));
-      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
-    }
-    if (request.status === "pending_admin" && canManageData()) {
-      actions.appendChild(createButton("OK admin finale", () => approveHoursRequestLevel2(request)));
-      actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
-    }
-    if (actions.children.length) card.appendChild(actions);
-    ui.hoursApprovalsList.appendChild(card);
-  });
-}
 
-function subscribeHoursApprovals() {
-  if (!currentUser) {
-    hoursApprovalRequests = [];
-    renderHoursApprovalRequests();
-    return;
-  }
-  if (unsubscribeHoursApprovals) unsubscribeHoursApprovals();
-  unsubscribeHoursApprovals = db.collection("oreApprovalRequests")
-    .orderBy("createdAt", "desc")
-    .limit(80)
-    .onSnapshot((snapshot) => {
-      hoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderHoursApprovalRequests();
-    }, (error) => {
-      console.error("Errore caricamento approvazioni ore:", error);
-      if (ui.hoursApprovalsFeedback) ui.hoursApprovalsFeedback.textContent = "Errore caricamento richieste approvazione ore.";
-    });
-}
 
-function stopHoursApprovalsSubscription() {
-  if (unsubscribeHoursApprovals) {
-    unsubscribeHoursApprovals();
-    unsubscribeHoursApprovals = null;
-  }
-}
 
 async function approveHoursRequestLevel1(request) {
   if (!canApproveHoursLevel1(request)) {

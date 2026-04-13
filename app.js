@@ -1681,6 +1681,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   const operatorsMap = new Map();
   hoursTableRowsMap = new Map();
+  const formatHoursValue = (value) => (Number.isInteger(value) ? String(value) : Number(value || 0).toFixed(2).replace(".", ","));
   (Array.isArray(reports) ? reports : []).forEach((report) => {
     const reportDate = String(report.date || "").trim();
     const day = Number(reportDate.split("-")[2] || 0);
@@ -1693,9 +1694,9 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
         const ore = Number(row.ore || 0);
         if (!operatore || ore <= 0) return;
         if (!operatorsMap.has(operatore)) {
-          operatorsMap.set(operatore, Array(monthMeta.daysInMonth).fill(0));
+          operatorsMap.set(operatore, Array.from({ length: monthMeta.daysInMonth }, () => []));
         }
-        operatorsMap.get(operatore)[day - 1] += ore;
+        operatorsMap.get(operatore)[day - 1].push(ore);
         const key = `${operatore}__${day}`;
         if (!hoursTableRowsMap.has(key)) hoursTableRowsMap.set(key, []);
         hoursTableRowsMap.get(key).push({
@@ -1703,7 +1704,9 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
           reportDate,
           entryCommessaId: entry.commessaId,
           entryIndex,
-          rowIndex
+          rowIndex,
+          operatore,
+          ore
         });
       });
     });
@@ -1714,20 +1717,20 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   const daysHeader = Array.from({ length: monthMeta.daysInMonth }, (_, idx) => `<th>${idx + 1}</th>`).join("");
   const bodyRowsReal = operators.map((operatorName) => {
     const dayValues = operatorsMap.get(operatorName);
-    const total = dayValues.reduce((sum, value) => sum + value, 0);
-    const cells = dayValues.map((value, idx) => {
+    const total = dayValues.reduce((sum, dayItems) => sum + dayItems.reduce((daySum, ore) => daySum + Number(ore || 0), 0), 0);
+    const cells = dayValues.map((dayItems, idx) => {
       const day = idx + 1;
-      if (value <= 0) return "<td>-</td>";
+      if (!dayItems.length) return "<td>-</td>";
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
       const canManage = canManageData() && sources.length;
+      const valueLabel = dayItems.map((item) => `${formatHoursValue(item)}h`).join(" + ");
       const title = canManage
-        ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}.`
+        ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
         : `${operatorName} - giorno ${day}`;
-      const valueLabel = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(".", ",");
-      return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}h</button></td>`;
+      return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
-    const totalLabel = Number.isInteger(total) ? String(total) : total.toFixed(2).replace(".", ",");
+    const totalLabel = formatHoursValue(total);
     return `<tr><th scope="row">${escapeHTML(operatorName)}</th>${cells}<td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
   });
   const emptyRowsNeeded = Math.max(0, 10 - bodyRowsReal.length);
@@ -1757,7 +1760,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
     monthMeta,
     operators: operators.map((name) => ({
       name,
-      dayValues: operatorsMap.get(name) || []
+      dayValues: (operatorsMap.get(name) || []).map((items) => items.reduce((sum, ore) => sum + Number(ore || 0), 0))
     }))
   };
 
@@ -1788,7 +1791,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
 
 async function handleHoursValueAction(cellKey) {
   if (!canManageData()) return;
-  const sources = hoursTableRowsMap.get(String(cellKey || ""));
+  let sources = hoursTableRowsMap.get(String(cellKey || ""));
   if (!sources || !sources.length) return;
   const action = window.prompt("Admin: scrivi M per modificare oppure E per eliminare.", "M");
   const normalizedAction = String(action || "").trim().toUpperCase();
@@ -1796,6 +1799,23 @@ async function handleHoursValueAction(cellKey) {
   if (!["M", "E"].includes(normalizedAction)) {
     if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Azione annullata: usa M (modifica) o E (elimina).";
     return;
+  }
+  if (sources.length > 1) {
+    const details = sources.map((source, idx) => `${idx + 1}) ${source.reportDate || "-"} • ${source.operatore || "-"} • ${Number(source.ore || 0)}h`).join("\n");
+    const choice = window.prompt(
+      `Ci sono ${sources.length} registrazioni in questa cella:\n${details}\n\nScrivi il numero da aggiornare/eliminare oppure A per tutte.`,
+      "A"
+    );
+    const normalizedChoice = String(choice || "").trim().toUpperCase();
+    if (!normalizedChoice) return;
+    if (normalizedChoice !== "A") {
+      const selectedIndex = Number(normalizedChoice);
+      if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > sources.length) {
+        if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Azione annullata: selezione registrazione non valida.";
+        return;
+      }
+      sources = [sources[selectedIndex - 1]];
+    }
   }
   let nextHoursValue = null;
   if (normalizedAction === "M") {

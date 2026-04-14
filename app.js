@@ -4375,9 +4375,7 @@ function renderImpianti() {
         if (doneMarked) {
           const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
           markActionAsUsed(whatsappActionId);
-          openWhatsApp(impianto, { targetWindow: whatsappWindow, preferContactPicker: true });
-        } else if (whatsappWindow && !whatsappWindow.closed) {
-          whatsappWindow.close();
+          openWhatsApp(impianto, { target: "_self", preferContactPicker: true });
         }
       },
       Boolean(impianto.done),
@@ -5502,17 +5500,35 @@ function openWhatsApp(impianto, options = {}) {
     `🕒 Ora: ${time}`
   ].join("\n");
 
+  const encodedMessage = encodeURIComponent(message);
+  const appUrl = `whatsapp://send?text=${encodedMessage}`;
   const useContactPicker = options?.preferContactPicker !== false;
-  const url = useContactPicker
-    ? `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`
-    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const webUrl = useContactPicker
+    ? `https://wa.me/?text=${encodedMessage}`
+    : `https://api.whatsapp.com/send?text=${encodedMessage}`;
   const targetWindow = options?.targetWindow;
   if (targetWindow && !targetWindow.closed) {
-    targetWindow.location.replace(url);
+    targetWindow.location.replace(appUrl);
+    setTimeout(() => {
+      if (!targetWindow.closed) targetWindow.location.replace(webUrl);
+    }, 700);
     return;
   }
-  const popup = window.open(url, "_blank", "noopener");
-  if (!popup) window.location.href = url;
+  const target = options?.target || "_blank";
+  const popup = window.open(appUrl, target, "noopener");
+  if (!popup) {
+    window.location.href = webUrl;
+    return;
+  }
+  if (target === "_self") {
+    setTimeout(() => {
+      window.location.href = webUrl;
+    }, 700);
+    return;
+  }
+  setTimeout(() => {
+    if (!popup.closed) popup.location.replace(webUrl);
+  }, 700);
 }
 
 function openImpiantoReportModal(impianto) {

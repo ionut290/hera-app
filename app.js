@@ -4377,7 +4377,19 @@ function renderImpianti() {
       true,
       actions
     );
-    addAction("whatsapp", "✉️", "Invia messaggio", () => triggerImpiantoWhatsAppAction(impianto), false, false, actions);
+    addAction(
+      "whatsapp",
+      "✉️",
+      "Invia messaggio",
+      async () => {
+        const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
+        if (!whatsappOpened || impianto.done) return;
+        await markImpiantoDone(impianto);
+      },
+      false,
+      false,
+      actions
+    );
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);

@@ -4374,14 +4374,17 @@ function renderImpianti() {
         if (doneMarked) {
           const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
           markActionAsUsed(whatsappActionId);
-          openWhatsApp(impianto);
+          openWhatsApp(impianto, {
+            targetWindow: whatsappWindow,
+            disableWebFallback: true
+          });
         }
       },
       Boolean(impianto.done),
       true,
       actions
     );
-    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, managementActions);
+    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, actions);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -5506,28 +5509,35 @@ function openWhatsApp(impianto, options = {}) {
     ? `https://wa.me/?text=${encodedMessage}`
     : `https://api.whatsapp.com/send?text=${encodedMessage}`;
   const targetWindow = options?.targetWindow;
+  const disableWebFallback = Boolean(options?.disableWebFallback);
   if (targetWindow && !targetWindow.closed) {
     targetWindow.location.replace(appUrl);
-    setTimeout(() => {
-      if (!targetWindow.closed) targetWindow.location.replace(webUrl);
-    }, 700);
+    if (!disableWebFallback) {
+      setTimeout(() => {
+        if (!targetWindow.closed) targetWindow.location.replace(webUrl);
+      }, 700);
+    }
     return;
   }
   const target = options?.target || "_blank";
   const popup = window.open(appUrl, target, "noopener");
   if (!popup) {
-    window.location.href = webUrl;
+    window.location.href = disableWebFallback ? appUrl : webUrl;
     return;
   }
   if (target === "_self") {
-    setTimeout(() => {
-      window.location.href = webUrl;
-    }, 700);
+    if (!disableWebFallback) {
+      setTimeout(() => {
+        window.location.href = webUrl;
+      }, 700);
+    }
     return;
   }
-  setTimeout(() => {
-    if (!popup.closed) popup.location.replace(webUrl);
-  }, 700);
+  if (!disableWebFallback) {
+    setTimeout(() => {
+      if (!popup.closed) popup.location.replace(webUrl);
+    }, 700);
+  }
 }
 
 function openImpiantoReportModal(impianto) {

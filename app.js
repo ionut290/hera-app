@@ -4370,8 +4370,15 @@ function renderImpianti() {
       "✅",
       "Fatto",
       async () => {
+        const whatsappWindow = window.open("about:blank", "_blank", "noopener");
         const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked) await openWhatsApp(impianto);
+        if (doneMarked) {
+          const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
+          markActionAsUsed(whatsappActionId);
+          openWhatsApp(impianto, { targetWindow: whatsappWindow, preferContactPicker: true });
+        } else if (whatsappWindow && !whatsappWindow.closed) {
+          whatsappWindow.close();
+        }
       },
       Boolean(impianto.done),
       true,
@@ -5469,7 +5476,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done) {
   })));
 }
 
-function openWhatsApp(impianto) {
+function openWhatsApp(impianto, options = {}) {
   const user = auth.currentUser;
   if (!user) {
     alert("Devi fare login.");
@@ -5495,8 +5502,17 @@ function openWhatsApp(impianto) {
     `🕒 Ora: ${time}`
   ].join("\n");
 
-  const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank");
+  const useContactPicker = options?.preferContactPicker !== false;
+  const url = useContactPicker
+    ? `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const targetWindow = options?.targetWindow;
+  if (targetWindow && !targetWindow.closed) {
+    targetWindow.location.replace(url);
+    return;
+  }
+  const popup = window.open(url, "_blank", "noopener");
+  if (!popup) window.location.href = url;
 }
 
 function openImpiantoReportModal(impianto) {

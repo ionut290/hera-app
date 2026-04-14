@@ -278,6 +278,7 @@ let driveChatFolderId = "";
 let driveReportsFolderId = "";
 let driveSquadreFolderId = "";
 let driveHelpCenterFolderId = "";
+let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let personaleRecords = [];
@@ -788,7 +789,7 @@ async function ensurePushSubscription() {
       console.info("Push subscription pronta:", subscription.toJSON());
     }
     updateNotificationUi(
-      subscription ? "Notifiche push pronte (configurare backend invio)." : "Notifiche attive. Manca solo chiave VAPID per push remoto.",
+      subscription ? "Notifiche push pronte (configurare backend invio)." : "Notifiche locali attive. Per il push remoto serve configurare la chiave VAPID.",
       true
     );
   } catch (error) {
@@ -8107,6 +8108,30 @@ async function buildAppBackupPayload(dateKey, squadraPayload) {
   };
 }
 
+async function refreshDriveAccessToken() {
+  if (driveTokenRefreshPromise) return driveTokenRefreshPromise;
+  if (!auth.currentUser) return false;
+  driveTokenRefreshPromise = (async () => {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/drive.file");
+      provider.setCustomParameters({ prompt: "none" });
+      const result = await auth.signInWithPopup(provider);
+      const accessToken = extractGoogleAccessToken(result);
+      if (!accessToken) return false;
+      persistDriveAccessToken(accessToken);
+      await autoConnectDriveBridge({ notifyOnError: false });
+      return true;
+    } catch (error) {
+      console.warn("Refresh automatico token Drive non riuscito:", error);
+      return false;
+    } finally {
+      driveTokenRefreshPromise = null;
+    }
+  })();
+  return driveTokenRefreshPromise;
+}
+
 async function driveApiFetch(url, options = {}) {
   if (!driveAccessToken) {
     throw new Error("Google Drive non collegato. Premi 'Collega Google Drive'.");
@@ -8121,8 +8146,11 @@ async function driveApiFetch(url, options = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
+    const refreshed = await refreshDriveAccessToken();
+    if (refreshed) {
+      return driveApiFetch(url, options);
+    }
     localStorage.removeItem("googleDriveAccessToken");
-    localStorage.setItem("googleDriveConnected", "false");
     updateDriveStatus(false);
     throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
   }

@@ -4194,8 +4194,7 @@ function renderImpianti() {
       true,
       actions
     );
-    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, actions);
-
+    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, managementActions);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);

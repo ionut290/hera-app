@@ -110,6 +110,7 @@ const ui = {
   openHoursBtn: document.getElementById("open-hours-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
+  openBookPdfBtn: document.getElementById("open-book-pdf-btn"),
   managementPage: document.getElementById("management-page"),
   managementTitle: document.getElementById("management-title"),
   managementCloseBtn: document.getElementById("management-close-btn"),
@@ -552,6 +553,15 @@ const MENU_HOWTO_CONTENT = {
       "Genera il PDF e condividilo via WhatsApp o email."
     ],
     tags: ["segnalazioni", "pdf", "sicurezza"]
+  },
+  "open-book-pdf-btn": {
+    rispostaBreve: "Apre il manuale completo dell'app in formato PDF in una nuova scheda.",
+    passi: [
+      "Apri il menu (⋮) e premi “Libro PDF”.",
+      "Attendi l'apertura del file PDF in una nuova scheda del browser.",
+      "Se il popup è bloccato, abilita i popup oppure scarica il file dal link diretto."
+    ],
+    tags: ["manuale", "pdf", "guida"]
   }
 };
 const STATIC_HOWTO_ITEMS = [
@@ -723,6 +733,7 @@ ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
+ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
@@ -1590,6 +1601,15 @@ function openHowtoPage() {
 function closeHowtoPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function openBookPdf() {
+  closeSideMenu();
+  const bookUrl = "./docs/Libro_Completo_Hera_App.pdf";
+  const opened = window.open(bookUrl, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.href = bookUrl;
+  }
 }
 
 function buildHowtoFaqItems() {

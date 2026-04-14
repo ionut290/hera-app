@@ -101,6 +101,7 @@ const ui = {
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
+  openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
@@ -115,6 +116,7 @@ const ui = {
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
+  panelGlobal: document.getElementById("panel-global"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
@@ -251,7 +253,16 @@ const ui = {
   editLavorazioniRichieste: document.getElementById("edit-lavorazioni-richieste"),
   editSfalci: document.getElementById("edit-sfalci"),
   editGpsY: document.getElementById("edit-gps-y"),
-  editGpsX: document.getElementById("edit-gps-x")
+  editGpsX: document.getElementById("edit-gps-x"),
+  globalCommessaForm: document.getElementById("global-commessa-form"),
+  globalCommessaName: document.getElementById("global-commessa-name"),
+  globalCommessaSelect: document.getElementById("global-commessa-select"),
+  globalExcelFile: document.getElementById("global-excel-file"),
+  globalImportBtn: document.getElementById("global-import-btn"),
+  globalImportFeedback: document.getElementById("global-import-feedback"),
+  globalImpiantoSearch: document.getElementById("global-impianto-search"),
+  globalImpiantiLista: document.getElementById("global-impianti-lista"),
+  globalMapFeedback: document.getElementById("global-map-feedback")
 };
 
 let pendingRows = [];
@@ -333,6 +344,13 @@ let chatRetentionTimer = null;
 let geolocationWatchId = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
+let unsubscribeGlobalCommesse = null;
+let unsubscribeGlobalImpianti = null;
+let pendingGlobalRows = [];
+let selectedGlobalCommessaId = "";
+let globalCommesseById = new Map();
+let globalImpianti = [];
+let globalImpiantoSearchTerm = "";
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_NEAR_KM = 0.25;
 const PROXIMITY_AWAY_KM = 0.7;
@@ -617,6 +635,13 @@ map.setView([44.4949, 11.3426], 11);
 map.doubleClickZoom.disable();
 
 const markerLayer = L.layerGroup().addTo(map);
+const globalMap = L.map("global-map");
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: "&copy; OpenStreetMap contributors"
+}).addTo(globalMap);
+globalMap.setView([44.4949, 11.3426], 6);
+const globalMarkerLayer = L.layerGroup().addTo(globalMap);
 const mapElement = document.getElementById("map");
 if (mapElement) {
   let lastTapAt = 0;
@@ -686,6 +711,7 @@ ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre
 ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
+ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
@@ -733,6 +759,11 @@ ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto)
 ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
 ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
 ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
+ui.globalCommessaForm?.addEventListener("submit", createGlobalCommessa);
+ui.globalExcelFile?.addEventListener("change", onGlobalExcelSelected);
+ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
+ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
+ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
@@ -1066,6 +1097,8 @@ auth.onAuthStateChanged((user) => {
   stopUsersSubscription();
   stopAdminUsersSubscription();
   stopResourcesSubscription();
+  stopGlobalCommesseSubscription();
+  stopGlobalImpiantiSubscription();
   stopPrivateDocsSubscription();
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
@@ -1082,6 +1115,10 @@ auth.onAuthStateChanged((user) => {
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
+  globalCommesseById = new Map();
+  globalImpianti = [];
+  pendingGlobalRows = [];
+  selectedGlobalCommessaId = "";
   resourceRecords = [];
   privateDocsRecords = [];
   gpsUpdateRequests = [];
@@ -1118,6 +1155,7 @@ auth.onAuthStateChanged((user) => {
     subscribeMezzi();
     subscribeSquadre();
     subscribeResources();
+    subscribeGlobalCommesse();
     subscribePrivateDocs();
     subscribeGpsRequests();
     subscribeGlobalNotifications();
@@ -1134,7 +1172,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelInfoUtili]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelInfoUtili]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
@@ -1143,6 +1181,10 @@ function updateAdminControls() {
   ui.mezzoNId.disabled = !canManage;
   ui.mezzoMarca.disabled = !canManage;
   ui.mezzoModello.disabled = !canManage;
+  if (ui.globalCommessaName) ui.globalCommessaName.disabled = !canManage;
+  if (ui.globalCommessaSelect) ui.globalCommessaSelect.disabled = !canManage;
+  if (ui.globalExcelFile) ui.globalExcelFile.disabled = !canManage;
+  if (ui.globalImportBtn) ui.globalImportBtn.disabled = !canManage || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
   ui.mezzoPortataCarico.disabled = !canManage;
   ui.mezzoMassaComplessivaKg.disabled = !canManage;
   ui.mezzoAlimentazione.disabled = !canManage;
@@ -1215,15 +1257,17 @@ function openManagementPanel(panel) {
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
+    global: { el: ui.panelGlobal, title: "Global" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
   ui.managementPage.setAttribute("aria-hidden", "false");
+  if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   closeSideMenu();
 }
 
@@ -3145,6 +3189,242 @@ function stopCommesseSubscription() {
   }
 }
 
+async function createGlobalCommessa(event) {
+  event.preventDefault();
+  const user = auth.currentUser;
+  if (!user) return;
+  if (!canManageData()) {
+    alert("Solo un admin può gestire il Global.");
+    return;
+  }
+  const nome = String(ui.globalCommessaName?.value || "").trim();
+  if (!nome) return;
+  await db.collection("globalCommesse").add({
+    nome,
+    creatoDa: user.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  ui.globalCommessaForm.reset();
+}
+
+function subscribeGlobalCommesse() {
+  unsubscribeGlobalCommesse = db.collection("globalCommesse").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+    globalCommesseById = new Map();
+    if (ui.globalCommessaSelect) ui.globalCommessaSelect.innerHTML = "<option value=''>Seleziona commessa Global</option>";
+    snapshot.forEach((doc) => {
+      const item = { id: doc.id, ...doc.data() };
+      globalCommesseById.set(doc.id, item);
+      const option = document.createElement("option");
+      option.value = doc.id;
+      option.textContent = item.nome || "Commessa Global";
+      ui.globalCommessaSelect?.appendChild(option);
+    });
+
+    if (selectedGlobalCommessaId && !globalCommesseById.has(selectedGlobalCommessaId)) {
+      selectedGlobalCommessaId = "";
+      globalImpianti = [];
+      renderGlobalImpianti();
+      renderGlobalMap();
+    }
+    if (selectedGlobalCommessaId && ui.globalCommessaSelect) ui.globalCommessaSelect.value = selectedGlobalCommessaId;
+    onGlobalCommessaSelectionChanged();
+  }, (error) => {
+    console.error("Errore caricamento commesse Global:", error);
+    if (ui.globalImportFeedback) ui.globalImportFeedback.textContent = "Errore caricamento commesse Global.";
+  });
+}
+
+function stopGlobalCommesseSubscription() {
+  if (unsubscribeGlobalCommesse) {
+    unsubscribeGlobalCommesse();
+    unsubscribeGlobalCommesse = null;
+  }
+}
+
+function onGlobalCommessaSelectionChanged() {
+  selectedGlobalCommessaId = String(ui.globalCommessaSelect?.value || "").trim();
+  stopGlobalImpiantiSubscription();
+  if (selectedGlobalCommessaId) subscribeGlobalImpianti();
+  if (ui.globalImportBtn) {
+    ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+  }
+  if (!selectedGlobalCommessaId) {
+    globalImpianti = [];
+    renderGlobalImpianti();
+    renderGlobalMap();
+  }
+}
+
+function subscribeGlobalImpianti() {
+  if (!selectedGlobalCommessaId) return;
+  unsubscribeGlobalImpianti = db
+    .collection("globalCommesse")
+    .doc(selectedGlobalCommessaId)
+    .collection("impianti")
+    .onSnapshot((snapshot) => {
+      const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      globalImpianti = combineImpiantiForView(rawImpianti);
+      renderGlobalImpianti();
+      renderGlobalMap();
+    }, (error) => {
+      console.error("Errore caricamento impianti Global:", error);
+      ui.globalImpiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti Global.</p>";
+    });
+}
+
+function stopGlobalImpiantiSubscription() {
+  if (unsubscribeGlobalImpianti) {
+    unsubscribeGlobalImpianti();
+    unsubscribeGlobalImpianti = null;
+  }
+}
+
+function onGlobalExcelSelected(event) {
+  pendingGlobalRows = [];
+  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    ui.globalImportFeedback.textContent = "Nessun file selezionato.";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const workbook = XLSX.read(e.target.result, { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
+      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione);
+      pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
+      ui.globalImportFeedback.textContent = `Excel Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
+      ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+    } catch (error) {
+      console.error("Errore lettura Excel Global:", error);
+      ui.globalImportFeedback.textContent = "Errore lettura Excel Global.";
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function importPendingGlobalRows() {
+  if (!canManageData()) {
+    alert("Solo un admin può importare nel Global.");
+    return;
+  }
+  if (!selectedGlobalCommessaId) {
+    alert("Seleziona una commessa Global.");
+    return;
+  }
+  if (!pendingGlobalRows.length) {
+    alert("Nessuna riga da importare.");
+    return;
+  }
+
+  const ref = db.collection("globalCommesse").doc(selectedGlobalCommessaId).collection("impianti");
+  const existingSnapshot = await ref.get();
+  const existingByKey = new Map();
+  existingSnapshot.forEach((doc) => {
+    const data = doc.data() || {};
+    const key = buildImpiantoKey(data);
+    if (!existingByKey.has(key)) existingByKey.set(key, { id: doc.id, ...data });
+  });
+
+  let created = 0;
+  let updated = 0;
+  for (const row of pendingGlobalRows) {
+    const key = buildImpiantoKey(row);
+    const existing = existingByKey.get(key);
+    if (!existing) {
+      await ref.add({
+        ...row,
+        hasOrdinario: hasOrdinario(row.codicePrezzo),
+        hasStraordinario: hasStraordinario(row.codicePrezzo),
+        tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
+        done: false,
+        doneAt: null,
+        doneBy: "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      created += 1;
+      continue;
+    }
+    const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    if (mergedCodicePrezzo !== String(existing.codicePrezzo || "")) {
+      await ref.doc(existing.id).set({
+        codicePrezzo: mergedCodicePrezzo,
+        voceRiferimento: mergeMultiValue(existing.voceRiferimento, row.voceRiferimento),
+        tipologiaIntervento: mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento),
+        lavorazioniRichieste: mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste),
+        frequenzaAnnua: mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua),
+        hasOrdinario: hasOrdinario(mergedCodicePrezzo),
+        hasStraordinario: hasStraordinario(mergedCodicePrezzo),
+        tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo)
+      }, { merge: true });
+      updated += 1;
+    }
+  }
+
+  const skipped = Math.max(0, pendingGlobalRows.length - created - updated);
+  pendingGlobalRows = [];
+  if (ui.globalExcelFile) ui.globalExcelFile.value = "";
+  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  ui.globalImportFeedback.textContent = `Import Global completato: nuovi ${created}, aggiornati ${updated}, ignorati ${skipped}.`;
+}
+
+function onGlobalImpiantoSearchInput(event) {
+  globalImpiantoSearchTerm = String(event.target.value || "").trim().toLowerCase();
+  renderGlobalImpianti();
+}
+
+function renderGlobalImpianti() {
+  if (!ui.globalImpiantiLista) return;
+  if (!selectedGlobalCommessaId) {
+    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa Global.</p>";
+    return;
+  }
+  const filtered = globalImpianti.filter((impianto) => {
+    if (!globalImpiantoSearchTerm) return true;
+    const haystack = [impianto.denominazione, impianto.comune, impianto.indirizzo, impianto.codicePrezzo]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(globalImpiantoSearchTerm);
+  });
+  if (!filtered.length) {
+    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato.</p>";
+    return;
+  }
+  ui.globalImpiantiLista.innerHTML = filtered.map((impianto) => `
+    <div class="simple-list-item">
+      <span>
+        <b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>
+        <small>${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.indirizzo || "-")} • ${escapeHTML(impianto.codicePrezzo || "-")}</small>
+      </span>
+    </div>
+  `).join("");
+}
+
+function renderGlobalMap() {
+  globalMarkerLayer.clearLayers();
+  if (!selectedGlobalCommessaId) {
+    ui.globalMapFeedback.textContent = "Seleziona una commessa Global.";
+    globalMap.setView([44.4949, 11.3426], 6);
+    return;
+  }
+  const withGps = globalImpianti.filter((item) => item.gpsY != null && item.gpsX != null);
+  if (!withGps.length) {
+    ui.globalMapFeedback.textContent = "Nessuna coordinata GPS disponibile per questa commessa Global.";
+    globalMap.setView([44.4949, 11.3426], 6);
+    return;
+  }
+  ui.globalMapFeedback.textContent = `Mappa impianti Global: ${withGps.length} con coordinate GPS.`;
+  const bounds = [];
+  withGps.forEach((impianto) => {
+    L.marker([impianto.gpsY, impianto.gpsX]).addTo(globalMarkerLayer)
+      .bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "-")}`);
+    bounds.push([impianto.gpsY, impianto.gpsX]);
+  });
+  globalMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+}
+
 function subscribeResources() {
   unsubscribeResources = db
     .collection("commessaResources")
@@ -4366,18 +4646,6 @@ function renderImpianti() {
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, actions);
     addAction(
-      "done",
-      "✅",
-      "Fatto",
-      async () => {
-        const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked) triggerImpiantoWhatsAppAction(impianto);
-      },
-      Boolean(impianto.done),
-      true,
-      actions
-    );
-    addAction(
       "whatsapp",
       "✉️",
       "Invia messaggio",
@@ -4389,6 +4657,18 @@ function renderImpianti() {
       false,
       false,
       actions
+    );
+    addAction(
+      "done",
+      "✅",
+      "Fatto",
+      async () => {
+        const doneMarked = await markImpiantoDone(impianto);
+        if (doneMarked) triggerImpiantoWhatsAppAction(impianto);
+      },
+      Boolean(impianto.done),
+      true,
+      managementActions
     );
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);

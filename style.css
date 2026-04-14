@@ -995,6 +995,13 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+#global-map {
+  height: 280px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
 .map-fullscreen-btn {
   margin-bottom: 0;
 }

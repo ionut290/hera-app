@@ -4371,20 +4371,13 @@ function renderImpianti() {
       "Fatto",
       async () => {
         const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked) {
-          const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
-          markActionAsUsed(whatsappActionId);
-          openWhatsApp(impianto, {
-            targetWindow: whatsappWindow,
-            disableWebFallback: true
-          });
-        }
+        if (doneMarked) triggerImpiantoWhatsAppAction(impianto);
       },
       Boolean(impianto.done),
       true,
       actions
     );
-    addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, actions);
+    addAction("whatsapp", "✉️", "Invia messaggio", () => triggerImpiantoWhatsAppAction(impianto), false, false, actions);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -5474,6 +5467,26 @@ async function setImpiantoDone(commessaId, impiantoIds, done) {
     doneAt,
     doneBy: done ? (user.displayName || user.email || "Operatore") : ""
   })));
+}
+
+function canTriggerImpiantoWhatsApp(impianto, notify = true) {
+  if (canManageData()) return true;
+  if (!currentUserPos) {
+    if (notify) alert("Per inviare WhatsApp devi attivare la posizione GPS.");
+    return false;
+  }
+  const distanceKm = distanceFromUser(impianto);
+  if (!Number.isFinite(distanceKm) || distanceKm > 4) {
+    if (notify) alert("Puoi inviare WhatsApp solo entro 4 km dall'impianto.");
+    return false;
+  }
+  return true;
+}
+
+function triggerImpiantoWhatsAppAction(impianto) {
+  if (!canTriggerImpiantoWhatsApp(impianto, true)) return false;
+  openWhatsApp(impianto);
+  return true;
 }
 
 function openWhatsApp(impianto, options = {}) {

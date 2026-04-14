@@ -4182,7 +4182,18 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, actions);
-    addAction("done", "✅", "Fatto", () => markImpiantoDone(impianto), Boolean(impianto.done), true, actions);
+    addAction(
+      "done",
+      "✅",
+      "Fatto",
+      async () => {
+        const doneMarked = await markImpiantoDone(impianto);
+        if (doneMarked) await openWhatsApp(impianto);
+      },
+      Boolean(impianto.done),
+      true,
+      actions
+    );
     addAction("whatsapp", "✉️", "Invia messaggio", () => openWhatsApp(impianto), false, true, actions);
 
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
@@ -4349,16 +4360,16 @@ async function navigateToImpianto(impianto) {
 
 async function markImpiantoDone(impianto) {
   const ids = getImpiantoDocIds(impianto);
-  if (!selectedCommessaId || !ids.length) return;
+  if (!selectedCommessaId || !ids.length) return false;
   if (!canManageData()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
-      return;
+      return false;
     }
     const distanceKm = distanceFromUser(impianto);
     if (!Number.isFinite(distanceKm) || distanceKm > 4) {
       alert("Puoi segnare FATTO solo entro 4 km dall'impianto.");
-      return;
+      return false;
     }
   }
   const exportPayload = {
@@ -4383,10 +4394,11 @@ async function markImpiantoDone(impianto) {
     } catch (error) {
       console.error("Impianto FATTO ma coda admin non salvata:", error);
     }
-    return;
+    return true;
   }
 
   scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
+  return true;
 }
 
 async function retrySetImpiantoDone(commessaId, impiantoIds, done, retries = 3) {

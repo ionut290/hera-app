@@ -204,10 +204,14 @@
           <option value="">Usa commessa selezionata in home</option>
         </select>
       </div>
-      <h3>Import Excel impianti (senza cancellare i precedenti)</h3>
+      <h3>Import impianti (Excel, CSV, ODS, HTML, TXT)</h3>
       <div class="inline-form">
-        <input id="excel-file" type="file" accept=".xlsx,.xls">
+        <input id="excel-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods,.html,.htm,.txt">
         <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
+      </div>
+      <div class="inline-form">
+        <input id="sheet-url" type="url" placeholder="URL Google Sheet (opzionale)">
+        <button id="sheet-url-import-btn" class="btn" type="button">Carica da Google Sheet</button>
       </div>
       <p id="import-feedback" class="muted"></p>
       <h3>Aggiungi impianto manualmente (senza cancellare i precedenti)</h3>
@@ -234,8 +238,12 @@
         </select>
       </div>
       <div class="inline-form">
-        <input id="global-excel-file" type="file" accept=".xlsx,.xls">
-        <button id="global-import-btn" class="btn" type="button" disabled>Importa Excel Global</button>
+        <input id="global-excel-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods,.html,.htm,.txt">
+        <button id="global-import-btn" class="btn" type="button" disabled>Importa file Global</button>
+      </div>
+      <div class="inline-form">
+        <input id="global-sheet-url" type="url" placeholder="URL Google Sheet Global (opzionale)">
+        <button id="global-sheet-url-import-btn" class="btn" type="button">Carica da Google Sheet</button>
       </div>
       <p id="global-import-feedback" class="muted"></p>
       <div class="search-box">

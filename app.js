@@ -40,6 +40,8 @@ const ui = {
   commessaTargetSelect: document.getElementById("commessa-target-select"),
   excelFile: document.getElementById("excel-file"),
   importBtn: document.getElementById("import-btn"),
+  sheetUrl: document.getElementById("sheet-url"),
+  sheetUrlImportBtn: document.getElementById("sheet-url-import-btn"),
   importFeedback: document.getElementById("import-feedback"),
   impiantiLista: document.getElementById("impianti-lista"),
   gpsStatus: document.getElementById("gps-status"),
@@ -259,6 +261,8 @@ const ui = {
   globalCommessaSelect: document.getElementById("global-commessa-select"),
   globalExcelFile: document.getElementById("global-excel-file"),
   globalImportBtn: document.getElementById("global-import-btn"),
+  globalSheetUrl: document.getElementById("global-sheet-url"),
+  globalSheetUrlImportBtn: document.getElementById("global-sheet-url-import-btn"),
   globalImportFeedback: document.getElementById("global-import-feedback"),
   globalImpiantoSearch: document.getElementById("global-impianto-search"),
   globalImpiantiLista: document.getElementById("global-impianti-lista"),
@@ -678,6 +682,7 @@ ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
+ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
 ui.commessaTargetSelect.addEventListener("change", onCommessaTargetChanged);
 ui.chatOpenBtn.addEventListener("click", openChatModal);
 ui.chatCloseBtn.addEventListener("click", closeChatModal);
@@ -762,6 +767,7 @@ ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.globalCommessaForm?.addEventListener("submit", createGlobalCommessa);
 ui.globalExcelFile?.addEventListener("change", onGlobalExcelSelected);
 ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
+ui.globalSheetUrlImportBtn?.addEventListener("click", importGlobalFromGoogleSheetUrl);
 ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
 ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
@@ -3290,19 +3296,37 @@ function onGlobalExcelSelected(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const workbook = XLSX.read(e.target.result, { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
-      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione);
+      const rows = rowsFromWorkbookBuffer(e.target.result);
+      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
       pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
-      ui.globalImportFeedback.textContent = `Excel Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
+      ui.globalImportFeedback.textContent = `File Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
       ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
     } catch (error) {
       console.error("Errore lettura Excel Global:", error);
-      ui.globalImportFeedback.textContent = "Errore lettura Excel Global.";
+      ui.globalImportFeedback.textContent = "Errore lettura file Global.";
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+async function importGlobalFromGoogleSheetUrl() {
+  pendingGlobalRows = [];
+  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  const value = String(ui.globalSheetUrl?.value || "").trim();
+  if (!value) {
+    ui.globalImportFeedback.textContent = "Inserisci URL Google Sheet.";
+    return;
+  }
+  try {
+    const rows = await fetchGoogleSheetRows(value);
+    const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
+    pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
+    ui.globalImportFeedback.textContent = `Google Sheet Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
+    ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+  } catch (error) {
+    console.error("Errore import Google Sheet Global:", error);
+    ui.globalImportFeedback.textContent = "Errore lettura Google Sheet Global. Verifica link/condivisione.";
+  }
 }
 
 async function importPendingGlobalRows() {
@@ -3348,6 +3372,8 @@ async function importPendingGlobalRows() {
       continue;
     }
     const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
+    const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
     if (mergedCodicePrezzo !== String(existing.codicePrezzo || "")) {
       await ref.doc(existing.id).set({
         codicePrezzo: mergedCodicePrezzo,
@@ -3355,10 +3381,14 @@ async function importPendingGlobalRows() {
         tipologiaIntervento: mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento),
         lavorazioniRichieste: mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste),
         frequenzaAnnua: mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua),
+        extraFields: mergedExtraFields,
         hasOrdinario: hasOrdinario(mergedCodicePrezzo),
         hasStraordinario: hasStraordinario(mergedCodicePrezzo),
         tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo)
       }, { merge: true });
+      updated += 1;
+    } else if (extraFieldsChanged) {
+      await ref.doc(existing.id).set({ extraFields: mergedExtraFields }, { merge: true });
       updated += 1;
     }
   }
@@ -4001,11 +4031,8 @@ function onExcelSelected(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const workbook = XLSX.read(e.target.result, { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
-
-      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione);
+      const rows = rowsFromWorkbookBuffer(e.target.result);
+      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
       pendingRows = mergeRowsByImpianto(normalizedRows);
       ui.importFeedback.textContent = `Righe valide: ${normalizedRows.length}. Impianti unici: ${pendingRows.length}`;
       ui.importBtn.disabled = !auth.currentUser || !getTargetCommessaId() || pendingRows.length === 0 || !canManageData();
@@ -4016,6 +4043,26 @@ function onExcelSelected(event) {
   };
 
   reader.readAsArrayBuffer(file);
+}
+
+async function importFromGoogleSheetUrl() {
+  pendingRows = [];
+  ui.importBtn.disabled = true;
+  const value = String(ui.sheetUrl?.value || "").trim();
+  if (!value) {
+    ui.importFeedback.textContent = "Inserisci URL Google Sheet.";
+    return;
+  }
+  try {
+    const rows = await fetchGoogleSheetRows(value);
+    const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
+    pendingRows = mergeRowsByImpianto(normalizedRows);
+    ui.importFeedback.textContent = `Google Sheet letto: ${normalizedRows.length} righe. Impianti unici: ${pendingRows.length}`;
+    ui.importBtn.disabled = !auth.currentUser || !getTargetCommessaId() || pendingRows.length === 0 || !canManageData();
+  } catch (error) {
+    console.error("Errore import Google Sheet:", error);
+    ui.importFeedback.textContent = "Errore lettura Google Sheet. Verifica link/condivisione.";
+  }
 }
 
 async function importPendingRows() {
@@ -4070,11 +4117,14 @@ async function importPendingRows() {
     const mergedTipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
     const mergedLavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
     const mergedFrequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
+    const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
+    const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
     const changed = mergedCodicePrezzo !== String(existing.codicePrezzo || "")
       || mergedVoceRiferimento !== String(existing.voceRiferimento || "")
       || mergedTipologiaIntervento !== String(existing.tipologiaIntervento || "")
       || mergedLavorazioniRichieste !== String(existing.lavorazioniRichieste || "")
-      || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "");
+      || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "")
+      || extraFieldsChanged;
     if (!changed) return;
     rowsToUpdate.push({
       id: existing.id,
@@ -4082,7 +4132,8 @@ async function importPendingRows() {
       voceRiferimento: mergedVoceRiferimento,
       tipologiaIntervento: mergedTipologiaIntervento,
       lavorazioniRichieste: mergedLavorazioniRichieste,
-      frequenzaAnnua: mergedFrequenzaAnnua
+      frequenzaAnnua: mergedFrequenzaAnnua,
+      extraFields: mergedExtraFields
     });
     existing.codicePrezzo = mergedCodicePrezzo;
     existing.voceRiferimento = mergedVoceRiferimento;
@@ -4120,6 +4171,7 @@ async function importPendingRows() {
           tipologiaIntervento: row.tipologiaIntervento,
           lavorazioniRichieste: row.lavorazioniRichieste,
           frequenzaAnnua: row.frequenzaAnnua,
+          extraFields: row.extraFields || {},
           hasOrdinario: hasOrdinario(row.codicePrezzo),
           hasStraordinario: hasStraordinario(row.codicePrezzo),
           tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo)
@@ -4210,21 +4262,46 @@ async function addManualImpianto(event) {
 
 function normalizeRow(row) {
   const keys = normalizeKeys(row);
+  const consumedKeys = new Set();
+
+  const idSapEntry = getValueWithMatchedKey(keys, ["idsap", "codicehera", "codiceimpianto", "codicecliente", "code"]);
+  if (idSapEntry.key) consumedKeys.add(idSapEntry.key);
+  const denominazioneEntry = getValueWithMatchedKey(keys, ["denominazioneimpianto", "denominazione", "impianto", "impiantounico", "sito", "sitonome", "nomeimpianto"]);
+  if (denominazioneEntry.key) consumedKeys.add(denominazioneEntry.key);
+  const comuneEntry = getValueWithMatchedKey(keys, ["comuneubicazioneimpianto", "comuneubicazione", "comune", "citta", "city"]);
+  if (comuneEntry.key) consumedKeys.add(comuneEntry.key);
+  const indirizzoEntry = getValueWithMatchedKey(keys, ["viaecivicodiubicazioneimpianto", "indirizzoubicazione", "indirizzo", "via", "address"]);
+  if (indirizzoEntry.key) consumedKeys.add(indirizzoEntry.key);
+  const voceEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "voce", "riferimento", "codiceintervento"]);
+  if (voceEntry.key) consumedKeys.add(voceEntry.key);
+  const codicePrezzoEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "codiceprezzo", "prezzo", "codice"]);
+  if (codicePrezzoEntry.key) consumedKeys.add(codicePrezzoEntry.key);
+  const gpsYEntry = getValueWithMatchedKey(keys, ["coordinategpsy", "gpslat", "latitudine", "latitude"]);
+  if (gpsYEntry.key) consumedKeys.add(gpsYEntry.key);
+  const gpsXEntry = getValueWithMatchedKey(keys, ["coordinategpsx", "gpslong", "gpslng", "longitudine", "longitude"]);
+  if (gpsXEntry.key) consumedKeys.add(gpsXEntry.key);
+
+  const extraFields = {};
+  Object.entries(keys).forEach(([key, value]) => {
+    if (!value || consumedKeys.has(key)) return;
+    extraFields[key] = value;
+  });
 
   return {
     distretto: getValue(keys, ["distretto"]),
-    idSap: getValue(keys, ["idsap"]),
-    denominazione: getValue(keys, ["denominazioneimpianto", "denominazione", "impianto"]),
-    comune: getValue(keys, ["comuneubicazioneimpianto", "comune"]),
-    indirizzo: getValue(keys, ["viaecivicodiubicazioneimpianto", "indirizzo", "via"]),
-    voceRiferimento: getValue(keys, ["vocediriferimentoelencoprezzi"]),
-    codicePrezzo: getValue(keys, ["vocediriferimentoelencoprezzi", "codiceprezzo"]),
-    sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim"]),
-    frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin"]),
-    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste"]),
+    idSap: idSapEntry.value,
+    denominazione: denominazioneEntry.value,
+    comune: comuneEntry.value,
+    indirizzo: indirizzoEntry.value,
+    voceRiferimento: voceEntry.value,
+    codicePrezzo: codicePrezzoEntry.value,
+    sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim", "superficiemq"]),
+    frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
+    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]),
     lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
-    gpsY: parseCoordinate(getValue(keys, ["coordinategpsy"])),
-    gpsX: parseCoordinate(getValue(keys, ["coordinategpsx"]))
+    gpsY: parseCoordinate(gpsYEntry.value),
+    gpsX: parseCoordinate(gpsXEntry.value),
+    extraFields
   };
 }
 
@@ -4251,6 +4328,7 @@ function mergeRowsByImpianto(rows) {
     if (!existing.idSap && row.idSap) existing.idSap = row.idSap;
     if (existing.gpsY == null && row.gpsY != null) existing.gpsY = row.gpsY;
     if (existing.gpsX == null && row.gpsX != null) existing.gpsX = row.gpsX;
+    existing.extraFields = mergeExtraFields(existing.extraFields, row.extraFields);
   });
 
   return Array.from(grouped.values());
@@ -4338,10 +4416,62 @@ function normalizeKeys(obj) {
 }
 
 function getValue(obj, aliases) {
+  return getValueWithMatchedKey(obj, aliases).value;
+}
+
+function getValueWithMatchedKey(obj, aliases) {
   for (const alias of aliases) {
-    if (obj[alias]) return obj[alias];
+    if (obj[alias]) return { value: obj[alias], key: alias };
   }
-  return "";
+  const keys = Object.keys(obj);
+  for (const alias of aliases) {
+    const matchedKey = keys.find((key) => key.includes(alias) && obj[key]);
+    if (matchedKey) return { value: obj[matchedKey], key: matchedKey };
+  }
+  return { value: "", key: "" };
+}
+
+function mergeExtraFields(oldFields, newFields) {
+  const current = oldFields && typeof oldFields === "object" ? oldFields : {};
+  const incoming = newFields && typeof newFields === "object" ? newFields : {};
+  const merged = { ...current };
+  Object.entries(incoming).forEach(([key, value]) => {
+    const oldValue = String(merged[key] || "").trim();
+    const newValue = String(value || "").trim();
+    if (!newValue) return;
+    if (!oldValue) {
+      merged[key] = newValue;
+      return;
+    }
+    merged[key] = mergeMultiValue(oldValue, newValue);
+  });
+  return merged;
+}
+
+function rowsFromWorkbookBuffer(arrayBuffer) {
+  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
+}
+
+async function fetchGoogleSheetRows(sheetUrl) {
+  const exportUrl = buildGoogleSheetCsvUrl(sheetUrl);
+  const response = await fetch(exportUrl);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const csvText = await response.text();
+  const workbook = XLSX.read(csvText, { type: "string" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(firstSheet, { defval: "", raw: false });
+}
+
+function buildGoogleSheetCsvUrl(inputUrl) {
+  const url = new URL(inputUrl);
+  if (!/docs\.google\.com$/i.test(url.hostname)) return inputUrl;
+  const match = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/i);
+  if (!match || !match[1]) return inputUrl;
+  const sheetId = match[1];
+  const gid = url.searchParams.get("gid") || "0";
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 }
 
 function parseCoordinate(value) {

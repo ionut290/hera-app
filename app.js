@@ -4371,7 +4371,11 @@ function renderImpianti() {
       "Fatto",
       async () => {
         const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked) await openWhatsApp(impianto);
+        if (doneMarked) {
+          const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
+          markActionAsUsed(whatsappActionId);
+          openWhatsApp(impianto, { target: "_self" });
+        }
       },
       Boolean(impianto.done),
       true,
@@ -5469,7 +5473,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done) {
   })));
 }
 
-function openWhatsApp(impianto) {
+function openWhatsApp(impianto, options = {}) {
   const user = auth.currentUser;
   if (!user) {
     alert("Devi fare login.");
@@ -5496,7 +5500,9 @@ function openWhatsApp(impianto) {
   ].join("\n");
 
   const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank");
+  const target = options?.target === "_self" ? "_self" : "_blank";
+  const popup = window.open(url, target);
+  if (!popup) window.location.href = url;
 }
 
 function openImpiantoReportModal(impianto) {

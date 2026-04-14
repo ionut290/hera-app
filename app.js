@@ -2,10 +2,20 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
+const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
+let firebaseMessaging = null;
 
 db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
   console.warn("Persistenza offline Firestore non disponibile:", error && error.code ? error.code : error);
 });
+
+if (firebase.messaging && typeof firebase.messaging === "function") {
+  try {
+    firebaseMessaging = firebase.messaging();
+  } catch (error) {
+    console.warn("Firebase Messaging non inizializzato:", error);
+  }
+}
 
 const ui = {
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
@@ -278,6 +288,7 @@ let driveChatFolderId = "";
 let driveReportsFolderId = "";
 let driveSquadreFolderId = "";
 let driveHelpCenterFolderId = "";
+let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let personaleRecords = [];
@@ -373,18 +384,55 @@ const PERSONAL_SERVICE_CATEGORIES = {
   }
 };
 const PUSH_PUBLIC_VAPID_KEY = resolvePushPublicVapidKey();
+const AUTO_ENABLE_NOTIFICATIONS_KEY = "heraAutoEnableNotifications";
 let serviceWorkerRegistration = null;
+let hasTriedAutoEnableNotifications = false;
 
 function resolvePushPublicVapidKey() {
   const sources = [
     window?.HERA_PUSH_PUBLIC_VAPID_KEY,
     document.querySelector('meta[name="hera-push-vapid-key"]')?.content,
-    localStorage.getItem("heraPushPublicVapidKey")
+    localStorage.getItem("heraPushPublicVapidKey"),
+    DEFAULT_PUSH_PUBLIC_VAPID_KEY
   ];
   for (const value of sources) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "";
+}
+
+function isAutoNotificationEnabled() {
+  const value = localStorage.getItem(AUTO_ENABLE_NOTIFICATIONS_KEY);
+  if (value === null) {
+    localStorage.setItem(AUTO_ENABLE_NOTIFICATIONS_KEY, "true");
+    return true;
+  }
+  return value === "true";
+}
+
+function setAutoNotificationEnabled(enabled) {
+  localStorage.setItem(AUTO_ENABLE_NOTIFICATIONS_KEY, enabled ? "true" : "false");
+}
+
+async function persistNotificationAutoPreference(enabled) {
+  setAutoNotificationEnabled(enabled);
+  if (!currentUser) return;
+  try {
+    await db.collection("platformUsers").doc(currentUser.uid).set({
+      notificationsAutoEnabled: enabled,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email || ""
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Salvataggio preferenza notifiche non riuscito:", error);
+  }
+}
+
+function syncNotificationAutoPreferenceFromProfile() {
+  if (!currentUser) return;
+  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  if (!row || typeof row.notificationsAutoEnabled !== "boolean") return;
+  setAutoNotificationEnabled(row.notificationsAutoEnabled);
 }
 const MENU_HOWTO_CONTENT = {
   "open-panel-commesse": {
@@ -687,7 +735,10 @@ ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
 ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
 ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
-ui.enableNotificationsBtn?.addEventListener("click", enablePushNotifications);
+ui.enableNotificationsBtn?.addEventListener("click", async () => {
+  await persistNotificationAutoPreference(true);
+  await enablePushNotifications({ auto: false });
+});
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
@@ -753,17 +804,69 @@ async function initPwaCapabilities() {
     return;
   }
   updateNotificationUi("Notifiche disattive. Premi 'Attiva notifiche'.");
+  await maybeAutoEnableNotifications();
 }
 
-async function enablePushNotifications() {
+async function maybeAutoEnableNotifications() {
+  if (hasTriedAutoEnableNotifications) return;
+  if (!isAutoNotificationEnabled()) return;
   if (!("Notification" in window)) return;
-  const permission = await Notification.requestPermission();
+  if (Notification.permission !== "default") return;
+  hasTriedAutoEnableNotifications = true;
+  updateNotificationUi("Attivazione automatica notifiche in corso...");
+  await enablePushNotifications({ auto: true });
+}
+
+async function enablePushNotifications(options = {}) {
+  const { auto = false } = options;
+  if (!("Notification" in window)) return;
+  let permission = "default";
+  try {
+    permission = await Notification.requestPermission();
+  } catch (error) {
+    console.warn("Richiesta permesso notifiche non riuscita:", error);
+    updateNotificationUi("Impossibile richiedere i permessi notifiche su questo browser.");
+    return;
+  }
   if (permission !== "granted") {
+    if (permission === "default" && auto) {
+      updateNotificationUi("Attivazione automatica bloccata dal browser. Premi 'Attiva notifiche'.");
+      return;
+    }
     updateNotificationUi("Notifiche non autorizzate.");
     return;
   }
-  updateNotificationUi("Notifiche autorizzate.");
-  await ensurePushSubscription();
+  await attivaNotifiche();
+}
+
+async function attivaNotifiche() {
+  if (!firebaseMessaging) {
+    updateNotificationUi("Firebase Messaging non disponibile su questo dispositivo.");
+    return;
+  }
+  if (!PUSH_PUBLIC_VAPID_KEY) {
+    updateNotificationUi("Chiave VAPID non configurata.");
+    return;
+  }
+  try {
+    if (!serviceWorkerRegistration && "serviceWorker" in navigator) {
+      serviceWorkerRegistration = await navigator.serviceWorker.ready;
+    }
+    const token = await firebaseMessaging.getToken({
+      vapidKey: PUSH_PUBLIC_VAPID_KEY,
+      serviceWorkerRegistration
+    });
+    if (!token) {
+      updateNotificationUi("Token push non disponibile. Riprova.");
+      return;
+    }
+    localStorage.setItem("heraPushFcmToken", token);
+    console.log("Token push:", token);
+    updateNotificationUi("Notifiche push attive.", true);
+  } catch (error) {
+    console.error("Errore notifiche:", error);
+    updateNotificationUi("Errore attivazione notifiche push.", true);
+  }
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -774,27 +877,16 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function ensurePushSubscription() {
-  if (!serviceWorkerRegistration || !("pushManager" in serviceWorkerRegistration)) {
-    updateNotificationUi("Notifiche attive (senza push remoto).", true);
+  if (!firebaseMessaging) {
+    updateNotificationUi("Notifiche attive (Firebase Messaging non disponibile).", true);
     return;
   }
-  try {
-    let subscription = await serviceWorkerRegistration.pushManager.getSubscription();
-    if (!subscription && PUSH_PUBLIC_VAPID_KEY) {
-      subscription = await serviceWorkerRegistration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(PUSH_PUBLIC_VAPID_KEY)
-      });
-      console.info("Push subscription pronta:", subscription.toJSON());
-    }
-    updateNotificationUi(
-      subscription ? "Notifiche push pronte (configurare backend invio)." : "Notifiche attive. Manca solo chiave VAPID per push remoto.",
-      true
-    );
-  } catch (error) {
-    console.warn("Errore setup push:", error);
-    updateNotificationUi("Notifiche attive ma setup push incompleto.", true);
+  const existingToken = localStorage.getItem("heraPushFcmToken");
+  if (existingToken) {
+    updateNotificationUi("Notifiche push attive.", true);
+    return;
   }
+  await attivaNotifiche();
 }
 
 async function sendTestNotification() {
@@ -6511,6 +6603,7 @@ async function upsertCurrentPlatformUser() {
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
     isAdmin: canManageData(),
+    notificationsAutoEnabled: isAutoNotificationEnabled(),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
@@ -6548,6 +6641,8 @@ function subscribeUsers() {
   unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
     platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+    syncNotificationAutoPreferenceFromProfile();
+    maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
     renderUserPermissionList();
@@ -8107,6 +8202,30 @@ async function buildAppBackupPayload(dateKey, squadraPayload) {
   };
 }
 
+async function refreshDriveAccessToken() {
+  if (driveTokenRefreshPromise) return driveTokenRefreshPromise;
+  if (!auth.currentUser) return false;
+  driveTokenRefreshPromise = (async () => {
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/drive.file");
+      provider.setCustomParameters({ prompt: "none" });
+      const result = await auth.signInWithPopup(provider);
+      const accessToken = extractGoogleAccessToken(result);
+      if (!accessToken) return false;
+      persistDriveAccessToken(accessToken);
+      await autoConnectDriveBridge({ notifyOnError: false });
+      return true;
+    } catch (error) {
+      console.warn("Refresh automatico token Drive non riuscito:", error);
+      return false;
+    } finally {
+      driveTokenRefreshPromise = null;
+    }
+  })();
+  return driveTokenRefreshPromise;
+}
+
 async function driveApiFetch(url, options = {}) {
   if (!driveAccessToken) {
     throw new Error("Google Drive non collegato. Premi 'Collega Google Drive'.");
@@ -8121,8 +8240,11 @@ async function driveApiFetch(url, options = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
+    const refreshed = await refreshDriveAccessToken();
+    if (refreshed) {
+      return driveApiFetch(url, options);
+    }
     localStorage.removeItem("googleDriveAccessToken");
-    localStorage.setItem("googleDriveConnected", "false");
     updateDriveStatus(false);
     throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
   }

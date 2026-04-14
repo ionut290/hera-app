@@ -23,6 +23,7 @@
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
+      <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
@@ -218,6 +219,32 @@
         <button id="manual-impianto-submit" class="btn btn-primary" type="submit">Aggiungi impianto</button>
       </form>
       <p id="manual-impianto-feedback" class="muted"></p>
+    </div>
+    <div id="panel-global" class="management-panel hidden">
+      <h3>Global (separato dall'app principale)</h3>
+      <p class="muted">Le commesse Global sono autonome e non interagiscono con le commesse standard.</p>
+      <form id="global-commessa-form" class="inline-form">
+        <input type="text" id="global-commessa-name" placeholder="Nuova commessa Global" required>
+        <button class="btn btn-primary" type="submit">Aggiungi commessa Global</button>
+      </form>
+      <div class="inline-form">
+        <label for="global-commessa-select">Commessa Global</label>
+        <select id="global-commessa-select">
+          <option value="">Seleziona commessa Global</option>
+        </select>
+      </div>
+      <div class="inline-form">
+        <input id="global-excel-file" type="file" accept=".xlsx,.xls">
+        <button id="global-import-btn" class="btn" type="button" disabled>Importa Excel Global</button>
+      </div>
+      <p id="global-import-feedback" class="muted"></p>
+      <div class="search-box">
+        <span aria-hidden="true">🔎</span>
+        <input id="global-impianto-search" type="search" placeholder="Cerca impianto nella commessa Global">
+      </div>
+      <div id="global-impianti-lista" class="simple-list"></div>
+      <div id="global-map"></div>
+      <p id="global-map-feedback" class="muted"></p>
     </div>
     <div id="panel-squadre" class="management-panel hidden">
       <form id="squadra-form" class="squadra-form">

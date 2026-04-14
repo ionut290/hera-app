@@ -4375,7 +4375,10 @@ function renderImpianti() {
         if (doneMarked) {
           const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;
           markActionAsUsed(whatsappActionId);
-          openWhatsApp(impianto, { target: "_self", preferContactPicker: true });
+          openWhatsApp(impianto, {
+            targetWindow: whatsappWindow,
+            preferContactPicker: true
+          });
         }
       },
       Boolean(impianto.done),

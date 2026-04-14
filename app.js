@@ -273,6 +273,7 @@ let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
+let unsubscribeGlobalNotifications = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -329,7 +330,12 @@ let activeResourceManageFilter = "";
 let editingImpiantoIds = [];
 let reportingImpianto = null;
 let chatRetentionTimer = null;
+let geolocationWatchId = null;
+let activeNearbyImpiantoContext = null;
+let globalNotificationsInitialized = false;
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const PROXIMITY_NEAR_KM = 0.25;
+const PROXIMITY_AWAY_KM = 0.7;
 const GPS_APPROVAL_PHONE = "3892352575";
 const HOURS_WHATSAPP_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
@@ -840,15 +846,15 @@ async function enablePushNotifications(options = {}) {
 }
 
 async function attivaNotifiche() {
-  if (!firebaseMessaging) {
-    updateNotificationUi("Firebase Messaging non disponibile su questo dispositivo.");
-    return;
-  }
-  if (!PUSH_PUBLIC_VAPID_KEY) {
-    updateNotificationUi("Chiave VAPID non configurata.");
-    return;
-  }
   try {
+    if (!firebaseMessaging) {
+      updateNotificationUi("Notifiche locali attive (push cloud non disponibile).", true);
+      return;
+    }
+    if (!PUSH_PUBLIC_VAPID_KEY) {
+      updateNotificationUi("Notifiche locali attive (chiave VAPID assente).", true);
+      return;
+    }
     if (!serviceWorkerRegistration && "serviceWorker" in navigator) {
       serviceWorkerRegistration = await navigator.serviceWorker.ready;
     }
@@ -856,16 +862,22 @@ async function attivaNotifiche() {
       vapidKey: PUSH_PUBLIC_VAPID_KEY,
       serviceWorkerRegistration
     });
-    if (!token) {
-      updateNotificationUi("Token push non disponibile. Riprova.");
+    if (token) {
+      localStorage.setItem("heraPushFcmToken", token);
+      console.log("Token push:", token);
+      if (currentUser) {
+        await db.collection("platformUsers").doc(currentUser.uid).set({
+          pushToken: token,
+          pushTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      updateNotificationUi("Notifiche push attive.", true);
       return;
     }
-    localStorage.setItem("heraPushFcmToken", token);
-    console.log("Token push:", token);
-    updateNotificationUi("Notifiche push attive.", true);
+    updateNotificationUi("Notifiche locali attive (token push non disponibile).", true);
   } catch (error) {
     console.error("Errore notifiche:", error);
-    updateNotificationUi("Errore attivazione notifiche push.", true);
+    updateNotificationUi("Notifiche locali attive (push cloud non disponibile).", true);
   }
 }
 
@@ -890,6 +902,10 @@ async function ensurePushSubscription() {
 }
 
 async function sendTestNotification() {
+  if (Notification.permission !== "granted") {
+    updateNotificationUi("Abilita prima i permessi notifiche.");
+    return;
+  }
   const title = "Hera App";
   const options = {
     body: "Test notifiche completato con successo.",
@@ -910,6 +926,76 @@ async function sendTestNotification() {
     return;
   }
   new Notification(title, options);
+}
+
+async function showLocalNotification(title, options = {}) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return false;
+  const payload = {
+    icon: "./icons/hera-icon.svg",
+    badge: "./icons/hera-icon.svg",
+    ...options
+  };
+  if (serviceWorkerRegistration) {
+    await serviceWorkerRegistration.showNotification(title, payload);
+    return true;
+  }
+  new Notification(title, payload);
+  return true;
+}
+
+async function publishGlobalNotificationEvent(eventType, payload = {}) {
+  if (!currentUser) return;
+  try {
+    await db.collection("appNotifications").add({
+      eventType,
+      title: payload.title || "Hera App",
+      body: payload.body || "Nuovo aggiornamento operativo.",
+      commessaId: payload.commessaId || "",
+      commessaName: payload.commessaName || "",
+      impiantoName: payload.impiantoName || "",
+      impiantoKey: payload.impiantoKey || "",
+      createdByUid: currentUser.uid || "",
+      createdByName: currentUser.displayName || currentUser.email || "Operatore",
+      createdByEmail: currentUser.email || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    console.warn("Invio evento notifica globale non riuscito:", error);
+  }
+}
+
+function subscribeGlobalNotifications() {
+  stopGlobalNotificationsSubscription();
+  globalNotificationsInitialized = false;
+  unsubscribeGlobalNotifications = db.collection("appNotifications")
+    .orderBy("createdAt", "desc")
+    .limit(40)
+    .onSnapshot(async (snapshot) => {
+      if (!globalNotificationsInitialized) {
+        globalNotificationsInitialized = true;
+        return;
+      }
+      const added = snapshot.docChanges().filter((change) => change.type === "added");
+      for (const change of added) {
+        const data = change.doc.data() || {};
+        if (String(data.createdByUid || "") === String(currentUser?.uid || "")) continue;
+        await showLocalNotification(data.title || "Hera App", {
+          body: data.body || "Nuovo aggiornamento operativo.",
+          tag: `hera-event-${change.doc.id}`,
+          data: { url: "./index.html" }
+        });
+      }
+    }, (error) => {
+      console.warn("Sottoscrizione notifiche globali non disponibile:", error);
+    });
+}
+
+function stopGlobalNotificationsSubscription() {
+  if (unsubscribeGlobalNotifications) {
+    unsubscribeGlobalNotifications();
+    unsubscribeGlobalNotifications = null;
+  }
+  globalNotificationsInitialized = false;
 }
 
 function weatherCodeLabel(weatherCode) {
@@ -982,6 +1068,7 @@ auth.onAuthStateChanged((user) => {
   stopResourcesSubscription();
   stopPrivateDocsSubscription();
   stopGpsRequestsSubscription();
+  stopGlobalNotificationsSubscription();
   stopChatRetentionLoop();
   selectedCommessaId = "";
   selectedCommessaName = "";
@@ -1033,6 +1120,7 @@ auth.onAuthStateChanged((user) => {
     subscribeResources();
     subscribePrivateDocs();
     subscribeGpsRequests();
+    subscribeGlobalNotifications();
     processPendingSheetExports();
     startChatRetentionLoop();
   } else {
@@ -3522,6 +3610,7 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  activeNearbyImpiantoContext = null;
   localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
   setImpiantiViewMode("todo");
   if (!ui.commessaTargetSelect.value) {
@@ -3588,6 +3677,7 @@ function subscribeImpianti() {
       renderHeaderActivitySummary();
       renderImpianti();
       renderMap();
+      evaluateImpiantoProximityAlerts();
 
       const currentDoneSignature = rawImpianti
         .filter((impianto) => Boolean(impianto.done))
@@ -3613,6 +3703,7 @@ function stopImpiantiSubscription() {
     unsubscribeImpianti = null;
   }
   currentImpianti = [];
+  activeNearbyImpiantoContext = null;
   renderHeaderActivitySummary();
   clearMap();
 }
@@ -4485,10 +4576,26 @@ async function markImpiantoDone(impianto) {
     } catch (error) {
       console.error("Impianto FATTO ma coda admin non salvata:", error);
     }
+    await publishGlobalNotificationEvent("impianto-done", {
+      title: "Impianto completato",
+      body: `${doneByLocal} ha premuto FATTO su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+      commessaId: selectedCommessaId,
+      commessaName: selectedCommessaName || "Commessa",
+      impiantoName: impianto.denominazione || "Impianto",
+      impiantoKey: buildImpiantoKey(impianto)
+    });
     return true;
   }
 
   scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
+  await publishGlobalNotificationEvent("impianto-done", {
+    title: "Impianto completato",
+    body: `${doneByLocal} ha premuto FATTO su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+    commessaId: selectedCommessaId,
+    commessaName: selectedCommessaName || "Commessa",
+    impiantoName: impianto.denominazione || "Impianto",
+    impiantoKey: buildImpiantoKey(impianto)
+  });
   return true;
 }
 
@@ -5220,6 +5327,17 @@ async function saveSquadraComposition(event) {
     dateKey
   }, { merge: true });
   await backupSquadreSnapshotToDrive(dateKey, payload);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = getDateKeyFromLocalDate(tomorrow);
+  if (dateKey === tomorrowKey) {
+    await publishGlobalNotificationEvent("next-day-squadre-published", {
+      title: "Nuove squadre giorno successivo",
+      body: `${currentUser?.displayName || currentUser?.email || "Operatore"} ha pubblicato le squadre del ${new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT")} per ${payload.commessaNome}.`,
+      commessaId,
+      commessaName: payload.commessaNome
+    });
+  }
   ui.squadraCalendarDate.value = dateKey;
 }
 
@@ -6375,8 +6493,9 @@ function initGeolocation() {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
     return;
   }
+  if (geolocationWatchId != null) navigator.geolocation.clearWatch(geolocationWatchId);
 
-  navigator.geolocation.getCurrentPosition((pos) => {
+  const onPosition = (pos) => {
     currentUserPos = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude
@@ -6384,6 +6503,11 @@ function initGeolocation() {
     ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
     renderImpianti();
     renderMap();
+    evaluateImpiantoProximityAlerts();
+  };
+
+  navigator.geolocation.getCurrentPosition((pos) => {
+    onPosition(pos);
     fetchWeather();
   }, () => {
     ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
@@ -6392,6 +6516,81 @@ function initGeolocation() {
     enableHighAccuracy: true,
     timeout: 8000
   });
+
+  geolocationWatchId = navigator.geolocation.watchPosition(onPosition, () => {
+    ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+  }, {
+    enableHighAccuracy: true,
+    maximumAge: 10000,
+    timeout: 10000
+  });
+}
+
+function buildImpiantoEventLocalKey(eventType, commessaId, impiantoKey) {
+  return `heraNotified:${eventType}:${commessaId || ""}:${impiantoKey || ""}`;
+}
+
+function hasLocalImpiantoEvent(eventType, commessaId, impiantoKey) {
+  return localStorage.getItem(buildImpiantoEventLocalKey(eventType, commessaId, impiantoKey)) === "1";
+}
+
+function markLocalImpiantoEvent(eventType, commessaId, impiantoKey) {
+  localStorage.setItem(buildImpiantoEventLocalKey(eventType, commessaId, impiantoKey), "1");
+}
+
+function evaluateImpiantoProximityAlerts() {
+  if (!selectedCommessaId || !currentUserPos || !Array.isArray(currentImpianti) || !currentImpianti.length) return;
+  const todoSorted = combineImpiantiForView(currentImpianti)
+    .filter((impianto) => !impianto.done)
+    .sort((a, b) => distanceFromUser(a) - distanceFromUser(b));
+  const nearest = todoSorted[0];
+  if (!nearest) {
+    activeNearbyImpiantoContext = null;
+    return;
+  }
+  const nearestKey = buildImpiantoKey(nearest);
+  const distanceKm = distanceFromUser(nearest);
+  if (!Number.isFinite(distanceKm)) return;
+
+  if (!activeNearbyImpiantoContext && distanceKm <= PROXIMITY_NEAR_KM) {
+    activeNearbyImpiantoContext = { commessaId: selectedCommessaId, impiantoKey: nearestKey };
+    if (!hasLocalImpiantoEvent("near", selectedCommessaId, nearestKey)) {
+      markLocalImpiantoEvent("near", selectedCommessaId, nearestKey);
+      const commessaName = selectedCommessaName || "Commessa";
+      const impiantoName = nearest.denominazione || "Impianto";
+      publishGlobalNotificationEvent("impianto-near", {
+        title: "Operatore vicino impianto",
+        body: `${currentUser?.displayName || currentUser?.email || "Operatore"} è vicino a ${impiantoName} (${commessaName}).`,
+        commessaId: selectedCommessaId,
+        commessaName,
+        impiantoName,
+        impiantoKey: nearestKey
+      });
+    }
+    return;
+  }
+
+  if (!activeNearbyImpiantoContext) return;
+  if (activeNearbyImpiantoContext.commessaId !== selectedCommessaId || activeNearbyImpiantoContext.impiantoKey !== nearestKey) return;
+  if (distanceKm < PROXIMITY_AWAY_KM) return;
+  if (nearest.done) {
+    activeNearbyImpiantoContext = null;
+    return;
+  }
+  if (!hasLocalImpiantoEvent("away-without-done", selectedCommessaId, nearestKey)) {
+    markLocalImpiantoEvent("away-without-done", selectedCommessaId, nearestKey);
+    const commessaName = selectedCommessaName || "Commessa";
+    const impiantoName = nearest.denominazione || "Impianto";
+    publishGlobalNotificationEvent("impianto-away-without-done", {
+      title: "Allontanamento senza FATTO",
+      body: `${currentUser?.displayName || currentUser?.email || "Operatore"} si è allontanato da ${impiantoName} senza premere FATTO.`,
+      commessaId: selectedCommessaId,
+      commessaName,
+      impiantoName,
+      impiantoKey: nearestKey
+    });
+  }
+  activeNearbyImpiantoContext = null;
 }
 
 async function fetchWeather() {

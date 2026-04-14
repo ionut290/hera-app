@@ -4382,11 +4382,9 @@ function renderImpianti() {
       "✉️",
       "Invia messaggio",
       async () => {
-        if (!impianto.done) {
-          const doneMarked = await markImpiantoDone(impianto);
-          if (!doneMarked) return;
-        }
-        triggerImpiantoWhatsAppAction(impianto);
+        const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
+        if (!whatsappOpened || impianto.done) return;
+        await markImpiantoDone(impianto);
       },
       false,
       false,

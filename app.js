@@ -2,10 +2,20 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
+const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
+let firebaseMessaging = null;
 
 db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
   console.warn("Persistenza offline Firestore non disponibile:", error && error.code ? error.code : error);
 });
+
+if (firebase.messaging && typeof firebase.messaging === "function") {
+  try {
+    firebaseMessaging = firebase.messaging();
+  } catch (error) {
+    console.warn("Firebase Messaging non inizializzato:", error);
+  }
+}
 
 const ui = {
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
@@ -382,7 +392,8 @@ function resolvePushPublicVapidKey() {
   const sources = [
     window?.HERA_PUSH_PUBLIC_VAPID_KEY,
     document.querySelector('meta[name="hera-push-vapid-key"]')?.content,
-    localStorage.getItem("heraPushPublicVapidKey")
+    localStorage.getItem("heraPushPublicVapidKey"),
+    DEFAULT_PUSH_PUBLIC_VAPID_KEY
   ];
   for (const value of sources) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -825,8 +836,37 @@ async function enablePushNotifications(options = {}) {
     updateNotificationUi("Notifiche non autorizzate.");
     return;
   }
-  updateNotificationUi("Notifiche autorizzate.");
-  await ensurePushSubscription();
+  await attivaNotifiche();
+}
+
+async function attivaNotifiche() {
+  if (!firebaseMessaging) {
+    updateNotificationUi("Firebase Messaging non disponibile su questo dispositivo.");
+    return;
+  }
+  if (!PUSH_PUBLIC_VAPID_KEY) {
+    updateNotificationUi("Chiave VAPID non configurata.");
+    return;
+  }
+  try {
+    if (!serviceWorkerRegistration && "serviceWorker" in navigator) {
+      serviceWorkerRegistration = await navigator.serviceWorker.ready;
+    }
+    const token = await firebaseMessaging.getToken({
+      vapidKey: PUSH_PUBLIC_VAPID_KEY,
+      serviceWorkerRegistration
+    });
+    if (!token) {
+      updateNotificationUi("Token push non disponibile. Riprova.");
+      return;
+    }
+    localStorage.setItem("heraPushFcmToken", token);
+    console.log("Token push:", token);
+    updateNotificationUi("Notifiche push attive.", true);
+  } catch (error) {
+    console.error("Errore notifiche:", error);
+    updateNotificationUi("Errore attivazione notifiche push.", true);
+  }
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -837,27 +877,16 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function ensurePushSubscription() {
-  if (!serviceWorkerRegistration || !("pushManager" in serviceWorkerRegistration)) {
-    updateNotificationUi("Notifiche attive (senza push remoto).", true);
+  if (!firebaseMessaging) {
+    updateNotificationUi("Notifiche attive (Firebase Messaging non disponibile).", true);
     return;
   }
-  try {
-    let subscription = await serviceWorkerRegistration.pushManager.getSubscription();
-    if (!subscription && PUSH_PUBLIC_VAPID_KEY) {
-      subscription = await serviceWorkerRegistration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(PUSH_PUBLIC_VAPID_KEY)
-      });
-      console.info("Push subscription pronta:", subscription.toJSON());
-    }
-    updateNotificationUi(
-      subscription ? "Notifiche push pronte (configurare backend invio)." : "Notifiche locali attive. Per il push remoto serve configurare la chiave VAPID.",
-      true
-    );
-  } catch (error) {
-    console.warn("Errore setup push:", error);
-    updateNotificationUi("Notifiche attive ma setup push incompleto.", true);
+  const existingToken = localStorage.getItem("heraPushFcmToken");
+  if (existingToken) {
+    updateNotificationUi("Notifiche push attive.", true);
+    return;
   }
+  await attivaNotifiche();
 }
 
 async function sendTestNotification() {

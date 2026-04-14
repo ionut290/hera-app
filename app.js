@@ -4370,6 +4370,7 @@ function renderImpianti() {
       "✅",
       "Fatto",
       async () => {
+        const whatsappWindow = window.open("about:blank", "_blank", "noopener");
         const doneMarked = await markImpiantoDone(impianto);
         if (doneMarked) {
           const whatsappActionId = `${selectedCommessaId}:${impiantoKey}:whatsapp`;

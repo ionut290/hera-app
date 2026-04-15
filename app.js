@@ -65,6 +65,11 @@ const ui = {
   impiantiNextAction: document.getElementById("impianti-next-action"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
+  mapFullscreenPage: document.getElementById("map-fullscreen-page"),
+  mapFullscreenBackBtn: document.getElementById("map-fullscreen-back-btn"),
+  mapDrawAreaBtn: document.getElementById("map-draw-area-btn"),
+  mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
+  mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
@@ -365,6 +370,9 @@ let selectedGlobalImpiantoKey = "";
 let selectedGlobalImpianto = null;
 let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: false };
 let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
+let isMapFullscreenPageOpen = false;
+let drawAreaModeActive = false;
+let drawnAreaPoints = [];
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_NEAR_KM = 0.25;
@@ -659,6 +667,14 @@ map.setView(mainMapViewState.center, mainMapViewState.zoom);
 map.doubleClickZoom.disable();
 
 const markerLayer = L.layerGroup().addTo(map);
+const fullscreenMap = L.map("map-fullscreen-view", { markerZoomAnimation: true });
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: "&copy; OpenStreetMap"
+}).addTo(fullscreenMap);
+fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom);
+const fullscreenMarkerLayer = L.layerGroup().addTo(fullscreenMap);
+const fullscreenDrawLayer = L.layerGroup().addTo(fullscreenMap);
 const globalMap = L.map("global-map", { markerZoomAnimation: true });
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -673,6 +689,19 @@ map.on("moveend zoomend", () => {
     zoom: map.getZoom(),
     hasUserMoved: true
   };
+  if (isMapFullscreenPageOpen && !drawAreaModeActive) {
+    fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+  }
+});
+fullscreenMap.on("moveend zoomend", () => {
+  if (!isMapFullscreenPageOpen || drawAreaModeActive) return;
+  const center = fullscreenMap.getCenter();
+  mainMapViewState = {
+    center: [center.lat, center.lng],
+    zoom: fullscreenMap.getZoom(),
+    hasUserMoved: true
+  };
+  map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
 });
 globalMap.on("moveend zoomend", () => {
   const center = globalMap.getCenter();
@@ -682,31 +711,7 @@ globalMap.on("moveend zoomend", () => {
     hasUserMoved: true
   };
 });
-const mapElement = document.getElementById("map");
-if (mapElement) {
-  let lastTapAt = 0;
-  mapElement.addEventListener("touchend", () => {
-    const now = Date.now();
-    if (now - lastTapAt < 320) {
-      toggleMapFullscreen();
-      lastTapAt = 0;
-      return;
-    }
-    lastTapAt = now;
-  }, { passive: true });
-  mapElement.addEventListener("dblclick", (event) => {
-    event.preventDefault();
-    toggleMapFullscreen();
-  });
-}
-document.addEventListener("fullscreenchange", () => {
-  syncMapFullscreenUiState();
-  setTimeout(() => map.invalidateSize(), 60);
-});
-document.addEventListener("webkitfullscreenchange", () => {
-  syncMapFullscreenUiState();
-  setTimeout(() => map.invalidateSize(), 60);
-});
+fullscreenMap.on("click", onFullscreenMapClick);
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
@@ -728,7 +733,10 @@ ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
-ui.mapFullscreenBtn.addEventListener("click", toggleMapFullscreen);
+ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
+ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
+ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
 ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
@@ -1329,40 +1337,104 @@ function closeManagementPanel() {
   ui.managementPage.setAttribute("aria-hidden", "true");
 }
 
-function toggleMapFullscreen() {
-  const mapContainer = document.getElementById("map");
-  if (!mapContainer) return;
-  const canUseNativeFullscreen = typeof mapContainer.requestFullscreen === "function";
-  if (!canUseNativeFullscreen) {
-    toggleMapCssFullscreen(mapContainer);
-    return;
-  }
-  if (!document.fullscreenElement) {
-    mapContainer.requestFullscreen().catch((error) => {
-      console.error("Fullscreen mappa non disponibile, uso fallback CSS:", error);
-      toggleMapCssFullscreen(mapContainer);
-    });
-    return;
-  }
-  document.exitFullscreen().catch((error) => {
-    console.error("Uscita fullscreen non disponibile:", error);
-  });
+function openMapFullscreenPage() {
+  if (!ui.mapFullscreenPage) return;
+  isMapFullscreenPageOpen = true;
+  drawAreaModeActive = false;
+  drawnAreaPoints = [];
+  renderDrawnArea();
+  ui.impiantiPage.classList.add("hidden");
+  ui.mapFullscreenPage.classList.remove("hidden");
+  ui.mapFullscreenBtn.textContent = "⤢ Mappa a schermo intero";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
+  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
+  setTimeout(() => {
+    fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+    fullscreenMap.invalidateSize();
+    renderMap();
+  }, 60);
 }
 
-function toggleMapCssFullscreen(mapContainer) {
-  mapContainer.classList.toggle("map-fallback-fullscreen");
-  document.body.classList.toggle("map-fallback-fullscreen-open", mapContainer.classList.contains("map-fallback-fullscreen"));
-  syncMapFullscreenUiState();
+function closeMapFullscreenPage() {
+  if (!ui.mapFullscreenPage) return;
+  isMapFullscreenPageOpen = false;
+  drawAreaModeActive = false;
+  ui.mapFullscreenPage.classList.add("hidden");
+  ui.impiantiPage.classList.remove("hidden");
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
+  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
 }
 
-function syncMapFullscreenUiState() {
-  if (!ui.mapFullscreenBtn) return;
-  const mapContainer = document.getElementById("map");
-  const isCssFullscreen = mapContainer ? mapContainer.classList.contains("map-fallback-fullscreen") : false;
-  const isNativeFullscreen = Boolean(document.fullscreenElement);
-  const isFullscreenOpen = isCssFullscreen || isNativeFullscreen;
-  ui.mapFullscreenBtn.textContent = isFullscreenOpen ? "✕ Chiudi schermo intero" : "⤢ Mappa schermo intero";
+function setFullscreenFeedback(message) {
+  if (ui.mapFullscreenFeedback) ui.mapFullscreenFeedback.textContent = message;
+}
+
+function toggleDrawAreaMode() {
+  drawAreaModeActive = !drawAreaModeActive;
+  if (drawAreaModeActive) {
+    drawnAreaPoints = [];
+    renderDrawnArea();
+    ui.mapDrawAreaBtn.textContent = "✅ Termina disegno";
+    setFullscreenFeedback("Disegno attivo: tocca la mappa per aggiungere punti, poi premi “Termina disegno”.");
+    return;
+  }
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
+  if (drawnAreaPoints.length < 3) {
+    setFullscreenFeedback("Area non valida: servono almeno 3 punti.");
+    if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = true;
+    return;
+  }
+  setFullscreenFeedback(`Area pronta (${drawnAreaPoints.length} punti). Puoi inoltrarla su WhatsApp.`);
+  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = false;
+  renderDrawnArea();
+}
+
+function onFullscreenMapClick(event) {
+  if (!drawAreaModeActive) return;
+  if (!event?.latlng) return;
+  drawnAreaPoints.push([event.latlng.lat, event.latlng.lng]);
+  renderDrawnArea();
+}
+
+function renderDrawnArea() {
+  fullscreenDrawLayer.clearLayers();
+  if (!drawnAreaPoints.length) return;
+  drawnAreaPoints.forEach((point, idx) => {
+    L.circleMarker(point, {
+      radius: 5,
+      color: "#1d4ed8",
+      weight: 2,
+      fillColor: "#93c5fd",
+      fillOpacity: 0.9
+    }).addTo(fullscreenDrawLayer).bindTooltip(`Punto ${idx + 1}`);
+  });
+  if (drawnAreaPoints.length >= 2) {
+    L.polyline(drawnAreaPoints, { color: "#2563eb", weight: 3 }).addTo(fullscreenDrawLayer);
+  }
+  if (drawnAreaPoints.length >= 3) {
+    L.polygon(drawnAreaPoints, { color: "#1e40af", fillColor: "#60a5fa", fillOpacity: 0.18 }).addTo(fullscreenDrawLayer);
+  }
+}
+
+function shareDrawnAreaViaWhatsapp() {
+  if (drawnAreaPoints.length < 3) {
+    alert("Disegna almeno 3 punti per creare un'area condivisibile.");
+    return;
+  }
+  const vertices = drawnAreaPoints.map((point, idx) => `• Punto ${idx + 1}: ${point[0].toFixed(6)}, ${point[1].toFixed(6)}`).join("\n");
+  const message = [
+    "📍 Area di lavoro disegnata su Hera App",
+    `Commessa: ${selectedCommessaName || "-"}`,
+    "",
+    vertices,
+    "",
+    "Apri coordinate su Google Maps (primo punto):",
+    `https://www.google.com/maps/search/?api=1&query=${drawnAreaPoints[0][0]},${drawnAreaPoints[0][1]}`
+  ].join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
 }
 
 function applyRoute() {
@@ -1381,7 +1453,8 @@ function applyRoute() {
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
   ui.homePage.classList.toggle("hidden", showImpianti || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours || showPersonalServices);
-  ui.impiantiPage.classList.toggle("hidden", !showImpianti);
+  ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
+  ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.personalServicesPage.classList.toggle("hidden", !showPersonalServices);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
@@ -1435,6 +1508,7 @@ function openImpiantiPage() {
 }
 
 function closeImpiantiPage() {
+  closeMapFullscreenPage();
   localStorage.removeItem(LAST_OPENED_COMMESSA_KEY);
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
@@ -3559,14 +3633,6 @@ function renderGlobalImpianti() {
     ui.globalImpiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa Global.</p>";
     return;
   }
-  if (!globalImpiantoSearchTerm) {
-    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Digita almeno 2 caratteri per cercare un impianto.</p>";
-    return;
-  }
-  if (globalImpiantoSearchTerm.trim().length < 2) {
-    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Continua a digitare per vedere i suggerimenti.</p>";
-    return;
-  }
   const normalizedSearch = globalImpiantoSearchTerm.toLowerCase();
   const filtered = globalImpianti.filter((impianto) => {
     if (!globalImpiantoSearchTerm) return true;
@@ -3579,7 +3645,7 @@ function renderGlobalImpianti() {
     ui.globalImpiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato.</p>";
     return;
   }
-  const suggestions = filtered.slice(0, 20);
+  const suggestions = filtered.slice(0, globalImpiantoSearchTerm ? 20 : 12);
   ui.globalImpiantiLista.innerHTML = suggestions.map((impianto) => {
     const key = buildImpiantoKey(impianto);
     const isSelected = key === selectedGlobalImpiantoKey;
@@ -3619,9 +3685,23 @@ function renderGlobalMap() {
   ui.globalMapFeedback.textContent = `Mappa impianti Global: ${withGps.length} con coordinate GPS.`;
   const bounds = [];
   withGps.forEach((impianto) => {
+    const markerDetails = [
+      `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
+      `Codice Hera: ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}`,
+      `Comune: ${escapeHTML(impianto.comune || "-")}`,
+      `Competenza: ${escapeHTML(impianto.competenza || "-")}`,
+      `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(buildImpiantoKey(impianto))}">Dettagli</button>`
+    ].join("<br>");
     const marker = L.marker([impianto.gpsY, impianto.gpsX]).addTo(globalMarkerLayer)
-      .bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "-")}`);
+      .bindPopup(markerDetails);
     marker.on("click", () => openGlobalImpiantoDetails(impianto, { updateSearch: true }));
+    marker.on("popupopen", (event) => {
+      const popupElement = event.popup?.getElement();
+      if (!popupElement) return;
+      popupElement.querySelectorAll("[data-global-marker-details]").forEach((btn) => {
+        btn.addEventListener("click", () => openGlobalImpiantoDetails(impianto, { updateSearch: true }));
+      });
+    });
     bounds.push([impianto.gpsY, impianto.gpsX]);
   });
   if (!globalMapViewState.hasUserMoved) {
@@ -6547,25 +6627,10 @@ function renderMap() {
   const bounds = [];
 
   currentImpianti.forEach((impianto) => {
-    if (impianto.gpsY == null || impianto.gpsX == null) return;
-
-    const markerClass = getMarkerClass(impianto);
-    const marker = L.marker([impianto.gpsY, impianto.gpsX], {
-      icon: L.divIcon({
-        className: "",
-        html: `<div class="marker-pin ${markerClass}"></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
-      })
-    });
-
-    const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
-    const popupHtml = buildImpiantoMapPopup(impianto, tipo);
-    marker.bindPopup(popupHtml);
-    marker.on("click", () => focusImpiantoInList(impianto, false));
-    marker.addTo(markerLayer);
-    impiantoMarkerByKey.set(buildImpiantoKey(impianto), marker);
-    bounds.push([impianto.gpsY, impianto.gpsX]);
+    const marker = addImpiantoMarkerToMapLayer(impianto, markerLayer);
+    if (marker) impiantoMarkerByKey.set(buildImpiantoKey(impianto), marker);
+    const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer);
+    if (fullscreenMarker) bounds.push([impianto.gpsY, impianto.gpsX]);
   });
 
   if (currentUserPos) {
@@ -6577,6 +6642,14 @@ function renderMap() {
         iconAnchor: [12, 12]
       })
     }).addTo(markerLayer).bindPopup("Operatore al lavoro");
+    L.marker([currentUserPos.lat, currentUserPos.lng], {
+      icon: L.divIcon({
+        className: "",
+        html: "<div class='marker-operator'>👷</div>",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      })
+    }).addTo(fullscreenMarkerLayer).bindPopup("Operatore al lavoro");
     bounds.push([currentUserPos.lat, currentUserPos.lng]);
   }
 
@@ -6589,6 +6662,26 @@ function renderMap() {
   } else {
     map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
+  fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+}
+
+function addImpiantoMarkerToMapLayer(impianto, targetLayer) {
+  if (impianto.gpsY == null || impianto.gpsX == null) return null;
+
+  const markerClass = getMarkerClass(impianto);
+  const marker = L.marker([impianto.gpsY, impianto.gpsX], {
+    icon: L.divIcon({
+      className: "",
+      html: `<div class="marker-pin ${markerClass}"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    })
+  });
+  const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
+  marker.bindPopup(buildImpiantoMapPopup(impianto, tipo));
+  marker.on("click", () => focusImpiantoInList(impianto, false));
+  marker.addTo(targetLayer);
+  return marker;
 }
 
 function buildImpiantoMapPopup(impianto, tipo) {
@@ -6678,6 +6771,7 @@ function normalizeEmail(email) {
 function clearMap() {
   impiantoMarkerByKey.clear();
   markerLayer.clearLayers();
+  fullscreenMarkerLayer.clearLayers();
 }
 
 function getMezzoByLabel(label) {

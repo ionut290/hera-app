@@ -267,7 +267,12 @@ const ui = {
   globalImportFeedback: document.getElementById("global-import-feedback"),
   globalImpiantoSearch: document.getElementById("global-impianto-search"),
   globalImpiantiLista: document.getElementById("global-impianti-lista"),
-  globalMapFeedback: document.getElementById("global-map-feedback")
+  globalMapFeedback: document.getElementById("global-map-feedback"),
+  globalImpiantoModal: document.getElementById("global-impianto-modal"),
+  globalImpiantoModalBody: document.getElementById("global-impianto-modal-body"),
+  globalImpiantoModalCloseBtn: document.getElementById("global-impianto-modal-close-btn"),
+  globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
+  globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn")
 };
 
 let pendingRows = [];
@@ -356,6 +361,11 @@ let selectedGlobalCommessaId = "";
 let globalCommesseById = new Map();
 let globalImpianti = [];
 let globalImpiantoSearchTerm = "";
+let selectedGlobalImpiantoKey = "";
+let selectedGlobalImpianto = null;
+let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: false };
+let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
+const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_NEAR_KM = 0.25;
 const PROXIMITY_AWAY_KM = 0.7;
@@ -640,22 +650,38 @@ let impiantoNextActionHighlightEnabled = false;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
-const map = L.map("map");
+const map = L.map("map", { markerZoomAnimation: true });
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: "&copy; OpenStreetMap"
 }).addTo(map);
-map.setView([44.4949, 11.3426], 11);
+map.setView(mainMapViewState.center, mainMapViewState.zoom);
 map.doubleClickZoom.disable();
 
 const markerLayer = L.layerGroup().addTo(map);
-const globalMap = L.map("global-map");
+const globalMap = L.map("global-map", { markerZoomAnimation: true });
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: "&copy; OpenStreetMap contributors"
 }).addTo(globalMap);
-globalMap.setView([44.4949, 11.3426], 6);
+globalMap.setView(globalMapViewState.center, globalMapViewState.zoom);
 const globalMarkerLayer = L.layerGroup().addTo(globalMap);
+map.on("moveend zoomend", () => {
+  const center = map.getCenter();
+  mainMapViewState = {
+    center: [center.lat, center.lng],
+    zoom: map.getZoom(),
+    hasUserMoved: true
+  };
+});
+globalMap.on("moveend zoomend", () => {
+  const center = globalMap.getCenter();
+  globalMapViewState = {
+    center: [center.lat, center.lng],
+    zoom: globalMap.getZoom(),
+    hasUserMoved: true
+  };
+});
 const mapElement = document.getElementById("map");
 if (mapElement) {
   let lastTapAt = 0;
@@ -749,7 +775,12 @@ ui.addHoursCommessaBtn.addEventListener("click", () => {
   unlockHoursFinalizeButton();
   addHoursCommessaBlock();
 });
-ui.hoursDate?.addEventListener("input", unlockHoursFinalizeButton);
+ui.hoursDate?.addEventListener("input", () => {
+  unlockHoursFinalizeButton();
+  Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
+    applyHoursSuggestedOperators(card, { force: true });
+  });
+});
 ui.viewHoursBtn.addEventListener("click", openHoursViewModal);
 ui.hoursViewCloseBtn?.addEventListener("click", closeHoursViewModal);
 ui.hoursViewModal?.addEventListener("click", (event) => {
@@ -781,6 +812,11 @@ ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
 ui.globalSheetUrlImportBtn?.addEventListener("click", importGlobalFromGoogleSheetUrl);
 ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
 ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
+ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
+ui.globalImpiantoModalCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
+ui.globalImpiantoModal?.addEventListener("click", (event) => {
+  if (event.target === ui.globalImpiantoModal) closeGlobalImpiantoModal();
+});
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
@@ -1670,9 +1706,12 @@ function openHoursPage() {
     alert("Devi fare login per compilare la gestione ore.");
     return;
   }
-  if (!ui.hoursDate.value) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
+  if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
+  Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card")).forEach((card) => {
+    applyHoursSuggestedOperators(card, { force: true });
+  });
   renderHoursTableCommessaOptions();
   window.location.hash = "ore";
   applyRoute();
@@ -2294,6 +2333,9 @@ function renderHoursOperatoriOptions() {
     option.value = getPersonaleDisplayName(person);
     ui.hoursOperatoriOptions.appendChild(option);
   });
+  Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
+    renderHoursOperatorSuggestions(card);
+  });
 }
 
 function renderHoursCommessaSelectOptions() {
@@ -2332,25 +2374,97 @@ function renderHoursTableCommessaOptions(commesseInput = null) {
   }
 }
 
-function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }) {
+function getSuggestedHoursOperators(commessaId, dateValue) {
+  const dateKey = String(dateValue || "").trim();
+  if (!commessaId || !dateKey) return [];
+  const storicoByDate = squadreHistoryByDate.get(dateKey) || new Map();
+  const squadData = storicoByDate.get(commessaId) || {};
+  const squadRows = Array.isArray(squadData.squadre) ? squadData.squadre : getLegacySquadreRows(squadData);
+  const names = squadRows
+    .flatMap((row) => parseMultiEntryValue(row.personale || ""))
+    .map((name) => String(name || "").trim())
+    .filter(Boolean);
+  return [...new Set(names)];
+}
+
+function renderHoursOperatorSuggestions(card) {
+  if (!card) return;
+  const suggestionBox = card.querySelector(".hours-operator-suggestions");
+  const searchInput = card.querySelector(".hours-operator-search");
+  if (!suggestionBox || !searchInput) return;
+  const term = String(searchInput.value || "").trim().toLowerCase();
+  const operatorList = card.querySelector(".hours-operator-list");
+  const existing = new Set(Array.from(operatorList.querySelectorAll(".hours-operatore"))
+    .map((input) => String(input.value || "").trim().toLowerCase())
+    .filter(Boolean));
+  const source = personaleRecords.map((person) => getPersonaleDisplayName(person)).filter(Boolean);
+  const matches = source
+    .filter((name) => !existing.has(name.toLowerCase()))
+    .filter((name) => !term || name.toLowerCase().includes(term))
+    .slice(0, 8);
+  suggestionBox.innerHTML = matches.map((name) => (
+    `<button type="button" class="btn btn-small" data-hours-suggested-operator="${escapeHTML(name)}">${escapeHTML(name)}</button>`
+  )).join("");
+  suggestionBox.classList.toggle("hidden", matches.length === 0);
+  suggestionBox.querySelectorAll("[data-hours-suggested-operator]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      unlockHoursFinalizeButton();
+      addHoursOperatoreRow(operatorList, { operatore: btn.dataset.hoursSuggestedOperator || "", ore: "" }, card);
+      searchInput.value = "";
+      renderHoursOperatorSuggestions(card);
+      renderHoursSummary();
+    });
+  });
+}
+
+function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }, card = null) {
   const row = document.createElement("div");
   row.className = "hours-operator-row";
   row.innerHTML = `
-    <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}">
+    <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}" autocomplete="off">
     <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
-    <button type="button" class="btn hours-remove-operator-btn">Rimuovi</button>
+    <button type="button" class="btn btn-small hours-remove-operator-btn" aria-label="Rimuovi operatore">✕</button>
   `;
   const removeBtn = row.querySelector(".hours-remove-operator-btn");
   removeBtn.addEventListener("click", () => {
     unlockHoursFinalizeButton();
     row.remove();
+    if (!container.children.length) addHoursOperatoreRow(container, {}, card);
+    renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   });
   row.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => {
     unlockHoursFinalizeButton();
+    renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   }));
   container.appendChild(row);
+}
+
+function applyHoursSuggestedOperators(card, options = {}) {
+  if (!card) return;
+  const dateValue = String(ui.hoursDate?.value || "").trim();
+  const commessaId = String(card.querySelector(".hours-commessa-select")?.value || "").trim();
+  const operatorList = card.querySelector(".hours-operator-list");
+  const suggestionStatus = card.querySelector(".hours-squadra-status");
+  const suggestions = getSuggestedHoursOperators(commessaId, dateValue);
+  const sourceTag = `${commessaId}__${dateValue}`;
+  const force = options.force === true;
+  const alreadyApplied = String(card.dataset.suggestedSource || "") === sourceTag;
+  if (!force && alreadyApplied) return;
+  operatorList.innerHTML = "";
+  if (suggestions.length) {
+    suggestions.forEach((name) => addHoursOperatoreRow(operatorList, { operatore: name, ore: "" }, card));
+    if (suggestionStatus) suggestionStatus.textContent = "Squadra trovata: nomi precompilati (puoi modificarli liberamente).";
+  } else {
+    addHoursOperatoreRow(operatorList, {}, card);
+    if (suggestionStatus) suggestionStatus.textContent = commessaId && dateValue
+      ? "Nessuna squadra associata per questa data."
+      : "Seleziona commessa e data per suggerire automaticamente la squadra.";
+  }
+  card.dataset.suggestedSource = sourceTag;
+  renderHoursOperatorSuggestions(card);
+  renderHoursSummary();
 }
 
 function addHoursCommessaBlock(blockData = null) {
@@ -2364,6 +2478,9 @@ function addHoursCommessaBlock(blockData = null) {
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
     </select>
+    <p class="muted hours-squadra-status">Seleziona commessa e data per suggerire automaticamente la squadra.</p>
+    <input type="search" class="hours-operator-search" placeholder="Cerca operatore e aggiungi" autocomplete="off">
+    <div class="hours-operator-suggestions hidden"></div>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
@@ -2381,15 +2498,19 @@ function addHoursCommessaBlock(blockData = null) {
     renderHoursSummary();
   });
   const operatorList = card.querySelector(".hours-operator-list");
+  const searchInput = card.querySelector(".hours-operator-search");
   card.querySelector(".hours-add-operator-btn").addEventListener("click", () => {
     unlockHoursFinalizeButton();
-    addHoursOperatoreRow(operatorList);
+    addHoursOperatoreRow(operatorList, {}, card);
+    renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   });
   card.querySelector(".hours-commessa-select").addEventListener("change", () => {
     unlockHoursFinalizeButton();
-    renderHoursSummary();
+    applyHoursSuggestedOperators(card, { force: true });
   });
+  searchInput.addEventListener("input", () => renderHoursOperatorSuggestions(card));
+  searchInput.addEventListener("focus", () => renderHoursOperatorSuggestions(card));
   card.querySelector(".hours-note").addEventListener("input", () => {
     unlockHoursFinalizeButton();
     renderHoursSummary();
@@ -2399,9 +2520,10 @@ function addHoursCommessaBlock(blockData = null) {
     if (blockData.commessaId) card.querySelector(".hours-commessa-select").value = blockData.commessaId;
     card.querySelector(".hours-note").value = blockData.note || "";
     const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];
-    rows.forEach((row) => addHoursOperatoreRow(operatorList, row));
+    rows.forEach((row) => addHoursOperatoreRow(operatorList, row, card));
+    renderHoursOperatorSuggestions(card);
   } else {
-    addHoursOperatoreRow(operatorList);
+    applyHoursSuggestedOperators(card, { force: true });
   }
   renderHoursSummary();
 }
@@ -3269,6 +3391,10 @@ function stopGlobalCommesseSubscription() {
 
 function onGlobalCommessaSelectionChanged() {
   selectedGlobalCommessaId = String(ui.globalCommessaSelect?.value || "").trim();
+  globalMapViewState.hasUserMoved = false;
+  selectedGlobalImpianto = null;
+  selectedGlobalImpiantoKey = "";
+  closeGlobalImpiantoModal();
   stopGlobalImpiantiSubscription();
   if (selectedGlobalCommessaId) subscribeGlobalImpianti();
   if (ui.globalImportBtn) {
@@ -3276,6 +3402,8 @@ function onGlobalCommessaSelectionChanged() {
   }
   if (!selectedGlobalCommessaId) {
     globalImpianti = [];
+    globalImpiantoSearchTerm = "";
+    if (ui.globalImpiantoSearch) ui.globalImpiantoSearch.value = "";
     renderGlobalImpianti();
     renderGlobalMap();
   }
@@ -3421,7 +3549,7 @@ async function importPendingGlobalRows() {
 }
 
 function onGlobalImpiantoSearchInput(event) {
-  globalImpiantoSearchTerm = String(event.target.value || "").trim().toLowerCase();
+  globalImpiantoSearchTerm = String(event.target.value || "").trim();
   renderGlobalImpianti();
 }
 
@@ -3431,48 +3559,154 @@ function renderGlobalImpianti() {
     ui.globalImpiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa Global.</p>";
     return;
   }
+  if (!globalImpiantoSearchTerm) {
+    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Digita almeno 2 caratteri per cercare un impianto.</p>";
+    return;
+  }
+  if (globalImpiantoSearchTerm.trim().length < 2) {
+    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Continua a digitare per vedere i suggerimenti.</p>";
+    return;
+  }
+  const normalizedSearch = globalImpiantoSearchTerm.toLowerCase();
   const filtered = globalImpianti.filter((impianto) => {
     if (!globalImpiantoSearchTerm) return true;
-    const haystack = [impianto.denominazione, impianto.comune, impianto.indirizzo, impianto.codicePrezzo]
+    const haystack = [impianto.idSap, impianto.denominazione, impianto.comune, impianto.competenza, impianto.indirizzo, impianto.codicePrezzo]
       .map((value) => String(value || "").toLowerCase())
       .join(" ");
-    return haystack.includes(globalImpiantoSearchTerm);
+    return haystack.includes(normalizedSearch);
   });
   if (!filtered.length) {
     ui.globalImpiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato.</p>";
     return;
   }
-  ui.globalImpiantiLista.innerHTML = filtered.map((impianto) => `
-    <div class="simple-list-item">
-      <span>
-        <b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>
-        <small>${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.indirizzo || "-")} • ${escapeHTML(impianto.codicePrezzo || "-")}</small>
-      </span>
-    </div>
-  `).join("");
+  const suggestions = filtered.slice(0, 20);
+  ui.globalImpiantiLista.innerHTML = suggestions.map((impianto) => {
+    const key = buildImpiantoKey(impianto);
+    const isSelected = key === selectedGlobalImpiantoKey;
+    return `
+      <button type="button" class="simple-list-item global-suggestion-item ${isSelected ? "is-selected" : ""}" data-global-impianto-key="${escapeHTML(key)}">
+        <span>
+          <b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>
+          <small>${escapeHTML(impianto.idSap || "-")} • ${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.competenza || "-")}</small>
+        </span>
+      </button>
+    `;
+  }).join("");
+  ui.globalImpiantiLista.querySelectorAll("[data-global-impianto-key]").forEach((item) => {
+    item.addEventListener("click", () => {
+      const key = item.getAttribute("data-global-impianto-key");
+      const impianto = globalImpianti.find((row) => buildImpiantoKey(row) === key);
+      if (!impianto) return;
+      openGlobalImpiantoDetails(impianto, { focusOnMap: true });
+    });
+  });
 }
 
 function renderGlobalMap() {
   globalMarkerLayer.clearLayers();
   if (!selectedGlobalCommessaId) {
     ui.globalMapFeedback.textContent = "Seleziona una commessa Global.";
-    globalMap.setView([44.4949, 11.3426], 6);
+    globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
+    globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
     return;
   }
   const withGps = globalImpianti.filter((item) => item.gpsY != null && item.gpsX != null);
   if (!withGps.length) {
     ui.globalMapFeedback.textContent = "Nessuna coordinata GPS disponibile per questa commessa Global.";
-    globalMap.setView([44.4949, 11.3426], 6);
+    globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
     return;
   }
   ui.globalMapFeedback.textContent = `Mappa impianti Global: ${withGps.length} con coordinate GPS.`;
   const bounds = [];
   withGps.forEach((impianto) => {
-    L.marker([impianto.gpsY, impianto.gpsX]).addTo(globalMarkerLayer)
+    const marker = L.marker([impianto.gpsY, impianto.gpsX]).addTo(globalMarkerLayer)
       .bindPopup(`<b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>${escapeHTML(impianto.comune || "-")}`);
+    marker.on("click", () => openGlobalImpiantoDetails(impianto, { updateSearch: true }));
     bounds.push([impianto.gpsY, impianto.gpsX]);
   });
-  globalMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+  if (!globalMapViewState.hasUserMoved) {
+    globalMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+    const center = globalMap.getCenter();
+    globalMapViewState.center = [center.lat, center.lng];
+    globalMapViewState.zoom = globalMap.getZoom();
+    globalMapViewState.hasUserMoved = true;
+  } else {
+    globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
+  }
+}
+
+function openGlobalImpiantoDetails(impianto, options = {}) {
+  if (!impianto || !ui.globalImpiantoModalBody) return;
+  selectedGlobalImpianto = impianto;
+  selectedGlobalImpiantoKey = buildImpiantoKey(impianto);
+  if (options.updateSearch && ui.globalImpiantoSearch) {
+    ui.globalImpiantoSearch.value = impianto.denominazione || impianto.idSap || "";
+    globalImpiantoSearchTerm = String(ui.globalImpiantoSearch.value || "").trim();
+  }
+  const details = [
+    ["Codice Hera", impianto.idSap || impianto.codiceHera || "-"],
+    ["Nome impianto", impianto.denominazione || "-"],
+    ["Comune", impianto.comune || "-"],
+    ["Competenza", impianto.competenza || "-"],
+    ["Indirizzo", impianto.indirizzo || "-"],
+    ["Coordinate GPS", formatGpsLabel(impianto)],
+    ["Tipologia", impianto.tipologiaIntervento || impianto.tipoManutenzione || "-"],
+    ["Stato", impianto.stato || (impianto.done ? "Fatto" : "Da fare")],
+    ["Note", impianto.note || "-"]
+  ];
+  Object.entries(impianto.extraFields || {}).forEach(([key, value]) => details.push([formatExtraFieldLabel(key), value]));
+  ui.globalImpiantoModalBody.innerHTML = details
+    .map(([label, value]) => `<p><b>${escapeHTML(label)}:</b> ${escapeHTML(String(value == null || value === "" ? "-" : value))}</p>`)
+    .join("");
+  if (ui.globalImpiantoNavigateBtn) {
+    ui.globalImpiantoNavigateBtn.onclick = () => {
+      if (impianto.gpsY == null || impianto.gpsX == null) {
+        alert("Coordinate GPS mancanti per questo impianto.");
+        return;
+      }
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${impianto.gpsY},${impianto.gpsX}`, "_blank");
+    };
+  }
+  if (ui.globalImpiantoWhatsappBtn) {
+    ui.globalImpiantoWhatsappBtn.onclick = () => shareGlobalImpiantoViaWhatsapp(impianto);
+  }
+  ui.globalImpiantoModal?.classList.remove("hidden");
+  ui.globalImpiantoModal?.setAttribute("aria-hidden", "false");
+  if (options.focusOnMap && impianto.gpsY != null && impianto.gpsX != null) {
+    globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
+  }
+  renderGlobalImpianti();
+}
+
+function closeGlobalImpiantoModal() {
+  ui.globalImpiantoModal?.classList.add("hidden");
+  ui.globalImpiantoModal?.setAttribute("aria-hidden", "true");
+}
+
+function formatGpsLabel(impianto) {
+  if (impianto.gpsY == null || impianto.gpsX == null) return "-";
+  return `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`;
+}
+
+function formatExtraFieldLabel(key) {
+  return String(key || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function shareGlobalImpiantoViaWhatsapp(impianto) {
+  const lines = [
+    "📍 Impianto Global",
+    `Codice Hera: ${impianto.idSap || impianto.codiceHera || "-"}`,
+    `Nome: ${impianto.denominazione || "-"}`,
+    `Comune: ${impianto.comune || "-"}`,
+    `Competenza: ${impianto.competenza || "-"}`,
+    `Indirizzo: ${impianto.indirizzo || "-"}`,
+    `Coordinate: ${formatGpsLabel(impianto)}`
+  ];
+  window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
 }
 
 function subscribeResources() {
@@ -3940,6 +4174,7 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome) {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  mainMapViewState.hasUserMoved = false;
   activeNearbyImpiantoContext = null;
   localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
   setImpiantiViewMode("todo");
@@ -5487,6 +5722,9 @@ function subscribeSquadre() {
     });
     renderSquadre();
     autofillSquadraForm();
+    Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
+      applyHoursSuggestedOperators(card, { force: true });
+    });
   }, (error) => {
     console.error(error);
     ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
@@ -5503,6 +5741,9 @@ function subscribeSquadre() {
       squadreHistoryByDate.get(data.dateKey).set(data.commessaId, { id: doc.id, ...data });
     });
     renderSquadre();
+    Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
+      applyHoursSuggestedOperators(card, { force: true });
+    });
   }, (error) => {
     console.error(error);
   });
@@ -6323,6 +6564,7 @@ function renderMap() {
     marker.bindPopup(popupHtml);
     marker.on("click", () => focusImpiantoInList(impianto, false));
     marker.addTo(markerLayer);
+    impiantoMarkerByKey.set(buildImpiantoKey(impianto), marker);
     bounds.push([impianto.gpsY, impianto.gpsX]);
   });
 
@@ -6338,8 +6580,14 @@ function renderMap() {
     bounds.push([currentUserPos.lat, currentUserPos.lng]);
   }
 
-  if (bounds.length > 0) {
+  if (bounds.length > 0 && !mainMapViewState.hasUserMoved) {
     map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+    const center = map.getCenter();
+    mainMapViewState.center = [center.lat, center.lng];
+    mainMapViewState.zoom = map.getZoom();
+    mainMapViewState.hasUserMoved = true;
+  } else {
+    map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
 }
 
@@ -6374,7 +6622,6 @@ map.on("popupopen", (event) => {
   popupElement.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
     button.addEventListener("click", () => {
       map.closePopup(event.popup);
-      renderMap();
     });
   });
 });
@@ -6429,6 +6676,7 @@ function normalizeEmail(email) {
 }
 
 function clearMap() {
+  impiantoMarkerByKey.clear();
   markerLayer.clearLayers();
 }
 

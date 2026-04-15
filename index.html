@@ -249,9 +249,9 @@
       <p id="global-import-feedback" class="muted"></p>
       <div class="search-box">
         <span aria-hidden="true">🔎</span>
-        <input id="global-impianto-search" type="search" placeholder="Cerca impianto nella commessa Global">
+        <input id="global-impianto-search" type="search" placeholder="Cerca impianto nella commessa Global" autocomplete="off">
       </div>
-      <div id="global-impianti-lista" class="simple-list"></div>
+      <div id="global-impianti-lista" class="simple-list global-autocomplete-list"></div>
       <div id="global-map"></div>
       <p id="global-map-feedback" class="muted"></p>
     </div>
@@ -498,6 +498,20 @@
       </div>
       <p id="hours-table-feedback" class="muted"></p>
       <div id="hours-table-container" class="hours-table-wrap"></div>
+    </div>
+  </section>
+
+  <section id="global-impianto-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content global-impianto-modal-content">
+      <div class="chat-modal-header">
+        <h3>Dettaglio impianto Global</h3>
+        <button id="global-impianto-modal-close-btn" class="btn" type="button">✕</button>
+      </div>
+      <div id="global-impianto-modal-body" class="simple-list"></div>
+      <div class="item-actions">
+        <button id="global-impianto-navigate-btn" class="btn btn-primary" type="button">Naviga</button>
+        <button id="global-impianto-whatsapp-btn" class="btn" type="button">Invia tramite WhatsApp</button>
+      </div>
     </div>
   </section>
 

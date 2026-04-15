@@ -989,14 +989,18 @@ textarea:focus-visible {
 }
 
 #map {
-  height: 280px;
+  height: min(68dvh, 620px);
+  min-height: 320px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
 }
 
 #global-map {
-  height: 280px;
+  height: min(62dvh, 560px);
+  min-height: 280px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
@@ -1114,6 +1118,52 @@ body.map-fallback-fullscreen-open {
   margin-top: 8px;
   display: flex;
   gap: 8px;
+}
+
+.global-autocomplete-list {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.global-suggestion-item {
+  width: 100%;
+  text-align: left;
+}
+
+.global-impianto-modal-content {
+  width: min(640px, calc(100vw - 18px));
+  max-height: min(88dvh, 780px);
+}
+
+.hours-operator-search {
+  margin-bottom: 0;
+}
+
+.hours-operator-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hours-operator-row {
+  grid-template-columns: minmax(160px, 2fr) minmax(90px, 1fr) auto;
+  background: #eef4ff;
+  border: 1px solid #d6e1ff;
+  border-radius: 999px;
+  padding: 6px 8px;
+}
+
+.hours-operator-row input {
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  min-height: 34px;
+}
+
+.hours-remove-operator-btn {
+  border-radius: 999px;
+  min-width: 34px;
+  padding-inline: 10px;
 }
 
 .squadra-calendar-box {
@@ -1599,7 +1649,7 @@ body.map-fallback-fullscreen-open {
 
 @media (min-width: 760px) {
   .container { padding: 22px; gap: 14px; }
-  #map { height: 400px; }
+  #map { height: min(74dvh, 720px); }
 }
 
 @media (max-width: 760px) {
@@ -1607,7 +1657,8 @@ body.map-fallback-fullscreen-open {
   .actions-row { width: 100%; }
   .actions-row .btn { flex: 1 1 auto; }
   .page-head { align-items: stretch; }
-  #map { height: 220px; }
+  #map { height: calc(100dvh - 210px); min-height: 420px; }
+  #global-map { height: calc(100dvh - 300px); min-height: 320px; }
   .impianti-lista { gap: 6px; }
   .impianto-item { padding: 6px; }
   .impianto-item p { margin: 2px 0; font-size: 0.9rem; }
@@ -1617,6 +1668,13 @@ body.map-fallback-fullscreen-open {
   .howto-faq-question { padding: 12px; font-size: 0.94rem; }
   .howto-faq-answer { padding: 10px 12px 12px; }
   .howto-faq-steps { padding-left: 18px; font-size: 0.93rem; }
+  .global-impianto-modal-content {
+    width: 100vw;
+    max-height: 88dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-top: auto;
+  }
 }
 
 @media (max-width: 760px) {

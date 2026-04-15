@@ -125,7 +125,7 @@
 
       <section class="card">
         <div class="commessa-tools-bar">
-          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa schermo intero</button>
+          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
           <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
         </div>
         <section id="commessa-resource-viewer" class="commessa-resource-viewer hidden">
@@ -153,6 +153,18 @@
           </div>
         </div>
         <div id="impianti-lista" class="impianti-lista"></div>
+      </section>
+    </section>
+
+    <section id="map-fullscreen-page" class="hidden">
+      <section class="card map-fullscreen-page-card">
+        <div class="section-head">
+          <button id="map-fullscreen-back-btn" class="btn" type="button">← Torna indietro</button>
+          <button id="map-draw-area-btn" class="btn" type="button">✏️ Disegna la tua area</button>
+          <button id="map-share-area-whatsapp-btn" class="btn" type="button" disabled>📤 Inoltra area su WhatsApp</button>
+        </div>
+        <div id="map-fullscreen-view"></div>
+        <p id="map-fullscreen-feedback" class="muted">Usa “Disegna la tua area” per definire il perimetro di lavoro.</p>
       </section>
     </section>
   </main>

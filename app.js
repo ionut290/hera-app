@@ -68,6 +68,9 @@ const ui = {
   mapFullscreenPage: document.getElementById("map-fullscreen-page"),
   mapFullscreenBackBtn: document.getElementById("map-fullscreen-back-btn"),
   mapDrawAreaBtn: document.getElementById("map-draw-area-btn"),
+  mapDrawUndoBtn: document.getElementById("map-draw-undo-btn"),
+  mapDrawRedoBtn: document.getElementById("map-draw-redo-btn"),
+  mapDrawClearBtn: document.getElementById("map-draw-clear-btn"),
   mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
   mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
@@ -270,12 +273,14 @@ const ui = {
   globalSheetUrl: document.getElementById("global-sheet-url"),
   globalSheetUrlImportBtn: document.getElementById("global-sheet-url-import-btn"),
   globalImportFeedback: document.getElementById("global-import-feedback"),
+  globalImpiantoSearchForm: document.getElementById("global-impianto-search-form"),
+  globalImpiantoSearchBtn: document.getElementById("global-impianto-search-btn"),
   globalImpiantoSearch: document.getElementById("global-impianto-search"),
   globalImpiantiLista: document.getElementById("global-impianti-lista"),
   globalMapFeedback: document.getElementById("global-map-feedback"),
-  globalImpiantoModal: document.getElementById("global-impianto-modal"),
-  globalImpiantoModalBody: document.getElementById("global-impianto-modal-body"),
-  globalImpiantoModalCloseBtn: document.getElementById("global-impianto-modal-close-btn"),
+  globalImpiantoDetails: document.getElementById("global-impianto-details"),
+  globalImpiantoDetailsBody: document.getElementById("global-impianto-details-body"),
+  globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
   globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn")
 };
@@ -373,6 +378,9 @@ let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: fa
 let isMapFullscreenPageOpen = false;
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
+let drawnAreaRedoStack = [];
+let isDrawingStrokeActive = false;
+let globalImpiantiFiltered = [];
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_NEAR_KM = 0.25;
@@ -711,7 +719,11 @@ globalMap.on("moveend zoomend", () => {
     hasUserMoved: true
   };
 });
-fullscreenMap.on("click", onFullscreenMapClick);
+const fullscreenMapContainer = fullscreenMap.getContainer();
+fullscreenMapContainer.addEventListener("pointerdown", onFullscreenMapPointerDown);
+fullscreenMapContainer.addEventListener("pointermove", onFullscreenMapPointerMove);
+fullscreenMapContainer.addEventListener("pointerup", onFullscreenMapPointerUp);
+fullscreenMapContainer.addEventListener("pointercancel", onFullscreenMapPointerUp);
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
@@ -736,6 +748,9 @@ ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummar
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
 ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
 ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
+ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
+ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
+ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
 ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
@@ -820,11 +835,9 @@ ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
 ui.globalSheetUrlImportBtn?.addEventListener("click", importGlobalFromGoogleSheetUrl);
 ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
 ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
+ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSubmit);
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
-ui.globalImpiantoModalCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
-ui.globalImpiantoModal?.addEventListener("click", (event) => {
-  if (event.target === ui.globalImpiantoModal) closeGlobalImpiantoModal();
-});
+ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
@@ -1342,12 +1355,15 @@ function openMapFullscreenPage() {
   isMapFullscreenPageOpen = true;
   drawAreaModeActive = false;
   drawnAreaPoints = [];
+  drawnAreaRedoStack = [];
+  isDrawingStrokeActive = false;
   renderDrawnArea();
+  setFullscreenMapInteractivity(true);
   ui.impiantiPage.classList.add("hidden");
   ui.mapFullscreenPage.classList.remove("hidden");
   ui.mapFullscreenBtn.textContent = "⤢ Mappa a schermo intero";
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
-  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  syncDrawAreaToolbarState();
   setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
   setTimeout(() => {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
@@ -1360,10 +1376,12 @@ function closeMapFullscreenPage() {
   if (!ui.mapFullscreenPage) return;
   isMapFullscreenPageOpen = false;
   drawAreaModeActive = false;
+  isDrawingStrokeActive = false;
+  setFullscreenMapInteractivity(true);
   ui.mapFullscreenPage.classList.add("hidden");
   ui.impiantiPage.classList.remove("hidden");
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
-  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  syncDrawAreaToolbarState();
   setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
 }
@@ -1376,27 +1394,125 @@ function toggleDrawAreaMode() {
   drawAreaModeActive = !drawAreaModeActive;
   if (drawAreaModeActive) {
     drawnAreaPoints = [];
+    drawnAreaRedoStack = [];
+    isDrawingStrokeActive = false;
+    setFullscreenMapInteractivity(false);
     renderDrawnArea();
     ui.mapDrawAreaBtn.textContent = "✅ Termina disegno";
-    setFullscreenFeedback("Disegno attivo: tocca la mappa per aggiungere punti, poi premi “Termina disegno”.");
+    syncDrawAreaToolbarState();
+    setFullscreenFeedback("Disegno attivo: trascina il dito sulla mappa per tracciare liberamente l'area.");
     return;
   }
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna la tua area";
+  setFullscreenMapInteractivity(true);
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  isDrawingStrokeActive = false;
+  syncDrawAreaToolbarState();
   if (drawnAreaPoints.length < 3) {
     setFullscreenFeedback("Area non valida: servono almeno 3 punti.");
-    if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = true;
     return;
   }
   setFullscreenFeedback(`Area pronta (${drawnAreaPoints.length} punti). Puoi inoltrarla su WhatsApp.`);
-  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = false;
   renderDrawnArea();
 }
 
-function onFullscreenMapClick(event) {
+function setFullscreenMapInteractivity(enabled) {
+  const actions = [
+    fullscreenMap.dragging,
+    fullscreenMap.touchZoom,
+    fullscreenMap.doubleClickZoom,
+    fullscreenMap.scrollWheelZoom,
+    fullscreenMap.boxZoom,
+    fullscreenMap.keyboard,
+    fullscreenMap.tap
+  ];
+  actions.forEach((action) => {
+    if (!action) return;
+    if (enabled) action.enable();
+    else action.disable();
+  });
+  const container = fullscreenMap.getContainer();
+  if (!container) return;
+  container.style.touchAction = enabled ? "auto" : "none";
+}
+
+function mapPointerEventToLatLng(event) {
+  const rect = fullscreenMap.getContainer().getBoundingClientRect();
+  const point = L.point(event.clientX - rect.left, event.clientY - rect.top);
+  return fullscreenMap.containerPointToLatLng(point);
+}
+
+function onFullscreenMapPointerDown(event) {
   if (!drawAreaModeActive) return;
-  if (!event?.latlng) return;
-  drawnAreaPoints.push([event.latlng.lat, event.latlng.lng]);
+  event.preventDefault();
+  isDrawingStrokeActive = true;
+  drawnAreaPoints = [];
+  drawnAreaRedoStack = [];
+  const latLng = mapPointerEventToLatLng(event);
+  if (latLng) drawnAreaPoints.push([latLng.lat, latLng.lng]);
+  syncDrawAreaToolbarState();
   renderDrawnArea();
+}
+
+function onFullscreenMapPointerMove(event) {
+  if (!drawAreaModeActive || !isDrawingStrokeActive) return;
+  event.preventDefault();
+  const latLng = mapPointerEventToLatLng(event);
+  if (!latLng) return;
+  const lastPoint = drawnAreaPoints[drawnAreaPoints.length - 1];
+  if (lastPoint) {
+    const distance = fullscreenMap.distance(L.latLng(lastPoint[0], lastPoint[1]), latLng);
+    if (distance < 2) return;
+  }
+  drawnAreaPoints.push([latLng.lat, latLng.lng]);
+  renderDrawnArea();
+}
+
+function onFullscreenMapPointerUp(event) {
+  if (!drawAreaModeActive || !isDrawingStrokeActive) return;
+  event.preventDefault();
+  isDrawingStrokeActive = false;
+  if (drawnAreaPoints.length >= 3) {
+    const first = drawnAreaPoints[0];
+    const last = drawnAreaPoints[drawnAreaPoints.length - 1];
+    const closingDistance = fullscreenMap.distance(L.latLng(first[0], first[1]), L.latLng(last[0], last[1]));
+    if (closingDistance > 1) drawnAreaPoints.push([first[0], first[1]]);
+  }
+  syncDrawAreaToolbarState();
+  renderDrawnArea();
+}
+
+function syncDrawAreaToolbarState() {
+  if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  if (ui.mapDrawUndoBtn) ui.mapDrawUndoBtn.disabled = drawnAreaPoints.length < 2;
+  if (ui.mapDrawRedoBtn) ui.mapDrawRedoBtn.disabled = drawnAreaRedoStack.length < 2;
+  if (ui.mapDrawClearBtn) ui.mapDrawClearBtn.disabled = drawnAreaPoints.length === 0;
+}
+
+function undoDrawnArea() {
+  if (drawnAreaPoints.length < 2) return;
+  drawnAreaRedoStack = [...drawnAreaPoints];
+  drawnAreaPoints = [];
+  syncDrawAreaToolbarState();
+  renderDrawnArea();
+  setFullscreenFeedback("Disegno annullato. Premi “Rifai” per ripristinarlo.");
+}
+
+function redoDrawnArea() {
+  if (drawnAreaRedoStack.length < 2) return;
+  drawnAreaPoints = [...drawnAreaRedoStack];
+  drawnAreaRedoStack = [];
+  syncDrawAreaToolbarState();
+  renderDrawnArea();
+  setFullscreenFeedback("Disegno ripristinato.");
+}
+
+function clearDrawnArea() {
+  if (!drawnAreaPoints.length) return;
+  drawnAreaPoints = [];
+  drawnAreaRedoStack = [];
+  syncDrawAreaToolbarState();
+  renderDrawnArea();
+  setFullscreenFeedback("Disegno cancellato.");
 }
 
 function renderDrawnArea() {
@@ -3625,27 +3741,52 @@ async function importPendingGlobalRows() {
 function onGlobalImpiantoSearchInput(event) {
   globalImpiantoSearchTerm = String(event.target.value || "").trim();
   renderGlobalImpianti();
+  renderGlobalMap();
 }
 
-function renderGlobalImpianti() {
-  if (!ui.globalImpiantiLista) return;
-  if (!selectedGlobalCommessaId) {
-    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa Global.</p>";
-    return;
-  }
+function onGlobalImpiantoSearchSubmit(event) {
+  event.preventDefault();
+  globalImpiantoSearchTerm = String(ui.globalImpiantoSearch?.value || "").trim();
+  renderGlobalImpianti({ prioritizeTopResult: true });
+  renderGlobalMap();
+}
+
+function getFilteredGlobalImpianti() {
   const normalizedSearch = globalImpiantoSearchTerm.toLowerCase();
   const filtered = globalImpianti.filter((impianto) => {
-    if (!globalImpiantoSearchTerm) return true;
+    if (!normalizedSearch) return true;
     const haystack = [impianto.idSap, impianto.denominazione, impianto.comune, impianto.competenza, impianto.indirizzo, impianto.codicePrezzo]
       .map((value) => String(value || "").toLowerCase())
       .join(" ");
     return haystack.includes(normalizedSearch);
   });
-  if (!filtered.length) {
+  return filtered.sort((a, b) => {
+    if (!normalizedSearch) return 0;
+    const aName = String(a.denominazione || "").toLowerCase();
+    const bName = String(b.denominazione || "").toLowerCase();
+    const aStarts = aName.startsWith(normalizedSearch);
+    const bStarts = bName.startsWith(normalizedSearch);
+    if (aStarts !== bStarts) return aStarts ? -1 : 1;
+    return aName.localeCompare(bName);
+  });
+}
+
+function renderGlobalImpianti(options = {}) {
+  if (!ui.globalImpiantiLista) return;
+  if (!selectedGlobalCommessaId) {
+    ui.globalImpiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa Global.</p>";
+    globalImpiantiFiltered = [];
+    return;
+  }
+  globalImpiantiFiltered = getFilteredGlobalImpianti();
+  if (!globalImpiantiFiltered.length) {
     ui.globalImpiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato.</p>";
     return;
   }
-  const suggestions = filtered.slice(0, globalImpiantoSearchTerm ? 20 : 12);
+  if (options.prioritizeTopResult && globalImpiantiFiltered.length === 1) {
+    openGlobalImpiantoDetails(globalImpiantiFiltered[0], { focusOnMap: true, updateSearch: true });
+  }
+  const suggestions = globalImpiantiFiltered.slice(0, globalImpiantoSearchTerm ? 30 : 14);
   ui.globalImpiantiLista.innerHTML = suggestions.map((impianto) => {
     const key = buildImpiantoKey(impianto);
     const isSelected = key === selectedGlobalImpiantoKey;
@@ -3676,7 +3817,8 @@ function renderGlobalMap() {
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
     return;
   }
-  const withGps = globalImpianti.filter((item) => item.gpsY != null && item.gpsX != null);
+  const source = globalImpiantiFiltered.length || globalImpiantoSearchTerm ? globalImpiantiFiltered : globalImpianti;
+  const withGps = source.filter((item) => item.gpsY != null && item.gpsX != null);
   if (!withGps.length) {
     ui.globalMapFeedback.textContent = "Nessuna coordinata GPS disponibile per questa commessa Global.";
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
@@ -3685,14 +3827,23 @@ function renderGlobalMap() {
   ui.globalMapFeedback.textContent = `Mappa impianti Global: ${withGps.length} con coordinate GPS.`;
   const bounds = [];
   withGps.forEach((impianto) => {
+    const impiantoKey = buildImpiantoKey(impianto);
+    const isSelected = impiantoKey === selectedGlobalImpiantoKey;
     const markerDetails = [
       `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
       `Codice Hera: ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}`,
       `Comune: ${escapeHTML(impianto.comune || "-")}`,
       `Competenza: ${escapeHTML(impianto.competenza || "-")}`,
-      `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(buildImpiantoKey(impianto))}">Dettagli</button>`
+      `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(impiantoKey)}">Dettagli</button>`
     ].join("<br>");
-    const marker = L.marker([impianto.gpsY, impianto.gpsX]).addTo(globalMarkerLayer)
+    const marker = L.marker([impianto.gpsY, impianto.gpsX], {
+      icon: L.divIcon({
+        className: "global-map-pin-wrapper",
+        html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}"></span>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      })
+    }).addTo(globalMarkerLayer)
       .bindPopup(markerDetails);
     marker.on("click", () => openGlobalImpiantoDetails(impianto, { updateSearch: true }));
     marker.on("popupopen", (event) => {
@@ -3716,7 +3867,7 @@ function renderGlobalMap() {
 }
 
 function openGlobalImpiantoDetails(impianto, options = {}) {
-  if (!impianto || !ui.globalImpiantoModalBody) return;
+  if (!impianto || !ui.globalImpiantoDetailsBody) return;
   selectedGlobalImpianto = impianto;
   selectedGlobalImpiantoKey = buildImpiantoKey(impianto);
   if (options.updateSearch && ui.globalImpiantoSearch) {
@@ -3735,7 +3886,7 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
     ["Note", impianto.note || "-"]
   ];
   Object.entries(impianto.extraFields || {}).forEach(([key, value]) => details.push([formatExtraFieldLabel(key), value]));
-  ui.globalImpiantoModalBody.innerHTML = details
+  ui.globalImpiantoDetailsBody.innerHTML = details
     .map(([label, value]) => `<p><b>${escapeHTML(label)}:</b> ${escapeHTML(String(value == null || value === "" ? "-" : value))}</p>`)
     .join("");
   if (ui.globalImpiantoNavigateBtn) {
@@ -3750,17 +3901,20 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
   if (ui.globalImpiantoWhatsappBtn) {
     ui.globalImpiantoWhatsappBtn.onclick = () => shareGlobalImpiantoViaWhatsapp(impianto);
   }
-  ui.globalImpiantoModal?.classList.remove("hidden");
-  ui.globalImpiantoModal?.setAttribute("aria-hidden", "false");
+  ui.globalImpiantoDetails?.classList.remove("hidden");
   if (options.focusOnMap && impianto.gpsY != null && impianto.gpsX != null) {
     globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
   }
+  renderGlobalMap();
   renderGlobalImpianti();
 }
 
 function closeGlobalImpiantoModal() {
-  ui.globalImpiantoModal?.classList.add("hidden");
-  ui.globalImpiantoModal?.setAttribute("aria-hidden", "true");
+  ui.globalImpiantoDetails?.classList.add("hidden");
+  selectedGlobalImpianto = null;
+  selectedGlobalImpiantoKey = "";
+  renderGlobalMap();
+  renderGlobalImpianti();
 }
 
 function formatGpsLabel(impianto) {
@@ -3777,6 +3931,9 @@ function formatExtraFieldLabel(key) {
 }
 
 function shareGlobalImpiantoViaWhatsapp(impianto) {
+  const navigateUrl = impianto.gpsY != null && impianto.gpsX != null
+    ? `https://www.google.com/maps/search/?api=1&query=${impianto.gpsY},${impianto.gpsX}`
+    : "";
   const lines = [
     "📍 Impianto Global",
     `Codice Hera: ${impianto.idSap || impianto.codiceHera || "-"}`,
@@ -3784,7 +3941,9 @@ function shareGlobalImpiantoViaWhatsapp(impianto) {
     `Comune: ${impianto.comune || "-"}`,
     `Competenza: ${impianto.competenza || "-"}`,
     `Indirizzo: ${impianto.indirizzo || "-"}`,
-    `Coordinate: ${formatGpsLabel(impianto)}`
+    `Coordinate: ${formatGpsLabel(impianto)}`,
+    "",
+    navigateUrl ? `Naviga (Apri in My Maps): ${navigateUrl}` : "Naviga: coordinate non disponibili"
   ];
   window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
 }

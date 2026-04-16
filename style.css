@@ -1198,6 +1198,12 @@ textarea:focus-visible {
   border-radius: 999px;
 }
 
+.hours-commesse-buttons .commessa-btn {
+  width: auto;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
 .hours-operator-suggestions {
   display: flex;
   flex-wrap: wrap;

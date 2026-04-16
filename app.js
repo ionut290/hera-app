@@ -206,6 +206,7 @@ const ui = {
   hoursViewCloseBtn: document.getElementById("hours-view-close-btn"),
   hoursTableMonth: document.getElementById("hours-table-month"),
   hoursTableCommessaSelect: document.getElementById("hours-table-commessa-select"),
+  hoursTableCommesseButtons: document.getElementById("hours-table-commesse-buttons"),
   hoursTotalOperatorBtn: document.getElementById("hours-total-operator-btn"),
   hoursTotalOperatorCommessaBtn: document.getElementById("hours-total-operator-commessa-btn"),
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
@@ -2027,6 +2028,7 @@ async function loadHoursMonthlyTable() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   hoursTableContext = null;
   if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = false;
+  renderHoursTableCommessaButtons();
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
   const monthValue = String(ui.hoursTableMonth?.value || "").trim();
   const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
@@ -2071,6 +2073,7 @@ async function loadHoursTotalByOperator() {
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
   if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = true;
+  renderHoursTableCommessaButtons();
   ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore per operatore...";
   ui.hoursTableContainer.innerHTML = "";
@@ -2147,6 +2150,7 @@ async function loadHoursTotalByOperatorAndCommessa() {
   }
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = monthValue;
   if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = true;
+  renderHoursTableCommessaButtons();
   ensureHoursViewModalOpen();
   ui.hoursTableFeedback.textContent = "Caricamento totale ore operatore per commessa...";
   ui.hoursTableContainer.innerHTML = "";
@@ -2551,6 +2555,7 @@ function renderHoursCommessaSelectOptions() {
     if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
       select.value = selectedValue;
     }
+    renderHoursCardCommessaButtons(select.closest(".hours-commessa-card"), commesse);
   });
 }
 
@@ -2568,6 +2573,55 @@ function renderHoursTableCommessaOptions(commesseInput = null) {
   if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
     ui.hoursTableCommessaSelect.value = selectedValue;
   }
+  renderHoursTableCommessaButtons(commesse);
+}
+
+function renderHoursCardCommessaButtons(card, commesseInput = null) {
+  if (!card) return;
+  const buttonsWrap = card.querySelector(".hours-commesse-buttons");
+  const select = card.querySelector(".hours-commessa-select");
+  if (!buttonsWrap || !select) return;
+  const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
+  const selectedValue = String(select.value || "").trim();
+  if (!commesse.length) {
+    buttonsWrap.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    return;
+  }
+  buttonsWrap.innerHTML = commesse.map((commessa) => (
+    `<button type="button" class="btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+  )).join("");
+  buttonsWrap.querySelectorAll("[data-hours-commessa-choice]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const commessaId = String(btn.dataset.hoursCommessaChoice || "").trim();
+      if (!commessaId || select.value === commessaId) return;
+      select.value = commessaId;
+      unlockHoursFinalizeButton();
+      renderHoursCardCommessaButtons(card, commesse);
+      applyHoursSuggestedOperators(card, { force: true });
+    });
+  });
+}
+
+function renderHoursTableCommessaButtons(commesseInput = null) {
+  if (!ui.hoursTableCommesseButtons || !ui.hoursTableCommessaSelect) return;
+  const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
+  const selectedValue = String(ui.hoursTableCommessaSelect.value || "").trim();
+  if (!commesse.length) {
+    ui.hoursTableCommesseButtons.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    return;
+  }
+  ui.hoursTableCommesseButtons.innerHTML = commesse.map((commessa) => (
+    `<button type="button" class="btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+  )).join("");
+  ui.hoursTableCommesseButtons.querySelectorAll("[data-hours-table-commessa]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const commessaId = String(btn.dataset.hoursTableCommessa || "").trim();
+      if (!commessaId || ui.hoursTableCommessaSelect.value === commessaId) return;
+      ui.hoursTableCommessaSelect.value = commessaId;
+      renderHoursTableCommessaButtons(commesse);
+      loadHoursMonthlyTable();
+    });
+  });
 }
 
 function getSuggestedHoursOperators(commessaId, dateValue) {
@@ -2586,9 +2640,7 @@ function getSuggestedHoursOperators(commessaId, dateValue) {
 function renderHoursOperatorSuggestions(card) {
   if (!card) return;
   const suggestionBox = card.querySelector(".hours-operator-suggestions");
-  const searchInput = card.querySelector(".hours-operator-search");
-  if (!suggestionBox || !searchInput) return;
-  const term = String(searchInput.value || "").trim().toLowerCase();
+  if (!suggestionBox) return;
   const operatorList = card.querySelector(".hours-operator-list");
   const existing = new Set(Array.from(operatorList.querySelectorAll(".hours-operatore"))
     .map((input) => String(input.value || "").trim().toLowerCase())
@@ -2596,7 +2648,6 @@ function renderHoursOperatorSuggestions(card) {
   const source = personaleRecords.map((person) => getPersonaleDisplayName(person)).filter(Boolean);
   const matches = source
     .filter((name) => !existing.has(name.toLowerCase()))
-    .filter((name) => !term || name.toLowerCase().includes(term))
     .slice(0, 8);
   suggestionBox.innerHTML = matches.map((name) => (
     `<button type="button" class="btn btn-small" data-hours-suggested-operator="${escapeHTML(name)}">${escapeHTML(name)}</button>`
@@ -2606,7 +2657,6 @@ function renderHoursOperatorSuggestions(card) {
     btn.addEventListener("click", () => {
       unlockHoursFinalizeButton();
       addHoursOperatoreRow(operatorList, { operatore: btn.dataset.hoursSuggestedOperator || "", ore: "" }, card);
-      searchInput.value = "";
       renderHoursOperatorSuggestions(card);
       renderHoursSummary();
     });
@@ -2674,8 +2724,8 @@ function addHoursCommessaBlock(blockData = null) {
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
     </select>
+    <div class="hours-commesse-buttons"></div>
     <p class="muted hours-squadra-status">Seleziona commessa e data per suggerire automaticamente la squadra.</p>
-    <input type="search" class="hours-operator-search" placeholder="Cerca operatore e aggiungi" autocomplete="off">
     <div class="hours-operator-suggestions hidden"></div>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
@@ -2694,19 +2744,12 @@ function addHoursCommessaBlock(blockData = null) {
     renderHoursSummary();
   });
   const operatorList = card.querySelector(".hours-operator-list");
-  const searchInput = card.querySelector(".hours-operator-search");
   card.querySelector(".hours-add-operator-btn").addEventListener("click", () => {
     unlockHoursFinalizeButton();
     addHoursOperatoreRow(operatorList, {}, card);
     renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   });
-  card.querySelector(".hours-commessa-select").addEventListener("change", () => {
-    unlockHoursFinalizeButton();
-    applyHoursSuggestedOperators(card, { force: true });
-  });
-  searchInput.addEventListener("input", () => renderHoursOperatorSuggestions(card));
-  searchInput.addEventListener("focus", () => renderHoursOperatorSuggestions(card));
   card.querySelector(".hours-note").addEventListener("input", () => {
     unlockHoursFinalizeButton();
     renderHoursSummary();
@@ -2721,6 +2764,7 @@ function addHoursCommessaBlock(blockData = null) {
   } else {
     applyHoursSuggestedOperators(card, { force: true });
   }
+  renderHoursCardCommessaButtons(card);
   renderHoursSummary();
 }
 

@@ -518,11 +518,12 @@
       <div class="hours-view-toolbar">
         <div class="item-actions">
           <input id="hours-table-month" type="month">
-          <select id="hours-table-commessa-select">
+          <select id="hours-table-commessa-select" class="hidden" aria-hidden="true" tabindex="-1">
             <option value="">Seleziona commessa</option>
           </select>
           <button id="hours-table-export-btn" class="btn btn-primary" type="button">Esporta Excel</button>
         </div>
+        <div id="hours-table-commesse-buttons" class="hours-commesse-buttons" role="group" aria-label="Commesse"></div>
       </div>
       <p id="hours-table-feedback" class="muted"></p>
       <div id="hours-table-container" class="hours-table-wrap"></div>

@@ -1184,6 +1184,26 @@ textarea:focus-visible {
   margin-bottom: 0;
 }
 
+.hours-commessa-select {
+  display: none;
+}
+
+.hours-commesse-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hours-commessa-choice-btn {
+  border-radius: 999px;
+}
+
+.hours-commessa-choice-btn.is-active {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
 .hours-operator-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -1842,6 +1862,10 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px 8px;
+}
+
+#hours-table-commessa-select.hidden {
+  display: none;
 }
 
 .hours-value-btn {

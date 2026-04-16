@@ -998,8 +998,8 @@ textarea:focus-visible {
 }
 
 #global-map {
-  height: min(62dvh, 560px);
-  min-height: 280px;
+  height: min(44dvh, 460px);
+  min-height: 260px;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1086,17 +1086,41 @@ textarea:focus-visible {
   gap: 8px;
 }
 
-#map-fullscreen-view {
-  height: calc(100dvh - 170px);
-  min-height: 420px;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
+#map-fullscreen-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: #fff;
+  padding: 0;
 }
 
 .map-fullscreen-page-card {
-  min-height: calc(100dvh - 32px);
+  min-height: 100dvh;
+  height: 100dvh;
+  width: 100vw;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  padding: 10px;
+}
+
+.map-fullscreen-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#map-fullscreen-view {
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .map-popup-card p {
@@ -1110,7 +1134,7 @@ textarea:focus-visible {
 }
 
 .global-autocomplete-list {
-  max-height: 280px;
+  max-height: 36dvh;
   overflow: auto;
 }
 
@@ -1122,6 +1146,38 @@ textarea:focus-visible {
 .global-impianto-modal-content {
   width: min(640px, calc(100vw - 18px));
   max-height: min(88dvh, 780px);
+}
+
+.global-search-box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.global-impianto-details {
+  margin-top: 6px;
+  background: #f8fbff;
+}
+
+.global-map-pin-wrapper {
+  background: transparent;
+  border: 0;
+}
+
+.global-map-pin {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.global-map-pin.is-selected {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22);
 }
 
 .hours-operator-search {
@@ -1647,8 +1703,9 @@ textarea:focus-visible {
   .actions-row .btn { flex: 1 1 auto; }
   .page-head { align-items: stretch; }
   #map { height: min(32dvh, 260px); min-height: 170px; }
-  #global-map { height: calc(100dvh - 300px); min-height: 320px; }
-  #map-fullscreen-view { height: calc(100dvh - 210px); min-height: 360px; }
+  #global-map { height: min(40dvh, 360px); min-height: 240px; }
+  .map-fullscreen-page-card { padding: 8px; }
+  #map-fullscreen-view { min-height: 0; }
   .impianti-lista { gap: 6px; }
   .impianto-item { padding: 6px; }
   .impianto-item p { margin: 2px 0; font-size: 0.9rem; }
@@ -1658,12 +1715,9 @@ textarea:focus-visible {
   .howto-faq-question { padding: 12px; font-size: 0.94rem; }
   .howto-faq-answer { padding: 10px 12px 12px; }
   .howto-faq-steps { padding-left: 18px; font-size: 0.93rem; }
-  .global-impianto-modal-content {
-    width: 100vw;
-    max-height: 88dvh;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    margin-top: auto;
+  .global-search-box {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
 

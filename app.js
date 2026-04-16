@@ -2587,8 +2587,8 @@ function renderHoursCardCommessaButtons(card, commesseInput = null) {
     buttonsWrap.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
-  buttonsWrap.innerHTML = commesse.map((commessa) => (
-    `<button type="button" class="btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+  buttonsWrap.innerHTML = commesse.map((commessa, idx) => (
+    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
   )).join("");
   buttonsWrap.querySelectorAll("[data-hours-commessa-choice]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2610,8 +2610,8 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
     ui.hoursTableCommesseButtons.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
-  ui.hoursTableCommesseButtons.innerHTML = commesse.map((commessa) => (
-    `<button type="button" class="btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+  ui.hoursTableCommesseButtons.innerHTML = commesse.map((commessa, idx) => (
+    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
   )).join("");
   ui.hoursTableCommesseButtons.querySelectorAll("[data-hours-table-commessa]").forEach((btn) => {
     btn.addEventListener("click", () => {

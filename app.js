@@ -2692,7 +2692,6 @@ function applyHoursSuggestedOperators(card, options = {}) {
   const dateValue = String(ui.hoursDate?.value || "").trim();
   const commessaId = String(card.querySelector(".hours-commessa-select")?.value || "").trim();
   const operatorList = card.querySelector(".hours-operator-list");
-  const suggestionStatus = card.querySelector(".hours-squadra-status");
   const suggestions = getSuggestedHoursOperators(commessaId, dateValue);
   const sourceTag = `${commessaId}__${dateValue}`;
   const force = options.force === true;
@@ -2701,12 +2700,8 @@ function applyHoursSuggestedOperators(card, options = {}) {
   operatorList.innerHTML = "";
   if (suggestions.length) {
     suggestions.forEach((name) => addHoursOperatoreRow(operatorList, { operatore: name, ore: "" }, card));
-    if (suggestionStatus) suggestionStatus.textContent = "Squadra trovata: nomi precompilati (puoi modificarli liberamente).";
   } else {
     addHoursOperatoreRow(operatorList, {}, card);
-    if (suggestionStatus) suggestionStatus.textContent = commessaId && dateValue
-      ? "Nessuna squadra associata per questa data."
-      : "Seleziona commessa e data per suggerire automaticamente la squadra.";
   }
   card.dataset.suggestedSource = sourceTag;
   renderHoursOperatorSuggestions(card);
@@ -2725,8 +2720,6 @@ function addHoursCommessaBlock(blockData = null) {
       <option value="">Seleziona commessa</option>
     </select>
     <div class="hours-commesse-buttons"></div>
-    <p class="muted hours-squadra-status">Seleziona commessa e data per suggerire automaticamente la squadra.</p>
-    <div class="hours-operator-suggestions hidden"></div>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>

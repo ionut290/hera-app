@@ -1198,12 +1198,6 @@ textarea:focus-visible {
   border-radius: 999px;
 }
 
-.hours-commessa-choice-btn.is-active {
-  border-color: #1d4ed8;
-  background: #dbeafe;
-  color: #1e3a8a;
-}
-
 .hours-operator-suggestions {
   display: flex;
   flex-wrap: wrap;

@@ -270,6 +270,7 @@ const ui = {
   globalCommessaSelect: document.getElementById("global-commessa-select"),
   globalExcelFile: document.getElementById("global-excel-file"),
   globalImportBtn: document.getElementById("global-import-btn"),
+  globalUpdateBtn: document.getElementById("global-update-btn"),
   globalSheetUrl: document.getElementById("global-sheet-url"),
   globalSheetUrlImportBtn: document.getElementById("global-sheet-url-import-btn"),
   globalImportFeedback: document.getElementById("global-import-feedback"),
@@ -724,6 +725,9 @@ fullscreenMapContainer.addEventListener("pointerdown", onFullscreenMapPointerDow
 fullscreenMapContainer.addEventListener("pointermove", onFullscreenMapPointerMove);
 fullscreenMapContainer.addEventListener("pointerup", onFullscreenMapPointerUp);
 fullscreenMapContainer.addEventListener("pointercancel", onFullscreenMapPointerUp);
+window.addEventListener("resize", () => {
+  if (isMapFullscreenPageOpen) refreshFullscreenMapLayout();
+});
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
@@ -832,6 +836,7 @@ ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
 ui.globalCommessaForm?.addEventListener("submit", createGlobalCommessa);
 ui.globalExcelFile?.addEventListener("change", onGlobalExcelSelected);
 ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
+ui.globalUpdateBtn?.addEventListener("click", updateExistingGlobalRowsOnly);
 ui.globalSheetUrlImportBtn?.addEventListener("click", importGlobalFromGoogleSheetUrl);
 ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
 ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
@@ -1258,7 +1263,7 @@ function updateAdminControls() {
   if (ui.globalCommessaName) ui.globalCommessaName.disabled = !canManage;
   if (ui.globalCommessaSelect) ui.globalCommessaSelect.disabled = !canManage;
   if (ui.globalExcelFile) ui.globalExcelFile.disabled = !canManage;
-  if (ui.globalImportBtn) ui.globalImportBtn.disabled = !canManage || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+  refreshGlobalImportButtons();
   ui.mezzoPortataCarico.disabled = !canManage;
   ui.mezzoMassaComplessivaKg.disabled = !canManage;
   ui.mezzoAlimentazione.disabled = !canManage;
@@ -1367,7 +1372,7 @@ function openMapFullscreenPage() {
   setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
   setTimeout(() => {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
-    fullscreenMap.invalidateSize();
+    refreshFullscreenMapLayout();
     renderMap();
   }, 60);
 }
@@ -1384,6 +1389,12 @@ function closeMapFullscreenPage() {
   syncDrawAreaToolbarState();
   setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
+}
+
+function refreshFullscreenMapLayout() {
+  fullscreenMap.invalidateSize({ pan: false, animate: false });
+  requestAnimationFrame(() => fullscreenMap.invalidateSize({ pan: false, animate: false }));
+  setTimeout(() => fullscreenMap.invalidateSize({ pan: false, animate: false }), 220);
 }
 
 function setFullscreenFeedback(message) {
@@ -1518,20 +1529,11 @@ function clearDrawnArea() {
 function renderDrawnArea() {
   fullscreenDrawLayer.clearLayers();
   if (!drawnAreaPoints.length) return;
-  drawnAreaPoints.forEach((point, idx) => {
-    L.circleMarker(point, {
-      radius: 5,
-      color: "#1d4ed8",
-      weight: 2,
-      fillColor: "#93c5fd",
-      fillOpacity: 0.9
-    }).addTo(fullscreenDrawLayer).bindTooltip(`Punto ${idx + 1}`);
-  });
   if (drawnAreaPoints.length >= 2) {
-    L.polyline(drawnAreaPoints, { color: "#2563eb", weight: 3 }).addTo(fullscreenDrawLayer);
+    L.polyline(drawnAreaPoints, { color: "#dc2626", weight: 4, lineCap: "round", lineJoin: "round" }).addTo(fullscreenDrawLayer);
   }
   if (drawnAreaPoints.length >= 3) {
-    L.polygon(drawnAreaPoints, { color: "#1e40af", fillColor: "#60a5fa", fillOpacity: 0.18 }).addTo(fullscreenDrawLayer);
+    L.polygon(drawnAreaPoints, { color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.12, weight: 3 }).addTo(fullscreenDrawLayer);
   }
 }
 
@@ -1541,13 +1543,17 @@ function shareDrawnAreaViaWhatsapp() {
     return;
   }
   const vertices = drawnAreaPoints.map((point, idx) => `• Punto ${idx + 1}: ${point[0].toFixed(6)}, ${point[1].toFixed(6)}`).join("\n");
+  const areaCoords = drawnAreaPoints.map((point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`).join(" | ");
   const message = [
-    "📍 Area di lavoro disegnata su Hera App",
+    "🗺️ *Area lavoro commessa*",
     `Commessa: ${selectedCommessaName || "-"}`,
+    `Perimetro: ${drawnAreaPoints.length} punti`,
     "",
     vertices,
     "",
-    "Apri coordinate su Google Maps (primo punto):",
+    `Tracciato compatto: ${areaCoords}`,
+    "",
+    "Apri da Google Maps (primo punto):",
     `https://www.google.com/maps/search/?api=1&query=${drawnAreaPoints[0][0]},${drawnAreaPoints[0][1]}`
   ].join("\n");
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
@@ -3587,9 +3593,7 @@ function onGlobalCommessaSelectionChanged() {
   closeGlobalImpiantoModal();
   stopGlobalImpiantiSubscription();
   if (selectedGlobalCommessaId) subscribeGlobalImpianti();
-  if (ui.globalImportBtn) {
-    ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
-  }
+  refreshGlobalImportButtons();
   if (!selectedGlobalCommessaId) {
     globalImpianti = [];
     globalImpiantoSearchTerm = "";
@@ -3625,7 +3629,7 @@ function stopGlobalImpiantiSubscription() {
 
 function onGlobalExcelSelected(event) {
   pendingGlobalRows = [];
-  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  refreshGlobalImportButtons();
   const file = event.target.files && event.target.files[0];
   if (!file) {
     ui.globalImportFeedback.textContent = "Nessun file selezionato.";
@@ -3638,7 +3642,7 @@ function onGlobalExcelSelected(event) {
       const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
       pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
       ui.globalImportFeedback.textContent = `File Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
-      ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+      refreshGlobalImportButtons();
     } catch (error) {
       console.error("Errore lettura Excel Global:", error);
       ui.globalImportFeedback.textContent = "Errore lettura file Global.";
@@ -3649,7 +3653,7 @@ function onGlobalExcelSelected(event) {
 
 async function importGlobalFromGoogleSheetUrl() {
   pendingGlobalRows = [];
-  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  refreshGlobalImportButtons();
   const value = String(ui.globalSheetUrl?.value || "").trim();
   if (!value) {
     ui.globalImportFeedback.textContent = "Inserisci URL Google Sheet.";
@@ -3660,7 +3664,7 @@ async function importGlobalFromGoogleSheetUrl() {
     const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
     pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
     ui.globalImportFeedback.textContent = `Google Sheet Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
-    ui.globalImportBtn.disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+    refreshGlobalImportButtons();
   } catch (error) {
     console.error("Errore import Google Sheet Global:", error);
     ui.globalImportFeedback.textContent = "Errore lettura Google Sheet Global. Verifica link/condivisione.";
@@ -3734,8 +3738,122 @@ async function importPendingGlobalRows() {
   const skipped = Math.max(0, pendingGlobalRows.length - created - updated);
   pendingGlobalRows = [];
   if (ui.globalExcelFile) ui.globalExcelFile.value = "";
-  if (ui.globalImportBtn) ui.globalImportBtn.disabled = true;
+  refreshGlobalImportButtons();
   ui.globalImportFeedback.textContent = `Import Global completato: nuovi ${created}, aggiornati ${updated}, ignorati ${skipped}.`;
+}
+
+async function updateExistingGlobalRowsOnly() {
+  if (!canManageData()) {
+    alert("Solo un admin può aggiornare impianti nel Global.");
+    return;
+  }
+  if (!selectedGlobalCommessaId) {
+    alert("Seleziona una commessa Global.");
+    return;
+  }
+  if (!pendingGlobalRows.length) {
+    alert("Nessuna riga da aggiornare.");
+    return;
+  }
+
+  const ref = db.collection("globalCommesse").doc(selectedGlobalCommessaId).collection("impianti");
+  const existingSnapshot = await ref.get();
+  const existingRows = existingSnapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+  let updated = 0;
+  let unmatched = 0;
+
+  for (const row of pendingGlobalRows) {
+    const match = findBestGlobalImpiantoMatch(row, existingRows);
+    if (!match || match.score < 5) {
+      unmatched += 1;
+      continue;
+    }
+
+    const patch = {};
+    if (match.record.gpsY == null && row.gpsY != null) patch.gpsY = row.gpsY;
+    if (match.record.gpsX == null && row.gpsX != null) patch.gpsX = row.gpsX;
+    if (row.comune && !match.record.comune) patch.comune = row.comune;
+    if (row.indirizzo && !match.record.indirizzo) patch.indirizzo = row.indirizzo;
+    if (row.idSap && !match.record.idSap) patch.idSap = row.idSap;
+    if (!Object.keys(patch).length) continue;
+    await ref.doc(match.record.id).set(patch, { merge: true });
+    updated += 1;
+  }
+
+  pendingGlobalRows = [];
+  if (ui.globalExcelFile) ui.globalExcelFile.value = "";
+  refreshGlobalImportButtons();
+  ui.globalImportFeedback.textContent = `Aggiorna impianti completato: aggiornati ${updated}, non abbinati ${unmatched}. Nessun nuovo impianto creato.`;
+}
+
+function findBestGlobalImpiantoMatch(row, existingRows) {
+  let best = null;
+  for (const record of existingRows) {
+    const score = scoreGlobalImpiantoMatch(row, record);
+    if (!best || score > best.score) best = { record, score };
+  }
+  return best;
+}
+
+function scoreGlobalImpiantoMatch(source, target) {
+  const sourceSap = normalizeText(source.idSap);
+  const targetSap = normalizeText(target.idSap);
+  if (sourceSap && targetSap && sourceSap === targetSap) return 100;
+
+  let score = 0;
+  const sourceName = normalizeText(source.denominazione);
+  const targetName = normalizeText(target.denominazione);
+  if (sourceName && targetName) {
+    if (sourceName === targetName) score += 5;
+    else if (sourceName.includes(targetName) || targetName.includes(sourceName)) score += 4;
+    else if (tokenJaccard(sourceName, targetName) >= 0.6) score += 3;
+  }
+  const sourceComune = normalizeText(source.comune);
+  const targetComune = normalizeText(target.comune);
+  if (sourceComune && targetComune && sourceComune === targetComune) score += 2;
+
+  const sourceAddress = normalizeAddress(source.indirizzo);
+  const targetAddress = normalizeAddress(target.indirizzo);
+  if (sourceAddress && targetAddress) {
+    if (sourceAddress === targetAddress) score += 3;
+    else if (sourceAddress.includes(targetAddress) || targetAddress.includes(sourceAddress)) score += 2;
+    else if (tokenJaccard(sourceAddress, targetAddress) >= 0.5) score += 1;
+  }
+  return score;
+}
+
+function normalizeAddress(value) {
+  return normalizeText(value)
+    .replace(/\b(via|viale|piazza|strada|loc|localita)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenJaccard(a, b) {
+  const aSet = new Set(String(a || "").split(" ").filter(Boolean));
+  const bSet = new Set(String(b || "").split(" ").filter(Boolean));
+  if (!aSet.size || !bSet.size) return 0;
+  let intersect = 0;
+  aSet.forEach((token) => {
+    if (bSet.has(token)) intersect += 1;
+  });
+  return intersect / (aSet.size + bSet.size - intersect);
+}
+
+function refreshGlobalImportButtons() {
+  const disabled = !canManageData() || !selectedGlobalCommessaId || pendingGlobalRows.length === 0;
+  if (ui.globalImportBtn) ui.globalImportBtn.disabled = disabled;
+  if (ui.globalUpdateBtn) ui.globalUpdateBtn.disabled = disabled;
 }
 
 function onGlobalImpiantoSearchInput(event) {

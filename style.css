@@ -371,7 +371,8 @@ h2 { font-size: 1.05rem; }
 }
 
 .header-icon-btn,
-.logo-head .menu-toggle-btn {
+.logo-head .menu-toggle-btn,
+.logo-head .refresh-app-btn {
   position: absolute;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -394,6 +395,18 @@ h2 { font-size: 1.05rem; }
 
 .logo-head .menu-toggle-btn {
   right: 0;
+}
+
+.logo-head-actions {
+  position: absolute;
+  right: 0;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.logo-head-actions .menu-toggle-btn,
+.logo-head-actions .refresh-app-btn {
+  position: static;
 }
 
 .home-top-grid {

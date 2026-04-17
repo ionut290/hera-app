@@ -11,6 +11,7 @@ const APP_SHELL = [
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const OPAQUE_CACHE_WHITELIST = new Set([]);
+const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 
 const isDynamicEndpoint = (url) => {
   const dynamicPathPatterns = [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/];
@@ -43,7 +44,7 @@ const canCacheResponse = (request, response, url) => {
 
 const networkFirstForDocument = async (request) => {
   try {
-    const response = await fetch(request);
+    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
     const requestUrl = new URL(request.url);
     if (canCacheResponse(request, response, requestUrl)) {
       const cache = await caches.open(CACHE_NAME);
@@ -55,6 +56,14 @@ const networkFirstForDocument = async (request) => {
     if (cached) return cached;
     return caches.match("./index.html");
   }
+};
+
+const fetchWithTimeout = (request, timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(request, { signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId);
+  });
 };
 
 const staleWhileRevalidateForAsset = async (event) => {

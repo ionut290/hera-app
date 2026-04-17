@@ -1377,10 +1377,16 @@ function closeSideMenu() {
 
 function refreshApplicationData() {
   closeSideMenu();
+  if (ui.refreshAppBtn) {
+    ui.refreshAppBtn.disabled = true;
+    ui.refreshAppBtn.classList.add("is-reloading");
+  }
   if (ui.commesseNextAction) {
     ui.commesseNextAction.textContent = "Aggiornamento app in corso...";
   }
-  window.location.reload();
+  const refreshUrl = new URL(window.location.href);
+  refreshUrl.searchParams.set("refreshTs", String(Date.now()));
+  window.location.replace(refreshUrl.toString());
 }
 
 function openManagementPanel(panel) {

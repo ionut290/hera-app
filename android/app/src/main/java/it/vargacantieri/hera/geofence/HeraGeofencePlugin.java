@@ -2,6 +2,7 @@ package it.vargacantieri.hera.geofence;
 
 import android.Manifest;
 import android.os.Build;
+import android.util.Log;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,6 +21,7 @@ import com.getcapacitor.annotation.Permission;
         }
 )
 public class HeraGeofencePlugin extends Plugin {
+    private static final String TAG = "HeraGeofencePlugin";
 
     @PluginMethod
     public void activate(PluginCall call) {
@@ -33,23 +35,45 @@ public class HeraGeofencePlugin extends Plugin {
         HeraGeofenceNotifier notifier = new HeraGeofenceNotifier(getContext());
         notifier.ensureChannel();
 
-        manager.setActive(true);
-        manager.registerGeofence();
+        manager.registerGeofence(new HeraGeofenceManager.GeofenceRegistrationCallback() {
+            @Override
+            public void onSuccess() {
+                manager.setActive(true);
+                JSObject result = new JSObject();
+                result.put("active", true);
+                call.resolve(result);
+            }
 
-        JSObject result = new JSObject();
-        result.put("active", true);
-        call.resolve(result);
+            @Override
+            public void onFailure(Exception exception) {
+                manager.setActive(false);
+                Log.e(TAG, "Geofence activation failed.", exception);
+                call.reject("Attivazione geofence fallita.", exception);
+            }
+        });
     }
 
     @PluginMethod
     public void deactivate(PluginCall call) {
         HeraGeofenceManager manager = new HeraGeofenceManager(getContext());
-        manager.unregisterGeofence();
-        manager.setActive(false);
+        boolean wasActive = manager.isActive();
 
-        JSObject result = new JSObject();
-        result.put("active", false);
-        call.resolve(result);
+        manager.unregisterGeofence(new HeraGeofenceManager.GeofenceRegistrationCallback() {
+            @Override
+            public void onSuccess() {
+                manager.setActive(false);
+                JSObject result = new JSObject();
+                result.put("active", false);
+                call.resolve(result);
+            }
+
+            @Override
+            public void onFailure(Exception exception) {
+                manager.setActive(wasActive);
+                Log.e(TAG, "Geofence deactivation failed.", exception);
+                call.reject("Disattivazione geofence fallita.", exception);
+            }
+        });
     }
 
     @PluginMethod

@@ -396,6 +396,18 @@ h2 { font-size: 1.05rem; }
   right: 0;
 }
 
+.logo-head-actions {
+  position: absolute;
+  right: 0;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.logo-head-actions .menu-toggle-btn,
+.logo-head-actions .refresh-header-btn {
+  position: static;
+}
+
 .home-top-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);

@@ -5759,6 +5759,35 @@ async function navigateToImpianto(impianto) {
 
   const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
   window.open(url, "_blank");
+
+  const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const impiantoName = impianto.denominazione || "Impianto";
+  const areaLabel = [
+    impianto.comune,
+    impianto.competenza,
+    impianto.zona,
+    impianto.indirizzo
+  ].find((value) => String(value || "").trim()) || "zona non specificata";
+  const chatText = `🧭 ${operatorName} si sta dirigendo verso ${impiantoName} (${areaLabel}). Squadra al lavoro in area ${areaLabel}.`;
+
+  try {
+    await sendChatMessage({
+      type: "text",
+      text: chatText,
+      recipientId: "",
+      kind: "system",
+      metadata: {
+        type: "impianto_navigate",
+        commessaId: selectedCommessaId,
+        commessaName: selectedCommessaName || "Commessa",
+        impiantoName,
+        impiantoKey: buildImpiantoKey(impianto),
+        area: areaLabel
+      }
+    });
+  } catch (error) {
+    console.error("Errore invio messaggio chat navigazione impianto:", error);
+  }
 }
 
 async function markImpiantoDone(impianto) {

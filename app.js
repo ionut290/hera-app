@@ -364,6 +364,7 @@ let activeResourceManageFilter = "";
 let editingImpiantoIds = [];
 let reportingImpianto = null;
 let chatRetentionTimer = null;
+let hoursDeadlineAlertTimer = null;
 let geolocationWatchId = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
@@ -386,6 +387,8 @@ let isDrawingStrokeActive = false;
 let globalImpiantiFiltered = [];
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const HOURS_DEADLINE_ALERT_HOUR = 19;
 const PROXIMITY_NEAR_KM = 0.25;
 const PROXIMITY_AWAY_KM = 0.7;
 const GPS_APPROVAL_PHONE = "3892352575";
@@ -1185,6 +1188,7 @@ auth.onAuthStateChanged((user) => {
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
   stopChatRetentionLoop();
+  stopHoursDeadlineAlertLoop();
   selectedCommessaId = "";
   selectedCommessaName = "";
   updateCommessaContextUI();
@@ -1243,6 +1247,7 @@ auth.onAuthStateChanged((user) => {
     subscribeGlobalNotifications();
     processPendingSheetExports();
     startChatRetentionLoop();
+    startHoursDeadlineAlertLoop();
   } else {
     stopPresenceHeartbeat();
   }
@@ -6224,6 +6229,7 @@ function subscribeSquadre() {
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
     });
+    checkAndSendHoursDeadlineAlerts();
   }, (error) => {
     console.error(error);
     ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
@@ -8012,11 +8018,25 @@ function subscribeChat() {
 }
 
 function isChatMessageFresh(message) {
-  const createdAtMs = message?.createdAt && typeof message.createdAt.toDate === "function"
-    ? message.createdAt.toDate().getTime()
-    : 0;
-  if (!createdAtMs) return true;
-  return createdAtMs >= (Date.now() - CHAT_RETENTION_MS);
+  const expiresAtMs = getChatMessageExpiryMs(message);
+  if (!expiresAtMs) return true;
+  return expiresAtMs >= Date.now();
+}
+
+function getChatMessageCreatedAtMs(message) {
+  if (message?.createdAt && typeof message.createdAt.toDate === "function") {
+    return message.createdAt.toDate().getTime();
+  }
+  return 0;
+}
+
+function getChatMessageExpiryMs(message) {
+  if (message?.expiresAt && typeof message.expiresAt.toDate === "function") {
+    return message.expiresAt.toDate().getTime();
+  }
+  const createdAtMs = getChatMessageCreatedAtMs(message);
+  if (!createdAtMs) return 0;
+  return createdAtMs + CHAT_RETENTION_MS;
 }
 
 function startChatRetentionLoop() {
@@ -8037,19 +8057,143 @@ function stopChatRetentionLoop() {
 async function purgeOldChatMessages() {
   if (!canManageData()) return;
   const cutoffDate = new Date(Date.now() - CHAT_RETENTION_MS);
+  const nowDate = new Date();
   try {
-    const snapshot = await db
-      .collection("chatMessages")
-      .where("createdAt", "<=", firebase.firestore.Timestamp.fromDate(cutoffDate))
-      .limit(200)
-      .get();
-    if (snapshot.empty) return;
+    const [legacySnapshot, expiresSnapshot] = await Promise.all([
+      db
+        .collection("chatMessages")
+        .where("createdAt", "<=", firebase.firestore.Timestamp.fromDate(cutoffDate))
+        .limit(200)
+        .get(),
+      db
+        .collection("chatMessages")
+        .where("expiresAt", "<=", firebase.firestore.Timestamp.fromDate(nowDate))
+        .limit(200)
+        .get()
+    ]);
+    const docsToDelete = new Map();
+    legacySnapshot.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      if (data.expiresAt && typeof data.expiresAt.toDate === "function") return;
+      docsToDelete.set(doc.id, doc);
+    });
+    expiresSnapshot.docs.forEach((doc) => docsToDelete.set(doc.id, doc));
+    if (!docsToDelete.size) return;
     const batch = db.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    docsToDelete.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
   } catch (error) {
     console.warn("Pulizia chat 24h non completata:", error);
   }
+}
+
+function startHoursDeadlineAlertLoop() {
+  stopHoursDeadlineAlertLoop();
+  checkAndSendHoursDeadlineAlerts();
+  hoursDeadlineAlertTimer = setInterval(() => {
+    checkAndSendHoursDeadlineAlerts();
+  }, 15 * 60 * 1000);
+}
+
+function stopHoursDeadlineAlertLoop() {
+  if (hoursDeadlineAlertTimer) {
+    clearInterval(hoursDeadlineAlertTimer);
+    hoursDeadlineAlertTimer = null;
+  }
+}
+
+function hasSquadreRowsForData(squadData) {
+  const rows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  return rows.some((row) => String(row?.personale || "").trim() || String(row?.mezzi || "").trim());
+}
+
+function hasHoursForCommessaInEntries(entries, commessaId) {
+  if (!Array.isArray(entries) || !commessaId) return false;
+  return entries.some((entry) => {
+    if (String(entry?.commessaId || "") !== String(commessaId)) return false;
+    return Array.isArray(entry.rows) && entry.rows.some((row) => Number(row?.ore || 0) > 0);
+  });
+}
+
+async function checkAndSendHoursDeadlineAlerts() {
+  if (!currentUser || !canManageData()) return;
+  const now = new Date();
+  if (now.getHours() < HOURS_DEADLINE_ALERT_HOUR) return;
+  const dateKey = getDateKeyFromLocalDate(now);
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const commesseConSquadra = Array.from(storicoDelGiorno.values())
+    .filter((squadData) => hasSquadreRowsForData(squadData))
+    .map((squadData) => ({
+      commessaId: String(squadData.commessaId || "").trim(),
+      commessaName: String(squadData.commessaNome || "").trim() || (commesseById.get(String(squadData.commessaId || "").trim()) || {}).nome || "Commessa"
+    }))
+    .filter((row) => row.commessaId);
+  if (!commesseConSquadra.length) return;
+
+  const [reportsSnapshot, approvalSnapshot, adminUsers] = await Promise.all([
+    db.collection("oreReports").where("date", "==", dateKey).get(),
+    db.collection("oreApprovalRequests").where("date", "==", dateKey).get(),
+    Promise.resolve(platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email))))
+  ]);
+
+  if (!adminUsers.length) return;
+
+  const reports = reportsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const approvals = approvalSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((request) => String(request.status || "").trim() !== "rejected");
+
+  for (const commessa of commesseConSquadra) {
+    const hasHoursSaved = reports.some((report) => hasHoursForCommessaInEntries(report.entries, commessa.commessaId));
+    const hasHoursPending = approvals.some((request) => hasHoursForCommessaInEntries(request.entries, commessa.commessaId));
+    if (hasHoursSaved || hasHoursPending) continue;
+    await Promise.all(adminUsers.map((adminUser) => sendHoursDeadlineAlertIfMissing({
+      adminUser,
+      commessaId: commessa.commessaId,
+      commessaName: commessa.commessaName,
+      dateKey
+    })));
+  }
+}
+
+async function sendHoursDeadlineAlertIfMissing({ adminUser, commessaId, commessaName, dateKey }) {
+  if (!adminUser?.id || !commessaId || !dateKey) return;
+  const alertId = `${dateKey}__${commessaId}__${adminUser.id}`;
+  const alertRef = db.collection("hoursDeadlineAlerts").doc(alertId);
+  const existing = await alertRef.get();
+  if (existing.exists) return;
+
+  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+  const text = `⚠️ Avviso ore mancanti: per la commessa ${commessaName || "Commessa"} (${dateLabel}) è presente una squadra ma non risultano ore inserite entro le 19:00.`;
+  const expiresAt = new Date(Date.now() + HOURS_DEADLINE_ALERT_RETENTION_MS);
+  const chatDocRef = await db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser?.uid || "system",
+    senderName: "Sistema ore",
+    senderEmail: currentUser?.email || "",
+    kind: "system",
+    metadata: {
+      type: "hours_deadline_alert",
+      action: "open_hours",
+      commessaId,
+      commessaName: commessaName || "",
+      date: dateKey
+    },
+    expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  await alertRef.set({
+    alertId,
+    adminUserId: adminUser.id,
+    commessaId,
+    commessaName: commessaName || "",
+    date: dateKey,
+    chatMessageId: chatDocRef.id,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
 }
 
 async function upsertCurrentPlatformUser() {
@@ -8104,6 +8248,7 @@ function subscribeUsers() {
     renderUserPermissionList();
     renderHeaderActivitySummary();
     renderExternalApps();
+    checkAndSendHoursDeadlineAlerts();
   });
 }
 
@@ -8820,6 +8965,20 @@ function canConfirmHoursFromChat(message) {
   return false;
 }
 
+function canOpenHoursFromChatAlert(message) {
+  if (String(message?.kind || "") !== "system") return false;
+  if (!canManageData()) return false;
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) return false;
+  return metadata.type === "hours_deadline_alert" && metadata.action === "open_hours";
+}
+
+async function deleteChatMessageById(messageId) {
+  const normalized = String(messageId || "").trim();
+  if (!normalized) return;
+  await db.collection("chatMessages").doc(normalized).delete();
+}
+
 async function getHoursApprovalRequestById(requestId) {
   const normalizedRequestId = String(requestId || "").trim();
   if (!normalizedRequestId) return null;
@@ -8836,6 +8995,36 @@ function setChatHoursActionButtonsState(acceptButton, rejectButton, state) {
 }
 
 async function buildChatMessageActions(message) {
+  if (canOpenHoursFromChatAlert(message)) {
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    const openHoursBtn = createButton("Inserisci ore", () => {
+      if (!currentUser) return;
+      openHoursPage();
+      if (ui.hoursDate && message?.metadata?.date) ui.hoursDate.value = message.metadata.date;
+      if (ui.hoursFeedback) {
+        const commessaName = String(message?.metadata?.commessaName || "").trim();
+        ui.hoursFeedback.textContent = commessaName
+          ? `Avviso ore: compila la commessa ${commessaName}.`
+          : "Avviso ore: compila le ore mancanti.";
+      }
+    });
+    actions.appendChild(openHoursBtn);
+    if (canManageData()) {
+      const deleteBtn = createButton("Elimina", async () => {
+        try {
+          await deleteChatMessageById(message.id);
+          ui.chatFeedback.textContent = "Messaggio avviso eliminato.";
+        } catch (error) {
+          console.error("Errore eliminazione messaggio avviso:", error);
+          ui.chatFeedback.textContent = "Impossibile eliminare il messaggio avviso.";
+        }
+      });
+      actions.appendChild(deleteBtn);
+    }
+    return actions;
+  }
+
   if (!canConfirmHoursFromChat(message)) return null;
   const actionType = String(message?.metadata?.action || "").trim();
   const approvalRequestId = String(message?.metadata?.approvalRequestId || "").trim();

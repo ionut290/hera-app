@@ -94,7 +94,7 @@ Questa procedura mantiene la versione web invariata: **la web app resta la sorge
 
 1. Verifica PWA base (già predisposta in questo repo): `manifest.webmanifest`, icona SVG e `sw.js`.
 2. Continua a distribuire la web app su Firebase Hosting come sempre.
-3. Usa Capacitor (config già pronta in `capacitor.config.ts`) per creare il wrapper Android in `android/`.
+3. Usa Capacitor (config già pronta in `capacitor.config.json`) per creare il wrapper Android in `android/`.
 4. Genera il file `.aab` da Android Studio e caricalo in Play Console.
 
 ### Comandi consigliati (quando vuoi attivare Android)
@@ -106,7 +106,7 @@ npm run android:sync
 npm run android:open
 ```
 
-`capacitor.config.ts` è già incluso nel repository con `appId` `it.vargacantieri.hera`, quindi non devi inizializzarlo manualmente.
+`capacitor.config.json` è già incluso nel repository con `appId` `it.vargacantieri.hera`, quindi non devi inizializzarlo manualmente.
 
 In Android Studio:
 - Build > Generate Signed Bundle / APK
@@ -116,3 +116,41 @@ In Android Studio:
 ### Nota importante
 
 Per mantenere la web app intatta, evita refactor lato UI/rotte solo per Android: usa plugin Capacitor solo se servono feature native (camera, notifiche, file).
+
+
+## Android: geofence nativo (app chiusa)
+
+È stato aggiunto un plugin nativo Capacitor (`HeraGeofence`) con logica lato Android per rispettare il vincolo *"anche con app spenta"*.
+
+### Coordinate e raggio geofence
+
+- lat: `44.562504656236015`
+- lng: `11.356961975643515`
+- radius: `200m`
+
+### Logica nativa implementata
+
+- Trigger geofence via `GeofencingClient` (Google Play Services), non via Web Geolocation.
+- Gestione fasce orarie in receiver nativo (ora locale device):
+  - `06:15–07:30` → notifica entrata
+  - `15:30–17:00` → notifica uscita
+- Deduplica persistente con `SharedPreferences` per `giorno + fascia`.
+- Ripristino automatico geofence dopo riavvio/aggiornamento app (`BOOT_COMPLETED` + `MY_PACKAGE_REPLACED`).
+
+### Permessi Android configurati
+
+- `ACCESS_COARSE_LOCATION`
+- `ACCESS_FINE_LOCATION`
+- `ACCESS_BACKGROUND_LOCATION`
+- `POST_NOTIFICATIONS` (Android 13+)
+- `RECEIVE_BOOT_COMPLETED`
+
+### Bridge opzionale in `app.js`
+
+`app.js` espone (solo se plugin disponibile su Android nativo):
+
+- `window.heraNativeGeofence.activate()`
+- `window.heraNativeGeofence.deactivate()`
+- `window.heraNativeGeofence.status()`
+
+La logica di trigger notifiche resta comunque al livello nativo.

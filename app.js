@@ -884,6 +884,39 @@ renderResourceManageFilters();
 updateResourceFormByType();
 updateConnectivityStatus();
 initPwaCapabilities();
+initNativeGeofenceBridge();
+
+
+function getNativeHeraGeofencePlugin() {
+  const plugins = window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins : null;
+  if (!plugins || !plugins.HeraGeofence) return null;
+  return plugins.HeraGeofence;
+}
+
+async function initNativeGeofenceBridge() {
+  const plugin = getNativeHeraGeofencePlugin();
+  if (!plugin) {
+    return;
+  }
+
+  try {
+    const status = await plugin.status();
+    const active = Boolean(status && status.active);
+    if (ui.gpsStatus) {
+      ui.gpsStatus.textContent = active
+        ? "Geofence nativo Android attivo (trigger anche ad app chiusa)."
+        : "Geofence nativo Android disponibile ma non attivo.";
+    }
+  } catch (error) {
+    console.warn("Status geofence nativo non disponibile:", error);
+  }
+
+  window.heraNativeGeofence = {
+    activate: async () => plugin.activate(),
+    deactivate: async () => plugin.deactivate(),
+    status: async () => plugin.status()
+  };
+}
 
 function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");

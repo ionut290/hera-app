@@ -2814,7 +2814,10 @@ function addHoursCommessaBlock(blockData = null) {
   card.innerHTML = `
     <div class="hours-commessa-head">
       <h3>Commessa</h3>
-      <button type="button" class="btn hours-remove-commessa-btn">Rimuovi commessa</button>
+      <div class="item-actions">
+        <button type="button" class="btn hours-export-global-btn">Esporta Excel Global</button>
+        <button type="button" class="btn hours-remove-commessa-btn">Rimuovi commessa</button>
+      </div>
     </div>
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
@@ -2836,6 +2839,8 @@ function addHoursCommessaBlock(blockData = null) {
     if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
     renderHoursSummary();
   });
+  const exportGlobalBtn = card.querySelector(".hours-export-global-btn");
+  exportGlobalBtn?.addEventListener("click", exportHoursGlobalMonthlyTable);
   const operatorList = card.querySelector(".hours-operator-list");
   card.querySelector(".hours-add-operator-btn").addEventListener("click", () => {
     unlockHoursFinalizeButton();

@@ -7,17 +7,27 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofenceStatusCodes;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
 
 public class HeraGeofenceManager {
+    private static final String TAG = "HeraGeofenceManager";
     private final Context context;
     private final GeofencingClient geofencingClient;
+
+    public interface GeofenceRegistrationCallback {
+        void onSuccess();
+
+        void onFailure(Exception exception);
+    }
 
     public HeraGeofenceManager(Context context) {
         this.context = context.getApplicationContext();
@@ -43,8 +53,9 @@ public class HeraGeofenceManager {
         return fineLocation && backgroundLocation;
     }
 
-    public void registerGeofence() {
+    public void registerGeofence(GeofenceRegistrationCallback callback) {
         if (!hasRequiredPermissions()) {
+            callback.onFailure(new SecurityException("Missing required location permissions."));
             return;
         }
 
@@ -65,12 +76,37 @@ public class HeraGeofenceManager {
                 .addGeofence(geofence)
                 .build();
 
-        geofencingClient.removeGeofences(getPendingIntent());
-        geofencingClient.addGeofences(request, getPendingIntent());
+        geofencingClient.removeGeofences(getPendingIntent())
+                .addOnFailureListener(removeException ->
+                        Log.w(TAG, "Failed to remove previous geofences before registration.", removeException)
+                )
+                .addOnCompleteListener(task -> geofencingClient.addGeofences(request, getPendingIntent())
+                        .addOnSuccessListener(unused -> callback.onSuccess())
+                        .addOnFailureListener(addException -> {
+                            logGeofenceError("Failed to add geofences.", addException);
+                            callback.onFailure(addException);
+                        }));
     }
 
-    public void unregisterGeofence() {
-        geofencingClient.removeGeofences(getPendingIntent());
+    public void unregisterGeofence(GeofenceRegistrationCallback callback) {
+        geofencingClient.removeGeofences(getPendingIntent())
+                .addOnSuccessListener(unused -> callback.onSuccess())
+                .addOnFailureListener(exception -> {
+                    logGeofenceError("Failed to remove geofences.", exception);
+                    callback.onFailure(exception);
+                });
+    }
+
+    private void logGeofenceError(String message, Exception exception) {
+        if (exception instanceof ApiException) {
+            ApiException apiException = (ApiException) exception;
+            int statusCode = apiException.getStatusCode();
+            String statusText = GeofenceStatusCodes.getStatusCodeString(statusCode);
+            Log.e(TAG, message + " statusCode=" + statusCode + " status=" + statusText, exception);
+            return;
+        }
+
+        Log.e(TAG, message, exception);
     }
 
     private PendingIntent getPendingIntent() {

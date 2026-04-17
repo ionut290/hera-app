@@ -9874,7 +9874,7 @@ function renderFaqHelpCenter(faqData) {
   faqDataset = normalized;
   window.appHelpFaqData = normalized;
 
-  const list = document.getElementById("help-faq-list");
+  const list = document.getElementById("help-faq-list") || ui.howtoFaqList;
   if (!list) return;
   list.innerHTML = normalized.items.map((item) => {
     const steps = item.passi.length

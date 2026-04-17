@@ -18,6 +18,7 @@ if (firebase.messaging && typeof firebase.messaging === "function") {
 }
 
 const ui = {
+  refreshAppBtn: document.getElementById("refresh-app-btn"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
   sideMenu: document.getElementById("side-menu"),
@@ -743,6 +744,7 @@ window.addEventListener("resize", () => {
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
 ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
+ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
 ui.menuToggleBtn.addEventListener("click", openSideMenu);
 ui.menuCloseBtn.addEventListener("click", closeSideMenu);
 ui.menuOverlay.addEventListener("click", closeSideMenu);
@@ -1371,6 +1373,20 @@ function closeSideMenu() {
   ui.sideMenu.classList.add("hidden");
   ui.menuOverlay.classList.add("hidden");
   ui.sideMenu.setAttribute("aria-hidden", "true");
+}
+
+function refreshApplicationData() {
+  closeSideMenu();
+  if (ui.refreshAppBtn) {
+    ui.refreshAppBtn.disabled = true;
+    ui.refreshAppBtn.classList.add("is-reloading");
+  }
+  if (ui.commesseNextAction) {
+    ui.commesseNextAction.textContent = "Aggiornamento app in corso...";
+  }
+  const refreshUrl = new URL(window.location.href);
+  refreshUrl.searchParams.set("refreshTs", String(Date.now()));
+  window.location.replace(refreshUrl.toString());
 }
 
 function openManagementPanel(panel) {

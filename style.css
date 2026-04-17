@@ -1566,6 +1566,31 @@ textarea:focus-visible {
   box-shadow: 0 14px 30px rgba(22, 163, 74, 0.45);
 }
 
+.refresh-fab {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.7rem;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.35);
+  cursor: pointer;
+  z-index: 999;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.refresh-fab:hover {
+  transform: scale(1.04);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.45);
+}
+
 .chat-counter {
   position: absolute;
   top: -5px;

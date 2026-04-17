@@ -371,7 +371,8 @@ h2 { font-size: 1.05rem; }
 }
 
 .header-icon-btn,
-.logo-head .menu-toggle-btn {
+.logo-head .menu-toggle-btn,
+.logo-head .refresh-app-btn {
   position: absolute;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1576,6 +1577,42 @@ textarea:focus-visible {
 .chat-fab:hover {
   transform: scale(1.04);
   box-shadow: 0 14px 30px rgba(22, 163, 74, 0.45);
+}
+
+.refresh-fab {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.35rem;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.35);
+  cursor: pointer;
+  z-index: 1201;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.refresh-fab:hover {
+  transform: scale(1.04);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.45);
+}
+
+.refresh-fab.is-reloading {
+  cursor: wait;
+  opacity: 0.92;
+  animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .chat-counter {

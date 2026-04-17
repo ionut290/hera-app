@@ -1620,7 +1620,7 @@ function shareDrawnAreaViaWhatsapp() {
     "Apri da Google Maps (primo punto):",
     `https://www.google.com/maps/search/?api=1&query=${drawnAreaPoints[0][0]},${drawnAreaPoints[0][1]}`
   ].join("\n");
-  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+  if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function applyRoute() {
@@ -3373,8 +3373,10 @@ async function shareSegnalazione(channel) {
   }
 
   if (channel === "whatsapp") {
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareMessage} Ho generato il PDF: ${lastSegnalazionePdfName}`)}`, "_blank");
-    ui.segnalazioneFeedback.textContent = "WhatsApp aperto. Allega il PDF scaricato prima di inviare.";
+    const opened = safeOpenWhatsAppMessage(`${shareMessage} Ho generato il PDF: ${lastSegnalazionePdfName}`);
+    ui.segnalazioneFeedback.textContent = opened
+      ? "WhatsApp aperto. Allega il PDF scaricato prima di inviare."
+      : "Impossibile aprire WhatsApp automaticamente. Condividi il PDF manualmente.";
     return;
   }
 
@@ -4266,7 +4268,7 @@ function shareGlobalImpiantoViaWhatsapp(impianto) {
     "",
     navigateUrl ? `Naviga (Apri in My Maps): ${navigateUrl}` : "Naviga: coordinate non disponibili"
   ];
-  window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+  if (!safeOpenWhatsAppMessage(lines.join("\n"))) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function subscribeResources() {
@@ -4698,10 +4700,75 @@ function sanitizePhone(value) {
   return String(value || "").replace(/[^0-9+]/g, "");
 }
 
+function openExternalUrl(url, options = {}) {
+  if (!url) return false;
+  const target = options?.target || "_blank";
+  const features = options?.features || "noopener";
+  try {
+    const openedWindow = window.open(url, target, features);
+    if (!openedWindow) {
+      if (options?.allowSameWindowFallback !== false) {
+        window.location.href = url;
+        return true;
+      }
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Errore apertura URL esterna:", error);
+    if (options?.allowSameWindowFallback !== false) {
+      try {
+        window.location.href = url;
+        return true;
+      } catch (fallbackError) {
+        console.error("Errore fallback apertura URL esterna:", fallbackError);
+      }
+    }
+    return false;
+  }
+}
+
+function buildWhatsAppWebUrl(encodedMessage, phone = "") {
+  const normalizedPhone = sanitizePhone(phone).replace(/\+/g, "");
+  if (normalizedPhone) return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
+  return `https://wa.me/?text=${encodedMessage}`;
+}
+
+function safeOpenWhatsAppMessage(message, options = {}) {
+  const encodedMessage = encodeURIComponent(String(message || ""));
+  const appUrl = options?.appUrl || `whatsapp://send?text=${encodedMessage}`;
+  const webUrl = options?.webUrl || buildWhatsAppWebUrl(encodedMessage, options?.phone);
+  const target = options?.target || "_blank";
+  const usePopup = options?.usePopup !== false;
+  if (!usePopup || target === "_self") {
+    try {
+      window.location.href = webUrl;
+      return true;
+    } catch (error) {
+      console.error("Errore apertura WhatsApp in stessa finestra:", error);
+      return false;
+    }
+  }
+  return openExternalUrl(appUrl, {
+    target,
+    features: "noopener",
+    allowSameWindowFallback: false
+  }) || openExternalUrl(webUrl, {
+    target,
+    features: "noopener",
+    allowSameWindowFallback: true
+  });
+}
+
 function openPhoneOnWhatsApp(value) {
-  const raw = sanitizePhone(value).replace("+", "");
+  const raw = sanitizePhone(value).replace(/\+/g, "");
   if (!raw) return;
-  window.open(`https://wa.me/${raw}`, "_blank");
+  const opened = safeOpenWhatsAppMessage("", {
+    appUrl: `whatsapp://send?phone=${raw}`,
+    webUrl: `https://wa.me/${raw}`,
+    phone: raw
+  });
+  if (!opened) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function openDocumentLink(value) {
@@ -5597,9 +5664,19 @@ function renderImpianti() {
       async () => {
         const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
         if (!whatsappOpened || impianto.done) return;
-        markImpiantoDone(impianto).catch((error) => {
+        try {
+          const doneMarked = await markImpiantoDone(impianto);
+          if (!doneMarked) {
+            alert("Messaggio WhatsApp aperto, ma non sono riuscito a spostare l'impianto tra i FATTI.");
+            notifyAdminsForImpiantoDoneRecovery(impianto, "Lo stato non è stato aggiornato automaticamente dopo Invia messaggio.")
+              .catch((error) => console.error("Errore invio richiesta recupero stato impianto:", error));
+          }
+        } catch (error) {
           console.error("Errore nel passaggio automatico a FATTO dopo apertura WhatsApp:", error);
-        });
+          alert("WhatsApp aperto, ma si è verificato un errore nel passaggio automatico tra i FATTI.");
+          notifyAdminsForImpiantoDoneRecovery(impianto, "Errore tecnico durante il passaggio automatico ai FATTI.")
+            .catch((notifyError) => console.error("Errore invio richiesta recupero stato impianto:", notifyError));
+        }
       },
       false,
       false,
@@ -6799,32 +6876,31 @@ function openWhatsApp(impianto, options = {}) {
   const targetWindow = options?.targetWindow;
   const disableWebFallback = Boolean(options?.disableWebFallback);
   if (targetWindow && !targetWindow.closed) {
-    targetWindow.location.replace(appUrl);
+    try {
+      targetWindow.location.replace(appUrl);
+    } catch (error) {
+      console.error("Errore apertura WhatsApp nella finestra target:", error);
+    }
     if (!disableWebFallback) {
       setTimeout(() => {
-        if (!targetWindow.closed) targetWindow.location.replace(webUrl);
+        try {
+          if (!targetWindow.closed) targetWindow.location.replace(webUrl);
+        } catch (error) {
+          console.error("Errore fallback WhatsApp nella finestra target:", error);
+        }
       }, 700);
     }
     return;
   }
   const target = options?.target || "_blank";
-  const popup = window.open(appUrl, target, "noopener");
-  if (!popup) {
-    window.location.href = disableWebFallback ? appUrl : webUrl;
-    return;
-  }
-  if (target === "_self") {
-    if (!disableWebFallback) {
-      setTimeout(() => {
-        window.location.href = webUrl;
-      }, 700);
-    }
-    return;
-  }
-  if (!disableWebFallback) {
-    setTimeout(() => {
-      if (!popup.closed) popup.location.replace(webUrl);
-    }, 700);
+  const opened = safeOpenWhatsAppMessage(message, {
+    appUrl,
+    webUrl,
+    target,
+    usePopup: target !== "_self"
+  });
+  if (!opened && !disableWebFallback) {
+    openExternalUrl(webUrl, { target: "_blank", features: "noopener", allowSameWindowFallback: true });
   }
 }
 
@@ -6873,8 +6949,10 @@ async function submitImpiantoReport(event) {
     `🕒 Ora segnalazione: ${now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })}`,
     "✅ Conferma: stiamo segnalando al cliente il problema riscontrato e il relativo intervento richiesto."
   ].join("\n");
-  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
-  ui.impiantoReportFeedback.textContent = "WhatsApp aperto con la segnalazione pronta da inviare.";
+  const opened = safeOpenWhatsAppMessage(message);
+  ui.impiantoReportFeedback.textContent = opened
+    ? "WhatsApp aperto con la segnalazione pronta da inviare."
+    : "Impossibile aprire WhatsApp automaticamente su questo dispositivo.";
   setTimeout(closeImpiantoReportModal, 200);
 }
 
@@ -6937,7 +7015,8 @@ async function requestGpsUpdate(impianto) {
       `Coordinate operatore: ${pos.lat}, ${pos.lng}`,
       `Mappa: ${mapsUrl}`
     ].join("\n");
-    window.open(`https://wa.me/${GPS_APPROVAL_PHONE}?text=${encodeURIComponent(waText)}`, "_blank");
+    const opened = safeOpenWhatsAppMessage(waText, { phone: GPS_APPROVAL_PHONE });
+    if (!opened) alert("Richiesta creata, ma non è stato possibile aprire WhatsApp automaticamente.");
 
     await notifyAdminsForGpsRequest(requestRef.id, impianto, pos);
     alert("Richiesta inviata. In attesa approvazione admin.");
@@ -6962,6 +7041,42 @@ async function notifyAdminsForGpsRequest(requestId, impianto, pos) {
   })));
 }
 
+async function notifyAdminsForImpiantoDoneRecovery(impianto, reason = "") {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoIds = getImpiantoDocIds(impianto).filter(Boolean);
+  if (!commessaId || !impiantoIds.length) return;
+  const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const text = [
+    "⚠️ Recupero stato impianto richiesto",
+    `Operatore: ${operatorName}`,
+    `Commessa: ${selectedCommessaName || "Commessa"}`,
+    `Impianto: ${impianto.denominazione || "Impianto"}`,
+    reason ? `Dettaglio: ${reason}` : "Dettaglio: passaggio automatico ai FATTI non riuscito.",
+    "Premi il pulsante per spostare l'impianto nei FATTI."
+  ].join("\n");
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser?.uid || "",
+    senderName: operatorName,
+    senderEmail: currentUser?.email || "",
+    kind: "system",
+    metadata: {
+      type: "impianto_done_recovery",
+      action: "move_done",
+      commessaId,
+      commessaName: selectedCommessaName || "Commessa",
+      impiantoIds,
+      impiantoName: impianto.denominazione || "Impianto",
+      impiantoKey: buildImpiantoKey(impianto)
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })));
+}
+
 function openSquadraWhatsApp(squad, commessa) {
   const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
   const rowsMessage = squadRows.map((row, idx) => ([
@@ -6981,8 +7096,7 @@ function openSquadraWhatsApp(squad, commessa) {
     "Grazie per la verifica."
   ].join("\n");
 
-  const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank");
+  if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function getSquadrePackageEntries() {
@@ -7119,7 +7233,7 @@ async function shareAllSquadreToWhatsApp() {
     "",
     "✅ Per favore confermare o segnalare eventuali modifiche."
   ].join("\n");
-  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+  if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function getCommessaAccentColor(commessaId, index) {
@@ -9108,6 +9222,35 @@ function canOpenHoursFromChatAlert(message) {
   return metadata.type === "hours_deadline_alert" && metadata.action === "open_hours";
 }
 
+function canMoveImpiantoDoneFromChat(message) {
+  if (String(message?.kind || "") !== "system") return false;
+  if (!canManageData()) return false;
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) return false;
+  if (metadata.type !== "impianto_done_recovery" || metadata.action !== "move_done") return false;
+  const commessaId = String(metadata.commessaId || "").trim();
+  const impiantoIds = Array.isArray(metadata.impiantoIds) ? metadata.impiantoIds.filter(Boolean) : [];
+  return Boolean(commessaId && impiantoIds.length);
+}
+
+async function moveImpiantoToDoneFromChat(message) {
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) throw new Error("Messaggio chat senza metadati validi.");
+  const commessaId = String(metadata.commessaId || "").trim();
+  const commessaName = String(metadata.commessaName || "").trim() || "Commessa";
+  const impiantoIds = Array.isArray(metadata.impiantoIds) ? metadata.impiantoIds.map((id) => String(id || "").trim()).filter(Boolean) : [];
+  if (!commessaId || !impiantoIds.length) throw new Error("Dati impianto insufficienti per lo spostamento nei FATTI.");
+  await setImpiantoDone(commessaId, impiantoIds, true);
+  if (selectedCommessaId === commessaId) {
+    updateImpiantoLocalState(impiantoIds, {
+      done: true,
+      doneAt: new Date(),
+      doneBy: currentUser?.displayName || currentUser?.email || "Admin"
+    });
+  }
+  scheduleCommessaSheetSync(commessaId, commessaName, 250);
+}
+
 async function deleteChatMessageById(messageId) {
   const normalized = String(messageId || "").trim();
   if (!normalized) return;
@@ -9130,6 +9273,24 @@ function setChatHoursActionButtonsState(acceptButton, rejectButton, state) {
 }
 
 async function buildChatMessageActions(message) {
+  if (canMoveImpiantoDoneFromChat(message)) {
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    const moveDoneBtn = createButton("Sposta nei FATTI", async () => {
+      moveDoneBtn.disabled = true;
+      try {
+        await moveImpiantoToDoneFromChat(message);
+        ui.chatFeedback.textContent = "Impianto spostato nei FATTI.";
+      } catch (error) {
+        console.error("Errore spostamento impianto nei FATTI da chat:", error);
+        ui.chatFeedback.textContent = error?.message || "Impossibile spostare l'impianto nei FATTI.";
+        moveDoneBtn.disabled = false;
+      }
+    });
+    actions.appendChild(moveDoneBtn);
+    return actions;
+  }
+
   if (canOpenHoursFromChatAlert(message)) {
     const actions = document.createElement("div");
     actions.className = "item-actions";

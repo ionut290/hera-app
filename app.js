@@ -5597,7 +5597,9 @@ function renderImpianti() {
       async () => {
         const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
         if (!whatsappOpened || impianto.done) return;
-        await markImpiantoDone(impianto);
+        markImpiantoDone(impianto).catch((error) => {
+          console.error("Errore nel passaggio automatico a FATTO dopo apertura WhatsApp:", error);
+        });
       },
       false,
       false,

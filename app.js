@@ -5664,9 +5664,19 @@ function renderImpianti() {
       async () => {
         const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
         if (!whatsappOpened || impianto.done) return;
-        markImpiantoDone(impianto).catch((error) => {
+        try {
+          const doneMarked = await markImpiantoDone(impianto);
+          if (!doneMarked) {
+            alert("Messaggio WhatsApp aperto, ma non sono riuscito a spostare l'impianto tra i FATTI.");
+            notifyAdminsForImpiantoDoneRecovery(impianto, "Lo stato non è stato aggiornato automaticamente dopo Invia messaggio.")
+              .catch((error) => console.error("Errore invio richiesta recupero stato impianto:", error));
+          }
+        } catch (error) {
           console.error("Errore nel passaggio automatico a FATTO dopo apertura WhatsApp:", error);
-        });
+          alert("WhatsApp aperto, ma si è verificato un errore nel passaggio automatico tra i FATTI.");
+          notifyAdminsForImpiantoDoneRecovery(impianto, "Errore tecnico durante il passaggio automatico ai FATTI.")
+            .catch((notifyError) => console.error("Errore invio richiesta recupero stato impianto:", notifyError));
+        }
       },
       false,
       false,
@@ -7027,6 +7037,42 @@ async function notifyAdminsForGpsRequest(requestId, impianto, pos) {
     senderId: currentUser.uid,
     senderName: currentUser.displayName || currentUser.email || "Operatore",
     senderEmail: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })));
+}
+
+async function notifyAdminsForImpiantoDoneRecovery(impianto, reason = "") {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoIds = getImpiantoDocIds(impianto).filter(Boolean);
+  if (!commessaId || !impiantoIds.length) return;
+  const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const text = [
+    "⚠️ Recupero stato impianto richiesto",
+    `Operatore: ${operatorName}`,
+    `Commessa: ${selectedCommessaName || "Commessa"}`,
+    `Impianto: ${impianto.denominazione || "Impianto"}`,
+    reason ? `Dettaglio: ${reason}` : "Dettaglio: passaggio automatico ai FATTI non riuscito.",
+    "Premi il pulsante per spostare l'impianto nei FATTI."
+  ].join("\n");
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser?.uid || "",
+    senderName: operatorName,
+    senderEmail: currentUser?.email || "",
+    kind: "system",
+    metadata: {
+      type: "impianto_done_recovery",
+      action: "move_done",
+      commessaId,
+      commessaName: selectedCommessaName || "Commessa",
+      impiantoIds,
+      impiantoName: impianto.denominazione || "Impianto",
+      impiantoKey: buildImpiantoKey(impianto)
+    },
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   })));
 }
@@ -9176,6 +9222,35 @@ function canOpenHoursFromChatAlert(message) {
   return metadata.type === "hours_deadline_alert" && metadata.action === "open_hours";
 }
 
+function canMoveImpiantoDoneFromChat(message) {
+  if (String(message?.kind || "") !== "system") return false;
+  if (!canManageData()) return false;
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) return false;
+  if (metadata.type !== "impianto_done_recovery" || metadata.action !== "move_done") return false;
+  const commessaId = String(metadata.commessaId || "").trim();
+  const impiantoIds = Array.isArray(metadata.impiantoIds) ? metadata.impiantoIds.filter(Boolean) : [];
+  return Boolean(commessaId && impiantoIds.length);
+}
+
+async function moveImpiantoToDoneFromChat(message) {
+  const metadata = message?.metadata && typeof message.metadata === "object" ? message.metadata : null;
+  if (!metadata) throw new Error("Messaggio chat senza metadati validi.");
+  const commessaId = String(metadata.commessaId || "").trim();
+  const commessaName = String(metadata.commessaName || "").trim() || "Commessa";
+  const impiantoIds = Array.isArray(metadata.impiantoIds) ? metadata.impiantoIds.map((id) => String(id || "").trim()).filter(Boolean) : [];
+  if (!commessaId || !impiantoIds.length) throw new Error("Dati impianto insufficienti per lo spostamento nei FATTI.");
+  await setImpiantoDone(commessaId, impiantoIds, true);
+  if (selectedCommessaId === commessaId) {
+    updateImpiantoLocalState(impiantoIds, {
+      done: true,
+      doneAt: new Date(),
+      doneBy: currentUser?.displayName || currentUser?.email || "Admin"
+    });
+  }
+  scheduleCommessaSheetSync(commessaId, commessaName, 250);
+}
+
 async function deleteChatMessageById(messageId) {
   const normalized = String(messageId || "").trim();
   if (!normalized) return;
@@ -9198,6 +9273,24 @@ function setChatHoursActionButtonsState(acceptButton, rejectButton, state) {
 }
 
 async function buildChatMessageActions(message) {
+  if (canMoveImpiantoDoneFromChat(message)) {
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    const moveDoneBtn = createButton("Sposta nei FATTI", async () => {
+      moveDoneBtn.disabled = true;
+      try {
+        await moveImpiantoToDoneFromChat(message);
+        ui.chatFeedback.textContent = "Impianto spostato nei FATTI.";
+      } catch (error) {
+        console.error("Errore spostamento impianto nei FATTI da chat:", error);
+        ui.chatFeedback.textContent = error?.message || "Impossibile spostare l'impianto nei FATTI.";
+        moveDoneBtn.disabled = false;
+      }
+    });
+    actions.appendChild(moveDoneBtn);
+    return actions;
+  }
+
   if (canOpenHoursFromChatAlert(message)) {
     const actions = document.createElement("div");
     actions.className = "item-actions";

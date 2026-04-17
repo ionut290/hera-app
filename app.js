@@ -388,6 +388,13 @@ const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const PROXIMITY_NEAR_KM = 0.25;
 const PROXIMITY_AWAY_KM = 0.7;
+const TIMBRATURA_TARGET_LAT = 44.4949;
+const TIMBRATURA_TARGET_LNG = 11.3426;
+const TIMBRATURA_RADIUS_M = 200;
+const TIMBRATURA_ENTRATA_START_MIN = 6 * 60 + 15;
+const TIMBRATURA_ENTRATA_END_MIN = 7 * 60 + 30;
+const TIMBRATURA_USCITA_START_MIN = 15 * 60 + 30;
+const TIMBRATURA_USCITA_END_MIN = 17 * 60;
 const GPS_APPROVAL_PHONE = "3892352575";
 const HOURS_WHATSAPP_PHONE = "3892352575";
 const HOWTO_UPDATED_AT = "2026-04-11";
@@ -7757,6 +7764,7 @@ function initGeolocation() {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude
     };
+    evaluateTimbraturaReminders();
     ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
     renderImpianti();
     renderMap();
@@ -7848,6 +7856,53 @@ function evaluateImpiantoProximityAlerts() {
     });
   }
   activeNearbyImpiantoContext = null;
+}
+
+function buildTimbraturaReminderLocalKey(dateKey, fascia) {
+  return `heraTimbraturaReminder:${dateKey}:${fascia}`;
+}
+
+function getLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMinutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function evaluateTimbraturaReminders(now = new Date()) {
+  if (!currentUserPos) return;
+  const distanceMeters = haversine(currentUserPos.lat, currentUserPos.lng, TIMBRATURA_TARGET_LAT, TIMBRATURA_TARGET_LNG) * 1000;
+  if (!Number.isFinite(distanceMeters) || distanceMeters > TIMBRATURA_RADIUS_M) return;
+
+  const minutes = getMinutesSinceMidnight(now);
+  let fascia = "";
+  let notificationText = "";
+  if (minutes >= TIMBRATURA_ENTRATA_START_MIN && minutes <= TIMBRATURA_ENTRATA_END_MIN) {
+    fascia = "entrata";
+    notificationText = "RICORDATI DI TIMBRARE L ENTRATA";
+  } else if (minutes >= TIMBRATURA_USCITA_START_MIN && minutes <= TIMBRATURA_USCITA_END_MIN) {
+    fascia = "uscita";
+    notificationText = "RICORDATI DI TIMBRARE L USCITA";
+  } else {
+    return;
+  }
+
+  const dateKey = getLocalDateKey(now);
+  const reminderKey = buildTimbraturaReminderLocalKey(dateKey, fascia);
+  if (localStorage.getItem(reminderKey) === "1") return;
+  localStorage.setItem(reminderKey, "1");
+  showLocalNotification("Hera App", {
+    body: notificationText,
+    tag: `hera-timbratura-${dateKey}-${fascia}`,
+    renotify: false,
+    data: { url: "./index.html" }
+  }).catch((error) => {
+    console.warn("Invio notifica timbratura non riuscito:", error);
+  });
 }
 
 async function fetchWeather() {

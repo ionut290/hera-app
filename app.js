@@ -390,6 +390,8 @@ const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_HOUR = 19;
+const NETWORK_DEFAULT_TIMEOUT_MS = 12000;
+const NETWORK_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const PROXIMITY_NEAR_KM = 0.25;
 const PROXIMITY_AWAY_KM = 0.7;
 const TIMBRATURA_TARGET_LAT = 44.4949;
@@ -4345,7 +4347,10 @@ function getPrivateDocsDriveToken() {
 async function driveApiFetchWithToken(token, url, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetchWithTimeoutAndRetry(url, { ...options, headers }, {
+    timeoutMs: NETWORK_DEFAULT_TIMEOUT_MS,
+    retries: 2
+  });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Google Drive API ${response.status}: ${text}`);
@@ -5338,7 +5343,10 @@ function rowsFromWorkbookBuffer(arrayBuffer) {
 
 async function fetchGoogleSheetRows(sheetUrl) {
   const exportUrl = buildGoogleSheetCsvUrl(sheetUrl);
-  const response = await fetch(exportUrl);
+  const response = await fetchWithTimeoutAndRetry(exportUrl, {}, {
+    timeoutMs: NETWORK_DEFAULT_TIMEOUT_MS,
+    retries: 2
+  });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const csvText = await response.text();
   const workbook = XLSX.read(csvText, { type: "string" });
@@ -10175,9 +10183,12 @@ async function driveApiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Authorization", `Bearer ${driveAccessToken}`);
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeoutAndRetry(url, {
     ...options,
     headers
+  }, {
+    timeoutMs: NETWORK_DEFAULT_TIMEOUT_MS,
+    retries: 2
   });
 
   if (response.status === 401 || response.status === 403) {
@@ -10197,4 +10208,49 @@ async function driveApiFetch(url, options = {}) {
 
   if (response.status === 204) return {};
   return response.json();
+}
+
+function isRetryableNetworkError(error) {
+  if (!error) return false;
+  if (error.name === "AbortError") return true;
+  if (error instanceof TypeError) return true;
+  return /network|fetch|failed|timeout/i.test(String(error.message || ""));
+}
+
+function shouldRetryHttpStatus(status) {
+  return NETWORK_RETRYABLE_STATUS_CODES.has(Number(status));
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
+  const retries = Number.isFinite(config.retries) ? Math.max(0, config.retries) : 0;
+  const timeoutMs = Number.isFinite(config.timeoutMs) ? Math.max(1, config.timeoutMs) : NETWORK_DEFAULT_TIMEOUT_MS;
+  const baseDelayMs = Number.isFinite(config.baseDelayMs) ? Math.max(0, config.baseDelayMs) : 600;
+
+  let attempt = 0;
+  while (attempt <= retries) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const mergedOptions = { ...options, signal: controller.signal };
+      const response = await fetch(url, mergedOptions);
+      clearTimeout(timeoutId);
+      if (attempt < retries && shouldRetryHttpStatus(response.status)) {
+        await wait(baseDelayMs * (attempt + 1));
+        attempt += 1;
+        continue;
+      }
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (attempt >= retries || !isRetryableNetworkError(error)) {
+        throw error;
+      }
+      await wait(baseDelayMs * (attempt + 1));
+      attempt += 1;
+    }
+  }
 }

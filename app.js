@@ -1186,7 +1186,7 @@ function normalizeWorkBannerConfig(payload = {}) {
   const text = rawText.trim();
   const enabled = Boolean(payload.enabled);
   const speedNumber = Number(payload.speed);
-  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 300
+  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 800
     ? Math.round(speedNumber)
     : null;
   return { text, enabled, speed };
@@ -1217,7 +1217,7 @@ function updateWorkBannerAnimationDuration() {
   const speedSetting = Number.isFinite(Number(currentWorkBannerConfig.speed))
     ? Number(currentWorkBannerConfig.speed)
     : WORK_BANNER_DEFAULT_DURATION_SEC;
-  const durationSec = Math.min(Math.max(speedSetting, 5), 300);
+  const durationSec = Math.min(Math.max(speedSetting, 5), 800);
   ui.workBannerHome.style.setProperty("--banner-scroll-duration", `${durationSec.toFixed(2)}s`);
 }
 
@@ -1276,7 +1276,7 @@ async function saveWorkBannerConfig(event) {
   const enabled = Boolean(ui.bannerEnabledToggle?.checked);
   const speedRaw = String(ui.bannerSpeedInput?.value || "").trim();
   const speedNum = Number(speedRaw);
-  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 300 ? Math.round(speedNum) : null;
+  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 800 ? Math.round(speedNum) : null;
   try {
     await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
       text,

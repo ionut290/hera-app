@@ -1306,7 +1306,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelInfoUtili]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelInfoUtili, ui.openPanelBanner]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
@@ -1410,10 +1410,8 @@ function openManagementPanel(panel) {
     banner: { el: ui.panelBanner, title: "Gestione banner" }
   };
   const target = panelMap[panel];
-  if (!target?.el) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili, ui.panelBanner]
-    .filter(Boolean)
-    .forEach((el) => el.classList.add("hidden"));
+  if (!target) return;
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili, ui.panelBanner].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");

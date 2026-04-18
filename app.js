@@ -671,7 +671,7 @@ const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const WORK_BANNER_CONFIG_PATH = { collection: "appConfig", doc: "workBanner" };
-const WORK_BANNER_DEFAULT_DURATION_SEC = 20;
+const WORK_BANNER_DEFAULT_DURATION_SEC = 35;
 const IMPIANTO_NEXT_ACTION_FLOW = ["navigate", "done", "whatsapp"];
 const HELP_CENTER_FAQ_FALLBACK = {
   version: 1,
@@ -1186,7 +1186,7 @@ function normalizeWorkBannerConfig(payload = {}) {
   const text = rawText.trim();
   const enabled = Boolean(payload.enabled);
   const speedNumber = Number(payload.speed);
-  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 120
+  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 800
     ? Math.round(speedNumber)
     : null;
   return { text, enabled, speed };
@@ -1217,7 +1217,7 @@ function updateWorkBannerAnimationDuration() {
   const speedSetting = Number.isFinite(Number(currentWorkBannerConfig.speed))
     ? Number(currentWorkBannerConfig.speed)
     : WORK_BANNER_DEFAULT_DURATION_SEC;
-  const durationSec = Math.min(Math.max(speedSetting, 5), 120);
+  const durationSec = Math.min(Math.max(speedSetting, 5), 800);
   ui.workBannerHome.style.setProperty("--banner-scroll-duration", `${durationSec.toFixed(2)}s`);
 }
 
@@ -1276,7 +1276,7 @@ async function saveWorkBannerConfig(event) {
   const enabled = Boolean(ui.bannerEnabledToggle?.checked);
   const speedRaw = String(ui.bannerSpeedInput?.value || "").trim();
   const speedNum = Number(speedRaw);
-  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 120 ? Math.round(speedNum) : null;
+  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 800 ? Math.round(speedNum) : null;
   try {
     await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
       text,

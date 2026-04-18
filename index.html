@@ -363,7 +363,13 @@
     <div id="panel-banner" class="management-panel hidden">
       <h3>Banner home operativa</h3>
       <form id="banner-config-form" class="inline-form">
-        <textarea id="banner-text-input" placeholder="Testo banner" rows="3" required></textarea>
+        <textarea id="banner-text-input" placeholder="Messaggio fallback (usato quando non ci sono note calendario)" rows="3"></textarea>
+        <div class="item-actions">
+          <input id="banner-note-date" type="date" aria-label="Data nota banner">
+          <input id="banner-note-input" type="text" placeholder="Nota da mostrare nel banner per la data scelta">
+          <button id="banner-add-note-btn" class="btn" type="button">Salva nota giorno</button>
+        </div>
+        <div id="banner-notes-list" class="simple-list"></div>
         <label class="item-actions" for="banner-enabled-toggle">
           <input id="banner-enabled-toggle" type="checkbox">
           Banner attivo

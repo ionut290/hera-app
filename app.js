@@ -735,147 +735,217 @@ globalMap.on("moveend zoomend", () => {
     hasUserMoved: true
   };
 });
-const fullscreenMapContainer = fullscreenMap.getContainer();
-fullscreenMapContainer.addEventListener("pointerdown", onFullscreenMapPointerDown);
-fullscreenMapContainer.addEventListener("pointermove", onFullscreenMapPointerMove);
-fullscreenMapContainer.addEventListener("pointerup", onFullscreenMapPointerUp);
-fullscreenMapContainer.addEventListener("pointercancel", onFullscreenMapPointerUp);
-window.addEventListener("resize", () => {
-  if (isMapFullscreenPageOpen) refreshFullscreenMapLayout();
-});
 
-ui.loginBtn.addEventListener("click", loginWithGoogle);
-ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
-ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
-ui.menuToggleBtn.addEventListener("click", openSideMenu);
-ui.menuCloseBtn.addEventListener("click", closeSideMenu);
-ui.menuOverlay.addEventListener("click", closeSideMenu);
-ui.logoutBtn.addEventListener("click", logout);
-ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
-ui.commessaForm.addEventListener("submit", createCommessa);
-ui.excelFile.addEventListener("change", onExcelSelected);
-ui.importBtn.addEventListener("click", importPendingRows);
-ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
-ui.commessaTargetSelect.addEventListener("change", onCommessaTargetChanged);
-ui.chatOpenBtn.addEventListener("click", openChatModal);
-ui.chatCloseBtn.addEventListener("click", closeChatModal);
-ui.chatSendForm.addEventListener("submit", sendTextMessage);
-ui.chatMediaInput.addEventListener("change", sendMediaMessage);
-ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
-ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
-ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
-ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
-ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
-ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
-ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
-ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
-ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
-ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
-ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
-ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
-ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
-ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
-ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
-ui.personaleForm.addEventListener("submit", addPersonale);
-ui.mezziForm.addEventListener("submit", addMezzo);
-ui.squadraForm.addEventListener("submit", saveSquadraComposition);
-ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
-ui.squadraCalendarDate.addEventListener("change", () => {
+function showStartupWarning(message) {
+  if (typeof document === "undefined" || !document.body) return;
+  const existingBanner = document.getElementById("startup-ui-warning");
+  if (existingBanner) {
+    existingBanner.textContent = message;
+    return;
+  }
+  const banner = document.createElement("div");
+  banner.id = "startup-ui-warning";
+  banner.setAttribute("role", "status");
+  banner.style.position = "fixed";
+  banner.style.left = "12px";
+  banner.style.right = "12px";
+  banner.style.bottom = "12px";
+  banner.style.zIndex = "9999";
+  banner.style.padding = "10px 12px";
+  banner.style.borderRadius = "10px";
+  banner.style.background = "#fff3cd";
+  banner.style.border = "1px solid #ffe69c";
+  banner.style.color = "#664d03";
+  banner.style.fontSize = "0.9rem";
+  banner.style.boxShadow = "0 6px 20px rgba(0, 0, 0, 0.18)";
+  banner.textContent = message;
+  document.body.appendChild(banner);
+}
+
+function bind(el, event, handler, options = {}) {
+  const { required = false, source = "unknown" } = options;
+  if (!el) {
+    if (!required) {
+      return false;
+    }
+    const payload = {
+      type: "UI_BIND_MISSING_ELEMENT",
+      required,
+      source,
+      event
+    };
+    console.error("[bind] elemento richiesto assente", payload);
+    throw new Error(`Impossibile registrare l'evento "${event}" su "${source}": elemento UI mancante.`);
+  }
+  el.addEventListener(event, handler);
+  return true;
+}
+
+function validateCriticalUiRefs() {
+  const criticalRefs = [
+    { key: "loginBtn", id: "login-btn" },
+    { key: "switchAccountBtn", id: "switch-account-btn" },
+    { key: "menuToggleBtn", id: "menu-toggle-btn" },
+    { key: "menuCloseBtn", id: "menu-close-btn" },
+    { key: "menuOverlay", id: "menu-overlay" },
+    { key: "sideMenu", id: "side-menu" },
+    { key: "backToHomeBtn", id: "back-to-home-btn" }
+  ];
+  const missing = criticalRefs.filter((item) => !ui[item.key]);
+  if (!missing.length) return true;
+  const missingIds = missing.map((item) => item.id).join(", ");
+  console.error("[startup] riferimenti UI critici mancanti", {
+    type: "UI_CRITICAL_REFS_MISSING",
+    ids: missing.map((item) => item.id),
+    count: missing.length
+  });
+  showStartupWarning(`Alcuni controlli principali non sono disponibili (${missingIds}). L'app continua in modalità ridotta.`);
+  return false;
+}
+
+validateCriticalUiRefs();
+
+const fullscreenMapContainer = fullscreenMap.getContainer();
+bind(fullscreenMapContainer, "pointerdown", onFullscreenMapPointerDown, { required: true, source: "fullscreenMapContainer" });
+bind(fullscreenMapContainer, "pointermove", onFullscreenMapPointerMove, { required: true, source: "fullscreenMapContainer" });
+bind(fullscreenMapContainer, "pointerup", onFullscreenMapPointerUp, { required: true, source: "fullscreenMapContainer" });
+bind(fullscreenMapContainer, "pointercancel", onFullscreenMapPointerUp, { required: true, source: "fullscreenMapContainer" });
+bind(window, "resize", () => {
+  if (isMapFullscreenPageOpen) refreshFullscreenMapLayout();
+}, { required: true, source: "window" });
+
+bind(ui.loginBtn, "click", loginWithGoogle, { required: true, source: "ui.loginBtn" });
+bind(ui.switchAccountBtn, "click", switchGoogleAccount, { required: true, source: "ui.switchAccountBtn" });
+bind(ui.refreshAppBtn, "click", refreshApplicationData, { required: false, source: "ui.refreshAppBtn" });
+bind(ui.menuToggleBtn, "click", openSideMenu, { required: true, source: "ui.menuToggleBtn" });
+bind(ui.menuCloseBtn, "click", closeSideMenu, { required: true, source: "ui.menuCloseBtn" });
+bind(ui.menuOverlay, "click", closeSideMenu, { required: true, source: "ui.menuOverlay" });
+bind(ui.logoutBtn, "click", logout, { required: true, source: "ui.logoutBtn" });
+bind(ui.driveConnectBtn, "click", connectGoogleDrive, { required: true, source: "ui.driveConnectBtn" });
+bind(ui.commessaForm, "submit", createCommessa, { required: true, source: "ui.commessaForm" });
+bind(ui.excelFile, "change", onExcelSelected, { required: true, source: "ui.excelFile" });
+bind(ui.importBtn, "click", importPendingRows, { required: true, source: "ui.importBtn" });
+bind(ui.sheetUrlImportBtn, "click", importFromGoogleSheetUrl, { required: false, source: "ui.sheetUrlImportBtn" });
+bind(ui.commessaTargetSelect, "change", onCommessaTargetChanged, { required: true, source: "ui.commessaTargetSelect" });
+bind(ui.chatOpenBtn, "click", openChatModal, { required: true, source: "ui.chatOpenBtn" });
+bind(ui.chatCloseBtn, "click", closeChatModal, { required: false, source: "ui.chatCloseBtn" });
+bind(ui.chatSendForm, "submit", sendTextMessage, { required: false, source: "ui.chatSendForm" });
+bind(ui.chatMediaInput, "change", sendMediaMessage, { required: false, source: "ui.chatMediaInput" });
+bind(ui.chatVoiceBtn, "click", toggleVoiceRecording, { required: false, source: "ui.chatVoiceBtn" });
+bind(ui.backToHomeBtn, "click", closeImpiantiPage, { required: true, source: "ui.backToHomeBtn" });
+bind(ui.showNextActionBtn, "click", toggleImpiantoNextActionHighlight, { required: false, source: "ui.showNextActionBtn" });
+bind(ui.exportCurrentCommessaBtn, "click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName), { required: true, source: "ui.exportCurrentCommessaBtn" });
+bind(ui.mapFullscreenBtn, "click", openMapFullscreenPage, { required: true, source: "ui.mapFullscreenBtn" });
+bind(ui.mapFullscreenBackBtn, "click", closeMapFullscreenPage, { required: false, source: "ui.mapFullscreenBackBtn" });
+bind(ui.mapDrawAreaBtn, "click", toggleDrawAreaMode, { required: false, source: "ui.mapDrawAreaBtn" });
+bind(ui.mapDrawUndoBtn, "click", undoDrawnArea, { required: false, source: "ui.mapDrawUndoBtn" });
+bind(ui.mapDrawRedoBtn, "click", redoDrawnArea, { required: false, source: "ui.mapDrawRedoBtn" });
+bind(ui.mapDrawClearBtn, "click", clearDrawnArea, { required: false, source: "ui.mapDrawClearBtn" });
+bind(ui.mapShareAreaWhatsappBtn, "click", shareDrawnAreaViaWhatsapp, { required: false, source: "ui.mapShareAreaWhatsappBtn" });
+bind(ui.squadreWhatsappAllBtn, "click", shareAllSquadreToWhatsApp, { required: false, source: "ui.squadreWhatsappAllBtn" });
+bind(ui.impiantoSearch, "input", onImpiantoSearchInput, { required: true, source: "ui.impiantoSearch" });
+bind(ui.viewDoneBtn, "click", () => setImpiantiViewMode("done"), { required: true, source: "ui.viewDoneBtn" });
+bind(ui.viewTodoBtn, "click", () => setImpiantiViewMode("todo"), { required: true, source: "ui.viewTodoBtn" });
+bind(ui.personaleForm, "submit", addPersonale, { required: true, source: "ui.personaleForm" });
+bind(ui.mezziForm, "submit", addMezzo, { required: true, source: "ui.mezziForm" });
+bind(ui.squadraForm, "submit", saveSquadraComposition, { required: true, source: "ui.squadraForm" });
+bind(ui.squadraCommessa, "change", autofillSquadraForm, { required: true, source: "ui.squadraCommessa" });
+bind(ui.squadraCalendarDate, "change", () => {
   manualSquadreFilterDateKey = ui.squadraCalendarDate.value || "";
   if (ui.squadreFilterDate) ui.squadreFilterDate.value = manualSquadreFilterDateKey;
   renderSquadre();
-});
-ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
-ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
-ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
-ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
-ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
-ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commesse"));
-ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
-ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
-ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
-ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
-ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
-ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
-ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
-ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
-ui.openHoursBtn.addEventListener("click", openHoursPage);
-ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
-ui.openHowtoBtn.addEventListener("click", openHowtoPage);
-ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
-ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
-ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
-ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
-ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
-ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
-ui.backFromPersonalServicesBtn.addEventListener("click", closePersonalServicesPage);
-ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
-ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
-ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
-ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
-ui.hoursForm.addEventListener("submit", finalizeHoursReport);
-ui.addHoursCommessaBtn.addEventListener("click", () => {
+}, { required: true, source: "ui.squadraCalendarDate" });
+bind(ui.squadreFilterDate, "change", onSquadreFilterDateChange, { required: false, source: "ui.squadreFilterDate" });
+bind(ui.squadreFilterClearBtn, "click", clearManualSquadreFilterDate, { required: false, source: "ui.squadreFilterClearBtn" });
+bind(ui.addSquadraRowBtn, "click", () => addSquadraRow(), { required: true, source: "ui.addSquadraRowBtn" });
+bind(ui.personaleImportBtn, "click", importPersonaleFromExcel, { required: true, source: "ui.personaleImportBtn" });
+bind(ui.mezziImportBtn, "click", importMezziFromExcel, { required: true, source: "ui.mezziImportBtn" });
+bind(ui.openPanelCommesse, "click", () => openManagementPanel("commesse"), { required: true, source: "ui.openPanelCommesse" });
+bind(ui.openPanelSquadre, "click", () => openManagementPanel("squadre"), { required: true, source: "ui.openPanelSquadre" });
+bind(ui.openPanelPersonale, "click", () => openManagementPanel("personale"), { required: true, source: "ui.openPanelPersonale" });
+bind(ui.openPanelMezzi, "click", () => openManagementPanel("mezzi"), { required: true, source: "ui.openPanelMezzi" });
+bind(ui.openPanelUtenti, "click", () => openManagementPanel("utenti"), { required: true, source: "ui.openPanelUtenti" });
+bind(ui.openPanelGlobal, "click", () => openManagementPanel("global"), { required: true, source: "ui.openPanelGlobal" });
+bind(ui.openPanelInfoUtili, "click", () => openManagementPanel("infoUtili"), { required: true, source: "ui.openPanelInfoUtili" });
+bind(ui.openPrivateDocsBtn, "click", openPrivateDocsPage, { required: true, source: "ui.openPrivateDocsBtn" });
+bind(ui.openPersonalServicesBtn, "click", openPersonalServicesPage, { required: true, source: "ui.openPersonalServicesBtn" });
+bind(ui.openHoursBtn, "click", openHoursPage, { required: true, source: "ui.openHoursBtn" });
+bind(ui.openSegnalazioniBtn, "click", openSegnalazioniPage, { required: true, source: "ui.openSegnalazioniBtn" });
+bind(ui.openHowtoBtn, "click", openHowtoPage, { required: true, source: "ui.openHowtoBtn" });
+bind(ui.openBookPdfBtn, "click", openBookPdf, { required: false, source: "ui.openBookPdfBtn" });
+bind(ui.managementCloseBtn, "click", closeManagementPanel, { required: false, source: "ui.managementCloseBtn" });
+bind(ui.userToggleBtn, "click", toggleUserDetailsPanel, { required: true, source: "ui.userToggleBtn" });
+bind(ui.weatherCloseBtn, "click", closeWeatherModal, { required: false, source: "ui.weatherCloseBtn" });
+bind(ui.backFromFuelBtn, "click", closeFuelPage, { required: false, source: "ui.backFromFuelBtn" });
+bind(ui.fuelMezzoDetailsBtn, "click", toggleFuelMezzoDetails, { required: false, source: "ui.fuelMezzoDetailsBtn" });
+bind(ui.backFromPersonalServicesBtn, "click", closePersonalServicesPage, { required: false, source: "ui.backFromPersonalServicesBtn" });
+bind(ui.backFromSegnalazioniBtn, "click", closeSegnalazioniPage, { required: false, source: "ui.backFromSegnalazioniBtn" });
+bind(ui.backFromHowtoBtn, "click", closeHowtoPage, { required: false, source: "ui.backFromHowtoBtn" });
+bind(ui.backFromPrivateDocsBtn, "click", closePrivateDocsPage, { required: false, source: "ui.backFromPrivateDocsBtn" });
+bind(ui.backFromHoursBtn, "click", closeHoursPage, { required: false, source: "ui.backFromHoursBtn" });
+bind(ui.hoursForm, "submit", finalizeHoursReport, { required: false, source: "ui.hoursForm" });
+bind(ui.addHoursCommessaBtn, "click", () => {
   unlockHoursFinalizeButton();
   addHoursCommessaBlock();
-});
-ui.hoursDate?.addEventListener("input", () => {
+}, { required: false, source: "ui.addHoursCommessaBtn" });
+bind(ui.hoursDate, "input", () => {
   unlockHoursFinalizeButton();
   Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
     applyHoursSuggestedOperators(card, { force: true });
   });
-});
-ui.viewHoursBtn.addEventListener("click", openHoursViewModal);
-ui.hoursViewCloseBtn?.addEventListener("click", closeHoursViewModal);
-ui.hoursViewModal?.addEventListener("click", (event) => {
+}, { required: false, source: "ui.hoursDate" });
+bind(ui.viewHoursBtn, "click", openHoursViewModal, { required: false, source: "ui.viewHoursBtn" });
+bind(ui.hoursViewCloseBtn, "click", closeHoursViewModal, { required: false, source: "ui.hoursViewCloseBtn" });
+bind(ui.hoursViewModal, "click", (event) => {
   if (event.target === ui.hoursViewModal) closeHoursViewModal();
-});
-ui.hoursStatsMonth?.addEventListener("change", () => {
+}, { required: false, source: "ui.hoursViewModal" });
+bind(ui.hoursStatsMonth, "change", () => {
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = ui.hoursStatsMonth.value || "";
-});
-ui.hoursTableMonth?.addEventListener("change", loadHoursMonthlyTable);
-ui.hoursTableCommessaSelect?.addEventListener("change", loadHoursMonthlyTable);
-ui.hoursTotalOperatorBtn?.addEventListener("click", loadHoursTotalByOperator);
-ui.hoursTotalOperatorCommessaBtn?.addEventListener("click", loadHoursTotalByOperatorAndCommessa);
-ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
-ui.hoursTableExportGlobalBtn?.addEventListener("click", exportHoursGlobalMonthlyTable);
-ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
-ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
-ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
-ui.personalServicesCategories?.addEventListener("click", onPersonalServiceCategoryClick);
-ui.personalServicesRadius?.addEventListener("change", () => {
+}, { required: false, source: "ui.hoursStatsMonth" });
+bind(ui.hoursTableMonth, "change", loadHoursMonthlyTable, { required: false, source: "ui.hoursTableMonth" });
+bind(ui.hoursTableCommessaSelect, "change", loadHoursMonthlyTable, { required: false, source: "ui.hoursTableCommessaSelect" });
+bind(ui.hoursTotalOperatorBtn, "click", loadHoursTotalByOperator, { required: false, source: "ui.hoursTotalOperatorBtn" });
+bind(ui.hoursTotalOperatorCommessaBtn, "click", loadHoursTotalByOperatorAndCommessa, { required: false, source: "ui.hoursTotalOperatorCommessaBtn" });
+bind(ui.hoursTableExportBtn, "click", exportHoursMonthlyTable, { required: false, source: "ui.hoursTableExportBtn" });
+bind(ui.hoursTableExportGlobalBtn, "click", exportHoursGlobalMonthlyTable, { required: false, source: "ui.hoursTableExportGlobalBtn" });
+bind(ui.privateDocsPresetPinBtn, "click", () => applyPrivateDocPreset("pin"), { required: false, source: "ui.privateDocsPresetPinBtn" });
+bind(ui.privateDocsPresetTesseraBtn, "click", () => applyPrivateDocPreset("tessera"), { required: false, source: "ui.privateDocsPresetTesseraBtn" });
+bind(ui.privateDocsForm, "submit", savePrivateDocument, { required: false, source: "ui.privateDocsForm" });
+bind(ui.personalServicesCategories, "click", onPersonalServiceCategoryClick, { required: false, source: "ui.personalServicesCategories" });
+bind(ui.personalServicesRadius, "change", () => {
   if (activePersonalServiceCategory) loadPersonalServicesByCategory(activePersonalServiceCategory);
-});
-ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
-ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
-ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
-ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
-ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
-ui.globalCommessaForm?.addEventListener("submit", createGlobalCommessa);
-ui.globalExcelFile?.addEventListener("change", onGlobalExcelSelected);
-ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
-ui.globalUpdateBtn?.addEventListener("click", updateExistingGlobalRowsOnly);
-ui.globalSheetUrlImportBtn?.addEventListener("click", importGlobalFromGoogleSheetUrl);
-ui.globalCommessaSelect?.addEventListener("change", onGlobalCommessaSelectionChanged);
-ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
-ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSubmit);
-ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
-ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
-ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
-ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
-ui.resourceForm.addEventListener("submit", addResourceItem);
-ui.resourceType.addEventListener("change", updateResourceFormByType);
-ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
-ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
-ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
-ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
-ui.enableNotificationsBtn?.addEventListener("click", async () => {
+}, { required: false, source: "ui.personalServicesRadius" });
+bind(ui.segnalazioneForm, "submit", generateSegnalazionePdf, { required: false, source: "ui.segnalazioneForm" });
+bind(ui.segnalazionePreposto, "input", syncSegnalazioneFirmaPreposto, { required: false, source: "ui.segnalazionePreposto" });
+bind(ui.segnalazioneShareWhatsappBtn, "click", () => shareSegnalazione("whatsapp"), { required: false, source: "ui.segnalazioneShareWhatsappBtn" });
+bind(ui.segnalazioneShareEmailBtn, "click", () => shareSegnalazione("email"), { required: false, source: "ui.segnalazioneShareEmailBtn" });
+bind(ui.manualImpiantoForm, "submit", addManualImpianto, { required: false, source: "ui.manualImpiantoForm" });
+bind(ui.globalCommessaForm, "submit", createGlobalCommessa, { required: false, source: "ui.globalCommessaForm" });
+bind(ui.globalExcelFile, "change", onGlobalExcelSelected, { required: false, source: "ui.globalExcelFile" });
+bind(ui.globalImportBtn, "click", importPendingGlobalRows, { required: false, source: "ui.globalImportBtn" });
+bind(ui.globalUpdateBtn, "click", updateExistingGlobalRowsOnly, { required: false, source: "ui.globalUpdateBtn" });
+bind(ui.globalSheetUrlImportBtn, "click", importGlobalFromGoogleSheetUrl, { required: false, source: "ui.globalSheetUrlImportBtn" });
+bind(ui.globalCommessaSelect, "change", onGlobalCommessaSelectionChanged, { required: false, source: "ui.globalCommessaSelect" });
+bind(ui.globalImpiantoSearch, "input", onGlobalImpiantoSearchInput, { required: false, source: "ui.globalImpiantoSearch" });
+bind(ui.globalImpiantoSearchForm, "submit", onGlobalImpiantoSearchSubmit, { required: false, source: "ui.globalImpiantoSearchForm" });
+bind(ui.globalImpiantoSearch, "focus", renderGlobalImpianti, { required: false, source: "ui.globalImpiantoSearch" });
+bind(ui.globalImpiantoDetailsCloseBtn, "click", closeGlobalImpiantoModal, { required: false, source: "ui.globalImpiantoDetailsCloseBtn" });
+bind(ui.adminUserForm, "submit", addAdminUserByEmail, { required: true, source: "ui.adminUserForm" });
+bind(ui.externalAppForm, "submit", saveExternalAppForCurrentUser, { required: true, source: "ui.externalAppForm" });
+bind(ui.resourceForm, "submit", addResourceItem, { required: true, source: "ui.resourceForm" });
+bind(ui.resourceType, "change", updateResourceFormByType, { required: true, source: "ui.resourceType" });
+bind(ui.impiantoEditCloseBtn, "click", closeImpiantoEditor, { required: false, source: "ui.impiantoEditCloseBtn" });
+bind(ui.impiantoEditForm, "submit", saveImpiantoEdits, { required: false, source: "ui.impiantoEditForm" });
+bind(ui.impiantoReportCloseBtn, "click", closeImpiantoReportModal, { required: false, source: "ui.impiantoReportCloseBtn" });
+bind(ui.impiantoReportForm, "submit", submitImpiantoReport, { required: false, source: "ui.impiantoReportForm" });
+bind(ui.enableNotificationsBtn, "click", async () => {
   await persistNotificationAutoPreference(true);
   await enablePushNotifications({ auto: false });
-});
-ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
-window.addEventListener("online", updateConnectivityStatus);
-window.addEventListener("offline", updateConnectivityStatus);
-ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
+}, { required: false, source: "ui.enableNotificationsBtn" });
+bind(ui.testNotificationBtn, "click", sendTestNotification, { required: false, source: "ui.testNotificationBtn" });
+bind(window, "online", updateConnectivityStatus, { required: true, source: "window" });
+bind(window, "offline", updateConnectivityStatus, { required: true, source: "window" });
+bind(ui.commessaResourceViewerCloseBtn, "click", closeCommessaResourceViewer, { required: false, source: "ui.commessaResourceViewerCloseBtn" });
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     activeResourceManageFilter = btn.dataset.resourceFilter || "";
@@ -890,7 +960,7 @@ initGeolocation();
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
 applyRoute();
-window.addEventListener("hashchange", applyRoute);
+bind(window, "hashchange", applyRoute, { required: true, source: "window" });
 loadPendingSheetExports();
 startSheetRetryLoop();
 initHelpCenterFaq();

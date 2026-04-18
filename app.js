@@ -115,6 +115,7 @@ const ui = {
   openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
@@ -132,6 +133,7 @@ const ui = {
   panelGlobal: document.getElementById("panel-global"),
   panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
+  panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
@@ -810,6 +812,7 @@ ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti")
 ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);

@@ -671,7 +671,6 @@ const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const WORK_BANNER_CONFIG_PATH = { collection: "appConfig", doc: "workBanner" };
-const WORK_BANNER_REFERENCE_DISTANCE_PX = 1200;
 const WORK_BANNER_DEFAULT_DURATION_SEC = 20;
 const IMPIANTO_NEXT_ACTION_FLOW = ["navigate", "done", "whatsapp"];
 const HELP_CENTER_FAQ_FALLBACK = {
@@ -1215,16 +1214,10 @@ function initWorkBannerObservers() {
 
 function updateWorkBannerAnimationDuration() {
   if (!ui.workBannerHome || !ui.workBannerText) return;
-  if (ui.workBannerHome.classList.contains("hidden")) return;
-  const homeWidth = ui.workBannerHome.clientWidth || 0;
-  const textWidth = ui.workBannerText.scrollWidth || 0;
-  const distancePx = homeWidth + textWidth;
-  if (!distancePx) return;
   const speedSetting = Number.isFinite(Number(currentWorkBannerConfig.speed))
     ? Number(currentWorkBannerConfig.speed)
     : WORK_BANNER_DEFAULT_DURATION_SEC;
-  const pxPerSec = WORK_BANNER_REFERENCE_DISTANCE_PX / Math.max(5, speedSetting);
-  const durationSec = Math.max(distancePx / pxPerSec, 6);
+  const durationSec = Math.min(Math.max(speedSetting, 5), 120);
   ui.workBannerHome.style.setProperty("--banner-scroll-duration", `${durationSec.toFixed(2)}s`);
 }
 
@@ -1240,8 +1233,6 @@ function applyWorkBannerConfig(config = {}) {
   }
   ui.workBannerText.textContent = `${normalized.text}   •   ${normalized.text}   •   ${normalized.text}`;
   window.requestAnimationFrame(updateWorkBannerAnimationDuration);
-  setTimeout(updateWorkBannerAnimationDuration, 180);
-  setTimeout(updateWorkBannerAnimationDuration, 900);
 }
 
 function subscribeWorkBanner() {

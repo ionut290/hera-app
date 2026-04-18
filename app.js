@@ -1231,6 +1231,10 @@ function stopWorkBannerSubscription() {
 
 async function saveWorkBannerConfig(event) {
   event.preventDefault();
+  if (!currentUser) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Esegui il login per gestire il banner.";
+    return;
+  }
   if (!canManageData()) {
     if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Solo gli admin possono salvare il banner.";
     return;
@@ -1260,6 +1264,10 @@ async function saveWorkBannerConfig(event) {
 }
 
 async function disableWorkBanner() {
+  if (!currentUser) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Esegui il login per gestire il banner.";
+    return;
+  }
   if (!canManageData()) {
     if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Solo gli admin possono disattivare il banner.";
     return;
@@ -1393,6 +1401,7 @@ auth.onAuthStateChanged((user) => {
   }
   renderChat([]);
   applyRoute();
+  subscribeWorkBanner();
 
   if (loggedIn) {
     startPresenceHeartbeat();
@@ -1428,6 +1437,7 @@ function updateAdminControls() {
   const canManage = canManageData();
   [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
+  ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
@@ -1520,7 +1530,7 @@ function refreshApplicationData() {
 }
 
 function openManagementPanel(panel) {
-  if (!canManageData()) {
+  if (panel !== "banner" && !canManageData()) {
     closeSideMenu();
     return;
   }

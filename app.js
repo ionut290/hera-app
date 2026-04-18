@@ -166,6 +166,10 @@ const ui = {
   workBannerText: document.getElementById("work-banner-text"),
   bannerConfigForm: document.getElementById("banner-config-form"),
   bannerTextInput: document.getElementById("banner-text-input"),
+  bannerNoteDate: document.getElementById("banner-note-date"),
+  bannerNoteInput: document.getElementById("banner-note-input"),
+  bannerAddNoteBtn: document.getElementById("banner-add-note-btn"),
+  bannerNotesList: document.getElementById("banner-notes-list"),
   bannerEnabledToggle: document.getElementById("banner-enabled-toggle"),
   bannerSpeedInput: document.getElementById("banner-speed-input"),
   bannerDisableBtn: document.getElementById("banner-disable-btn"),
@@ -322,7 +326,7 @@ let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
-let currentWorkBannerConfig = { text: "", enabled: false, speed: null };
+let currentWorkBannerConfig = { text: "", enabled: false, speed: null, notes: [] };
 let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
@@ -885,6 +889,7 @@ ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
+ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
 ui.resourceType.addEventListener("change", updateResourceFormByType);
 ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
@@ -1189,13 +1194,70 @@ function normalizeWorkBannerConfig(payload = {}) {
   const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 800
     ? Math.round(speedNumber)
     : null;
-  return { text, enabled, speed };
+  const notes = Array.isArray(payload.notes)
+    ? payload.notes
+      .map((entry) => {
+        const dateKey = String(entry?.dateKey || "").trim();
+        const note = String(entry?.note || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !note) return null;
+        return { dateKey, note };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    : [];
+  return { text, enabled, speed, notes };
 }
 
 function loadWorkBannerForm(config = {}) {
   if (ui.bannerTextInput) ui.bannerTextInput.value = config.text || "";
   if (ui.bannerEnabledToggle) ui.bannerEnabledToggle.checked = Boolean(config.enabled);
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.value = Number.isFinite(Number(config.speed)) ? String(config.speed) : "";
+  if (ui.bannerNoteDate && !ui.bannerNoteDate.value) ui.bannerNoteDate.value = getDateKeyFromLocalDate(new Date());
+  renderWorkBannerNotesList(config.notes || []);
+}
+
+function renderWorkBannerNotesList(notes = []) {
+  if (!ui.bannerNotesList) return;
+  const safeNotes = Array.isArray(notes) ? notes : [];
+  if (!safeNotes.length) {
+    ui.bannerNotesList.innerHTML = "<p class='muted'>Nessuna nota programmata.</p>";
+    return;
+  }
+  ui.bannerNotesList.innerHTML = "";
+  safeNotes.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "list-item";
+    const dateLabel = new Date(`${entry.dateKey}T00:00:00`).toLocaleDateString("it-IT");
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHTML(dateLabel)}</strong>
+        <p class="muted">${escapeHTML(entry.note)}</p>
+      </div>
+    `;
+    if (canManageData()) {
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+      const deleteBtn = createButton("Rimuovi", async () => {
+        await deleteWorkBannerNote(entry.dateKey);
+      });
+      actions.appendChild(deleteBtn);
+      row.appendChild(actions);
+    }
+    ui.bannerNotesList.appendChild(row);
+  });
+}
+
+function getActiveWorkBannerMessage(config = {}) {
+  const notes = Array.isArray(config.notes) ? [...config.notes] : [];
+  if (notes.length) {
+    const todayKey = getDateKeyFromLocalDate(new Date());
+    const todayNote = notes.find((entry) => entry.dateKey === todayKey);
+    if (todayNote) return { text: todayNote.note, isScheduled: false };
+    const nextNote = notes.find((entry) => entry.dateKey >= todayKey) || notes[0];
+    const dateLabel = new Date(`${nextNote.dateKey}T00:00:00`).toLocaleDateString("it-IT");
+    return { text: `📅 ${dateLabel} · ${nextNote.note}`, isScheduled: true };
+  }
+  return { text: String(config.text || "").trim(), isScheduled: false };
 }
 
 function initWorkBannerObservers() {
@@ -1225,13 +1287,14 @@ function applyWorkBannerConfig(config = {}) {
   if (!ui.workBannerHome || !ui.workBannerText) return;
   const normalized = normalizeWorkBannerConfig(config);
   currentWorkBannerConfig = normalized;
-  const shouldShow = normalized.enabled && Boolean(normalized.text);
+  const activeMessage = getActiveWorkBannerMessage(normalized);
+  const shouldShow = normalized.enabled && Boolean(activeMessage.text);
   ui.workBannerHome.classList.toggle("hidden", !shouldShow);
   if (!shouldShow) {
     ui.workBannerText.textContent = "";
     return;
   }
-  ui.workBannerText.textContent = `${normalized.text}   •   ${normalized.text}   •   ${normalized.text}`;
+  ui.workBannerText.textContent = `${activeMessage.text}   •   ${activeMessage.text}   •   ${activeMessage.text}`;
   window.requestAnimationFrame(updateWorkBannerAnimationDuration);
 }
 
@@ -1269,8 +1332,9 @@ async function saveWorkBannerConfig(event) {
     return;
   }
   const text = String(ui.bannerTextInput?.value || "").trim();
-  if (!text) {
-    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Inserisci il testo del banner prima di salvare.";
+  const notes = Array.isArray(currentWorkBannerConfig.notes) ? currentWorkBannerConfig.notes : [];
+  if (!text && !notes.length) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Inserisci un fallback o almeno una nota calendario.";
     return;
   }
   const enabled = Boolean(ui.bannerEnabledToggle?.checked);
@@ -1280,6 +1344,7 @@ async function saveWorkBannerConfig(event) {
   try {
     await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
       text,
+      notes,
       enabled,
       speed,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1289,6 +1354,59 @@ async function saveWorkBannerConfig(event) {
   } catch (error) {
     console.error("Salvataggio banner non riuscito:", error);
     if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Errore durante il salvataggio del banner.";
+  }
+}
+
+async function saveWorkBannerNoteForDate() {
+  if (!currentUser) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Esegui il login per gestire il banner.";
+    return;
+  }
+  if (!canManageData()) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Solo gli admin possono gestire le note banner.";
+    return;
+  }
+  const dateKey = String(ui.bannerNoteDate?.value || "").trim();
+  const note = String(ui.bannerNoteInput?.value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Seleziona una data valida.";
+    return;
+  }
+  if (!note) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Inserisci la nota da associare al giorno selezionato.";
+    return;
+  }
+  const currentNotes = Array.isArray(currentWorkBannerConfig.notes) ? [...currentWorkBannerConfig.notes] : [];
+  const withoutDate = currentNotes.filter((entry) => entry.dateKey !== dateKey);
+  const nextNotes = [...withoutDate, { dateKey, note }].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  try {
+    await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
+      notes: nextNotes,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || ""
+    }, { merge: true });
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Nota calendario salvata.";
+    if (ui.bannerNoteInput) ui.bannerNoteInput.value = "";
+  } catch (error) {
+    console.error("Salvataggio nota banner non riuscito:", error);
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Errore durante il salvataggio della nota.";
+  }
+}
+
+async function deleteWorkBannerNote(dateKey) {
+  if (!currentUser || !canManageData()) return;
+  const currentNotes = Array.isArray(currentWorkBannerConfig.notes) ? [...currentWorkBannerConfig.notes] : [];
+  const nextNotes = currentNotes.filter((entry) => entry.dateKey !== dateKey);
+  try {
+    await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
+      notes: nextNotes,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || ""
+    }, { merge: true });
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Nota calendario rimossa.";
+  } catch (error) {
+    console.error("Rimozione nota banner non riuscita:", error);
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Errore durante la rimozione della nota.";
   }
 }
 
@@ -1499,10 +1617,14 @@ function updateAdminControls() {
   ui.resourceCommesse.disabled = !canManage;
   ui.resourceSubmit.disabled = !canManage;
   if (ui.bannerTextInput) ui.bannerTextInput.disabled = !canManage;
+  if (ui.bannerNoteDate) ui.bannerNoteDate.disabled = !canManage;
+  if (ui.bannerNoteInput) ui.bannerNoteInput.disabled = !canManage;
+  if (ui.bannerAddNoteBtn) ui.bannerAddNoteBtn.disabled = !canManage;
   if (ui.bannerEnabledToggle) ui.bannerEnabledToggle.disabled = !canManage;
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.disabled = !canManage;
   if (ui.bannerDisableBtn) ui.bannerDisableBtn.disabled = !canManage;
   if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
+  renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
   if (ui.externalAppForm && ui.externalAppForm.querySelector("button[type='submit']")) {

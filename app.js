@@ -676,6 +676,7 @@ const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const WORK_BANNER_CONFIG_PATH = { collection: "appConfig", doc: "workBanner" };
 const WORK_BANNER_DEFAULT_DURATION_SEC = 35;
+const WORK_BANNER_NEXT_NOTE_PREVIEW_HOUR = 15;
 const IMPIANTO_NEXT_ACTION_FLOW = ["navigate", "done", "whatsapp"];
 const HELP_CENTER_FAQ_FALLBACK = {
   version: 1,
@@ -1250,7 +1251,18 @@ function renderWorkBannerNotesList(notes = []) {
 function getActiveWorkBannerMessage(config = {}) {
   const notes = Array.isArray(config.notes) ? [...config.notes] : [];
   if (notes.length) {
-    const todayKey = getDateKeyFromLocalDate(new Date());
+    const now = new Date();
+    const todayKey = getDateKeyFromLocalDate(now);
+    if (now.getHours() >= WORK_BANNER_NEXT_NOTE_PREVIEW_HOUR) {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowKey = getDateKeyFromLocalDate(tomorrow);
+      const tomorrowNote = notes.find((entry) => entry.dateKey === tomorrowKey);
+      if (tomorrowNote) {
+        const tomorrowLabel = tomorrow.toLocaleDateString("it-IT");
+        return { text: `📅 ${tomorrowLabel} · ${tomorrowNote.note}`, isScheduled: true };
+      }
+    }
     const todayNote = notes.find((entry) => entry.dateKey === todayKey);
     if (todayNote) return { text: todayNote.note, isScheduled: false };
     const nextNote = notes.find((entry) => entry.dateKey >= todayKey) || notes[0];

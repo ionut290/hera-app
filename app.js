@@ -1186,7 +1186,7 @@ function normalizeWorkBannerConfig(payload = {}) {
   const text = rawText.trim();
   const enabled = Boolean(payload.enabled);
   const speedNumber = Number(payload.speed);
-  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 120
+  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 300
     ? Math.round(speedNumber)
     : null;
   return { text, enabled, speed };
@@ -1217,7 +1217,7 @@ function updateWorkBannerAnimationDuration() {
   const speedSetting = Number.isFinite(Number(currentWorkBannerConfig.speed))
     ? Number(currentWorkBannerConfig.speed)
     : WORK_BANNER_DEFAULT_SPEED_PX_SEC;
-  const speedPxSec = Math.min(Math.max(speedSetting, 5), 120);
+  const speedPxSec = Math.min(Math.max(speedSetting, 5), 300);
   const bannerWidth = ui.workBannerHome.clientWidth || 0;
   const textWidth = ui.workBannerText.scrollWidth || 0;
   const travelDistancePx = bannerWidth + textWidth;
@@ -1282,7 +1282,7 @@ async function saveWorkBannerConfig(event) {
   const enabled = Boolean(ui.bannerEnabledToggle?.checked);
   const speedRaw = String(ui.bannerSpeedInput?.value || "").trim();
   const speedNum = Number(speedRaw);
-  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 120 ? Math.round(speedNum) : null;
+  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 300 ? Math.round(speedNum) : null;
   try {
     await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
       text,

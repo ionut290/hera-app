@@ -113,6 +113,7 @@ const ui = {
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelGlobal: document.getElementById("open-panel-global"),
+  openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
@@ -129,6 +130,7 @@ const ui = {
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
   panelGlobal: document.getElementById("panel-global"),
+  panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
@@ -158,6 +160,14 @@ const ui = {
   activeUsersSummary: document.getElementById("active-users-summary"),
   lastImpiantoActionSummary: document.getElementById("last-impianto-action-summary"),
   nextActionSummary: document.getElementById("next-action-summary"),
+  workBannerHome: document.getElementById("work-banner-home"),
+  workBannerText: document.getElementById("work-banner-text"),
+  bannerConfigForm: document.getElementById("banner-config-form"),
+  bannerTextInput: document.getElementById("banner-text-input"),
+  bannerEnabledToggle: document.getElementById("banner-enabled-toggle"),
+  bannerSpeedInput: document.getElementById("banner-speed-input"),
+  bannerDisableBtn: document.getElementById("banner-disable-btn"),
+  bannerFeedback: document.getElementById("banner-feedback"),
   weatherRisks: document.getElementById("weather-risks"),
   userCard: document.getElementById("user-card"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
@@ -309,6 +319,9 @@ let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
+let unsubscribeWorkBanner = null;
+let currentWorkBannerConfig = { text: "", enabled: false, speed: null };
+let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -655,6 +668,9 @@ const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
+const WORK_BANNER_CONFIG_PATH = { collection: "appConfig", doc: "workBanner" };
+const WORK_BANNER_REFERENCE_DISTANCE_PX = 1200;
+const WORK_BANNER_DEFAULT_DURATION_SEC = 20;
 const IMPIANTO_NEXT_ACTION_FLOW = ["navigate", "done", "whatsapp"];
 const HELP_CENTER_FAQ_FALLBACK = {
   version: 1,
@@ -742,6 +758,7 @@ fullscreenMapContainer.addEventListener("pointerup", onFullscreenMapPointerUp);
 fullscreenMapContainer.addEventListener("pointercancel", onFullscreenMapPointerUp);
 window.addEventListener("resize", () => {
   if (isMapFullscreenPageOpen) refreshFullscreenMapLayout();
+  updateWorkBannerAnimationDuration();
 });
 
 ui.loginBtn.addEventListener("click", loginWithGoogle);
@@ -796,6 +813,7 @@ ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("perso
 ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
+ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
@@ -863,6 +881,8 @@ ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoM
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
+ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.resourceType.addEventListener("change", updateResourceFormByType);
 ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
 ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
@@ -899,6 +919,7 @@ updateResourceFormByType();
 updateConnectivityStatus();
 initPwaCapabilities();
 initNativeGeofenceBridge();
+initWorkBannerObservers();
 
 
 function getNativeHeraGeofencePlugin() {
@@ -1158,6 +1179,148 @@ function stopGlobalNotificationsSubscription() {
   globalNotificationsInitialized = false;
 }
 
+function normalizeWorkBannerConfig(payload = {}) {
+  const rawText = typeof payload.text === "string" ? payload.text : "";
+  const text = rawText.trim();
+  const enabled = Boolean(payload.enabled);
+  const speedNumber = Number(payload.speed);
+  const speed = Number.isFinite(speedNumber) && speedNumber >= 5 && speedNumber <= 120
+    ? Math.round(speedNumber)
+    : null;
+  return { text, enabled, speed };
+}
+
+function loadWorkBannerForm(config = {}) {
+  if (ui.bannerTextInput) ui.bannerTextInput.value = config.text || "";
+  if (ui.bannerEnabledToggle) ui.bannerEnabledToggle.checked = Boolean(config.enabled);
+  if (ui.bannerSpeedInput) ui.bannerSpeedInput.value = Number.isFinite(Number(config.speed)) ? String(config.speed) : "";
+}
+
+function initWorkBannerObservers() {
+  if (workBannerResizeObserver || typeof ResizeObserver !== "function") return;
+  if (!ui.workBannerHome || !ui.workBannerText) return;
+  workBannerResizeObserver = new ResizeObserver(() => {
+    updateWorkBannerAnimationDuration();
+  });
+  workBannerResizeObserver.observe(ui.workBannerHome);
+  workBannerResizeObserver.observe(ui.workBannerText);
+  window.addEventListener("orientationchange", updateWorkBannerAnimationDuration);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateWorkBannerAnimationDuration();
+  });
+}
+
+function updateWorkBannerAnimationDuration() {
+  if (!ui.workBannerHome || !ui.workBannerText) return;
+  if (ui.workBannerHome.classList.contains("hidden")) return;
+  const homeWidth = ui.workBannerHome.clientWidth || 0;
+  const textWidth = ui.workBannerText.scrollWidth || 0;
+  const distancePx = homeWidth + textWidth;
+  if (!distancePx) return;
+  const speedSetting = Number.isFinite(Number(currentWorkBannerConfig.speed))
+    ? Number(currentWorkBannerConfig.speed)
+    : WORK_BANNER_DEFAULT_DURATION_SEC;
+  const pxPerSec = WORK_BANNER_REFERENCE_DISTANCE_PX / Math.max(5, speedSetting);
+  const durationSec = Math.max(distancePx / pxPerSec, 6);
+  ui.workBannerHome.style.setProperty("--banner-scroll-duration", `${durationSec.toFixed(2)}s`);
+}
+
+function applyWorkBannerConfig(config = {}) {
+  if (!ui.workBannerHome || !ui.workBannerText) return;
+  const normalized = normalizeWorkBannerConfig(config);
+  currentWorkBannerConfig = normalized;
+  const shouldShow = normalized.enabled && Boolean(normalized.text);
+  ui.workBannerHome.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    ui.workBannerText.textContent = "";
+    return;
+  }
+  ui.workBannerText.textContent = `${normalized.text}   •   ${normalized.text}   •   ${normalized.text}`;
+  window.requestAnimationFrame(updateWorkBannerAnimationDuration);
+  setTimeout(updateWorkBannerAnimationDuration, 180);
+  setTimeout(updateWorkBannerAnimationDuration, 900);
+}
+
+function subscribeWorkBanner() {
+  stopWorkBannerSubscription();
+  unsubscribeWorkBanner = db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc)
+    .onSnapshot((doc) => {
+      const config = normalizeWorkBannerConfig(doc.exists ? (doc.data() || {}) : {});
+      applyWorkBannerConfig(config);
+      loadWorkBannerForm(config);
+      if (ui.bannerFeedback) ui.bannerFeedback.textContent = "";
+    }, (error) => {
+      console.warn("Sottoscrizione banner home non disponibile:", error);
+      if (ui.bannerFeedback && canManageData()) {
+        ui.bannerFeedback.textContent = "Errore lettura banner. Riprova più tardi.";
+      }
+    });
+}
+
+function stopWorkBannerSubscription() {
+  if (unsubscribeWorkBanner) {
+    unsubscribeWorkBanner();
+    unsubscribeWorkBanner = null;
+  }
+}
+
+async function saveWorkBannerConfig(event) {
+  event.preventDefault();
+  if (!currentUser) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Esegui il login per gestire il banner.";
+    return;
+  }
+  if (!canManageData()) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Solo gli admin possono salvare il banner.";
+    return;
+  }
+  const text = String(ui.bannerTextInput?.value || "").trim();
+  if (!text) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Inserisci il testo del banner prima di salvare.";
+    return;
+  }
+  const enabled = Boolean(ui.bannerEnabledToggle?.checked);
+  const speedRaw = String(ui.bannerSpeedInput?.value || "").trim();
+  const speedNum = Number(speedRaw);
+  const speed = speedRaw && Number.isFinite(speedNum) && speedNum >= 5 && speedNum <= 120 ? Math.round(speedNum) : null;
+  try {
+    await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
+      text,
+      enabled,
+      speed,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || ""
+    }, { merge: true });
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Banner salvato correttamente.";
+  } catch (error) {
+    console.error("Salvataggio banner non riuscito:", error);
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Errore durante il salvataggio del banner.";
+  }
+}
+
+async function disableWorkBanner() {
+  if (!currentUser) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Esegui il login per gestire il banner.";
+    return;
+  }
+  if (!canManageData()) {
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Solo gli admin possono disattivare il banner.";
+    return;
+  }
+  try {
+    await db.collection(WORK_BANNER_CONFIG_PATH.collection).doc(WORK_BANNER_CONFIG_PATH.doc).set({
+      enabled: false,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || ""
+    }, { merge: true });
+    if (ui.bannerEnabledToggle) ui.bannerEnabledToggle.checked = false;
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Banner disattivato.";
+  } catch (error) {
+    console.error("Disattivazione banner non riuscita:", error);
+    if (ui.bannerFeedback) ui.bannerFeedback.textContent = "Errore durante la disattivazione del banner.";
+  }
+}
+
 function weatherCodeLabel(weatherCode) {
   const code = Number(weatherCode);
   const weatherMap = {
@@ -1272,6 +1435,7 @@ auth.onAuthStateChanged((user) => {
   }
   renderChat([]);
   applyRoute();
+  subscribeWorkBanner();
 
   if (loggedIn) {
     startPresenceHeartbeat();
@@ -1305,6 +1469,7 @@ function updateAdminControls() {
   const canManage = canManageData();
   [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelInfoUtili]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
+  ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
@@ -1336,6 +1501,11 @@ function updateAdminControls() {
   ui.resourceValue.disabled = !canManage;
   ui.resourceCommesse.disabled = !canManage;
   ui.resourceSubmit.disabled = !canManage;
+  if (ui.bannerTextInput) ui.bannerTextInput.disabled = !canManage;
+  if (ui.bannerEnabledToggle) ui.bannerEnabledToggle.disabled = !canManage;
+  if (ui.bannerSpeedInput) ui.bannerSpeedInput.disabled = !canManage;
+  if (ui.bannerDisableBtn) ui.bannerDisableBtn.disabled = !canManage;
+  if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
   if (ui.externalAppForm && ui.externalAppForm.querySelector("button[type='submit']")) {
@@ -1392,7 +1562,7 @@ function refreshApplicationData() {
 }
 
 function openManagementPanel(panel) {
-  if (!canManageData()) {
+  if (panel !== "banner" && !canManageData()) {
     closeSideMenu();
     return;
   }
@@ -1403,11 +1573,12 @@ function openManagementPanel(panel) {
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
     global: { el: ui.panelGlobal, title: "Global" },
+    banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");

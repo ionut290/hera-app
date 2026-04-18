@@ -5671,17 +5671,19 @@ function renderImpianti() {
       "Invia messaggio",
       async () => {
         const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
-        if (!whatsappOpened || impianto.done) return;
+        if (!whatsappOpened) return;
+        if (!impianto.done) markImpiantoDoneVisualFallback(impianto);
+        if (impianto.done) return;
         try {
           const doneMarked = await markImpiantoDone(impianto);
           if (!doneMarked) {
-            alert("Messaggio WhatsApp aperto, ma non sono riuscito a spostare l'impianto tra i FATTI.");
+            alert("Messaggio WhatsApp aperto: impianto segnato FATTO in app (verde), ma il salvataggio remoto non è riuscito.");
             notifyAdminsForImpiantoDoneRecovery(impianto, "Lo stato non è stato aggiornato automaticamente dopo Invia messaggio.")
               .catch((error) => console.error("Errore invio richiesta recupero stato impianto:", error));
           }
         } catch (error) {
           console.error("Errore nel passaggio automatico a FATTO dopo apertura WhatsApp:", error);
-          alert("WhatsApp aperto, ma si è verificato un errore nel passaggio automatico tra i FATTI.");
+          alert("WhatsApp aperto: impianto segnato FATTO in app (verde), ma si è verificato un errore nel salvataggio remoto.");
           notifyAdminsForImpiantoDoneRecovery(impianto, "Errore tecnico durante il passaggio automatico ai FATTI.")
             .catch((notifyError) => console.error("Errore invio richiesta recupero stato impianto:", notifyError));
         }
@@ -5950,6 +5952,16 @@ async function markImpiantoDone(impianto) {
     impiantoKey: buildImpiantoKey(impianto)
   });
   return true;
+}
+
+function markImpiantoDoneVisualFallback(impianto) {
+  const ids = getImpiantoDocIds(impianto);
+  if (!ids.length) return;
+  const doneAtLocal = new Date();
+  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  expandedImpiantoKey = buildImpiantoKey(impianto);
+  updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
+  setImpiantiViewMode("done");
 }
 
 async function retrySetImpiantoDone(commessaId, impiantoIds, done, retries = 3) {

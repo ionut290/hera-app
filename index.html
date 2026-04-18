@@ -24,6 +24,7 @@
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
       <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
+      <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
@@ -53,6 +54,12 @@
           <p id="next-action-summary" class="muted">Prossima azione consigliata: caricamento...</p>
         </div>
       </header>
+
+      <section id="work-banner-home" class="card work-banner-home hidden" aria-live="polite">
+        <div class="work-banner-track">
+          <p id="work-banner-text" class="work-banner-text"></p>
+        </div>
+      </section>
 
       <section class="home-top-grid">
         <section class="card weather-card" id="weather-card" role="button" tabindex="0">
@@ -351,6 +358,22 @@
       <h3>Richieste aggiornamento GPS impianti</h3>
       <p class="muted">L'operatore invia richiesta via WhatsApp + app. L'admin può accettare o rifiutare.</p>
       <div id="gps-requests-list" class="simple-list"></div>
+    </div>
+    <div id="panel-banner" class="management-panel hidden">
+      <h3>Banner home operativa</h3>
+      <form id="banner-config-form" class="inline-form">
+        <textarea id="banner-text-input" placeholder="Testo banner" rows="3" required></textarea>
+        <label class="item-actions" for="banner-enabled-toggle">
+          <input id="banner-enabled-toggle" type="checkbox">
+          Banner attivo
+        </label>
+        <input id="banner-speed-input" type="number" min="5" max="120" step="1" placeholder="Velocità scorrimento (opzionale, default 20)">
+        <div class="item-actions">
+          <button id="banner-save-btn" class="btn btn-primary" type="submit">Salva banner</button>
+          <button id="banner-disable-btn" class="btn" type="button">Disattiva banner</button>
+        </div>
+      </form>
+      <p id="banner-feedback" class="muted"></p>
     </div>
     <div id="panel-info-utili" class="management-panel hidden">
       <h3>Nuova informazione utile</h3>

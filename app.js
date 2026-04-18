@@ -323,6 +323,7 @@ let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
 let currentWorkBannerConfig = { text: "", enabled: false, speed: null };
+let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let platformUsers = [];
@@ -921,6 +922,7 @@ updateResourceFormByType();
 updateConnectivityStatus();
 initPwaCapabilities();
 initNativeGeofenceBridge();
+initWorkBannerObservers();
 
 
 function getNativeHeraGeofencePlugin() {
@@ -1197,6 +1199,20 @@ function loadWorkBannerForm(config = {}) {
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.value = Number.isFinite(Number(config.speed)) ? String(config.speed) : "";
 }
 
+function initWorkBannerObservers() {
+  if (workBannerResizeObserver || typeof ResizeObserver !== "function") return;
+  if (!ui.workBannerHome || !ui.workBannerText) return;
+  workBannerResizeObserver = new ResizeObserver(() => {
+    updateWorkBannerAnimationDuration();
+  });
+  workBannerResizeObserver.observe(ui.workBannerHome);
+  workBannerResizeObserver.observe(ui.workBannerText);
+  window.addEventListener("orientationchange", updateWorkBannerAnimationDuration);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateWorkBannerAnimationDuration();
+  });
+}
+
 function updateWorkBannerAnimationDuration() {
   if (!ui.workBannerHome || !ui.workBannerText) return;
   if (ui.workBannerHome.classList.contains("hidden")) return;
@@ -1224,6 +1240,8 @@ function applyWorkBannerConfig(config = {}) {
   }
   ui.workBannerText.textContent = `${normalized.text}   •   ${normalized.text}   •   ${normalized.text}`;
   window.requestAnimationFrame(updateWorkBannerAnimationDuration);
+  setTimeout(updateWorkBannerAnimationDuration, 180);
+  setTimeout(updateWorkBannerAnimationDuration, 900);
 }
 
 function subscribeWorkBanner() {

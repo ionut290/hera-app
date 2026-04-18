@@ -154,3 +154,30 @@ Per mantenere la web app intatta, evita refactor lato UI/rotte solo per Android:
 - `window.heraNativeGeofence.status()`
 
 La logica di trigger notifiche resta comunque al livello nativo.
+
+## Stabilità: cosa controllare prima di dire che è "perfetta"
+
+In questo progetto non ci sono test automatici completi, quindi la stabilità dipende da controlli tecnici e test manuali.
+
+### Check rapido (consigliato a ogni modifica)
+
+```bash
+npm run check:syntax
+```
+
+Questo comando verifica che `app.js` non abbia errori di sintassi JavaScript bloccanti.
+
+### Check funzionali minimi
+
+1. Login/logout con account Google.
+2. Lettura/scrittura Firestore (creazione e aggiornamento di almeno un impianto).
+3. Import Excel (`.xlsx/.xls`) con almeno un file reale.
+4. Notifiche PWA (permesso + test notifica locale).
+5. Se usi Android wrapper: `npm run android:sync` dopo ogni modifica web rilevante.
+
+### Per migliorare ancora l'affidabilità
+
+- Introdurre test end-to-end (es. Playwright) per i flussi critici.
+- Aggiungere monitoraggio errori runtime (es. Sentry) per intercettare errori reali utenti.
+- Definire una checklist di release con prova su browser mobile reale + almeno un dispositivo Android.
+- Validare sempre configurazioni Firebase e permessi Android prima del rilascio.

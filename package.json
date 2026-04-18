@@ -7,7 +7,8 @@
     "serve": "python3 -m http.server 8080",
     "android:add": "npx cap add android",
     "android:sync": "npx cap sync android",
-    "android:open": "npx cap open android"
+    "android:open": "npx cap open android",
+    "check:syntax": "node --check app.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

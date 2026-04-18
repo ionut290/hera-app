@@ -368,7 +368,8 @@
           <input id="banner-enabled-toggle" type="checkbox">
           Banner attivo
         </label>
-        <input id="banner-speed-input" type="number" min="5" max="300" step="1" placeholder="Velocità scorrimento (opzionale, default 20)">
+        <input id="banner-speed-input" type="number" min="5" max="300" step="1" placeholder="Durata scorrimento in secondi (default 35)">
+        <p class="muted">Valore alto = scorrimento più lento (non dipende dalla dimensione dello schermo).</p>
         <div class="item-actions">
           <button id="banner-save-btn" class="btn btn-primary" type="submit">Salva banner</button>
           <button id="banner-disable-btn" class="btn" type="button">Disattiva banner</button>
@@ -398,10 +399,6 @@
         <button type="button" class="btn resource-filter-btn" data-resource-filter="note" aria-label="Categoria note">📝</button>
       </div>
       <div id="resources-list" class="simple-list"></div>
-    </div>
-    <div id="panel-banner" class="management-panel hidden">
-      <h3>Gestione banner</h3>
-      <p class="muted">Pannello dedicato alla gestione banner (configurazione in sviluppo).</p>
     </div>
   </section>
 

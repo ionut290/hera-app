@@ -114,6 +114,7 @@ const ui = {
   openPanelUtenti: document.getElementById("open-panel-utenti"),
   openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
@@ -130,6 +131,7 @@ const ui = {
   panelUtenti: document.getElementById("panel-utenti"),
   panelGlobal: document.getElementById("panel-global"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
+  panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
@@ -797,6 +799,7 @@ ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
 ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
@@ -1403,11 +1406,14 @@ function openManagementPanel(panel) {
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
     global: { el: ui.panelGlobal, title: "Global" },
-    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
+    banner: { el: ui.panelBanner, title: "Gestione banner" }
   };
   const target = panelMap[panel];
-  if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  if (!target?.el) return;
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelInfoUtili, ui.panelBanner]
+    .filter(Boolean)
+    .forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");

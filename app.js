@@ -66,8 +66,21 @@ function triggerErrorFeedback() {
 }
 
 function shouldPlayErrorFeedback(message) {
-  if (typeof message !== "string") return false;
-  return /(errore|impossibile|non riuscit|fallit|non autorizzat|bloccat|mancanti?|invalid)/i.test(message);
+  if (typeof message !== "string") return true;
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) return true;
+
+  const nonErrorAlertPatterns = [
+    /collegato correttamente/,
+    /^import (mezzi )?completato/,
+    /^richiesta inviata\./,
+    /in attesa approvazione/
+  ];
+  if (nonErrorAlertPatterns.some((pattern) => pattern.test(normalized))) {
+    return false;
+  }
+
+  return true;
 }
 
 const nativeAlert = window.alert.bind(window);

@@ -17,6 +17,67 @@ if (firebase.messaging && typeof firebase.messaging === "function") {
   }
 }
 
+const errorFeedbackAudio = {
+  context: null,
+  lastAt: 0
+};
+
+function triggerErrorFeedback() {
+  const now = Date.now();
+  if (now - errorFeedbackAudio.lastAt < 250) return;
+  errorFeedbackAudio.lastAt = now;
+
+  if (navigator?.vibrate) {
+    navigator.vibrate([120, 60, 120]);
+  }
+
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  try {
+    if (!errorFeedbackAudio.context) {
+      errorFeedbackAudio.context = new AudioContextCtor();
+    }
+
+    const context = errorFeedbackAudio.context;
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startTime = context.currentTime;
+
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(220, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(140, startTime + 0.2);
+
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, startTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.22);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + 0.24);
+  } catch (error) {
+    console.warn("Feedback sonoro errore non disponibile:", error);
+  }
+}
+
+function shouldPlayErrorFeedback(message) {
+  if (typeof message !== "string") return false;
+  return /(errore|impossibile|non riuscit|fallit|non autorizzat|bloccat|mancanti?|invalid)/i.test(message);
+}
+
+const nativeAlert = window.alert.bind(window);
+window.alert = (message) => {
+  if (shouldPlayErrorFeedback(String(message || ""))) {
+    triggerErrorFeedback();
+  }
+  nativeAlert(message);
+};
+
 const ui = {
   refreshAppBtn: document.getElementById("refresh-app-btn"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),

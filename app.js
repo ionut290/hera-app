@@ -9454,11 +9454,16 @@ function subscribeUserAlerts() {
   }
   unsubscribeUserAlerts = db.collection("userAlerts")
     .where("targetUserId", "==", currentUser.uid)
-    .where("acknowledgedAt", "==", null)
-    .orderBy("createdAt", "desc")
-    .limit(1)
+    .limit(30)
     .onSnapshot((snapshot) => {
-      userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      userAlerts = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((item) => !item.acknowledgedAt)
+        .sort((a, b) => {
+          const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+          const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+          return bMs - aMs;
+        });
       maybeShowUserAlert();
     }, (error) => {
       console.error("Errore caricamento notifiche utente:", error);
@@ -9482,6 +9487,8 @@ function maybeShowUserAlert() {
     closeUserAlertModal();
     return;
   }
+  closeSideMenu();
+  closeManagementPanel();
   activeUserAlert = firstPending;
   if (ui.userAlertText) ui.userAlertText.textContent = firstPending.message || "";
   ui.userAlertModal?.classList.remove("hidden");

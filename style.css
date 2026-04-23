@@ -1739,6 +1739,36 @@ textarea:focus-visible {
   grid-template-rows: auto 1fr auto;
 }
 
+
+
+.user-alert-content {
+  width: min(560px, 96vw);
+  height: auto;
+  max-height: min(420px, 92dvh);
+  margin: auto;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.35);
+}
+
+.user-alert-body {
+  background: #fff;
+  min-height: 120px;
+}
+
+.user-alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notification-doc-viewer-frame {
+  width: 100%;
+  height: calc(100dvh - 70px);
+  border: 0;
+  background: #f8fafc;
+}
 .chat-modal-header {
   display: flex;
   justify-content: space-between;

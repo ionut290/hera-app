@@ -26,6 +26,7 @@
       <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
       <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
+      <button id="open-panel-notifiche" class="btn menu-title-btn" type="button">Gestione notifiche</button>
       <button id="open-panel-banner" class="btn menu-title-btn" type="button">Gestione banner</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
@@ -383,6 +384,25 @@
       </form>
       <p id="banner-feedback" class="muted"></p>
     </div>
+    <div id="panel-notifiche" class="management-panel hidden">
+      <h3>Invia avviso utente</h3>
+      <p class="muted">Solo gli admin possono creare notifiche mirate. L'utente vedrà l'avviso all'accesso.</p>
+      <form id="notification-form" class="resource-form">
+        <select id="notification-user-select" required>
+          <option value="">Seleziona utente registrato</option>
+        </select>
+        <textarea id="notification-message" rows="4" placeholder="Scrivi l'avviso da mostrare all'utente" required></textarea>
+        <input id="notification-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.xlsm,.xlsb,.csv,.ods,.fods,.txt,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
+        <p class="muted">Allega documenti (PDF, Excel e altri formati). Verranno aperti dal destinatario dentro l'app.</p>
+        <div class="item-actions">
+          <button id="notification-submit" class="btn btn-primary" type="submit">Invia avviso</button>
+          <button id="notification-cancel-upload-btn" class="btn" type="button" disabled>Annulla caricamento file</button>
+        </div>
+      </form>
+      <p id="notification-feedback" class="muted"></p>
+      <h3>Notifiche attive</h3>
+      <div id="notifications-list" class="simple-list"></div>
+    </div>
     <div id="panel-info-utili" class="management-panel hidden">
       <h3>Nuova informazione utile</h3>
       <form id="resource-form" class="resource-form">
@@ -405,6 +425,33 @@
         <button type="button" class="btn resource-filter-btn" data-resource-filter="note" aria-label="Categoria note">📝</button>
       </div>
       <div id="resources-list" class="simple-list"></div>
+    </div>
+  </section>
+
+
+  <section id="user-alert-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content user-alert-content">
+      <div class="chat-modal-header">
+        <h2>Avviso importante</h2>
+      </div>
+      <div class="chat-full-list user-alert-body">
+        <p id="user-alert-text" class="chat-text"></p>
+        <div id="user-alert-attachments" class="simple-list"></div>
+      </div>
+      <div class="chat-send-form user-alert-actions">
+        <button id="user-alert-ok-btn" class="btn btn-primary" type="button">OK, ho capito</button>
+        <button id="user-alert-later-btn" class="btn" type="button">Ricordamelo più tardi</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="notification-doc-viewer-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2 id="notification-doc-viewer-title">Documento notifica</h2>
+        <button id="notification-doc-viewer-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <iframe id="notification-doc-viewer-frame" class="notification-doc-viewer-frame" title="Anteprima documento notifica"></iframe>
     </div>
   </section>
 

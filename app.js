@@ -189,6 +189,7 @@ const ui = {
   openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPanelNotifiche: document.getElementById("open-panel-notifiche"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
@@ -207,6 +208,7 @@ const ui = {
   panelGlobal: document.getElementById("panel-global"),
   panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
+  panelNotifiche: document.getElementById("panel-notifiche"),
   panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
@@ -376,7 +378,24 @@ const ui = {
   globalImpiantoDetailsBody: document.getElementById("global-impianto-details-body"),
   globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
-  globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn")
+  globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
+  notificationForm: document.getElementById("notification-form"),
+  notificationUserSelect: document.getElementById("notification-user-select"),
+  notificationMessage: document.getElementById("notification-message"),
+  notificationAttachments: document.getElementById("notification-attachments"),
+  notificationSubmit: document.getElementById("notification-submit"),
+  notificationCancelUploadBtn: document.getElementById("notification-cancel-upload-btn"),
+  notificationFeedback: document.getElementById("notification-feedback"),
+  notificationsList: document.getElementById("notifications-list"),
+  userAlertModal: document.getElementById("user-alert-modal"),
+  userAlertText: document.getElementById("user-alert-text"),
+  userAlertAttachments: document.getElementById("user-alert-attachments"),
+  userAlertOkBtn: document.getElementById("user-alert-ok-btn"),
+  userAlertLaterBtn: document.getElementById("user-alert-later-btn"),
+  notificationDocViewerModal: document.getElementById("notification-doc-viewer-modal"),
+  notificationDocViewerTitle: document.getElementById("notification-doc-viewer-title"),
+  notificationDocViewerCloseBtn: document.getElementById("notification-doc-viewer-close-btn"),
+  notificationDocViewerFrame: document.getElementById("notification-doc-viewer-frame")
 };
 
 let pendingRows = [];
@@ -400,6 +419,7 @@ let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
+let unsubscribeUserAlerts = null;
 let currentWorkBannerConfig = { text: "", enabled: false, speed: null, notes: [] };
 let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
@@ -479,6 +499,10 @@ let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
 let isDrawingStrokeActive = false;
 let globalImpiantiFiltered = [];
+let userAlerts = [];
+let activeUserAlert = null;
+let notificationUploadAbortController = null;
+let notificationUploadInProgress = false;
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -895,6 +919,7 @@ ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti")
 ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
 ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
@@ -962,6 +987,8 @@ ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoM
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.notificationForm?.addEventListener("submit", createUserNotification);
+ui.notificationCancelUploadBtn?.addEventListener("click", cancelNotificationUpload);
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
@@ -975,6 +1002,12 @@ ui.enableNotificationsBtn?.addEventListener("click", async () => {
   await enablePushNotifications({ auto: false });
 });
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
+ui.userAlertOkBtn?.addEventListener("click", acknowledgeActiveUserAlert);
+ui.userAlertLaterBtn?.addEventListener("click", postponeActiveUserAlert);
+ui.notificationDocViewerCloseBtn?.addEventListener("click", closeNotificationDocumentViewer);
+ui.notificationDocViewerModal?.addEventListener("click", (event) => {
+  if (event.target === ui.notificationDocViewerModal) closeNotificationDocumentViewer();
+});
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
@@ -1593,6 +1626,7 @@ auth.onAuthStateChanged((user) => {
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
   stopWorkBannerSubscription();
+  stopUserAlertsSubscription();
   stopChatRetentionLoop();
   stopHoursDeadlineAlertLoop();
   selectedCommessaId = "";
@@ -1653,12 +1687,14 @@ auth.onAuthStateChanged((user) => {
     subscribeGpsRequests();
     subscribeGlobalNotifications();
     subscribeWorkBanner();
+    subscribeUserAlerts();
     processPendingSheetExports();
     startChatRetentionLoop();
     startHoursDeadlineAlertLoop();
   } else {
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
+    closeUserAlertModal();
   }
   renderHeaderActivitySummary();
   renderExternalApps();
@@ -1668,7 +1704,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili, ui.openPanelNotifiche]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
@@ -1710,6 +1746,11 @@ function updateAdminControls() {
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.disabled = !canManage;
   if (ui.bannerDisableBtn) ui.bannerDisableBtn.disabled = !canManage;
   if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
+  if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = !canManage;
+  if (ui.notificationMessage) ui.notificationMessage.disabled = !canManage;
+  if (ui.notificationAttachments) ui.notificationAttachments.disabled = !canManage;
+  if (ui.notificationSubmit) ui.notificationSubmit.disabled = !canManage;
+  if (ui.notificationCancelUploadBtn) ui.notificationCancelUploadBtn.disabled = !canManage || !notificationUploadInProgress;
   renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
@@ -1737,6 +1778,8 @@ function updateAdminControls() {
     : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
   updateResourceFormByType();
   renderUserPermissionList();
+  renderNotificationTargetUsers();
+  renderNotificationsList();
   renderExternalApps();
 }
 
@@ -1779,11 +1822,12 @@ function openManagementPanel(panel) {
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
     global: { el: ui.panelGlobal, title: "Global" },
     banner: { el: ui.panelBanner, title: "Banner home" },
-    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
+    notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -8891,6 +8935,7 @@ function subscribeUsers() {
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
     renderUserPermissionList();
+    renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
     checkAndSendHoursDeadlineAlerts();
@@ -8906,6 +8951,7 @@ function stopUsersSubscription() {
   deniedImpiantoActions = new Set();
   renderChatRecipients();
   renderUserPermissionList();
+  renderNotificationTargetUsers();
   renderHeaderActivitySummary();
   renderExternalApps();
 }
@@ -9315,6 +9361,369 @@ function renderUserPermissionList() {
     row.appendChild(actionBox);
     ui.userPermissionsList.appendChild(row);
   });
+}
+
+
+function getPlatformUserLabel(user) {
+  if (!user) return "Utente sconosciuto";
+  return String(user.displayName || user.email || user.id || "Utente").trim() || "Utente";
+}
+
+function renderNotificationTargetUsers() {
+  if (!ui.notificationUserSelect) return;
+  const previous = ui.notificationUserSelect.value;
+  ui.notificationUserSelect.innerHTML = "<option value=''>Seleziona utente registrato</option>";
+  platformUsers
+    .filter((user) => !adminEmails.has(normalizeEmail(user.email)))
+    .forEach((user) => {
+      const opt = document.createElement("option");
+      opt.value = user.id;
+      opt.textContent = `${getPlatformUserLabel(user)}${user.email ? ` (${user.email})` : ""}`;
+      ui.notificationUserSelect.appendChild(opt);
+    });
+  if (previous && platformUsers.some((user) => user.id === previous)) {
+    ui.notificationUserSelect.value = previous;
+  }
+}
+
+function renderNotificationsList() {
+  if (!ui.notificationsList) return;
+  if (!currentUser) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Fai login per vedere le notifiche.</p>";
+    return;
+  }
+  if (!canManageData()) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Solo gli admin possono gestire le notifiche.</p>";
+    return;
+  }
+  if (!userAlerts.length) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Nessuna notifica disponibile.</p>";
+    return;
+  }
+  ui.notificationsList.innerHTML = "";
+  userAlerts.forEach((item) => {
+    const userLabel = getPlatformUserLabel(platformUsers.find((user) => user.id === item.targetUserId));
+    const row = document.createElement("article");
+    row.className = "simple-list-item stacked";
+    const status = item.acknowledgedAt ? "Confermata" : "In attesa";
+    const attachments = Array.isArray(item.attachments) ? item.attachments : [];
+    row.innerHTML = `<strong>${escapeHTML(userLabel)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(status)}</small>`;
+    const attachmentsBox = document.createElement("div");
+    if (!attachments.length) {
+      attachmentsBox.innerHTML = "<small>Nessun allegato.</small>";
+    } else {
+      const list = document.createElement("ul");
+      attachments.forEach((att) => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = "#";
+        link.textContent = `📎 ${att.name || "Documento"}`;
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          openNotificationDocumentViewer(att.url || "", att.name || "Documento");
+        });
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+      attachmentsBox.appendChild(list);
+    }
+    row.appendChild(attachmentsBox);
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    actions.appendChild(createButton("Elimina", () => deleteUserNotification(item.id)));
+    row.appendChild(actions);
+    ui.notificationsList.appendChild(row);
+  });
+}
+
+function renderActiveUserAlertAttachments() {
+  if (!ui.userAlertAttachments) return;
+  const attachments = Array.isArray(activeUserAlert?.attachments) ? activeUserAlert.attachments : [];
+  if (!attachments.length) {
+    ui.userAlertAttachments.innerHTML = "<p class='muted'>Nessun documento allegato.</p>";
+    return;
+  }
+  ui.userAlertAttachments.innerHTML = "";
+  attachments.forEach((attachment) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const label = document.createElement("span");
+    label.textContent = `📎 ${attachment.name || "Documento"}`;
+    row.appendChild(label);
+    const openBtn = createButton("Apri", () => openNotificationDocumentViewer(attachment.url || "", attachment.name || "Documento"));
+    row.appendChild(openBtn);
+    ui.userAlertAttachments.appendChild(row);
+  });
+}
+
+function buildNotificationEmailPayload(targetUser, message, notificationId) {
+  const recipientEmail = String(targetUser?.email || "").trim();
+  const appUrl = `${window.location.origin}${window.location.pathname}#home`;
+  return {
+    to: recipientEmail,
+    subject: "Nuova notifica da Hera App",
+    text: `Ciao ${targetUser?.displayName || "utente"},\n\nl'amministratore ti ha inviato una nuova notifica:\n\"${message}\"\n\nApri l'app per visualizzarla: ${appUrl}\n\nID notifica: ${notificationId}`,
+    html: `
+      <p>Ciao ${escapeHTML(targetUser?.displayName || "utente")},</p>
+      <p>L'amministratore ti ha inviato una nuova notifica su Hera App.</p>
+      <p><b>Messaggio:</b> ${escapeHTML(message)}</p>
+      <p><a href="${appUrl}" style="display:inline-block;padding:10px 14px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;">Clicca per aprire l'app</a></p>
+      <p style="font-size:12px;color:#64748b;">ID notifica: ${escapeHTML(notificationId)}</p>
+    `,
+    appUrl,
+    notificationId
+  };
+}
+
+async function queueNotificationEmail(targetUser, message, notificationId) {
+  if (!targetUser?.email) return { queued: false, reason: "missing_email" };
+  const payload = buildNotificationEmailPayload(targetUser, message, notificationId);
+  await db.collection("notificationEmailQueue").add({
+    ...payload,
+    status: "pending",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: currentUser?.email || currentUser?.uid || "admin"
+  });
+  const webhookUrl = String(window?.HERA_NOTIFICATION_EMAIL_WEBHOOK || localStorage.getItem("heraNotificationEmailWebhook") || "").trim();
+  if (!webhookUrl) return { queued: true, delivered: false };
+  try {
+    await fetchWithTimeoutAndRetry(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, {
+      timeoutMs: NETWORK_DEFAULT_TIMEOUT_MS,
+      retries: 1
+    });
+    return { queued: true, delivered: true };
+  } catch (error) {
+    console.warn("Webhook email notifica non raggiungibile:", error);
+    return { queued: true, delivered: false, error };
+  }
+}
+
+function mapFileNameForNotificationAttachment(fileName = "") {
+  const safeName = String(fileName || "allegato").replace(/\s+/g, "_").replace(/[^\w.\-]+/g, "_");
+  return `notifiche/${Date.now()}_${safeName}`;
+}
+
+function setNotificationUploadState(inProgress) {
+  notificationUploadInProgress = Boolean(inProgress);
+  if (ui.notificationCancelUploadBtn) ui.notificationCancelUploadBtn.disabled = !notificationUploadInProgress || !canManageData();
+  if (ui.notificationSubmit) ui.notificationSubmit.disabled = notificationUploadInProgress || !canManageData();
+}
+
+function cancelNotificationUpload() {
+  if (!notificationUploadAbortController) return;
+  notificationUploadAbortController.abort();
+  notificationUploadAbortController = null;
+  setNotificationUploadState(false);
+  if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento allegati annullato.";
+}
+
+async function uploadNotificationAttachments(files = [], options = {}) {
+  if (!files.length) return [];
+  if (!driveAccessToken) {
+    throw new Error("Google Drive non collegato. Collega Drive per allegare documenti alle notifiche.");
+  }
+  if (!driveReportsFolderId) await ensureDriveFolders();
+  const { signal = null, onProgress = null } = options;
+  let completed = 0;
+  const uploads = await Promise.all(files.map(async (file) => {
+    if (signal?.aborted) throw new DOMException("Upload annullato", "AbortError");
+    const upload = await uploadBlobToDrive(
+      file,
+      mapFileNameForNotificationAttachment(file.name || "allegato"),
+      file.type || "application/octet-stream",
+      driveReportsFolderId,
+      { signal }
+    );
+    completed += 1;
+    if (typeof onProgress === "function") onProgress(completed, files.length, file.name || "allegato");
+    return {
+      name: file.name || "allegato",
+      type: file.type || "application/octet-stream",
+      size: Number(file.size || 0),
+      url: upload.webViewLink || upload.directUrl || "",
+      fileId: upload.fileId || ""
+    };
+  }));
+  return uploads;
+}
+
+function buildDocumentViewerUrl(rawUrl = "") {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (/docs\.google\.com\/spreadsheets/i.test(url)) return url;
+  if (/drive\.google\.com/i.test(url)) {
+    return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`;
+  }
+  return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`;
+}
+
+function openNotificationDocumentViewer(rawUrl, title = "Documento") {
+  const viewerUrl = buildDocumentViewerUrl(rawUrl);
+  if (!viewerUrl) return;
+  if (ui.notificationDocViewerTitle) ui.notificationDocViewerTitle.textContent = title;
+  if (ui.notificationDocViewerFrame) ui.notificationDocViewerFrame.src = viewerUrl;
+  ui.notificationDocViewerModal?.classList.remove("hidden");
+  ui.notificationDocViewerModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeNotificationDocumentViewer() {
+  if (ui.notificationDocViewerFrame) ui.notificationDocViewerFrame.src = "";
+  ui.notificationDocViewerModal?.classList.add("hidden");
+  ui.notificationDocViewerModal?.setAttribute("aria-hidden", "true");
+}
+
+async function createUserNotification(event) {
+  event.preventDefault();
+  if (notificationUploadInProgress) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento già in corso...";
+    return;
+  }
+  if (!currentUser || !canManageData()) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Solo gli admin possono inviare avvisi.";
+    return;
+  }
+  const targetUserId = String(ui.notificationUserSelect?.value || "").trim();
+  const message = String(ui.notificationMessage?.value || "").trim();
+  const files = Array.from(ui.notificationAttachments?.files || []);
+  const totalSizeMb = files.reduce((sum, file) => sum + Number(file.size || 0), 0) / (1024 * 1024);
+  if (totalSizeMb > 80) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Allegati troppo grandi (>80MB). Riduci il peso per velocizzare il caricamento.";
+    return;
+  }
+  if (!targetUserId || !message) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona un utente e scrivi un avviso.";
+    return;
+  }
+  notificationUploadAbortController = new AbortController();
+  setNotificationUploadState(true);
+  try {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = files.length ? `Caricamento allegati (0/${files.length})...` : "Invio notifica...";
+    const attachments = await uploadNotificationAttachments(files, {
+      signal: notificationUploadAbortController.signal,
+      onProgress: (completed, total) => {
+        if (ui.notificationFeedback) ui.notificationFeedback.textContent = `Caricamento allegati (${completed}/${total})...`;
+      }
+    });
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Salvataggio notifica...";
+    const notificationRef = await db.collection("userAlerts").add({
+      targetUserId,
+      message,
+      attachments,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.email || currentUser.uid || "admin",
+      acknowledgedAt: null,
+      acknowledgedBy: ""
+    });
+    const targetUser = platformUsers.find((user) => user.id === targetUserId);
+    const emailResult = await queueNotificationEmail(targetUser, message, notificationRef.id);
+    if (ui.notificationForm) ui.notificationForm.reset();
+    if (ui.notificationFeedback) {
+      ui.notificationFeedback.textContent = emailResult.queued
+        ? "Avviso inviato. Email messa in coda (e webhook usato se configurato)."
+        : "Avviso inviato. Nessuna email inviata (utente senza email).";
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento annullato.";
+      return;
+    }
+    console.error("Errore invio avviso utente:", error);
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Errore durante il salvataggio dell'avviso.";
+  } finally {
+    notificationUploadAbortController = null;
+    setNotificationUploadState(false);
+  }
+}
+
+async function deleteUserNotification(notificationId) {
+  if (!currentUser || !canManageData() || !notificationId) return;
+  const confirmed = window.confirm("Eliminare questa notifica?");
+  if (!confirmed) return;
+  await db.collection("userAlerts").doc(notificationId).delete();
+}
+
+function subscribeUserAlerts() {
+  if (unsubscribeUserAlerts) unsubscribeUserAlerts();
+  if (!currentUser) return;
+  if (canManageData()) {
+    unsubscribeUserAlerts = db.collection("userAlerts")
+      .orderBy("createdAt", "desc")
+      .limit(200)
+      .onSnapshot((snapshot) => {
+        userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderNotificationsList();
+      }, (error) => {
+        console.error("Errore caricamento notifiche admin:", error);
+      });
+    return;
+  }
+  unsubscribeUserAlerts = db.collection("userAlerts")
+    .where("targetUserId", "==", currentUser.uid)
+    .limit(30)
+    .onSnapshot((snapshot) => {
+      userAlerts = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((item) => !item.acknowledgedAt)
+        .sort((a, b) => {
+          const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+          const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+          return bMs - aMs;
+        });
+      maybeShowUserAlert();
+    }, (error) => {
+      console.error("Errore caricamento notifiche utente:", error);
+    });
+}
+
+function stopUserAlertsSubscription() {
+  if (unsubscribeUserAlerts) {
+    unsubscribeUserAlerts();
+    unsubscribeUserAlerts = null;
+  }
+  userAlerts = [];
+  activeUserAlert = null;
+  renderNotificationsList();
+}
+
+function maybeShowUserAlert() {
+  if (!currentUser || canManageData()) return;
+  const firstPending = userAlerts[0];
+  if (!firstPending) {
+    closeUserAlertModal();
+    return;
+  }
+  closeSideMenu();
+  closeManagementPanel();
+  activeUserAlert = firstPending;
+  if (ui.userAlertText) ui.userAlertText.textContent = firstPending.message || "";
+  renderActiveUserAlertAttachments();
+  ui.userAlertModal?.classList.remove("hidden");
+  ui.userAlertModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeUserAlertModal() {
+  if (ui.userAlertAttachments) ui.userAlertAttachments.innerHTML = "";
+  ui.userAlertModal?.classList.add("hidden");
+  ui.userAlertModal?.setAttribute("aria-hidden", "true");
+}
+
+async function acknowledgeActiveUserAlert() {
+  if (!currentUser || !activeUserAlert?.id) return;
+  await db.collection("userAlerts").doc(activeUserAlert.id).set({
+    acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    acknowledgedBy: currentUser.uid || currentUser.email || ""
+  }, { merge: true });
+  activeUserAlert = null;
+  closeUserAlertModal();
+}
+
+function postponeActiveUserAlert() {
+  activeUserAlert = null;
+  closeUserAlertModal();
 }
 
 function renderExternalApps() {
@@ -10474,11 +10883,12 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   return { id: created.id };
 }
 
-async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
+async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {}) {
   if (!driveAccessToken) {
     throw new Error("Google Drive non collegato.");
   }
   if (!folderId) await ensureDriveFolders();
+  const { signal = null } = options;
 
   const metadata = {
     name: fileName,
@@ -10492,13 +10902,15 @@ async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
 
   const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
     method: "POST",
-    body: form
+    body: form,
+    signal
   });
 
   await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${uploaded.id}/permissions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role: "reader", type: "anyone" })
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+    signal
   });
 
   return {
@@ -10621,11 +11033,18 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
   let attempt = 0;
   while (attempt <= retries) {
     const controller = new AbortController();
+    const externalSignal = options?.signal || null;
+    if (externalSignal?.aborted) {
+      throw new DOMException("Operazione annullata", "AbortError");
+    }
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) externalSignal.addEventListener("abort", onExternalAbort, { once: true });
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const mergedOptions = { ...options, signal: controller.signal };
       const response = await fetch(url, mergedOptions);
       clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
       if (attempt < retries && shouldRetryHttpStatus(response.status)) {
         await wait(baseDelayMs * (attempt + 1));
         attempt += 1;
@@ -10634,6 +11053,7 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
       if (attempt >= retries || !isRetryableNetworkError(error)) {
         throw error;
       }

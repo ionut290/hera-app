@@ -392,6 +392,8 @@
           <option value="">Seleziona utente registrato</option>
         </select>
         <textarea id="notification-message" rows="4" placeholder="Scrivi l'avviso da mostrare all'utente" required></textarea>
+        <input id="notification-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.xlsm,.xlsb,.csv,.ods,.fods,.txt,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
+        <p class="muted">Allega documenti (PDF, Excel e altri formati). Verranno aperti dal destinatario dentro l'app.</p>
         <button id="notification-submit" class="btn btn-primary" type="submit">Invia avviso</button>
       </form>
       <p id="notification-feedback" class="muted"></p>
@@ -431,11 +433,22 @@
       </div>
       <div class="chat-full-list user-alert-body">
         <p id="user-alert-text" class="chat-text"></p>
+        <div id="user-alert-attachments" class="simple-list"></div>
       </div>
       <div class="chat-send-form user-alert-actions">
         <button id="user-alert-ok-btn" class="btn btn-primary" type="button">OK, ho capito</button>
         <button id="user-alert-later-btn" class="btn" type="button">Ricordamelo più tardi</button>
       </div>
+    </div>
+  </section>
+
+  <section id="notification-doc-viewer-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2 id="notification-doc-viewer-title">Documento notifica</h2>
+        <button id="notification-doc-viewer-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <iframe id="notification-doc-viewer-frame" class="notification-doc-viewer-frame" title="Anteprima documento notifica"></iframe>
     </div>
   </section>
 

@@ -382,13 +382,19 @@ const ui = {
   notificationForm: document.getElementById("notification-form"),
   notificationUserSelect: document.getElementById("notification-user-select"),
   notificationMessage: document.getElementById("notification-message"),
+  notificationAttachments: document.getElementById("notification-attachments"),
   notificationSubmit: document.getElementById("notification-submit"),
   notificationFeedback: document.getElementById("notification-feedback"),
   notificationsList: document.getElementById("notifications-list"),
   userAlertModal: document.getElementById("user-alert-modal"),
   userAlertText: document.getElementById("user-alert-text"),
+  userAlertAttachments: document.getElementById("user-alert-attachments"),
   userAlertOkBtn: document.getElementById("user-alert-ok-btn"),
-  userAlertLaterBtn: document.getElementById("user-alert-later-btn")
+  userAlertLaterBtn: document.getElementById("user-alert-later-btn"),
+  notificationDocViewerModal: document.getElementById("notification-doc-viewer-modal"),
+  notificationDocViewerTitle: document.getElementById("notification-doc-viewer-title"),
+  notificationDocViewerCloseBtn: document.getElementById("notification-doc-viewer-close-btn"),
+  notificationDocViewerFrame: document.getElementById("notification-doc-viewer-frame")
 };
 
 let pendingRows = [];
@@ -994,6 +1000,10 @@ ui.enableNotificationsBtn?.addEventListener("click", async () => {
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
 ui.userAlertOkBtn?.addEventListener("click", acknowledgeActiveUserAlert);
 ui.userAlertLaterBtn?.addEventListener("click", postponeActiveUserAlert);
+ui.notificationDocViewerCloseBtn?.addEventListener("click", closeNotificationDocumentViewer);
+ui.notificationDocViewerModal?.addEventListener("click", (event) => {
+  if (event.target === ui.notificationDocViewerModal) closeNotificationDocumentViewer();
+});
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
@@ -1734,6 +1744,7 @@ function updateAdminControls() {
   if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
   if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = !canManage;
   if (ui.notificationMessage) ui.notificationMessage.disabled = !canManage;
+  if (ui.notificationAttachments) ui.notificationAttachments.disabled = !canManage;
   if (ui.notificationSubmit) ui.notificationSubmit.disabled = !canManage;
   renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
@@ -9390,15 +9401,149 @@ function renderNotificationsList() {
     const row = document.createElement("article");
     row.className = "simple-list-item stacked";
     const status = item.acknowledgedAt ? "Confermata" : "In attesa";
+    const attachments = Array.isArray(item.attachments) ? item.attachments : [];
     row.innerHTML = `<strong>${escapeHTML(userLabel)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(status)}</small>`;
-    if (!item.acknowledgedAt) {
-      const actions = document.createElement("div");
-      actions.className = "item-actions";
-      actions.appendChild(createButton("Elimina", () => deleteUserNotification(item.id)));
-      row.appendChild(actions);
+    const attachmentsBox = document.createElement("div");
+    if (!attachments.length) {
+      attachmentsBox.innerHTML = "<small>Nessun allegato.</small>";
+    } else {
+      const list = document.createElement("ul");
+      attachments.forEach((att) => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = "#";
+        link.textContent = `📎 ${att.name || "Documento"}`;
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          openNotificationDocumentViewer(att.url || "", att.name || "Documento");
+        });
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+      attachmentsBox.appendChild(list);
     }
+    row.appendChild(attachmentsBox);
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    actions.appendChild(createButton("Elimina", () => deleteUserNotification(item.id)));
+    row.appendChild(actions);
     ui.notificationsList.appendChild(row);
   });
+}
+
+function renderActiveUserAlertAttachments() {
+  if (!ui.userAlertAttachments) return;
+  const attachments = Array.isArray(activeUserAlert?.attachments) ? activeUserAlert.attachments : [];
+  if (!attachments.length) {
+    ui.userAlertAttachments.innerHTML = "<p class='muted'>Nessun documento allegato.</p>";
+    return;
+  }
+  ui.userAlertAttachments.innerHTML = "";
+  attachments.forEach((attachment) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item";
+    const label = document.createElement("span");
+    label.textContent = `📎 ${attachment.name || "Documento"}`;
+    row.appendChild(label);
+    const openBtn = createButton("Apri", () => openNotificationDocumentViewer(attachment.url || "", attachment.name || "Documento"));
+    row.appendChild(openBtn);
+    ui.userAlertAttachments.appendChild(row);
+  });
+}
+
+function buildNotificationEmailPayload(targetUser, message, notificationId) {
+  const recipientEmail = String(targetUser?.email || "").trim();
+  const appUrl = `${window.location.origin}${window.location.pathname}#home`;
+  return {
+    to: recipientEmail,
+    subject: "Nuova notifica da Hera App",
+    text: `Ciao ${targetUser?.displayName || "utente"},\n\nl'amministratore ti ha inviato una nuova notifica:\n\"${message}\"\n\nApri l'app per visualizzarla: ${appUrl}\n\nID notifica: ${notificationId}`,
+    html: `
+      <p>Ciao ${escapeHTML(targetUser?.displayName || "utente")},</p>
+      <p>L'amministratore ti ha inviato una nuova notifica su Hera App.</p>
+      <p><b>Messaggio:</b> ${escapeHTML(message)}</p>
+      <p><a href="${appUrl}" style="display:inline-block;padding:10px 14px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;">Clicca per aprire l'app</a></p>
+      <p style="font-size:12px;color:#64748b;">ID notifica: ${escapeHTML(notificationId)}</p>
+    `,
+    appUrl,
+    notificationId
+  };
+}
+
+async function queueNotificationEmail(targetUser, message, notificationId) {
+  if (!targetUser?.email) return { queued: false, reason: "missing_email" };
+  const payload = buildNotificationEmailPayload(targetUser, message, notificationId);
+  await db.collection("notificationEmailQueue").add({
+    ...payload,
+    status: "pending",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: currentUser?.email || currentUser?.uid || "admin"
+  });
+  const webhookUrl = String(window?.HERA_NOTIFICATION_EMAIL_WEBHOOK || localStorage.getItem("heraNotificationEmailWebhook") || "").trim();
+  if (!webhookUrl) return { queued: true, delivered: false };
+  try {
+    await fetchWithTimeoutAndRetry(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, {
+      timeoutMs: NETWORK_DEFAULT_TIMEOUT_MS,
+      retries: 1
+    });
+    return { queued: true, delivered: true };
+  } catch (error) {
+    console.warn("Webhook email notifica non raggiungibile:", error);
+    return { queued: true, delivered: false, error };
+  }
+}
+
+function mapFileNameForNotificationAttachment(fileName = "") {
+  const safeName = String(fileName || "allegato").replace(/\s+/g, "_").replace(/[^\w.\-]+/g, "_");
+  return `notifiche/${Date.now()}_${safeName}`;
+}
+
+async function uploadNotificationAttachments(files = []) {
+  if (!files.length) return [];
+  if (!driveAccessToken) {
+    throw new Error("Google Drive non collegato. Collega Drive per allegare documenti alle notifiche.");
+  }
+  if (!driveReportsFolderId) await ensureDriveFolders();
+  const uploads = await Promise.all(files.map(async (file) => {
+    const upload = await uploadBlobToDrive(file, mapFileNameForNotificationAttachment(file.name || "allegato"), file.type || "application/octet-stream", driveReportsFolderId);
+    return {
+      name: file.name || "allegato",
+      type: file.type || "application/octet-stream",
+      size: Number(file.size || 0),
+      url: upload.webViewLink || upload.directUrl || "",
+      fileId: upload.fileId || ""
+    };
+  }));
+  return uploads;
+}
+
+function buildDocumentViewerUrl(rawUrl = "") {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (/docs\.google\.com\/spreadsheets/i.test(url)) return url;
+  if (/drive\.google\.com/i.test(url)) {
+    return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`;
+  }
+  return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`;
+}
+
+function openNotificationDocumentViewer(rawUrl, title = "Documento") {
+  const viewerUrl = buildDocumentViewerUrl(rawUrl);
+  if (!viewerUrl) return;
+  if (ui.notificationDocViewerTitle) ui.notificationDocViewerTitle.textContent = title;
+  if (ui.notificationDocViewerFrame) ui.notificationDocViewerFrame.src = viewerUrl;
+  ui.notificationDocViewerModal?.classList.remove("hidden");
+  ui.notificationDocViewerModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeNotificationDocumentViewer() {
+  if (ui.notificationDocViewerFrame) ui.notificationDocViewerFrame.src = "";
+  ui.notificationDocViewerModal?.classList.add("hidden");
+  ui.notificationDocViewerModal?.setAttribute("aria-hidden", "true");
 }
 
 async function createUserNotification(event) {
@@ -9409,21 +9554,31 @@ async function createUserNotification(event) {
   }
   const targetUserId = String(ui.notificationUserSelect?.value || "").trim();
   const message = String(ui.notificationMessage?.value || "").trim();
+  const files = Array.from(ui.notificationAttachments?.files || []);
   if (!targetUserId || !message) {
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona un utente e scrivi un avviso.";
     return;
   }
   try {
-    await db.collection("userAlerts").add({
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = files.length ? "Caricamento allegati..." : "Invio notifica...";
+    const attachments = await uploadNotificationAttachments(files);
+    const notificationRef = await db.collection("userAlerts").add({
       targetUserId,
       message,
+      attachments,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: currentUser.email || currentUser.uid || "admin",
       acknowledgedAt: null,
       acknowledgedBy: ""
     });
+    const targetUser = platformUsers.find((user) => user.id === targetUserId);
+    const emailResult = await queueNotificationEmail(targetUser, message, notificationRef.id);
     if (ui.notificationForm) ui.notificationForm.reset();
-    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Avviso inviato con successo.";
+    if (ui.notificationFeedback) {
+      ui.notificationFeedback.textContent = emailResult.queued
+        ? "Avviso inviato. Email messa in coda (e webhook usato se configurato)."
+        : "Avviso inviato. Nessuna email inviata (utente senza email).";
+    }
   } catch (error) {
     console.error("Errore invio avviso utente:", error);
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Errore durante il salvataggio dell'avviso.";
@@ -9491,11 +9646,13 @@ function maybeShowUserAlert() {
   closeManagementPanel();
   activeUserAlert = firstPending;
   if (ui.userAlertText) ui.userAlertText.textContent = firstPending.message || "";
+  renderActiveUserAlertAttachments();
   ui.userAlertModal?.classList.remove("hidden");
   ui.userAlertModal?.setAttribute("aria-hidden", "false");
 }
 
 function closeUserAlertModal() {
+  if (ui.userAlertAttachments) ui.userAlertAttachments.innerHTML = "";
   ui.userAlertModal?.classList.add("hidden");
   ui.userAlertModal?.setAttribute("aria-hidden", "true");
 }

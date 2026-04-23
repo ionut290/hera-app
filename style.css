@@ -1762,6 +1762,13 @@ textarea:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.notification-doc-viewer-frame {
+  width: 100%;
+  height: calc(100dvh - 70px);
+  border: 0;
+  background: #f8fafc;
+}
 .chat-modal-header {
   display: flex;
   justify-content: space-between;

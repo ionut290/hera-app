@@ -9186,6 +9186,7 @@ function subscribeGpsRequests() {
   if (unsubscribeGpsRequests) unsubscribeGpsRequests();
   unsubscribeGpsRequests = db
     .collection("gpsUpdateRequests")
+    .where("status", "==", "pending")
     .orderBy("createdAt", "desc")
     .limit(200)
     .onSnapshot((snapshot) => {
@@ -9221,7 +9222,12 @@ function renderGpsRequests() {
     return;
   }
   ui.gpsRequestsList.innerHTML = "";
-  gpsUpdateRequests.forEach((request) => {
+  const pendingRequests = gpsUpdateRequests.filter((request) => String(request.status || "pending") === "pending");
+  if (!pendingRequests.length) {
+    ui.gpsRequestsList.innerHTML = "<p class='muted'>Nessuna richiesta GPS.</p>";
+    return;
+  }
+  pendingRequests.forEach((request) => {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const when = request.createdAt && typeof request.createdAt.toDate === "function"
@@ -9234,9 +9240,8 @@ function renderGpsRequests() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
-    const canDecide = String(request.status || "pending") === "pending";
-    actions.appendChild(createButton("Accetta", () => approveGpsRequest(request), !canDecide));
-    actions.appendChild(createButton("Rifiuta", () => rejectGpsRequest(request), !canDecide));
+    actions.appendChild(createButton("Accetta", () => approveGpsRequest(request)));
+    actions.appendChild(createButton("Rifiuta", () => rejectGpsRequest(request)));
     row.appendChild(actions);
     ui.gpsRequestsList.appendChild(row);
   });

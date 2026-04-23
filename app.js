@@ -384,6 +384,7 @@ const ui = {
   notificationMessage: document.getElementById("notification-message"),
   notificationAttachments: document.getElementById("notification-attachments"),
   notificationSubmit: document.getElementById("notification-submit"),
+  notificationCancelUploadBtn: document.getElementById("notification-cancel-upload-btn"),
   notificationFeedback: document.getElementById("notification-feedback"),
   notificationsList: document.getElementById("notifications-list"),
   userAlertModal: document.getElementById("user-alert-modal"),
@@ -500,6 +501,8 @@ let isDrawingStrokeActive = false;
 let globalImpiantiFiltered = [];
 let userAlerts = [];
 let activeUserAlert = null;
+let notificationUploadAbortController = null;
+let notificationUploadInProgress = false;
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -985,6 +988,7 @@ ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
+ui.notificationCancelUploadBtn?.addEventListener("click", cancelNotificationUpload);
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
@@ -1746,6 +1750,7 @@ function updateAdminControls() {
   if (ui.notificationMessage) ui.notificationMessage.disabled = !canManage;
   if (ui.notificationAttachments) ui.notificationAttachments.disabled = !canManage;
   if (ui.notificationSubmit) ui.notificationSubmit.disabled = !canManage;
+  if (ui.notificationCancelUploadBtn) ui.notificationCancelUploadBtn.disabled = !canManage || !notificationUploadInProgress;
   renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
@@ -9502,14 +9507,39 @@ function mapFileNameForNotificationAttachment(fileName = "") {
   return `notifiche/${Date.now()}_${safeName}`;
 }
 
-async function uploadNotificationAttachments(files = []) {
+function setNotificationUploadState(inProgress) {
+  notificationUploadInProgress = Boolean(inProgress);
+  if (ui.notificationCancelUploadBtn) ui.notificationCancelUploadBtn.disabled = !notificationUploadInProgress || !canManageData();
+  if (ui.notificationSubmit) ui.notificationSubmit.disabled = notificationUploadInProgress || !canManageData();
+}
+
+function cancelNotificationUpload() {
+  if (!notificationUploadAbortController) return;
+  notificationUploadAbortController.abort();
+  notificationUploadAbortController = null;
+  setNotificationUploadState(false);
+  if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento allegati annullato.";
+}
+
+async function uploadNotificationAttachments(files = [], options = {}) {
   if (!files.length) return [];
   if (!driveAccessToken) {
     throw new Error("Google Drive non collegato. Collega Drive per allegare documenti alle notifiche.");
   }
   if (!driveReportsFolderId) await ensureDriveFolders();
+  const { signal = null, onProgress = null } = options;
+  let completed = 0;
   const uploads = await Promise.all(files.map(async (file) => {
-    const upload = await uploadBlobToDrive(file, mapFileNameForNotificationAttachment(file.name || "allegato"), file.type || "application/octet-stream", driveReportsFolderId);
+    if (signal?.aborted) throw new DOMException("Upload annullato", "AbortError");
+    const upload = await uploadBlobToDrive(
+      file,
+      mapFileNameForNotificationAttachment(file.name || "allegato"),
+      file.type || "application/octet-stream",
+      driveReportsFolderId,
+      { signal }
+    );
+    completed += 1;
+    if (typeof onProgress === "function") onProgress(completed, files.length, file.name || "allegato");
     return {
       name: file.name || "allegato",
       type: file.type || "application/octet-stream",
@@ -9548,6 +9578,10 @@ function closeNotificationDocumentViewer() {
 
 async function createUserNotification(event) {
   event.preventDefault();
+  if (notificationUploadInProgress) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento già in corso...";
+    return;
+  }
   if (!currentUser || !canManageData()) {
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Solo gli admin possono inviare avvisi.";
     return;
@@ -9555,13 +9589,26 @@ async function createUserNotification(event) {
   const targetUserId = String(ui.notificationUserSelect?.value || "").trim();
   const message = String(ui.notificationMessage?.value || "").trim();
   const files = Array.from(ui.notificationAttachments?.files || []);
+  const totalSizeMb = files.reduce((sum, file) => sum + Number(file.size || 0), 0) / (1024 * 1024);
+  if (totalSizeMb > 80) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Allegati troppo grandi (>80MB). Riduci il peso per velocizzare il caricamento.";
+    return;
+  }
   if (!targetUserId || !message) {
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona un utente e scrivi un avviso.";
     return;
   }
+  notificationUploadAbortController = new AbortController();
+  setNotificationUploadState(true);
   try {
-    if (ui.notificationFeedback) ui.notificationFeedback.textContent = files.length ? "Caricamento allegati..." : "Invio notifica...";
-    const attachments = await uploadNotificationAttachments(files);
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = files.length ? `Caricamento allegati (0/${files.length})...` : "Invio notifica...";
+    const attachments = await uploadNotificationAttachments(files, {
+      signal: notificationUploadAbortController.signal,
+      onProgress: (completed, total) => {
+        if (ui.notificationFeedback) ui.notificationFeedback.textContent = `Caricamento allegati (${completed}/${total})...`;
+      }
+    });
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Salvataggio notifica...";
     const notificationRef = await db.collection("userAlerts").add({
       targetUserId,
       message,
@@ -9580,8 +9627,15 @@ async function createUserNotification(event) {
         : "Avviso inviato. Nessuna email inviata (utente senza email).";
     }
   } catch (error) {
+    if (error?.name === "AbortError") {
+      if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento annullato.";
+      return;
+    }
     console.error("Errore invio avviso utente:", error);
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Errore durante il salvataggio dell'avviso.";
+  } finally {
+    notificationUploadAbortController = null;
+    setNotificationUploadState(false);
   }
 }
 
@@ -10829,11 +10883,12 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   return { id: created.id };
 }
 
-async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
+async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {}) {
   if (!driveAccessToken) {
     throw new Error("Google Drive non collegato.");
   }
   if (!folderId) await ensureDriveFolders();
+  const { signal = null } = options;
 
   const metadata = {
     name: fileName,
@@ -10847,13 +10902,15 @@ async function uploadBlobToDrive(blob, fileName, mimeType, folderId) {
 
   const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
     method: "POST",
-    body: form
+    body: form,
+    signal
   });
 
   await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${uploaded.id}/permissions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role: "reader", type: "anyone" })
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+    signal
   });
 
   return {
@@ -10976,11 +11033,18 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
   let attempt = 0;
   while (attempt <= retries) {
     const controller = new AbortController();
+    const externalSignal = options?.signal || null;
+    if (externalSignal?.aborted) {
+      throw new DOMException("Operazione annullata", "AbortError");
+    }
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) externalSignal.addEventListener("abort", onExternalAbort, { once: true });
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const mergedOptions = { ...options, signal: controller.signal };
       const response = await fetch(url, mergedOptions);
       clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
       if (attempt < retries && shouldRetryHttpStatus(response.status)) {
         await wait(baseDelayMs * (attempt + 1));
         attempt += 1;
@@ -10989,6 +11053,7 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
       if (attempt >= retries || !isRetryableNetworkError(error)) {
         throw error;
       }

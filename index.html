@@ -394,7 +394,10 @@
         <textarea id="notification-message" rows="4" placeholder="Scrivi l'avviso da mostrare all'utente" required></textarea>
         <input id="notification-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.xlsm,.xlsb,.csv,.ods,.fods,.txt,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
         <p class="muted">Allega documenti (PDF, Excel e altri formati). Verranno aperti dal destinatario dentro l'app.</p>
-        <button id="notification-submit" class="btn btn-primary" type="submit">Invia avviso</button>
+        <div class="item-actions">
+          <button id="notification-submit" class="btn btn-primary" type="submit">Invia avviso</button>
+          <button id="notification-cancel-upload-btn" class="btn" type="button" disabled>Annulla caricamento file</button>
+        </div>
       </form>
       <p id="notification-feedback" class="muted"></p>
       <h3>Notifiche attive</h3>

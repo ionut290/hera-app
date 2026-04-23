@@ -189,6 +189,7 @@ const ui = {
   openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
+  openPanelNotifiche: document.getElementById("open-panel-notifiche"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
@@ -207,6 +208,7 @@ const ui = {
   panelGlobal: document.getElementById("panel-global"),
   panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
+  panelNotifiche: document.getElementById("panel-notifiche"),
   panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
@@ -376,7 +378,17 @@ const ui = {
   globalImpiantoDetailsBody: document.getElementById("global-impianto-details-body"),
   globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
-  globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn")
+  globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
+  notificationForm: document.getElementById("notification-form"),
+  notificationUserSelect: document.getElementById("notification-user-select"),
+  notificationMessage: document.getElementById("notification-message"),
+  notificationSubmit: document.getElementById("notification-submit"),
+  notificationFeedback: document.getElementById("notification-feedback"),
+  notificationsList: document.getElementById("notifications-list"),
+  userAlertModal: document.getElementById("user-alert-modal"),
+  userAlertText: document.getElementById("user-alert-text"),
+  userAlertOkBtn: document.getElementById("user-alert-ok-btn"),
+  userAlertLaterBtn: document.getElementById("user-alert-later-btn")
 };
 
 let pendingRows = [];
@@ -400,6 +412,7 @@ let unsubscribePrivateDocs = null;
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
+let unsubscribeUserAlerts = null;
 let currentWorkBannerConfig = { text: "", enabled: false, speed: null, notes: [] };
 let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
@@ -479,6 +492,8 @@ let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
 let isDrawingStrokeActive = false;
 let globalImpiantiFiltered = [];
+let userAlerts = [];
+let activeUserAlert = null;
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -895,6 +910,7 @@ ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti")
 ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
 ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
@@ -962,6 +978,7 @@ ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoM
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.notificationForm?.addEventListener("submit", createUserNotification);
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
@@ -975,6 +992,8 @@ ui.enableNotificationsBtn?.addEventListener("click", async () => {
   await enablePushNotifications({ auto: false });
 });
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
+ui.userAlertOkBtn?.addEventListener("click", acknowledgeActiveUserAlert);
+ui.userAlertLaterBtn?.addEventListener("click", postponeActiveUserAlert);
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
@@ -1593,6 +1612,7 @@ auth.onAuthStateChanged((user) => {
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
   stopWorkBannerSubscription();
+  stopUserAlertsSubscription();
   stopChatRetentionLoop();
   stopHoursDeadlineAlertLoop();
   selectedCommessaId = "";
@@ -1653,12 +1673,14 @@ auth.onAuthStateChanged((user) => {
     subscribeGpsRequests();
     subscribeGlobalNotifications();
     subscribeWorkBanner();
+    subscribeUserAlerts();
     processPendingSheetExports();
     startChatRetentionLoop();
     startHoursDeadlineAlertLoop();
   } else {
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
+    closeUserAlertModal();
   }
   renderHeaderActivitySummary();
   renderExternalApps();
@@ -1668,7 +1690,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili, ui.openPanelNotifiche]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
@@ -1710,6 +1732,9 @@ function updateAdminControls() {
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.disabled = !canManage;
   if (ui.bannerDisableBtn) ui.bannerDisableBtn.disabled = !canManage;
   if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
+  if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = !canManage;
+  if (ui.notificationMessage) ui.notificationMessage.disabled = !canManage;
+  if (ui.notificationSubmit) ui.notificationSubmit.disabled = !canManage;
   renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
@@ -1737,6 +1762,8 @@ function updateAdminControls() {
     : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
   updateResourceFormByType();
   renderUserPermissionList();
+  renderNotificationTargetUsers();
+  renderNotificationsList();
   renderExternalApps();
 }
 
@@ -1779,11 +1806,12 @@ function openManagementPanel(panel) {
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
     global: { el: ui.panelGlobal, title: "Global" },
     banner: { el: ui.panelBanner, title: "Banner home" },
-    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" }
+    infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
+    notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -8891,6 +8919,7 @@ function subscribeUsers() {
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
     renderUserPermissionList();
+    renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
     checkAndSendHoursDeadlineAlerts();
@@ -8906,6 +8935,7 @@ function stopUsersSubscription() {
   deniedImpiantoActions = new Set();
   renderChatRecipients();
   renderUserPermissionList();
+  renderNotificationTargetUsers();
   renderHeaderActivitySummary();
   renderExternalApps();
 }
@@ -9315,6 +9345,174 @@ function renderUserPermissionList() {
     row.appendChild(actionBox);
     ui.userPermissionsList.appendChild(row);
   });
+}
+
+
+function getPlatformUserLabel(user) {
+  if (!user) return "Utente sconosciuto";
+  return String(user.displayName || user.email || user.id || "Utente").trim() || "Utente";
+}
+
+function renderNotificationTargetUsers() {
+  if (!ui.notificationUserSelect) return;
+  const previous = ui.notificationUserSelect.value;
+  ui.notificationUserSelect.innerHTML = "<option value=''>Seleziona utente registrato</option>";
+  platformUsers
+    .filter((user) => !adminEmails.has(normalizeEmail(user.email)))
+    .forEach((user) => {
+      const opt = document.createElement("option");
+      opt.value = user.id;
+      opt.textContent = `${getPlatformUserLabel(user)}${user.email ? ` (${user.email})` : ""}`;
+      ui.notificationUserSelect.appendChild(opt);
+    });
+  if (previous && platformUsers.some((user) => user.id === previous)) {
+    ui.notificationUserSelect.value = previous;
+  }
+}
+
+function renderNotificationsList() {
+  if (!ui.notificationsList) return;
+  if (!currentUser) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Fai login per vedere le notifiche.</p>";
+    return;
+  }
+  if (!canManageData()) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Solo gli admin possono gestire le notifiche.</p>";
+    return;
+  }
+  if (!userAlerts.length) {
+    ui.notificationsList.innerHTML = "<p class='muted'>Nessuna notifica disponibile.</p>";
+    return;
+  }
+  ui.notificationsList.innerHTML = "";
+  userAlerts.forEach((item) => {
+    const userLabel = getPlatformUserLabel(platformUsers.find((user) => user.id === item.targetUserId));
+    const row = document.createElement("article");
+    row.className = "simple-list-item stacked";
+    const status = item.acknowledgedAt ? "Confermata" : "In attesa";
+    row.innerHTML = `<strong>${escapeHTML(userLabel)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(status)}</small>`;
+    if (!item.acknowledgedAt) {
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+      actions.appendChild(createButton("Elimina", () => deleteUserNotification(item.id)));
+      row.appendChild(actions);
+    }
+    ui.notificationsList.appendChild(row);
+  });
+}
+
+async function createUserNotification(event) {
+  event.preventDefault();
+  if (!currentUser || !canManageData()) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Solo gli admin possono inviare avvisi.";
+    return;
+  }
+  const targetUserId = String(ui.notificationUserSelect?.value || "").trim();
+  const message = String(ui.notificationMessage?.value || "").trim();
+  if (!targetUserId || !message) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona un utente e scrivi un avviso.";
+    return;
+  }
+  try {
+    await db.collection("userAlerts").add({
+      targetUserId,
+      message,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.email || currentUser.uid || "admin",
+      acknowledgedAt: null,
+      acknowledgedBy: ""
+    });
+    if (ui.notificationForm) ui.notificationForm.reset();
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Avviso inviato con successo.";
+  } catch (error) {
+    console.error("Errore invio avviso utente:", error);
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Errore durante il salvataggio dell'avviso.";
+  }
+}
+
+async function deleteUserNotification(notificationId) {
+  if (!currentUser || !canManageData() || !notificationId) return;
+  const confirmed = window.confirm("Eliminare questa notifica?");
+  if (!confirmed) return;
+  await db.collection("userAlerts").doc(notificationId).delete();
+}
+
+function subscribeUserAlerts() {
+  if (unsubscribeUserAlerts) unsubscribeUserAlerts();
+  if (!currentUser) return;
+  if (canManageData()) {
+    unsubscribeUserAlerts = db.collection("userAlerts")
+      .orderBy("createdAt", "desc")
+      .limit(200)
+      .onSnapshot((snapshot) => {
+        userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderNotificationsList();
+      }, (error) => {
+        console.error("Errore caricamento notifiche admin:", error);
+      });
+    return;
+  }
+  unsubscribeUserAlerts = db.collection("userAlerts")
+    .where("targetUserId", "==", currentUser.uid)
+    .limit(30)
+    .onSnapshot((snapshot) => {
+      userAlerts = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((item) => !item.acknowledgedAt)
+        .sort((a, b) => {
+          const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+          const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+          return bMs - aMs;
+        });
+      maybeShowUserAlert();
+    }, (error) => {
+      console.error("Errore caricamento notifiche utente:", error);
+    });
+}
+
+function stopUserAlertsSubscription() {
+  if (unsubscribeUserAlerts) {
+    unsubscribeUserAlerts();
+    unsubscribeUserAlerts = null;
+  }
+  userAlerts = [];
+  activeUserAlert = null;
+  renderNotificationsList();
+}
+
+function maybeShowUserAlert() {
+  if (!currentUser || canManageData()) return;
+  const firstPending = userAlerts[0];
+  if (!firstPending) {
+    closeUserAlertModal();
+    return;
+  }
+  closeSideMenu();
+  closeManagementPanel();
+  activeUserAlert = firstPending;
+  if (ui.userAlertText) ui.userAlertText.textContent = firstPending.message || "";
+  ui.userAlertModal?.classList.remove("hidden");
+  ui.userAlertModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeUserAlertModal() {
+  ui.userAlertModal?.classList.add("hidden");
+  ui.userAlertModal?.setAttribute("aria-hidden", "true");
+}
+
+async function acknowledgeActiveUserAlert() {
+  if (!currentUser || !activeUserAlert?.id) return;
+  await db.collection("userAlerts").doc(activeUserAlert.id).set({
+    acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    acknowledgedBy: currentUser.uid || currentUser.email || ""
+  }, { merge: true });
+  activeUserAlert = null;
+  closeUserAlertModal();
+}
+
+function postponeActiveUserAlert() {
+  activeUserAlert = null;
+  closeUserAlertModal();
 }
 
 function renderExternalApps() {

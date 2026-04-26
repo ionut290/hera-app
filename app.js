@@ -1003,7 +1003,10 @@ ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
 ui.notificationCancelUploadBtn?.addEventListener("click", cancelNotificationUpload);
-ui.notificationOpenCalendarBtn?.addEventListener("click", openNotificationCalendarView);
+ui.notificationOpenCalendarBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  openNotificationCalendarView();
+});
 ui.notificationCalendarBackBtn?.addEventListener("click", closeNotificationCalendarView);
 ui.notificationCalendarPrevBtn?.addEventListener("click", () => moveNotificationCalendarMonth(-1));
 ui.notificationCalendarNextBtn?.addEventListener("click", () => moveNotificationCalendarMonth(1));
@@ -9842,15 +9845,16 @@ function postponeActiveUserAlert() {
 }
 
 function openNotificationCalendarView() {
-  if (!canManageData()) return;
-  ui.notificationMainView?.classList.add("hidden");
-  ui.notificationCalendarView?.classList.remove("hidden");
+  if (!ui.notificationCalendarView || !ui.notificationMainView) return;
+  ui.notificationMainView.classList.add("hidden");
+  ui.notificationCalendarView.classList.remove("hidden");
   renderNotificationCalendar();
 }
 
 function closeNotificationCalendarView() {
-  ui.notificationCalendarView?.classList.add("hidden");
-  ui.notificationMainView?.classList.remove("hidden");
+  if (!ui.notificationCalendarView || !ui.notificationMainView) return;
+  ui.notificationCalendarView.classList.add("hidden");
+  ui.notificationMainView.classList.remove("hidden");
 }
 
 function moveNotificationCalendarMonth(offset) {

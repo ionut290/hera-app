@@ -385,23 +385,46 @@
       <p id="banner-feedback" class="muted"></p>
     </div>
     <div id="panel-notifiche" class="management-panel hidden">
-      <h3>Invia avviso utente</h3>
-      <p class="muted">Solo gli admin possono creare notifiche mirate. L'utente vedrà l'avviso all'accesso.</p>
-      <form id="notification-form" class="resource-form">
-        <select id="notification-user-select" required>
-          <option value="">Seleziona utente registrato</option>
-        </select>
-        <textarea id="notification-message" rows="4" placeholder="Scrivi l'avviso da mostrare all'utente" required></textarea>
-        <input id="notification-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.xlsm,.xlsb,.csv,.ods,.fods,.txt,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
-        <p class="muted">Allega documenti (PDF, Excel e altri formati). Verranno aperti dal destinatario dentro l'app.</p>
+      <div id="notification-main-view">
+        <h3>Invia avviso utente</h3>
+        <p class="muted">Solo gli admin possono creare notifiche mirate o pianificate. I dettagli conferme sono nel calendario notifiche.</p>
         <div class="item-actions">
-          <button id="notification-submit" class="btn btn-primary" type="submit">Invia avviso</button>
-          <button id="notification-cancel-upload-btn" class="btn" type="button" disabled>Annulla caricamento file</button>
+          <button id="notification-open-calendar-btn" class="btn" type="button">📅 Calendario notifiche</button>
         </div>
-      </form>
-      <p id="notification-feedback" class="muted"></p>
-      <h3>Notifiche attive</h3>
-      <div id="notifications-list" class="simple-list"></div>
+        <form id="notification-form" class="resource-form">
+          <input id="notification-title" type="text" placeholder="Titolo notifica" required>
+          <textarea id="notification-message" rows="4" placeholder="Scrivi il testo notifica" required></textarea>
+          <input id="notification-date" type="date">
+          <label class="item-actions" for="notification-send-all-toggle">
+            <input id="notification-send-all-toggle" type="checkbox">
+            Invia a tutti gli utenti registrati
+          </label>
+          <select id="notification-user-select" multiple size="6"></select>
+          <p class="muted">Seleziona uno o più utenti (Ctrl/Cmd + click) oppure abilita l'invio a tutti.</p>
+          <input id="notification-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.xlsm,.xlsb,.csv,.ods,.fods,.txt,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
+          <p class="muted">Allega documenti (PDF, Excel e altri formati). Verranno aperti dal destinatario dentro l'app.</p>
+          <div class="item-actions">
+            <button id="notification-submit" class="btn btn-primary" type="submit">Salva notifica</button>
+            <button id="notification-cancel-upload-btn" class="btn" type="button" disabled>Annulla caricamento file</button>
+          </div>
+        </form>
+        <p id="notification-feedback" class="muted"></p>
+        <h3>Notifiche attive</h3>
+        <div id="notifications-list" class="simple-list"></div>
+      </div>
+      <div id="notification-calendar-view" class="hidden">
+        <div class="item-actions">
+          <button id="notification-calendar-back-btn" class="btn" type="button">← Torna a Gestione notifiche</button>
+        </div>
+        <h3>Calendario notifiche</h3>
+        <div class="notification-calendar-head">
+          <button id="notification-calendar-prev-btn" class="btn" type="button">◀</button>
+          <strong id="notification-calendar-month-label">-</strong>
+          <button id="notification-calendar-next-btn" class="btn" type="button">▶</button>
+        </div>
+        <div id="notification-calendar-grid" class="notification-calendar-grid"></div>
+        <div id="notification-day-detail" class="simple-list"></div>
+      </div>
     </div>
     <div id="panel-info-utili" class="management-panel hidden">
       <h3>Nuova informazione utile</h3>

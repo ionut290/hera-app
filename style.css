@@ -1769,6 +1769,49 @@ textarea:focus-visible {
   border: 0;
   background: #f8fafc;
 }
+
+.notification-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.notification-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.notification-calendar-cell {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.notification-calendar-weekday {
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.notification-calendar-day {
+  cursor: pointer;
+}
+
+.notification-calendar-day.has-notification {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  font-weight: 700;
+}
+
+.notification-calendar-day.is-selected {
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.3);
+}
 .chat-modal-header {
   display: flex;
   justify-content: space-between;

@@ -380,6 +380,9 @@ const ui = {
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
   globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
   notificationForm: document.getElementById("notification-form"),
+  notificationTitle: document.getElementById("notification-title"),
+  notificationDate: document.getElementById("notification-date"),
+  notificationSendAllToggle: document.getElementById("notification-send-all-toggle"),
   notificationUserSelect: document.getElementById("notification-user-select"),
   notificationMessage: document.getElementById("notification-message"),
   notificationAttachments: document.getElementById("notification-attachments"),
@@ -387,6 +390,15 @@ const ui = {
   notificationCancelUploadBtn: document.getElementById("notification-cancel-upload-btn"),
   notificationFeedback: document.getElementById("notification-feedback"),
   notificationsList: document.getElementById("notifications-list"),
+  notificationMainView: document.getElementById("notification-main-view"),
+  notificationOpenCalendarBtn: document.getElementById("notification-open-calendar-btn"),
+  notificationCalendarView: document.getElementById("notification-calendar-view"),
+  notificationCalendarBackBtn: document.getElementById("notification-calendar-back-btn"),
+  notificationCalendarPrevBtn: document.getElementById("notification-calendar-prev-btn"),
+  notificationCalendarNextBtn: document.getElementById("notification-calendar-next-btn"),
+  notificationCalendarMonthLabel: document.getElementById("notification-calendar-month-label"),
+  notificationCalendarGrid: document.getElementById("notification-calendar-grid"),
+  notificationDayDetail: document.getElementById("notification-day-detail"),
   userAlertModal: document.getElementById("user-alert-modal"),
   userAlertText: document.getElementById("user-alert-text"),
   userAlertAttachments: document.getElementById("user-alert-attachments"),
@@ -503,6 +515,8 @@ let userAlerts = [];
 let activeUserAlert = null;
 let notificationUploadAbortController = null;
 let notificationUploadInProgress = false;
+let notificationCalendarCursor = new Date();
+let selectedNotificationCalendarDateKey = "";
 const impiantoMarkerByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -989,6 +1003,14 @@ ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
 ui.notificationCancelUploadBtn?.addEventListener("click", cancelNotificationUpload);
+ui.notificationOpenCalendarBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  openNotificationCalendarView();
+});
+ui.notificationCalendarBackBtn?.addEventListener("click", closeNotificationCalendarView);
+ui.notificationCalendarPrevBtn?.addEventListener("click", () => moveNotificationCalendarMonth(-1));
+ui.notificationCalendarNextBtn?.addEventListener("click", () => moveNotificationCalendarMonth(1));
+ui.notificationSendAllToggle?.addEventListener("change", onNotificationSendAllChange);
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
@@ -1746,11 +1768,15 @@ function updateAdminControls() {
   if (ui.bannerSpeedInput) ui.bannerSpeedInput.disabled = !canManage;
   if (ui.bannerDisableBtn) ui.bannerDisableBtn.disabled = !canManage;
   if (ui.bannerConfigForm && ui.bannerConfigForm.querySelector("button[type='submit']")) ui.bannerConfigForm.querySelector("button[type='submit']").disabled = !canManage;
-  if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = !canManage;
+  if (ui.notificationTitle) ui.notificationTitle.disabled = !canManage;
+  if (ui.notificationDate) ui.notificationDate.disabled = !canManage;
+  if (ui.notificationSendAllToggle) ui.notificationSendAllToggle.disabled = !canManage;
+  if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = !canManage || Boolean(ui.notificationSendAllToggle?.checked);
   if (ui.notificationMessage) ui.notificationMessage.disabled = !canManage;
   if (ui.notificationAttachments) ui.notificationAttachments.disabled = !canManage;
   if (ui.notificationSubmit) ui.notificationSubmit.disabled = !canManage;
   if (ui.notificationCancelUploadBtn) ui.notificationCancelUploadBtn.disabled = !canManage || !notificationUploadInProgress;
+  if (ui.notificationOpenCalendarBtn) ui.notificationOpenCalendarBtn.disabled = !canManage;
   renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
   if (ui.externalAppName) ui.externalAppName.disabled = !auth.currentUser;
   if (ui.externalAppUrl) ui.externalAppUrl.disabled = !auth.currentUser;
@@ -1833,6 +1859,7 @@ function openManagementPanel(panel) {
   ui.managementPage.classList.remove("hidden");
   ui.managementPage.setAttribute("aria-hidden", "false");
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
+  if (panel === "notifiche") closeNotificationCalendarView();
   closeSideMenu();
 }
 
@@ -9371,19 +9398,22 @@ function getPlatformUserLabel(user) {
 
 function renderNotificationTargetUsers() {
   if (!ui.notificationUserSelect) return;
-  const previous = ui.notificationUserSelect.value;
-  ui.notificationUserSelect.innerHTML = "<option value=''>Seleziona utente registrato</option>";
-  platformUsers
-    .filter((user) => !adminEmails.has(normalizeEmail(user.email)))
-    .forEach((user) => {
-      const opt = document.createElement("option");
-      opt.value = user.id;
-      opt.textContent = `${getPlatformUserLabel(user)}${user.email ? ` (${user.email})` : ""}`;
-      ui.notificationUserSelect.appendChild(opt);
-    });
-  if (previous && platformUsers.some((user) => user.id === previous)) {
-    ui.notificationUserSelect.value = previous;
-  }
+  const previous = Array.from(ui.notificationUserSelect.selectedOptions || []).map((opt) => opt.value);
+  ui.notificationUserSelect.innerHTML = "";
+  const recipients = platformUsers.filter((user) => !adminEmails.has(normalizeEmail(user.email)));
+  recipients.forEach((user) => {
+    const opt = document.createElement("option");
+    opt.value = user.id;
+    opt.textContent = `${getPlatformUserLabel(user)}${user.email ? ` (${user.email})` : ""}`;
+    if (previous.includes(user.id)) opt.selected = true;
+    ui.notificationUserSelect.appendChild(opt);
+  });
+  onNotificationSendAllChange();
+}
+
+function onNotificationSendAllChange() {
+  const sendAll = Boolean(ui.notificationSendAllToggle?.checked);
+  if (ui.notificationUserSelect) ui.notificationUserSelect.disabled = sendAll;
 }
 
 function renderNotificationsList() {
@@ -9402,12 +9432,13 @@ function renderNotificationsList() {
   }
   ui.notificationsList.innerHTML = "";
   userAlerts.forEach((item) => {
-    const userLabel = getPlatformUserLabel(platformUsers.find((user) => user.id === item.targetUserId));
+    const userLabel = formatNotificationRecipientsLabel(item);
     const row = document.createElement("article");
     row.className = "simple-list-item stacked";
-    const status = item.acknowledgedAt ? "Confermata" : "In attesa";
+    const status = item.scheduledDateKey && item.scheduledDateKey > getDateKeyFromLocalDate(new Date()) ? "Programm. futura" : "Attiva";
+    const title = String(item.title || "Notifica").trim();
     const attachments = Array.isArray(item.attachments) ? item.attachments : [];
-    row.innerHTML = `<strong>${escapeHTML(userLabel)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(status)}</small>`;
+    row.innerHTML = `<strong>${escapeHTML(title)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(userLabel)} • ${escapeHTML(status)}</small>`;
     const attachmentsBox = document.createElement("div");
     if (!attachments.length) {
       attachmentsBox.innerHTML = "<small>Nessun allegato.</small>";
@@ -9431,9 +9462,29 @@ function renderNotificationsList() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
     actions.appendChild(createButton("Elimina", () => deleteUserNotification(item.id)));
+    actions.appendChild(createButton("Dettaglio giorno", () => openNotificationDayDetail(getNotificationPrimaryDateKey(item))));
     row.appendChild(actions);
     ui.notificationsList.appendChild(row);
   });
+}
+
+function getNotificationRecipientUserIds(alertItem) {
+  if (!alertItem) return [];
+  if (Array.isArray(alertItem.targetUserIds)) return alertItem.targetUserIds.map((id) => String(id || "").trim()).filter(Boolean);
+  if (alertItem.targetUserId) return [String(alertItem.targetUserId).trim()].filter(Boolean);
+  return [];
+}
+
+function formatNotificationRecipientsLabel(alertItem) {
+  if (alertItem?.sendToAllRegistered) return "Destinatari: tutti gli utenti registrati";
+  const ids = getNotificationRecipientUserIds(alertItem);
+  if (!ids.length) return "Destinatari non impostati";
+  const labels = ids.map((id) => getPlatformUserLabel(platformUsers.find((u) => u.id === id)));
+  return `Destinatari: ${labels.join(", ")}`;
+}
+
+function getNotificationPrimaryDateKey(item) {
+  return String(item?.scheduledDateKey || item?.createdDateKey || "").trim();
 }
 
 function renderActiveUserAlertAttachments() {
@@ -9586,16 +9637,25 @@ async function createUserNotification(event) {
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Solo gli admin possono inviare avvisi.";
     return;
   }
-  const targetUserId = String(ui.notificationUserSelect?.value || "").trim();
+  const sendToAllRegistered = Boolean(ui.notificationSendAllToggle?.checked);
+  const targetUserIds = sendToAllRegistered
+    ? []
+    : Array.from(ui.notificationUserSelect?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean);
+  const title = String(ui.notificationTitle?.value || "").trim();
   const message = String(ui.notificationMessage?.value || "").trim();
+  const scheduledDateKey = String(ui.notificationDate?.value || "").trim();
   const files = Array.from(ui.notificationAttachments?.files || []);
   const totalSizeMb = files.reduce((sum, file) => sum + Number(file.size || 0), 0) / (1024 * 1024);
   if (totalSizeMb > 80) {
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Allegati troppo grandi (>80MB). Riduci il peso per velocizzare il caricamento.";
     return;
   }
-  if (!targetUserId || !message) {
-    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona un utente e scrivi un avviso.";
+  if (!title || !message) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Inserisci titolo e testo notifica.";
+    return;
+  }
+  if (!sendToAllRegistered && !targetUserIds.length) {
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Seleziona almeno un utente o scegli invio a tutti.";
     return;
   }
   notificationUploadAbortController = new AbortController();
@@ -9609,22 +9669,31 @@ async function createUserNotification(event) {
       }
     });
     if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Salvataggio notifica...";
+    const createdDateKey = getDateKeyFromLocalDate(new Date());
     const notificationRef = await db.collection("userAlerts").add({
-      targetUserId,
+      title,
+      sendToAllRegistered,
+      targetUserIds,
       message,
       attachments,
+      scheduledDateKey: scheduledDateKey || "",
+      createdDateKey,
+      status: scheduledDateKey && scheduledDateKey > createdDateKey ? "scheduled" : "active",
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: currentUser.email || currentUser.uid || "admin",
-      acknowledgedAt: null,
-      acknowledgedBy: ""
+      acknowledgedUsers: 0
     });
-    const targetUser = platformUsers.find((user) => user.id === targetUserId);
-    const emailResult = await queueNotificationEmail(targetUser, message, notificationRef.id);
+    const targetUsers = sendToAllRegistered
+      ? platformUsers.filter((user) => !adminEmails.has(normalizeEmail(user.email)))
+      : platformUsers.filter((user) => targetUserIds.includes(user.id));
+    const emailResults = await Promise.all(targetUsers.map((targetUser) => queueNotificationEmail(targetUser, message, notificationRef.id)));
+    const hasQueued = emailResults.some((result) => result?.queued);
     if (ui.notificationForm) ui.notificationForm.reset();
+    onNotificationSendAllChange();
     if (ui.notificationFeedback) {
-      ui.notificationFeedback.textContent = emailResult.queued
-        ? "Avviso inviato. Email messa in coda (e webhook usato se configurato)."
-        : "Avviso inviato. Nessuna email inviata (utente senza email).";
+      ui.notificationFeedback.textContent = hasQueued
+        ? "Notifica salvata. Email messe in coda per i destinatari con email."
+        : "Notifica salvata. Nessuna email inviata (destinatari senza email).";
     }
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -9656,18 +9725,25 @@ function subscribeUserAlerts() {
       .onSnapshot((snapshot) => {
         userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         renderNotificationsList();
+        renderNotificationCalendar();
       }, (error) => {
         console.error("Errore caricamento notifiche admin:", error);
       });
     return;
   }
   unsubscribeUserAlerts = db.collection("userAlerts")
-    .where("targetUserId", "==", currentUser.uid)
     .limit(30)
     .onSnapshot((snapshot) => {
+      const todayKey = getDateKeyFromLocalDate(new Date());
       userAlerts = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((item) => !item.acknowledgedAt)
+        .filter((item) => {
+          const userTargets = getNotificationRecipientUserIds(item);
+          const belongsToUser = item.sendToAllRegistered || userTargets.includes(currentUser.uid);
+          if (!belongsToUser) return false;
+          const dateKey = String(item.scheduledDateKey || "").trim();
+          return !dateKey || dateKey <= todayKey;
+        })
         .sort((a, b) => {
           const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
           const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
@@ -9691,7 +9767,7 @@ function stopUserAlertsSubscription() {
 
 function maybeShowUserAlert() {
   if (!currentUser || canManageData()) return;
-  const firstPending = userAlerts[0];
+  const firstPending = userAlerts.find((alertItem) => !Boolean(alertItem?.ackByUserIds?.[currentUser.uid]));
   if (!firstPending) {
     closeUserAlertModal();
     return;
@@ -9699,7 +9775,7 @@ function maybeShowUserAlert() {
   closeSideMenu();
   closeManagementPanel();
   activeUserAlert = firstPending;
-  if (ui.userAlertText) ui.userAlertText.textContent = firstPending.message || "";
+  if (ui.userAlertText) ui.userAlertText.textContent = `${firstPending.title ? `${firstPending.title}\n\n` : ""}${firstPending.message || ""}`;
   renderActiveUserAlertAttachments();
   ui.userAlertModal?.classList.remove("hidden");
   ui.userAlertModal?.setAttribute("aria-hidden", "false");
@@ -9713,17 +9789,172 @@ function closeUserAlertModal() {
 
 async function acknowledgeActiveUserAlert() {
   if (!currentUser || !activeUserAlert?.id) return;
-  await db.collection("userAlerts").doc(activeUserAlert.id).set({
+  const acknowledgementId = `${activeUserAlert.id}__${currentUser.uid}`;
+  const acknowledgementRef = db.collection("userAlertAcknowledgements").doc(acknowledgementId);
+  const existing = await acknowledgementRef.get();
+  if (existing.exists) {
+    activeUserAlert = null;
+    closeUserAlertModal();
+    return;
+  }
+  const now = new Date();
+  await acknowledgementRef.set({
+    notificationId: activeUserAlert.id,
+    userId: currentUser.uid || "",
+    userName: currentUser.displayName || currentUser.email || "Utente",
     acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    acknowledgedBy: currentUser.uid || currentUser.email || ""
+    acknowledgedDateKey: getDateKeyFromLocalDate(now)
   }, { merge: true });
+  await db.collection("userAlerts").doc(activeUserAlert.id).set({
+    [`ackByUserIds.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp(),
+    lastAcknowledgedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  await sendNotificationAckToAdmins(activeUserAlert, now);
   activeUserAlert = null;
   closeUserAlertModal();
+}
+
+async function sendNotificationAckToAdmins(alertItem, ackDate = new Date()) {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const whenLabel = ackDate.toLocaleString("it-IT");
+  const text = `✅ NOTIFICA CONFERMATA\nL’utente ${currentUser?.displayName || currentUser?.email || "Utente"} ha premuto “OK, HO CAPITO”\nNotifica: ${alertItem?.title || "Notifica"}\nData/Ora: ${whenLabel}`;
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser?.uid || "system",
+    senderName: "Sistema notifiche",
+    senderEmail: currentUser?.email || "",
+    kind: "system",
+    metadata: {
+      type: "notification_ack",
+      notificationId: alertItem?.id || "",
+      notificationTitle: alertItem?.title || "",
+      acknowledgedByUserId: currentUser?.uid || "",
+      acknowledgedByUserName: currentUser?.displayName || currentUser?.email || "Utente",
+      acknowledgedAt: ackDate.toISOString()
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })));
 }
 
 function postponeActiveUserAlert() {
   activeUserAlert = null;
   closeUserAlertModal();
+}
+
+function openNotificationCalendarView() {
+  if (!ui.notificationCalendarView || !ui.notificationMainView) return;
+  ui.notificationMainView.classList.add("hidden");
+  ui.notificationCalendarView.classList.remove("hidden");
+  renderNotificationCalendar();
+}
+
+function closeNotificationCalendarView() {
+  if (!ui.notificationCalendarView || !ui.notificationMainView) return;
+  ui.notificationCalendarView.classList.add("hidden");
+  ui.notificationMainView.classList.remove("hidden");
+}
+
+function moveNotificationCalendarMonth(offset) {
+  notificationCalendarCursor = new Date(notificationCalendarCursor.getFullYear(), notificationCalendarCursor.getMonth() + offset, 1);
+  renderNotificationCalendar();
+}
+
+function renderNotificationCalendar() {
+  if (!ui.notificationCalendarGrid || !ui.notificationCalendarMonthLabel) return;
+  const monthStart = new Date(notificationCalendarCursor.getFullYear(), notificationCalendarCursor.getMonth(), 1);
+  const monthLabel = monthStart.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  ui.notificationCalendarMonthLabel.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  const weekdayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+  const dayMap = new Map();
+  userAlerts.forEach((item) => {
+    const key = getNotificationPrimaryDateKey(item);
+    if (!key) return;
+    if (!dayMap.has(key)) dayMap.set(key, []);
+    dayMap.get(key).push(item);
+  });
+  const firstWeekday = (monthStart.getDay() + 6) % 7;
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  ui.notificationCalendarGrid.innerHTML = "";
+  weekdayLabels.forEach((label) => {
+    const header = document.createElement("div");
+    header.className = "notification-calendar-cell notification-calendar-weekday";
+    header.textContent = label;
+    ui.notificationCalendarGrid.appendChild(header);
+  });
+  for (let i = 0; i < firstWeekday; i += 1) {
+    const empty = document.createElement("div");
+    empty.className = "notification-calendar-cell is-empty";
+    ui.notificationCalendarGrid.appendChild(empty);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+    const dateKey = getDateKeyFromLocalDate(date);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "notification-calendar-cell notification-calendar-day";
+    btn.textContent = String(day);
+    if (dayMap.has(dateKey)) btn.classList.add("has-notification");
+    if (selectedNotificationCalendarDateKey === dateKey) btn.classList.add("is-selected");
+    btn.addEventListener("click", () => openNotificationDayDetail(dateKey));
+    ui.notificationCalendarGrid.appendChild(btn);
+  }
+}
+
+async function openNotificationDayDetail(dateKey) {
+  selectedNotificationCalendarDateKey = String(dateKey || "").trim();
+  renderNotificationCalendar();
+  if (!ui.notificationDayDetail) return;
+  if (!selectedNotificationCalendarDateKey) {
+    ui.notificationDayDetail.innerHTML = "";
+    return;
+  }
+  const dateLabel = new Date(`${selectedNotificationCalendarDateKey}T00:00:00`).toLocaleDateString("it-IT");
+  const dayItems = userAlerts.filter((item) => getNotificationPrimaryDateKey(item) === selectedNotificationCalendarDateKey);
+  ui.notificationDayDetail.innerHTML = `<h4>Dettaglio ${escapeHTML(dateLabel)}</h4>`;
+  const addButton = createButton("➕ Programma notifica per questo giorno", () => openScheduledNotificationForm(selectedNotificationCalendarDateKey));
+  ui.notificationDayDetail.appendChild(addButton);
+  if (!dayItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Nessuna notifica registrata per questo giorno.";
+    ui.notificationDayDetail.appendChild(empty);
+    return;
+  }
+  const ackSnapshot = await db.collection("userAlertAcknowledgements").where("acknowledgedDateKey", "==", selectedNotificationCalendarDateKey).get();
+  const acknowledgements = ackSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  dayItems.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "simple-list-item stacked";
+    const recipientsIds = item.sendToAllRegistered
+      ? platformUsers.filter((user) => !adminEmails.has(normalizeEmail(user.email))).map((user) => user.id)
+      : getNotificationRecipientUserIds(item);
+    const recipientLabels = recipientsIds.map((id) => getPlatformUserLabel(platformUsers.find((u) => u.id === id)));
+    const itemAcks = acknowledgements.filter((ack) => String(ack.notificationId || "") === String(item.id || ""));
+    const ackedIds = new Set(itemAcks.map((ack) => String(ack.userId || "")));
+    const pendingLabels = recipientsIds.filter((id) => !ackedIds.has(id)).map((id) => getPlatformUserLabel(platformUsers.find((u) => u.id === id)));
+    const ackRows = itemAcks.map((ack) => {
+      const when = ack.acknowledgedAt?.toDate ? ack.acknowledgedAt.toDate().toLocaleString("it-IT") : "-";
+      return `<li>${escapeHTML(ack.userName || ack.userId || "Utente")} • ${escapeHTML(when)}</li>`;
+    }).join("");
+    card.innerHTML = `
+      <strong>${escapeHTML(item.title || "Notifica")}</strong>
+      <p>${escapeHTML(item.message || "")}</p>
+      <small>${escapeHTML(`Destinatari: ${recipientLabels.join(", ") || "-"}`)}</small>
+      <small>Confermati: ${itemAcks.length}</small>
+      <small>Non confermati: ${pendingLabels.length ? escapeHTML(pendingLabels.join(", ")) : "Nessuno"}</small>
+      <ul>${ackRows || "<li>Nessuna conferma</li>"}</ul>
+    `;
+    ui.notificationDayDetail.appendChild(card);
+  });
+}
+
+function openScheduledNotificationForm(dateKey) {
+  closeNotificationCalendarView();
+  if (ui.notificationDate) ui.notificationDate.value = dateKey;
+  ui.notificationTitle?.focus();
 }
 
 function renderExternalApps() {
@@ -9990,6 +10221,8 @@ function countUnreadMessages(messages) {
 
 function canViewMessage(message) {
   if (!currentUser) return false;
+  const metadataType = String(message?.metadata?.type || "");
+  if (metadataType === "notification_ack" && !canManageData()) return false;
   if (!message.recipientId) return true;
   return message.recipientId === currentUser.uid || message.senderId === currentUser.uid;
 }

@@ -380,6 +380,18 @@ const ui = {
   globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
   globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
+  globalReportModal: document.getElementById("global-report-modal"),
+  globalReportCloseBtn: document.getElementById("global-report-close-btn"),
+  globalReportForm: document.getElementById("global-report-form"),
+  globalReportImpiantoSelect: document.getElementById("global-report-impianto-select"),
+  globalReportIdSap: document.getElementById("global-report-id-sap"),
+  globalReportDenominazione: document.getElementById("global-report-denominazione"),
+  globalReportComune: document.getElementById("global-report-comune"),
+  globalReportVia: document.getElementById("global-report-via"),
+  globalReportCoordinate: document.getElementById("global-report-coordinate"),
+  globalReportDitta: document.getElementById("global-report-ditta"),
+  globalReportText: document.getElementById("global-report-text"),
+  globalReportFeedback: document.getElementById("global-report-feedback"),
   notificationForm: document.getElementById("notification-form"),
   notificationTitle: document.getElementById("notification-title"),
   notificationDate: document.getElementById("notification-date"),
@@ -504,6 +516,7 @@ let globalImpianti = [];
 let globalImpiantoSearchTerm = "";
 let selectedGlobalImpiantoKey = "";
 let selectedGlobalImpianto = null;
+let selectedGlobalSegnalazioneKey = "";
 let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: false };
 let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
 let isMapFullscreenPageOpen = false;
@@ -1000,6 +1013,12 @@ ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSu
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
 ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
 ui.globalCommesseLista?.addEventListener("click", onGlobalCommesseListClick);
+ui.globalReportCloseBtn?.addEventListener("click", closeGlobalSegnalazioneModal);
+ui.globalReportForm?.addEventListener("submit", submitGlobalSegnalazioneWhatsapp);
+ui.globalReportImpiantoSelect?.addEventListener("change", onGlobalSegnalazioneImpiantoChange);
+ui.globalReportModal?.addEventListener("click", (event) => {
+  if (event.target === ui.globalReportModal) closeGlobalSegnalazioneModal();
+});
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
@@ -4308,6 +4327,7 @@ function onGlobalCommessaSelectionChanged() {
   selectedGlobalImpianto = null;
   selectedGlobalImpiantoKey = "";
   closeGlobalImpiantoModal();
+  closeGlobalSegnalazioneModal();
   stopGlobalImpiantiSubscription();
   if (selectedGlobalCommessaId) subscribeGlobalImpianti();
   refreshGlobalImportButtons();
@@ -4316,6 +4336,7 @@ function onGlobalCommessaSelectionChanged() {
     globalImpianti = [];
     globalImpiantoSearchTerm = "";
     if (ui.globalImpiantoSearch) ui.globalImpiantoSearch.value = "";
+    renderGlobalSegnalazioneImpiantiOptions();
     renderGlobalImpianti();
     renderGlobalMap();
   }
@@ -4330,6 +4351,7 @@ function subscribeGlobalImpianti() {
     .onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       globalImpianti = combineImpiantiForView(rawImpianti);
+      renderGlobalSegnalazioneImpiantiOptions();
       renderGlobalImpianti();
       renderGlobalMap();
     }, (error) => {
@@ -4809,25 +4831,113 @@ function formatExtraFieldLabel(key) {
 }
 
 function shareGlobalImpiantoViaWhatsapp(impianto) {
+  openGlobalSegnalazioneModal(impianto);
+}
+
+function renderGlobalSegnalazioneImpiantiOptions() {
+  if (!ui.globalReportImpiantoSelect) return;
+  const current = selectedGlobalSegnalazioneKey;
+  const options = globalImpianti
+    .slice()
+    .sort((a, b) => String(a.denominazione || "").localeCompare(String(b.denominazione || ""), "it"))
+    .map((impianto) => {
+      const key = buildImpiantoKey(impianto);
+      return `<option value="${escapeHTML(key)}">${escapeHTML(impianto.denominazione || "Impianto")} • ${escapeHTML(impianto.idSap || "-")}</option>`;
+    });
+  ui.globalReportImpiantoSelect.innerHTML = `<option value="">Seleziona impianto Global</option>${options.join("")}`;
+  if (current) ui.globalReportImpiantoSelect.value = current;
+}
+
+function openGlobalSegnalazioneModal(impianto = null) {
+  renderGlobalSegnalazioneImpiantiOptions();
+  if (ui.globalReportText) ui.globalReportText.value = "";
+  if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = globalImpianti.length ? "" : "Nessun impianto disponibile nella commessa Global selezionata.";
+  ui.globalReportModal?.classList.remove("hidden");
+  ui.globalReportModal?.setAttribute("aria-hidden", "false");
+
+  const preferred = impianto || selectedGlobalImpianto || null;
+  if (preferred) {
+    const key = buildImpiantoKey(preferred);
+    if (ui.globalReportImpiantoSelect) ui.globalReportImpiantoSelect.value = key;
+    applyGlobalSegnalazioneImpianto(preferred);
+  } else {
+    applyGlobalSegnalazioneImpianto(null);
+  }
+}
+
+function closeGlobalSegnalazioneModal() {
+  ui.globalReportModal?.classList.add("hidden");
+  ui.globalReportModal?.setAttribute("aria-hidden", "true");
+  selectedGlobalSegnalazioneKey = "";
+}
+
+function onGlobalSegnalazioneImpiantoChange(event) {
+  const key = String(event.target?.value || "").trim();
+  const impianto = globalImpianti.find((row) => buildImpiantoKey(row) === key) || null;
+  applyGlobalSegnalazioneImpianto(impianto);
+}
+
+function applyGlobalSegnalazioneImpianto(impianto) {
+  selectedGlobalSegnalazioneKey = impianto ? buildImpiantoKey(impianto) : "";
+  const via = impianto?.descrizioneVia || impianto?.indirizzo || "-";
+  const coordinateText = impianto ? formatGpsLabel(impianto) : "-";
+  if (ui.globalReportIdSap) ui.globalReportIdSap.value = impianto?.idSap || impianto?.codiceHera || "";
+  if (ui.globalReportDenominazione) ui.globalReportDenominazione.value = impianto?.denominazione || "";
+  if (ui.globalReportComune) ui.globalReportComune.value = impianto?.comune || "";
+  if (ui.globalReportVia) ui.globalReportVia.value = via === "-" ? "" : via;
+  if (ui.globalReportCoordinate) ui.globalReportCoordinate.value = coordinateText === "Coordinate GPS non disponibili" ? "" : coordinateText;
+  if (ui.globalReportDitta) ui.globalReportDitta.value = impianto?.dittaEsecutrice || "";
+}
+
+async function submitGlobalSegnalazioneWhatsapp(event) {
+  event.preventDefault();
+  const key = String(ui.globalReportImpiantoSelect?.value || "").trim();
+  const impianto = globalImpianti.find((row) => buildImpiantoKey(row) === key);
+  const testoSegnalazione = String(ui.globalReportText?.value || "").trim();
+  if (!impianto) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Seleziona prima un impianto Global.";
+    return;
+  }
+  if (!testoSegnalazione) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Inserisci il testo segnalazione.";
+    return;
+  }
+  const message = buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione);
+  if (!safeOpenWhatsAppMessage(message)) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Impossibile aprire WhatsApp su questo dispositivo.";
+    return;
+  }
+  if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "WhatsApp aperto con il messaggio precompilato.";
+}
+
+function buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione) {
   const hasCoords = hasValidGlobalCoordinates(impianto);
-  const coordinateLabel = hasCoords ? `${impianto.gpsY},${impianto.gpsX}` : "Coordinate GPS non disponibili";
-  const navigateUrl = hasCoords ? `https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}` : "";
+  const coordinateRaw = hasCoords ? `${impianto.gpsY},${impianto.gpsX}` : "Coordinate GPS non disponibili";
+  const mapsUrl = hasCoords ? `https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}` : "";
+  const coordinateLine = hasCoords
+    ? `🌐 Coordinate: ${coordinateRaw} ➡️ 🧭 Naviga verso l’impianto`
+    : `🌐 Coordinate: ${coordinateRaw}`;
   const lines = [
-    "🌿 SEGNALAZIONE MANUTENZIONE VERDE",
+    "🟢 SEGNALAZIONE MANUTENZIONE VERDE 🌿",
     "",
-    `ID-SAP: ${impianto.idSap || impianto.codiceHera || "-"}`,
-    `Impianto: ${impianto.denominazione || "-"}`,
-    `Comune: ${impianto.comune || "-"}`,
-    `Descrizione via: ${impianto.descrizioneVia || impianto.indirizzo || "-"}`,
-    `Coordinate: ${coordinateLabel}`,
-    `Ditta esecutrice: ${impianto.dittaEsecutrice || "-"}`,
+    "Si segnala che all’impianto:",
     "",
-    "Problema segnalato:",
-    "__________",
+    `🆔 ID-SAP: ${impianto.idSap || impianto.codiceHera || "-"}`,
+    `🏭 Impianto: ${impianto.denominazione || "-"}`,
+    `🏙️ Comune: ${impianto.comune || "-"}`,
+    `📍 Via: ${impianto.descrizioneVia || impianto.indirizzo || "-"}`,
+    coordinateLine,
+    `🏢 Ditta esecutrice: ${impianto.dittaEsecutrice || "-"}`,
     "",
-    `Link Google Maps: ${navigateUrl || "Coordinate mancanti"}`
+    "📢 Segnalazione:",
+    testoSegnalazione,
+    "",
+    "🙏 Si chiede gentilmente un riscontro.",
+    "",
+    "Grazie."
   ];
-  if (!safeOpenWhatsAppMessage(lines.join("\n"))) alert("Impossibile aprire WhatsApp su questo dispositivo.");
+  if (mapsUrl) lines.push("", mapsUrl);
+  return lines.join("\n");
 }
 
 function subscribeResources() {

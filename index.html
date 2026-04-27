@@ -754,6 +754,29 @@
     </div>
   </section>
 
+  <section id="global-report-modal" class="chat-modal hidden" aria-hidden="true">
+    <div class="chat-modal-content">
+      <div class="chat-modal-header">
+        <h2>🌿 Segnalazione manutenzione verde</h2>
+        <button id="global-report-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <form id="global-report-form" class="resource-form">
+        <select id="global-report-impianto-select" required>
+          <option value="">Seleziona impianto Global</option>
+        </select>
+        <input id="global-report-id-sap" type="text" placeholder="ID-SAP" readonly>
+        <input id="global-report-denominazione" type="text" placeholder="Denominazione impianto" readonly>
+        <input id="global-report-comune" type="text" placeholder="Comune" readonly>
+        <input id="global-report-via" type="text" placeholder="Via / descrizione via" readonly>
+        <input id="global-report-coordinate" type="text" placeholder="Coordinate" readonly>
+        <input id="global-report-ditta" type="text" placeholder="Ditta esecutrice" readonly>
+        <textarea id="global-report-text" placeholder="Testo segnalazione" maxlength="1500" required></textarea>
+        <button id="global-report-submit-btn" class="btn btn-primary" type="submit">Crea messaggio WhatsApp</button>
+      </form>
+      <p id="global-report-feedback" class="muted"></p>
+    </div>
+  </section>
+
   <section id="howto-page" class="hidden">
     <section class="card">
       <div class="page-head">

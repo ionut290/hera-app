@@ -1014,8 +1014,8 @@ ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSu
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
 ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
 ui.globalCommesseLista?.addEventListener("click", onGlobalCommesseListClick);
-ui.globalOpenReportBtn?.addEventListener("click", () => openGlobalSegnalazioneModal(selectedGlobalImpianto || null));
-ui.globalImpiantoWhatsappBtn?.addEventListener("click", () => openGlobalSegnalazioneModal(selectedGlobalImpianto || null));
+ui.globalOpenReportBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
+ui.globalImpiantoWhatsappBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
 ui.globalReportCloseBtn?.addEventListener("click", closeGlobalSegnalazioneModal);
 ui.globalReportForm?.addEventListener("submit", submitGlobalSegnalazioneWhatsapp);
 ui.globalReportImpiantoSelect?.addEventListener("change", onGlobalSegnalazioneImpiantoChange);
@@ -4797,6 +4797,9 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
       window.open(`https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}`, "_blank");
     };
   }
+  if (ui.globalImpiantoWhatsappBtn) {
+    ui.globalImpiantoWhatsappBtn.onclick = () => handleOpenGlobalSegnalazioneClick(impianto);
+  }
   ui.globalImpiantoDetails?.classList.remove("hidden");
   if (options.focusOnMap && hasValidGlobalCoordinates(impianto)) {
     globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
@@ -4831,6 +4834,16 @@ function formatExtraFieldLabel(key) {
 }
 
 function shareGlobalImpiantoViaWhatsapp(impianto) {
+  handleOpenGlobalSegnalazioneClick(impianto);
+}
+
+function handleOpenGlobalSegnalazioneClick(impiantoFromAction = null) {
+  const impianto = impiantoFromAction || selectedGlobalImpianto || null;
+  console.log("Apro form segnalazione manutenzione verde", impianto);
+  if (!impianto) {
+    alert("Seleziona prima un impianto per creare la segnalazione.");
+    return;
+  }
   openGlobalSegnalazioneModal(impianto);
 }
 

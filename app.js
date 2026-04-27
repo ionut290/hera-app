@@ -4673,6 +4673,7 @@ function renderGlobalMap() {
   }
   const source = globalImpiantiFiltered.length || globalImpiantoSearchTerm ? globalImpiantiFiltered : globalImpianti;
   const withGps = source.filter((item) => hasValidGlobalCoordinates(item));
+  const dittaColorMap = buildGlobalDittaColorMap(withGps);
   if (!withGps.length) {
     ui.globalMapFeedback.textContent = "Nessuna coordinata GPS disponibile per questa commessa Global.";
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
@@ -4683,19 +4684,22 @@ function renderGlobalMap() {
   withGps.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
     const isSelected = impiantoKey === selectedGlobalImpiantoKey;
+    const ditta = getGlobalDittaLabel(impianto);
+    const markerColor = dittaColorMap.get(ditta) || "#2563eb";
     const markerDetails = [
       `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
       `Codice Hera: ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}`,
       `Comune: ${escapeHTML(impianto.comune || "-")}`,
       `Area: ${escapeHTML(impianto.area || impianto.competenza || "-")}`,
+      `Ditta esecutrice: ${escapeHTML(ditta)}`,
       `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(impiantoKey)}">Dettagli</button>`
     ].join("<br>");
     const marker = L.marker([impianto.gpsY, impianto.gpsX], {
       icon: L.divIcon({
         className: "global-map-pin-wrapper",
-        html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}"></span>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
+        html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}" style="--global-marker-color:${escapeHTML(markerColor)}">${escapeHTML(ditta)}</span>`,
+        iconSize: [82, 24],
+        iconAnchor: [41, 12]
       })
     }).addTo(globalMarkerLayer)
       .bindPopup(markerDetails);
@@ -4718,6 +4722,23 @@ function renderGlobalMap() {
   } else {
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
   }
+}
+
+function getGlobalDittaLabel(impianto) {
+  return String(impianto?.dittaEsecutrice || "").trim() || "SENZA DITTA";
+}
+
+function buildGlobalDittaColorMap(impianti) {
+  const palette = ["#2563eb", "#dc2626", "#059669", "#7c3aed", "#ea580c", "#0891b2", "#be185d", "#4f46e5", "#16a34a", "#b45309"];
+  const colorMap = new Map();
+  let nextIndex = 0;
+  impianti.forEach((impianto) => {
+    const ditta = getGlobalDittaLabel(impianto);
+    if (colorMap.has(ditta)) return;
+    colorMap.set(ditta, palette[nextIndex % palette.length]);
+    nextIndex += 1;
+  });
+  return colorMap;
 }
 
 function openGlobalImpiantoDetails(impianto, options = {}) {
@@ -5699,7 +5720,7 @@ function normalizeRow(row) {
   if (tipologiaImpiantoEntry.key) consumedKeys.add(tipologiaImpiantoEntry.key);
   const areaEntry = getValueWithMatchedKey(keys, ["area", "competenza"]);
   if (areaEntry.key) consumedKeys.add(areaEntry.key);
-  const dittaEsecutriceEntry = getValueWithMatchedKey(keys, ["dittaesecutrice", "dittaappaltatrice", "ditta"]);
+  const dittaEsecutriceEntry = getValueWithMatchedKey(keys, ["dittaesecutrice", "ditaesecutrice", "dittaappaltatrice", "ditta"]);
   if (dittaEsecutriceEntry.key) consumedKeys.add(dittaEsecutriceEntry.key);
   const voceEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "voce", "riferimento", "codiceintervento"]);
   if (voceEntry.key) consumedKeys.add(voceEntry.key);

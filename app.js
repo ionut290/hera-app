@@ -4839,11 +4839,27 @@ function shareGlobalImpiantoViaWhatsapp(impianto) {
 
 function handleOpenGlobalSegnalazioneClick(impiantoFromAction = null) {
   const impianto = impiantoFromAction || selectedGlobalImpianto || null;
-  console.log("Apro form segnalazione manutenzione verde", impianto);
-  if (!impianto && ui.globalReportFeedback) {
-    ui.globalReportFeedback.textContent = "Seleziona prima un impianto per creare la segnalazione.";
+  console.log("Invio segnalazione manutenzione verde via WhatsApp", impianto);
+  if (!impianto) {
+    alert("Seleziona prima un impianto per creare la segnalazione.");
+    return;
   }
-  openGlobalSegnalazioneModal(impianto);
+  const opened = sendGlobalSegnalazioneViaWhatsappDirect(impianto);
+  if (!opened) {
+    alert("Impossibile aprire WhatsApp su questo dispositivo.");
+  }
+}
+
+function sendGlobalSegnalazioneViaWhatsappDirect(impianto) {
+  const message = buildGlobalWhatsappSegnalazioneMessage(impianto, "__________");
+  const opened = safeOpenWhatsAppMessage(message)
+    || openExternalUrl(`https://wa.me/?text=${encodeURIComponent(message)}`);
+  if (ui.globalReportFeedback) {
+    ui.globalReportFeedback.textContent = opened
+      ? "WhatsApp aperto con segnalazione precompilata."
+      : "Impossibile aprire WhatsApp su questo dispositivo.";
+  }
+  return opened;
 }
 
 function renderGlobalSegnalazioneImpiantiOptions() {

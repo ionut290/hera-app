@@ -1184,6 +1184,24 @@ textarea:focus-visible {
 .global-autocomplete-list {
   max-height: 36dvh;
   overflow: auto;
+  margin-top: 6px;
+}
+
+#global-commesse-lista {
+  margin: 8px 0 10px;
+}
+
+#global-commesse-lista .simple-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-danger {
+  background: #b91c1c;
+  color: #fff;
+  border-color: #b91c1c;
 }
 
 .global-suggestion-item {
@@ -1201,6 +1219,10 @@ textarea:focus-visible {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f8fbff;
 }
 
 .global-impianto-details {

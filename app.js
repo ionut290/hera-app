@@ -190,7 +190,7 @@ const ui = {
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPanelNotifiche: document.getElementById("open-panel-notifiche"),
-  openPanelBanner: document.getElementById("open-panel-banner"),
+  openPanelBannerGestione: document.getElementById("open-panel-banner-gestione"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
@@ -934,7 +934,7 @@ ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global")
 ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
-ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
+ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
@@ -1726,9 +1726,10 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelInfoUtili, ui.openPanelNotifiche]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
+  ui.openPanelBannerGestione?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;

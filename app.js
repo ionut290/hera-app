@@ -4840,9 +4840,8 @@ function shareGlobalImpiantoViaWhatsapp(impianto) {
 function handleOpenGlobalSegnalazioneClick(impiantoFromAction = null) {
   const impianto = impiantoFromAction || selectedGlobalImpianto || null;
   console.log("Apro form segnalazione manutenzione verde", impianto);
-  if (!impianto) {
-    alert("Seleziona prima un impianto per creare la segnalazione.");
-    return;
+  if (!impianto && ui.globalReportFeedback) {
+    ui.globalReportFeedback.textContent = "Seleziona prima un impianto per creare la segnalazione.";
   }
   openGlobalSegnalazioneModal(impianto);
 }
@@ -4864,8 +4863,11 @@ function renderGlobalSegnalazioneImpiantiOptions() {
 function openGlobalSegnalazioneModal(impianto = null) {
   renderGlobalSegnalazioneImpiantiOptions();
   if (ui.globalReportText) ui.globalReportText.value = "";
-  if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = globalImpianti.length ? "" : "Nessun impianto disponibile nella commessa Global selezionata.";
+  if (ui.globalReportFeedback && !ui.globalReportFeedback.textContent) {
+    ui.globalReportFeedback.textContent = globalImpianti.length ? "" : "Nessun impianto disponibile nella commessa Global selezionata.";
+  }
   ui.globalReportModal?.classList.remove("hidden");
+  if (ui.globalReportModal) ui.globalReportModal.style.display = "flex";
   ui.globalReportModal?.setAttribute("aria-hidden", "false");
 
   const preferred = impianto || selectedGlobalImpianto || null;
@@ -4880,6 +4882,7 @@ function openGlobalSegnalazioneModal(impianto = null) {
 
 function closeGlobalSegnalazioneModal() {
   ui.globalReportModal?.classList.add("hidden");
+  if (ui.globalReportModal) ui.globalReportModal.style.display = "";
   ui.globalReportModal?.setAttribute("aria-hidden", "true");
   selectedGlobalSegnalazioneKey = "";
 }
@@ -4916,7 +4919,9 @@ async function submitGlobalSegnalazioneWhatsapp(event) {
     return;
   }
   const message = buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione);
-  if (!safeOpenWhatsAppMessage(message)) {
+  const opened = safeOpenWhatsAppMessage(message)
+    || openExternalUrl(`https://wa.me/?text=${encodeURIComponent(message)}`);
+  if (!opened) {
     if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Impossibile aprire WhatsApp su questo dispositivo.";
     return;
   }

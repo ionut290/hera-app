@@ -362,6 +362,7 @@ const ui = {
   editGpsX: document.getElementById("edit-gps-x"),
   globalCommessaForm: document.getElementById("global-commessa-form"),
   globalCommessaName: document.getElementById("global-commessa-name"),
+  globalCommesseLista: document.getElementById("global-commesse-lista"),
   globalCommessaSelect: document.getElementById("global-commessa-select"),
   globalExcelFile: document.getElementById("global-excel-file"),
   globalImportBtn: document.getElementById("global-import-btn"),
@@ -372,6 +373,7 @@ const ui = {
   globalImpiantoSearchForm: document.getElementById("global-impianto-search-form"),
   globalImpiantoSearchBtn: document.getElementById("global-impianto-search-btn"),
   globalImpiantoSearch: document.getElementById("global-impianto-search"),
+  globalOpenReportBtn: document.getElementById("global-open-report-btn"),
   globalImpiantiLista: document.getElementById("global-impianti-lista"),
   globalMapFeedback: document.getElementById("global-map-feedback"),
   globalImpiantoDetails: document.getElementById("global-impianto-details"),
@@ -379,6 +381,18 @@ const ui = {
   globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
   globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
+  globalReportModal: document.getElementById("global-report-modal"),
+  globalReportCloseBtn: document.getElementById("global-report-close-btn"),
+  globalReportForm: document.getElementById("global-report-form"),
+  globalReportImpiantoSelect: document.getElementById("global-report-impianto-select"),
+  globalReportIdSap: document.getElementById("global-report-id-sap"),
+  globalReportDenominazione: document.getElementById("global-report-denominazione"),
+  globalReportComune: document.getElementById("global-report-comune"),
+  globalReportVia: document.getElementById("global-report-via"),
+  globalReportCoordinate: document.getElementById("global-report-coordinate"),
+  globalReportDitta: document.getElementById("global-report-ditta"),
+  globalReportText: document.getElementById("global-report-text"),
+  globalReportFeedback: document.getElementById("global-report-feedback"),
   notificationForm: document.getElementById("notification-form"),
   notificationTitle: document.getElementById("notification-title"),
   notificationDate: document.getElementById("notification-date"),
@@ -503,6 +517,7 @@ let globalImpianti = [];
 let globalImpiantoSearchTerm = "";
 let selectedGlobalImpiantoKey = "";
 let selectedGlobalImpianto = null;
+let selectedGlobalSegnalazioneKey = "";
 let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: false };
 let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
 let isMapFullscreenPageOpen = false;
@@ -998,6 +1013,15 @@ ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
 ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSubmit);
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
 ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
+ui.globalCommesseLista?.addEventListener("click", onGlobalCommesseListClick);
+ui.globalOpenReportBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
+ui.globalImpiantoWhatsappBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
+ui.globalReportCloseBtn?.addEventListener("click", closeGlobalSegnalazioneModal);
+ui.globalReportForm?.addEventListener("submit", submitGlobalSegnalazioneWhatsapp);
+ui.globalReportImpiantoSelect?.addEventListener("change", onGlobalSegnalazioneImpiantoChange);
+ui.globalReportModal?.addEventListener("click", (event) => {
+  if (event.target === ui.globalReportModal) closeGlobalSegnalazioneModal();
+});
 ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
 ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm.addEventListener("submit", addResourceItem);
@@ -4218,6 +4242,7 @@ function subscribeGlobalCommesse() {
       option.textContent = item.nome || "Commessa Global";
       ui.globalCommessaSelect?.appendChild(option);
     });
+    renderGlobalCommesseManagementList();
 
     if (selectedGlobalCommessaId && !globalCommesseById.has(selectedGlobalCommessaId)) {
       selectedGlobalCommessaId = "";
@@ -4233,6 +4258,65 @@ function subscribeGlobalCommesse() {
   });
 }
 
+function renderGlobalCommesseManagementList() {
+  if (!ui.globalCommesseLista) return;
+  if (!globalCommesseById.size) {
+    ui.globalCommesseLista.innerHTML = "<p class='muted'>Nessuna commessa Global disponibile.</p>";
+    return;
+  }
+  const canManage = canManageData();
+  ui.globalCommesseLista.innerHTML = Array.from(globalCommesseById.values()).map((commessa) => {
+    const isSelected = commessa.id === selectedGlobalCommessaId;
+    return `
+      <div class="simple-list-item">
+        <span><b>${escapeHTML(commessa.nome || "Commessa Global")}</b>${isSelected ? " <small>(attiva)</small>" : ""}</span>
+        <button type="button" class="btn btn-danger btn-small" data-delete-global-commessa="${escapeHTML(commessa.id)}" ${canManage ? "" : "disabled"}>
+          ELIMINA COMMESSA
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+async function onGlobalCommesseListClick(event) {
+  const btn = event.target.closest("[data-delete-global-commessa]");
+  if (!btn) return;
+  if (!canManageData()) {
+    alert("Solo un admin può eliminare commesse Global.");
+    return;
+  }
+  const commessaId = String(btn.getAttribute("data-delete-global-commessa") || "").trim();
+  if (!commessaId) return;
+  const commessa = globalCommesseById.get(commessaId);
+  const nomeCommessa = commessa?.nome || "Commessa Global";
+  const confirmed = window.confirm(`Confermi eliminazione di "${nomeCommessa}" e di tutti gli impianti collegati?`);
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  if (ui.globalImportFeedback) ui.globalImportFeedback.textContent = "Eliminazione commessa Global in corso...";
+  try {
+    await deleteGlobalCommessaCascade(commessaId);
+    if (ui.globalImportFeedback) ui.globalImportFeedback.textContent = `Commessa "${nomeCommessa}" eliminata con tutti i relativi impianti.`;
+  } catch (error) {
+    console.error("Errore eliminazione commessa Global:", error);
+    if (ui.globalImportFeedback) ui.globalImportFeedback.textContent = "Errore durante l'eliminazione della commessa Global.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteGlobalCommessaCascade(commessaId) {
+  const impiantiRef = db.collection("globalCommesse").doc(commessaId).collection("impianti");
+  const snapshot = await impiantiRef.get();
+  for (let i = 0; i < snapshot.docs.length; i += 400) {
+    const chunk = snapshot.docs.slice(i, i + 400);
+    const batch = db.batch();
+    chunk.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+  await db.collection("globalCommesse").doc(commessaId).delete();
+}
+
 function stopGlobalCommesseSubscription() {
   if (unsubscribeGlobalCommesse) {
     unsubscribeGlobalCommesse();
@@ -4246,13 +4330,16 @@ function onGlobalCommessaSelectionChanged() {
   selectedGlobalImpianto = null;
   selectedGlobalImpiantoKey = "";
   closeGlobalImpiantoModal();
+  closeGlobalSegnalazioneModal();
   stopGlobalImpiantiSubscription();
   if (selectedGlobalCommessaId) subscribeGlobalImpianti();
   refreshGlobalImportButtons();
+  renderGlobalCommesseManagementList();
   if (!selectedGlobalCommessaId) {
     globalImpianti = [];
     globalImpiantoSearchTerm = "";
     if (ui.globalImpiantoSearch) ui.globalImpiantoSearch.value = "";
+    renderGlobalSegnalazioneImpiantiOptions();
     renderGlobalImpianti();
     renderGlobalMap();
   }
@@ -4267,6 +4354,7 @@ function subscribeGlobalImpianti() {
     .onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       globalImpianti = combineImpiantiForView(rawImpianti);
+      renderGlobalSegnalazioneImpiantiOptions();
       renderGlobalImpianti();
       renderGlobalMap();
     }, (error) => {
@@ -4294,9 +4382,9 @@ function onGlobalExcelSelected(event) {
   reader.onload = (e) => {
     try {
       const rows = rowsFromWorkbookBuffer(e.target.result);
-      const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
-      pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
-      ui.globalImportFeedback.textContent = `File Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
+      const prepared = prepareGlobalRowsForImport(rows);
+      pendingGlobalRows = prepared.rows;
+      ui.globalImportFeedback.textContent = `File Global letto: ${prepared.validRows} righe valide, ${pendingGlobalRows.length} impianti unici. Scartate ${prepared.invalidRows} righe (campi mancanti o non validi).`;
       refreshGlobalImportButtons();
     } catch (error) {
       console.error("Errore lettura Excel Global:", error);
@@ -4316,9 +4404,9 @@ async function importGlobalFromGoogleSheetUrl() {
   }
   try {
     const rows = await fetchGoogleSheetRows(value);
-    const normalizedRows = rows.map(normalizeRow).filter((row) => row.denominazione || row.idSap || row.indirizzo);
-    pendingGlobalRows = mergeRowsByImpianto(normalizedRows);
-    ui.globalImportFeedback.textContent = `Google Sheet Global letto: ${normalizedRows.length} righe, ${pendingGlobalRows.length} impianti unici.`;
+    const prepared = prepareGlobalRowsForImport(rows);
+    pendingGlobalRows = prepared.rows;
+    ui.globalImportFeedback.textContent = `Google Sheet Global letto: ${prepared.validRows} righe valide, ${pendingGlobalRows.length} impianti unici. Scartate ${prepared.invalidRows} righe (campi mancanti o non validi).`;
     refreshGlobalImportButtons();
   } catch (error) {
     console.error("Errore import Google Sheet Global:", error);
@@ -4371,6 +4459,16 @@ async function importPendingGlobalRows() {
     const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
     const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
     const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
+    const basePatch = {};
+    if (row.area && !existing.area) basePatch.area = row.area;
+    if (row.competenza && !existing.competenza) basePatch.competenza = row.competenza;
+    if (row.descrizioneVia && !existing.descrizioneVia) basePatch.descrizioneVia = row.descrizioneVia;
+    if (row.indirizzo && !existing.indirizzo) basePatch.indirizzo = row.indirizzo;
+    if (row.tipologiaImpianto && !existing.tipologiaImpianto) basePatch.tipologiaImpianto = row.tipologiaImpianto;
+    if (row.dittaEsecutrice && !existing.dittaEsecutrice) basePatch.dittaEsecutrice = row.dittaEsecutrice;
+    if (row.gpsY != null && existing.gpsY == null) basePatch.gpsY = row.gpsY;
+    if (row.gpsX != null && existing.gpsX == null) basePatch.gpsX = row.gpsX;
+
     if (mergedCodicePrezzo !== String(existing.codicePrezzo || "")) {
       await ref.doc(existing.id).set({
         codicePrezzo: mergedCodicePrezzo,
@@ -4381,11 +4479,15 @@ async function importPendingGlobalRows() {
         extraFields: mergedExtraFields,
         hasOrdinario: hasOrdinario(mergedCodicePrezzo),
         hasStraordinario: hasStraordinario(mergedCodicePrezzo),
-        tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo)
+        tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo),
+        ...basePatch
       }, { merge: true });
       updated += 1;
     } else if (extraFieldsChanged) {
-      await ref.doc(existing.id).set({ extraFields: mergedExtraFields }, { merge: true });
+      await ref.doc(existing.id).set({ extraFields: mergedExtraFields, ...basePatch }, { merge: true });
+      updated += 1;
+    } else if (Object.keys(basePatch).length) {
+      await ref.doc(existing.id).set(basePatch, { merge: true });
       updated += 1;
     }
   }
@@ -4429,6 +4531,10 @@ async function updateExistingGlobalRowsOnly() {
     if (match.record.gpsX == null && row.gpsX != null) patch.gpsX = row.gpsX;
     if (row.comune && !match.record.comune) patch.comune = row.comune;
     if (row.indirizzo && !match.record.indirizzo) patch.indirizzo = row.indirizzo;
+    if (row.descrizioneVia && !match.record.descrizioneVia) patch.descrizioneVia = row.descrizioneVia;
+    if (row.area && !match.record.area) patch.area = row.area;
+    if (row.tipologiaImpianto && !match.record.tipologiaImpianto) patch.tipologiaImpianto = row.tipologiaImpianto;
+    if (row.dittaEsecutrice && !match.record.dittaEsecutrice) patch.dittaEsecutrice = row.dittaEsecutrice;
     if (row.idSap && !match.record.idSap) patch.idSap = row.idSap;
     if (!Object.keys(patch).length) continue;
     await ref.doc(match.record.id).set(patch, { merge: true });
@@ -4528,7 +4634,7 @@ function getFilteredGlobalImpianti() {
   const normalizedSearch = globalImpiantoSearchTerm.toLowerCase();
   const filtered = globalImpianti.filter((impianto) => {
     if (!normalizedSearch) return true;
-    const haystack = [impianto.idSap, impianto.denominazione, impianto.comune, impianto.competenza, impianto.indirizzo, impianto.codicePrezzo]
+    const haystack = [impianto.idSap, impianto.denominazione, impianto.comune, impianto.area, impianto.competenza, impianto.descrizioneVia, impianto.indirizzo, impianto.codicePrezzo]
       .map((value) => String(value || "").toLowerCase())
       .join(" ");
     return haystack.includes(normalizedSearch);
@@ -4567,7 +4673,7 @@ function renderGlobalImpianti(options = {}) {
       <button type="button" class="simple-list-item global-suggestion-item ${isSelected ? "is-selected" : ""}" data-global-impianto-key="${escapeHTML(key)}">
         <span>
           <b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>
-          <small>${escapeHTML(impianto.idSap || "-")} • ${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.competenza || "-")}</small>
+          <small>${escapeHTML(impianto.idSap || "-")} • ${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.area || impianto.competenza || "-")}</small>
         </span>
       </button>
     `;
@@ -4591,7 +4697,8 @@ function renderGlobalMap() {
     return;
   }
   const source = globalImpiantiFiltered.length || globalImpiantoSearchTerm ? globalImpiantiFiltered : globalImpianti;
-  const withGps = source.filter((item) => item.gpsY != null && item.gpsX != null);
+  const withGps = source.filter((item) => hasValidGlobalCoordinates(item));
+  const dittaColorMap = buildGlobalDittaColorMap(withGps);
   if (!withGps.length) {
     ui.globalMapFeedback.textContent = "Nessuna coordinata GPS disponibile per questa commessa Global.";
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
@@ -4602,19 +4709,22 @@ function renderGlobalMap() {
   withGps.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
     const isSelected = impiantoKey === selectedGlobalImpiantoKey;
+    const ditta = getGlobalDittaLabel(impianto);
+    const markerColor = dittaColorMap.get(ditta) || "#2563eb";
     const markerDetails = [
       `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
       `Codice Hera: ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}`,
       `Comune: ${escapeHTML(impianto.comune || "-")}`,
-      `Competenza: ${escapeHTML(impianto.competenza || "-")}`,
+      `Area: ${escapeHTML(impianto.area || impianto.competenza || "-")}`,
+      `Ditta esecutrice: ${escapeHTML(ditta)}`,
       `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(impiantoKey)}">Dettagli</button>`
     ].join("<br>");
     const marker = L.marker([impianto.gpsY, impianto.gpsX], {
       icon: L.divIcon({
         className: "global-map-pin-wrapper",
-        html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}"></span>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
+        html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}" style="--global-marker-color:${escapeHTML(markerColor)}">${escapeHTML(ditta)}</span>`,
+        iconSize: [82, 24],
+        iconAnchor: [41, 12]
       })
     }).addTo(globalMarkerLayer)
       .bindPopup(markerDetails);
@@ -4639,6 +4749,23 @@ function renderGlobalMap() {
   }
 }
 
+function getGlobalDittaLabel(impianto) {
+  return String(impianto?.dittaEsecutrice || "").trim() || "SENZA DITTA";
+}
+
+function buildGlobalDittaColorMap(impianti) {
+  const palette = ["#2563eb", "#dc2626", "#059669", "#7c3aed", "#ea580c", "#0891b2", "#be185d", "#4f46e5", "#16a34a", "#b45309"];
+  const colorMap = new Map();
+  let nextIndex = 0;
+  impianti.forEach((impianto) => {
+    const ditta = getGlobalDittaLabel(impianto);
+    if (colorMap.has(ditta)) return;
+    colorMap.set(ditta, palette[nextIndex % palette.length]);
+    nextIndex += 1;
+  });
+  return colorMap;
+}
+
 function openGlobalImpiantoDetails(impianto, options = {}) {
   if (!impianto || !ui.globalImpiantoDetailsBody) return;
   selectedGlobalImpianto = impianto;
@@ -4648,15 +4775,14 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
     globalImpiantoSearchTerm = String(ui.globalImpiantoSearch.value || "").trim();
   }
   const details = [
-    ["Codice Hera", impianto.idSap || impianto.codiceHera || "-"],
-    ["Nome impianto", impianto.denominazione || "-"],
+    ["ID-SAP", impianto.idSap || impianto.codiceHera || "-"],
+    ["Denominazione impianto", impianto.denominazione || "-"],
+    ["Tipologia impianto", impianto.tipologiaImpianto || impianto.tipologiaIntervento || "-"],
     ["Comune", impianto.comune || "-"],
-    ["Competenza", impianto.competenza || "-"],
-    ["Indirizzo", impianto.indirizzo || "-"],
+    ["Area", impianto.area || impianto.competenza || "-"],
+    ["Descrizione via", impianto.descrizioneVia || impianto.indirizzo || "-"],
     ["Coordinate GPS", formatGpsLabel(impianto)],
-    ["Tipologia", impianto.tipologiaIntervento || impianto.tipoManutenzione || "-"],
-    ["Stato", impianto.stato || (impianto.done ? "Fatto" : "Da fare")],
-    ["Note", impianto.note || "-"]
+    ["Ditta esecutrice", impianto.dittaEsecutrice || "-"]
   ];
   Object.entries(impianto.extraFields || {}).forEach(([key, value]) => details.push([formatExtraFieldLabel(key), value]));
   ui.globalImpiantoDetailsBody.innerHTML = details
@@ -4664,18 +4790,18 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
     .join("");
   if (ui.globalImpiantoNavigateBtn) {
     ui.globalImpiantoNavigateBtn.onclick = () => {
-      if (impianto.gpsY == null || impianto.gpsX == null) {
-        alert("Coordinate GPS mancanti per questo impianto.");
+      if (!hasValidGlobalCoordinates(impianto)) {
+        alert("Coordinate mancanti");
         return;
       }
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${impianto.gpsY},${impianto.gpsX}`, "_blank");
+      window.open(`https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}`, "_blank");
     };
   }
   if (ui.globalImpiantoWhatsappBtn) {
-    ui.globalImpiantoWhatsappBtn.onclick = () => shareGlobalImpiantoViaWhatsapp(impianto);
+    ui.globalImpiantoWhatsappBtn.onclick = () => handleOpenGlobalSegnalazioneClick(impianto);
   }
   ui.globalImpiantoDetails?.classList.remove("hidden");
-  if (options.focusOnMap && impianto.gpsY != null && impianto.gpsX != null) {
+  if (options.focusOnMap && hasValidGlobalCoordinates(impianto)) {
     globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
   }
   renderGlobalMap();
@@ -4690,8 +4816,12 @@ function closeGlobalImpiantoModal() {
   renderGlobalImpianti();
 }
 
+function hasValidGlobalCoordinates(impianto) {
+  return isValidLatLon(Number(impianto?.gpsY), Number(impianto?.gpsX));
+}
+
 function formatGpsLabel(impianto) {
-  if (impianto.gpsY == null || impianto.gpsX == null) return "-";
+  if (!hasValidGlobalCoordinates(impianto)) return "Coordinate GPS non disponibili";
   return `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`;
 }
 
@@ -4704,21 +4834,144 @@ function formatExtraFieldLabel(key) {
 }
 
 function shareGlobalImpiantoViaWhatsapp(impianto) {
-  const navigateUrl = impianto.gpsY != null && impianto.gpsX != null
-    ? `https://www.google.com/maps/search/?api=1&query=${impianto.gpsY},${impianto.gpsX}`
-    : "";
+  handleOpenGlobalSegnalazioneClick(impianto);
+}
+
+function handleOpenGlobalSegnalazioneClick(impiantoFromAction = null) {
+  const impianto = impiantoFromAction || selectedGlobalImpianto || null;
+  console.log("Invio segnalazione manutenzione verde via WhatsApp", impianto);
+  if (!impianto) {
+    alert("Seleziona prima un impianto per creare la segnalazione.");
+    return;
+  }
+  const opened = sendGlobalSegnalazioneViaWhatsappDirect(impianto);
+  if (!opened) {
+    alert("Impossibile aprire WhatsApp su questo dispositivo.");
+  }
+}
+
+function sendGlobalSegnalazioneViaWhatsappDirect(impianto) {
+  const message = buildGlobalWhatsappSegnalazioneMessage(impianto, "__________");
+  const opened = safeOpenWhatsAppMessage(message)
+    || openExternalUrl(`https://wa.me/?text=${encodeURIComponent(message)}`);
+  if (ui.globalReportFeedback) {
+    ui.globalReportFeedback.textContent = opened
+      ? "WhatsApp aperto con segnalazione precompilata."
+      : "Impossibile aprire WhatsApp su questo dispositivo.";
+  }
+  return opened;
+}
+
+function renderGlobalSegnalazioneImpiantiOptions() {
+  if (!ui.globalReportImpiantoSelect) return;
+  const current = selectedGlobalSegnalazioneKey;
+  const options = globalImpianti
+    .slice()
+    .sort((a, b) => String(a.denominazione || "").localeCompare(String(b.denominazione || ""), "it"))
+    .map((impianto) => {
+      const key = buildImpiantoKey(impianto);
+      return `<option value="${escapeHTML(key)}">${escapeHTML(impianto.denominazione || "Impianto")} • ${escapeHTML(impianto.idSap || "-")}</option>`;
+    });
+  ui.globalReportImpiantoSelect.innerHTML = `<option value="">Seleziona impianto Global</option>${options.join("")}`;
+  if (current) ui.globalReportImpiantoSelect.value = current;
+}
+
+function openGlobalSegnalazioneModal(impianto = null) {
+  renderGlobalSegnalazioneImpiantiOptions();
+  if (ui.globalReportText) ui.globalReportText.value = "";
+  if (ui.globalReportFeedback && !ui.globalReportFeedback.textContent) {
+    ui.globalReportFeedback.textContent = globalImpianti.length ? "" : "Nessun impianto disponibile nella commessa Global selezionata.";
+  }
+  ui.globalReportModal?.classList.remove("hidden");
+  if (ui.globalReportModal) ui.globalReportModal.style.display = "flex";
+  ui.globalReportModal?.setAttribute("aria-hidden", "false");
+
+  const preferred = impianto || selectedGlobalImpianto || null;
+  if (preferred) {
+    const key = buildImpiantoKey(preferred);
+    if (ui.globalReportImpiantoSelect) ui.globalReportImpiantoSelect.value = key;
+    applyGlobalSegnalazioneImpianto(preferred);
+  } else {
+    applyGlobalSegnalazioneImpianto(null);
+  }
+}
+
+function closeGlobalSegnalazioneModal() {
+  ui.globalReportModal?.classList.add("hidden");
+  if (ui.globalReportModal) ui.globalReportModal.style.display = "";
+  ui.globalReportModal?.setAttribute("aria-hidden", "true");
+  selectedGlobalSegnalazioneKey = "";
+}
+
+function onGlobalSegnalazioneImpiantoChange(event) {
+  const key = String(event.target?.value || "").trim();
+  const impianto = globalImpianti.find((row) => buildImpiantoKey(row) === key) || null;
+  applyGlobalSegnalazioneImpianto(impianto);
+}
+
+function applyGlobalSegnalazioneImpianto(impianto) {
+  selectedGlobalSegnalazioneKey = impianto ? buildImpiantoKey(impianto) : "";
+  const via = impianto?.descrizioneVia || impianto?.indirizzo || "-";
+  const coordinateText = impianto ? formatGpsLabel(impianto) : "-";
+  if (ui.globalReportIdSap) ui.globalReportIdSap.value = impianto?.idSap || impianto?.codiceHera || "";
+  if (ui.globalReportDenominazione) ui.globalReportDenominazione.value = impianto?.denominazione || "";
+  if (ui.globalReportComune) ui.globalReportComune.value = impianto?.comune || "";
+  if (ui.globalReportVia) ui.globalReportVia.value = via === "-" ? "" : via;
+  if (ui.globalReportCoordinate) ui.globalReportCoordinate.value = coordinateText === "Coordinate GPS non disponibili" ? "" : coordinateText;
+  if (ui.globalReportDitta) ui.globalReportDitta.value = impianto?.dittaEsecutrice || "";
+}
+
+async function submitGlobalSegnalazioneWhatsapp(event) {
+  event.preventDefault();
+  const key = String(ui.globalReportImpiantoSelect?.value || "").trim();
+  const impianto = globalImpianti.find((row) => buildImpiantoKey(row) === key);
+  const testoSegnalazione = String(ui.globalReportText?.value || "").trim();
+  if (!impianto) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Seleziona prima un impianto Global.";
+    return;
+  }
+  if (!testoSegnalazione) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Inserisci il testo segnalazione.";
+    return;
+  }
+  const message = buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione);
+  const opened = safeOpenWhatsAppMessage(message)
+    || openExternalUrl(`https://wa.me/?text=${encodeURIComponent(message)}`);
+  if (!opened) {
+    if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "Impossibile aprire WhatsApp su questo dispositivo.";
+    return;
+  }
+  if (ui.globalReportFeedback) ui.globalReportFeedback.textContent = "WhatsApp aperto con il messaggio precompilato.";
+}
+
+function buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione) {
+  const hasCoords = hasValidGlobalCoordinates(impianto);
+  const coordinateRaw = hasCoords ? `${impianto.gpsY},${impianto.gpsX}` : "Coordinate GPS non disponibili";
+  const mapsUrl = hasCoords ? `https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}` : "";
+  const coordinateLine = hasCoords
+    ? `🌐 Coordinate: ${coordinateRaw} ➡️ 🧭 Naviga verso l’impianto`
+    : `🌐 Coordinate: ${coordinateRaw}`;
   const lines = [
-    "📍 Impianto Global",
-    `Codice Hera: ${impianto.idSap || impianto.codiceHera || "-"}`,
-    `Nome: ${impianto.denominazione || "-"}`,
-    `Comune: ${impianto.comune || "-"}`,
-    `Competenza: ${impianto.competenza || "-"}`,
-    `Indirizzo: ${impianto.indirizzo || "-"}`,
-    `Coordinate: ${formatGpsLabel(impianto)}`,
+    "🟢 SEGNALAZIONE MANUTENZIONE VERDE 🌿",
     "",
-    navigateUrl ? `Naviga (Apri in My Maps): ${navigateUrl}` : "Naviga: coordinate non disponibili"
+    "Si segnala che all’impianto:",
+    "",
+    `🆔 ID-SAP: ${impianto.idSap || impianto.codiceHera || "-"}`,
+    `🏭 Impianto: ${impianto.denominazione || "-"}`,
+    `🏙️ Comune: ${impianto.comune || "-"}`,
+    `📍 Via: ${impianto.descrizioneVia || impianto.indirizzo || "-"}`,
+    coordinateLine,
+    `🏢 Ditta esecutrice: ${impianto.dittaEsecutrice || "-"}`,
+    "",
+    "📢 Segnalazione:",
+    testoSegnalazione,
+    "",
+    "🙏 Si chiede gentilmente un riscontro.",
+    "",
+    "Grazie."
   ];
-  if (!safeOpenWhatsAppMessage(lines.join("\n"))) alert("Impossibile aprire WhatsApp su questo dispositivo.");
+  if (mapsUrl) lines.push("", mapsUrl);
+  return lines.join("\n");
 }
 
 function subscribeResources() {
@@ -5599,14 +5852,20 @@ function normalizeRow(row) {
   const keys = normalizeKeys(row);
   const consumedKeys = new Set();
 
-  const idSapEntry = getValueWithMatchedKey(keys, ["idsap", "codicehera", "codiceimpianto", "codicecliente", "code"]);
+  const idSapEntry = getValueWithMatchedKey(keys, ["idsap", "id", "codicehera", "codiceimpianto", "codicecliente", "code"]);
   if (idSapEntry.key) consumedKeys.add(idSapEntry.key);
   const denominazioneEntry = getValueWithMatchedKey(keys, ["denominazioneimpianto", "denominazione", "impianto", "impiantounico", "sito", "sitonome", "nomeimpianto"]);
   if (denominazioneEntry.key) consumedKeys.add(denominazioneEntry.key);
   const comuneEntry = getValueWithMatchedKey(keys, ["comuneubicazioneimpianto", "comuneubicazione", "comune", "citta", "city"]);
   if (comuneEntry.key) consumedKeys.add(comuneEntry.key);
-  const indirizzoEntry = getValueWithMatchedKey(keys, ["viaecivicodiubicazioneimpianto", "indirizzoubicazione", "indirizzo", "via", "address"]);
+  const indirizzoEntry = getValueWithMatchedKey(keys, ["descrizionevia", "viaecivicodiubicazioneimpianto", "indirizzoubicazione", "indirizzo", "via", "address"]);
   if (indirizzoEntry.key) consumedKeys.add(indirizzoEntry.key);
+  const tipologiaImpiantoEntry = getValueWithMatchedKey(keys, ["tipologiaimpianto", "tipoimpianto"]);
+  if (tipologiaImpiantoEntry.key) consumedKeys.add(tipologiaImpiantoEntry.key);
+  const areaEntry = getValueWithMatchedKey(keys, ["area", "competenza"]);
+  if (areaEntry.key) consumedKeys.add(areaEntry.key);
+  const dittaEsecutriceEntry = getValueWithMatchedKey(keys, ["dittaesecutrice", "ditaesecutrice", "dittaappaltatrice", "ditta"]);
+  if (dittaEsecutriceEntry.key) consumedKeys.add(dittaEsecutriceEntry.key);
   const voceEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "voce", "riferimento", "codiceintervento"]);
   if (voceEntry.key) consumedKeys.add(voceEntry.key);
   const codicePrezzoEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "codiceprezzo", "prezzo", "codice"]);
@@ -5615,6 +5874,9 @@ function normalizeRow(row) {
   if (gpsYEntry.key) consumedKeys.add(gpsYEntry.key);
   const gpsXEntry = getValueWithMatchedKey(keys, ["coordinategpsx", "gpslong", "gpslng", "longitudine", "longitude"]);
   if (gpsXEntry.key) consumedKeys.add(gpsXEntry.key);
+  const coordinatesEntry = getValueWithMatchedKey(keys, ["coordinate", "coord"]);
+  if (coordinatesEntry.key) consumedKeys.add(coordinatesEntry.key);
+  const coordinatePair = parseCoordinatePair(coordinatesEntry.value);
 
   const extraFields = {};
   Object.entries(keys).forEach(([key, value]) => {
@@ -5628,15 +5890,34 @@ function normalizeRow(row) {
     denominazione: denominazioneEntry.value,
     comune: comuneEntry.value,
     indirizzo: indirizzoEntry.value,
+    descrizioneVia: indirizzoEntry.value,
+    tipologiaImpianto: tipologiaImpiantoEntry.value,
+    area: areaEntry.value,
+    competenza: areaEntry.value,
+    dittaEsecutrice: dittaEsecutriceEntry.value,
     voceRiferimento: voceEntry.value,
     codicePrezzo: codicePrezzoEntry.value,
     sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim", "superficiemq"]),
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
-    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]),
+    tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]) || tipologiaImpiantoEntry.value,
     lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
-    gpsY: parseCoordinate(gpsYEntry.value),
-    gpsX: parseCoordinate(gpsXEntry.value),
+    gpsY: parseCoordinate(gpsYEntry.value) ?? coordinatePair.lat,
+    gpsX: parseCoordinate(gpsXEntry.value) ?? coordinatePair.lon,
     extraFields
+  };
+}
+
+function prepareGlobalRowsForImport(rawRows) {
+  const normalizedRows = rawRows.map(normalizeRow);
+  const validRows = normalizedRows.filter((row) => {
+    const hasIdentity = Boolean(row.denominazione || row.idSap || row.indirizzo || row.descrizioneVia);
+    const hasDitta = Boolean(String(row.dittaEsecutrice || "").trim());
+    return hasIdentity && hasDitta;
+  });
+  return {
+    rows: mergeRowsByImpianto(validRows),
+    validRows: validRows.length,
+    invalidRows: Math.max(0, normalizedRows.length - validRows.length)
   };
 }
 
@@ -5660,6 +5941,11 @@ function mergeRowsByImpianto(rows) {
     if (!existing.distretto && row.distretto) existing.distretto = row.distretto;
     if (!existing.comune && row.comune) existing.comune = row.comune;
     if (!existing.indirizzo && row.indirizzo) existing.indirizzo = row.indirizzo;
+    if (!existing.descrizioneVia && row.descrizioneVia) existing.descrizioneVia = row.descrizioneVia;
+    if (!existing.area && row.area) existing.area = row.area;
+    if (!existing.competenza && row.competenza) existing.competenza = row.competenza;
+    if (!existing.tipologiaImpianto && row.tipologiaImpianto) existing.tipologiaImpianto = row.tipologiaImpianto;
+    if (!existing.dittaEsecutrice && row.dittaEsecutrice) existing.dittaEsecutrice = row.dittaEsecutrice;
     if (!existing.idSap && row.idSap) existing.idSap = row.idSap;
     if (existing.gpsY == null && row.gpsY != null) existing.gpsY = row.gpsY;
     if (existing.gpsX == null && row.gpsX != null) existing.gpsX = row.gpsX;
@@ -5711,6 +5997,11 @@ function combineImpiantiForView(impianti) {
     if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
     if (!existing.comune && item.comune) existing.comune = item.comune;
     if (!existing.indirizzo && item.indirizzo) existing.indirizzo = item.indirizzo;
+    if (!existing.descrizioneVia && item.descrizioneVia) existing.descrizioneVia = item.descrizioneVia;
+    if (!existing.area && item.area) existing.area = item.area;
+    if (!existing.competenza && item.competenza) existing.competenza = item.competenza;
+    if (!existing.tipologiaImpianto && item.tipologiaImpianto) existing.tipologiaImpianto = item.tipologiaImpianto;
+    if (!existing.dittaEsecutrice && item.dittaEsecutrice) existing.dittaEsecutrice = item.dittaEsecutrice;
     if (existing.gpsY == null && item.gpsY != null) existing.gpsY = item.gpsY;
     if (existing.gpsX == null && item.gpsX != null) existing.gpsX = item.gpsX;
   });
@@ -5816,6 +6107,21 @@ function parseCoordinate(value) {
   const normalized = String(value || "").replace(",", ".").trim();
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseCoordinatePair(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { lat: null, lon: null };
+  const parts = raw.split(/[;,/\s]+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return { lat: null, lon: null };
+  const lat = parseCoordinate(parts[0]);
+  const lon = parseCoordinate(parts[1]);
+  if (!isValidLatLon(lat, lon)) return { lat: null, lon: null };
+  return { lat, lon };
+}
+
+function isValidLatLon(lat, lon) {
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 }
 
 function classifyTipoManutenzione(codicePrezzo) {

@@ -373,6 +373,7 @@ const ui = {
   globalImpiantoSearchForm: document.getElementById("global-impianto-search-form"),
   globalImpiantoSearchBtn: document.getElementById("global-impianto-search-btn"),
   globalImpiantoSearch: document.getElementById("global-impianto-search"),
+  globalOpenReportBtn: document.getElementById("global-open-report-btn"),
   globalImpiantiLista: document.getElementById("global-impianti-lista"),
   globalMapFeedback: document.getElementById("global-map-feedback"),
   globalImpiantoDetails: document.getElementById("global-impianto-details"),
@@ -1013,6 +1014,8 @@ ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSu
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
 ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
 ui.globalCommesseLista?.addEventListener("click", onGlobalCommesseListClick);
+ui.globalOpenReportBtn?.addEventListener("click", () => openGlobalSegnalazioneModal(selectedGlobalImpianto || null));
+ui.globalImpiantoWhatsappBtn?.addEventListener("click", () => openGlobalSegnalazioneModal(selectedGlobalImpianto || null));
 ui.globalReportCloseBtn?.addEventListener("click", closeGlobalSegnalazioneModal);
 ui.globalReportForm?.addEventListener("submit", submitGlobalSegnalazioneWhatsapp);
 ui.globalReportImpiantoSelect?.addEventListener("change", onGlobalSegnalazioneImpiantoChange);
@@ -4793,9 +4796,6 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
       }
       window.open(`https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}`, "_blank");
     };
-  }
-  if (ui.globalImpiantoWhatsappBtn) {
-    ui.globalImpiantoWhatsappBtn.onclick = () => shareGlobalImpiantoViaWhatsapp(impianto);
   }
   ui.globalImpiantoDetails?.classList.remove("hidden");
   if (options.focusOnMap && hasValidGlobalCoordinates(impianto)) {

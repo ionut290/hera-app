@@ -3113,16 +3113,26 @@ async function exportHoursGlobalMonthlyTable() {
     "GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO",
     "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"
   ][monthMeta.month - 1] || monthValue;
+  const monthLabelIt = `${monthNameIt} ${monthMeta.year}`;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Hera App";
   workbook.created = new Date();
   const worksheet = workbook.addWorksheet("Export globale", {
-    views: [{ state: "frozen", ySplit: 3 }]
+    views: [{ state: "frozen", xSplit: 1, ySplit: 8 }]
   });
 
+  const dayStartColumn = 2;
   const totalColumn = monthMeta.daysInMonth + 2;
+  const workedDaysColumn = monthMeta.daysInMonth + 3;
+  const avgHoursColumn = monthMeta.daysInMonth + 4;
+  const lastColumn = avgHoursColumn;
   const dayHeaderFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
+  const totalColumnFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAF7" } };
+  const hoursFilledCell = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDE9DD" } };
+  const weekendFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E5E5" } };
+  const errorFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC7CE" } };
+  const whiteFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
   const thinBorder = {
     top: { style: "thin", color: { argb: "FF000000" } },
     left: { style: "thin", color: { argb: "FF000000" } },
@@ -3130,19 +3140,49 @@ async function exportHoursGlobalMonthlyTable() {
     right: { style: "thin", color: { argb: "FF000000" } }
   };
   const mediumSide = { style: "medium", color: { argb: "FF000000" } };
+  const thickSide = { style: "thick", color: { argb: "FF000000" } };
+  const isWeekendDay = (dayNumber) => {
+    const dayDate = new Date(monthMeta.year, monthMeta.month - 1, dayNumber);
+    const weekday = dayDate.getDay();
+    return weekday === 0 || weekday === 6;
+  };
+  const getExcelNumberFormat = (value) => {
+    const num = Number(value || 0);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return Number.isInteger(num) ? "0" : "0.##";
+  };
   const setThinBorder = (cell) => {
     cell.border = thinBorder;
   };
   const setOuterBlockBorder = (startRow, endRow) => {
     for (let row = startRow; row <= endRow; row += 1) {
-      for (let col = 1; col <= totalColumn; col += 1) {
+      for (let col = 1; col <= lastColumn; col += 1) {
         const cell = worksheet.getCell(row, col);
         const border = { ...(cell.border || {}) };
         if (row === startRow) border.top = mediumSide;
         if (row === endRow) border.bottom = mediumSide;
         if (col === 1) border.left = mediumSide;
-        if (col === totalColumn) border.right = mediumSide;
+        if (col === lastColumn) border.right = mediumSide;
         cell.border = border;
+      }
+    }
+  };
+  const addWeekSeparatorBorders = (rowIndex) => {
+    for (let day = 1; day <= monthMeta.daysInMonth; day += 1) {
+      const date = new Date(monthMeta.year, monthMeta.month - 1, day);
+      const isSunday = date.getDay() === 0;
+      if (!isSunday || day === monthMeta.daysInMonth) continue;
+      const dayCol = dayStartColumn + day - 1;
+      const cell = worksheet.getCell(rowIndex, dayCol);
+      const border = { ...(cell.border || {}) };
+      border.right = thickSide;
+      cell.border = border;
+      const nextCol = dayCol + 1;
+      if (nextCol <= dayStartColumn + monthMeta.daysInMonth - 1) {
+        const nextCell = worksheet.getCell(rowIndex, nextCol);
+        const nextBorder = { ...(nextCell.border || {}) };
+        nextBorder.left = thickSide;
+        nextCell.border = nextBorder;
       }
     }
   };
@@ -3151,97 +3191,224 @@ async function exportHoursGlobalMonthlyTable() {
   const commesseSorted = Array.from(commessaMap.values())
     .sort((a, b) => a.commessaName.localeCompare(b.commessaName, "it"));
 
+  let totalHoursMonth = 0;
+  let totalOperatorsMonth = 0;
+
+  const summaryStartRow = rowPointer;
+  worksheet.mergeCells(summaryStartRow, 1, summaryStartRow, lastColumn);
+  const summaryTitleCell = worksheet.getCell(summaryStartRow, 1);
+  summaryTitleCell.value = "RIEPILOGO GESTIONE ORE GLOBAL";
+  summaryTitleCell.font = { bold: true, size: 14, color: { argb: "FF000000" } };
+  summaryTitleCell.alignment = { horizontal: "center", vertical: "middle" };
+  summaryTitleCell.fill = whiteFill;
+  rowPointer += 1;
+
+  const summaryRows = [
+    ["MESE DI RIFERIMENTO", monthNameIt],
+    ["ANNO", String(monthMeta.year)],
+    ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")]
+  ];
+  summaryRows.forEach(([label, value]) => {
+    const row = worksheet.getRow(rowPointer);
+    row.getCell(1).value = label;
+    row.getCell(2).value = value;
+    worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
+    rowPointer += 1;
+  });
+
   commesseSorted.forEach((commessaBlock, idx) => {
     const operatorRows = Array.from(commessaBlock.operatorsMap.values())
       .sort((a, b) => a.displayName.localeCompare(b.displayName, "it"));
-    const operators = operatorRows.length
-      ? operatorRows
-      : [{ displayName: "", days: Array.from({ length: monthMeta.daysInMonth }, () => 0) }];
+    const operators = operatorRows.length ? operatorRows : [];
+    totalOperatorsMonth += operators.length;
 
     const startRow = rowPointer;
     const commessaRow = worksheet.getRow(rowPointer);
     commessaRow.getCell(1).value = "COMMESSA";
     commessaRow.getCell(2).value = commessaBlock.commessaName;
-    worksheet.mergeCells(rowPointer, 2, rowPointer, totalColumn);
+    worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
 
     rowPointer += 1;
     const meseRow = worksheet.getRow(rowPointer);
     meseRow.getCell(1).value = "MESE RIF.";
-    meseRow.getCell(2).value = monthNameIt;
-    worksheet.mergeCells(rowPointer, 2, rowPointer, totalColumn);
+    meseRow.getCell(2).value = monthLabelIt;
+    worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
 
     rowPointer += 1;
     const headerRow = worksheet.getRow(rowPointer);
     headerRow.getCell(1).value = "OPERATORE";
+    headerRow.getCell(1).fill = dayHeaderFill;
+    headerRow.getCell(1).font = { bold: true, color: { argb: "FF000000" } };
     for (let day = 1; day <= monthMeta.daysInMonth; day += 1) {
       headerRow.getCell(day + 1).value = day;
       headerRow.getCell(day + 1).fill = dayHeaderFill;
-      headerRow.getCell(day + 1).font = { bold: true };
+      headerRow.getCell(day + 1).font = { bold: true, color: { argb: "FF000000" } };
     }
     headerRow.getCell(totalColumn).value = "TOTALE";
-    headerRow.getCell(totalColumn).font = { bold: true };
+    headerRow.getCell(totalColumn).fill = totalColumnFill;
+    headerRow.getCell(totalColumn).font = { bold: true, color: { argb: "FF000000" } };
+    headerRow.getCell(workedDaysColumn).value = "GIORNI LAVORATI";
+    headerRow.getCell(workedDaysColumn).fill = dayHeaderFill;
+    headerRow.getCell(workedDaysColumn).font = { bold: true, color: { argb: "FF000000" } };
+    headerRow.getCell(avgHoursColumn).value = "MEDIA ORE/GIORNO";
+    headerRow.getCell(avgHoursColumn).fill = dayHeaderFill;
+    headerRow.getCell(avgHoursColumn).font = { bold: true, color: { argb: "FF000000" } };
+    headerRow.height = 24;
 
     rowPointer += 1;
+    let commessaTotal = 0;
+
     operators.forEach((operatorData, operatorIdx) => {
       const row = worksheet.getRow(rowPointer + operatorIdx);
       row.getCell(1).value = operatorData.displayName || "";
       let total = 0;
+      let workedDays = 0;
       for (let dayIdx = 0; dayIdx < monthMeta.daysInMonth; dayIdx += 1) {
         const value = Number(operatorData.days[dayIdx] || 0);
-        if (value > 0) {
-          row.getCell(dayIdx + 2).value = value;
-          total += value;
+        const cell = row.getCell(dayIdx + 2);
+        if (isWeekendDay(dayIdx + 1)) {
+          cell.fill = weekendFill;
         } else {
-          row.getCell(dayIdx + 2).value = null;
+          cell.fill = whiteFill;
+        }
+        if (value > 0) {
+          cell.value = value;
+          cell.fill = value > 12 ? errorFill : hoursFilledCell;
+          const numFmt = getExcelNumberFormat(value);
+          if (numFmt) cell.numFmt = numFmt;
+          total += value;
+          workedDays += 1;
+        } else {
+          cell.value = null;
         }
       }
       row.getCell(totalColumn).value = total > 0 ? total : null;
+      row.getCell(totalColumn).fill = totalColumnFill;
+      if (total > 0) row.getCell(totalColumn).numFmt = getExcelNumberFormat(total);
+      row.getCell(workedDaysColumn).value = workedDays > 0 ? workedDays : null;
+      row.getCell(workedDaysColumn).numFmt = "0";
+      row.getCell(avgHoursColumn).value = workedDays > 0 ? total / workedDays : null;
+      if (workedDays > 0) row.getCell(avgHoursColumn).numFmt = "0.##";
+      commessaTotal += total;
+      totalHoursMonth += total;
+      row.height = 21;
     });
 
-    const endRow = rowPointer + operators.length - 1;
+    const totalCommessaRowIndex = rowPointer + operators.length;
+    const totalCommessaRow = worksheet.getRow(totalCommessaRowIndex);
+    totalCommessaRow.getCell(1).value = "TOTALE COMMESSA";
+    worksheet.mergeCells(totalCommessaRowIndex, 1, totalCommessaRowIndex, totalColumn - 1);
+    totalCommessaRow.getCell(totalColumn).value = commessaTotal > 0 ? commessaTotal : null;
+    totalCommessaRow.getCell(totalColumn).fill = totalColumnFill;
+    if (commessaTotal > 0) totalCommessaRow.getCell(totalColumn).numFmt = getExcelNumberFormat(commessaTotal);
+    totalCommessaRow.getCell(1).font = { bold: true, color: { argb: "FF000000" } };
+    totalCommessaRow.getCell(totalColumn).font = { bold: true, color: { argb: "FF000000" } };
+    totalCommessaRow.height = 22;
+
+    const endRow = totalCommessaRowIndex;
     for (let row = startRow; row <= endRow; row += 1) {
-      for (let col = 1; col <= totalColumn; col += 1) {
+      for (let col = 1; col <= lastColumn; col += 1) {
         const cell = worksheet.getCell(row, col);
+        if (!cell.fill) cell.fill = whiteFill;
         setThinBorder(cell);
-        if (row >= startRow + 2) {
+        if (row >= startRow + 2 && row < endRow) {
           const isOperatorName = col === 1;
           cell.alignment = {
             vertical: "middle",
             horizontal: isOperatorName ? "left" : "center"
           };
+        } else if (row === endRow) {
+          cell.alignment = {
+            vertical: "middle",
+            horizontal: col === 1 ? "left" : "center"
+          };
+        } else {
+          cell.alignment = {
+            vertical: "middle",
+            horizontal: col === 1 ? "left" : "center"
+          };
         }
         const isTitleLabel = col === 1 && row <= startRow + 2;
         const isHeaderRow = row === startRow + 2;
         if (isTitleLabel || isHeaderRow) {
-          cell.font = { ...(cell.font || {}), bold: true };
-        }
-        if (typeof cell.value === "number") {
-          cell.numFmt = "0.##";
+          cell.font = { ...(cell.font || {}), bold: true, color: { argb: "FF000000" } };
         }
       }
-      worksheet.getRow(row).height = 22;
+      if (row <= startRow + 1) worksheet.getRow(row).height = 22;
+      addWeekSeparatorBorders(row);
     }
 
     setOuterBlockBorder(startRow, endRow);
 
-    rowPointer = endRow + 1;
+    rowPointer = endRow + 2;
     if (idx < commesseSorted.length - 1) {
-      worksheet.getRow(rowPointer).height = 12;
-      rowPointer += 1;
+      worksheet.getRow(rowPointer - 1).height = 10;
     }
   });
 
-  worksheet.columns.forEach((column, columnIdx) => {
-    let maxLength = columnIdx === 0 ? 12 : 4;
-    column.eachCell({ includeEmpty: false }, (cell) => {
-      const raw = cell.value;
-      const text = raw && typeof raw === "object" && raw.richText
-        ? raw.richText.map((part) => part.text || "").join("")
-        : String(raw ?? "");
-      maxLength = Math.max(maxLength, text.length + 2);
-    });
-    column.width = Math.min(Math.max(maxLength, columnIdx === 0 ? 18 : 4), columnIdx === 0 ? 36 : 12);
+  const totalCommesse = commesseSorted.length;
+  const summaryTailRows = [
+    ["TOTALE ORE MESE", totalHoursMonth > 0 ? totalHoursMonth : ""],
+    ["TOTALE OPERATORI", totalOperatorsMonth],
+    ["TOTALE COMMESSE", totalCommesse]
+  ];
+  summaryTailRows.forEach(([label, value], idx) => {
+    const rowIndex = summaryStartRow + 4 + idx;
+    const row = worksheet.getRow(rowIndex);
+    row.getCell(1).value = label;
+    row.getCell(2).value = value;
+    if (typeof value === "number" && value > 0) {
+      row.getCell(2).numFmt = getExcelNumberFormat(value) || "0";
+    }
+    worksheet.mergeCells(rowIndex, 2, rowIndex, lastColumn);
   });
+
+  for (let row = summaryStartRow; row <= summaryStartRow + 6; row += 1) {
+    for (let col = 1; col <= lastColumn; col += 1) {
+      const cell = worksheet.getCell(row, col);
+      setThinBorder(cell);
+      if (!cell.fill) cell.fill = whiteFill;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: col === 1 ? "left" : "center"
+      };
+      if (col === 1 || row === summaryStartRow) {
+        cell.font = { ...(cell.font || {}), bold: true, color: { argb: "FF000000" } };
+      }
+    }
+    worksheet.getRow(row).height = row === summaryStartRow ? 28 : 21;
+  }
+  setOuterBlockBorder(summaryStartRow, summaryStartRow + 6);
+
+  for (let col = 1; col <= lastColumn; col += 1) {
+    if (col === 1) {
+      worksheet.getColumn(col).width = 28;
+      continue;
+    }
+    if (col >= dayStartColumn && col <= totalColumn - 1) {
+      worksheet.getColumn(col).width = 4.2;
+      continue;
+    }
+    if (col === totalColumn) {
+      worksheet.getColumn(col).width = 11;
+      continue;
+    }
+    if (col === workedDaysColumn) {
+      worksheet.getColumn(col).width = 16;
+      continue;
+    }
+    worksheet.getColumn(col).width = 18;
+  }
+
+  worksheet.autoFilter = {
+    from: { row: summaryStartRow + 7, column: 1 },
+    to: { row: summaryStartRow + 7, column: 1 }
+  };
+
+  for (let row = 1; row <= worksheet.rowCount; row += 1) {
+    const currentRow = worksheet.getRow(row);
+    if (!currentRow.height) currentRow.height = 21;
+  }
 
   const safeMonth = monthValue.replace("/", "-");
   const buffer = await workbook.xlsx.writeBuffer();

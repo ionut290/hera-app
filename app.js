@@ -3069,6 +3069,11 @@ async function exportHoursGlobalMonthlyTable() {
     alert("Seleziona un mese valido prima di esportare il file globale.");
     return;
   }
+  if (!window.ExcelJS?.Workbook) {
+    alert("Libreria Excel non disponibile. Ricarica la pagina e riprova.");
+    return;
+  }
+
   const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
   const commessaMap = new Map();
   reports.forEach((report) => {
@@ -3108,56 +3113,154 @@ async function exportHoursGlobalMonthlyTable() {
     "GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO",
     "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"
   ][monthMeta.month - 1] || monthValue;
-  const totalColIdx = monthMeta.daysInMonth + 2;
-  const aoa = [];
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Hera App";
+  workbook.created = new Date();
+  const worksheet = workbook.addWorksheet("Export globale", {
+    views: [{ state: "frozen", ySplit: 3 }]
+  });
+
+  const totalColumn = monthMeta.daysInMonth + 2;
+  const dayHeaderFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
+  const thinBorder = {
+    top: { style: "thin", color: { argb: "FF000000" } },
+    left: { style: "thin", color: { argb: "FF000000" } },
+    bottom: { style: "thin", color: { argb: "FF000000" } },
+    right: { style: "thin", color: { argb: "FF000000" } }
+  };
+  const mediumSide = { style: "medium", color: { argb: "FF000000" } };
+  const setThinBorder = (cell) => {
+    cell.border = thinBorder;
+  };
+  const setOuterBlockBorder = (startRow, endRow) => {
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let col = 1; col <= totalColumn; col += 1) {
+        const cell = worksheet.getCell(row, col);
+        const border = { ...(cell.border || {}) };
+        if (row === startRow) border.top = mediumSide;
+        if (row === endRow) border.bottom = mediumSide;
+        if (col === 1) border.left = mediumSide;
+        if (col === totalColumn) border.right = mediumSide;
+        cell.border = border;
+      }
+    }
+  };
+
+  let rowPointer = 1;
   const commesseSorted = Array.from(commessaMap.values())
     .sort((a, b) => a.commessaName.localeCompare(b.commessaName, "it"));
 
-  commesseSorted.forEach((commessaBlock, blockIdx) => {
-    aoa.push(["", "COMMESSA", commessaBlock.commessaName]);
-    aoa.push(["", "MESE RIF.", monthNameIt]);
-    aoa.push(["OPERATORE", ...Array.from({ length: monthMeta.daysInMonth }, (_, idx) => idx + 1), "TOTALE"]);
-    const operators = Array.from(commessaBlock.operatorsMap.values())
+  commesseSorted.forEach((commessaBlock, idx) => {
+    const operatorRows = Array.from(commessaBlock.operatorsMap.values())
       .sort((a, b) => a.displayName.localeCompare(b.displayName, "it"));
-    operators.forEach((operatorData) => {
-      const total = operatorData.days.reduce((sum, value) => sum + Number(value || 0), 0);
-      aoa.push([operatorData.displayName, ...operatorData.days, total]);
+    const operators = operatorRows.length
+      ? operatorRows
+      : [{ displayName: "", days: Array.from({ length: monthMeta.daysInMonth }, () => 0) }];
+
+    const startRow = rowPointer;
+    const commessaRow = worksheet.getRow(rowPointer);
+    commessaRow.getCell(1).value = "COMMESSA";
+    commessaRow.getCell(2).value = commessaBlock.commessaName;
+    worksheet.mergeCells(rowPointer, 2, rowPointer, totalColumn);
+
+    rowPointer += 1;
+    const meseRow = worksheet.getRow(rowPointer);
+    meseRow.getCell(1).value = "MESE RIF.";
+    meseRow.getCell(2).value = monthNameIt;
+    worksheet.mergeCells(rowPointer, 2, rowPointer, totalColumn);
+
+    rowPointer += 1;
+    const headerRow = worksheet.getRow(rowPointer);
+    headerRow.getCell(1).value = "OPERATORE";
+    for (let day = 1; day <= monthMeta.daysInMonth; day += 1) {
+      headerRow.getCell(day + 1).value = day;
+      headerRow.getCell(day + 1).fill = dayHeaderFill;
+      headerRow.getCell(day + 1).font = { bold: true };
+    }
+    headerRow.getCell(totalColumn).value = "TOTALE";
+    headerRow.getCell(totalColumn).font = { bold: true };
+
+    rowPointer += 1;
+    operators.forEach((operatorData, operatorIdx) => {
+      const row = worksheet.getRow(rowPointer + operatorIdx);
+      row.getCell(1).value = operatorData.displayName || "";
+      let total = 0;
+      for (let dayIdx = 0; dayIdx < monthMeta.daysInMonth; dayIdx += 1) {
+        const value = Number(operatorData.days[dayIdx] || 0);
+        if (value > 0) {
+          row.getCell(dayIdx + 2).value = value;
+          total += value;
+        } else {
+          row.getCell(dayIdx + 2).value = null;
+        }
+      }
+      row.getCell(totalColumn).value = total > 0 ? total : null;
     });
-    if (!operators.length) {
-      aoa.push(["", ...Array.from({ length: monthMeta.daysInMonth }, () => ""), ""]);
+
+    const endRow = rowPointer + operators.length - 1;
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let col = 1; col <= totalColumn; col += 1) {
+        const cell = worksheet.getCell(row, col);
+        setThinBorder(cell);
+        if (row >= startRow + 2) {
+          const isOperatorName = col === 1;
+          cell.alignment = {
+            vertical: "middle",
+            horizontal: isOperatorName ? "left" : "center"
+          };
+        }
+        const isTitleLabel = col === 1 && row <= startRow + 2;
+        const isHeaderRow = row === startRow + 2;
+        if (isTitleLabel || isHeaderRow) {
+          cell.font = { ...(cell.font || {}), bold: true };
+        }
+        if (typeof cell.value === "number") {
+          cell.numFmt = "0.##";
+        }
+      }
+      worksheet.getRow(row).height = 22;
     }
-    if (blockIdx < commesseSorted.length - 1) {
-      aoa.push([]);
-      aoa.push([]);
+
+    setOuterBlockBorder(startRow, endRow);
+
+    rowPointer = endRow + 1;
+    if (idx < commesseSorted.length - 1) {
+      worksheet.getRow(rowPointer).height = 12;
+      rowPointer += 1;
     }
   });
 
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  const sections = [];
-  let rowPointer = 0;
-  commesseSorted.forEach((commessaBlock, blockIdx) => {
-    const operatorsCount = Array.from(commessaBlock.operatorsMap.values()).length || 1;
-    const headerTop = rowPointer + 1;
-    const monthRow = rowPointer + 2;
-    const daysHeaderRow = rowPointer + 3;
-    const operatorsStartRow = rowPointer + 4;
-    const operatorsEndRow = operatorsStartRow + operatorsCount - 1;
-    sections.push({ headerTop, monthRow, daysHeaderRow, operatorsStartRow, operatorsEndRow });
-    rowPointer += 3 + operatorsCount + (blockIdx < commesseSorted.length - 1 ? 2 : 0);
+  worksheet.columns.forEach((column, columnIdx) => {
+    let maxLength = columnIdx === 0 ? 12 : 4;
+    column.eachCell({ includeEmpty: false }, (cell) => {
+      const raw = cell.value;
+      const text = raw && typeof raw === "object" && raw.richText
+        ? raw.richText.map((part) => part.text || "").join("")
+        : String(raw ?? "");
+      maxLength = Math.max(maxLength, text.length + 2);
+    });
+    column.width = Math.min(Math.max(maxLength, columnIdx === 0 ? 18 : 4), columnIdx === 0 ? 36 : 12);
   });
-  worksheet["!cols"] = [
-    { wch: 28 },
-    ...Array.from({ length: monthMeta.daysInMonth }, () => ({ wch: 4 })),
-    { wch: 10 }
-  ];
-  worksheet["!merges"] = sections.flatMap((section) => ([
-    { s: { r: section.headerTop - 1, c: 2 }, e: { r: section.headerTop - 1, c: totalColIdx - 1 } },
-    { s: { r: section.monthRow - 1, c: 2 }, e: { r: section.monthRow - 1, c: totalColIdx - 1 } }
-  ]));
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Export globale");
-  XLSX.writeFile(workbook, `ore_global_${monthValue}.xlsx`);
+  const safeMonth = monthValue.replace("/", "-");
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const fileName = `ore_global_${safeMonth}.xlsx`;
+  if (window.navigator?.msSaveOrOpenBlob) {
+    window.navigator.msSaveOrOpenBlob(blob, fileName);
+    return;
+  }
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function renderHoursOperatoriOptions() {

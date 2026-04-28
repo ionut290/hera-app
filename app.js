@@ -3191,8 +3191,15 @@ async function exportHoursGlobalMonthlyTable() {
   const commesseSorted = Array.from(commessaMap.values())
     .sort((a, b) => a.commessaName.localeCompare(b.commessaName, "it"));
 
-  let totalHoursMonth = 0;
-  let totalOperatorsMonth = 0;
+  const totalCommesse = commesseSorted.length;
+  const totalOperatorsMonth = commesseSorted.reduce((acc, commessaBlock) => (
+    acc + commessaBlock.operatorsMap.size
+  ), 0);
+  const totalHoursMonth = commesseSorted.reduce((acc, commessaBlock) => (
+    acc + Array.from(commessaBlock.operatorsMap.values()).reduce((hoursAcc, operator) => (
+      hoursAcc + operator.days.reduce((dayAcc, value) => dayAcc + Number(value || 0), 0)
+    ), 0)
+  ), 0);
 
   const summaryStartRow = rowPointer;
   worksheet.mergeCells(summaryStartRow, 1, summaryStartRow, lastColumn);
@@ -3206,21 +3213,27 @@ async function exportHoursGlobalMonthlyTable() {
   const summaryRows = [
     ["MESE DI RIFERIMENTO", monthNameIt],
     ["ANNO", String(monthMeta.year)],
-    ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")]
+    ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")],
+    ["TOTALE ORE MESE", totalHoursMonth > 0 ? totalHoursMonth : ""],
+    ["TOTALE OPERATORI", totalOperatorsMonth],
+    ["TOTALE COMMESSE", totalCommesse]
   ];
   summaryRows.forEach(([label, value]) => {
     const row = worksheet.getRow(rowPointer);
     row.getCell(1).value = label;
     row.getCell(2).value = value;
+    if (typeof value === "number" && value > 0) {
+      row.getCell(2).numFmt = getExcelNumberFormat(value) || "0";
+    }
     worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
     rowPointer += 1;
   });
+  rowPointer += 1;
 
   commesseSorted.forEach((commessaBlock, idx) => {
     const operatorRows = Array.from(commessaBlock.operatorsMap.values())
       .sort((a, b) => a.displayName.localeCompare(b.displayName, "it"));
     const operators = operatorRows.length ? operatorRows : [];
-    totalOperatorsMonth += operators.length;
 
     const startRow = rowPointer;
     const commessaRow = worksheet.getRow(rowPointer);
@@ -3290,7 +3303,6 @@ async function exportHoursGlobalMonthlyTable() {
       row.getCell(avgHoursColumn).value = workedDays > 0 ? total / workedDays : null;
       if (workedDays > 0) row.getCell(avgHoursColumn).numFmt = "0.##";
       commessaTotal += total;
-      totalHoursMonth += total;
       row.height = 21;
     });
 
@@ -3346,22 +3358,52 @@ async function exportHoursGlobalMonthlyTable() {
     }
   });
 
-  const totalCommesse = commesseSorted.length;
-  const summaryTailRows = [
-    ["TOTALE ORE MESE", totalHoursMonth > 0 ? totalHoursMonth : ""],
-    ["TOTALE OPERATORI", totalOperatorsMonth],
-    ["TOTALE COMMESSE", totalCommesse]
-  ];
-  summaryTailRows.forEach(([label, value], idx) => {
-    const rowIndex = summaryStartRow + 4 + idx;
-    const row = worksheet.getRow(rowIndex);
-    row.getCell(1).value = label;
-    row.getCell(2).value = value;
-    if (typeof value === "number" && value > 0) {
-      row.getCell(2).numFmt = getExcelNumberFormat(value) || "0";
+  for (let row = summaryStartRow; row <= summaryStartRow + summaryRows.length; row += 1) {
+    for (let col = 1; col <= lastColumn; col += 1) {
+      const cell = worksheet.getCell(row, col);
+      setThinBorder(cell);
+      if (!cell.fill) cell.fill = whiteFill;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: col === 1 ? "left" : "center"
+      };
+      if (col === 1 || row === summaryStartRow) {
+        cell.font = { ...(cell.font || {}), bold: true, color: { argb: "FF000000" } };
+      }
     }
-    worksheet.mergeCells(rowIndex, 2, rowIndex, lastColumn);
-  });
+    worksheet.getRow(row).height = row === summaryStartRow ? 28 : 21;
+  }
+  setOuterBlockBorder(summaryStartRow, summaryStartRow + summaryRows.length);
+
+  for (let col = 1; col <= lastColumn; col += 1) {
+    if (col === 1) {
+      worksheet.getColumn(col).width = 28;
+      continue;
+    }
+    if (col >= dayStartColumn && col <= totalColumn - 1) {
+      worksheet.getColumn(col).width = 4.2;
+      continue;
+    }
+    if (col === totalColumn) {
+      worksheet.getColumn(col).width = 11;
+      continue;
+    }
+    if (col === workedDaysColumn) {
+      worksheet.getColumn(col).width = 16;
+      continue;
+    }
+    worksheet.getColumn(col).width = 18;
+  }
+
+  worksheet.autoFilter = {
+    from: { row: summaryStartRow + 7, column: 1 },
+    to: { row: summaryStartRow + 7, column: 1 }
+  };
+
+  for (let row = 1; row <= worksheet.rowCount; row += 1) {
+    const currentRow = worksheet.getRow(row);
+    if (!currentRow.height) currentRow.height = 21;
+  }
 
   for (let row = summaryStartRow; row <= summaryStartRow + 6; row += 1) {
     for (let col = 1; col <= lastColumn; col += 1) {

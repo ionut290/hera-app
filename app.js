@@ -192,6 +192,7 @@ const ui = {
   openPanelNotifiche: document.getElementById("open-panel-notifiche"),
   openPanelBannerGestione: document.getElementById("open-panel-banner-gestione"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
+  openPrivateDocsUploadBtn: document.getElementById("open-private-docs-upload-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
@@ -951,6 +952,7 @@ ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoU
 ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
+ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
@@ -2413,6 +2415,15 @@ function openPrivateDocsPage() {
   window.location.hash = "documenti";
   applyRoute();
   closeSideMenu();
+}
+
+function openPrivateDocsUploadPage() {
+  openPrivateDocsPage();
+  applyPrivateDocPreset("pin");
+  setTimeout(() => {
+    ui.privateDocsForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+    ui.privateDocsName?.focus();
+  }, 50);
 }
 
 function closePrivateDocsPage() {
@@ -8533,7 +8544,19 @@ function renderFuelMezzoDetails() {
     <p><b>Portata (carico):</b> ${escapeHTML(portataLabel)}</p>
     <p><b>Massa complessiva (kg):</b> ${escapeHTML(massaLabel)}</p>
     <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
+    <div class="item-actions">
+      <button id="fuel-open-pin-doc-btn" class="btn" type="button">📌 PIN carburante</button>
+    </div>
   `;
+  const openPinBtn = document.getElementById("fuel-open-pin-doc-btn");
+  openPinBtn?.addEventListener("click", () => {
+    openPrivateDocsPage();
+    applyPrivateDocPreset("pin");
+    setTimeout(() => {
+      ui.privateDocsForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ui.privateDocsName?.focus();
+    }, 50);
+  });
 }
 
 async function loadNearbyFuelStations() {

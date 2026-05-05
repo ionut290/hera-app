@@ -4507,7 +4507,8 @@ function subscribeCommesse() {
         btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
         btn.dataset.commessaId = doc.id;
         btn.style.setProperty("--commessa-accent", getCommessaAccentColor(doc.id, idx));
-        btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span><small class="muted">Cod. commessa: ${escapeHTML(commessa.codice || "-")}</small>`;
+        const codiceCommessa = String(commessa.codice || "").trim();
+        btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${codiceCommessa ? `<small class="muted">${escapeHTML(codiceCommessa)}</small>` : ""}`;
         btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa", commessa.codice || ""));
 
         row.appendChild(btn);

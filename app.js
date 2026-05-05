@@ -6822,7 +6822,12 @@ function renderImpianti() {
       uploadPdfBtn.classList.add("pdf-request-btn");
       actions.appendChild(uploadPdfBtn);
     }
-    const richiestaPdfUrl = String(impianto.richiestaPdfDataUrl || "").trim();
+    const richiestaPdfUrl = String(
+      impianto.richiestaPdfDriveWebViewLink
+      || impianto.richiestaPdfDriveDirectUrl
+      || impianto.richiestaPdfDataUrl
+      || ""
+    ).trim();
     if (detailsVisible && richiestaPdfUrl) {
       const viewPdfBtn = createButton("Visualizza richiesta", () => window.open(richiestaPdfUrl, "_blank"));
       viewPdfBtn.classList.add("pdf-request-view-btn");
@@ -6920,11 +6925,33 @@ async function attachImpiantoRequestPdf(impianto) {
       alert("Seleziona un file PDF valido.");
       return;
     }
+    if (!driveAccessToken && Number(file.size || 0) > 700000) {
+      alert("PDF troppo grande per il salvataggio diretto. Collega Google Drive e riprova.");
+      return;
+    }
     try {
-      const pdfDataUrl = await readFileAsDataUrl(file);
+      let driveFileId = "";
+      let driveWebViewLink = "";
+      let driveDirectUrl = "";
+      if (driveAccessToken) {
+        if (!driveReportsFolderId) await ensureDriveFolders();
+        const upload = await uploadBlobToDrive(
+          file,
+          file.name || `richiesta_${Date.now()}.pdf`,
+          "application/pdf",
+          driveReportsFolderId
+        );
+        driveFileId = upload?.fileId || "";
+        driveWebViewLink = upload?.webViewLink || "";
+        driveDirectUrl = upload?.directUrl || "";
+      }
+      const pdfDataUrl = driveWebViewLink ? "" : await readFileAsDataUrl(file);
       const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
       await Promise.all(ids.map((impiantoId) => ref.doc(impiantoId).set({
         richiestaPdfDataUrl: pdfDataUrl,
+        richiestaPdfDriveFileId: driveFileId,
+        richiestaPdfDriveWebViewLink: driveWebViewLink,
+        richiestaPdfDriveDirectUrl: driveDirectUrl,
         richiestaPdfName: file.name || "richiesta.pdf",
         richiestaPdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         richiestaPdfUpdatedBy: currentUser?.email || ""

@@ -841,7 +841,17 @@ textarea:focus-visible {
   color: var(--commessa-accent, var(--primary));
   background: color-mix(in srgb, var(--commessa-accent, var(--primary)) 14%, #ffffff);
   font-weight: 700;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
   transition: filter 0.2s ease, opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.commessa-btn small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.8;
 }
 
 .impianti-toolbar {
@@ -1412,6 +1422,14 @@ textarea:focus-visible {
   color: #0f9d58;
   text-transform: uppercase;
   text-shadow: 0 0 14px rgba(15, 157, 88, 0.35);
+}
+
+.commessa-focus-code {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0b1f44;
+  letter-spacing: 0.04em;
 }
 
 .commessa-ticker {

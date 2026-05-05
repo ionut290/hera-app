@@ -109,6 +109,7 @@ const ui = {
   testNotificationBtn: document.getElementById("test-notification-btn"),
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
+  commessaCode: document.getElementById("commessa-code"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   commesseNextAction: document.getElementById("commesse-next-action"),
@@ -135,6 +136,7 @@ const ui = {
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
+  commessaFocusCode: document.getElementById("commessa-focus-code"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   showNextActionBtn: document.getElementById("show-next-action-btn"),
   impiantiNextAction: document.getElementById("impianti-next-action"),
@@ -3095,8 +3097,9 @@ async function exportHoursGlobalMonthlyTable() {
       const commessaId = String(entry.commessaId || "").trim();
       if (!commessaId) return;
       const commessaName = String(entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa").trim() || "Commessa";
+      const commessaCode = String(commesseById.get(commessaId)?.codice || "").trim();
       if (!commessaMap.has(commessaId)) {
-        commessaMap.set(commessaId, { commessaName, operatorsMap: new Map() });
+        commessaMap.set(commessaId, { commessaName, commessaCode, operatorsMap: new Map() });
       }
       const commessaBucket = commessaMap.get(commessaId);
       (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
@@ -3251,6 +3254,14 @@ async function exportHoursGlobalMonthlyTable() {
     commessaRow.getCell(1).value = "COMMESSA";
     commessaRow.getCell(2).value = commessaBlock.commessaName;
     worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
+    commessaRow.font = { bold: true, size: 14, color: { argb: "FF0B1F44" } };
+
+    rowPointer += 1;
+    const codeRow = worksheet.getRow(rowPointer);
+    codeRow.getCell(1).value = "CODICE COMMESSA";
+    codeRow.getCell(2).value = commessaBlock.commessaCode || "N/D";
+    worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
+    codeRow.font = { bold: true, size: 12, color: { argb: "FF0B1F44" } };
 
     rowPointer += 1;
     const meseRow = worksheet.getRow(rowPointer);
@@ -4381,6 +4392,7 @@ async function createCommessa(event) {
   }
 
   const nome = ui.commessaName.value.trim();
+  const codice = String(ui.commessaCode?.value || "").trim();
   if (!nome) return;
   if (!canManageData()) {
     alert("Solo un admin può aggiungere commesse.");
@@ -4389,6 +4401,7 @@ async function createCommessa(event) {
 
   const commessaRef = await db.collection("commesse").add({
     nome,
+    codice,
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
@@ -4494,8 +4507,8 @@ function subscribeCommesse() {
         btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
         btn.dataset.commessaId = doc.id;
         btn.style.setProperty("--commessa-accent", getCommessaAccentColor(doc.id, idx));
-        btn.textContent = commessa.nome || "Commessa senza nome";
-        btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa"));
+        btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span><small class="muted">Cod. commessa: ${escapeHTML(commessa.codice || "-")}</small>`;
+        btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa", commessa.codice || ""));
 
         row.appendChild(btn);
         ui.commesseLista.appendChild(row);
@@ -4518,7 +4531,7 @@ function subscribeCommesse() {
       updateCommessaContextUI();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
-        if (restored) selectCommessa(restored.id, restored.nome || "Commessa");
+        if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
       }
       renderNextActionCard();
     }, (error) => {
@@ -5827,7 +5840,7 @@ function downloadVCard(name, phone) {
   URL.revokeObjectURL(link.href);
 }
 
-function selectCommessa(id, nome) {
+function selectCommessa(id, nome, codice = "") {
   selectedCommessaId = id;
   selectedCommessaName = nome;
   mainMapViewState.hasUserMoved = false;
@@ -5837,7 +5850,8 @@ function selectCommessa(id, nome) {
   if (!ui.commessaTargetSelect.value) {
     ui.commessaTargetSelect.value = id;
   }
-  ui.commessaAttiva.textContent = `Commessa selezionata: ${nome}`;
+  const codeText = String(codice || "").trim();
+  ui.commessaAttiva.textContent = codeText ? `Commessa selezionata: ${nome} • Cod. commessa: ${codeText}` : `Commessa selezionata: ${nome}`;
   updateCommessaContextUI();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser || !canManageData();
@@ -5854,6 +5868,11 @@ function selectCommessa(id, nome) {
 function updateCommessaContextUI() {
   if (ui.commessaFocusLabel) {
     ui.commessaFocusLabel.textContent = (selectedCommessaName || "Commessa").toUpperCase();
+  }
+  if (ui.commessaFocusCode) {
+    const selected = commesseById.get(selectedCommessaId) || {};
+    const codeText = String(selected.codice || "").trim();
+    ui.commessaFocusCode.textContent = codeText ? `CODICE COMMESSA: ${codeText}` : "";
   }
 }
 
@@ -10685,11 +10704,11 @@ function renderCommesseManagementList() {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const title = document.createElement("span");
-    title.textContent = commessa.nome || "Commessa senza nome";
+    title.textContent = `${commessa.nome || "Commessa senza nome"} • Cod. ${commessa.codice || "-"}`;
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
-    actions.appendChild(createButton("Rinomina", () => renameCommessa(commessa.id, commessa.nome || "Commessa")));
+    actions.appendChild(createButton("Modifica", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
     actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
 
@@ -10699,19 +10718,23 @@ function renderCommesseManagementList() {
   });
 }
 
-async function renameCommessa(commessaId, currentName) {
+async function renameCommessa(commessaId, currentName, currentCode = "") {
   if (!canManageData()) {
     alert("Solo un admin può rinominare commesse.");
     return;
   }
   const nextName = window.prompt("Nuovo nome commessa:", currentName || "");
   if (nextName == null) return;
+  const nextCode = window.prompt("Codice commessa:", currentCode || "");
+  if (nextCode == null) return;
   const normalized = nextName.trim();
+  const normalizedCode = String(nextCode || "").trim();
   if (!normalized) return;
-  await db.collection("commesse").doc(commessaId).set({ nome: normalized }, { merge: true });
+  await db.collection("commesse").doc(commessaId).set({ nome: normalized, codice: normalizedCode }, { merge: true });
   if (selectedCommessaId === commessaId) {
     selectedCommessaName = normalized;
-    ui.commessaAttiva.textContent = `Commessa selezionata: ${normalized}`;
+    ui.commessaAttiva.textContent = normalizedCode ? `Commessa selezionata: ${normalized} • Cod. commessa: ${normalizedCode}` : `Commessa selezionata: ${normalized}`;
+    updateCommessaContextUI();
   }
 }
 

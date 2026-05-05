@@ -131,6 +131,7 @@
           <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
           <button id="show-next-action-btn" class="btn" type="button">Mostra pulsante Naviga</button>
           <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
+          <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
           <h2 id="impianti-page-title" class="sr-only">Impianti commessa</h2>
         </div>
         <p id="impianti-next-action" class="muted">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
@@ -222,6 +223,7 @@
     <div id="panel-commesse" class="management-panel hidden">
       <form id="commessa-form" class="inline-form">
         <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
+        <input type="text" id="commessa-code" placeholder="Codice commessa">
         <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
       </form>
       <h3>Gestisci commesse (admin)</h3>

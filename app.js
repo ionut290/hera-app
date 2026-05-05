@@ -6818,12 +6818,14 @@ function renderImpianti() {
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
     if (canManageData()) {
-      const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => attachImpiantoRequestPdf(impianto));
+      const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => setImpiantoRequestDriveLink(impianto));
       uploadPdfBtn.classList.add("pdf-request-btn");
       actions.appendChild(uploadPdfBtn);
     }
     const richiestaPdfUrl = String(
-      impianto.richiestaPdfDriveWebViewLink
+      impianto.linkRichiestaDrive
+      || impianto.linkDocumentoRichiesta
+      || impianto.richiestaPdfDriveWebViewLink
       || impianto.richiestaPdfDriveDirectUrl
       || impianto.richiestaPdfDataUrl
       || ""
@@ -6832,6 +6834,11 @@ function renderImpianti() {
       const viewPdfBtn = createButton("Visualizza richiesta", () => window.open(richiestaPdfUrl, "_blank"));
       viewPdfBtn.classList.add("pdf-request-view-btn");
       actions.appendChild(viewPdfBtn);
+    } else if (detailsVisible) {
+      const noPdfLabel = document.createElement("small");
+      noPdfLabel.className = "muted";
+      noPdfLabel.textContent = "Nessuna richiesta caricata";
+      actions.appendChild(noPdfLabel);
     }
 
     if (actions.childElementCount > 0) article.appendChild(actions);
@@ -6907,61 +6914,33 @@ async function saveImpiantoEdits(event) {
   setTimeout(closeImpiantoEditor, 500);
 }
 
-async function attachImpiantoRequestPdf(impianto) {
+async function setImpiantoRequestDriveLink(impianto) {
   if (!selectedCommessaId || !canManageData() || !impianto) return;
   const ids = getImpiantoDocIds(impianto);
   if (!ids.length) {
-    alert("Impianto non valido per allegare il PDF richiesta.");
+    alert("Impianto non valido per salvare il link richiesta.");
     return;
   }
-  const picker = document.createElement("input");
-  picker.type = "file";
-  picker.accept = "application/pdf,.pdf";
-  picker.click();
-  picker.addEventListener("change", async () => {
-    const file = picker.files?.[0];
-    if (!file) return;
-    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
-      alert("Seleziona un file PDF valido.");
-      return;
-    }
-    if (!driveAccessToken && Number(file.size || 0) > 700000) {
-      alert("PDF troppo grande per il salvataggio diretto. Collega Google Drive e riprova.");
-      return;
-    }
-    try {
-      let driveFileId = "";
-      let driveWebViewLink = "";
-      let driveDirectUrl = "";
-      if (driveAccessToken) {
-        if (!driveReportsFolderId) await ensureDriveFolders();
-        const upload = await uploadBlobToDrive(
-          file,
-          file.name || `richiesta_${Date.now()}.pdf`,
-          "application/pdf",
-          driveReportsFolderId
-        );
-        driveFileId = upload?.fileId || "";
-        driveWebViewLink = upload?.webViewLink || "";
-        driveDirectUrl = upload?.directUrl || "";
-      }
-      const pdfDataUrl = driveWebViewLink ? "" : await readFileAsDataUrl(file);
-      const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
-      await Promise.all(ids.map((impiantoId) => ref.doc(impiantoId).set({
-        richiestaPdfDataUrl: pdfDataUrl,
-        richiestaPdfDriveFileId: driveFileId,
-        richiestaPdfDriveWebViewLink: driveWebViewLink,
-        richiestaPdfDriveDirectUrl: driveDirectUrl,
-        richiestaPdfName: file.name || "richiesta.pdf",
-        richiestaPdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        richiestaPdfUpdatedBy: currentUser?.email || ""
-      }, { merge: true })));
-      alert("PDF richiesta salvato su questo cantiere.");
-    } catch (error) {
-      console.error("Errore salvataggio PDF richiesta:", error);
-      alert("Impossibile salvare il PDF richiesta.");
-    }
-  }, { once: true });
+  const currentLink = String(impianto.linkRichiestaDrive || "").trim();
+  const linkRichiestaDrive = window.prompt("Link documento richiesta (Google Drive):", currentLink);
+  if (linkRichiestaDrive == null) return;
+  const normalizedLink = String(linkRichiestaDrive || "").trim();
+  if (normalizedLink && !/^https?:\/\//i.test(normalizedLink)) {
+    alert("Inserisci un link valido (http/https).");
+    return;
+  }
+  try {
+    const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+    await Promise.all(ids.map((impiantoId) => ref.doc(impiantoId).set({
+      linkRichiestaDrive: normalizedLink,
+      richiestaPdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      richiestaPdfUpdatedBy: currentUser?.email || ""
+    }, { merge: true })));
+    alert(normalizedLink ? "Link richiesta salvato." : "Link richiesta rimosso.");
+  } catch (error) {
+    console.error("Errore salvataggio link richiesta:", error);
+    alert("Impossibile salvare il link richiesta.");
+  }
 }
 
 function updateConnectivityStatus() {

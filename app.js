@@ -6817,6 +6817,17 @@ function renderImpianti() {
       actions.appendChild(manageBtn);
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
+    if (canManageData()) {
+      const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => attachImpiantoRequestPdf(impianto));
+      uploadPdfBtn.classList.add("pdf-request-btn");
+      actions.appendChild(uploadPdfBtn);
+    }
+    const richiestaPdfUrl = String(impianto.richiestaPdfDataUrl || "").trim();
+    if (detailsVisible && richiestaPdfUrl) {
+      const viewPdfBtn = createButton("Visualizza richiesta", () => window.open(richiestaPdfUrl, "_blank"));
+      viewPdfBtn.classList.add("pdf-request-view-btn");
+      actions.appendChild(viewPdfBtn);
+    }
 
     if (actions.childElementCount > 0) article.appendChild(actions);
     if (managementActions.childElementCount > 0) article.appendChild(managementActions);
@@ -6889,6 +6900,41 @@ async function saveImpiantoEdits(event) {
   await Promise.all(editingImpiantoIds.map((id) => ref.doc(id).set(patch, { merge: true })));
   ui.impiantoEditFeedback.textContent = "Modifiche salvate. Sincronizzazione per tutti gli utenti in corso...";
   setTimeout(closeImpiantoEditor, 500);
+}
+
+async function attachImpiantoRequestPdf(impianto) {
+  if (!selectedCommessaId || !canManageData() || !impianto) return;
+  const ids = getImpiantoDocIds(impianto);
+  if (!ids.length) {
+    alert("Impianto non valido per allegare il PDF richiesta.");
+    return;
+  }
+  const picker = document.createElement("input");
+  picker.type = "file";
+  picker.accept = "application/pdf,.pdf";
+  picker.click();
+  picker.addEventListener("change", async () => {
+    const file = picker.files?.[0];
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+      alert("Seleziona un file PDF valido.");
+      return;
+    }
+    try {
+      const pdfDataUrl = await readFileAsDataUrl(file);
+      const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
+      await Promise.all(ids.map((impiantoId) => ref.doc(impiantoId).set({
+        richiestaPdfDataUrl: pdfDataUrl,
+        richiestaPdfName: file.name || "richiesta.pdf",
+        richiestaPdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        richiestaPdfUpdatedBy: currentUser?.email || ""
+      }, { merge: true })));
+      alert("PDF richiesta salvato su questo cantiere.");
+    } catch (error) {
+      console.error("Errore salvataggio PDF richiesta:", error);
+      alert("Impossibile salvare il PDF richiesta.");
+    }
+  }, { once: true });
 }
 
 function updateConnectivityStatus() {

@@ -2128,21 +2128,36 @@ function shareDrawnAreaViaWhatsapp() {
   if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
+function parseCommessaHash(hash = window.location.hash || "") {
+  const rawHash = String(hash || "").replace(/^#/, "");
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false };
+  const params = new URLSearchParams(rawHash);
+  return {
+    id: params.get("commessa") || "",
+    resource: params.get("resource") || "",
+    notes: params.has("notes")
+  };
+}
+
+function setCommessaHash(suffix = "") {
+  if (!selectedCommessaId) return;
+  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}${suffix}`;
+}
+
 function applyRoute() {
   const hash = window.location.hash || "";
-  const match = hash.match(/^#commessa=([a-zA-Z0-9_-]+)(?:&resource=(phone|document|note))?$/);
-  const notesMatch = hash.match(/^#commessa=([a-zA-Z0-9_-]+)&notes$/);
+  const commessaRoute = parseCommessaHash(hash);
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
   const showPrivateDocs = hash === "#documenti";
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
-  const commessaIdFromHash = match ? match[1] : (notesMatch ? notesMatch[1] : "");
-  const resourceTypeFromHash = match ? (match[2] || "") : "";
+  const commessaIdFromHash = commessaRoute.id;
+  const resourceTypeFromHash = commessaRoute.resource;
   const showFuel = Boolean(fuelMatch);
   const showPersonalServices = Boolean(personalServiceMatch);
-  const showNotesPage = Boolean(notesMatch && selectedCommessaId === commessaIdFromHash);
+  const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
   ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours || showPersonalServices);
@@ -2202,7 +2217,15 @@ function applyRoute() {
 function openImpiantiPage() {
   if (!selectedCommessaId) return;
   localStorage.setItem(LAST_OPENED_COMMESSA_KEY, selectedCommessaId);
-  window.location.hash = `commessa=${selectedCommessaId}`;
+  setCommessaHash();
+  applyRoute();
+}
+
+function openCommessaNotesPage() {
+  if (!selectedCommessaId) return;
+  closeCommessaResourceViewer();
+  setCommessaHash("&notes");
+  renderCommessaNotes();
   applyRoute();
 }
 
@@ -2254,7 +2277,8 @@ function getWorkflowSteps() {
   const hasSelectedCommessa = Boolean(selectedCommessaId);
   const todoCount = currentImpianti.filter((item) => !item.done).length;
   const doneCount = currentImpianti.filter((item) => Boolean(item.done)).length;
-  const hasOpenCommessaRoute = hasSelectedCommessa && routeHash === `#commessa=${selectedCommessaId}`;
+  const commessaRoute = parseCommessaHash(routeHash);
+  const hasOpenCommessaRoute = hasSelectedCommessa && commessaRoute.id === selectedCommessaId && !commessaRoute.notes && !commessaRoute.resource;
   const isLoggedIn = Boolean(currentUser);
   return [
     {
@@ -4537,7 +4561,8 @@ function subscribeCommesse() {
         return;
       }
 
-      const activeStoredId = localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
+      const routeCommessaId = parseCommessaHash().id;
+      const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
       let shouldRestoreOpenCommessa = false;
       snapshot.forEach((doc, idx) => {
         const commessa = doc.data();
@@ -5714,13 +5739,13 @@ function renderResourceButtonsForCommessa() {
 function openCommessaResourceWindow(type) {
   activeResourceTypeForViewer = type;
   if (!selectedCommessaId) return;
-  window.location.hash = `commessa=${selectedCommessaId}&resource=${type}`;
+  setCommessaHash(`&resource=${encodeURIComponent(type)}`);
   applyRoute();
 }
 
 function closeCommessaResourceViewer() {
-  if (window.location.hash.includes("&resource=") && selectedCommessaId) {
-    window.location.hash = `commessa=${selectedCommessaId}`;
+  if (parseCommessaHash().resource && selectedCommessaId) {
+    setCommessaHash();
   }
   activeResourceTypeForViewer = "";
   ui.commessaResourceViewer.classList.remove("page-mode");
@@ -5908,7 +5933,7 @@ function selectCommessa(id, nome, codice = "") {
   subscribeImpianti();
   subscribeCommessaNotes();
   setCurrentWorkflowStep("open-commessa");
-  if (window.location.hash === `#commessa=${selectedCommessaId}&notes`) openCommessaNotesPage();
+  if (parseCommessaHash().notes) openCommessaNotesPage();
   else openImpiantiPage();
 }
 

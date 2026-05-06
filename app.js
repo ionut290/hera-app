@@ -156,7 +156,11 @@ const ui = {
   commessaNoteTitle: document.getElementById("commessa-note-title"),
   commessaNoteText: document.getElementById("commessa-note-text"),
   commessaNoteDriveLinks: document.getElementById("commessa-note-drive-links"),
-  commessaNoteImpiantoSelect: document.getElementById("commessa-note-impianto-select"),
+  commessaNoteImpiantoKey: document.getElementById("commessa-note-impianto-key"),
+  commessaNoteImpiantoSearch: document.getElementById("commessa-note-impianto-search"),
+  commessaNoteImpiantoClearBtn: document.getElementById("commessa-note-impianto-clear-btn"),
+  commessaNoteImpiantoSuggestions: document.getElementById("commessa-note-impianto-suggestions"),
+  commessaNoteImpiantoSelected: document.getElementById("commessa-note-impianto-selected"),
   commessaNoteSubmitBtn: document.getElementById("commessa-note-submit-btn"),
   commessaNoteCancelBtn: document.getElementById("commessa-note-cancel-btn"),
   commessaNotesList: document.getElementById("commessa-notes-list"),
@@ -173,6 +177,7 @@ const ui = {
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
   viewTodoBtn: document.getElementById("view-todo-btn"),
+  viewAlertsBtn: document.getElementById("view-alerts-btn"),
   personaleForm: document.getElementById("personale-form"),
   personaleNome: document.getElementById("personale-nome"),
   personaleLista: document.getElementById("personale-lista"),
@@ -455,6 +460,7 @@ let unsubscribeCommessaNotes = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentCommessaNotes = [];
+let commessaNoteImpiantoSearchTerm = "";
 let currentUser = null;
 let unsubscribeChat = null;
 let unsubscribeDriveBridge = null;
@@ -945,6 +951,13 @@ ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.commessaNoteNewBtn?.addEventListener("click", () => openCommessaNoteForm());
 ui.commessaNoteForm?.addEventListener("submit", saveCommessaNote);
 ui.commessaNoteCancelBtn?.addEventListener("click", closeCommessaNoteForm);
+ui.commessaNoteImpiantoSearch?.addEventListener("input", onCommessaNoteImpiantoSearchInput);
+ui.commessaNoteImpiantoSearch?.addEventListener("focus", () => renderCommessaNoteImpiantoSuggestions());
+ui.commessaNoteImpiantoSearch?.addEventListener("blur", () => setTimeout(() => {
+  ui.commessaNoteImpiantoSuggestions?.classList.add("hidden");
+  ui.commessaNoteImpiantoSearch?.setAttribute("aria-expanded", "false");
+}, 120));
+ui.commessaNoteImpiantoClearBtn?.addEventListener("click", clearCommessaNoteImpiantoSelection);
 ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
 ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
 ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
@@ -955,6 +968,7 @@ ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
+ui.viewAlertsBtn?.addEventListener("click", () => setImpiantiViewMode("alerts"));
 ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
@@ -6072,21 +6086,119 @@ function getImpiantoDisplayLabel(impianto) {
   return String(impianto?.denominazione || impianto?.idSap || impianto?.codiceHera || impianto?.codicePrezzo || "Impianto").trim();
 }
 
-function populateCommessaNoteImpiantoSelect(selectedKey = "") {
-  if (!ui.commessaNoteImpiantoSelect) return;
-  ui.commessaNoteImpiantoSelect.innerHTML = '<option value="">Nessun impianto collegato</option>';
-  currentImpianti
-    .slice()
-    .sort((a, b) => getImpiantoDisplayLabel(a).localeCompare(getImpiantoDisplayLabel(b), "it"))
-    .forEach((impianto) => {
+function getImpiantoSearchLabel(impianto) {
+  return [
+    getImpiantoDisplayLabel(impianto),
+    impianto?.comune,
+    impianto?.idSap,
+    impianto?.indirizzo || impianto?.descrizioneVia
+  ].map((value) => String(value || "").trim()).filter(Boolean).join(" • ");
+}
+
+function getImpiantoSearchText(impianto) {
+  return [
+    impianto?.denominazione,
+    impianto?.comune,
+    impianto?.idSap,
+    impianto?.indirizzo,
+    impianto?.descrizioneVia,
+    impianto?.codiceHera,
+    impianto?.codicePrezzo,
+    impianto?.voceRiferimento
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+}
+
+function getCommessaNoteLinkedNotes(impianto) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!impiantoKey) return [];
+  return currentCommessaNotes.filter((note) => note.impiantoKey && note.impiantoKey === impiantoKey);
+}
+
+function updateCommessaNoteImpiantoSelection(selectedKey = "", options = {}) {
+  const key = String(selectedKey || "").trim();
+  const impianto = key ? currentImpianti.find((item) => buildImpiantoKey(item) === key) : null;
+  const label = impianto ? getImpiantoSearchLabel(impianto) : "";
+  if (ui.commessaNoteImpiantoKey) ui.commessaNoteImpiantoKey.value = impianto ? key : "";
+  if (ui.commessaNoteImpiantoSearch && options.updateSearch !== false) ui.commessaNoteImpiantoSearch.value = label;
+  if (ui.commessaNoteImpiantoSelected) {
+    ui.commessaNoteImpiantoSelected.textContent = impianto
+      ? `Impianto selezionato: ${label}`
+      : "Nessun impianto collegato.";
+  }
+  renderCommessaNoteImpiantoSuggestions();
+}
+
+function clearCommessaNoteImpiantoSelection() {
+  commessaNoteImpiantoSearchTerm = "";
+  if (ui.commessaNoteImpiantoSearch) ui.commessaNoteImpiantoSearch.value = "";
+  updateCommessaNoteImpiantoSelection("");
+  ui.commessaNoteImpiantoSearch?.focus();
+}
+
+function getFilteredCommessaNoteImpianti() {
+  const term = commessaNoteImpiantoSearchTerm.trim().toLowerCase();
+  return currentImpianti
+    .filter((impianto) => {
       const key = buildImpiantoKey(impianto);
-      if (!key) return;
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = getImpiantoDisplayLabel(impianto);
-      if (key === selectedKey) option.selected = true;
-      ui.commessaNoteImpiantoSelect.appendChild(option);
+      if (!key) return false;
+      if (!term) return true;
+      return getImpiantoSearchText(impianto).includes(term);
+    })
+    .sort((a, b) => {
+      const aName = getImpiantoDisplayLabel(a).toLowerCase();
+      const bName = getImpiantoDisplayLabel(b).toLowerCase();
+      const aStarts = term && aName.startsWith(term);
+      const bStarts = term && bName.startsWith(term);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      return getImpiantoDisplayLabel(a).localeCompare(getImpiantoDisplayLabel(b), "it");
+    })
+    .slice(0, 12);
+}
+
+function renderCommessaNoteImpiantoSuggestions() {
+  if (!ui.commessaNoteImpiantoSuggestions) return;
+  const suggestions = getFilteredCommessaNoteImpianti();
+  ui.commessaNoteImpiantoSuggestions.innerHTML = "";
+  const isFocused = document.activeElement === ui.commessaNoteImpiantoSearch;
+  if (!isFocused && !commessaNoteImpiantoSearchTerm) {
+    ui.commessaNoteImpiantoSuggestions.classList.add("hidden");
+    ui.commessaNoteImpiantoSearch?.setAttribute("aria-expanded", "false");
+    return;
+  }
+  if (!suggestions.length) {
+    ui.commessaNoteImpiantoSuggestions.innerHTML = "<p class='muted'>Nessun impianto della commessa trovato.</p>";
+    ui.commessaNoteImpiantoSuggestions.classList.remove("hidden");
+    ui.commessaNoteImpiantoSearch?.setAttribute("aria-expanded", "true");
+    return;
+  }
+  suggestions.forEach((impianto) => {
+    const key = buildImpiantoKey(impianto);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "commessa-note-suggestion";
+    btn.setAttribute("role", "option");
+    btn.innerHTML = `
+      <strong>${escapeHTML(getImpiantoDisplayLabel(impianto))}</strong>
+      <small>${escapeHTML(getImpiantoSearchLabel(impianto))}</small>
+    `;
+    btn.addEventListener("mousedown", (event) => event.preventDefault());
+    btn.addEventListener("click", () => {
+      commessaNoteImpiantoSearchTerm = "";
+      updateCommessaNoteImpiantoSelection(key);
+      ui.commessaNoteImpiantoSuggestions?.classList.add("hidden");
+      ui.commessaNoteImpiantoSearch?.setAttribute("aria-expanded", "false");
     });
+    ui.commessaNoteImpiantoSuggestions.appendChild(btn);
+  });
+  ui.commessaNoteImpiantoSuggestions.classList.remove("hidden");
+  ui.commessaNoteImpiantoSearch?.setAttribute("aria-expanded", "true");
+}
+
+function onCommessaNoteImpiantoSearchInput(event) {
+  commessaNoteImpiantoSearchTerm = String(event.target.value || "").trim();
+  if (ui.commessaNoteImpiantoKey) ui.commessaNoteImpiantoKey.value = "";
+  if (ui.commessaNoteImpiantoSelected) ui.commessaNoteImpiantoSelected.textContent = "Seleziona un suggerimento oppure lascia nessun impianto collegato.";
+  renderCommessaNoteImpiantoSuggestions();
 }
 
 function openCommessaNoteForm(note = null) {
@@ -6100,7 +6212,8 @@ function openCommessaNoteForm(note = null) {
   if (ui.commessaNoteTitle) ui.commessaNoteTitle.value = getCommessaNoteTitle(note);
   ui.commessaNoteText.value = note?.text || "";
   ui.commessaNoteDriveLinks.value = Array.isArray(note?.driveLinks) ? note.driveLinks.join("\n") : "";
-  populateCommessaNoteImpiantoSelect(note?.impiantoKey || "");
+  commessaNoteImpiantoSearchTerm = "";
+  updateCommessaNoteImpiantoSelection(note?.impiantoKey || "");
   ui.commessaNoteSubmitBtn.textContent = note?.id ? "Aggiorna nota" : "Salva nota";
   setTimeout(() => (note?.id ? ui.commessaNoteTitle : ui.commessaNoteTitle || ui.commessaNoteText)?.focus(), 30);
 }
@@ -6138,7 +6251,7 @@ async function saveCommessaNote(event) {
   event.preventDefault();
   if (!selectedCommessaId) return;
   const noteId = String(ui.commessaNoteId.value || "").trim();
-  const impiantoKey = String(ui.commessaNoteImpiantoSelect?.value || "").trim();
+  const impiantoKey = String(ui.commessaNoteImpiantoKey?.value || "").trim();
   const impianto = impiantoKey ? currentImpianti.find((item) => buildImpiantoKey(item) === impiantoKey) : null;
   const payload = {
     commessaId: selectedCommessaId,
@@ -6945,9 +7058,10 @@ function onImpiantoSearchInput(event) {
 }
 
 function setImpiantiViewMode(mode) {
-  impiantiViewMode = mode === "todo" ? "todo" : "done";
+  impiantiViewMode = ["todo", "alerts"].includes(mode) ? mode : "done";
   ui.viewDoneBtn.classList.toggle("btn-primary", impiantiViewMode === "done");
   ui.viewTodoBtn.classList.toggle("btn-primary", impiantiViewMode === "todo");
+  ui.viewAlertsBtn?.classList.toggle("btn-primary", impiantiViewMode === "alerts");
   renderImpianti();
 }
 
@@ -6974,7 +7088,10 @@ function renderImpianti() {
   }
 
   const filtered = currentImpianti.filter((impianto) => {
-    const viewMatch = impiantiViewMode === "done" ? Boolean(impianto.done) : !impianto.done;
+    const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+    const viewMatch = impiantiViewMode === "done"
+      ? Boolean(impianto.done)
+      : !impianto.done && (impiantiViewMode === "alerts" ? linkedNotes.length > 0 : true);
     return viewMatch && matchesImpiantoSearch(impianto);
   });
   const sorted = [...filtered].sort((a, b) => {
@@ -6983,7 +7100,9 @@ function renderImpianti() {
   });
 
   if (!sorted.length) {
-    ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
+    ui.impiantiLista.innerHTML = impiantiViewMode === "alerts"
+      ? "<p class='muted'>Nessun impianto da fare con segnalazione collegata.</p>"
+      : "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
     renderNextActionCard();
     return;
   }
@@ -6997,6 +7116,8 @@ function renderImpianti() {
     article.classList.toggle("is-expanded", detailsVisible);
     if (highlightedImpiantoKey === impiantoKey) article.classList.add("highlight");
 
+    const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+    article.classList.toggle("has-segnalazione", linkedNotes.length > 0);
     const distanceKm = distanceFromUser(impianto);
     const distance = formatDistance(distanceKm);
     const travelMeta = estimateTravelMeta(distanceKm);
@@ -7008,6 +7129,7 @@ function renderImpianti() {
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
+      ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       <small class="impianto-travel-meta">
         ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
       </small>
@@ -7029,11 +7151,10 @@ function renderImpianti() {
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
-    const linkedNotes = currentCommessaNotes.filter((note) => note.impiantoKey && note.impiantoKey === impiantoKey);
     if (linkedNotes.length) {
       const notesBox = document.createElement("div");
       notesBox.className = "impianto-linked-notes";
-      notesBox.innerHTML = "<p><b>Note collegate:</b></p>";
+      notesBox.innerHTML = "<p><b>⚠️ Segnalazione presente:</b></p>";
       linkedNotes.forEach((note) => {
         const noteBtn = document.createElement("button");
         noteBtn.type = "button";
@@ -8349,6 +8470,14 @@ function openWhatsApp(impianto, options = {}) {
   const doneInfo = formatDoneDateTime(impianto.doneAt);
   const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
   const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  const segnalazioniLines = linkedNotes.length
+    ? [
+        "",
+        "⚠️ A questo impianto è stata segnalata una criticità:",
+        ...linkedNotes.map((note) => `${getCommessaNoteTitle(note)}\n${note.text || "-"}`)
+      ]
+    : [];
   const message = [
     `${title} - Report operativo`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
@@ -8358,7 +8487,8 @@ function openWhatsApp(impianto, options = {}) {
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     `👷 Operatore: ${user.displayName || user.email || "-"}`,
     `📅 Data: ${date}`,
-    `🕒 Ora: ${time}`
+    `🕒 Ora: ${time}`,
+    ...segnalazioniLines
   ].join("\n");
 
   const encodedMessage = encodeURIComponent(message);

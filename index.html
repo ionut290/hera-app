@@ -165,6 +165,7 @@
           <div class="view-tabs" role="tablist" aria-label="Filtro impianti">
             <button id="view-done-btn" class="btn" type="button">✅ Fatti</button>
             <button id="view-todo-btn" class="btn btn-primary" type="button">🛠️ Da fare</button>
+            <button id="view-alerts-btn" class="btn" type="button">⚠️ Impianti con segnalazione</button>
             <button id="export-current-commessa-btn" class="btn hidden" type="button">📤 Esporta fatti</button>
           </div>
         </div>
@@ -201,10 +202,17 @@
               <textarea id="commessa-note-drive-links" rows="3" placeholder="Incolla uno o più link Google Drive, uno per riga"></textarea>
               <small class="muted">Puoi inserire più link separandoli con una nuova riga.</small>
             </label>
-            <label>Impianto di riferimento
-              <select id="commessa-note-impianto-select">
-                <option value="">Nessun impianto collegato</option>
-              </select>
+            <label class="commessa-note-impianto-field">Impianto di riferimento
+              <input id="commessa-note-impianto-key" type="hidden">
+              <div class="commessa-note-autocomplete" data-note-impianto-autocomplete>
+                <div class="search-box commessa-note-autocomplete-search">
+                  <span aria-hidden="true">🔎</span>
+                  <input id="commessa-note-impianto-search" type="search" placeholder="Scrivi nome, comune, ID SAP o via..." autocomplete="off" aria-controls="commessa-note-impianto-suggestions" aria-expanded="false">
+                </div>
+                <button id="commessa-note-impianto-clear-btn" class="btn btn-small" type="button">Nessun impianto collegato</button>
+                <div id="commessa-note-impianto-suggestions" class="commessa-note-suggestions hidden" role="listbox"></div>
+                <p id="commessa-note-impianto-selected" class="muted commessa-note-impianto-selected">Nessun impianto collegato.</p>
+              </div>
             </label>
             <div class="commessa-note-form-actions">
               <button id="commessa-note-submit-btn" class="btn btn-primary" type="submit">Salva nota</button>

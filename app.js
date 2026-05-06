@@ -2229,6 +2229,14 @@ function openCommessaNotesPage() {
   applyRoute();
 }
 
+function openCommessaNotesPage() {
+  if (!selectedCommessaId) return;
+  closeCommessaResourceViewer();
+  window.location.hash = `commessa=${selectedCommessaId}&notes`;
+  renderCommessaNotes();
+  applyRoute();
+}
+
 function closeImpiantiPage() {
   closeMapFullscreenPage();
   localStorage.removeItem(LAST_OPENED_COMMESSA_KEY);

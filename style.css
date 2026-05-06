@@ -2330,3 +2330,45 @@ textarea:focus-visible {
     justify-content: center;
   }
 }
+
+.commessa-note-title-btn {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #166534;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.commessa-note-title-btn:hover,
+.commessa-note-title-btn:focus-visible {
+  color: #14532d;
+  text-decoration-thickness: 2px;
+}
+
+.commessa-note-detail {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: #f0fdf4;
+}
+
+.impianto-linked-notes {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.impianto-note-title-btn {
+  width: 100%;
+}

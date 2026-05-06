@@ -140,7 +140,7 @@
       <section class="card">
         <div class="commessa-tools-bar">
           <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
-          <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-expanded="false" aria-controls="commessa-notes-form-wrap">📝 NOTE COMMESSA</button>
+          <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-controls="commessa-notes-page">📝 NOTE COMMESSA</button>
           <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
         </div>
         <section id="commessa-resource-viewer" class="commessa-resource-viewer hidden">
@@ -154,55 +154,6 @@
         <p id="gps-status" class="muted"></p>
       </section>
 
-      <section id="commessa-notes-card" class="card commessa-notes-card">
-        <div class="section-head commessa-notes-head">
-          <div>
-            <h2>📌 Note commessa</h2>
-            <p id="commessa-notes-counter" class="commessa-notes-counter muted">📝 Note: 0 · ✅ Fatte: 0 · ⏳ In lavorazione: 0 · 🔴 Da fare: 0</p>
-          </div>
-        </div>
-
-        <div id="commessa-notes-form-wrap" class="commessa-notes-form-wrap hidden">
-          <form id="commessa-note-form" class="commessa-note-form">
-            <input id="commessa-note-id" type="hidden">
-            <label>Data nota
-              <input id="commessa-note-date" type="date" required>
-            </label>
-            <label>Tipo nota
-              <select id="commessa-note-type" required>
-                <option value="Segnalazione">Segnalazione</option>
-                <option value="Lavorazione da fare">Lavorazione da fare</option>
-                <option value="Problema riscontrato">Problema riscontrato</option>
-                <option value="Materiale necessario">Materiale necessario</option>
-                <option value="Comunicazione al cliente">Comunicazione al cliente</option>
-                <option value="Promemoria interno">Promemoria interno</option>
-                <option value="Altro">Altro</option>
-              </select>
-            </label>
-            <label>Stato nota
-              <select id="commessa-note-status" required>
-                <option value="Da fare">Da fare</option>
-                <option value="In lavorazione">In lavorazione</option>
-                <option value="Fatta">Fatta</option>
-                <option value="Annullata">Annullata</option>
-              </select>
-            </label>
-            <label class="commessa-note-text-field">Testo della nota
-              <textarea id="commessa-note-text" rows="4" placeholder="Scrivi qui la nota della commessa..." required></textarea>
-            </label>
-            <label class="commessa-note-links-field">Link foto/documento Drive
-              <textarea id="commessa-note-drive-links" rows="3" placeholder="Incolla uno o più link Google Drive, uno per riga: foto, documenti, PDF, video, verbali..."></textarea>
-              <small class="muted">Puoi inserire più allegati Drive separandoli con una nuova riga.</small>
-            </label>
-            <div class="commessa-note-form-actions">
-              <button id="commessa-note-submit-btn" class="btn btn-primary" type="submit">Salva nota</button>
-              <button id="commessa-note-cancel-btn" class="btn" type="button">Annulla</button>
-            </div>
-          </form>
-        </div>
-
-        <div id="commessa-notes-list" class="commessa-notes-list"></div>
-      </section>
 
       <section class="card">
         <h2>Impianti (dal più vicino al più lontano)</h2>
@@ -218,6 +169,52 @@
           </div>
         </div>
         <div id="impianti-lista" class="impianti-lista"></div>
+      </section>
+    </section>
+
+
+    <section id="commessa-notes-page" class="hidden">
+      <section id="commessa-notes-card" class="card commessa-notes-card">
+        <div class="section-head commessa-notes-head">
+          <div>
+            <button id="commessa-notes-back-btn" class="btn" type="button">← Torna alla commessa</button>
+            <h2>📌 Note commessa</h2>
+            <p id="commessa-notes-title" class="muted"></p>
+            <p id="commessa-notes-counter" class="commessa-notes-counter muted">📝 Note: 0</p>
+          </div>
+          <button id="commessa-note-new-btn" class="btn btn-primary" type="button">+ Nuova nota</button>
+        </div>
+
+        <div id="commessa-notes-form-wrap" class="commessa-notes-form-wrap hidden">
+          <form id="commessa-note-form" class="commessa-note-form">
+            <input id="commessa-note-id" type="hidden">
+            <label>Data
+              <input id="commessa-note-date" type="date" required>
+            </label>
+            <label>Titolo nota
+              <input id="commessa-note-title" type="text" placeholder="Titolo della nota" required>
+            </label>
+            <label class="commessa-note-text-field">Testo nota
+              <textarea id="commessa-note-text" rows="4" placeholder="Scrivi qui la nota della commessa..." required></textarea>
+            </label>
+            <label class="commessa-note-links-field">Link foto da Google Drive
+              <textarea id="commessa-note-drive-links" rows="3" placeholder="Incolla uno o più link Google Drive, uno per riga"></textarea>
+              <small class="muted">Puoi inserire più link separandoli con una nuova riga.</small>
+            </label>
+            <label>Impianto di riferimento
+              <select id="commessa-note-impianto-select">
+                <option value="">Nessun impianto collegato</option>
+              </select>
+            </label>
+            <div class="commessa-note-form-actions">
+              <button id="commessa-note-submit-btn" class="btn btn-primary" type="submit">Salva nota</button>
+              <button id="commessa-note-cancel-btn" class="btn" type="button">Annulla</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="commessa-notes-list" class="commessa-notes-list"></div>
+        <div id="commessa-note-detail" class="commessa-note-detail hidden"></div>
       </section>
     </section>
 

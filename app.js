@@ -142,6 +142,20 @@ const ui = {
   impiantiNextAction: document.getElementById("impianti-next-action"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
+  commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
+  commessaNotesCard: document.getElementById("commessa-notes-card"),
+  commessaNotesCounter: document.getElementById("commessa-notes-counter"),
+  commessaNotesFormWrap: document.getElementById("commessa-notes-form-wrap"),
+  commessaNoteForm: document.getElementById("commessa-note-form"),
+  commessaNoteId: document.getElementById("commessa-note-id"),
+  commessaNoteDate: document.getElementById("commessa-note-date"),
+  commessaNoteType: document.getElementById("commessa-note-type"),
+  commessaNoteStatus: document.getElementById("commessa-note-status"),
+  commessaNoteText: document.getElementById("commessa-note-text"),
+  commessaNoteDriveLinks: document.getElementById("commessa-note-drive-links"),
+  commessaNoteSubmitBtn: document.getElementById("commessa-note-submit-btn"),
+  commessaNoteCancelBtn: document.getElementById("commessa-note-cancel-btn"),
+  commessaNotesList: document.getElementById("commessa-notes-list"),
   mapFullscreenPage: document.getElementById("map-fullscreen-page"),
   mapFullscreenBackBtn: document.getElementById("map-fullscreen-back-btn"),
   mapDrawAreaBtn: document.getElementById("map-draw-area-btn"),
@@ -432,8 +446,10 @@ let selectedCommessaId = "";
 let selectedCommessaName = "";
 let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
+let unsubscribeCommessaNotes = null;
 let currentUserPos = null;
 let currentImpianti = [];
+let currentCommessaNotes = [];
 let currentUser = null;
 let unsubscribeChat = null;
 let unsubscribeDriveBridge = null;
@@ -919,6 +935,9 @@ ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.commessaNotesToggleBtn?.addEventListener("click", toggleCommessaNoteForm);
+ui.commessaNoteForm?.addEventListener("submit", saveCommessaNote);
+ui.commessaNoteCancelBtn?.addEventListener("click", closeCommessaNoteForm);
 ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
 ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
 ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
@@ -1662,6 +1681,7 @@ auth.onAuthStateChanged((user) => {
 
   stopCommesseSubscription();
   stopImpiantiSubscription();
+  stopCommessaNotesSubscription();
   stopChatSubscription();
   stopDriveBridgeSubscription();
   stopPersonaleSubscription();
@@ -2127,6 +2147,8 @@ function applyRoute() {
   ui.hoursPage.classList.toggle("hidden", !showHours);
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
+  ui.commessaNotesToggleBtn?.classList.toggle("hidden", showResourceViewer);
+  ui.commessaNotesCard?.classList.toggle("hidden", showResourceViewer);
   const mapElement = document.getElementById("map");
   if (mapElement) mapElement.classList.toggle("hidden", showResourceViewer);
   if (ui.gpsStatus) ui.gpsStatus.classList.toggle("hidden", showResourceViewer);
@@ -5861,7 +5883,9 @@ function selectCommessa(id, nome, codice = "") {
   closeCommessaResourceViewer();
 
   stopImpiantiSubscription();
+  stopCommessaNotesSubscription();
   subscribeImpianti();
+  subscribeCommessaNotes();
   setCurrentWorkflowStep("open-commessa");
   openImpiantiPage();
 }
@@ -5947,6 +5971,190 @@ function stopImpiantiSubscription() {
   activeNearbyImpiantoContext = null;
   renderHeaderActivitySummary();
   clearMap();
+}
+
+function subscribeCommessaNotes() {
+  if (!selectedCommessaId) return;
+  unsubscribeCommessaNotes = db
+    .collection("commesse")
+    .doc(selectedCommessaId)
+    .collection("noteCommessa")
+    .orderBy("noteDate", "desc")
+    .onSnapshot((snapshot) => {
+      currentCommessaNotes = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const dateCompare = String(b.noteDate || "").localeCompare(String(a.noteDate || ""));
+          if (dateCompare) return dateCompare;
+          return firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt);
+        });
+      renderCommessaNotes();
+    }, (error) => {
+      console.error(error);
+      if (ui.commessaNotesList) ui.commessaNotesList.innerHTML = "<p class='muted'>Errore caricamento note commessa.</p>";
+    });
+}
+
+function stopCommessaNotesSubscription() {
+  if (unsubscribeCommessaNotes) {
+    unsubscribeCommessaNotes();
+    unsubscribeCommessaNotes = null;
+  }
+  currentCommessaNotes = [];
+  renderCommessaNotes();
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toggleCommessaNoteForm() {
+  if (ui.commessaNotesFormWrap?.classList.contains("hidden")) {
+    openCommessaNoteForm();
+  } else {
+    closeCommessaNoteForm();
+  }
+}
+
+function openCommessaNoteForm(note = null) {
+  if (!selectedCommessaId) return;
+  ui.commessaNotesFormWrap?.classList.remove("hidden");
+  if (ui.commessaNotesToggleBtn) ui.commessaNotesToggleBtn.setAttribute("aria-expanded", "true");
+  ui.commessaNoteId.value = note?.id || "";
+  ui.commessaNoteDate.value = note?.noteDate || getTodayDateKey();
+  ui.commessaNoteType.value = note?.type || "Segnalazione";
+  ui.commessaNoteStatus.value = note?.status || "Da fare";
+  ui.commessaNoteText.value = note?.text || "";
+  ui.commessaNoteDriveLinks.value = Array.isArray(note?.driveLinks) ? note.driveLinks.join("\n") : "";
+  ui.commessaNoteSubmitBtn.textContent = note?.id ? "Aggiorna nota" : "Salva nota";
+  setTimeout(() => ui.commessaNoteText?.focus(), 30);
+}
+
+function closeCommessaNoteForm() {
+  ui.commessaNotesFormWrap?.classList.add("hidden");
+  if (ui.commessaNotesToggleBtn) ui.commessaNotesToggleBtn.setAttribute("aria-expanded", "false");
+  ui.commessaNoteForm?.reset();
+  if (ui.commessaNoteId) ui.commessaNoteId.value = "";
+  if (ui.commessaNoteSubmitBtn) ui.commessaNoteSubmitBtn.textContent = "Salva nota";
+}
+
+function parseDriveLinks(value) {
+  return String(value || "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getDriveLinkLabel(url) {
+  const normalized = String(url || "").toLowerCase();
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/.test(normalized) || normalized.includes("photo") || normalized.includes("foto")) return "📷 Apri foto";
+  if (/\.(pdf|docx?|xlsx?|pptx?)(\?|#|$)/.test(normalized) || normalized.includes("document")) return "📄 Apri documento";
+  return "🔗 Apri allegato";
+}
+
+function formatCommessaNoteDate(noteDate) {
+  if (!noteDate) return "-";
+  const date = new Date(`${noteDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return noteDate;
+  return date.toLocaleDateString("it-IT");
+}
+
+async function saveCommessaNote(event) {
+  event.preventDefault();
+  if (!selectedCommessaId) return;
+  const noteId = String(ui.commessaNoteId.value || "").trim();
+  const payload = {
+    commessaId: selectedCommessaId,
+    commessaName: selectedCommessaName || "",
+    noteDate: ui.commessaNoteDate.value || getTodayDateKey(),
+    type: ui.commessaNoteType.value || "Segnalazione",
+    text: String(ui.commessaNoteText.value || "").trim(),
+    status: ui.commessaNoteStatus.value || "Da fare",
+    driveLinks: parseDriveLinks(ui.commessaNoteDriveLinks.value),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  };
+  if (!payload.text) {
+    alert("Inserisci il testo della nota.");
+    return;
+  }
+  const notesRef = db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa");
+  if (noteId) {
+    await notesRef.doc(noteId).set(payload, { merge: true });
+  } else {
+    await notesRef.add({
+      ...payload,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser?.email || ""
+    });
+  }
+  closeCommessaNoteForm();
+}
+
+async function updateCommessaNoteStatus(noteId, status) {
+  if (!selectedCommessaId || !noteId) return;
+  await db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa").doc(noteId).set({
+    status,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
+}
+
+async function deleteCommessaNote(noteId) {
+  if (!selectedCommessaId || !noteId) return;
+  if (!window.confirm("Eliminare questa nota commessa?")) return;
+  await db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa").doc(noteId).delete();
+}
+
+function renderCommessaNotes() {
+  if (!ui.commessaNotesList || !ui.commessaNotesCounter) return;
+  const total = currentCommessaNotes.length;
+  const done = currentCommessaNotes.filter((note) => note.status === "Fatta").length;
+  const working = currentCommessaNotes.filter((note) => note.status === "In lavorazione").length;
+  const todo = currentCommessaNotes.filter((note) => note.status === "Da fare").length;
+  ui.commessaNotesCounter.textContent = `📝 Note: ${total} · ✅ Fatte: ${done} · ⏳ In lavorazione: ${working} · 🔴 Da fare: ${todo}`;
+
+  if (!selectedCommessaId) {
+    ui.commessaNotesList.innerHTML = "<p class='muted'>Seleziona una commessa per vedere le note.</p>";
+    return;
+  }
+  if (!currentCommessaNotes.length) {
+    ui.commessaNotesList.innerHTML = "<p class='muted'>Nessuna nota inserita per questa commessa.</p>";
+    return;
+  }
+
+  ui.commessaNotesList.innerHTML = "";
+  currentCommessaNotes.forEach((note) => {
+    const article = document.createElement("article");
+    const statusKey = String(note.status || "Da fare").toLowerCase().replace(/\s+/g, "-");
+    article.className = `commessa-note-item status-${statusKey}`;
+    const driveLinks = Array.isArray(note.driveLinks) ? note.driveLinks : [];
+    article.innerHTML = `
+      <div class="commessa-note-main">
+        <div class="commessa-note-meta">
+          <span>📅 ${escapeHTML(formatCommessaNoteDate(note.noteDate))}</span>
+          <span>🏷️ ${escapeHTML(note.type || "-")}</span>
+          <span class="commessa-note-status">${note.status === "Fatta" ? "✅" : note.status === "In lavorazione" ? "⏳" : note.status === "Da fare" ? "🔴" : "⚪"} ${escapeHTML(note.status || "Da fare")}</span>
+        </div>
+        <p class="commessa-note-text">${escapeHTML(note.text || "-")}</p>
+        <div class="commessa-note-attachments">
+          ${driveLinks.length ? driveLinks.map((link) => `<a class="btn btn-small commessa-note-attachment" href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer">${escapeHTML(getDriveLinkLabel(link))}</a>`).join("") : "<span class='muted'>Nessun allegato Drive.</span>"}
+        </div>
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.className = "commessa-note-actions";
+    actions.appendChild(createButton("Modifica", () => openCommessaNoteForm(note)));
+    actions.appendChild(createButton("Elimina", () => deleteCommessaNote(note.id)));
+    const workingBtn = createButton("Segna come in lavorazione", () => updateCommessaNoteStatus(note.id, "In lavorazione"));
+    workingBtn.disabled = note.status === "In lavorazione";
+    actions.appendChild(workingBtn);
+    const doneBtn = createButton("Segna come fatta", () => updateCommessaNoteStatus(note.id, "Fatta"));
+    doneBtn.disabled = note.status === "Fatta";
+    actions.appendChild(doneBtn);
+    article.appendChild(actions);
+    ui.commessaNotesList.appendChild(article);
+  });
 }
 
 function onExcelSelected(event) {
@@ -7253,6 +7461,7 @@ async function deleteCommessa(commessaId, nome) {
     selectedCommessaName = "";
     window.location.hash = "";
     stopImpiantiSubscription();
+    stopCommessaNotesSubscription();
     ui.impiantiLista.innerHTML = "<p class='muted'>Seleziona una commessa.</p>";
     ui.commessaAttiva.textContent = "Seleziona una commessa.";
     applyRoute();

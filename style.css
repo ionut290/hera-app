@@ -2142,3 +2142,191 @@ textarea:focus-visible {
 #hours-page .item-actions > * {
   flex: 1 1 190px;
 }
+
+.commessa-notes-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-color: #15803d;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(22, 163, 74, 0.24);
+  white-space: nowrap;
+}
+
+.commessa-notes-toggle-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+  border-color: #166534;
+}
+
+.commessa-notes-card {
+  border-top: 4px solid #16a34a;
+}
+
+.commessa-notes-head {
+  align-items: flex-start;
+}
+
+.commessa-notes-counter {
+  font-weight: 700;
+  color: #334155;
+}
+
+.commessa-notes-form-wrap {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.commessa-note-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.commessa-note-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.commessa-note-text-field,
+.commessa-note-links-field,
+.commessa-note-form-actions {
+  grid-column: 1 / -1;
+}
+
+.commessa-note-form-actions,
+.commessa-note-actions,
+.commessa-note-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commessa-notes-list {
+  display: grid;
+  gap: 10px;
+}
+
+.commessa-note-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 6px solid #94a3b8;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.commessa-note-item.status-da-fare {
+  border-left-color: #dc2626;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.12);
+}
+
+.commessa-note-item.status-in-lavorazione {
+  border-left-color: #f59e0b;
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.commessa-note-item.status-fatta {
+  border-left-color: #16a34a;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.commessa-note-item.status-fatta .commessa-note-text {
+  color: #166534;
+}
+
+.commessa-note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.commessa-note-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.commessa-note-status {
+  background: #ecfdf5 !important;
+  border-color: #bbf7d0 !important;
+}
+
+.commessa-note-text {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.commessa-note-attachment {
+  color: #0f172a;
+  text-decoration: none;
+}
+
+@media (min-width: 760px) {
+  .commessa-note-item {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .commessa-note-actions {
+    justify-content: flex-end;
+    max-width: 290px;
+  }
+}
+
+@media (max-width: 760px) {
+  .commessa-tools-bar {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .commessa-tools-bar > .btn,
+  .commessa-resource-buttons,
+  .commessa-resource-buttons .btn,
+  .commessa-note-form-actions .btn,
+  .commessa-note-actions .btn {
+    width: 100%;
+  }
+
+  .commessa-resource-buttons {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .commessa-note-form {
+    grid-template-columns: 1fr;
+  }
+
+  .commessa-note-item {
+    padding: 10px;
+  }
+
+  .commessa-note-meta span,
+  .commessa-note-attachments .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

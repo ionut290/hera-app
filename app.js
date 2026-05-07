@@ -518,6 +518,8 @@ const commessaSheetCache = new Map();
 let commesseById = new Map();
 let commessaStatsById = new Map();
 let commessaHoursById = new Map();
+let commessaWorkSummariesById = new Map();
+let allHoursReports = [];
 let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
@@ -4507,15 +4509,42 @@ function getSubcommesse(parentCommessaId) {
 
 
 function getEmptyCommessaStats() {
-  return { total: 0, done: 0, openAlerts: 0 };
+  return { total: 0, done: 0, openAlerts: 0, firstDoneAtMs: 0, firstDoneDateKey: "", lastResetAtMs: 0, lastResetDateKey: "" };
+}
+
+function dateKeyFromMillis(millis) {
+  if (!Number.isFinite(millis) || millis <= 0) return "";
+  const date = new Date(millis);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function calculateImpiantiStats(rawImpianti = []) {
   const combined = combineImpiantiForView(rawImpianti);
   const total = combined.length;
-  const done = combined.filter((impianto) => Boolean(impianto.done)).length;
+  const doneImpianti = combined.filter((impianto) => Boolean(impianto.done));
+  const done = doneImpianti.length;
   const openAlerts = combined.filter((impianto) => hasOpenImpiantoAlert(impianto)).length;
-  return { total, done, openAlerts };
+  const firstDoneAtMs = doneImpianti.reduce((earliest, impianto) => {
+    const doneAtMs = firestoreDateToMillis(impianto.doneAt);
+    if (!doneAtMs) return earliest;
+    return earliest ? Math.min(earliest, doneAtMs) : doneAtMs;
+  }, 0);
+  const lastResetAtMs = combined.reduce((latest, impianto) => {
+    const resetAtMs = firestoreDateToMillis(impianto.resetAt);
+    return resetAtMs > latest ? resetAtMs : latest;
+  }, 0);
+  return {
+    total,
+    done,
+    openAlerts,
+    firstDoneAtMs,
+    firstDoneDateKey: dateKeyFromMillis(firstDoneAtMs),
+    lastResetAtMs,
+    lastResetDateKey: dateKeyFromMillis(lastResetAtMs)
+  };
 }
 
 function hasOpenImpiantoAlert(impianto = {}) {
@@ -4535,21 +4564,33 @@ function getCommessaStats(commessaId) {
   return commessaStatsById.get(commessaId) || getEmptyCommessaStats();
 }
 
+function getEmptyCommessaWorkSummary() {
+  return { totalHours: 0, workedDays: 0, averageHoursPerDay: 0, firstDoneAtMs: 0, firstDoneDateKey: "", workedDateKeys: new Set() };
+}
+
+function getCommessaWorkSummary(commessaId) {
+  return commessaWorkSummariesById.get(commessaId) || getEmptyCommessaWorkSummary();
+}
+
 function getCommessaHoursTotal(commessaId) {
-  return Number(commessaHoursById.get(commessaId) || 0);
+  return Number(getCommessaWorkSummary(commessaId).totalHours || 0);
 }
 
 function getParentCommessaAggregate(parentCommessaId) {
   const subcommesse = getSubcommesse(parentCommessaId);
   return subcommesse.reduce((acc, sub) => {
     const stats = getCommessaStats(sub.id);
+    const workSummary = getCommessaWorkSummary(sub.id);
     acc.subCount += 1;
     acc.total += stats.total;
     acc.done += stats.done;
     acc.openAlerts += stats.openAlerts;
-    acc.hours += getCommessaHoursTotal(sub.id);
+    acc.hours += Number(workSummary.totalHours || 0);
+    (workSummary.workedDateKeys || new Set()).forEach((dateKey) => acc.workedDateKeys.add(dateKey));
+    const firstDoneAtMs = Number(workSummary.firstDoneAtMs || stats.firstDoneAtMs || 0);
+    if (firstDoneAtMs) acc.firstDoneAtMs = acc.firstDoneAtMs ? Math.min(acc.firstDoneAtMs, firstDoneAtMs) : firstDoneAtMs;
     return acc;
-  }, { subCount: 0, total: 0, done: 0, openAlerts: 0, hours: 0 });
+  }, { subCount: 0, total: 0, done: 0, openAlerts: 0, hours: 0, workedDateKeys: new Set(), firstDoneAtMs: 0 });
 }
 
 function formatProgress(done, total) {
@@ -4557,13 +4598,26 @@ function formatProgress(done, total) {
   return `${Math.round((Number(done || 0) / total) * 100)}%`;
 }
 
+function formatHoursNumber(value) {
+  return Number(value || 0).toLocaleString("it-IT", { maximumFractionDigits: 2 });
+}
+
+function formatWorkSummaryParts(workSummary) {
+  const totalHours = Number(workSummary.totalHours || workSummary.hours || 0);
+  const workedDays = Number(workSummary.workedDays ?? workSummary.workedDateKeys?.size ?? 0);
+  const averageHoursPerDay = workedDays > 0 ? totalHours / workedDays : 0;
+  return `Ore ${formatHoursNumber(totalHours)} • Giorni lavorati ${workedDays} • Media ore/giorno ${formatHoursNumber(averageHoursPerDay)}`;
+}
+
 function formatParentCommessaSummary(aggregate) {
-  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti totali • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento complessivo ${formatProgress(aggregate.done, aggregate.total)} • ${Number(aggregate.hours || 0).toLocaleString("it-IT")} ore totali`;
+  const workedDays = aggregate.workedDateKeys?.size || 0;
+  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(aggregate.done, aggregate.total)} • ${formatWorkSummaryParts({ totalHours: aggregate.hours, workedDays })}`;
 }
 
 function formatSingleCommessaSummary(commessaId) {
   const stats = getCommessaStats(commessaId);
-  return `${stats.total} impianti totali • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${getCommessaHoursTotal(commessaId).toLocaleString("it-IT")} ore totali`;
+  const workSummary = getCommessaWorkSummary(commessaId);
+  return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${formatWorkSummaryParts(workSummary)}`;
 }
 
 function toggleOrganizeCommesseScreen(show) {
@@ -4680,6 +4734,133 @@ async function moveSubcommessaToMain(commessaId) {
   }, { merge: true });
 }
 
+
+function normalizeHoursReportDateKey(value) {
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const millis = firestoreDateToMillis(value);
+  return dateKeyFromMillis(millis);
+}
+
+function normalizeCommessaNameForRules(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function isHeraDiscaricheCommessa(commessa = {}) {
+  return normalizeCommessaNameForRules(commessa.nome).includes("HERA DISCARICHE");
+}
+
+function isUnderHeraDiscaricheParent(commessaId) {
+  let parentId = String((commesseById.get(commessaId) || {}).parentCommessaId || "").trim();
+  const visited = new Set();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = commesseById.get(parentId);
+    if (!parent) return false;
+    if (isHeraDiscaricheCommessa(parent)) return true;
+    parentId = String(parent.parentCommessaId || "").trim();
+  }
+  return false;
+}
+
+function sumPositiveHoursRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).reduce((sum, row) => {
+    const hours = Number(row.ore || 0);
+    return Number.isFinite(hours) && hours > 0 ? sum + hours : sum;
+  }, 0);
+}
+
+function getFirstWorkedDateKeyForCommessa(commessaId, options = {}) {
+  const minExclusiveDateKey = String(options.minExclusiveDateKey || "");
+  const maxDateKey = String(options.maxDateKey || "");
+  let firstWorkedDateKey = "";
+  allHoursReports.forEach((report) => {
+    const reportDateKey = normalizeHoursReportDateKey(report.date);
+    if (!reportDateKey || (minExclusiveDateKey && reportDateKey <= minExclusiveDateKey) || (maxDateKey && reportDateKey > maxDateKey)) return;
+    const hasCommessaHours = (Array.isArray(report.entries) ? report.entries : []).some((entry) => (
+      String(entry.commessaId || "").trim() === String(commessaId) && sumPositiveHoursRows(entry.rows) > 0
+    ));
+    if (!hasCommessaHours) return;
+    if (!firstWorkedDateKey || reportDateKey < firstWorkedDateKey) firstWorkedDateKey = reportDateKey;
+  });
+  return firstWorkedDateKey;
+}
+
+function getCommessaWorkRange(commessaId, stats) {
+  if (isUnderHeraDiscaricheParent(commessaId)) {
+    const resetDateKey = String(stats.lastResetDateKey || "");
+    const doneDateKey = String(stats.firstDoneDateKey || "");
+    const effectiveDoneDateKey = doneDateKey && (!resetDateKey || doneDateKey > resetDateKey) ? doneDateKey : "";
+    return {
+      startDateKey: getFirstWorkedDateKeyForCommessa(commessaId, {
+        minExclusiveDateKey: resetDateKey,
+        maxDateKey: effectiveDoneDateKey
+      }),
+      endDateKey: effectiveDoneDateKey,
+      resetDateKey,
+      startMode: "hera_discariche"
+    };
+  }
+  const firstDoneAtMs = Number(stats.firstDoneAtMs || 0);
+  return {
+    startDateKey: Number(stats.done || 0) > 0 ? String(stats.firstDoneDateKey || dateKeyFromMillis(firstDoneAtMs) || "") : "",
+    endDateKey: "",
+    resetDateKey: String(stats.lastResetDateKey || ""),
+    startMode: "done"
+  };
+}
+
+function recalculateCommessaWorkSummaries() {
+  const summaries = new Map();
+  commesseById.forEach((_commessa, commessaId) => {
+    const stats = getCommessaStats(commessaId);
+    const workRange = getCommessaWorkRange(commessaId, stats);
+    const startDateKey = String(workRange.startDateKey || "");
+    const endDateKey = String(workRange.endDateKey || "");
+    if (!startDateKey) {
+      summaries.set(commessaId, getEmptyCommessaWorkSummary());
+      return;
+    }
+
+    let totalHours = 0;
+    const workedDateKeys = new Set();
+    allHoursReports.forEach((report) => {
+      const reportDateKey = normalizeHoursReportDateKey(report.date);
+      if (!reportDateKey || reportDateKey < startDateKey || (endDateKey && reportDateKey > endDateKey)) return;
+      (Array.isArray(report.entries) ? report.entries : []).forEach((entry) => {
+        if (String(entry.commessaId || "").trim() !== String(commessaId)) return;
+        const entryHours = sumPositiveHoursRows(entry.rows);
+        if (entryHours <= 0) return;
+        totalHours += entryHours;
+        workedDateKeys.add(reportDateKey);
+      });
+    });
+
+    const workedDays = workedDateKeys.size;
+    summaries.set(commessaId, {
+      totalHours,
+      workedDays,
+      averageHoursPerDay: workedDays > 0 ? totalHours / workedDays : 0,
+      firstDoneAtMs: Number(stats.firstDoneAtMs || 0),
+      firstDoneDateKey: String(stats.firstDoneDateKey || ""),
+      lastResetAtMs: Number(stats.lastResetAtMs || 0),
+      lastResetDateKey: String(stats.lastResetDateKey || ""),
+      startDateKey,
+      endDateKey,
+      resetDateKey: String(workRange.resetDateKey || ""),
+      startMode: workRange.startMode,
+      workedDateKeys
+    });
+  });
+  commessaWorkSummariesById = summaries;
+  commessaHoursById = new Map(Array.from(summaries.entries()).map(([commessaId, summary]) => [commessaId, Number(summary.totalHours || 0)]));
+}
+
 function subscribeStatsForCommesse() {
   const activeIds = new Set(commesseById.keys());
   Array.from(unsubscribeCommessaStats.keys()).forEach((commessaId) => {
@@ -4687,6 +4868,8 @@ function subscribeStatsForCommesse() {
       unsubscribeCommessaStats.get(commessaId)?.();
       unsubscribeCommessaStats.delete(commessaId);
       commessaStatsById.delete(commessaId);
+      commessaWorkSummariesById.delete(commessaId);
+      commessaHoursById.delete(commessaId);
     }
   });
   activeIds.forEach((commessaId) => {
@@ -4694,6 +4877,7 @@ function subscribeStatsForCommesse() {
     const unsubscribe = db.collection("commesse").doc(commessaId).collection("impianti").onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       commessaStatsById.set(commessaId, calculateImpiantiStats(rawImpianti));
+      recalculateCommessaWorkSummaries();
       renderCommesseHomeList();
       renderParentCommessaOverview();
     }, (error) => console.error("Errore stats commessa:", error));
@@ -4704,17 +4888,8 @@ function subscribeStatsForCommesse() {
 function subscribeHoursStats() {
   if (unsubscribeHoursStats) return;
   unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
-    const totals = new Map();
-    snapshot.docs.forEach((doc) => {
-      const report = doc.data() || {};
-      (Array.isArray(report.entries) ? report.entries : []).forEach((entry) => {
-        const commessaId = String(entry.commessaId || "").trim();
-        if (!commessaId) return;
-        const hours = (Array.isArray(entry.rows) ? entry.rows : []).reduce((sum, row) => sum + Number(row.ore || 0), 0);
-        totals.set(commessaId, Number(totals.get(commessaId) || 0) + hours);
-      });
-    });
-    commessaHoursById = totals;
+    allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    recalculateCommessaWorkSummaries();
     renderParentCommessaOverview();
   }, (error) => console.error("Errore stats ore commesse:", error));
 }
@@ -4728,6 +4903,8 @@ function stopCommessaStatsSubscriptions() {
     unsubscribeHoursStats = null;
   }
   commessaHoursById = new Map();
+  commessaWorkSummariesById = new Map();
+  allHoursReports = [];
 }
 
 function sortCommesseByCreatedAtDesc(commesse) {
@@ -7130,6 +7307,8 @@ function combineImpiantiForView(impianti) {
         done: Boolean(item.done),
         doneAt: item.doneAt || null,
         doneBy: item.doneBy || "",
+        resetAt: item.resetAt || null,
+        resetBy: item.resetBy || "",
         sourceIds: [item.id]
       });
       return;
@@ -7148,6 +7327,8 @@ function combineImpiantiForView(impianti) {
     const itemDone = Boolean(item.done);
     const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
     const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
+    const existingResetAtMs = firestoreDateToMillis(existing.resetAt);
+    const itemResetAtMs = firestoreDateToMillis(item.resetAt);
     existing.done = Boolean(existing.done || itemDone);
 
     if (itemDone && (!existing.doneBy || itemDoneAtMs >= existingDoneAtMs)) {
@@ -7156,7 +7337,10 @@ function combineImpiantiForView(impianti) {
     if (itemDoneAtMs >= existingDoneAtMs) {
       existing.doneAt = item.doneAt || existing.doneAt || null;
     }
-
+    if (itemResetAtMs >= existingResetAtMs) {
+      existing.resetAt = item.resetAt || existing.resetAt || null;
+      existing.resetBy = item.resetBy || existing.resetBy || "";
+    }
     if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
     if (!existing.comune && item.comune) existing.comune = item.comune;
     if (!existing.indirizzo && item.indirizzo) existing.indirizzo = item.indirizzo;
@@ -8076,9 +8260,11 @@ async function resetImpianto(impianto) {
     alert("Solo un admin può usare reset.");
     return;
   }
+  const resetAtLocal = new Date();
+  const resetByLocal = currentUser?.displayName || currentUser?.email || "Operatore";
   trackLocalSheetMutation(selectedCommessaId);
-  updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "" });
-  await setImpiantoDone(selectedCommessaId, ids, false);
+  updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "", resetAt: resetAtLocal, resetBy: resetByLocal, navigateAt: null, navigatedBy: "" });
+  await setImpiantoDone(selectedCommessaId, ids, false, { resetAt: resetAtLocal, resetBy: resetByLocal });
   const impiantoKey = buildImpiantoKey(impianto);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
@@ -8851,18 +9037,28 @@ function getPersonaleDisplayName(person) {
   return composed || String(person.fullName || "").trim();
 }
 
-async function setImpiantoDone(commessaId, impiantoIds, done) {
+async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const user = auth.currentUser;
   if (!user) return;
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(new Date()) : null;
 
   if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
   const ref = db.collection("commesse").doc(commessaId).collection("impianti");
-  await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
-    done,
-    doneAt,
-    doneBy: done ? (user.displayName || user.email || "Operatore") : ""
-  })));
+  await Promise.all(impiantoIds.map((impiantoId) => {
+    const payload = {
+      done,
+      doneAt,
+      doneBy: done ? (user.displayName || user.email || "Operatore") : ""
+    };
+    if (!done) {
+      const resetAtDate = options.resetAt instanceof Date ? options.resetAt : new Date();
+      payload.resetAt = firebase.firestore.Timestamp.fromDate(resetAtDate);
+      payload.resetBy = options.resetBy || user.displayName || user.email || "Operatore";
+      payload.navigateAt = null;
+      payload.navigatedBy = "";
+    }
+    return ref.doc(impiantoId).update(payload);
+  }));
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {

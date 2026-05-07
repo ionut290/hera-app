@@ -155,6 +155,7 @@ const ui = {
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
   parentCommessaOverview: document.getElementById("parent-commessa-overview"),
   parentCommessaSummary: document.getElementById("parent-commessa-summary"),
+  parentSubcommesseTitle: document.getElementById("parent-subcommesse-title"),
   parentSubcommesseList: document.getElementById("parent-subcommesse-list"),
   commessaOperationalCard: document.getElementById("commessa-operational-card"),
   impiantiCard: document.getElementById("impianti-card"),
@@ -4560,6 +4561,11 @@ function formatParentCommessaSummary(aggregate) {
   return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti totali • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento complessivo ${formatProgress(aggregate.done, aggregate.total)} • ${Number(aggregate.hours || 0).toLocaleString("it-IT")} ore totali`;
 }
 
+function formatSingleCommessaSummary(commessaId) {
+  const stats = getCommessaStats(commessaId);
+  return `${stats.total} impianti totali • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${getCommessaHoursTotal(commessaId).toLocaleString("it-IT")} ore totali`;
+}
+
 function toggleOrganizeCommesseScreen(show) {
   ui.organizeCommesseScreen?.classList.toggle("hidden", !show);
   ui.organizeCommesseScreen?.setAttribute("aria-hidden", show ? "false" : "true");
@@ -4815,20 +4821,26 @@ function renderParentCommessaOverview() {
     ui.impiantiCard?.classList.remove("hidden");
     return;
   }
+
   const subcommesse = sortCommesseByCreatedAtDesc(getSubcommesse(selectedCommessaId));
   const isParent = subcommesse.length > 0;
-  ui.parentCommessaOverview.classList.toggle("hidden", !isParent);
-  ui.parentCommessaOverview.setAttribute("aria-hidden", isParent ? "false" : "true");
-  ui.commessaOperationalCard?.classList.toggle("hidden", isParent);
-  ui.impiantiCard?.classList.toggle("hidden", isParent);
+  ui.parentCommessaOverview.classList.remove("hidden");
+  ui.parentCommessaOverview.setAttribute("aria-hidden", "false");
+  ui.commessaOperationalCard?.classList.remove("hidden");
+  ui.impiantiCard?.classList.remove("hidden");
+
+  if (ui.parentCommessaSummary) {
+    ui.parentCommessaSummary.textContent = isParent
+      ? formatParentCommessaSummary(getParentCommessaAggregate(selectedCommessaId))
+      : formatSingleCommessaSummary(selectedCommessaId);
+  }
+
+  ui.parentSubcommesseTitle?.classList.toggle("hidden", !isParent);
+  if (!ui.parentSubcommesseList) return;
+  ui.parentSubcommesseList.classList.toggle("hidden", !isParent);
+  ui.parentSubcommesseList.innerHTML = "";
   if (!isParent) return;
 
-  const aggregate = getParentCommessaAggregate(selectedCommessaId);
-  if (ui.parentCommessaSummary) {
-    ui.parentCommessaSummary.textContent = formatParentCommessaSummary(aggregate);
-  }
-  if (!ui.parentSubcommesseList) return;
-  ui.parentSubcommesseList.innerHTML = "";
   subcommesse.forEach((sub) => {
     const stats = getCommessaStats(sub.id);
     const card = document.createElement("article");
@@ -4841,12 +4853,10 @@ function renderParentCommessaOverview() {
         <p>${stats.done} / ${stats.total} impianti fatti • ${getCommessaHoursTotal(sub.id).toLocaleString("it-IT")} ore totali • ${stats.openAlerts} segnalazioni aperte</p>
       </div>
       <div class="item-actions">
-        <button class="btn btn-primary" type="button" data-open-subcommessa="${escapeHTML(sub.id)}">Apri</button>
-        <button class="btn" type="button" data-move-main="${escapeHTML(sub.id)}">Sposta nella vista principale</button>
+        <button class="btn subcommessa-open-btn" type="button" data-open-subcommessa="${escapeHTML(sub.id)}">Apri commessa</button>
       </div>
     `;
     card.querySelector("[data-open-subcommessa]")?.addEventListener("click", () => selectCommessa(sub.id, sub.nome || "Subcommessa", sub.codice || ""));
-    card.querySelector("[data-move-main]")?.addEventListener("click", () => moveSubcommessaToMain(sub.id));
     ui.parentSubcommesseList.appendChild(card);
   });
 }
@@ -11633,17 +11643,10 @@ function renderCommesseManagementList() {
     const info = document.createElement("div");
     info.className = "commessa-manage-info";
     const title = document.createElement("strong");
-    const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
-    const subCount = getSubcommesse(commessa.id).length;
-    const hierarchyLabel = parent ? `Subcommessa di ${parent.nome || "commessa padre"}` : "Commessa principale";
-    title.textContent = `${commessa.nome || "Commessa senza nome"} • ${hierarchyLabel} • Cod. ${commessa.codice || "-"}`;
+    const codiceCommessa = String(commessa.codice || "").trim();
+    const hasSubcommesse = getSubcommesse(commessa.id).length > 0;
+    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${codiceCommessa ? ` • Cod. ${escapeHTML(codiceCommessa)}` : ""}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}`;
     info.appendChild(title);
-    if (subCount) {
-      const summary = document.createElement("p");
-      summary.className = "muted commessa-manage-summary";
-      summary.textContent = formatParentCommessaSummary(getParentCommessaAggregate(commessa.id));
-      info.appendChild(summary);
-    }
 
     const actions = document.createElement("div");
     actions.className = "item-actions";

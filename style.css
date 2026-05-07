@@ -983,6 +983,16 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.squadra-date-field {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.squadra-date-field input {
+  font-weight: 400;
+}
+
 .squadra-rows {
   display: grid;
   gap: 8px;

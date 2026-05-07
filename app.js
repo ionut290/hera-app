@@ -1965,6 +1965,7 @@ function openManagementPanel(panel) {
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
   ui.managementPage.setAttribute("aria-hidden", "false");
+  if (panel === "squadre") setDefaultSquadraCompositionDate({ force: true });
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   if (panel === "notifiche") closeNotificationCalendarView();
   closeSideMenu();
@@ -8746,13 +8747,13 @@ function autofillSquadraForm() {
   const commessaId = ui.squadraCommessa.value;
   if (!commessaId) {
     ui.squadraRows.innerHTML = "";
-    ui.squadraRiferimento.value = "";
+    setDefaultSquadraCompositionDate();
     addSquadraRow();
     return;
   }
 
   const data = squadreByCommessa.get(commessaId) || {};
-  ui.squadraRiferimento.value = data.riferimentoData || "";
+  setDefaultSquadraCompositionDate();
   setSquadraRowsFromData(data);
 }
 
@@ -8936,6 +8937,19 @@ function getDateKeyFromLocalDate(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getNextDayDateKey(now = new Date()) {
+  const nextDay = new Date(now);
+  nextDay.setDate(nextDay.getDate() + 1);
+  return getDateKeyFromLocalDate(nextDay);
+}
+
+function setDefaultSquadraCompositionDate({ force = false } = {}) {
+  if (!ui.squadraRiferimento) return;
+  if (force || !ui.squadraRiferimento.value) {
+    ui.squadraRiferimento.value = getNextDayDateKey();
+  }
 }
 
 function getAutomaticSquadreDateKey(now = new Date()) {

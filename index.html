@@ -410,7 +410,10 @@
         <select id="squadra-commessa" required>
           <option value="">Seleziona commessa</option>
         </select>
-        <input id="squadra-riferimento" type="date">
+        <label class="squadra-date-field" for="squadra-riferimento">
+          <span>Giorno composizione (automatico domani)</span>
+          <input id="squadra-riferimento" type="date">
+        </label>
         <div id="squadra-rows" class="squadra-rows"></div>
         <button id="add-squadra-row-btn" class="btn" type="button">➕ Aggiungi squadra</button>
         <button class="btn btn-primary" type="submit">Salva composizione</button>

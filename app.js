@@ -4509,7 +4509,7 @@ function getSubcommesse(parentCommessaId) {
 
 
 function getEmptyCommessaStats() {
-  return { total: 0, done: 0, openAlerts: 0, firstDoneAtMs: 0, firstDoneDateKey: "", firstNavigateAtMs: 0, firstNavigateDateKey: "" };
+  return { total: 0, done: 0, openAlerts: 0, firstDoneAtMs: 0, firstDoneDateKey: "" };
 }
 
 function dateKeyFromMillis(millis) {
@@ -4532,19 +4532,12 @@ function calculateImpiantiStats(rawImpianti = []) {
     if (!doneAtMs) return earliest;
     return earliest ? Math.min(earliest, doneAtMs) : doneAtMs;
   }, 0);
-  const firstNavigateAtMs = combined.reduce((earliest, impianto) => {
-    const navigateAtMs = firestoreDateToMillis(impianto.navigateAt);
-    if (!navigateAtMs) return earliest;
-    return earliest ? Math.min(earliest, navigateAtMs) : navigateAtMs;
-  }, 0);
   return {
     total,
     done,
     openAlerts,
     firstDoneAtMs,
-    firstDoneDateKey: dateKeyFromMillis(firstDoneAtMs),
-    firstNavigateAtMs,
-    firstNavigateDateKey: dateKeyFromMillis(firstNavigateAtMs)
+    firstDoneDateKey: dateKeyFromMillis(firstDoneAtMs)
   };
 }
 
@@ -4756,7 +4749,7 @@ function isHeraDiscaricheCommessa(commessa = {}) {
   return normalizeCommessaNameForRules(commessa.nome).includes("HERA DISCARICHE");
 }
 
-function shouldStartCommessaHoursFromNavigate(commessaId) {
+function isUnderHeraDiscaricheParent(commessaId) {
   let parentId = String((commesseById.get(commessaId) || {}).parentCommessaId || "").trim();
   const visited = new Set();
   while (parentId && !visited.has(parentId)) {
@@ -4769,19 +4762,41 @@ function shouldStartCommessaHoursFromNavigate(commessaId) {
   return false;
 }
 
-function getCommessaWorkStartInfo(commessaId, stats) {
-  if (shouldStartCommessaHoursFromNavigate(commessaId)) {
-    const firstNavigateAtMs = Number(stats.firstNavigateAtMs || 0);
+function sumPositiveHoursRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).reduce((sum, row) => {
+    const hours = Number(row.ore || 0);
+    return Number.isFinite(hours) && hours > 0 ? sum + hours : sum;
+  }, 0);
+}
+
+function getFirstWorkedDateKeyForCommessa(commessaId, maxDateKey = "") {
+  let firstWorkedDateKey = "";
+  allHoursReports.forEach((report) => {
+    const reportDateKey = normalizeHoursReportDateKey(report.date);
+    if (!reportDateKey || (maxDateKey && reportDateKey > maxDateKey)) return;
+    const hasCommessaHours = (Array.isArray(report.entries) ? report.entries : []).some((entry) => (
+      String(entry.commessaId || "").trim() === String(commessaId) && sumPositiveHoursRows(entry.rows) > 0
+    ));
+    if (!hasCommessaHours) return;
+    if (!firstWorkedDateKey || reportDateKey < firstWorkedDateKey) firstWorkedDateKey = reportDateKey;
+  });
+  return firstWorkedDateKey;
+}
+
+function getCommessaWorkRange(commessaId, stats) {
+  if (isUnderHeraDiscaricheParent(commessaId)) {
+    const doneDateKey = String(stats.firstDoneDateKey || "");
+    if (Number(stats.done || 0) <= 0 || !doneDateKey) return { startDateKey: "", endDateKey: "", startMode: "hera_discariche" };
     return {
-      startAtMs: firstNavigateAtMs,
-      startDateKey: String(stats.firstNavigateDateKey || dateKeyFromMillis(firstNavigateAtMs) || ""),
-      startMode: "navigate"
+      startDateKey: getFirstWorkedDateKeyForCommessa(commessaId, doneDateKey),
+      endDateKey: doneDateKey,
+      startMode: "hera_discariche"
     };
   }
   const firstDoneAtMs = Number(stats.firstDoneAtMs || 0);
   return {
-    startAtMs: Number(stats.done || 0) > 0 ? firstDoneAtMs : 0,
     startDateKey: Number(stats.done || 0) > 0 ? String(stats.firstDoneDateKey || dateKeyFromMillis(firstDoneAtMs) || "") : "",
+    endDateKey: "",
     startMode: "done"
   };
 }
@@ -4790,10 +4805,10 @@ function recalculateCommessaWorkSummaries() {
   const summaries = new Map();
   commesseById.forEach((_commessa, commessaId) => {
     const stats = getCommessaStats(commessaId);
-    const workStart = getCommessaWorkStartInfo(commessaId, stats);
-    const startDateKey = String(workStart.startDateKey || "");
-    const startAtMs = Number(workStart.startAtMs || 0);
-    if (!startDateKey || !startAtMs) {
+    const workRange = getCommessaWorkRange(commessaId, stats);
+    const startDateKey = String(workRange.startDateKey || "");
+    const endDateKey = String(workRange.endDateKey || "");
+    if (!startDateKey) {
       summaries.set(commessaId, getEmptyCommessaWorkSummary());
       return;
     }
@@ -4802,13 +4817,10 @@ function recalculateCommessaWorkSummaries() {
     const workedDateKeys = new Set();
     allHoursReports.forEach((report) => {
       const reportDateKey = normalizeHoursReportDateKey(report.date);
-      if (!reportDateKey || reportDateKey < startDateKey) return;
+      if (!reportDateKey || reportDateKey < startDateKey || (endDateKey && reportDateKey > endDateKey)) return;
       (Array.isArray(report.entries) ? report.entries : []).forEach((entry) => {
         if (String(entry.commessaId || "").trim() !== String(commessaId)) return;
-        const entryHours = (Array.isArray(entry.rows) ? entry.rows : []).reduce((sum, row) => {
-          const hours = Number(row.ore || 0);
-          return Number.isFinite(hours) && hours > 0 ? sum + hours : sum;
-        }, 0);
+        const entryHours = sumPositiveHoursRows(entry.rows);
         if (entryHours <= 0) return;
         totalHours += entryHours;
         workedDateKeys.add(reportDateKey);
@@ -4820,13 +4832,11 @@ function recalculateCommessaWorkSummaries() {
       totalHours,
       workedDays,
       averageHoursPerDay: workedDays > 0 ? totalHours / workedDays : 0,
-      firstDoneAtMs: workStart.startMode === "done" ? startAtMs : Number(stats.firstDoneAtMs || 0),
+      firstDoneAtMs: Number(stats.firstDoneAtMs || 0),
       firstDoneDateKey: String(stats.firstDoneDateKey || ""),
-      firstNavigateAtMs: Number(stats.firstNavigateAtMs || 0),
-      firstNavigateDateKey: String(stats.firstNavigateDateKey || ""),
-      startAtMs,
       startDateKey,
-      startMode: workStart.startMode,
+      endDateKey,
+      startMode: workRange.startMode,
       workedDateKeys
     });
   });
@@ -7310,11 +7320,6 @@ function combineImpiantiForView(impianti) {
     if (itemDoneAtMs >= existingDoneAtMs) {
       existing.doneAt = item.doneAt || existing.doneAt || null;
     }
-    if (itemNavigateAtMs && (!existingNavigateAtMs || itemNavigateAtMs < existingNavigateAtMs)) {
-      existing.navigateAt = item.navigateAt || existing.navigateAt || null;
-      existing.navigatedBy = item.navigatedBy || existing.navigatedBy || "";
-    }
-
     if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
     if (!existing.comune && item.comune) existing.comune = item.comune;
     if (!existing.indirizzo && item.indirizzo) existing.indirizzo = item.indirizzo;

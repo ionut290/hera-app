@@ -116,6 +116,16 @@ const ui = {
   commessaAttiva: document.getElementById("commessa-attiva"),
   commesseNextAction: document.getElementById("commesse-next-action"),
   commessaTargetSelect: document.getElementById("commessa-target-select"),
+  openOrganizeCommesseBtn: document.getElementById("open-organize-commesse-btn"),
+  closeOrganizeCommesseBtn: document.getElementById("close-organize-commesse-btn"),
+  organizeCommesseScreen: document.getElementById("organize-commesse-screen"),
+  parentCommessaForm: document.getElementById("parent-commessa-form"),
+  parentCommessaName: document.getElementById("parent-commessa-name"),
+  parentCommessaCode: document.getElementById("parent-commessa-code"),
+  moveSubcommesseForm: document.getElementById("move-subcommesse-form"),
+  moveParentCommessaSelect: document.getElementById("move-parent-commessa-select"),
+  moveSubcommesseList: document.getElementById("move-subcommesse-list"),
+  organizeCommesseFeedback: document.getElementById("organize-commesse-feedback"),
   excelFile: document.getElementById("excel-file"),
   importBtn: document.getElementById("import-btn"),
   sheetUrl: document.getElementById("sheet-url"),
@@ -143,6 +153,12 @@ const ui = {
   showNextActionBtn: document.getElementById("show-next-action-btn"),
   impiantiNextAction: document.getElementById("impianti-next-action"),
   exportCurrentCommessaBtn: document.getElementById("export-current-commessa-btn"),
+  parentCommessaOverview: document.getElementById("parent-commessa-overview"),
+  parentCommessaSummary: document.getElementById("parent-commessa-summary"),
+  parentSubcommesseTitle: document.getElementById("parent-subcommesse-title"),
+  parentSubcommesseList: document.getElementById("parent-subcommesse-list"),
+  commessaOperationalCard: document.getElementById("commessa-operational-card"),
+  impiantiCard: document.getElementById("impianti-card"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
   commessaNotesPage: document.getElementById("commessa-notes-page"),
@@ -459,6 +475,8 @@ let selectedCommessaName = "";
 let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
 let unsubscribeCommessaNotes = null;
+const unsubscribeCommessaStats = new Map();
+let unsubscribeHoursStats = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentCommessaNotes = [];
@@ -498,6 +516,8 @@ let driveHelpCenterFolderId = "";
 let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
+let commessaStatsById = new Map();
+let commessaHoursById = new Map();
 let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
@@ -936,6 +956,11 @@ ui.logoutBtn.addEventListener("click", logout);
 ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
 ui.commessaType?.addEventListener("change", updateCommessaParentField);
+ui.openOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(true));
+ui.closeOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(false));
+ui.parentCommessaForm?.addEventListener("submit", createParentCommessa);
+ui.moveSubcommesseForm?.addEventListener("submit", moveSelectedCommesseUnderParent);
+ui.moveParentCommessaSelect?.addEventListener("change", renderMoveSubcommesseList);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
 ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
@@ -1746,6 +1771,7 @@ auth.onAuthStateChanged((user) => {
   renderPrivateDocsList();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
+  renderParentCommessaOverview();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
@@ -1803,6 +1829,12 @@ function updateAdminControls() {
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.openPanelBannerGestione?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
+  if (ui.openOrganizeCommesseBtn) ui.openOrganizeCommesseBtn.disabled = !canManage;
+  if (ui.parentCommessaName) ui.parentCommessaName.disabled = !canManage;
+  if (ui.parentCommessaCode) ui.parentCommessaCode.disabled = !canManage;
+  if (ui.moveParentCommessaSelect) ui.moveParentCommessaSelect.disabled = !canManage;
+  ui.parentCommessaForm?.querySelector("button[type='submit']")?.toggleAttribute("disabled", !canManage);
+  ui.moveSubcommesseForm?.querySelector("button[type='submit']")?.toggleAttribute("disabled", !canManage);
   const submitBtn = ui.commessaForm.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.disabled = !canManage;
   ui.personaleNome.disabled = !canManage;
@@ -4473,6 +4505,231 @@ function getSubcommesse(parentCommessaId) {
   return Array.from(commesseById.values()).filter((commessa) => String(commessa.parentCommessaId || "") === String(parentCommessaId || ""));
 }
 
+
+function getEmptyCommessaStats() {
+  return { total: 0, done: 0, openAlerts: 0 };
+}
+
+function calculateImpiantiStats(rawImpianti = []) {
+  const combined = combineImpiantiForView(rawImpianti);
+  const total = combined.length;
+  const done = combined.filter((impianto) => Boolean(impianto.done)).length;
+  const openAlerts = combined.filter((impianto) => hasOpenImpiantoAlert(impianto)).length;
+  return { total, done, openAlerts };
+}
+
+function hasOpenImpiantoAlert(impianto = {}) {
+  const fields = [impianto.segnalazioneStatus, impianto.reportStatus, impianto.alertStatus, impianto.problemStatus, impianto.status];
+  const text = fields.map((value) => String(value || "").toLowerCase()).join(" ");
+  return Boolean(
+    impianto.hasSegnalazione ||
+    impianto.segnalazioneAperta ||
+    impianto.problemOpen ||
+    impianto.alertOpen ||
+    text.includes("apert") ||
+    text.includes("pending")
+  ) && !text.includes("chius") && !text.includes("risolt") && !text.includes("done") && !text.includes("fatto");
+}
+
+function getCommessaStats(commessaId) {
+  return commessaStatsById.get(commessaId) || getEmptyCommessaStats();
+}
+
+function getCommessaHoursTotal(commessaId) {
+  return Number(commessaHoursById.get(commessaId) || 0);
+}
+
+function getParentCommessaAggregate(parentCommessaId) {
+  const subcommesse = getSubcommesse(parentCommessaId);
+  return subcommesse.reduce((acc, sub) => {
+    const stats = getCommessaStats(sub.id);
+    acc.subCount += 1;
+    acc.total += stats.total;
+    acc.done += stats.done;
+    acc.openAlerts += stats.openAlerts;
+    acc.hours += getCommessaHoursTotal(sub.id);
+    return acc;
+  }, { subCount: 0, total: 0, done: 0, openAlerts: 0, hours: 0 });
+}
+
+function formatProgress(done, total) {
+  if (!total) return "0%";
+  return `${Math.round((Number(done || 0) / total) * 100)}%`;
+}
+
+function formatParentCommessaSummary(aggregate) {
+  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti totali • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento complessivo ${formatProgress(aggregate.done, aggregate.total)} • ${Number(aggregate.hours || 0).toLocaleString("it-IT")} ore totali`;
+}
+
+function formatSingleCommessaSummary(commessaId) {
+  const stats = getCommessaStats(commessaId);
+  return `${stats.total} impianti totali • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${getCommessaHoursTotal(commessaId).toLocaleString("it-IT")} ore totali`;
+}
+
+function toggleOrganizeCommesseScreen(show) {
+  ui.organizeCommesseScreen?.classList.toggle("hidden", !show);
+  ui.organizeCommesseScreen?.setAttribute("aria-hidden", show ? "false" : "true");
+  if (show) {
+    renderOrganizeCommesseControls();
+    if (ui.organizeCommesseFeedback) ui.organizeCommesseFeedback.textContent = "";
+  }
+}
+
+function renderOrganizeCommesseControls() {
+  renderMoveParentCommessaSelect();
+  renderMoveSubcommesseList();
+}
+
+function renderMoveParentCommessaSelect() {
+  if (!ui.moveParentCommessaSelect) return;
+  const previousValue = ui.moveParentCommessaSelect.value;
+  ui.moveParentCommessaSelect.innerHTML = "<option value=''>Seleziona commessa padre</option>";
+  sortCommesseByCreatedAtDesc(getMainCommesse()).forEach((commessa) => {
+    ui.moveParentCommessaSelect.appendChild(createCommessaOption(commessa));
+  });
+  if (previousValue && commesseById.has(previousValue) && !isSubcommessa(commesseById.get(previousValue))) {
+    ui.moveParentCommessaSelect.value = previousValue;
+  }
+}
+
+function renderMoveSubcommesseList() {
+  if (!ui.moveSubcommesseList) return;
+  const parentId = String(ui.moveParentCommessaSelect?.value || "").trim();
+  const candidates = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()))
+    .filter((commessa) => commessa.id !== parentId && String(commessa.parentCommessaId || "") !== parentId && getSubcommesse(commessa.id).length === 0);
+  if (!candidates.length) {
+    ui.moveSubcommesseList.innerHTML = "<p class='muted'>Nessuna commessa spostabile.</p>";
+    return;
+  }
+  ui.moveSubcommesseList.innerHTML = "";
+  candidates.forEach((commessa) => {
+    const row = document.createElement("label");
+    row.className = "organize-commessa-choice";
+    const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
+    row.innerHTML = `
+      <input type="checkbox" value="${escapeHTML(commessa.id)}">
+      <span><strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>${commessa.codice ? ` • Cod. ${escapeHTML(commessa.codice)}` : ""}${parent ? `<br><small>Ora sotto: ${escapeHTML(parent.nome || "commessa padre")}</small>` : ""}</span>
+    `;
+    ui.moveSubcommesseList.appendChild(row);
+  });
+}
+
+async function createParentCommessa(event) {
+  event.preventDefault();
+  if (!currentUser) {
+    alert("Devi fare login.");
+    return;
+  }
+  if (!canManageData()) {
+    alert("Solo un admin può creare commesse padre.");
+    return;
+  }
+  const nome = String(ui.parentCommessaName?.value || "").trim();
+  const codice = String(ui.parentCommessaCode?.value || "").trim();
+  if (!nome) return;
+  await db.collection("commesse").add({
+    nome,
+    codice,
+    parentCommessaId: null,
+    creatoDa: currentUser.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  ui.parentCommessaForm?.reset();
+  if (ui.organizeCommesseFeedback) ui.organizeCommesseFeedback.textContent = `Commessa padre "${nome}" creata.`;
+}
+
+async function moveSelectedCommesseUnderParent(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo un admin può organizzare commesse.");
+    return;
+  }
+  const parentId = String(ui.moveParentCommessaSelect?.value || "").trim();
+  if (!parentId) {
+    alert("Seleziona una commessa padre.");
+    return;
+  }
+  const selectedIds = Array.from(ui.moveSubcommesseList?.querySelectorAll("input[type='checkbox']:checked") || [])
+    .map((input) => input.value)
+    .filter((id) => id && id !== parentId);
+  if (!selectedIds.length) {
+    alert("Seleziona almeno una commessa da spostare.");
+    return;
+  }
+  const batch = db.batch();
+  selectedIds.forEach((id) => {
+    batch.set(db.collection("commesse").doc(id), {
+      parentCommessaId: parentId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser?.email || ""
+    }, { merge: true });
+  });
+  await batch.commit();
+  if (ui.organizeCommesseFeedback) ui.organizeCommesseFeedback.textContent = `${selectedIds.length} commesse spostate sotto la commessa padre selezionata.`;
+}
+
+async function moveSubcommessaToMain(commessaId) {
+  if (!canManageData()) {
+    alert("Solo un admin può spostare subcommesse nella vista principale.");
+    return;
+  }
+  await db.collection("commesse").doc(commessaId).set({
+    parentCommessaId: null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
+}
+
+function subscribeStatsForCommesse() {
+  const activeIds = new Set(commesseById.keys());
+  Array.from(unsubscribeCommessaStats.keys()).forEach((commessaId) => {
+    if (!activeIds.has(commessaId)) {
+      unsubscribeCommessaStats.get(commessaId)?.();
+      unsubscribeCommessaStats.delete(commessaId);
+      commessaStatsById.delete(commessaId);
+    }
+  });
+  activeIds.forEach((commessaId) => {
+    if (unsubscribeCommessaStats.has(commessaId)) return;
+    const unsubscribe = db.collection("commesse").doc(commessaId).collection("impianti").onSnapshot((snapshot) => {
+      const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      commessaStatsById.set(commessaId, calculateImpiantiStats(rawImpianti));
+      renderCommesseHomeList();
+      renderParentCommessaOverview();
+    }, (error) => console.error("Errore stats commessa:", error));
+    unsubscribeCommessaStats.set(commessaId, unsubscribe);
+  });
+}
+
+function subscribeHoursStats() {
+  if (unsubscribeHoursStats) return;
+  unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
+    const totals = new Map();
+    snapshot.docs.forEach((doc) => {
+      const report = doc.data() || {};
+      (Array.isArray(report.entries) ? report.entries : []).forEach((entry) => {
+        const commessaId = String(entry.commessaId || "").trim();
+        if (!commessaId) return;
+        const hours = (Array.isArray(entry.rows) ? entry.rows : []).reduce((sum, row) => sum + Number(row.ore || 0), 0);
+        totals.set(commessaId, Number(totals.get(commessaId) || 0) + hours);
+      });
+    });
+    commessaHoursById = totals;
+    renderParentCommessaOverview();
+  }, (error) => console.error("Errore stats ore commesse:", error));
+}
+
+function stopCommessaStatsSubscriptions() {
+  unsubscribeCommessaStats.forEach((unsubscribe) => unsubscribe?.());
+  unsubscribeCommessaStats.clear();
+  commessaStatsById = new Map();
+  if (unsubscribeHoursStats) {
+    unsubscribeHoursStats();
+    unsubscribeHoursStats = null;
+  }
+  commessaHoursById = new Map();
+}
+
 function sortCommesseByCreatedAtDesc(commesse) {
   return [...commesse].sort((a, b) => {
     const aTime = typeof a.createdAt?.toMillis === "function" ? a.createdAt.toMillis() : 0;
@@ -4517,10 +4774,9 @@ function populateCommessaParentSelect() {
   updateCommessaParentField();
 }
 
-function renderCommessaHomeButton(commessa, index, options = {}) {
+function renderCommessaHomeButton(commessa, index) {
   const row = document.createElement("div");
-  const isSub = Boolean(options.isSub);
-  row.className = `commessa-row${isSub ? " commessa-sub-row" : ""}`;
+  row.className = "commessa-row";
 
   const btn = document.createElement("button");
   btn.type = "button";
@@ -4528,38 +4784,80 @@ function renderCommessaHomeButton(commessa, index, options = {}) {
   btn.dataset.commessaId = commessa.id;
   btn.style.setProperty("--commessa-accent", getCommessaAccentColor(commessa.id, index));
   const codiceCommessa = String(commessa.codice || "").trim();
-  const parent = isSub ? commesseById.get(commessa.parentCommessaId) : null;
-  const metaParts = [];
-  if (isSub) metaParts.push(`Subcommessa${parent ? ` di ${parent.nome || "commessa padre"}` : ""}`);
-  if (codiceCommessa) metaParts.push(codiceCommessa);
-  btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${metaParts.length ? `<small class="muted">${escapeHTML(metaParts.join(" • "))}</small>` : ""}`;
+  const hasSubcommesse = getSubcommesse(commessa.id).length > 0;
+  btn.classList.toggle("commessa-btn-parent", hasSubcommesse);
+  btn.innerHTML = `
+    <span class="commessa-home-main">
+      <span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>
+      ${hasSubcommesse ? `<span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}
+    </span>
+    ${codiceCommessa ? `<small class="muted">Cod. ${escapeHTML(codiceCommessa)}</small>` : ""}
+  `;
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
-
-  if (!isSub) {
-    const subcommesse = getSubcommesse(commessa.id);
-    if (subcommesse.length) {
-      const badge = document.createElement("span");
-      badge.className = "commessa-sub-toggle commessa-sub-badge";
-      badge.textContent = `📂 ${subcommesse.length} subcommesse`;
-      row.appendChild(badge);
-    }
-  }
-
   return row;
 }
 
 function renderCommesseHomeList() {
   if (!ui.commesseLista) return;
   ui.commesseLista.innerHTML = "";
-  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
   if (!commesse.length) {
     ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
   commesse.forEach((commessa, idx) => {
-    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx, { isSub: isSubcommessa(commessa) }));
+    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
+  });
+}
+
+function renderParentCommessaOverview() {
+  if (!ui.parentCommessaOverview) return;
+  if (!selectedCommessaId) {
+    ui.parentCommessaOverview.classList.add("hidden");
+    ui.parentCommessaOverview.setAttribute("aria-hidden", "true");
+    ui.commessaOperationalCard?.classList.remove("hidden");
+    ui.impiantiCard?.classList.remove("hidden");
+    return;
+  }
+
+  const subcommesse = sortCommesseByCreatedAtDesc(getSubcommesse(selectedCommessaId));
+  const isParent = subcommesse.length > 0;
+  ui.parentCommessaOverview.classList.remove("hidden");
+  ui.parentCommessaOverview.setAttribute("aria-hidden", "false");
+  ui.commessaOperationalCard?.classList.remove("hidden");
+  ui.impiantiCard?.classList.remove("hidden");
+
+  if (ui.parentCommessaSummary) {
+    ui.parentCommessaSummary.textContent = isParent
+      ? formatParentCommessaSummary(getParentCommessaAggregate(selectedCommessaId))
+      : formatSingleCommessaSummary(selectedCommessaId);
+  }
+
+  ui.parentSubcommesseTitle?.classList.toggle("hidden", !isParent);
+  if (!ui.parentSubcommesseList) return;
+  ui.parentSubcommesseList.classList.toggle("hidden", !isParent);
+  ui.parentSubcommesseList.innerHTML = "";
+  if (!isParent) return;
+
+  subcommesse.forEach((sub) => {
+    const stats = getCommessaStats(sub.id);
+    const card = document.createElement("article");
+    card.className = "subcommessa-compact-card";
+    const codice = String(sub.codice || "").trim() || "-";
+    card.innerHTML = `
+      <div>
+        <h3>${escapeHTML(sub.nome || "Subcommessa senza nome")}</h3>
+        <p class="muted">Codice: ${escapeHTML(codice)}</p>
+        <p>${stats.done} / ${stats.total} impianti fatti • ${getCommessaHoursTotal(sub.id).toLocaleString("it-IT")} ore totali • ${stats.openAlerts} segnalazioni aperte</p>
+      </div>
+      <div class="item-actions">
+        <button class="btn subcommessa-open-btn" type="button" data-open-subcommessa="${escapeHTML(sub.id)}">Apri commessa</button>
+      </div>
+    `;
+    card.querySelector("[data-open-subcommessa]")?.addEventListener("click", () => selectCommessa(sub.id, sub.nome || "Subcommessa", sub.codice || ""));
+    ui.parentSubcommesseList.appendChild(card);
   });
 }
 
@@ -4692,8 +4990,11 @@ function subscribeCommesse() {
       const routeCommessaId = parseCommessaHash().id;
       const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
       const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
+      subscribeStatsForCommesse();
+      subscribeHoursStats();
       renderCommesseHomeList();
       renderCommessaSelects();
+      renderOrganizeCommesseControls();
 
       renderCommesseManagementList();
       renderHoursCommessaSelectOptions();
@@ -4702,6 +5003,7 @@ function subscribeCommesse() {
       renderResourceButtonsForCommessa();
       syncBannerFormFromSelection();
       updateCommessaContextUI();
+      renderParentCommessaOverview();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
@@ -4719,6 +5021,7 @@ function stopCommesseSubscription() {
     unsubscribeCommesse();
     unsubscribeCommesse = null;
   }
+  stopCommessaStatsSubscriptions();
 }
 
 async function createGlobalCommessa(event) {
@@ -6034,6 +6337,7 @@ function selectCommessa(id, nome, codice = "") {
   updateCommessaButtonsActive();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
+  renderParentCommessaOverview();
 
   stopImpiantiSubscription();
   stopCommessaNotesSubscription();
@@ -11335,12 +11639,14 @@ function renderCommesseManagementList() {
   ui.commesseManageList.innerHTML = "";
   commesse.forEach((commessa) => {
     const row = document.createElement("div");
-    row.className = "simple-list-item";
-    const title = document.createElement("span");
-    const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
-    const subCount = getSubcommesse(commessa.id).length;
-    const hierarchyLabel = parent ? `Subcommessa di ${parent.nome || "commessa padre"}` : "Commessa principale";
-    title.textContent = `${commessa.nome || "Commessa senza nome"} • ${hierarchyLabel} • Cod. ${commessa.codice || "-"}${subCount ? ` • 📂 ${subCount} subcommesse` : ""}`;
+    row.className = "simple-list-item commessa-manage-item";
+    const info = document.createElement("div");
+    info.className = "commessa-manage-info";
+    const title = document.createElement("strong");
+    const codiceCommessa = String(commessa.codice || "").trim();
+    const hasSubcommesse = getSubcommesse(commessa.id).length > 0;
+    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${codiceCommessa ? ` • Cod. ${escapeHTML(codiceCommessa)}` : ""}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}`;
+    info.appendChild(title);
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
@@ -11348,7 +11654,7 @@ function renderCommesseManagementList() {
     actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
     actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
 
-    row.appendChild(title);
+    row.appendChild(info);
     row.appendChild(actions);
     ui.commesseManageList.appendChild(row);
   });

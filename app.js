@@ -8068,6 +8068,14 @@ async function navigateToImpianto(impianto) {
   window.open(url, "_blank");
 
   const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const navigateAtLocal = new Date();
+  const ids = getImpiantoDocIds(impianto);
+  if (ids.length && !firestoreDateToMillis(impianto.navigateAt)) {
+    updateImpiantoLocalState(ids, { navigateAt: navigateAtLocal, navigatedBy: operatorName });
+    setImpiantoNavigated(selectedCommessaId, ids, navigateAtLocal, operatorName)
+      .catch((error) => console.error("Errore salvataggio navigazione impianto:", error));
+  }
+
   const impiantoName = impianto.denominazione || "Impianto";
   const areaLabel = [
     impianto.comune,

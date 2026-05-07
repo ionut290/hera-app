@@ -4594,18 +4594,18 @@ function formatWorkSummaryParts(workSummary) {
   const totalHours = Number(workSummary.totalHours || workSummary.hours || 0);
   const workedDays = Number(workSummary.workedDays ?? workSummary.workedDateKeys?.size ?? 0);
   const averageHoursPerDay = workedDays > 0 ? totalHours / workedDays : 0;
-  return `Ore complessive dalla data del primo impianto FATTO: ${formatHoursNumber(totalHours)} • Giorni lavorati dalla data del primo impianto FATTO: ${workedDays} • Media ore/giorno: ${formatHoursNumber(averageHoursPerDay)}`;
+  return `Ore ${formatHoursNumber(totalHours)} • Giorni lavorati ${workedDays} • Media ore/giorno ${formatHoursNumber(averageHoursPerDay)}`;
 }
 
 function formatParentCommessaSummary(aggregate) {
   const workedDays = aggregate.workedDateKeys?.size || 0;
-  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti totali • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento complessivo ${formatProgress(aggregate.done, aggregate.total)} • ${formatWorkSummaryParts({ totalHours: aggregate.hours, workedDays })}`;
+  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(aggregate.done, aggregate.total)} • ${formatWorkSummaryParts({ totalHours: aggregate.hours, workedDays })}`;
 }
 
 function formatSingleCommessaSummary(commessaId) {
   const stats = getCommessaStats(commessaId);
   const workSummary = getCommessaWorkSummary(commessaId);
-  return `${stats.total} impianti totali • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${formatWorkSummaryParts(workSummary)}`;
+  return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${formatWorkSummaryParts(workSummary)}`;
 }
 
 function toggleOrganizeCommesseScreen(show) {

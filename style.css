@@ -2540,3 +2540,36 @@ textarea:focus-visible {
     flex: 1 1 auto;
   }
 }
+
+.commessa-home-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.commessa-parent-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--primary);
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.commessa-manage-item {
+  align-items: flex-start;
+}
+
+.commessa-manage-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.commessa-manage-summary {
+  margin: 0;
+}

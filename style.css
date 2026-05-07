@@ -854,6 +854,33 @@ textarea:focus-visible {
   opacity: 0.8;
 }
 
+.commessa-row {
+  gap: 6px;
+  align-items: center;
+}
+
+.commessa-sub-row .commessa-btn {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--commessa-accent, var(--primary)) 8%, #ffffff);
+}
+
+.commessa-sub-toggle {
+  min-height: 36px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.commessa-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .impianti-toolbar {
   display: grid;
   gap: 8px;

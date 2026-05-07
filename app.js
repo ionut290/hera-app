@@ -110,6 +110,8 @@ const ui = {
   commessaForm: document.getElementById("commessa-form"),
   commessaName: document.getElementById("commessa-name"),
   commessaCode: document.getElementById("commessa-code"),
+  commessaType: document.getElementById("commessa-type"),
+  commessaParent: document.getElementById("commessa-parent"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   commesseNextAction: document.getElementById("commesse-next-action"),
@@ -933,6 +935,7 @@ ui.menuOverlay.addEventListener("click", closeSideMenu);
 ui.logoutBtn.addEventListener("click", logout);
 ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
 ui.commessaForm.addEventListener("submit", createCommessa);
+ui.commessaType?.addEventListener("change", updateCommessaParentField);
 ui.excelFile.addEventListener("change", onExcelSelected);
 ui.importBtn.addEventListener("click", importPendingRows);
 ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
@@ -3590,17 +3593,14 @@ function renderHoursOperatoriOptions() {
 
 function renderHoursCommessaSelectOptions() {
   const selects = ui.hoursCommesseList ? ui.hoursCommesseList.querySelectorAll(".hours-commessa-select") : [];
-  const commesse = Array.from(commesseById.values());
+  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
   renderHoursTableCommessaOptions(commesse);
   if (!selects.length) return;
   selects.forEach((select) => {
     const selectedValue = select.value;
     select.innerHTML = "<option value=''>Seleziona commessa</option>";
     commesse.forEach((commessa) => {
-      const option = document.createElement("option");
-      option.value = commessa.id;
-      option.textContent = commessa.nome || "Commessa senza nome";
-      select.appendChild(option);
+      select.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
     });
     if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
       select.value = selectedValue;
@@ -3611,14 +3611,11 @@ function renderHoursCommessaSelectOptions() {
 
 function renderHoursTableCommessaOptions(commesseInput = null) {
   if (!ui.hoursTableCommessaSelect) return;
-  const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
+  const commesse = Array.isArray(commesseInput) ? commesseInput : sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
   const selectedValue = ui.hoursTableCommessaSelect.value;
   ui.hoursTableCommessaSelect.innerHTML = "<option value=''>Seleziona commessa</option>";
   commesse.forEach((commessa) => {
-    const option = document.createElement("option");
-    option.value = commessa.id;
-    option.textContent = commessa.nome || "Commessa senza nome";
-    ui.hoursTableCommessaSelect.appendChild(option);
+    ui.hoursTableCommessaSelect.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
   });
   if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
     ui.hoursTableCommessaSelect.value = selectedValue;
@@ -3638,7 +3635,7 @@ function renderHoursCardCommessaButtons(card, commesseInput = null) {
     return;
   }
   buttonsWrap.innerHTML = commesse.map((commessa, idx) => (
-    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`
   )).join("");
   buttonsWrap.querySelectorAll("[data-hours-commessa-choice]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3661,7 +3658,7 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
     return;
   }
   ui.hoursTableCommesseButtons.innerHTML = commesse.map((commessa, idx) => (
-    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(commessa.nome || "Commessa senza nome")}</button>`
+    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`
   )).join("");
   ui.hoursTableCommesseButtons.querySelectorAll("[data-hours-table-commessa]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -4463,6 +4460,122 @@ function logout() {
   auth.signOut();
 }
 
+
+function isSubcommessa(commessa = {}) {
+  return Boolean(String(commessa.parentCommessaId || "").trim());
+}
+
+function getMainCommesse() {
+  return Array.from(commesseById.values()).filter((commessa) => !isSubcommessa(commessa));
+}
+
+function getSubcommesse(parentCommessaId) {
+  return Array.from(commesseById.values()).filter((commessa) => String(commessa.parentCommessaId || "") === String(parentCommessaId || ""));
+}
+
+function sortCommesseByCreatedAtDesc(commesse) {
+  return [...commesse].sort((a, b) => {
+    const aTime = typeof a.createdAt?.toMillis === "function" ? a.createdAt.toMillis() : 0;
+    const bTime = typeof b.createdAt?.toMillis === "function" ? b.createdAt.toMillis() : 0;
+    return bTime - aTime;
+  });
+}
+
+function getCommessaDisplayName(commessa = {}) {
+  const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
+  const name = commessa.nome || "Commessa senza nome";
+  return parent ? `${parent.nome || "Commessa padre"} / ${name}` : name;
+}
+
+function createCommessaOption(commessa, options = {}) {
+  const option = document.createElement("option");
+  option.value = commessa.id;
+  const prefix = options.includeHierarchy && isSubcommessa(commessa) ? "↳ " : "";
+  option.textContent = `${prefix}${getCommessaDisplayName(commessa)}`;
+  return option;
+}
+
+function updateCommessaParentField() {
+  if (!ui.commessaType || !ui.commessaParent) return;
+  const isSub = ui.commessaType.value === "sub";
+  ui.commessaParent.classList.toggle("hidden", !isSub);
+  ui.commessaParent.required = isSub;
+  ui.commessaParent.disabled = !isSub;
+  if (!isSub) ui.commessaParent.value = "";
+}
+
+function populateCommessaParentSelect() {
+  if (!ui.commessaParent) return;
+  const previousValue = ui.commessaParent.value;
+  ui.commessaParent.innerHTML = "<option value=''>Commessa padre</option>";
+  sortCommesseByCreatedAtDesc(getMainCommesse()).forEach((commessa) => {
+    ui.commessaParent.appendChild(createCommessaOption(commessa));
+  });
+  if (previousValue && commesseById.has(previousValue) && !isSubcommessa(commesseById.get(previousValue))) {
+    ui.commessaParent.value = previousValue;
+  }
+  updateCommessaParentField();
+}
+
+function renderCommessaHomeButton(commessa, index, options = {}) {
+  const row = document.createElement("div");
+  const isSub = Boolean(options.isSub);
+  row.className = `commessa-row${isSub ? " commessa-sub-row" : ""}`;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn commessa-btn" + (commessa.id === selectedCommessaId ? " active" : "");
+  btn.dataset.commessaId = commessa.id;
+  btn.style.setProperty("--commessa-accent", getCommessaAccentColor(commessa.id, index));
+  const codiceCommessa = String(commessa.codice || "").trim();
+  const parent = isSub ? commesseById.get(commessa.parentCommessaId) : null;
+  const metaParts = [];
+  if (isSub) metaParts.push(`Subcommessa${parent ? ` di ${parent.nome || "commessa padre"}` : ""}`);
+  if (codiceCommessa) metaParts.push(codiceCommessa);
+  btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${metaParts.length ? `<small class="muted">${escapeHTML(metaParts.join(" • "))}</small>` : ""}`;
+  btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
+
+  row.appendChild(btn);
+
+  if (!isSub) {
+    const subcommesse = getSubcommesse(commessa.id);
+    if (subcommesse.length) {
+      const badge = document.createElement("span");
+      badge.className = "commessa-sub-toggle commessa-sub-badge";
+      badge.textContent = `📂 ${subcommesse.length} subcommesse`;
+      row.appendChild(badge);
+    }
+  }
+
+  return row;
+}
+
+function renderCommesseHomeList() {
+  if (!ui.commesseLista) return;
+  ui.commesseLista.innerHTML = "";
+  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  if (!commesse.length) {
+    ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    return;
+  }
+  commesse.forEach((commessa, idx) => {
+    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx, { isSub: isSubcommessa(commessa) }));
+  });
+}
+
+function renderCommessaSelects() {
+  const orderedCommesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
+  ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
+  ui.resourceCommesse.innerHTML = "";
+  orderedCommesse.forEach((commessa) => {
+    ui.squadraCommessa.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+    ui.commessaTargetSelect.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+    ui.resourceCommesse.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+  });
+  populateCommessaParentSelect();
+}
+
 async function createCommessa(event) {
   event.preventDefault();
 
@@ -4474,7 +4587,13 @@ async function createCommessa(event) {
 
   const nome = ui.commessaName.value.trim();
   const codice = String(ui.commessaCode?.value || "").trim();
+  const tipoCommessa = ui.commessaType?.value === "sub" ? "sub" : "main";
+  const parentCommessaId = tipoCommessa === "sub" ? String(ui.commessaParent?.value || "").trim() : "";
   if (!nome) return;
+  if (tipoCommessa === "sub" && !parentCommessaId) {
+    alert("Seleziona la commessa padre per creare una subcommessa.");
+    return;
+  }
   if (!canManageData()) {
     alert("Solo un admin può aggiungere commesse.");
     return;
@@ -4483,6 +4602,7 @@ async function createCommessa(event) {
   const commessaRef = await db.collection("commesse").add({
     nome,
     codice,
+    parentCommessaId: parentCommessaId || null,
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
@@ -4497,6 +4617,7 @@ async function createCommessa(event) {
   }
 
   ui.commessaForm.reset();
+  updateCommessaParentField();
 }
 
 function subscribeDriveBridge() {
@@ -4561,49 +4682,18 @@ function subscribeCommesse() {
     .collection("commesse")
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot) => {
-      ui.commesseLista.innerHTML = "";
       commesseById = new Map();
-      ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
-      ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
-      ui.resourceCommesse.innerHTML = "";
 
-      if (snapshot.empty) {
-        ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
-        renderHoursCommessaSelectOptions();
-        updateCommessaContextUI();
-        renderNextActionCard();
-        return;
-      }
+      snapshot.forEach((doc) => {
+        const commessa = doc.data();
+        commesseById.set(doc.id, { id: doc.id, ...commessa });
+      });
 
       const routeCommessaId = parseCommessaHash().id;
       const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
-      let shouldRestoreOpenCommessa = false;
-      snapshot.forEach((doc, idx) => {
-        const commessa = doc.data();
-        commesseById.set(doc.id, { id: doc.id, ...commessa });
-        const row = document.createElement("div");
-        row.className = "commessa-row";
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn commessa-btn" + (doc.id === selectedCommessaId ? " active" : "");
-        btn.dataset.commessaId = doc.id;
-        btn.style.setProperty("--commessa-accent", getCommessaAccentColor(doc.id, idx));
-        const codiceCommessa = String(commessa.codice || "").trim();
-        btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${codiceCommessa ? `<small class="muted">${escapeHTML(codiceCommessa)}</small>` : ""}`;
-        btn.addEventListener("click", () => selectCommessa(doc.id, commessa.nome || "Commessa", commessa.codice || ""));
-
-        row.appendChild(btn);
-        ui.commesseLista.appendChild(row);
-
-        const option = document.createElement("option");
-        option.value = doc.id;
-        option.textContent = commessa.nome || "Commessa senza nome";
-        ui.squadraCommessa.appendChild(option);
-        ui.commessaTargetSelect.appendChild(option.cloneNode(true));
-        ui.resourceCommesse.appendChild(option.cloneNode(true));
-        if (!selectedCommessaId && activeStoredId && activeStoredId === doc.id) shouldRestoreOpenCommessa = true;
-      });
+      const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
+      renderCommesseHomeList();
+      renderCommessaSelects();
 
       renderCommesseManagementList();
       renderHoursCommessaSelectOptions();
@@ -5934,7 +6024,10 @@ function selectCommessa(id, nome, codice = "") {
     ui.commessaTargetSelect.value = id;
   }
   const codeText = String(codice || "").trim();
-  ui.commessaAttiva.textContent = codeText ? `Commessa selezionata: ${nome} • Cod. commessa: ${codeText}` : `Commessa selezionata: ${nome}`;
+  const selectedCommessa = commesseById.get(id) || {};
+  const parentCommessa = selectedCommessa.parentCommessaId ? commesseById.get(selectedCommessa.parentCommessaId) : null;
+  const hierarchyText = parentCommessa ? `Subcommessa di ${parentCommessa.nome || "commessa padre"}: ${nome}` : `Commessa selezionata: ${nome}`;
+  ui.commessaAttiva.textContent = codeText ? `${hierarchyText} • Cod. commessa: ${codeText}` : hierarchyText;
   updateCommessaContextUI();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser || !canManageData();
@@ -5958,7 +6051,11 @@ function updateCommessaContextUI() {
   if (ui.commessaFocusCode) {
     const selected = commesseById.get(selectedCommessaId) || {};
     const codeText = String(selected.codice || "").trim();
-    ui.commessaFocusCode.textContent = codeText ? `CODICE COMMESSA: ${codeText}` : "";
+    const parent = selected.parentCommessaId ? commesseById.get(selected.parentCommessaId) : null;
+    const parts = [];
+    if (parent) parts.push(`SUBCOMMESSA DI: ${(parent.nome || "COMMESSA PADRE").toUpperCase()}`);
+    if (codeText) parts.push(`CODICE COMMESSA: ${codeText}`);
+    ui.commessaFocusCode.textContent = parts.join(" • ");
   }
 }
 
@@ -6956,6 +7053,45 @@ function renderHeaderActivitySummary() {
   }
 }
 
+async function fetchDoneImpiantiRowsForExport(commessaId, commessaName, parentName = "") {
+  const snapshot = await db
+    .collection("commesse")
+    .doc(commessaId)
+    .collection("impianti")
+    .get();
+
+  const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const doneImpianti = combineImpiantiForView(rawImpianti).filter((impianto) => impianto.done);
+
+  return doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((impianto) => {
+    const doneInfo = formatDoneDateTime(impianto.doneAt);
+    return {
+      "Commessa padre": parentName || "",
+      Commessa: commessaName || "",
+      Cantiere: impianto.cantiereRiga || "",
+      Distretto: impianto.distretto || "",
+      "ID SAP": impianto.idSap || "",
+      Denominazione: impianto.denominazione || "",
+      Comune: impianto.comune || "",
+      Indirizzo: impianto.indirizzo || "",
+      "Voce riferimento": impianto.voceRiferimento || "",
+      "Codice prezzo": impianto.codicePrezzoSingolo || impianto.codicePrezzo || "",
+      Sfalci: impianto.sfalci || "",
+      "Frequenza annua": impianto.frequenzaAnnua || "",
+      "Tipologia intervento": impianto.tipologiaIntervento || "",
+      "Lavorazioni richieste": impianto.lavorazioniRichieste || "",
+      "GPS Y": impianto.gpsY ?? "",
+      "GPS X": impianto.gpsX ?? "",
+      "Tipo manutenzione": impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
+      Stato: "Fatto",
+      "Data esecuzione": doneInfo.date,
+      "Ora esecuzione": doneInfo.time,
+      "Eseguito da": impianto.doneBy || "-",
+      "Email operatore": auth.currentUser?.email || ""
+    };
+  });
+}
+
 async function exportCommessaSummary(commessaId, commessaName) {
   if (!auth.currentUser) {
     alert("Devi fare login per esportare il riepilogo.");
@@ -6963,57 +7099,41 @@ async function exportCommessaSummary(commessaId, commessaName) {
   }
 
   try {
-    const snapshot = await db
-      .collection("commesse")
-      .doc(commessaId)
-      .collection("impianti")
-      .get();
+    const selected = commesseById.get(commessaId) || { id: commessaId, nome: commessaName };
+    const subcommesse = getSubcommesse(commessaId);
+    const includeSubcommesse = subcommesse.length > 0 && window.confirm(
+      `La commessa "${commessaName}" ha ${subcommesse.length} subcommesse.\n\nPremi OK per esportare una vista raggruppata con commessa padre e subcommesse, oppure Annulla per esportare solo la commessa padre.`
+    );
+    const exportCommesse = includeSubcommesse ? [selected, ...sortCommesseByCreatedAtDesc(subcommesse)] : [selected];
+    const parentName = includeSubcommesse ? (selected.nome || commessaName || "Commessa padre") : "";
+    const rowsGroups = await Promise.all(exportCommesse.map((commessa) => (
+      fetchDoneImpiantiRowsForExport(
+        commessa.id,
+        commessa.nome || (commessa.id === commessaId ? commessaName : "Commessa"),
+        includeSubcommesse && commessa.id !== selected.id ? parentName : ""
+      )
+    )));
+    const rows = rowsGroups.flat();
 
-    const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const doneImpianti = combineImpiantiForView(rawImpianti).filter((impianto) => impianto.done);
-
-    if (!doneImpianti.length) {
-      alert(`Nessun impianto FATTO da esportare per la commessa "${commessaName}".`);
+    if (!rows.length) {
+      const message = includeSubcommesse
+        ? `Nessun impianto FATTO da esportare per la commessa "${commessaName}" e le sue subcommesse.`
+        : `Nessun impianto FATTO da esportare per la commessa "${commessaName}".`;
+      alert(message);
       return;
     }
 
-    const rows = doneImpianti.flatMap((impianto) => buildRowsForEachCodicePrezzo(impianto)).map((impianto) => {
-      const doneInfo = formatDoneDateTime(impianto.doneAt);
-      return {
-        Commessa: commessaName || "",
-        Cantiere: impianto.cantiereRiga || "",
-        Distretto: impianto.distretto || "",
-        "ID SAP": impianto.idSap || "",
-        Denominazione: impianto.denominazione || "",
-        Comune: impianto.comune || "",
-        Indirizzo: impianto.indirizzo || "",
-        "Voce riferimento": impianto.voceRiferimento || "",
-        "Codice prezzo": impianto.codicePrezzoSingolo || impianto.codicePrezzo || "",
-        Sfalci: impianto.sfalci || "",
-        "Frequenza annua": impianto.frequenzaAnnua || "",
-        "Tipologia intervento": impianto.tipologiaIntervento || "",
-        "Lavorazioni richieste": impianto.lavorazioniRichieste || "",
-        "GPS Y": impianto.gpsY ?? "",
-        "GPS X": impianto.gpsX ?? "",
-        "Tipo manutenzione": impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo),
-        Stato: "Fatto",
-        "Data esecuzione": doneInfo.date,
-        "Ora esecuzione": doneInfo.time,
-        "Eseguito da": impianto.doneBy || "-",
-        "Email operatore": auth.currentUser?.email || ""
-      };
-    });
-
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Riepilogo impianti");
+    XLSX.utils.book_append_sheet(workbook, worksheet, includeSubcommesse ? "Riepilogo raggruppato" : "Riepilogo impianti");
 
     const safeName = String(commessaName || "commessa")
       .trim()
       .replace(/[\\/:*?"<>|]/g, "_")
       .replace(/\s+/g, "_");
+    const suffix = includeSubcommesse ? "_raggruppato" : "";
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    XLSX.writeFile(workbook, `riepilogo_impianti_${safeName}_${timestamp}.xlsx`);
+    XLSX.writeFile(workbook, `riepilogo_impianti_${safeName}${suffix}_${timestamp}.xlsx`);
   } catch (error) {
     console.error(error);
     alert("Errore durante l'esportazione del riepilogo in Excel.");
@@ -7683,6 +7803,11 @@ async function deleteImpianto(impianto) {
 async function deleteCommessa(commessaId, nome) {
   if (!canManageData()) {
     alert("Solo un admin può eliminare commesse.");
+    return;
+  }
+  const subcommesse = getSubcommesse(commessaId);
+  if (subcommesse.length) {
+    alert(`Non puoi eliminare la commessa "${nome}" perché contiene ${subcommesse.length} subcommesse. Elimina o sposta prima le subcommesse.`);
     return;
   }
 
@@ -11212,7 +11337,10 @@ function renderCommesseManagementList() {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const title = document.createElement("span");
-    title.textContent = `${commessa.nome || "Commessa senza nome"} • Cod. ${commessa.codice || "-"}`;
+    const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
+    const subCount = getSubcommesse(commessa.id).length;
+    const hierarchyLabel = parent ? `Subcommessa di ${parent.nome || "commessa padre"}` : "Commessa principale";
+    title.textContent = `${commessa.nome || "Commessa senza nome"} • ${hierarchyLabel} • Cod. ${commessa.codice || "-"}${subCount ? ` • 📂 ${subCount} subcommesse` : ""}`;
 
     const actions = document.createElement("div");
     actions.className = "item-actions";

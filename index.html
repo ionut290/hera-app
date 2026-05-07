@@ -280,6 +280,15 @@
       <form id="commessa-form" class="inline-form">
         <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
         <input type="text" id="commessa-code" placeholder="Codice commessa">
+        <label for="commessa-type" class="sr-only">Tipo commessa</label>
+        <select id="commessa-type" aria-label="Tipo commessa">
+          <option value="main">Commessa principale</option>
+          <option value="sub">Subcommessa</option>
+        </select>
+        <label for="commessa-parent" class="sr-only">Commessa padre</label>
+        <select id="commessa-parent" class="hidden" aria-label="Commessa padre">
+          <option value="">Commessa padre</option>
+        </select>
         <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
       </form>
       <h3>Gestisci commesse (admin)</h3>
@@ -861,7 +870,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260413-ore-export-completo"></script>
+  <script src="app.js?v=20260507-subcommesse"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

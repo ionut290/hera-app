@@ -4519,7 +4519,8 @@ function populateCommessaParentSelect() {
 
 function renderCommessaHomeButton(commessa, index, options = {}) {
   const row = document.createElement("div");
-  row.className = `commessa-row${options.isSub ? " commessa-sub-row" : ""}`;
+  const isSub = Boolean(options.isSub);
+  row.className = `commessa-row${isSub ? " commessa-sub-row" : ""}`;
 
   const btn = document.createElement("button");
   btn.type = "button";
@@ -4527,26 +4528,22 @@ function renderCommessaHomeButton(commessa, index, options = {}) {
   btn.dataset.commessaId = commessa.id;
   btn.style.setProperty("--commessa-accent", getCommessaAccentColor(commessa.id, index));
   const codiceCommessa = String(commessa.codice || "").trim();
-  const subLabel = options.isSub ? `<small class="muted">Subcommessa${codiceCommessa ? ` • ${escapeHTML(codiceCommessa)}` : ""}</small>` : (codiceCommessa ? `<small class="muted">${escapeHTML(codiceCommessa)}</small>` : "");
-  btn.innerHTML = `<span>${options.isSub ? "↳ " : ""}${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${subLabel}`;
+  const parent = isSub ? commesseById.get(commessa.parentCommessaId) : null;
+  const metaParts = [];
+  if (isSub) metaParts.push(`Subcommessa${parent ? ` di ${parent.nome || "commessa padre"}` : ""}`);
+  if (codiceCommessa) metaParts.push(codiceCommessa);
+  btn.innerHTML = `<span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>${metaParts.length ? `<small class="muted">${escapeHTML(metaParts.join(" • "))}</small>` : ""}`;
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
 
-  if (!options.isSub) {
+  if (!isSub) {
     const subcommesse = getSubcommesse(commessa.id);
     if (subcommesse.length) {
-      const toggleBtn = document.createElement("button");
-      toggleBtn.type = "button";
-      toggleBtn.className = "btn commessa-sub-toggle";
-      toggleBtn.textContent = `📂 ${subcommesse.length} subcommesse`;
-      toggleBtn.setAttribute("aria-expanded", expandedParentCommesse.has(commessa.id) ? "true" : "false");
-      toggleBtn.addEventListener("click", () => {
-        if (expandedParentCommesse.has(commessa.id)) expandedParentCommesse.delete(commessa.id);
-        else expandedParentCommesse.add(commessa.id);
-        renderCommesseHomeList();
-      });
-      row.appendChild(toggleBtn);
+      const badge = document.createElement("span");
+      badge.className = "commessa-sub-toggle commessa-sub-badge";
+      badge.textContent = `📂 ${subcommesse.length} subcommesse`;
+      row.appendChild(badge);
     }
   }
 
@@ -4556,20 +4553,13 @@ function renderCommessaHomeButton(commessa, index, options = {}) {
 function renderCommesseHomeList() {
   if (!ui.commesseLista) return;
   ui.commesseLista.innerHTML = "";
-  const mainCommesse = sortCommesseByCreatedAtDesc(getMainCommesse());
-  if (!mainCommesse.length) {
-    ui.commesseLista.innerHTML = commesseById.size
-      ? "<p class='muted'>Nessuna commessa principale disponibile.</p>"
-      : "<p class='muted'>Nessuna commessa disponibile.</p>";
+  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  if (!commesse.length) {
+    ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
   }
-  mainCommesse.forEach((commessa, idx) => {
-    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
-    if (expandedParentCommesse.has(commessa.id)) {
-      sortCommesseByCreatedAtDesc(getSubcommesse(commessa.id)).forEach((subcommessa, subIdx) => {
-        ui.commesseLista.appendChild(renderCommessaHomeButton(subcommessa, idx + subIdx + 1, { isSub: true }));
-      });
-    }
+  commesse.forEach((commessa, idx) => {
+    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx, { isSub: isSubcommessa(commessa) }));
   });
 }
 
@@ -4702,9 +4692,6 @@ function subscribeCommesse() {
       const routeCommessaId = parseCommessaHash().id;
       const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
       const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
-      const visibleActiveCommessa = commesseById.get(selectedCommessaId || activeStoredId);
-      if (visibleActiveCommessa?.parentCommessaId) expandedParentCommesse.add(visibleActiveCommessa.parentCommessaId);
-
       renderCommesseHomeList();
       renderCommessaSelects();
 

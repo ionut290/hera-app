@@ -7290,6 +7290,8 @@ function combineImpiantiForView(impianti) {
         done: Boolean(item.done),
         doneAt: item.doneAt || null,
         doneBy: item.doneBy || "",
+        navigateAt: item.navigateAt || null,
+        navigatedBy: item.navigatedBy || "",
         sourceIds: [item.id]
       });
       return;
@@ -7308,6 +7310,8 @@ function combineImpiantiForView(impianti) {
     const itemDone = Boolean(item.done);
     const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
     const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
+    const existingNavigateAtMs = firestoreDateToMillis(existing.navigateAt);
+    const itemNavigateAtMs = firestoreDateToMillis(item.navigateAt);
     existing.done = Boolean(existing.done || itemDone);
 
     if (itemDone && (!existing.doneBy || itemDoneAtMs >= existingDoneAtMs)) {
@@ -8043,6 +8047,14 @@ async function navigateToImpianto(impianto) {
   window.open(url, "_blank");
 
   const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const navigateAtLocal = new Date();
+  const ids = getImpiantoDocIds(impianto);
+  if (ids.length && !firestoreDateToMillis(impianto.navigateAt)) {
+    updateImpiantoLocalState(ids, { navigateAt: navigateAtLocal, navigatedBy: operatorName });
+    setImpiantoNavigated(selectedCommessaId, ids, navigateAtLocal, operatorName)
+      .catch((error) => console.error("Errore salvataggio navigazione impianto:", error));
+  }
+
   const impiantoName = impianto.denominazione || "Impianto";
   const areaLabel = [
     impianto.comune,
@@ -9008,6 +9020,23 @@ function getPersonaleDisplayName(person) {
   const nome = String(person.nome || "").trim();
   const composed = `${cognome} ${nome}`.trim();
   return composed || String(person.fullName || "").trim();
+}
+
+async function setImpiantoNavigated(commessaId, impiantoIds, navigateAtDate, navigatedBy) {
+  if (!commessaId || !Array.isArray(impiantoIds) || !impiantoIds.length) return;
+  const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+  const navigateAt = firebase.firestore.Timestamp.fromDate(navigateAtDate instanceof Date ? navigateAtDate : new Date());
+  await Promise.all(impiantoIds.map(async (impiantoId) => {
+    const docRef = ref.doc(impiantoId);
+    const docSnap = await docRef.get();
+    const existingNavigateAtMs = docSnap.exists ? firestoreDateToMillis(docSnap.data()?.navigateAt) : 0;
+    if (existingNavigateAtMs) return;
+    await docRef.set({
+      navigateAt,
+      navigatedBy: navigatedBy || "Operatore",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }));
 }
 
 async function setImpiantoDone(commessaId, impiantoIds, done) {

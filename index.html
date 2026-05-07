@@ -137,7 +137,17 @@
         <p id="impianti-next-action" class="muted">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
       </section>
 
-      <section class="card">
+      <section id="parent-commessa-overview" class="card parent-commessa-overview hidden" aria-hidden="true">
+        <div class="section-head">
+          <div>
+            <h2>Subcommesse</h2>
+            <p id="parent-commessa-summary" class="muted"></p>
+          </div>
+        </div>
+        <div id="parent-subcommesse-list" class="parent-subcommesse-list"></div>
+      </section>
+
+      <section id="commessa-operational-card" class="card">
         <div class="commessa-tools-bar">
           <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
           <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-controls="commessa-notes-page">📝 NOTE COMMESSA</button>
@@ -155,7 +165,7 @@
       </section>
 
 
-      <section class="card">
+      <section id="impianti-card" class="card">
         <h2>Impianti (dal più vicino al più lontano)</h2>
         <div class="impianti-toolbar">
           <div class="search-box">
@@ -277,13 +287,41 @@
       <button id="management-close-btn" class="btn" type="button">Chiudi</button>
     </div>
     <div id="panel-commesse" class="management-panel hidden">
+      <button id="open-organize-commesse-btn" class="btn btn-primary" type="button">Organizza commesse</button>
+      <section id="organize-commesse-screen" class="organize-commesse-screen hidden" aria-hidden="true">
+        <div class="section-head">
+          <div>
+            <h3>Organizza commesse</h3>
+            <p class="muted">Crea una commessa padre e sposta sotto di essa commesse già esistenti senza cancellare dati.</p>
+          </div>
+          <button id="close-organize-commesse-btn" class="btn" type="button">Torna ad aggiungi commesse</button>
+        </div>
+        <form id="parent-commessa-form" class="inline-form">
+          <input type="text" id="parent-commessa-name" placeholder="Nome commessa padre" required>
+          <input type="text" id="parent-commessa-code" placeholder="Codice commessa padre (opzionale)">
+          <button class="btn btn-primary" type="submit">Crea commessa padre</button>
+        </form>
+        <form id="move-subcommesse-form" class="organize-move-form">
+          <label>Seleziona commessa padre
+            <select id="move-parent-commessa-select" required>
+              <option value="">Seleziona commessa padre</option>
+            </select>
+          </label>
+          <div>
+            <h4>Commesse esistenti</h4>
+            <p class="muted">Seleziona una o più commesse da trasformare in subcommesse.</p>
+            <div id="move-subcommesse-list" class="organize-commesse-list"></div>
+          </div>
+          <button class="btn btn-primary" type="submit">Sposta sotto questa commessa padre</button>
+          <p id="organize-commesse-feedback" class="muted"></p>
+        </form>
+      </section>
       <form id="commessa-form" class="inline-form">
         <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
         <input type="text" id="commessa-code" placeholder="Codice commessa">
         <label for="commessa-type" class="sr-only">Tipo commessa</label>
-        <select id="commessa-type" aria-label="Tipo commessa">
+        <select id="commessa-type" class="hidden" aria-label="Tipo commessa">
           <option value="main">Commessa principale</option>
-          <option value="sub">Subcommessa</option>
         </select>
         <label for="commessa-parent" class="sr-only">Commessa padre</label>
         <select id="commessa-parent" class="hidden" aria-label="Commessa padre">
@@ -870,7 +908,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260507-subcommesse"></script>
+  <script src="app.js?v=20260507-organizza-commesse"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

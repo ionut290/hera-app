@@ -19,6 +19,12 @@
           }
         ]
       }
+    ],
+    "rewrites": [
+      {
+        "source": "/pos",
+        "destination": "/index.html"
+      }
     ]
   },
   "firestore": {

@@ -26,8 +26,45 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    match /posDocuments/{docId} {
+      allow read: if resource.data.active == true || request.auth != null;
+      allow create, update, delete: if request.auth != null
+        && request.auth.token.email in [
+          "ionut29019@gmail.com"
+        ];
+    }
+
+    match /{collection}/{docId} {
+      allow read, write: if request.auth != null && collection in [
+        "appConfig",
+        "appNotifications",
+        "chatMessages",
+        "commessaResources",
+        "globalCommesse",
+        "gpsUpdateRequests",
+        "hoursDeadlineAlerts",
+        "items",
+        "mezzi",
+        "noteCommessa",
+        "notificationEmailQueue",
+        "oreApprovalRequests",
+        "oreReports",
+        "personale",
+        "platformUsers",
+        "privateDocuments",
+        "sheetExportQueue",
+        "squadreCommesse",
+        "squadreStorico",
+        "userAlertAcknowledgements",
+        "userAlerts"
+      ];
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && collection in [
+          "globalCommesse",
+          "privateDocuments"
+        ];
+      }
     }
   }
 }

@@ -516,6 +516,7 @@ let driveHelpCenterFolderId = "";
 let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
+let commesseLoadState = { status: "idle", message: "" };
 let commessaStatsById = new Map();
 let commessaHoursById = new Map();
 let commessaWorkSummariesById = new Map();
@@ -850,6 +851,7 @@ const ADMIN_EMAIL = "ionut29019@gmail.com";
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
+const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
@@ -1754,7 +1756,10 @@ auth.onAuthStateChanged((user) => {
   selectedCommessaName = "";
   updateCommessaContextUI();
   window.location.hash = "";
-  ui.commesseLista.innerHTML = "";
+  commesseLoadState = loggedIn
+    ? { status: "idle", message: "" }
+    : { status: "unauthenticated", message: "Effettua login per visualizzare le commesse" };
+  ui.commesseLista.innerHTML = loggedIn ? "" : "<p class='muted'>Effettua login per visualizzare le commesse</p>";
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
   if (ui.squadreFilterDate) ui.squadreFilterDate.value = "";
@@ -4508,6 +4513,82 @@ function getSubcommesse(parentCommessaId) {
   return Array.from(commesseById.values()).filter((commessa) => String(commessa.parentCommessaId || "") === String(parentCommessaId || ""));
 }
 
+function validateFirebaseConfigForCommesse() {
+  const requiredKeys = ["apiKey", "projectId", "appId"];
+  const missingKeys = requiredKeys.filter((key) => !String(firebaseConfig?.[key] || "").trim());
+  if (missingKeys.length) {
+    console.error("Configurazione Firebase incompleta per il caricamento commesse. Variabili equivalenti richieste: VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID. Campi mancanti:", missingKeys);
+    return false;
+  }
+  if (!db || typeof db.collection !== "function") {
+    console.error("Firestore non inizializzato correttamente: db.collection non disponibile.");
+    return false;
+  }
+  return true;
+}
+
+function getCommesseErrorMessage(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (code.includes("permission-denied") || message.includes("missing or insufficient permissions")) {
+    return "Permessi insufficienti per leggere le commesse.";
+  }
+  if (code.includes("unauthenticated")) {
+    return "Effettua login per visualizzare le commesse";
+  }
+  if (["unavailable", "deadline-exceeded", "resource-exhausted", "internal"].some((value) => code.includes(value)) || message.includes("network") || message.includes("offline")) {
+    return "Impossibile connettersi al database";
+  }
+  return "Errore caricamento commesse.";
+}
+
+function parseCachedCommesse() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COMMESSE_LOCAL_CACHE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.id) : [];
+  } catch (error) {
+    console.error("Errore lettura cache locale commesse:", error);
+    return [];
+  }
+}
+
+function saveCommesseLocalCache(commesse) {
+  if (!Array.isArray(commesse)) return;
+  try {
+    localStorage.setItem(COMMESSE_LOCAL_CACHE_KEY, JSON.stringify(commesse));
+  } catch (error) {
+    console.error("Errore salvataggio cache locale commesse:", error);
+  }
+}
+
+function loadCommesseFromLocalCache() {
+  const cachedCommesse = parseCachedCommesse();
+  commesseById = new Map(cachedCommesse.map((commessa) => [commessa.id, commessa]));
+  if (cachedCommesse.length) {
+    console.log("Commesse ricevute dalla cache locale:", cachedCommesse);
+  }
+  return cachedCommesse;
+}
+
+function refreshCommesseDependentUI(includeRemoteStats = true) {
+  if (includeRemoteStats) {
+    subscribeStatsForCommesse();
+    subscribeHoursStats();
+  }
+  renderCommesseHomeList();
+  renderCommessaSelects();
+  renderOrganizeCommesseControls();
+  renderCommesseManagementList();
+  renderHoursCommessaSelectOptions();
+  renderSquadre();
+  renderResourcesList();
+  renderResourceButtonsForCommessa();
+  syncBannerFormFromSelection();
+  updateCommessaContextUI();
+  renderParentCommessaOverview();
+  renderNextActionCard();
+}
+
 
 function getEmptyCommessaStats() {
   return { total: 0, done: 0, openAlerts: 0, firstDoneAtMs: 0, firstDoneDateKey: "", lastResetAtMs: 0, lastResetDateKey: "" };
@@ -4909,11 +4990,8 @@ function stopCommessaStatsSubscriptions() {
 }
 
 function sortCommesseByCreatedAtDesc(commesse) {
-  return [...commesse].sort((a, b) => {
-    const aTime = typeof a.createdAt?.toMillis === "function" ? a.createdAt.toMillis() : 0;
-    const bTime = typeof b.createdAt?.toMillis === "function" ? b.createdAt.toMillis() : 0;
-    return bTime - aTime;
-  });
+  const safeCommesse = Array.isArray(commesse) ? commesse : [];
+  return [...safeCommesse].sort((a, b) => firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt));
 }
 
 function getCommessaDisplayName(commessa = {}) {
@@ -4980,10 +5058,24 @@ function renderCommessaHomeButton(commessa, index) {
 function renderCommesseHomeList() {
   if (!ui.commesseLista) return;
   ui.commesseLista.innerHTML = "";
+  if (!auth.currentUser) {
+    ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
+    return;
+  }
+  if (commesseLoadState.status === "loading") {
+    ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
+    return;
+  }
   const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
   if (!commesse.length) {
-    ui.commesseLista.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
     return;
+  }
+  if (commesseLoadState.status === "error" && commesseLoadState.message) {
+    const warning = document.createElement("p");
+    warning.className = "muted";
+    warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
+    ui.commesseLista.appendChild(warning);
   }
   commesse.forEach((commessa, idx) => {
     ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
@@ -5041,13 +5133,13 @@ function renderParentCommessaOverview() {
 
 function renderCommessaSelects() {
   const orderedCommesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
-  ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
-  ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
-  ui.resourceCommesse.innerHTML = "";
+  if (ui.squadraCommessa) ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
+  if (ui.commessaTargetSelect) ui.commessaTargetSelect.innerHTML = "<option value=''>Usa commessa selezionata in home</option>";
+  if (ui.resourceCommesse) ui.resourceCommesse.innerHTML = "";
   orderedCommesse.forEach((commessa) => {
-    ui.squadraCommessa.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
-    ui.commessaTargetSelect.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
-    ui.resourceCommesse.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+    ui.squadraCommessa?.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+    ui.commessaTargetSelect?.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
+    ui.resourceCommesse?.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
   });
   populateCommessaParentSelect();
 }
@@ -5154,43 +5246,52 @@ function stopDriveBridgeSubscription() {
 }
 
 function subscribeCommesse() {
+  commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
+  renderCommesseHomeList();
+
+  if (!validateFirebaseConfigForCommesse()) {
+    commesseLoadState = { status: "error", message: "Impossibile connettersi al database" };
+    loadCommesseFromLocalCache();
+    refreshCommesseDependentUI(false);
+    return;
+  }
+
   unsubscribeCommesse = db
     .collection("commesse")
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot) => {
+      const receivedCommesse = [];
       commesseById = new Map();
 
       snapshot.forEach((doc) => {
-        const commessa = doc.data();
-        commesseById.set(doc.id, { id: doc.id, ...commessa });
+        const commessa = { id: doc.id, ...(doc.data() || {}) };
+        receivedCommesse.push(commessa);
+        commesseById.set(doc.id, commessa);
       });
+
+      console.log("Commesse ricevute:", receivedCommesse);
+      saveCommesseLocalCache(receivedCommesse);
+      commesseLoadState = receivedCommesse.length
+        ? { status: "loaded", message: "" }
+        : { status: "empty", message: "Nessuna commessa disponibile" };
 
       const routeCommessaId = parseCommessaHash().id;
       const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
       const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
-      subscribeStatsForCommesse();
-      subscribeHoursStats();
-      renderCommesseHomeList();
-      renderCommessaSelects();
-      renderOrganizeCommesseControls();
-
-      renderCommesseManagementList();
-      renderHoursCommessaSelectOptions();
-      renderSquadre();
-      renderResourcesList();
-      renderResourceButtonsForCommessa();
-      syncBannerFormFromSelection();
-      updateCommessaContextUI();
-      renderParentCommessaOverview();
+      refreshCommesseDependentUI();
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
       }
       renderNextActionCard();
     }, (error) => {
-      console.error(error);
-      ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse.</p>";
-      renderNextActionCard();
+      console.error("Errore caricamento commesse:", error);
+      loadCommesseFromLocalCache();
+      commesseLoadState = {
+        status: "error",
+        message: getCommesseErrorMessage(error)
+      };
+      refreshCommesseDependentUI(false);
     });
 }
 
@@ -7488,6 +7589,8 @@ function firestoreDateToMillis(value) {
     return date instanceof Date ? date.getTime() : 0;
   }
   if (value instanceof Date) return value.getTime();
+  if (Number.isFinite(value?.seconds)) return (value.seconds * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000);
+  if (Number.isFinite(value?._seconds)) return (value._seconds * 1000) + Math.floor(Number(value._nanoseconds || 0) / 1000000);
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }

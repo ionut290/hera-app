@@ -239,6 +239,7 @@ const ui = {
   openPrivateDocsUploadBtn: document.getElementById("open-private-docs-upload-btn"),
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
+  openPosBtn: document.getElementById("open-pos-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   openBookPdfBtn: document.getElementById("open-book-pdf-btn"),
@@ -329,6 +330,23 @@ const ui = {
   backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
   hoursPage: document.getElementById("hours-page"),
   backFromHoursBtn: document.getElementById("back-from-hours-btn"),
+  posPage: document.getElementById("pos-page"),
+  backFromPosBtn: document.getElementById("back-from-pos-btn"),
+  posAdminCard: document.getElementById("pos-admin-card"),
+  posAddToggleBtn: document.getElementById("pos-add-toggle-btn"),
+  posDocumentForm: document.getElementById("pos-document-form"),
+  posDocumentId: document.getElementById("pos-document-id"),
+  posTitle: document.getElementById("pos-title"),
+  posDescription: document.getElementById("pos-description"),
+  posDriveUrl: document.getElementById("pos-drive-url"),
+  posCategory: document.getElementById("pos-category"),
+  posOrder: document.getElementById("pos-order"),
+  posActive: document.getElementById("pos-active"),
+  posSaveBtn: document.getElementById("pos-save-btn"),
+  posCancelBtn: document.getElementById("pos-cancel-btn"),
+  posFeedback: document.getElementById("pos-feedback"),
+  posSearch: document.getElementById("pos-search"),
+  posDocumentsList: document.getElementById("pos-documents-list"),
   hoursForm: document.getElementById("hours-form"),
   hoursDate: document.getElementById("hours-date"),
   hoursCommesseList: document.getElementById("hours-commesse-list"),
@@ -790,6 +808,15 @@ const MENU_HOWTO_CONTENT = {
     ],
     tags: ["ore", "commesse", "operatori", "whatsapp", "drive"]
   },
+  "open-pos-btn": {
+    rispostaBreve: "Archivio documenti sicurezza: POS, PMS, schede lavorazioni, schede macchine e modulistica.",
+    passi: [
+      "Apri il menu (⋮) e premi “📄 POS”.",
+      "Cerca il documento per titolo, descrizione o categoria.",
+      "Premi “Apri documento” per consultare il link Google Drive in una nuova scheda."
+    ],
+    tags: ["pos", "documenti", "sicurezza", "drive"]
+  },
   "open-segnalazioni-btn": {
     rispostaBreve: "Compili la segnalazione sicurezza e generi il PDF da condividere.",
     passi: [
@@ -850,8 +877,11 @@ const STATIC_HOWTO_ITEMS = [
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+const POS_DEFAULT_CATEGORIES = ["POS", "PMS", "Schede lavorazioni", "Schede macchine e attrezzature", "Sicurezza", "Modulistica", "Altro"];
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
+let posDocuments = [];
+let unsubscribePosDocuments = null;
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
@@ -1031,6 +1061,7 @@ ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
 ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn.addEventListener("click", openHoursPage);
+ui.openPosBtn?.addEventListener("click", openPosPage);
 ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn.addEventListener("click", openHowtoPage);
 ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
@@ -1044,6 +1075,11 @@ ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
 ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
+ui.backFromPosBtn?.addEventListener("click", closePosPage);
+ui.posAddToggleBtn?.addEventListener("click", () => openPosDocumentForm());
+ui.posCancelBtn?.addEventListener("click", closePosDocumentForm);
+ui.posDocumentForm?.addEventListener("submit", savePosDocument);
+ui.posSearch?.addEventListener("input", renderPosDocuments);
 ui.hoursForm.addEventListener("submit", finalizeHoursReport);
 ui.addHoursCommessaBtn.addEventListener("click", () => {
   unlockHoursFinalizeButton();
@@ -1150,6 +1186,7 @@ prefillSegnalazioneDateTime();
 renderHowtoFaq();
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
+window.addEventListener("popstate", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
 initHelpCenterFaq();
@@ -1748,6 +1785,7 @@ auth.onAuthStateChanged((user) => {
   stopGlobalCommesseSubscription();
   stopGlobalImpiantiSubscription();
   stopPrivateDocsSubscription();
+  stopPosDocumentsSubscription();
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
   stopWorkBannerSubscription();
@@ -1774,9 +1812,11 @@ auth.onAuthStateChanged((user) => {
   selectedGlobalCommessaId = "";
   resourceRecords = [];
   privateDocsRecords = [];
+  posDocuments = [];
   gpsUpdateRequests = [];
   hoursApprovalRequests = [];
   renderPrivateDocsList();
+  renderPosDocuments();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
   renderParentCommessaOverview();
@@ -1812,6 +1852,7 @@ auth.onAuthStateChanged((user) => {
     subscribeResources();
     subscribeGlobalCommesse();
     subscribePrivateDocs();
+    subscribePosDocuments();
     subscribeGpsRequests();
     subscribeGlobalNotifications();
     subscribeWorkBanner();
@@ -1822,6 +1863,7 @@ auth.onAuthStateChanged((user) => {
   } else {
     subscribeCommesse();
     subscribeSquadre();
+    subscribePosDocuments();
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
     closeUserAlertModal();
@@ -1834,6 +1876,9 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
+  ui.posAdminCard?.classList.toggle("hidden", !canManage);
+  if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
+  ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
   [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
@@ -2211,6 +2256,7 @@ function applyRoute() {
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
   const showPrivateDocs = hash === "#documenti";
+  const showPos = hash === "#pos" || (window.location.pathname === "/pos" && !hash);
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
   const commessaIdFromHash = commessaRoute.id;
@@ -2220,7 +2266,7 @@ function applyRoute() {
   const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.commessaNotesPage?.classList.toggle("hidden", !showNotesPage);
   ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
@@ -2229,6 +2275,7 @@ function applyRoute() {
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
+  ui.posPage?.classList.toggle("hidden", !showPos);
   ui.hoursPage.classList.toggle("hidden", !showHours);
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
@@ -2257,6 +2304,7 @@ function applyRoute() {
   }
   if (showHowto) renderHowtoFaq();
   if (showPrivateDocs) renderPrivateDocsList();
+  if (showPos) renderPosDocuments();
   if (showFuel) {
     setTimeout(() => {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
@@ -2595,6 +2643,200 @@ function openHoursPage() {
 function closeHoursPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+function openPosPage() {
+  if (window.location.pathname !== "/pos" || window.location.hash) {
+    window.history.pushState({}, "", "/pos");
+  }
+  applyRoute();
+  closeSideMenu();
+}
+
+function closePosPage() {
+  if (window.location.pathname === "/pos") {
+    window.history.pushState({}, "", "/");
+  } else {
+    window.location.hash = "";
+  }
+  applyRoute();
+}
+
+function stopPosDocumentsSubscription() {
+  if (unsubscribePosDocuments) {
+    unsubscribePosDocuments();
+    unsubscribePosDocuments = null;
+  }
+  posDocuments = [];
+}
+
+function subscribePosDocuments() {
+  stopPosDocumentsSubscription();
+  const query = canManageData()
+    ? db.collection("posDocuments")
+    : db.collection("posDocuments").where("active", "==", true);
+  unsubscribePosDocuments = query.onSnapshot((snapshot) => {
+    posDocuments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderPosDocuments();
+  }, (error) => {
+    console.error("Errore caricamento documenti POS:", error);
+    if (ui.posDocumentsList) ui.posDocumentsList.innerHTML = "<p class='muted'>Impossibile caricare i documenti POS.</p>";
+  });
+}
+
+function getFilteredPosDocuments() {
+  const canManage = canManageData();
+  const search = String(ui.posSearch?.value || "").trim().toLowerCase();
+  return posDocuments
+    .filter((doc) => canManage || doc.active === true)
+    .filter((doc) => {
+      if (!search) return true;
+      return [doc.title, doc.description, doc.category]
+        .some((value) => String(value || "").toLowerCase().includes(search));
+    })
+    .sort((a, b) => {
+      const categoryCompare = String(a.category || "Altro").localeCompare(String(b.category || "Altro"), "it");
+      if (categoryCompare !== 0) return categoryCompare;
+      const orderCompare = Number(a.order || 0) - Number(b.order || 0);
+      if (orderCompare !== 0) return orderCompare;
+      return String(a.title || "").localeCompare(String(b.title || ""), "it");
+    });
+}
+
+function renderPosDocuments() {
+  if (!ui.posDocumentsList) return;
+  const canManage = canManageData();
+  ui.posAdminCard?.classList.toggle("hidden", !canManage);
+  const documents = getFilteredPosDocuments();
+  if (!documents.length) {
+    ui.posDocumentsList.innerHTML = "<p class='muted'>Nessun documento disponibile.</p>";
+    return;
+  }
+  ui.posDocumentsList.innerHTML = "";
+  const grouped = new Map();
+  documents.forEach((doc) => {
+    const category = String(doc.category || "Altro").trim() || "Altro";
+    if (!grouped.has(category)) grouped.set(category, []);
+    grouped.get(category).push(doc);
+  });
+  grouped.forEach((items, category) => {
+    const group = document.createElement("section");
+    group.className = "pos-category-group";
+    group.innerHTML = `<h3>📁 ${escapeHTML(category)}</h3>`;
+    const grid = document.createElement("div");
+    grid.className = "pos-document-grid";
+    items.forEach((doc) => grid.appendChild(createPosDocumentCard(doc, canManage)));
+    group.appendChild(grid);
+    ui.posDocumentsList.appendChild(group);
+  });
+}
+
+function createPosDocumentCard(doc, canManage) {
+  const card = document.createElement("article");
+  card.className = "pos-document-card";
+  if (doc.active === false) card.classList.add("is-inactive");
+  const title = document.createElement("h4");
+  title.textContent = doc.title || "Documento senza titolo";
+  const description = document.createElement("p");
+  description.className = "muted";
+  description.textContent = doc.description || "Nessuna descrizione.";
+  const actions = document.createElement("div");
+  actions.className = "item-actions pos-document-actions";
+  const driveUrl = String(doc.driveUrl || "").trim();
+  if (driveUrl) {
+    const link = document.createElement("a");
+    link.className = "btn pos-open-link";
+    link.href = driveUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Apri documento";
+    actions.appendChild(link);
+  } else {
+    const unavailable = document.createElement("p");
+    unavailable.className = "muted pos-unavailable";
+    unavailable.textContent = "Documento non disponibile.";
+    actions.appendChild(unavailable);
+  }
+  if (canManage) {
+    const editBtn = createButton("Modifica", () => openPosDocumentForm(doc));
+    const deleteBtn = createButton("Elimina", () => deletePosDocument(doc));
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+    const meta = document.createElement("p");
+    meta.className = "muted pos-admin-meta";
+    meta.textContent = `Ordine: ${Number(doc.order || 0)} • ${doc.active === false ? "Non attivo" : "Attivo"}`;
+    card.append(title, description, meta, actions);
+    return card;
+  }
+  card.append(title, description, actions);
+  return card;
+}
+
+function openPosDocumentForm(doc = null) {
+  if (!canManageData()) return;
+  ui.posDocumentForm?.classList.remove("hidden");
+  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = doc ? "Modifica documento" : "➕ Aggiungi documento";
+  if (ui.posDocumentId) ui.posDocumentId.value = doc?.id || "";
+  if (ui.posTitle) ui.posTitle.value = doc?.title || "";
+  if (ui.posDescription) ui.posDescription.value = doc?.description || "";
+  if (ui.posDriveUrl) ui.posDriveUrl.value = doc?.driveUrl || "";
+  if (ui.posCategory) ui.posCategory.value = doc?.category || POS_DEFAULT_CATEGORIES[0];
+  if (ui.posOrder) ui.posOrder.value = Number(doc?.order || 0);
+  if (ui.posActive) ui.posActive.checked = doc?.active !== false;
+  ui.posTitle?.focus();
+}
+
+function closePosDocumentForm() {
+  ui.posDocumentForm?.reset();
+  if (ui.posDocumentId) ui.posDocumentId.value = "";
+  if (ui.posActive) ui.posActive.checked = true;
+  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = "➕ Aggiungi documento";
+  ui.posDocumentForm?.classList.add("hidden");
+  if (ui.posFeedback) ui.posFeedback.textContent = "";
+}
+
+async function savePosDocument(event) {
+  event.preventDefault();
+  if (!canManageData()) {
+    alert("Solo l'admin può salvare documenti POS.");
+    return;
+  }
+  const id = String(ui.posDocumentId?.value || "").trim();
+  const now = firebase.firestore.FieldValue.serverTimestamp();
+  const payload = {
+    title: String(ui.posTitle?.value || "").trim(),
+    description: String(ui.posDescription?.value || "").trim(),
+    driveUrl: String(ui.posDriveUrl?.value || "").trim(),
+    category: String(ui.posCategory?.value || "").trim() || "Altro",
+    order: Number(ui.posOrder?.value || 0),
+    active: Boolean(ui.posActive?.checked),
+    updatedAt: now
+  };
+  if (!payload.title) {
+    alert("Inserisci il titolo documento.");
+    return;
+  }
+  if (id) {
+    await db.collection("posDocuments").doc(id).set(payload, { merge: true });
+  } else {
+    await db.collection("posDocuments").add({
+      ...payload,
+      createdAt: now,
+      createdBy: currentUser?.email || ""
+    });
+  }
+  if (ui.posFeedback) ui.posFeedback.textContent = "Documento salvato.";
+  closePosDocumentForm();
+}
+
+async function deletePosDocument(doc) {
+  if (!canManageData()) {
+    alert("Solo l'admin può eliminare documenti POS.");
+    return;
+  }
+  const ok = window.confirm(`Eliminare il documento "${doc.title || "senza titolo"}"?`);
+  if (!ok) return;
+  await db.collection("posDocuments").doc(doc.id).delete();
 }
 
 function renderSavedHoursReports(records = []) {
@@ -10872,12 +11114,14 @@ function subscribeAdminUsers() {
       .filter(Boolean);
     adminEmails = new Set([ADMIN_EMAIL, ...normalized]);
     updateAdminControls();
+    subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
     adminEmails = new Set([ADMIN_EMAIL]);
     updateAdminControls();
+    subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
   });

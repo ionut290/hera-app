@@ -2606,3 +2606,133 @@ textarea:focus-visible {
     font-size: 1.05rem;
   }
 }
+
+#pos-page {
+  display: grid;
+  gap: 12px;
+}
+
+.pos-page-head {
+  align-items: flex-start;
+}
+
+.pos-admin-card,
+.pos-search-card,
+.pos-list-card,
+.pos-hero-card {
+  overflow: hidden;
+}
+
+.pos-document-form {
+  margin-top: 12px;
+}
+
+.pos-active-row {
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+#pos-search {
+  width: 100%;
+}
+
+.pos-documents-list {
+  display: grid;
+  gap: 18px;
+}
+
+.pos-category-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.pos-category-group h3 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.pos-document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.pos-document-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+}
+
+.pos-document-card.is-inactive {
+  opacity: 0.72;
+  background: #f8fafc;
+}
+
+.pos-document-card h4 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.pos-document-card p {
+  overflow-wrap: anywhere;
+}
+
+.pos-document-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-open-link {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.pos-open-link:hover,
+.pos-open-link:focus-visible {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+.pos-unavailable {
+  margin: 0;
+  font-weight: 700;
+}
+
+.pos-admin-meta {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .pos-page-head {
+    display: grid;
+    gap: 10px;
+  }
+
+  .pos-document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-document-actions,
+  .pos-document-actions .btn,
+  .pos-open-link {
+    width: 100%;
+  }
+}

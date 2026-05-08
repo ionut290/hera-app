@@ -525,7 +525,9 @@ let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
+let squadreLoadState = { status: "idle", message: "" };
 let manualSquadreFilterDateKey = "";
+let automaticSquadreDateKey = "";
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
@@ -1756,17 +1758,16 @@ auth.onAuthStateChanged((user) => {
   selectedCommessaName = "";
   updateCommessaContextUI();
   window.location.hash = "";
-  commesseLoadState = loggedIn
-    ? { status: "idle", message: "" }
-    : { status: "unauthenticated", message: "Effettua login per visualizzare le commesse" };
-  ui.commesseLista.innerHTML = loggedIn ? "" : "<p class='muted'>Effettua login per visualizzare le commesse</p>";
+  commesseLoadState = { status: "idle", message: "" };
+  ui.commesseLista.innerHTML = "";
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
-  if (ui.squadreFilterDate) ui.squadreFilterDate.value = "";
+  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   manualSquadreFilterDateKey = "";
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
+  initializeAutomaticSquadreDate();
   globalCommesseById = new Map();
   globalImpianti = [];
   pendingGlobalRows = [];
@@ -1819,6 +1820,8 @@ auth.onAuthStateChanged((user) => {
     startChatRetentionLoop();
     startHoursDeadlineAlertLoop();
   } else {
+    subscribeCommesse();
+    subscribeSquadre();
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
     closeUserAlertModal();
@@ -4527,19 +4530,8 @@ function validateFirebaseConfigForCommesse() {
   return true;
 }
 
-function getCommesseErrorMessage(error) {
-  const code = String(error?.code || "").toLowerCase();
-  const message = String(error?.message || "").toLowerCase();
-  if (code.includes("permission-denied") || message.includes("missing or insufficient permissions")) {
-    return "Permessi insufficienti per leggere le commesse.";
-  }
-  if (code.includes("unauthenticated")) {
-    return "Effettua login per visualizzare le commesse";
-  }
-  if (["unavailable", "deadline-exceeded", "resource-exhausted", "internal"].some((value) => code.includes(value)) || message.includes("network") || message.includes("offline")) {
-    return "Impossibile connettersi al database";
-  }
-  return "Errore caricamento commesse.";
+function getCommesseErrorMessage() {
+  return "Impossibile caricare le commesse online. Mostro dati salvati localmente.";
 }
 
 function parseCachedCommesse() {
@@ -5278,7 +5270,7 @@ function subscribeCommesse() {
       const routeCommessaId = parseCommessaHash().id;
       const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
       const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
-      refreshCommesseDependentUI();
+      refreshCommesseDependentUI(Boolean(currentUser));
       if (!selectedCommessaId && shouldRestoreOpenCommessa) {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
@@ -8725,6 +8717,9 @@ function subscribeMezzi() {
 }
 
 function subscribeSquadre() {
+  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
+  renderSquadre();
+
   unsubscribeSquadre = db.collection("squadreCommesse").onSnapshot((snapshot) => {
     squadreByCommessa = new Map();
     snapshot.forEach((doc) => {
@@ -8737,8 +8732,7 @@ function subscribeSquadre() {
     });
     checkAndSendHoursDeadlineAlerts();
   }, (error) => {
-    console.error(error);
-    ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
+    console.error("Errore caricamento squadre:", error);
   });
 
   unsubscribeSquadreHistory = db.collection("squadreStorico").onSnapshot((snapshot) => {
@@ -8751,12 +8745,15 @@ function subscribeSquadre() {
       }
       squadreHistoryByDate.get(data.dateKey).set(data.commessaId, { id: doc.id, ...data });
     });
+    squadreLoadState = { status: "loaded", message: "" };
     renderSquadre();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
     });
   }, (error) => {
-    console.error(error);
+    console.error("Errore caricamento squadre:", error);
+    squadreLoadState = { status: "error", message: "Errore caricamento squadre da Firebase." };
+    renderSquadre();
   });
 }
 
@@ -9063,32 +9060,55 @@ function getAutomaticSquadreDateKey(now = new Date()) {
   return getDateKeyFromLocalDate(base);
 }
 
+function initializeAutomaticSquadreDate() {
+  automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  if (!manualSquadreFilterDateKey && ui.squadreFilterDate) {
+    ui.squadreFilterDate.value = automaticSquadreDateKey;
+  }
+  if (!manualSquadreFilterDateKey && ui.squadraCalendarDate) {
+    ui.squadraCalendarDate.value = automaticSquadreDateKey;
+  }
+  renderSquadre();
+}
+
 function getActiveSquadreDateKey() {
-  return manualSquadreFilterDateKey || getAutomaticSquadreDateKey();
+  if (manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
+  if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  return automaticSquadreDateKey;
 }
 
 function onSquadreFilterDateChange() {
-  manualSquadreFilterDateKey = ui.squadreFilterDate?.value || "";
-  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = manualSquadreFilterDateKey;
+  const selectedDateKey = ui.squadreFilterDate?.value || "";
+  manualSquadreFilterDateKey = selectedDateKey === automaticSquadreDateKey ? "" : selectedDateKey;
+  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = selectedDateKey || automaticSquadreDateKey;
   renderSquadre();
 }
 
 function clearManualSquadreFilterDate() {
   manualSquadreFilterDateKey = "";
-  if (ui.squadreFilterDate) ui.squadreFilterDate.value = "";
-  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = "";
-  renderSquadre();
+  initializeAutomaticSquadreDate();
 }
 
 function renderSquadre() {
+  if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
   const selectedDateKey = getActiveSquadreDateKey();
+  if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   if (ui.squadreFilterStatus) {
     const selectedDateLabel = new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString("it-IT");
     ui.squadreFilterStatus.textContent = manualSquadreFilterDateKey
       ? `Filtro admin attivo: mostro le squadre del ${selectedDateLabel}.`
-      : `Filtro automatico attivo: mostro le squadre del ${selectedDateLabel} (dopo le 17:30 passa al giorno successivo).`;
+      : `Filtro automatico attivo: mostro le squadre del ${selectedDateLabel}.`;
+  }
+
+  if (squadreLoadState.status === "loading") {
+    ui.squadreLista.innerHTML = "<p class='muted'>Caricamento squadre...</p>";
+    return;
+  }
+  if (squadreLoadState.status === "error") {
+    ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre da Firebase.</p>";
+    return;
   }
 
   const commesse = Array.from(commesseById.values());
@@ -9098,7 +9118,7 @@ function renderSquadre() {
     return rows.some((row) => row.personale || row.mezzi);
   });
   if (!commesseConSquadre.length) {
-    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna composizione trovata per la data selezionata.</p>";
+    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra inserita per questo giorno.</p>";
     return;
   }
 

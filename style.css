@@ -2736,3 +2736,44 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+
+.add-hours-quick-btn {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: auto;
+  padding: 3px 8px;
+  border: 1px solid #15803d;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.add-hours-quick-btn:hover,
+.add-hours-quick-btn:focus-visible {
+  background: #15803d;
+  color: #fff;
+}
+
+.squadra-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.squadra-item-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hours-locked-commessa-label,
+.hours-team-label,
+.hours-inserted-by-label {
+  font-weight: 700;
+}

@@ -2738,15 +2738,19 @@ textarea:focus-visible {
 }
 
 .add-hours-quick-btn {
-  align-self: start;
+  flex: 0 0 auto;
+  min-height: 0;
+  width: auto;
+  padding: 3px 8px;
   border: 1px solid #15803d;
   border-radius: 999px;
   background: #16a34a;
   color: #fff;
+  font-size: 0.78rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.22);
 }
 
 .add-hours-quick-btn:hover,
@@ -2757,27 +2761,19 @@ textarea:focus-visible {
 
 .squadra-item-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.squadra-item-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .hours-locked-commessa-label,
-.hours-team-label {
+.hours-team-label,
+.hours-inserted-by-label {
   font-weight: 700;
-}
-
-@media (max-width: 560px) {
-  .commessa-row {
-    grid-template-columns: 1fr;
-  }
-
-  .add-hours-quick-btn {
-    justify-self: start;
-  }
-
-  .squadra-item-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }

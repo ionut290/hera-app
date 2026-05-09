@@ -4032,6 +4032,29 @@ function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
   return assignment?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore";
 }
 
+function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
+  if (assignment) {
+    return parseMultiEntryValue(assignment.row?.personale || "").map((name) => ({
+      operatore: name,
+      ore: "",
+      squadraIndex: assignment.squadraIndex,
+      squadraLabel: assignment.squadraLabel
+    }));
+  }
+  if (canManageData()) {
+    const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+    const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+    return squadRows.flatMap((row, index) => parseMultiEntryValue(row?.personale || "").map((name) => ({
+      operatore: name,
+      ore: "",
+      squadraIndex: index + 1,
+      squadraLabel: `Squadra ${index + 1}`
+    })));
+  }
+  return [];
+}
+
 function createAddHoursButton(commessa) {
   const button = document.createElement("button");
   button.type = "button";
@@ -4069,14 +4092,17 @@ function openHoursPageForCommessa(commessaId) {
   }
   const dateValue = getActiveSquadreDateKey() || ui.hoursDate?.value || new Date().toISOString().slice(0, 10);
   const assignment = getCurrentUserSquadraAssignment(id, dateValue);
+  const teamRows = getHoursRowsForCommessaSquadra(id, dateValue);
+  const squadraLabel = assignment?.squadraLabel || (canManageData() ? "Tutte le squadre" : "");
   if (ui.hoursDate) ui.hoursDate.value = dateValue;
   ui.hoursCommesseList.innerHTML = "";
   addHoursCommessaBlock({
     commessaId: id,
     lockedCommessa: true,
     squadraIndex: assignment?.squadraIndex || "",
-    squadraLabel: assignment?.squadraLabel || (canManageData() ? "Admin" : ""),
-    rows: [{
+    squadraLabel,
+    insertedBy: currentUser.displayName || currentUser.email || "Operatore",
+    rows: teamRows.length ? teamRows : [{
       operatore: getHoursOperatorForCurrentUser(id, dateValue),
       ore: "",
       squadraIndex: assignment?.squadraIndex || "",
@@ -4131,6 +4157,8 @@ function renderHoursOperatorSuggestions(card) {
 function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }, card = null) {
   const row = document.createElement("div");
   row.className = "hours-operator-row";
+  if (rowData.squadraIndex) row.dataset.squadraIndex = String(rowData.squadraIndex || "");
+  if (rowData.squadraLabel) row.dataset.squadraLabel = String(rowData.squadraLabel || "");
   row.innerHTML = `
     <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}" autocomplete="off">
     <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
@@ -4190,6 +4218,7 @@ function addHoursCommessaBlock(blockData = null) {
     <p class="hours-locked-commessa-label muted hidden"></p>
     <div class="hours-commesse-buttons"></div>
     <p class="hours-team-label muted hidden"></p>
+    <p class="hours-inserted-by-label muted hidden"></p>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
@@ -4248,8 +4277,15 @@ function addHoursCommessaBlock(blockData = null) {
       card.dataset.squadraLabel = String(blockData.squadraLabel || "");
       const teamLabel = card.querySelector(".hours-team-label");
       if (teamLabel) {
-        teamLabel.textContent = `Squadra di appartenenza: ${blockData.squadraLabel}`;
+        teamLabel.textContent = `Squadra: ${blockData.squadraLabel}`;
         teamLabel.classList.remove("hidden");
+      }
+    }
+    if (blockData.insertedBy) {
+      const insertedByLabel = card.querySelector(".hours-inserted-by-label");
+      if (insertedByLabel) {
+        insertedByLabel.textContent = `Inserito da: ${blockData.insertedBy}`;
+        insertedByLabel.classList.remove("hidden");
       }
     }
     card.querySelector(".hours-note").value = blockData.note || "";
@@ -4273,8 +4309,8 @@ function collectHoursEntries() {
     const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
       operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
       ore: Number(row.querySelector(".hours-ore")?.value || 0),
-      squadraIndex,
-      squadraLabel
+      squadraIndex: String(row.dataset.squadraIndex || squadraIndex || "").trim(),
+      squadraLabel: String(row.dataset.squadraLabel || squadraLabel || "").trim()
     })).filter((row) => row.operatore && row.ore > 0);
     const commessaName = commesseById.get(commessaId)?.nome || "";
     return { commessaId, commessaName, note, squadraIndex, squadraLabel, rows };
@@ -4503,9 +4539,9 @@ async function finalizeHoursReport(event) {
         squadraLabel: assignment?.squadraLabel || entry.squadraLabel || "",
         rows: entry.rows.map((row) => ({
           ...row,
-          operatore: assignment?.matchedName || currentUser.displayName || currentUser.email || row.operatore,
-          squadraIndex: assignment?.squadraIndex || row.squadraIndex || "",
-          squadraLabel: assignment?.squadraLabel || row.squadraLabel || ""
+          operatore: row.operatore,
+          squadraIndex: row.squadraIndex || assignment?.squadraIndex || "",
+          squadraLabel: row.squadraLabel || assignment?.squadraLabel || ""
         }))
       };
     });
@@ -9635,7 +9671,10 @@ function renderSquadre() {
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
-    appendAddHoursButtonIfAllowed(item.querySelector(".squadra-item-head"), commessa);
+    const head = item.querySelector(".squadra-item-head");
+    appendAddHoursButtonIfAllowed(head, commessa);
+    const title = head?.querySelector("strong");
+    if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });

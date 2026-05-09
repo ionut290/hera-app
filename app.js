@@ -495,6 +495,7 @@ let unsubscribeImpianti = null;
 let unsubscribeCommessaNotes = null;
 const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
+let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentCommessaNotes = [];
@@ -540,6 +541,9 @@ let commessaStatsById = new Map();
 let commessaHoursById = new Map();
 let commessaWorkSummariesById = new Map();
 let allHoursReports = [];
+let allHoursApprovalRequests = [];
+let hoursReportsLoaded = false;
+let hoursApprovalsLoaded = false;
 let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
@@ -581,6 +585,7 @@ let editingImpiantoIds = [];
 let reportingImpianto = null;
 let chatRetentionTimer = null;
 let hoursDeadlineAlertTimer = null;
+let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
@@ -1180,6 +1185,7 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   });
 });
 
+startQuickSquadraWindowTicker();
 addSquadraRow();
 initHoursPage();
 initGeolocation();
@@ -1960,7 +1966,7 @@ function updateAdminControls() {
   }
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
-  ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
+  ui.squadraRows.querySelectorAll("input,textarea,select,button").forEach((el) => { el.disabled = !canManage; });
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -1970,6 +1976,7 @@ function updateAdminControls() {
   renderNotificationTargetUsers();
   renderNotificationsList();
   renderExternalApps();
+  renderCommesseHomeList();
 }
 
 function openSideMenu() {
@@ -3961,6 +3968,213 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
   });
 }
 
+
+function normalizeSquadraMemberIdentity(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCurrentUserIdentityParts() {
+  if (!currentUser) return [];
+  const parts = [currentUser.displayName, currentUser.email];
+  const emailLocal = String(currentUser.email || "").split("@")[0] || "";
+  if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
+  return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
+}
+
+function doSquadraMemberAndUserMatch(memberName, identityParts = getCurrentUserIdentityParts()) {
+  const member = normalizeSquadraMemberIdentity(memberName);
+  if (!member || !identityParts.length) return false;
+  return identityParts.some((part) => {
+    if (!part) return false;
+    if (member === part) return true;
+    const memberTokens = member.split(" ").filter((token) => token.length > 1);
+    const partTokens = part.split(" ").filter((token) => token.length > 1);
+    return partTokens.length >= 2 && partTokens.every((token) => memberTokens.includes(token));
+  });
+}
+
+function getSquadraDataForCommessaDate(commessaId, dateValue = "") {
+  const id = String(commessaId || "").trim();
+  if (!id) return null;
+  const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  return storicoDelGiorno.get(id) || squadreByCommessa.get(id) || null;
+}
+
+function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
+  if (!currentUser) return null;
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const identities = getCurrentUserIdentityParts();
+  for (let index = 0; index < squadRows.length; index += 1) {
+    const personale = parseMultiEntryValue(squadRows[index]?.personale || "");
+    const matchedName = personale.find((name) => doSquadraMemberAndUserMatch(name, identities));
+    if (matchedName) {
+      return {
+        squadraIndex: index + 1,
+        squadraLabel: `Squadra ${index + 1}`,
+        matchedName,
+        squadData,
+        row: squadRows[index]
+      };
+    }
+  }
+  return null;
+}
+
+function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
+  if (!currentUser) return false;
+  if (canManageData()) return true;
+  return Boolean(getCurrentUserSquadraAssignment(commessaId, dateValue));
+}
+
+function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
+  return assignment?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore";
+}
+
+function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
+  if (assignment) {
+    return parseMultiEntryValue(assignment.row?.personale || "").map((name) => ({
+      operatore: name,
+      ore: "",
+      squadraIndex: assignment.squadraIndex,
+      squadraLabel: assignment.squadraLabel
+    }));
+  }
+  if (canManageData()) {
+    const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+    const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+    return squadRows.flatMap((row, index) => parseMultiEntryValue(row?.personale || "").map((name) => ({
+      operatore: name,
+      ore: "",
+      squadraIndex: index + 1,
+      squadraLabel: `Squadra ${index + 1}`
+    })));
+  }
+  return [];
+}
+
+function getHoursEntrySquadraIndexes(entry) {
+  const indexes = new Set();
+  const entryIndex = String(entry?.squadraIndex || "").trim();
+  if (entryIndex) indexes.add(entryIndex);
+  (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+    const rowIndex = String(row?.squadraIndex || "").trim();
+    if (rowIndex) indexes.add(rowIndex);
+  });
+  return indexes;
+}
+
+function doesHoursEntryMatchSquadra(entry, squadraIndex = "") {
+  const targetIndex = String(squadraIndex || "").trim();
+  if (!targetIndex) return true;
+  const entryIndexes = getHoursEntrySquadraIndexes(entry);
+  return !entryIndexes.size || entryIndexes.has(targetIndex);
+}
+
+function hasHoursRecordForCommessaDateSquadra(commessaId, dateValue, squadraIndex = "") {
+  const id = String(commessaId || "").trim();
+  const dateKey = String(dateValue || "").trim();
+  if (!id || !dateKey) return false;
+  const sources = [
+    ...allHoursReports,
+    ...allHoursApprovalRequests.filter((request) => String(request.status || "").trim() !== "rejected")
+  ];
+  return sources.some((record) => {
+    if (String(record?.date || "").trim() !== dateKey) return false;
+    return (Array.isArray(record?.entries) ? record.entries : []).some((entry) => (
+      String(entry?.commessaId || "").trim() === id
+      && doesHoursEntryMatchSquadra(entry, squadraIndex)
+      && (Array.isArray(entry?.rows) ? entry.rows : []).some((row) => Number(row?.ore || 0) > 0)
+    ));
+  });
+}
+
+function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
+  const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey();
+  if (!hoursReportsLoaded || !hoursApprovalsLoaded) return null;
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateKey);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const hasAssignedSquadra = squadRows.some((row) => String(row?.personale || "").trim() || String(row?.mezzi || "").trim());
+  if (!dateKey || !hasAssignedSquadra) return null;
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
+  const squadraIndex = assignment?.squadraIndex || "";
+  if (!canManageData() && !assignment) return null;
+  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
+  return { dateKey, assignment, squadData, squadRows, squadraIndex };
+}
+
+function createAddHoursButton(commessa, dateValue = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn add-hours-quick-btn";
+  button.textContent = "+ ORE";
+  button.dataset.addHoursCommessaId = commessa.id || "";
+  button.setAttribute("aria-label", `Inserisci ore per ${commessa.nome || "commessa"}`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openHoursPageForCommessa(commessa.id, dateValue);
+  });
+  return button;
+}
+
+function appendAddHoursButtonIfAllowed(container, commessa, dateValue = "") {
+  if (!container || !commessa?.id) return;
+  const context = getQuickHoursContextForCommessa(commessa.id, dateValue);
+  if (!context) return;
+  container.appendChild(createAddHoursButton(commessa, context.dateKey));
+}
+
+function openHoursPageForCommessa(commessaId, dateValue = "") {
+  if (!currentUser) {
+    alert("Devi fare login per inserire le ore.");
+    return;
+  }
+  const id = String(commessaId || "").trim();
+  if (!id || !commesseById.has(id)) {
+    alert("Commessa non disponibile per l'inserimento ore.");
+    return;
+  }
+  const context = getQuickHoursContextForCommessa(id, dateValue);
+  if (!context) {
+    alert("Il pulsante ore è disponibile solo per squadre assegnate senza ore già inserite.");
+    renderSquadre();
+    return;
+  }
+  const targetDateValue = context.dateKey;
+  const assignment = context.assignment;
+  const teamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
+  const squadraLabel = assignment?.squadraLabel || (canManageData() ? "Tutte le squadre" : "");
+  if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
+  ui.hoursCommesseList.innerHTML = "";
+  addHoursCommessaBlock({
+    commessaId: id,
+    lockedCommessa: true,
+    squadraIndex: assignment?.squadraIndex || "",
+    squadraLabel,
+    insertedBy: currentUser.displayName || currentUser.email || "Operatore",
+    rows: teamRows.length ? teamRows : [{
+      operatore: getHoursOperatorForCurrentUser(id, targetDateValue),
+      ore: "",
+      squadraIndex: assignment?.squadraIndex || "",
+      squadraLabel: assignment?.squadraLabel || ""
+    }]
+  });
+  window.location.hash = "ore";
+  applyRoute();
+  closeSideMenu();
+  setTimeout(() => ui.hoursForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+
 function getSuggestedHoursOperators(commessaId, dateValue) {
   const dateKey = String(dateValue || "").trim();
   if (!commessaId || !dateKey) return [];
@@ -4003,6 +4217,8 @@ function renderHoursOperatorSuggestions(card) {
 function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }, card = null) {
   const row = document.createElement("div");
   row.className = "hours-operator-row";
+  if (rowData.squadraIndex) row.dataset.squadraIndex = String(rowData.squadraIndex || "");
+  if (rowData.squadraLabel) row.dataset.squadraLabel = String(rowData.squadraLabel || "");
   row.innerHTML = `
     <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}" autocomplete="off">
     <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
@@ -4059,7 +4275,10 @@ function addHoursCommessaBlock(blockData = null) {
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
     </select>
+    <p class="hours-locked-commessa-label muted hidden"></p>
     <div class="hours-commesse-buttons"></div>
+    <p class="hours-team-label muted hidden"></p>
+    <p class="hours-inserted-by-label muted hidden"></p>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
@@ -4085,13 +4304,50 @@ function addHoursCommessaBlock(blockData = null) {
     renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   });
+  const commessaSelect = card.querySelector(".hours-commessa-select");
+  commessaSelect.addEventListener("change", () => {
+    unlockHoursFinalizeButton();
+    renderHoursCardCommessaButtons(card);
+    applyHoursSuggestedOperators(card, { force: true });
+  });
   card.querySelector(".hours-note").addEventListener("input", () => {
     unlockHoursFinalizeButton();
     renderHoursSummary();
   });
 
   if (blockData) {
-    if (blockData.commessaId) card.querySelector(".hours-commessa-select").value = blockData.commessaId;
+    if (blockData.commessaId) {
+      commessaSelect.value = blockData.commessaId;
+      card.dataset.lockedCommessaId = blockData.commessaId;
+    }
+    if (blockData.lockedCommessa) {
+      card.dataset.lockedCommessa = "true";
+      commessaSelect.classList.add("hidden");
+      commessaSelect.disabled = true;
+      const lockedLabel = card.querySelector(".hours-locked-commessa-label");
+      if (lockedLabel) {
+        lockedLabel.textContent = `Commessa: ${commesseById.get(blockData.commessaId)?.nome || "Commessa"}`;
+        lockedLabel.classList.remove("hidden");
+      }
+      const buttons = card.querySelector(".hours-commesse-buttons");
+      buttons?.classList.add("hidden");
+    }
+    if (blockData.squadraLabel) {
+      card.dataset.squadraIndex = String(blockData.squadraIndex || "");
+      card.dataset.squadraLabel = String(blockData.squadraLabel || "");
+      const teamLabel = card.querySelector(".hours-team-label");
+      if (teamLabel) {
+        teamLabel.textContent = `Squadra: ${blockData.squadraLabel}`;
+        teamLabel.classList.remove("hidden");
+      }
+    }
+    if (blockData.insertedBy) {
+      const insertedByLabel = card.querySelector(".hours-inserted-by-label");
+      if (insertedByLabel) {
+        insertedByLabel.textContent = `Inserito da: ${blockData.insertedBy}`;
+        insertedByLabel.classList.remove("hidden");
+      }
+    }
     card.querySelector(".hours-note").value = blockData.note || "";
     const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];
     rows.forEach((row) => addHoursOperatoreRow(operatorList, row, card));
@@ -4106,14 +4362,18 @@ function addHoursCommessaBlock(blockData = null) {
 function collectHoursEntries() {
   const cards = Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card"));
   return cards.map((card) => {
-    const commessaId = String(card.querySelector(".hours-commessa-select")?.value || "").trim();
+    const commessaId = String(card.dataset.lockedCommessaId || card.querySelector(".hours-commessa-select")?.value || "").trim();
     const note = String(card.querySelector(".hours-note")?.value || "").trim();
+    const squadraIndex = String(card.dataset.squadraIndex || "").trim();
+    const squadraLabel = String(card.dataset.squadraLabel || "").trim();
     const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
       operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
-      ore: Number(row.querySelector(".hours-ore")?.value || 0)
+      ore: Number(row.querySelector(".hours-ore")?.value || 0),
+      squadraIndex: String(row.dataset.squadraIndex || squadraIndex || "").trim(),
+      squadraLabel: String(row.dataset.squadraLabel || squadraLabel || "").trim()
     })).filter((row) => row.operatore && row.ore > 0);
     const commessaName = commesseById.get(commessaId)?.nome || "";
-    return { commessaId, commessaName, note, rows };
+    return { commessaId, commessaName, note, squadraIndex, squadraLabel, rows };
   }).filter((entry) => entry.commessaId || entry.rows.length || entry.note);
 }
 
@@ -4315,6 +4575,8 @@ async function finalizeHoursReport(event) {
     entries: entries.map((entry) => ({
       commessaId: entry.commessaId,
       commessaName: entry.commessaName,
+      squadraIndex: entry.squadraIndex || "",
+      squadraLabel: entry.squadraLabel || "",
       note: entry.note,
       rows: entry.rows.filter((row) => row.operatore && row.ore > 0)
     })).filter((entry) => entry.commessaId && entry.rows.length),
@@ -4323,6 +4585,27 @@ async function finalizeHoursReport(event) {
     createdByEmail: currentUser.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  if (!canManageData()) {
+    const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
+    if (unauthorizedEntry) {
+      ui.hoursFeedback.textContent = `Permesso negato: puoi inserire ore solo per le commesse dove sei assegnato in squadra (${unauthorizedEntry.commessaName || "Commessa"}).`;
+      return;
+    }
+    payload.entries = payload.entries.map((entry) => {
+      const assignment = getCurrentUserSquadraAssignment(entry.commessaId, dateValue);
+      return {
+        ...entry,
+        squadraIndex: assignment?.squadraIndex || entry.squadraIndex || "",
+        squadraLabel: assignment?.squadraLabel || entry.squadraLabel || "",
+        rows: entry.rows.map((row) => ({
+          ...row,
+          operatore: row.operatore,
+          squadraIndex: row.squadraIndex || assignment?.squadraIndex || "",
+          squadraLabel: row.squadraLabel || assignment?.squadraLabel || ""
+        }))
+      };
+    });
+  }
   ui.hoursFinalizeBtn.disabled = true;
   ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
@@ -5255,12 +5538,24 @@ function subscribeStatsForCommesse() {
 }
 
 function subscribeHoursStats() {
-  if (unsubscribeHoursStats) return;
-  unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
-    allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    recalculateCommessaWorkSummaries();
-    renderParentCommessaOverview();
-  }, (error) => console.error("Errore stats ore commesse:", error));
+  if (!unsubscribeHoursStats) {
+    unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
+      allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      hoursReportsLoaded = true;
+      recalculateCommessaWorkSummaries();
+      renderParentCommessaOverview();
+      renderSquadre();
+    }, (error) => console.error("Errore stats ore commesse:", error));
+  }
+  if (!unsubscribeHoursApprovals) {
+    unsubscribeHoursApprovals = db.collection("oreApprovalRequests").onSnapshot((snapshot) => {
+      allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      hoursApprovalsLoaded = true;
+      hoursApprovalRequests = allHoursApprovalRequests;
+      renderHoursApprovalRequests();
+      renderSquadre();
+    }, (error) => console.error("Errore richieste ore commesse:", error));
+  }
 }
 
 function stopCommessaStatsSubscriptions() {
@@ -5271,9 +5566,17 @@ function stopCommessaStatsSubscriptions() {
     unsubscribeHoursStats();
     unsubscribeHoursStats = null;
   }
+  if (unsubscribeHoursApprovals) {
+    unsubscribeHoursApprovals();
+    unsubscribeHoursApprovals = null;
+  }
   commessaHoursById = new Map();
   commessaWorkSummariesById = new Map();
   allHoursReports = [];
+  allHoursApprovalRequests = [];
+  hoursReportsLoaded = false;
+  hoursApprovalsLoaded = false;
+  hoursApprovalRequests = [];
 }
 
 function sortCommesseByCreatedAtDesc(commesse) {
@@ -5317,6 +5620,96 @@ function populateCommessaParentSelect() {
   updateCommessaParentField();
 }
 
+
+function getTomorrowSquadraDateKey() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return getDateKeyFromLocalDate(tomorrow);
+}
+
+function isQuickSquadraWindowOpen(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= 12 && hour < 19;
+}
+
+function isValidActiveCommessaForQuickSquadra(commessa) {
+  return Boolean(commessa?.id && String(commessa.nome || "").trim());
+}
+
+function canShowQuickSquadraButton(commessa) {
+  return Boolean(currentUser && canManageData() && isQuickSquadraWindowOpen() && isValidActiveCommessaForQuickSquadra(commessa));
+}
+
+function getSquadreCountForCommessaDate(commessaId, dateKey) {
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const squad = storicoDelGiorno.get(commessaId) || {};
+  const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+  return rows.filter((row) => String(row?.personale || "").trim() || String(row?.caposquadra || "").trim() || String(row?.mezzi || "").trim()).length;
+}
+
+function createQuickSquadraControls(commessa) {
+  const wrap = document.createElement("span");
+  wrap.className = "quick-squadra-controls";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn quick-squadra-btn";
+  button.textContent = "+ SQ";
+  button.setAttribute("aria-label", `Crea squadra per ${commessa.nome || "commessa"}`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openQuickSquadraForm(commessa.id);
+  });
+  wrap.appendChild(button);
+  const count = getSquadreCountForCommessaDate(commessa.id, getTomorrowSquadraDateKey());
+  if (count > 0) {
+    const badge = document.createElement("span");
+    badge.className = "quick-squadra-badge";
+    badge.textContent = String(count);
+    badge.title = `${count} squadre già assegnate per domani`;
+    wrap.appendChild(badge);
+  }
+  return wrap;
+}
+
+function openQuickSquadraForm(commessaId) {
+  if (!currentUser || !canManageData()) {
+    alert("Solo gli amministratori possono creare squadre dalla scheda commesse.");
+    return;
+  }
+  if (!isQuickSquadraWindowOpen()) {
+    alert("Le squadre dalla scheda commesse si possono creare solo tra le 12:00 e le 19:00.");
+    renderCommesseHomeList();
+    return;
+  }
+  const commessa = commesseById.get(commessaId);
+  if (!isValidActiveCommessaForQuickSquadra(commessa)) {
+    alert("Commessa non valida per la creazione squadra.");
+    return;
+  }
+  openManagementPanel("squadre");
+  const dateKey = getTomorrowSquadraDateKey();
+  if (ui.squadraCommessa) ui.squadraCommessa.value = commessaId;
+  if (ui.squadraRiferimento) ui.squadraRiferimento.value = dateKey;
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const data = storicoDelGiorno.get(commessaId) || {};
+  const existingRows = Array.isArray(data.squadre) ? data.squadre : getLegacySquadreRows(data);
+  if (existingRows.length) {
+    setSquadraRowsFromData(data);
+  } else {
+    ui.squadraRows.innerHTML = "";
+  }
+  addSquadraRow({ quickNew: true });
+  setTimeout(() => ui.squadraForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+
+function startQuickSquadraWindowTicker() {
+  if (quickSquadraWindowTimer) return;
+  quickSquadraWindowTimer = setInterval(() => {
+    renderCommesseHomeList();
+  }, 60 * 1000);
+}
+
 function renderCommessaHomeButton(commessa, index) {
   const row = document.createElement("div");
   row.className = "commessa-row";
@@ -5339,6 +5732,9 @@ function renderCommessaHomeButton(commessa, index) {
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
+  if (canShowQuickSquadraButton(commessa)) {
+    row.appendChild(createQuickSquadraControls(commessa));
+  }
   return row;
 }
 
@@ -9031,6 +9427,7 @@ function subscribeSquadre() {
       squadreByCommessa.set(doc.id, { id: doc.id, ...doc.data() });
     });
     renderSquadre();
+    renderCommesseHomeList();
     autofillSquadraForm();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
@@ -9052,6 +9449,7 @@ function subscribeSquadre() {
     });
     squadreLoadState = { status: "loaded", message: "" };
     renderSquadre();
+    renderCommesseHomeList();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
     });
@@ -9162,10 +9560,11 @@ function autofillSquadraForm() {
   setSquadraRowsFromData(data);
 }
 
-function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
+function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
   const personaleValues = parseMultiEntryValue(rowData.personale);
   const mezziValues = parseMultiEntryValue(rowData.mezzi);
+  const impiantiValues = parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "");
   const row = document.createElement("div");
   row.className = "squadra-row";
   row.innerHTML = `
@@ -9173,16 +9572,30 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
       <strong>Squadra ${index}</strong>
       <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
     </div>
+    <label class="squadra-simple-field">Caposquadra
+      <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
+    </label>
+    <label class="squadra-simple-field">Orario
+      <input type="time" class="squadra-orario-input" value="${escapeHTML(rowData.orario || "")}">
+    </label>
     <div class="squadra-multi-field">
-      <div class="squadra-multi-field-head"><strong>👥 Personale</strong></div>
+      <div class="squadra-multi-field-head"><strong>👥 Operatori</strong></div>
       <div class="squadra-personale-list"></div>
-      <button type="button" class="btn btn-small add-personale-input-btn">+ Persona</button>
+      <button type="button" class="btn btn-small add-personale-input-btn">+ Operatore</button>
     </div>
     <div class="squadra-multi-field">
       <div class="squadra-multi-field-head"><strong>🚚 Mezzi</strong></div>
       <div class="squadra-mezzi-list"></div>
       <button type="button" class="btn btn-small add-mezzo-input-btn">+ Mezzo</button>
     </div>
+    <div class="squadra-multi-field">
+      <div class="squadra-multi-field-head"><strong>📍 Impianti</strong></div>
+      <div class="squadra-impianti-list"></div>
+      <button type="button" class="btn btn-small add-impianto-input-btn">+ Impianto</button>
+    </div>
+    <label class="squadra-note-field">Note
+      <textarea class="squadra-note-input" rows="2" placeholder="Note squadra">${escapeHTML(rowData.note || "")}</textarea>
+    </label>
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
@@ -9191,8 +9604,10 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   });
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
+  const impiantiList = row.querySelector(".squadra-impianti-list");
   const addPersonaleBtn = row.querySelector(".add-personale-input-btn");
   const addMezzoBtn = row.querySelector(".add-mezzo-input-btn");
+  const addImpiantoBtn = row.querySelector(".add-impianto-input-btn");
 
   const addPersonaleInput = (value = "") => addMultiEntryInput({
     container: personaleList,
@@ -9208,12 +9623,21 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
     value,
     sourceValues: mezziRecords.map((m) => m.nId || m.nome)
   });
+  const addImpiantoInput = (value = "") => addMultiEntryInput({
+    container: impiantiList,
+    listId: "",
+    placeholder: "Impianto assegnato",
+    value,
+    sourceValues: []
+  });
 
   (personaleValues.length ? personaleValues : [""]).forEach((value) => addPersonaleInput(value));
   (mezziValues.length ? mezziValues : [""]).forEach((value) => addMezzoInput(value));
+  (impiantiValues.length ? impiantiValues : [""]).forEach((value) => addImpiantoInput(value));
 
   addPersonaleBtn.addEventListener("click", () => addPersonaleInput(""));
   addMezzoBtn.addEventListener("click", () => addMezzoInput(""));
+  addImpiantoBtn.addEventListener("click", () => addImpiantoInput(""));
   ui.squadraRows.appendChild(row);
   updateAdminControls();
 }
@@ -9266,6 +9690,7 @@ function renumberSquadraRows() {
 
 function readSquadraRows() {
   return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
+    caposquadra: String(row.querySelector(".squadra-caposquadra-input")?.value || "").trim(),
     personale: Array.from(row.querySelectorAll(".squadra-personale-list .squadra-multi-entry-input"))
       .map((input) => String(input.value || "").trim())
       .filter(Boolean)
@@ -9273,8 +9698,14 @@ function readSquadraRows() {
     mezzi: Array.from(row.querySelectorAll(".squadra-mezzi-list .squadra-multi-entry-input"))
       .map((input) => String(input.value || "").trim())
       .filter(Boolean)
-      .join(", ")
-  })).filter((row) => row.personale || row.mezzi);
+      .join(", "),
+    impianti: Array.from(row.querySelectorAll(".squadra-impianti-list .squadra-multi-entry-input"))
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean)
+      .join(", "),
+    note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
+    orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim()
+  })).filter((row) => row.caposquadra || row.personale || row.mezzi || row.impianti || row.note || row.orario);
 }
 
 function getLegacySquadreRows(data) {
@@ -9296,6 +9727,42 @@ function setSquadraRowsFromData(data) {
   renumberSquadraRows();
 }
 
+
+function normalizeSquadraDuplicatePart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSquadraDuplicateSignature(row) {
+  const caposquadra = normalizeSquadraDuplicatePart(row?.caposquadra || "");
+  const operatori = parseMultiEntryValue(row?.personale || "")
+    .map(normalizeSquadraDuplicatePart)
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  return `${caposquadra}__${operatori}`;
+}
+
+function findDuplicateSquadraRows(rows) {
+  const seen = new Map();
+  const duplicates = [];
+  rows.forEach((row, index) => {
+    const signature = buildSquadraDuplicateSignature(row);
+    if (!signature.replace(/[_|]/g, "")) return;
+    if (seen.has(signature)) {
+      duplicates.push({ firstIndex: seen.get(signature), duplicateIndex: index });
+      return;
+    }
+    seen.set(signature, index);
+  });
+  return duplicates;
+}
+
 async function saveSquadraComposition(event) {
   event.preventDefault();
   if (!canManageData()) {
@@ -9308,7 +9775,21 @@ async function saveSquadraComposition(event) {
     return;
   }
   const dateKey = ui.squadraRiferimento.value || new Date().toISOString().slice(0, 10);
+  if (!dateKey) {
+    alert("Seleziona una data per la composizione squadre.");
+    return;
+  }
   const squadreRows = readSquadraRows();
+  if (!squadreRows.length) {
+    alert("Inserisci almeno una squadra.");
+    return;
+  }
+  const duplicateRows = findDuplicateSquadraRows(squadreRows);
+  if (duplicateRows.length) {
+    const dup = duplicateRows[0];
+    alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
+    return;
+  }
   const payload = {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
@@ -9317,11 +9798,39 @@ async function saveSquadraComposition(event) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   };
-  await db.collection("squadreCommesse").doc(commessaId).set(payload, { merge: true });
-  await db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`).set({
-    ...payload,
-    dateKey
-  }, { merge: true });
+  const currentRef = db.collection("squadreCommesse").doc(commessaId);
+  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  try {
+    await db.runTransaction(async (transaction) => {
+    const historySnap = await transaction.get(historyRef);
+    const currentRows = historySnap.exists
+      ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
+      : [];
+    const mergedRows = squadreRows;
+    const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
+    if (transactionDuplicates.length) {
+      throw new Error("DUPLICATE_SQUADRA");
+    }
+    const nextPayload = {
+      ...payload,
+      squadre: mergedRows,
+      existingSquadreCountBeforeSave: currentRows.length
+    };
+    transaction.set(currentRef, nextPayload, { merge: true });
+    transaction.set(historyRef, {
+      ...nextPayload,
+      dateKey
+    }, { merge: true });
+    });
+  } catch (error) {
+    if (error?.message === "DUPLICATE_SQUADRA") {
+      alert("Duplicato bloccato: esiste già una squadra con stessa commessa, stessa data, stesso caposquadra e stessi operatori.");
+      return;
+    }
+    throw error;
+  }
+  renderCommesseHomeList();
+  renderSquadre();
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -9435,14 +9944,26 @@ function renderSquadre() {
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
-    const rowsHtml = squadRows.map((row, idx) => (
-      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
-    )).join("");
+    const rowsHtml = squadRows.map((row, idx) => {
+      const details = [
+        row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
+        row.orario ? `<br><b>🕒 Orario:</b> ${escapeHTML(row.orario)}` : "",
+        row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
+      ].join("");
+      return `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`;
+    }).join("");
     item.innerHTML = `
-      <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      <div class="squadra-item-head">
+        <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      </div>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
+    const head = item.querySelector(".squadra-item-head");
+    appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
+    const title = head?.querySelector("strong");
+    if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });

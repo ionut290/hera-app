@@ -518,6 +518,7 @@ let currentWorkBannerConfig = { text: "", enabled: false, speed: null, notes: []
 let workBannerResizeObserver = null;
 let presenceHeartbeatTimer = null;
 let chatMessages = [];
+let chatNotificationsInitialized = false;
 let platformUsers = [];
 let deniedImpiantoActions = new Set();
 const usedActionKeys = new Set();
@@ -1876,6 +1877,8 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
+  ui.openPosBtn?.classList.remove("hidden");
+  if (ui.openPosBtn) ui.openPosBtn.disabled = false;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
@@ -2706,6 +2709,8 @@ function getFilteredPosDocuments() {
 function renderPosDocuments() {
   if (!ui.posDocumentsList) return;
   const canManage = canManageData();
+  ui.openPosBtn?.classList.remove("hidden");
+  if (ui.openPosBtn) ui.openPosBtn.disabled = false;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   const documents = getFilteredPosDocuments();
   if (!documents.length) {
@@ -10901,17 +10906,61 @@ function escapeHTML(value) {
 }
 
 function subscribeChat() {
+  chatNotificationsInitialized = false;
   unsubscribeChat = db
     .collection("chatMessages")
     .orderBy("createdAt", "asc")
     .limit(500)
     .onSnapshot((snapshot) => {
       chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      notifyForNewChatMessages(snapshot.docChanges());
       renderChat(chatMessages);
     }, (error) => {
       console.error(error);
       ui.chatFeedback.textContent = "Errore caricamento chat.";
     });
+}
+
+async function notifyForNewChatMessages(changes = []) {
+  if (!chatNotificationsInitialized) {
+    chatNotificationsInitialized = true;
+    return;
+  }
+  const addedMessages = changes
+    .filter((change) => change.type === "added")
+    .map((change) => ({ id: change.doc.id, ...change.doc.data() }))
+    .filter((message) => canNotifyForChatMessage(message));
+
+  for (const message of addedMessages) {
+    const senderName = String(message.senderName || "Operatore").trim();
+    const body = getChatNotificationBody(message);
+    try {
+      await showLocalNotification(`Nuovo messaggio da ${senderName}`, {
+        body,
+        tag: `hera-chat-${message.id}`,
+        data: { url: "./index.html#chat" }
+      });
+    } catch (error) {
+      console.warn("Invio notifica chat non riuscito:", error);
+    }
+  }
+}
+
+function canNotifyForChatMessage(message) {
+  if (!currentUser || isOwnMessage(message)) return false;
+  if (!canViewMessage(message) || !isChatMessageFresh(message)) return false;
+  if (!document.hidden && ui.chatModal && !ui.chatModal.classList.contains("hidden")) return false;
+  return true;
+}
+
+function getChatNotificationBody(message) {
+  const text = String(message.text || message.message || message.body || message.content || "").trim();
+  if (text) return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const type = String(message.type || "").toLowerCase();
+  if (type === "image") return "Ha inviato una foto.";
+  if (type === "video") return "Ha inviato un video.";
+  if (type === "voice") return "Ha inviato un messaggio vocale.";
+  return "Hai un nuovo messaggio in chat.";
 }
 
 function isChatMessageFresh(message) {
@@ -12353,6 +12402,7 @@ function stopChatSubscription() {
     unsubscribeChat = null;
   }
   chatMessages = [];
+  chatNotificationsInitialized = false;
 }
 
 async function renderChat(messages) {

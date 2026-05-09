@@ -4227,6 +4227,53 @@ function renderHoursSummary(forcedEntries = null) {
   ui.hoursSummary.innerHTML = html;
 }
 
+function getHoursEntryTotal(entry) {
+  return (entry?.rows || []).reduce((sum, row) => sum + Number(row?.ore || 0), 0);
+}
+
+function buildHoursInsertedChatText(payload) {
+  const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
+  const dateLabel = payload?.date
+    ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
+    : "-";
+  const details = (Array.isArray(payload?.entries) ? payload.entries : [])
+    .map((entry) => {
+      const commessaName = String(entry?.commessaName || "Commessa").trim() || "Commessa";
+      const totalHours = getHoursEntryTotal(entry);
+      return `${formatHoursNumber(totalHours)} ore in ${commessaName}`;
+    })
+    .filter(Boolean)
+    .join("; ");
+  return `🕒 ${author} ha inserito le ore del ${dateLabel}: ${details || "nessun dettaglio ore"}.`;
+}
+
+async function notifyHoursInsertedToChat(requestId, payload) {
+  const text = buildHoursInsertedChatText(payload);
+  const firstEntry = Array.isArray(payload?.entries) && payload.entries.length ? payload.entries[0] : null;
+  await sendChatMessage({
+    type: "text",
+    text,
+    recipientId: "",
+    kind: "system",
+    metadata: {
+      type: "hours_inserted",
+      approvalRequestId: requestId || "",
+      date: payload?.date || "",
+      entries: (Array.isArray(payload?.entries) ? payload.entries : []).map((entry) => ({
+        commessaId: entry?.commessaId || "",
+        commessaName: entry?.commessaName || "",
+        totalHours: getHoursEntryTotal(entry)
+      }))
+    }
+  });
+  await publishGlobalNotificationEvent("hours-inserted", {
+    title: "Ore inserite",
+    body: text,
+    commessaId: firstEntry?.commessaId || "",
+    commessaName: firstEntry?.commessaName || ""
+  });
+}
+
 function setHoursFinalizeLocked(locked) {
   hoursFinalizeLocked = Boolean(locked);
   if (ui.hoursFinalizeBtn) {
@@ -4305,6 +4352,7 @@ async function finalizeHoursReport(event) {
       rejectionReason: "",
       finalizedReportId: ""
     });
+    await notifyHoursInsertedToChat(approvalRef.id, payload);
     await notifyLevel1ForHoursApproval(approvalRef.id, payload);
 
     ui.hoursFeedback.textContent = `Richiesta inviata (ID ${approvalRef.id}). In attesa primo OK, poi conferma admin finale.`;
@@ -8426,7 +8474,8 @@ async function navigateToImpianto(impianto) {
     impianto.zona,
     impianto.indirizzo
   ].find((value) => String(value || "").trim()) || "zona non specificata";
-  const chatText = `🧭 ${operatorName} si sta dirigendo verso ${impiantoName} (${areaLabel}). Squadra al lavoro in area ${areaLabel}.`;
+  const comuneLabel = String(impianto.comune || "").trim() || areaLabel;
+  const chatText = `🧭 ${operatorName} naviga verso ${impiantoName}. La squadra è al lavoro nella zona ${comuneLabel}.`;
 
   try {
     await sendChatMessage({
@@ -8440,8 +8489,17 @@ async function navigateToImpianto(impianto) {
         commessaName: selectedCommessaName || "Commessa",
         impiantoName,
         impiantoKey: buildImpiantoKey(impianto),
+        comune: comuneLabel,
         area: areaLabel
       }
+    });
+    await publishGlobalNotificationEvent("impianto-navigate", {
+      title: "Operatore in navigazione",
+      body: chatText,
+      commessaId: selectedCommessaId,
+      commessaName: selectedCommessaName || "Commessa",
+      impiantoName,
+      impiantoKey: buildImpiantoKey(impianto)
     });
   } catch (error) {
     console.error("Errore invio messaggio chat navigazione impianto:", error);
@@ -11076,13 +11134,10 @@ async function checkAndSendHoursDeadlineAlerts() {
     .filter((row) => row.commessaId);
   if (!commesseConSquadra.length) return;
 
-  const [reportsSnapshot, approvalSnapshot, adminUsers] = await Promise.all([
+  const [reportsSnapshot, approvalSnapshot] = await Promise.all([
     db.collection("oreReports").where("date", "==", dateKey).get(),
-    db.collection("oreApprovalRequests").where("date", "==", dateKey).get(),
-    Promise.resolve(platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email))))
+    db.collection("oreApprovalRequests").where("date", "==", dateKey).get()
   ]);
-
-  if (!adminUsers.length) return;
 
   const reports = reportsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   const approvals = approvalSnapshot.docs
@@ -11093,32 +11148,31 @@ async function checkAndSendHoursDeadlineAlerts() {
     const hasHoursSaved = reports.some((report) => hasHoursForCommessaInEntries(report.entries, commessa.commessaId));
     const hasHoursPending = approvals.some((request) => hasHoursForCommessaInEntries(request.entries, commessa.commessaId));
     if (hasHoursSaved || hasHoursPending) continue;
-    await Promise.all(adminUsers.map((adminUser) => sendHoursDeadlineAlertIfMissing({
-      adminUser,
+    await sendHoursDeadlineAlertIfMissing({
       commessaId: commessa.commessaId,
       commessaName: commessa.commessaName,
       dateKey
-    })));
+    });
   }
 }
 
-async function sendHoursDeadlineAlertIfMissing({ adminUser, commessaId, commessaName, dateKey }) {
-  if (!adminUser?.id || !commessaId || !dateKey) return;
-  const alertId = `${dateKey}__${commessaId}__${adminUser.id}`;
+async function sendHoursDeadlineAlertIfMissing({ commessaId, commessaName, dateKey }) {
+  if (!commessaId || !dateKey) return;
+  const alertId = `${dateKey}__${commessaId}__all`;
   const alertRef = db.collection("hoursDeadlineAlerts").doc(alertId);
   const existing = await alertRef.get();
   if (existing.exists) return;
 
   const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
-  const text = `⚠️ Avviso ore mancanti: per la commessa ${commessaName || "Commessa"} (${dateLabel}) è presente una squadra ma non risultano ore inserite entro le 19:00.`;
+  const text = `⚠️ Avviso ore mancanti: per la commessa ${commessaName || "Commessa"} (${dateLabel}) non risultano ore inserite entro le 19:00.`;
   const expiresAt = new Date(Date.now() + HOURS_DEADLINE_ALERT_RETENTION_MS);
   const chatDocRef = await db.collection("chatMessages").add({
     type: "text",
     text,
-    recipientId: adminUser.id,
-    senderId: currentUser?.uid || "system",
+    recipientId: "",
+    senderId: "system",
     senderName: "Sistema ore",
-    senderEmail: currentUser?.email || "",
+    senderEmail: "",
     kind: "system",
     metadata: {
       type: "hours_deadline_alert",
@@ -11131,9 +11185,23 @@ async function sendHoursDeadlineAlertIfMissing({ adminUser, commessaId, commessa
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 
+  await db.collection("appNotifications").add({
+    eventType: "hours-deadline-missing",
+    title: "Ore mancanti entro le 19",
+    body: text,
+    commessaId,
+    commessaName: commessaName || "",
+    impiantoName: "",
+    impiantoKey: "",
+    createdByUid: "system",
+    createdByName: "Sistema ore",
+    createdByEmail: "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
   await alertRef.set({
     alertId,
-    adminUserId: adminUser.id,
+    recipient: "all",
     commessaId,
     commessaName: commessaName || "",
     date: dateKey,

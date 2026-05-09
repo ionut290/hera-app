@@ -495,6 +495,7 @@ let unsubscribeImpianti = null;
 let unsubscribeCommessaNotes = null;
 const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
+let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
 let currentImpianti = [];
 let currentCommessaNotes = [];
@@ -540,6 +541,9 @@ let commessaStatsById = new Map();
 let commessaHoursById = new Map();
 let commessaWorkSummariesById = new Map();
 let allHoursReports = [];
+let allHoursApprovalRequests = [];
+let hoursReportsLoaded = false;
+let hoursApprovalsLoaded = false;
 let personaleRecords = [];
 let mezziRecords = [];
 let squadreByCommessa = new Map();
@@ -4055,7 +4059,57 @@ function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
   return [];
 }
 
-function createAddHoursButton(commessa) {
+function getHoursEntrySquadraIndexes(entry) {
+  const indexes = new Set();
+  const entryIndex = String(entry?.squadraIndex || "").trim();
+  if (entryIndex) indexes.add(entryIndex);
+  (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+    const rowIndex = String(row?.squadraIndex || "").trim();
+    if (rowIndex) indexes.add(rowIndex);
+  });
+  return indexes;
+}
+
+function doesHoursEntryMatchSquadra(entry, squadraIndex = "") {
+  const targetIndex = String(squadraIndex || "").trim();
+  if (!targetIndex) return true;
+  const entryIndexes = getHoursEntrySquadraIndexes(entry);
+  return !entryIndexes.size || entryIndexes.has(targetIndex);
+}
+
+function hasHoursRecordForCommessaDateSquadra(commessaId, dateValue, squadraIndex = "") {
+  const id = String(commessaId || "").trim();
+  const dateKey = String(dateValue || "").trim();
+  if (!id || !dateKey) return false;
+  const sources = [
+    ...allHoursReports,
+    ...allHoursApprovalRequests.filter((request) => String(request.status || "").trim() !== "rejected")
+  ];
+  return sources.some((record) => {
+    if (String(record?.date || "").trim() !== dateKey) return false;
+    return (Array.isArray(record?.entries) ? record.entries : []).some((entry) => (
+      String(entry?.commessaId || "").trim() === id
+      && doesHoursEntryMatchSquadra(entry, squadraIndex)
+      && (Array.isArray(entry?.rows) ? entry.rows : []).some((row) => Number(row?.ore || 0) > 0)
+    ));
+  });
+}
+
+function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
+  const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey();
+  if (!hoursReportsLoaded || !hoursApprovalsLoaded) return null;
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateKey);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const hasAssignedSquadra = squadRows.some((row) => String(row?.personale || "").trim() || String(row?.mezzi || "").trim());
+  if (!dateKey || !hasAssignedSquadra) return null;
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
+  const squadraIndex = assignment?.squadraIndex || "";
+  if (!canManageData() && !assignment) return null;
+  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
+  return { dateKey, assignment, squadData, squadRows, squadraIndex };
+}
+
+function createAddHoursButton(commessa, dateValue = "") {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "btn add-hours-quick-btn";
@@ -4065,18 +4119,19 @@ function createAddHoursButton(commessa) {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    openHoursPageForCommessa(commessa.id);
+    openHoursPageForCommessa(commessa.id, dateValue);
   });
   return button;
 }
 
-function appendAddHoursButtonIfAllowed(container, commessa) {
+function appendAddHoursButtonIfAllowed(container, commessa, dateValue = "") {
   if (!container || !commessa?.id) return;
-  if (!canCurrentUserInsertHoursForCommessa(commessa.id, getActiveSquadreDateKey())) return;
-  container.appendChild(createAddHoursButton(commessa));
+  const context = getQuickHoursContextForCommessa(commessa.id, dateValue);
+  if (!context) return;
+  container.appendChild(createAddHoursButton(commessa, context.dateKey));
 }
 
-function openHoursPageForCommessa(commessaId) {
+function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (!currentUser) {
     alert("Devi fare login per inserire le ore.");
     return;
@@ -4086,15 +4141,17 @@ function openHoursPageForCommessa(commessaId) {
     alert("Commessa non disponibile per l'inserimento ore.");
     return;
   }
-  if (!canCurrentUserInsertHoursForCommessa(id, getActiveSquadreDateKey())) {
-    alert("Puoi inserire ore solo per le commesse dove sei assegnato in squadra.");
+  const context = getQuickHoursContextForCommessa(id, dateValue);
+  if (!context) {
+    alert("Il pulsante ore è disponibile solo per squadre assegnate senza ore già inserite.");
+    renderSquadre();
     return;
   }
-  const dateValue = getActiveSquadreDateKey() || ui.hoursDate?.value || new Date().toISOString().slice(0, 10);
-  const assignment = getCurrentUserSquadraAssignment(id, dateValue);
-  const teamRows = getHoursRowsForCommessaSquadra(id, dateValue);
+  const targetDateValue = context.dateKey;
+  const assignment = context.assignment;
+  const teamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
   const squadraLabel = assignment?.squadraLabel || (canManageData() ? "Tutte le squadre" : "");
-  if (ui.hoursDate) ui.hoursDate.value = dateValue;
+  if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
   ui.hoursCommesseList.innerHTML = "";
   addHoursCommessaBlock({
     commessaId: id,
@@ -4103,7 +4160,7 @@ function openHoursPageForCommessa(commessaId) {
     squadraLabel,
     insertedBy: currentUser.displayName || currentUser.email || "Operatore",
     rows: teamRows.length ? teamRows : [{
-      operatore: getHoursOperatorForCurrentUser(id, dateValue),
+      operatore: getHoursOperatorForCurrentUser(id, targetDateValue),
       ore: "",
       squadraIndex: assignment?.squadraIndex || "",
       squadraLabel: assignment?.squadraLabel || ""
@@ -5478,12 +5535,24 @@ function subscribeStatsForCommesse() {
 }
 
 function subscribeHoursStats() {
-  if (unsubscribeHoursStats) return;
-  unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
-    allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    recalculateCommessaWorkSummaries();
-    renderParentCommessaOverview();
-  }, (error) => console.error("Errore stats ore commesse:", error));
+  if (!unsubscribeHoursStats) {
+    unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
+      allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      hoursReportsLoaded = true;
+      recalculateCommessaWorkSummaries();
+      renderParentCommessaOverview();
+      renderSquadre();
+    }, (error) => console.error("Errore stats ore commesse:", error));
+  }
+  if (!unsubscribeHoursApprovals) {
+    unsubscribeHoursApprovals = db.collection("oreApprovalRequests").onSnapshot((snapshot) => {
+      allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      hoursApprovalsLoaded = true;
+      hoursApprovalRequests = allHoursApprovalRequests;
+      renderHoursApprovalRequests();
+      renderSquadre();
+    }, (error) => console.error("Errore richieste ore commesse:", error));
+  }
 }
 
 function stopCommessaStatsSubscriptions() {
@@ -5494,9 +5563,17 @@ function stopCommessaStatsSubscriptions() {
     unsubscribeHoursStats();
     unsubscribeHoursStats = null;
   }
+  if (unsubscribeHoursApprovals) {
+    unsubscribeHoursApprovals();
+    unsubscribeHoursApprovals = null;
+  }
   commessaHoursById = new Map();
   commessaWorkSummariesById = new Map();
   allHoursReports = [];
+  allHoursApprovalRequests = [];
+  hoursReportsLoaded = false;
+  hoursApprovalsLoaded = false;
+  hoursApprovalRequests = [];
 }
 
 function sortCommesseByCreatedAtDesc(commesse) {
@@ -9672,7 +9749,7 @@ function renderSquadre() {
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
-    appendAddHoursButtonIfAllowed(head, commessa);
+    appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
     const title = head?.querySelector("strong");
     if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {

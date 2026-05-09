@@ -2777,3 +2777,72 @@ textarea:focus-visible {
 .hours-inserted-by-label {
   font-weight: 700;
 }
+
+.quick-squadra-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.quick-squadra-btn {
+  min-height: 0;
+  width: auto;
+  padding: 4px 9px;
+  border: 1px solid #15803d;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 14px rgba(22, 163, 74, 0.18);
+}
+
+.quick-squadra-btn:hover,
+.quick-squadra-btn:focus-visible {
+  background: #15803d;
+  color: #fff;
+}
+
+.quick-squadra-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e8f5ee;
+  color: #166534;
+  border: 1px solid #86efac;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.squadra-simple-field,
+.squadra-note-field {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.squadra-note-field textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.squadra-impianti-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1 1 420px;
+}
+
+@media (max-width: 560px) {
+  .quick-squadra-controls {
+    justify-self: start;
+  }
+}

@@ -585,6 +585,7 @@ let editingImpiantoIds = [];
 let reportingImpianto = null;
 let chatRetentionTimer = null;
 let hoursDeadlineAlertTimer = null;
+let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
@@ -1184,6 +1185,7 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   });
 });
 
+startQuickSquadraWindowTicker();
 addSquadraRow();
 initHoursPage();
 initGeolocation();
@@ -1964,7 +1966,7 @@ function updateAdminControls() {
   }
   ui.squadraRiferimento.disabled = !canManage;
   ui.addSquadraRowBtn.disabled = !canManage;
-  ui.squadraRows.querySelectorAll("input,button").forEach((el) => { el.disabled = !canManage; });
+  ui.squadraRows.querySelectorAll("input,textarea,select,button").forEach((el) => { el.disabled = !canManage; });
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
@@ -1974,6 +1976,7 @@ function updateAdminControls() {
   renderNotificationTargetUsers();
   renderNotificationsList();
   renderExternalApps();
+  renderCommesseHomeList();
 }
 
 function openSideMenu() {
@@ -5617,6 +5620,96 @@ function populateCommessaParentSelect() {
   updateCommessaParentField();
 }
 
+
+function getTomorrowSquadraDateKey() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return getDateKeyFromLocalDate(tomorrow);
+}
+
+function isQuickSquadraWindowOpen(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= 12 && hour < 19;
+}
+
+function isValidActiveCommessaForQuickSquadra(commessa) {
+  return Boolean(commessa?.id && String(commessa.nome || "").trim());
+}
+
+function canShowQuickSquadraButton(commessa) {
+  return Boolean(currentUser && canManageData() && isQuickSquadraWindowOpen() && isValidActiveCommessaForQuickSquadra(commessa));
+}
+
+function getSquadreCountForCommessaDate(commessaId, dateKey) {
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const squad = storicoDelGiorno.get(commessaId) || {};
+  const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+  return rows.filter((row) => String(row?.personale || "").trim() || String(row?.caposquadra || "").trim() || String(row?.mezzi || "").trim()).length;
+}
+
+function createQuickSquadraControls(commessa) {
+  const wrap = document.createElement("span");
+  wrap.className = "quick-squadra-controls";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn quick-squadra-btn";
+  button.textContent = "+ SQ";
+  button.setAttribute("aria-label", `Crea squadra per ${commessa.nome || "commessa"}`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openQuickSquadraForm(commessa.id);
+  });
+  wrap.appendChild(button);
+  const count = getSquadreCountForCommessaDate(commessa.id, getTomorrowSquadraDateKey());
+  if (count > 0) {
+    const badge = document.createElement("span");
+    badge.className = "quick-squadra-badge";
+    badge.textContent = String(count);
+    badge.title = `${count} squadre già assegnate per domani`;
+    wrap.appendChild(badge);
+  }
+  return wrap;
+}
+
+function openQuickSquadraForm(commessaId) {
+  if (!currentUser || !canManageData()) {
+    alert("Solo gli amministratori possono creare squadre dalla scheda commesse.");
+    return;
+  }
+  if (!isQuickSquadraWindowOpen()) {
+    alert("Le squadre dalla scheda commesse si possono creare solo tra le 12:00 e le 19:00.");
+    renderCommesseHomeList();
+    return;
+  }
+  const commessa = commesseById.get(commessaId);
+  if (!isValidActiveCommessaForQuickSquadra(commessa)) {
+    alert("Commessa non valida per la creazione squadra.");
+    return;
+  }
+  openManagementPanel("squadre");
+  const dateKey = getTomorrowSquadraDateKey();
+  if (ui.squadraCommessa) ui.squadraCommessa.value = commessaId;
+  if (ui.squadraRiferimento) ui.squadraRiferimento.value = dateKey;
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const data = storicoDelGiorno.get(commessaId) || {};
+  const existingRows = Array.isArray(data.squadre) ? data.squadre : getLegacySquadreRows(data);
+  if (existingRows.length) {
+    setSquadraRowsFromData(data);
+  } else {
+    ui.squadraRows.innerHTML = "";
+  }
+  addSquadraRow({ quickNew: true });
+  setTimeout(() => ui.squadraForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+
+function startQuickSquadraWindowTicker() {
+  if (quickSquadraWindowTimer) return;
+  quickSquadraWindowTimer = setInterval(() => {
+    renderCommesseHomeList();
+  }, 60 * 1000);
+}
+
 function renderCommessaHomeButton(commessa, index) {
   const row = document.createElement("div");
   row.className = "commessa-row";
@@ -5639,7 +5732,9 @@ function renderCommessaHomeButton(commessa, index) {
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
-  appendAddHoursButtonIfAllowed(row, commessa);
+  if (canShowQuickSquadraButton(commessa)) {
+    row.appendChild(createQuickSquadraControls(commessa));
+  }
   return row;
 }
 
@@ -9465,10 +9560,11 @@ function autofillSquadraForm() {
   setSquadraRowsFromData(data);
 }
 
-function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
+function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
   const personaleValues = parseMultiEntryValue(rowData.personale);
   const mezziValues = parseMultiEntryValue(rowData.mezzi);
+  const impiantiValues = parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "");
   const row = document.createElement("div");
   row.className = "squadra-row";
   row.innerHTML = `
@@ -9476,16 +9572,30 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
       <strong>Squadra ${index}</strong>
       <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
     </div>
+    <label class="squadra-simple-field">Caposquadra
+      <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
+    </label>
+    <label class="squadra-simple-field">Orario
+      <input type="time" class="squadra-orario-input" value="${escapeHTML(rowData.orario || "")}">
+    </label>
     <div class="squadra-multi-field">
-      <div class="squadra-multi-field-head"><strong>👥 Personale</strong></div>
+      <div class="squadra-multi-field-head"><strong>👥 Operatori</strong></div>
       <div class="squadra-personale-list"></div>
-      <button type="button" class="btn btn-small add-personale-input-btn">+ Persona</button>
+      <button type="button" class="btn btn-small add-personale-input-btn">+ Operatore</button>
     </div>
     <div class="squadra-multi-field">
       <div class="squadra-multi-field-head"><strong>🚚 Mezzi</strong></div>
       <div class="squadra-mezzi-list"></div>
       <button type="button" class="btn btn-small add-mezzo-input-btn">+ Mezzo</button>
     </div>
+    <div class="squadra-multi-field">
+      <div class="squadra-multi-field-head"><strong>📍 Impianti</strong></div>
+      <div class="squadra-impianti-list"></div>
+      <button type="button" class="btn btn-small add-impianto-input-btn">+ Impianto</button>
+    </div>
+    <label class="squadra-note-field">Note
+      <textarea class="squadra-note-input" rows="2" placeholder="Note squadra">${escapeHTML(rowData.note || "")}</textarea>
+    </label>
   `;
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
@@ -9494,8 +9604,10 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
   });
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
+  const impiantiList = row.querySelector(".squadra-impianti-list");
   const addPersonaleBtn = row.querySelector(".add-personale-input-btn");
   const addMezzoBtn = row.querySelector(".add-mezzo-input-btn");
+  const addImpiantoBtn = row.querySelector(".add-impianto-input-btn");
 
   const addPersonaleInput = (value = "") => addMultiEntryInput({
     container: personaleList,
@@ -9511,12 +9623,21 @@ function addSquadraRow(rowData = { personale: "", mezzi: "" }) {
     value,
     sourceValues: mezziRecords.map((m) => m.nId || m.nome)
   });
+  const addImpiantoInput = (value = "") => addMultiEntryInput({
+    container: impiantiList,
+    listId: "",
+    placeholder: "Impianto assegnato",
+    value,
+    sourceValues: []
+  });
 
   (personaleValues.length ? personaleValues : [""]).forEach((value) => addPersonaleInput(value));
   (mezziValues.length ? mezziValues : [""]).forEach((value) => addMezzoInput(value));
+  (impiantiValues.length ? impiantiValues : [""]).forEach((value) => addImpiantoInput(value));
 
   addPersonaleBtn.addEventListener("click", () => addPersonaleInput(""));
   addMezzoBtn.addEventListener("click", () => addMezzoInput(""));
+  addImpiantoBtn.addEventListener("click", () => addImpiantoInput(""));
   ui.squadraRows.appendChild(row);
   updateAdminControls();
 }
@@ -9569,6 +9690,7 @@ function renumberSquadraRows() {
 
 function readSquadraRows() {
   return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
+    caposquadra: String(row.querySelector(".squadra-caposquadra-input")?.value || "").trim(),
     personale: Array.from(row.querySelectorAll(".squadra-personale-list .squadra-multi-entry-input"))
       .map((input) => String(input.value || "").trim())
       .filter(Boolean)
@@ -9576,8 +9698,14 @@ function readSquadraRows() {
     mezzi: Array.from(row.querySelectorAll(".squadra-mezzi-list .squadra-multi-entry-input"))
       .map((input) => String(input.value || "").trim())
       .filter(Boolean)
-      .join(", ")
-  })).filter((row) => row.personale || row.mezzi);
+      .join(", "),
+    impianti: Array.from(row.querySelectorAll(".squadra-impianti-list .squadra-multi-entry-input"))
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean)
+      .join(", "),
+    note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
+    orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim()
+  })).filter((row) => row.caposquadra || row.personale || row.mezzi || row.impianti || row.note || row.orario);
 }
 
 function getLegacySquadreRows(data) {
@@ -9599,6 +9727,42 @@ function setSquadraRowsFromData(data) {
   renumberSquadraRows();
 }
 
+
+function normalizeSquadraDuplicatePart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSquadraDuplicateSignature(row) {
+  const caposquadra = normalizeSquadraDuplicatePart(row?.caposquadra || "");
+  const operatori = parseMultiEntryValue(row?.personale || "")
+    .map(normalizeSquadraDuplicatePart)
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  return `${caposquadra}__${operatori}`;
+}
+
+function findDuplicateSquadraRows(rows) {
+  const seen = new Map();
+  const duplicates = [];
+  rows.forEach((row, index) => {
+    const signature = buildSquadraDuplicateSignature(row);
+    if (!signature.replace(/[_|]/g, "")) return;
+    if (seen.has(signature)) {
+      duplicates.push({ firstIndex: seen.get(signature), duplicateIndex: index });
+      return;
+    }
+    seen.set(signature, index);
+  });
+  return duplicates;
+}
+
 async function saveSquadraComposition(event) {
   event.preventDefault();
   if (!canManageData()) {
@@ -9611,7 +9775,21 @@ async function saveSquadraComposition(event) {
     return;
   }
   const dateKey = ui.squadraRiferimento.value || new Date().toISOString().slice(0, 10);
+  if (!dateKey) {
+    alert("Seleziona una data per la composizione squadre.");
+    return;
+  }
   const squadreRows = readSquadraRows();
+  if (!squadreRows.length) {
+    alert("Inserisci almeno una squadra.");
+    return;
+  }
+  const duplicateRows = findDuplicateSquadraRows(squadreRows);
+  if (duplicateRows.length) {
+    const dup = duplicateRows[0];
+    alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
+    return;
+  }
   const payload = {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
@@ -9620,11 +9798,39 @@ async function saveSquadraComposition(event) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   };
-  await db.collection("squadreCommesse").doc(commessaId).set(payload, { merge: true });
-  await db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`).set({
-    ...payload,
-    dateKey
-  }, { merge: true });
+  const currentRef = db.collection("squadreCommesse").doc(commessaId);
+  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  try {
+    await db.runTransaction(async (transaction) => {
+    const historySnap = await transaction.get(historyRef);
+    const currentRows = historySnap.exists
+      ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
+      : [];
+    const mergedRows = squadreRows;
+    const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
+    if (transactionDuplicates.length) {
+      throw new Error("DUPLICATE_SQUADRA");
+    }
+    const nextPayload = {
+      ...payload,
+      squadre: mergedRows,
+      existingSquadreCountBeforeSave: currentRows.length
+    };
+    transaction.set(currentRef, nextPayload, { merge: true });
+    transaction.set(historyRef, {
+      ...nextPayload,
+      dateKey
+    }, { merge: true });
+    });
+  } catch (error) {
+    if (error?.message === "DUPLICATE_SQUADRA") {
+      alert("Duplicato bloccato: esiste già una squadra con stessa commessa, stessa data, stesso caposquadra e stessi operatori.");
+      return;
+    }
+    throw error;
+  }
+  renderCommesseHomeList();
+  renderSquadre();
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -9738,9 +9944,15 @@ function renderSquadre() {
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
-    const rowsHtml = squadRows.map((row, idx) => (
-      `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
-    )).join("");
+    const rowsHtml = squadRows.map((row, idx) => {
+      const details = [
+        row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
+        row.orario ? `<br><b>🕒 Orario:</b> ${escapeHTML(row.orario)}` : "",
+        row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
+      ].join("");
+      return `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`;
+    }).join("");
     item.innerHTML = `
       <div class="squadra-item-head">
         <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>

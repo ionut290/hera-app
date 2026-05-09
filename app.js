@@ -5639,6 +5639,7 @@ function renderCommessaHomeButton(commessa, index) {
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
+  appendAddHoursButtonIfAllowed(row, commessa);
   return row;
 }
 

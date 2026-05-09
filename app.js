@@ -3961,6 +3961,134 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
   });
 }
 
+
+function normalizeSquadraMemberIdentity(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCurrentUserIdentityParts() {
+  if (!currentUser) return [];
+  const parts = [currentUser.displayName, currentUser.email];
+  const emailLocal = String(currentUser.email || "").split("@")[0] || "";
+  if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
+  return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
+}
+
+function doSquadraMemberAndUserMatch(memberName, identityParts = getCurrentUserIdentityParts()) {
+  const member = normalizeSquadraMemberIdentity(memberName);
+  if (!member || !identityParts.length) return false;
+  return identityParts.some((part) => {
+    if (!part) return false;
+    if (member === part) return true;
+    const memberTokens = member.split(" ").filter((token) => token.length > 1);
+    const partTokens = part.split(" ").filter((token) => token.length > 1);
+    return partTokens.length >= 2 && partTokens.every((token) => memberTokens.includes(token));
+  });
+}
+
+function getSquadraDataForCommessaDate(commessaId, dateValue = "") {
+  const id = String(commessaId || "").trim();
+  if (!id) return null;
+  const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  return storicoDelGiorno.get(id) || squadreByCommessa.get(id) || null;
+}
+
+function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
+  if (!currentUser) return null;
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const identities = getCurrentUserIdentityParts();
+  for (let index = 0; index < squadRows.length; index += 1) {
+    const personale = parseMultiEntryValue(squadRows[index]?.personale || "");
+    const matchedName = personale.find((name) => doSquadraMemberAndUserMatch(name, identities));
+    if (matchedName) {
+      return {
+        squadraIndex: index + 1,
+        squadraLabel: `Squadra ${index + 1}`,
+        matchedName,
+        squadData,
+        row: squadRows[index]
+      };
+    }
+  }
+  return null;
+}
+
+function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
+  if (!currentUser) return false;
+  if (canManageData()) return true;
+  return Boolean(getCurrentUserSquadraAssignment(commessaId, dateValue));
+}
+
+function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
+  return assignment?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore";
+}
+
+function createAddHoursButton(commessa) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn add-hours-quick-btn";
+  button.textContent = "+ ORE";
+  button.dataset.addHoursCommessaId = commessa.id || "";
+  button.setAttribute("aria-label", `Inserisci ore per ${commessa.nome || "commessa"}`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openHoursPageForCommessa(commessa.id);
+  });
+  return button;
+}
+
+function appendAddHoursButtonIfAllowed(container, commessa) {
+  if (!container || !commessa?.id) return;
+  if (!canCurrentUserInsertHoursForCommessa(commessa.id, getActiveSquadreDateKey())) return;
+  container.appendChild(createAddHoursButton(commessa));
+}
+
+function openHoursPageForCommessa(commessaId) {
+  if (!currentUser) {
+    alert("Devi fare login per inserire le ore.");
+    return;
+  }
+  const id = String(commessaId || "").trim();
+  if (!id || !commesseById.has(id)) {
+    alert("Commessa non disponibile per l'inserimento ore.");
+    return;
+  }
+  if (!canCurrentUserInsertHoursForCommessa(id, getActiveSquadreDateKey())) {
+    alert("Puoi inserire ore solo per le commesse dove sei assegnato in squadra.");
+    return;
+  }
+  const dateValue = getActiveSquadreDateKey() || ui.hoursDate?.value || new Date().toISOString().slice(0, 10);
+  const assignment = getCurrentUserSquadraAssignment(id, dateValue);
+  if (ui.hoursDate) ui.hoursDate.value = dateValue;
+  ui.hoursCommesseList.innerHTML = "";
+  addHoursCommessaBlock({
+    commessaId: id,
+    lockedCommessa: true,
+    squadraIndex: assignment?.squadraIndex || "",
+    squadraLabel: assignment?.squadraLabel || (canManageData() ? "Admin" : ""),
+    rows: [{
+      operatore: getHoursOperatorForCurrentUser(id, dateValue),
+      ore: "",
+      squadraIndex: assignment?.squadraIndex || "",
+      squadraLabel: assignment?.squadraLabel || ""
+    }]
+  });
+  window.location.hash = "ore";
+  applyRoute();
+  closeSideMenu();
+  setTimeout(() => ui.hoursForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+
 function getSuggestedHoursOperators(commessaId, dateValue) {
   const dateKey = String(dateValue || "").trim();
   if (!commessaId || !dateKey) return [];
@@ -4059,7 +4187,9 @@ function addHoursCommessaBlock(blockData = null) {
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
     </select>
+    <p class="hours-locked-commessa-label muted hidden"></p>
     <div class="hours-commesse-buttons"></div>
+    <p class="hours-team-label muted hidden"></p>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
@@ -4085,13 +4215,43 @@ function addHoursCommessaBlock(blockData = null) {
     renderHoursOperatorSuggestions(card);
     renderHoursSummary();
   });
+  const commessaSelect = card.querySelector(".hours-commessa-select");
+  commessaSelect.addEventListener("change", () => {
+    unlockHoursFinalizeButton();
+    renderHoursCardCommessaButtons(card);
+    applyHoursSuggestedOperators(card, { force: true });
+  });
   card.querySelector(".hours-note").addEventListener("input", () => {
     unlockHoursFinalizeButton();
     renderHoursSummary();
   });
 
   if (blockData) {
-    if (blockData.commessaId) card.querySelector(".hours-commessa-select").value = blockData.commessaId;
+    if (blockData.commessaId) {
+      commessaSelect.value = blockData.commessaId;
+      card.dataset.lockedCommessaId = blockData.commessaId;
+    }
+    if (blockData.lockedCommessa) {
+      card.dataset.lockedCommessa = "true";
+      commessaSelect.classList.add("hidden");
+      commessaSelect.disabled = true;
+      const lockedLabel = card.querySelector(".hours-locked-commessa-label");
+      if (lockedLabel) {
+        lockedLabel.textContent = `Commessa: ${commesseById.get(blockData.commessaId)?.nome || "Commessa"}`;
+        lockedLabel.classList.remove("hidden");
+      }
+      const buttons = card.querySelector(".hours-commesse-buttons");
+      buttons?.classList.add("hidden");
+    }
+    if (blockData.squadraLabel) {
+      card.dataset.squadraIndex = String(blockData.squadraIndex || "");
+      card.dataset.squadraLabel = String(blockData.squadraLabel || "");
+      const teamLabel = card.querySelector(".hours-team-label");
+      if (teamLabel) {
+        teamLabel.textContent = `Squadra di appartenenza: ${blockData.squadraLabel}`;
+        teamLabel.classList.remove("hidden");
+      }
+    }
     card.querySelector(".hours-note").value = blockData.note || "";
     const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];
     rows.forEach((row) => addHoursOperatoreRow(operatorList, row, card));
@@ -4106,14 +4266,18 @@ function addHoursCommessaBlock(blockData = null) {
 function collectHoursEntries() {
   const cards = Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card"));
   return cards.map((card) => {
-    const commessaId = String(card.querySelector(".hours-commessa-select")?.value || "").trim();
+    const commessaId = String(card.dataset.lockedCommessaId || card.querySelector(".hours-commessa-select")?.value || "").trim();
     const note = String(card.querySelector(".hours-note")?.value || "").trim();
+    const squadraIndex = String(card.dataset.squadraIndex || "").trim();
+    const squadraLabel = String(card.dataset.squadraLabel || "").trim();
     const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
       operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
-      ore: Number(row.querySelector(".hours-ore")?.value || 0)
+      ore: Number(row.querySelector(".hours-ore")?.value || 0),
+      squadraIndex,
+      squadraLabel
     })).filter((row) => row.operatore && row.ore > 0);
     const commessaName = commesseById.get(commessaId)?.nome || "";
-    return { commessaId, commessaName, note, rows };
+    return { commessaId, commessaName, note, squadraIndex, squadraLabel, rows };
   }).filter((entry) => entry.commessaId || entry.rows.length || entry.note);
 }
 
@@ -4315,6 +4479,8 @@ async function finalizeHoursReport(event) {
     entries: entries.map((entry) => ({
       commessaId: entry.commessaId,
       commessaName: entry.commessaName,
+      squadraIndex: entry.squadraIndex || "",
+      squadraLabel: entry.squadraLabel || "",
       note: entry.note,
       rows: entry.rows.filter((row) => row.operatore && row.ore > 0)
     })).filter((entry) => entry.commessaId && entry.rows.length),
@@ -4323,6 +4489,27 @@ async function finalizeHoursReport(event) {
     createdByEmail: currentUser.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  if (!canManageData()) {
+    const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
+    if (unauthorizedEntry) {
+      ui.hoursFeedback.textContent = `Permesso negato: puoi inserire ore solo per le commesse dove sei assegnato in squadra (${unauthorizedEntry.commessaName || "Commessa"}).`;
+      return;
+    }
+    payload.entries = payload.entries.map((entry) => {
+      const assignment = getCurrentUserSquadraAssignment(entry.commessaId, dateValue);
+      return {
+        ...entry,
+        squadraIndex: assignment?.squadraIndex || entry.squadraIndex || "",
+        squadraLabel: assignment?.squadraLabel || entry.squadraLabel || "",
+        rows: entry.rows.map((row) => ({
+          ...row,
+          operatore: assignment?.matchedName || currentUser.displayName || currentUser.email || row.operatore,
+          squadraIndex: assignment?.squadraIndex || row.squadraIndex || "",
+          squadraLabel: assignment?.squadraLabel || row.squadraLabel || ""
+        }))
+      };
+    });
+  }
   ui.hoursFinalizeBtn.disabled = true;
   ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
@@ -5339,6 +5526,7 @@ function renderCommessaHomeButton(commessa, index) {
   btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
 
   row.appendChild(btn);
+  appendAddHoursButtonIfAllowed(row, commessa);
   return row;
 }
 
@@ -9031,6 +9219,7 @@ function subscribeSquadre() {
       squadreByCommessa.set(doc.id, { id: doc.id, ...doc.data() });
     });
     renderSquadre();
+    renderCommesseHomeList();
     autofillSquadraForm();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
@@ -9052,6 +9241,7 @@ function subscribeSquadre() {
     });
     squadreLoadState = { status: "loaded", message: "" };
     renderSquadre();
+    renderCommesseHomeList();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
     });
@@ -9439,10 +9629,13 @@ function renderSquadre() {
       `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`
     )).join("");
     item.innerHTML = `
-      <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      <div class="squadra-item-head">
+        <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+      </div>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
+    appendAddHoursButtonIfAllowed(item.querySelector(".squadra-item-head"), commessa);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });

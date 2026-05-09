@@ -2736,3 +2736,48 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+
+.add-hours-quick-btn {
+  align-self: start;
+  border: 1px solid #15803d;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.22);
+}
+
+.add-hours-quick-btn:hover,
+.add-hours-quick-btn:focus-visible {
+  background: #15803d;
+  color: #fff;
+}
+
+.squadra-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hours-locked-commessa-label,
+.hours-team-label {
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .commessa-row {
+    grid-template-columns: 1fr;
+  }
+
+  .add-hours-quick-btn {
+    justify-self: start;
+  }
+
+  .squadra-item-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

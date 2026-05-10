@@ -1059,6 +1059,7 @@ textarea:focus-visible {
 
 .squadra-item p { margin: 7px 0; }
 
+
 .commessa-btn {
   text-align: left;
   width: 100%;
@@ -1899,8 +1900,8 @@ textarea:focus-visible {
 .marker-pin.straordinario { background: #f97316; }
 
 .marker-operator {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #111827;
   border: 2px solid #fff;
@@ -1908,7 +1909,8 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 800;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
 }
 

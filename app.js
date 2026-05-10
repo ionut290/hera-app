@@ -510,6 +510,7 @@ let unsubscribePersonale = null;
 let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
+let unsubscribeSquadreViewConfig = null;
 let unsubscribeUsers = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
@@ -553,6 +554,7 @@ let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
 let squadreLoadState = { status: "idle", message: "" };
 let manualSquadreFilterDateKey = "";
+let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
@@ -1079,9 +1081,7 @@ ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
 ui.squadraCalendarDate.addEventListener("change", () => {
-  manualSquadreFilterDateKey = ui.squadraCalendarDate.value || "";
-  if (ui.squadreFilterDate) ui.squadreFilterDate.value = manualSquadreFilterDateKey;
-  renderSquadre();
+  setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
 ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
@@ -1844,6 +1844,7 @@ auth.onAuthStateChanged((user) => {
   ui.squadreLista.innerHTML = "";
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   manualSquadreFilterDateKey = "";
+  sharedSquadreDateKey = "";
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
@@ -9537,6 +9538,16 @@ function subscribeSquadre() {
     squadreLoadState = { status: "error", message: "Errore caricamento squadre da Firebase." };
     renderSquadre();
   });
+
+  unsubscribeSquadreViewConfig = db.collection("appConfig").doc("squadreView").onSnapshot((doc) => {
+    const data = doc.exists ? doc.data() || {} : {};
+    sharedSquadreDateKey = String(data.selectedDateKey || "").trim();
+    manualSquadreFilterDateKey = sharedSquadreDateKey;
+    syncSquadreDateInputs();
+    renderSquadre();
+  }, (error) => {
+    console.error("Errore caricamento giorno squadre condiviso:", error);
+  });
 }
 
 function stopPersonaleSubscription() {
@@ -9561,6 +9572,10 @@ function stopSquadreSubscription() {
   if (unsubscribeSquadreHistory) {
     unsubscribeSquadreHistory();
     unsubscribeSquadreHistory = null;
+  }
+  if (unsubscribeSquadreViewConfig) {
+    unsubscribeSquadreViewConfig();
+    unsubscribeSquadreViewConfig = null;
   }
 }
 
@@ -9649,7 +9664,6 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.innerHTML = `
     <div class="squadra-row-head">
       <strong>Squadra ${index}</strong>
-      <button type="button" class="btn remove-squadra-btn">Elimina squadra</button>
     </div>
     <label class="squadra-simple-field">Caposquadra
       <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
@@ -9676,11 +9690,6 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
       <textarea class="squadra-note-input" rows="2" placeholder="Note squadra">${escapeHTML(rowData.note || "")}</textarea>
     </label>
   `;
-  row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
-    row.remove();
-    renumberSquadraRows();
-    updateEmptySquadraRowsHint();
-  });
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
   const impiantiList = row.querySelector(".squadra-impianti-list");
@@ -9988,30 +9997,53 @@ function getAutomaticSquadreDateKey(now = new Date()) {
 
 function initializeAutomaticSquadreDate() {
   automaticSquadreDateKey = getAutomaticSquadreDateKey();
-  if (!manualSquadreFilterDateKey && ui.squadreFilterDate) {
-    ui.squadreFilterDate.value = automaticSquadreDateKey;
-  }
-  if (!manualSquadreFilterDateKey && ui.squadraCalendarDate) {
-    ui.squadraCalendarDate.value = automaticSquadreDateKey;
-  }
+  syncSquadreDateInputs();
   renderSquadre();
 }
 
 function getActiveSquadreDateKey() {
   if (manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
+  if (sharedSquadreDateKey) return sharedSquadreDateKey;
   if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
   return automaticSquadreDateKey;
 }
 
-function onSquadreFilterDateChange() {
-  const selectedDateKey = ui.squadreFilterDate?.value || "";
-  manualSquadreFilterDateKey = selectedDateKey === automaticSquadreDateKey ? "" : selectedDateKey;
-  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = selectedDateKey || automaticSquadreDateKey;
+function syncSquadreDateInputs() {
+  const activeDateKey = getActiveSquadreDateKey();
+  if (ui.squadreFilterDate) ui.squadreFilterDate.value = activeDateKey;
+  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = activeDateKey;
+}
+
+async function persistSharedSquadreDate(dateKey) {
+  if (!canManageData()) return;
+  await db.collection("appConfig").doc("squadreView").set({
+    selectedDateKey: dateKey || "",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  }, { merge: true });
+}
+
+function setSquadreDateOverride(dateKey) {
+  const selectedDateKey = String(dateKey || "").trim();
+  manualSquadreFilterDateKey = selectedDateKey && selectedDateKey !== automaticSquadreDateKey ? selectedDateKey : "";
+  sharedSquadreDateKey = manualSquadreFilterDateKey;
+  syncSquadreDateInputs();
   renderSquadre();
+  persistSharedSquadreDate(manualSquadreFilterDateKey).catch((error) => {
+    console.error("Errore salvataggio giorno squadre condiviso:", error);
+  });
+}
+
+function onSquadreFilterDateChange() {
+  setSquadreDateOverride(ui.squadreFilterDate?.value || "");
 }
 
 function clearManualSquadreFilterDate() {
   manualSquadreFilterDateKey = "";
+  sharedSquadreDateKey = "";
+  persistSharedSquadreDate("").catch((error) => {
+    console.error("Errore reset giorno squadre condiviso:", error);
+  });
   initializeAutomaticSquadreDate();
 }
 
@@ -10023,8 +10055,8 @@ function renderSquadre() {
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   if (ui.squadreFilterStatus) {
     const selectedDateLabel = new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString("it-IT");
-    ui.squadreFilterStatus.textContent = manualSquadreFilterDateKey
-      ? `Filtro admin attivo: mostro le squadre del ${selectedDateLabel}.`
+    ui.squadreFilterStatus.textContent = sharedSquadreDateKey
+      ? `Giorno squadre condiviso: mostro a tutti le squadre del ${selectedDateLabel}.`
       : `Filtro automatico attivo: mostro le squadre del ${selectedDateLabel}.`;
   }
 

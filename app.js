@@ -631,6 +631,7 @@ let radarPlaying = true;
 let radarLoading = false;
 let activeWeatherLayerId = "rain";
 let weatherFramesBySource = {};
+let weatherLayerLoadToken = 0;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
 let unsubscribeGlobalCommesse = null;
@@ -2219,13 +2220,14 @@ function closeMapFullscreenPage() {
 
 
 const WEATHER_RADAR_MAX_ZOOM = 20;
-const WEATHER_PROVIDER_DEFAULT_MAX_NATIVE_ZOOM = 19;
+const WEATHER_PROVIDER_DEFAULT_MAX_NATIVE_ZOOM = 18;
 const RAINVIEWER_MAX_NATIVE_ZOOM = 10;
 const TRANSPARENT_TILE_URL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const WEATHER_UNAVAILABLE_MESSAGE = "Dato non disponibile";
 const OPENWEATHER_API_KEY_PLACEHOLDER = "%VITE_OPENWEATHER_API_KEY%";
 const OPENWEATHER_TILE_BASE_URL = "https://maps.openweathermap.org/maps/2.0/weather";
 const RAINVIEWER_API_URL = "https://api.rainviewer.com/public/weather-maps.json";
+const WEATHER_TILE_PREVIEW_TIMEOUT_MS = 4500;
 const WEATHER_LAYER_DEFINITIONS = {
   rain: {
     id: "rain",
@@ -2263,7 +2265,8 @@ const WEATHER_LAYER_DEFINITIONS = {
     title: "Vento",
     label: "Vento",
     opacity: 0.44,
-    providerLayers: { openweather: "WS10" },
+    providerLayers: { openweather: "WND" },
+    openWeatherParams: { use_norm: "true", arrow_step: "32" },
     legend: ["🟦 Brezza", "🟩 Moderato", "🟨 Forte", "🟥 Raffiche"],
     description: "Velocità e direzione del vento da OpenWeatherMap Weather Maps 2.0."
   },
@@ -2273,10 +2276,10 @@ const WEATHER_LAYER_DEFINITIONS = {
     title: "Temporali",
     label: "Temporali",
     opacity: 0.58,
-    providerLayers: { openweather: "PR0", rainviewer: "radar" },
+    providerLayers: { openweather: "PAC0", rainviewer: "radar" },
     usesFallbackLayerMessage: true,
     legend: ["🟦 Rovesci", "🟩 Pioggia", "🟨 Celle intense", "🟥 Possibile temporale"],
-    description: "OpenWeatherMap non espone un layer fulmini dedicato in questa vista: evidenzia le precipitazioni intense come proxy operativo."
+    description: "Temporali stimati dal layer di precipitazione convettiva OpenWeatherMap; se non disponibile usa il radar precipitazioni come fallback operativo."
   },
   alerts: {
     id: "alerts",
@@ -2305,7 +2308,14 @@ const WEATHER_PROVIDERS = {
       const layerCode = definition.providerLayers?.openweather;
       if (!apiKey) throw new Error("VITE_OPENWEATHER_API_KEY non configurata");
       if (!layerCode) throw new Error(`${definition.label}: ${WEATHER_UNAVAILABLE_MESSAGE}`);
-      const tileUrl = `${OPENWEATHER_TILE_BASE_URL}/${encodeURIComponent(layerCode)}/{z}/{x}/{y}?appid=${encodeURIComponent(apiKey)}&fill_bound=true&opacity=1`;
+      const params = new URLSearchParams({
+        appid: apiKey,
+        fill_bound: "true",
+        opacity: String(definition.opacity ?? 0.8),
+        ...(definition.openWeatherParams || {})
+      });
+      const tileUrl = `${OPENWEATHER_TILE_BASE_URL}/${encodeURIComponent(layerCode)}/{z}/{x}/{y}?${params.toString()}`;
+      await verifyWeatherTileTemplate(tileUrl, this.label);
       return [{
         providerId: this.id,
         providerLabel: this.label,
@@ -2364,6 +2374,14 @@ function getRuntimeEnvValue(key) {
     const value = source?.[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
+  const metaValue = document.querySelector(`meta[name="${key}"]`)?.getAttribute("content");
+  if (typeof metaValue === "string" && metaValue.trim()) return metaValue.trim();
+  try {
+    const storedValue = localStorage.getItem(key);
+    if (typeof storedValue === "string" && storedValue.trim()) return storedValue.trim();
+  } catch (error) {
+    console.warn(`Configurazione ${key} non leggibile da localStorage:`, error);
+  }
   return "";
 }
 
@@ -2372,6 +2390,41 @@ function getOpenWeatherApiKey() {
   if (!key || key === OPENWEATHER_API_KEY_PLACEHOLDER || /^(undefined|null)$/i.test(key)) return "";
   return key;
 }
+
+function materializeWeatherTileUrl(template, sample = { z: 2, x: 2, y: 1 }) {
+  return String(template || "")
+    .replace(/\{z\}/g, String(sample.z))
+    .replace(/\{x\}/g, String(sample.x))
+    .replace(/\{y\}/g, String(sample.y));
+}
+
+function verifyWeatherTileTemplate(tileTemplate, providerLabel = "Provider meteo") {
+  if (typeof Image !== "function") return Promise.resolve(true);
+  const previewUrl = materializeWeatherTileUrl(tileTemplate);
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timeoutId = setTimeout(() => {
+      image.onload = null;
+      image.onerror = null;
+      reject(new Error(`${providerLabel}: anteprima tile scaduta`));
+    }, WEATHER_TILE_PREVIEW_TIMEOUT_MS);
+    image.onload = () => {
+      clearTimeout(timeoutId);
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        resolve(true);
+      } else {
+        reject(new Error(`${providerLabel}: tile vuoto`));
+      }
+    };
+    image.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(new Error(`${providerLabel}: tile non caricabile`));
+    };
+    image.referrerPolicy = "no-referrer-when-downgrade";
+    image.src = previewUrl;
+  });
+}
+
 
 function formatRadarFrameTime(frame) {
   const timestamp = Number(frame?.time || 0) * 1000;
@@ -2441,7 +2494,7 @@ function buildRadarTileLayer(frame, definition = getActiveWeatherLayerDefinition
     reuseTiles: true,
     detectRetina: true,
     noWrap: false,
-    crossOrigin: true,
+    crossOrigin: false,
     errorTileUrl: TRANSPARENT_TILE_URL,
     className: `weather-radar-tile weather-radar-tile--${definition.id}`,
     attribution: frame.attribution || WEATHER_PROVIDERS.openweather.attribution
@@ -2628,12 +2681,16 @@ async function loadWeatherFramesForLayer(definition = getActiveWeatherLayerDefin
 
 async function switchWeatherLayer(layerId) {
   if (!WEATHER_LAYER_DEFINITIONS[layerId] || activeWeatherLayerId === layerId) return;
+  const loadToken = ++weatherLayerLoadToken;
   activeWeatherLayerId = layerId;
   stopRadarPlayback();
   if (radarLayer && fullscreenMap?.hasLayer(radarLayer)) fullscreenMap.removeLayer(radarLayer);
   radarLayer = null;
   radarFrames = getWeatherFramesForActiveLayer();
+  syncRadarControls();
+  syncWeatherLegend(radarFrames.length ? "" : "Caricamento...");
   if (!radarFrames.length) radarFrames = await loadWeatherFramesForLayer();
+  if (loadToken !== weatherLayerLoadToken || activeWeatherLayerId !== layerId) return;
   radarFrameIndex = Math.max(0, Math.min(radarFrameIndex, radarFrames.length - 1));
   if (radarFrames.length) {
     showRadarFrame(radarFrameIndex, { immediate: true });
@@ -2648,6 +2705,7 @@ async function switchWeatherLayer(layerId) {
 
 async function enableWeatherRadar() {
   if (!isMapFullscreenPageOpen || radarActive || radarLoading) return;
+  const loadToken = ++weatherLayerLoadToken;
   radarLoading = true;
   updateRadarButtonState();
   try {
@@ -2656,7 +2714,9 @@ async function enableWeatherRadar() {
     radarActive = true;
     radarPlaying = true;
     createRadarControls();
+    syncWeatherLegend("Caricamento...");
     radarFrames = await loadWeatherFramesForLayer();
+    if (loadToken !== weatherLayerLoadToken) return;
     if (!radarFrames.length) throw new Error("Nessun layer meteo disponibile");
     radarFrameIndex = Math.max(0, radarFrames.length - 1);
     showRadarFrame(radarFrameIndex, { immediate: true });
@@ -2672,6 +2732,7 @@ async function enableWeatherRadar() {
 }
 
 function destroyWeatherRadar() {
+  weatherLayerLoadToken += 1;
   stopRadarPlayback();
   if (radarLayer && fullscreenMap?.hasLayer(radarLayer)) fullscreenMap.removeLayer(radarLayer);
   radarLayer = null;

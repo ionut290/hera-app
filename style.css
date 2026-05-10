@@ -1404,6 +1404,16 @@ textarea:focus-visible {
   letter-spacing: 0.02em;
 }
 
+.weather-radar-unavailable {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
 .weather-radar-legend-items {
   display: flex;
   flex-wrap: wrap;
@@ -1443,6 +1453,12 @@ textarea:focus-visible {
   color: #082f49;
   font-weight: 900;
   font-size: 1rem;
+}
+
+.weather-radar-play:disabled,
+.weather-radar-timeline input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .weather-radar-timeline {

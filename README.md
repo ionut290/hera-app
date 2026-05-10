@@ -36,6 +36,22 @@ firebase login
 firebase deploy --only hosting
 ```
 
+
+## Layer meteo / radar
+
+- Il provider principale dei layer meteo in mappa fullscreen è **OpenWeatherMap Weather Maps 2.0**.
+- Configura la chiave API senza inserirla nel codice, esponendo `VITE_OPENWEATHER_API_KEY` a runtime, per esempio prima di `app.js`:
+
+```html
+<script>
+  window.__HERA_ENV__ = { VITE_OPENWEATHER_API_KEY: "INSERISCI_LA_TUA_CHIAVE" };
+</script>
+```
+
+- In ambienti con pipeline Vite/build puoi sostituire il placeholder `%VITE_OPENWEATHER_API_KEY%` durante il build.
+- RainViewer resta disponibile solo come fallback opzionale per pioggia/nuvole quando OpenWeatherMap non è configurato.
+- Se un layer non è esposto dal provider o dal piano attivo, l'app mostra “Dato non disponibile” e lascia la mappa navigabile.
+
 ## Note Firestore
 
 La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.

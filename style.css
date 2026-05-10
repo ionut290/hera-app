@@ -1435,10 +1435,22 @@ textarea:focus-visible {
   background: linear-gradient(135deg, #eff6ff, #ffffff);
 }
 
+.map-popup-title {
+  display: grid;
+  gap: 4px;
+}
+
 .map-popup-header h3 {
   margin: 0;
   font-size: 1rem;
   line-height: 1.2;
+}
+
+.map-popup-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .map-popup-close-btn {

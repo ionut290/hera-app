@@ -2345,18 +2345,28 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "" };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
     resource: params.get("resource") || "",
-    notes: params.has("notes")
+    notes: params.has("notes"),
+    impianto: params.get("impianto") || ""
   };
 }
 
 function setCommessaHash(suffix = "") {
   if (!selectedCommessaId) return;
   window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}${suffix}`;
+}
+
+function focusSharedImpiantoFromRoute(impiantoKey) {
+  const key = String(impiantoKey || "").trim();
+  if (!key) return;
+  const impianto = findCurrentImpiantoByKey(key);
+  if (!impianto) return;
+  focusImpiantoInList(impianto, true);
+  selectImpiantoForMapDetail(impianto);
 }
 
 function applyRoute() {
@@ -2410,7 +2420,10 @@ function applyRoute() {
     } else {
       closeCommessaResourceViewer();
     }
-    setTimeout(() => map.invalidateSize(), 50);
+    setTimeout(() => {
+      map.invalidateSize();
+      if (commessaRoute.impianto) focusSharedImpiantoFromRoute(commessaRoute.impianto);
+    }, 50);
   }
   if (showHowto) renderHowtoFaq();
   if (showPrivateDocs) renderPrivateDocsList();
@@ -2432,10 +2445,10 @@ function applyRoute() {
   renderNextActionCard();
 }
 
-function openImpiantiPage() {
+function openImpiantiPage(suffix = "") {
   if (!selectedCommessaId) return;
   localStorage.setItem(LAST_OPENED_COMMESSA_KEY, selectedCommessaId);
-  setCommessaHash();
+  setCommessaHash(suffix);
   applyRoute();
 }
 
@@ -7475,8 +7488,9 @@ function selectCommessa(id, nome, codice = "") {
   subscribeImpianti();
   subscribeCommessaNotes();
   setCurrentWorkflowStep("open-commessa");
-  if (parseCommessaHash().notes) openCommessaNotesPage();
-  else openImpiantiPage();
+  const commessaRoute = parseCommessaHash();
+  if (commessaRoute.notes) openCommessaNotesPage();
+  else openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
 }
 
 function updateCommessaContextUI() {
@@ -10877,19 +10891,84 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
   return marker;
 }
 
-function buildImpiantoMapPopup(impianto, tipo) {
-  const impiantoKey = buildImpiantoKey(impianto);
+function getImpiantoPopupData(impianto, tipo = "") {
   const doneInfo = formatDoneDateTime(impianto.doneAt);
-  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
-  const coordinates = impianto.gpsY != null && impianto.gpsX != null
-    ? `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`
-    : "-";
+  const idSap = impianto.idSap || impianto.codiceSap || "-";
   const via = impianto.indirizzo || impianto.descrizioneVia || impianto.via || "-";
   const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || impianto.lavorazioniRichieste || tipo || "-";
-  const stato = impianto.done ? "Fatto" : "Da fare";
   const operatore = impianto.doneBy || impianto.operatore || impianto.operator || impianto.navigatedBy || "-";
   const squadra = impianto.squadra || impianto.squadraAssegnata || impianto.team || "";
+  return {
+    idSap,
+    via,
+    tipologia,
+    stato: impianto.done ? "Fatto" : "Da fare",
+    dataFatto: doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`,
+    operatoreSquadra: [operatore, squadra].filter((value) => value && value !== "-").join(" • ") || "-",
+    coordinates: impianto.gpsY != null && impianto.gpsX != null
+      ? `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`
+      : "-"
+  };
+}
+
+function buildImpiantoPositionUrl(impianto) {
+  if (impianto.gpsY == null || impianto.gpsX == null) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${impianto.gpsY},${impianto.gpsX}`)}`;
+}
+
+function buildImpiantoAppUrl(impianto) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  const params = new URLSearchParams();
+  if (selectedCommessaId) params.set("commessa", selectedCommessaId);
+  if (impiantoKey) params.set("impianto", impiantoKey);
+  const hash = params.toString() || "home";
+  return `${window.location.origin}${window.location.pathname}#${hash}`;
+}
+
+function buildFullscreenImpiantoWhatsAppMessage(impianto) {
+  const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
+  const data = getImpiantoPopupData(impianto, tipo);
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  const linkedNotesLines = linkedNotes.length
+    ? linkedNotes.flatMap((note) => [
+        `- ${getCommessaNoteTitle(note)}`,
+        ...(String(note.text || "").trim() ? [String(note.text || "").trim()] : [])
+      ])
+    : ["-"];
+  const positionUrl = buildImpiantoPositionUrl(impianto);
+  const appUrl = buildImpiantoAppUrl(impianto);
+  return [
+    "Ti inoltro i dettagli dell’impianto:",
+    "",
+    `Nome impianto: ${impianto.denominazione || "-"}`,
+    `ID SAP: ${data.idSap}`,
+    `Comune: ${impianto.comune || "-"}`,
+    `Indirizzo / Via: ${data.via}`,
+    `Tipologia impianto: ${data.tipologia}`,
+    `Stato lavoro: ${data.stato}`,
+    `Data fatto: ${data.dataFatto}`,
+    `Operatore / Squadra: ${data.operatoreSquadra}`,
+    "Segnalazione collegata:",
+    ...linkedNotesLines,
+    "",
+    `Posizione impianto: ${data.coordinates}`,
+    positionUrl ? `[📍 Apri posizione impianto](${positionUrl})` : "📍 Apri posizione impianto: posizione non disponibile",
+    `[🔗 Apri impianto nell’app](${appUrl})`
+  ].join("\n");
+}
+
+function openFullscreenImpiantoWhatsApp(impianto) {
+  const message = buildFullscreenImpiantoWhatsAppMessage(impianto);
+  if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
+}
+
+function buildImpiantoMapPopup(impianto, tipo, options = {}) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  const popupData = getImpiantoPopupData(impianto, tipo);
   const noteImpianto = getImpiantoPopupNotes(impianto);
+  const showSapInHeader = Boolean(options?.showSapInHeader);
+  const whatsappAction = options?.fullscreenWhatsApp ? "fullscreen-whatsapp" : "whatsapp";
   const linkedNotesMarkup = linkedNotes.length
     ? linkedNotes.map((note) => `
         <button type="button" class="map-popup-note-btn" data-map-popup-action="note" data-note-id="${escapeHTML(note.id || "")}">
@@ -10897,30 +10976,39 @@ function buildImpiantoMapPopup(impianto, tipo) {
         </button>
       `).join("")
     : "<span>-</span>";
+  const headerSubtitle = showSapInHeader
+    ? `<p class="map-popup-subtitle">ID SAP: ${escapeHTML(popupData.idSap)}</p>`
+    : "";
+  const idSapDetail = showSapInHeader
+    ? ""
+    : `<div><dt>ID SAP</dt><dd>${escapeHTML(popupData.idSap)}</dd></div>`;
 
   return `
     <div class="map-popup-card" data-impianto-key="${escapeHTML(impiantoKey)}">
       <div class="map-popup-header">
-        <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
+        <div class="map-popup-title">
+          <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
+          ${headerSubtitle}
+        </div>
         <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup dettaglio impianto" title="Chiudi">×</button>
       </div>
       <div class="map-popup-scroll">
         <dl class="map-popup-details">
-          <div><dt>ID SAP</dt><dd>${escapeHTML(impianto.idSap || impianto.codiceSap || "-")}</dd></div>
+          ${idSapDetail}
           <div><dt>Comune</dt><dd>${escapeHTML(impianto.comune || "-")}</dd></div>
-          <div><dt>Indirizzo / via</dt><dd>${escapeHTML(via)}</dd></div>
-          <div><dt>Tipologia impianto</dt><dd>${escapeHTML(tipologia)}</dd></div>
-          <div><dt>Stato lavoro</dt><dd>${escapeHTML(stato)}</dd></div>
-          <div><dt>Data fatto</dt><dd>${escapeHTML(doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`)}</dd></div>
-          <div><dt>Operatore / squadra</dt><dd>${escapeHTML([operatore, squadra].filter((value) => value && value !== "-").join(" • ") || "-")}</dd></div>
+          <div><dt>Indirizzo / via</dt><dd>${escapeHTML(popupData.via)}</dd></div>
+          <div><dt>Tipologia impianto</dt><dd>${escapeHTML(popupData.tipologia)}</dd></div>
+          <div><dt>Stato lavoro</dt><dd>${escapeHTML(popupData.stato)}</dd></div>
+          <div><dt>Data fatto</dt><dd>${escapeHTML(popupData.dataFatto)}</dd></div>
+          <div><dt>Operatore / squadra</dt><dd>${escapeHTML(popupData.operatoreSquadra)}</dd></div>
           <div><dt>Segnalazione collegata</dt><dd class="map-popup-notes-list">${linkedNotesMarkup}</dd></div>
           <div><dt>Note impianto</dt><dd>${escapeHTML(noteImpianto || "-")}</dd></div>
-          <div><dt>Coordinate GPS</dt><dd>${escapeHTML(coordinates)}</dd></div>
+          <div><dt>Coordinate GPS</dt><dd>${escapeHTML(popupData.coordinates)}</dd></div>
         </dl>
       </div>
       <div class="map-popup-actions">
         <button type="button" class="btn btn-small btn-primary" data-map-popup-action="navigate" data-impianto-key="${escapeHTML(impiantoKey)}">NAVIGA</button>
-        <button type="button" class="btn btn-small btn-whatsapp" data-map-popup-action="whatsapp" data-impianto-key="${escapeHTML(impiantoKey)}">WHATSAPP</button>
+        <button type="button" class="btn btn-small btn-whatsapp" data-map-popup-action="${escapeHTML(whatsappAction)}" data-impianto-key="${escapeHTML(impiantoKey)}">WHATSAPP</button>
         <button type="button" class="btn btn-small" data-map-popup-action="detail" data-impianto-key="${escapeHTML(impiantoKey)}">DETTAGLIO IMPIANTO</button>
       </div>
     </div>
@@ -10961,9 +11049,12 @@ function renderSelectedImpiantoDetailPanel() {
     return;
   }
   const tipo = selectedImpiantoData.tipoManutenzione || classifyTipoManutenzione(selectedImpiantoData.codicePrezzo);
-  const markup = buildImpiantoMapPopup(selectedImpiantoData, tipo);
   panels.forEach(({ panel, body }) => {
-    body.innerHTML = markup;
+    const isFullscreenPanel = panel === ui.mapImpiantoDetailPanel;
+    body.innerHTML = buildImpiantoMapPopup(selectedImpiantoData, tipo, {
+      showSapInHeader: isFullscreenPanel,
+      fullscreenWhatsApp: isFullscreenPanel
+    });
     panel.classList.remove("hidden");
   });
   bindPersistentImpiantoDetailActions();
@@ -10985,6 +11076,14 @@ function bindPersistentImpiantoDetailActions() {
         const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
         if (!impianto) return;
         triggerImpiantoWhatsAppAction(impianto);
+      });
+    });
+    panel.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
+        const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
+        if (!impianto) return;
+        openFullscreenImpiantoWhatsApp(impianto);
       });
     });
     panel.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {
@@ -11050,6 +11149,14 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
       triggerImpiantoWhatsAppAction(impianto);
+    });
+  });
+  popupElement.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-impianto-key") || popupKey;
+      const impianto = findCurrentImpiantoByKey(key);
+      if (!impianto) return;
+      openFullscreenImpiantoWhatsApp(impianto);
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {

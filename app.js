@@ -7841,14 +7841,11 @@ function renderPendingWhatsappList() {
     const row = document.createElement("div");
     row.className = "simple-list-item stacked pending-whatsapp-item";
     const doneLabel = action.doneAt ? new Date(action.doneAt).toLocaleString("it-IT") : "-";
-    const syncLabel = isActionWaitingForSync(action)
-      ? "FATTO - DA SINCRONIZZARE"
-      : "FATTO sincronizzato";
     const whatsappLabel = action.whatsappStatus === "whatsappOpened" ? "WhatsApp aperto" : "WhatsApp in attesa";
     row.innerHTML = `
       <div>
         <strong>${escapeHTML(action.impiantoName || "Impianto")}</strong>
-        <p class="muted">${escapeHTML(action.commessaName || "Commessa")} • ${escapeHTML(doneLabel)} • ${escapeHTML(syncLabel)} • ${escapeHTML(whatsappLabel)}</p>
+        <p class="muted">${escapeHTML(action.commessaName || "Commessa")} • ${escapeHTML(doneLabel)} • ${escapeHTML(whatsappLabel)}</p>
         ${action.lastError ? `<p class="muted pending-error">Ultimo errore sync: ${escapeHTML(action.lastError)}</p>` : ""}
       </div>
     `;
@@ -9039,7 +9036,6 @@ function renderImpianti() {
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
-      ${waitingForSync ? `<span class="badge badge-sync-pending">FATTO - DA SINCRONIZZARE</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
       <small class="impianto-travel-meta">
         ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
@@ -9059,7 +9055,7 @@ function renderImpianti() {
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
-      <p><b>Stato:</b> ${waitingForSync ? "FATTO - DA SINCRONIZZARE" : (impianto.done ? "Fatto" : "Da fare")}</p>
+      <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
     if (linkedNotes.length) {

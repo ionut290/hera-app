@@ -590,6 +590,8 @@ let chatRetentionTimer = null;
 let hoursDeadlineAlertTimer = null;
 let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
+let lastPositionPublishAt = 0;
+let lastPublishedUserPos = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
 let unsubscribeGlobalCommesse = null;
@@ -9647,7 +9649,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.innerHTML = `
     <div class="squadra-row-head">
       <strong>Squadra ${index}</strong>
-      <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
+      <button type="button" class="btn remove-squadra-btn">Elimina squadra</button>
     </div>
     <label class="squadra-simple-field">Caposquadra
       <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
@@ -9677,7 +9679,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
     renumberSquadraRows();
-    if (!ui.squadraRows.children.length) addSquadraRow();
+    updateEmptySquadraRowsHint();
   });
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
@@ -9765,6 +9767,17 @@ function renumberSquadraRows() {
   });
 }
 
+function updateEmptySquadraRowsHint() {
+  if (!ui.squadraHint || !canManageData()) return;
+  if (!ui.squadraRows.children.length) {
+    ui.squadraHint.textContent = "Nessuna squadra nel modulo: salva per eliminare la composizione della commessa in questa data, oppure premi “Aggiungi squadra”.";
+  }
+}
+
+function isSquadraRowFilled(row) {
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario);
+}
+
 function readSquadraRows() {
   return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
     caposquadra: String(row.querySelector(".squadra-caposquadra-input")?.value || "").trim(),
@@ -9782,7 +9795,7 @@ function readSquadraRows() {
       .join(", "),
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim()
-  })).filter((row) => row.caposquadra || row.personale || row.mezzi || row.impianti || row.note || row.orario);
+  })).filter(isSquadraRowFilled);
 }
 
 function getLegacySquadreRows(data) {
@@ -9858,7 +9871,7 @@ async function saveSquadraComposition(event) {
   }
   const squadreRows = readSquadraRows();
   if (!squadreRows.length) {
-    alert("Inserisci almeno una squadra.");
+    await deleteSquadraCompositionForDate(commessaId, dateKey);
     return;
   }
   const duplicateRows = findDuplicateSquadraRows(squadreRows);
@@ -9879,25 +9892,25 @@ async function saveSquadraComposition(event) {
   const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
   try {
     await db.runTransaction(async (transaction) => {
-    const historySnap = await transaction.get(historyRef);
-    const currentRows = historySnap.exists
-      ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
-      : [];
-    const mergedRows = squadreRows;
-    const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
-    if (transactionDuplicates.length) {
-      throw new Error("DUPLICATE_SQUADRA");
-    }
-    const nextPayload = {
-      ...payload,
-      squadre: mergedRows,
-      existingSquadreCountBeforeSave: currentRows.length
-    };
-    transaction.set(currentRef, nextPayload, { merge: true });
-    transaction.set(historyRef, {
-      ...nextPayload,
-      dateKey
-    }, { merge: true });
+      const historySnap = await transaction.get(historyRef);
+      const currentRows = historySnap.exists
+        ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
+        : [];
+      const mergedRows = squadreRows;
+      const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
+      if (transactionDuplicates.length) {
+        throw new Error("DUPLICATE_SQUADRA");
+      }
+      const nextPayload = {
+        ...payload,
+        squadre: mergedRows,
+        existingSquadreCountBeforeSave: currentRows.length
+      };
+      transaction.set(currentRef, nextPayload, { merge: true });
+      transaction.set(historyRef, {
+        ...nextPayload,
+        dateKey
+      }, { merge: true });
     });
   } catch (error) {
     if (error?.message === "DUPLICATE_SQUADRA") {
@@ -9921,6 +9934,28 @@ async function saveSquadraComposition(event) {
     });
   }
   ui.squadraCalendarDate.value = dateKey;
+}
+
+async function deleteSquadraCompositionForDate(commessaId, dateKey) {
+  if (!canManageData()) return;
+  const commessaNome = (commesseById.get(commessaId) || {}).nome || "Commessa";
+  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+  if (!window.confirm(`Eliminare tutte le squadre di ${commessaNome} per il ${dateLabel}?`)) return;
+
+  const currentRef = db.collection("squadreCommesse").doc(commessaId);
+  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  await db.runTransaction(async (transaction) => {
+    const currentSnap = await transaction.get(currentRef);
+    transaction.delete(historyRef);
+    if (!currentSnap.exists || currentSnap.data()?.riferimentoData === dateKey) {
+      transaction.delete(currentRef);
+    }
+  });
+  ui.squadraRows.innerHTML = "";
+  addSquadraRow();
+  ui.squadraCalendarDate.value = dateKey;
+  renderCommesseHomeList();
+  renderSquadre();
 }
 
 function getDateKeyFromLocalDate(date) {
@@ -10006,7 +10041,7 @@ function renderSquadre() {
   const commesseConSquadre = commesse.filter((commessa) => {
     const squad = storicoDelGiorno.get(commessa.id) || {};
     const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
-    return rows.some((row) => row.personale || row.mezzi);
+    return rows.some(isSquadraRowFilled);
   });
   if (!commesseConSquadre.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra inserita per questo giorno.</p>";
@@ -10544,6 +10579,88 @@ function getCommessaAccentColor(commessaId, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
+function getPlatformUserPosition(user) {
+  const position = user?.lastPosition || {};
+  const lat = Number(position.lat);
+  const lng = Number(position.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    lat,
+    lng,
+    accuracy: Number(position.accuracy || 0),
+    updatedAt: position.updatedAt || user.lastSeenAt || null
+  };
+}
+
+function getTimestampDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getOperatorMarkerLabel(user) {
+  const label = getPlatformUserLabel(user).replace(/<[^>]*>/g, "").trim();
+  const initials = label
+    .split(/[\s._@-]+/)
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return initials || "👷";
+}
+
+function buildOperatorPositionPopup(user, position) {
+  const label = getPlatformUserLabel(user);
+  const updatedAt = getTimestampDate(position.updatedAt);
+  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
+  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
+  return `<b>👷 ${escapeHTML(label)}</b><br><small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`;
+}
+
+function addOperatorMarkerToLayer(user, position, layer) {
+  const markerLabel = getOperatorMarkerLabel(user);
+  return L.marker([position.lat, position.lng], {
+    icon: L.divIcon({
+      className: "",
+      html: `<div class='marker-operator' title='${escapeHTML(getPlatformUserLabel(user))}'>${escapeHTML(markerLabel)}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    })
+  }).addTo(layer).bindPopup(buildOperatorPositionPopup(user, position));
+}
+
+function getOperatorPositionUsersForMap() {
+  const byId = new Map(platformUsers.map((user) => [user.id, user]));
+  if (currentUser && currentUserPos) {
+    byId.set(currentUser.uid, {
+      ...(byId.get(currentUser.uid) || {}),
+      id: currentUser.uid,
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      lastPosition: {
+        lat: currentUserPos.lat,
+        lng: currentUserPos.lng,
+        accuracy: currentUserPos.accuracy || 0,
+        updatedAt: new Date()
+      }
+    });
+  }
+  return Array.from(byId.values()).filter((user) => getPlatformUserPosition(user));
+}
+
+function renderOperatorPositionMarkers(bounds) {
+  getOperatorPositionUsersForMap().forEach((user) => {
+    const position = getPlatformUserPosition(user);
+    addOperatorMarkerToLayer(user, position, markerLayer);
+    addOperatorMarkerToLayer(user, position, fullscreenMarkerLayer);
+    bounds.push([position.lat, position.lng]);
+  });
+}
+
 function renderMap() {
   clearMap();
 
@@ -10561,25 +10678,7 @@ function renderMap() {
     }
   });
 
-  if (currentUserPos) {
-    L.marker([currentUserPos.lat, currentUserPos.lng], {
-      icon: L.divIcon({
-        className: "",
-        html: "<div class='marker-operator'>👷</div>",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      })
-    }).addTo(markerLayer).bindPopup("Operatore al lavoro");
-    L.marker([currentUserPos.lat, currentUserPos.lng], {
-      icon: L.divIcon({
-        className: "",
-        html: "<div class='marker-operator'>👷</div>",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      })
-    }).addTo(fullscreenMarkerLayer).bindPopup("Operatore al lavoro");
-    bounds.push([currentUserPos.lat, currentUserPos.lng]);
-  }
+  renderOperatorPositionMarkers(bounds);
 
   if (bounds.length > 0 && !mainMapViewState.hasUserMoved) {
     map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
@@ -11364,6 +11463,41 @@ async function fetchOverpassWithFallback(query) {
   throw lastError || new Error("Overpass non disponibile");
 }
 
+function shouldPublishOperatorPosition(coords) {
+  if (!currentUser || !coords) return false;
+  const now = Date.now();
+  if (!lastPublishedUserPos) return true;
+  const movedMeters = haversine(
+    lastPublishedUserPos.lat,
+    lastPublishedUserPos.lng,
+    coords.latitude,
+    coords.longitude
+  ) * 1000;
+  return movedMeters >= 25 || now - lastPositionPublishAt >= 60 * 1000;
+}
+
+async function publishCurrentOperatorPosition(coords) {
+  if (!shouldPublishOperatorPosition(coords)) return;
+  lastPositionPublishAt = Date.now();
+  lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
+  try {
+    await db.collection("platformUsers").doc(currentUser.uid).set({
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      lastPosition: {
+        lat: Number(coords.latitude),
+        lng: Number(coords.longitude),
+        accuracy: Number(coords.accuracy || 0),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Aggiornamento posizione operatore non riuscito:", error);
+  }
+}
+
 function initGeolocation() {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
@@ -11374,10 +11508,12 @@ function initGeolocation() {
   const onPosition = (pos) => {
     currentUserPos = {
       lat: pos.coords.latitude,
-      lng: pos.coords.longitude
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy || 0
     };
+    publishCurrentOperatorPosition(pos.coords);
     evaluateTimbraturaReminders();
-    ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
+    ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza e operatori visibili sulla mappa.";
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
@@ -11919,6 +12055,14 @@ async function upsertCurrentPlatformUser() {
     displayName: currentUser.displayName || currentUser.email || "Utente",
     isAdmin: canManageData(),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
+    ...(currentUserPos ? {
+      lastPosition: {
+        lat: Number(currentUserPos.lat),
+        lng: Number(currentUserPos.lng),
+        accuracy: Number(currentUserPos.accuracy || 0),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }
+    } : {}),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
@@ -11966,6 +12110,7 @@ function subscribeUsers() {
     renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
+    renderMap();
     checkAndSendHoursDeadlineAlerts();
   });
 }

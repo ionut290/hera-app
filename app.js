@@ -13041,7 +13041,6 @@ function subscribeAdminUsers() {
     if (currentUser) {
       subscribeUsers();
       subscribeOperatorPositions();
-      syncPendingImpiantoActions();
     }
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
@@ -13053,7 +13052,6 @@ function subscribeAdminUsers() {
     if (currentUser) {
       subscribeUsers();
       subscribeOperatorPositions();
-      syncPendingImpiantoActions();
     }
   });
 }

@@ -194,6 +194,10 @@ const ui = {
   mapFullscreenFeedbackBanner: document.getElementById("map-fullscreen-feedback-banner"),
   mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
   mapFullscreenFeedbackClose: document.getElementById("map-fullscreen-feedback-close"),
+  mainMapImpiantoDetailPanel: document.getElementById("main-map-impianto-detail-panel"),
+  mainMapImpiantoDetailBody: document.getElementById("main-map-impianto-detail-body"),
+  mapImpiantoDetailPanel: document.getElementById("map-impianto-detail-panel"),
+  mapImpiantoDetailBody: document.getElementById("map-impianto-detail-body"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
@@ -615,6 +619,8 @@ let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: fa
 let isMapFullscreenPageOpen = false;
 let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
+let selectedImpiantoId = "";
+let selectedImpiantoData = null;
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
@@ -2115,8 +2121,7 @@ function openMapFullscreenPage() {
 
 function closeMapFullscreenPage() {
   if (!ui.mapFullscreenPage) return;
-  selectedFullscreenImpiantoId = "";
-  fullscreenMap.closePopup();
+  closeSelectedImpiantoDetail({ closePopup: true });
   isMapFullscreenPageOpen = false;
   drawAreaModeActive = false;
   isDrawingStrokeActive = false;
@@ -10812,13 +10817,26 @@ function renderMap() {
     map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
   fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
-  keepSelectedFullscreenPopupOpen(markerForActiveFullscreenPopup);
+  syncSelectedImpiantoDetailAfterRefresh(markerForActiveFullscreenPopup);
+}
+
+function syncSelectedImpiantoDetailAfterRefresh(markerForSelectedImpianto) {
+  if (!selectedImpiantoId) return;
+  const latestImpianto = findCurrentImpiantoByKey(selectedImpiantoId);
+  if (!latestImpianto) {
+    closeSelectedImpiantoDetail({ closePopup: true });
+    return;
+  }
+  selectedImpiantoData = { ...latestImpianto };
+  selectedFullscreenImpiantoId = selectedImpiantoId;
+  renderSelectedImpiantoDetailPanel();
+  keepSelectedFullscreenPopupOpen(markerForSelectedImpianto);
 }
 
 function keepSelectedFullscreenPopupOpen(markerForSelectedImpianto) {
   if (!selectedFullscreenImpiantoId || !markerForSelectedImpianto) return;
   const reopenPopup = () => {
-    if (!selectedFullscreenImpiantoId || !fullscreenMarkerLayer.hasLayer(markerForSelectedImpianto)) return;
+    if (!selectedFullscreenImpiantoId || !fullscreenMarkerLayer.hasLayer(markerForSelectedImpianto) || !markerForSelectedImpianto.getPopup?.()) return;
     markerForSelectedImpianto.openPopup();
   };
   requestAnimationFrame(reopenPopup);
@@ -10837,22 +10855,22 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
       iconAnchor: [7, 7]
     })
   });
-  const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
-  marker.bindPopup(buildImpiantoMapPopup(impianto, tipo), {
-    autoClose: false,
-    closeOnClick: false,
-    closeButton: false,
-    keepInView: true,
-    maxWidth: targetMap === fullscreenMap ? 420 : 340,
-    minWidth: targetMap === fullscreenMap ? 280 : 220,
-    className: targetMap === fullscreenMap ? "impianto-map-popup impianto-map-popup--fullscreen" : "impianto-map-popup"
-  });
+  if (targetMap !== fullscreenMap) {
+    const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
+    marker.bindPopup(buildImpiantoMapPopup(impianto, tipo), {
+      autoClose: false,
+      closeOnClick: false,
+      closeButton: false,
+      keepInView: true,
+      maxWidth: 340,
+      minWidth: 220,
+      className: "impianto-map-popup"
+    });
+  }
   marker.on("click", () => {
-    if (targetMap === fullscreenMap) {
-      const nextImpiantoId = buildImpiantoKey(impianto);
-      if (selectedFullscreenImpiantoId && selectedFullscreenImpiantoId !== nextImpiantoId) fullscreenMap.closePopup();
-      selectedFullscreenImpiantoId = nextImpiantoId;
-    }
+    const nextImpiantoId = buildImpiantoKey(impianto);
+    if (targetMap === fullscreenMap && selectedImpiantoId && selectedImpiantoId !== nextImpiantoId) fullscreenMap.closePopup();
+    selectImpiantoForMapDetail(impianto);
     focusImpiantoInList(impianto, false);
   });
   marker.addTo(targetLayer);
@@ -10907,6 +10925,94 @@ function buildImpiantoMapPopup(impianto, tipo) {
       </div>
     </div>
   `;
+}
+
+function selectImpiantoForMapDetail(impianto) {
+  const key = buildImpiantoKey(impianto);
+  if (!key) return;
+  selectedImpiantoId = key;
+  selectedFullscreenImpiantoId = key;
+  selectedImpiantoData = { ...impianto };
+  renderSelectedImpiantoDetailPanel();
+}
+
+function closeSelectedImpiantoDetail({ closePopup = false } = {}) {
+  selectedImpiantoId = "";
+  selectedImpiantoData = null;
+  selectedFullscreenImpiantoId = "";
+  ui.mainMapImpiantoDetailPanel?.classList.add("hidden");
+  ui.mapImpiantoDetailPanel?.classList.add("hidden");
+  if (ui.mainMapImpiantoDetailBody) ui.mainMapImpiantoDetailBody.innerHTML = "";
+  if (ui.mapImpiantoDetailBody) ui.mapImpiantoDetailBody.innerHTML = "";
+  if (closePopup) fullscreenMap.closePopup();
+}
+
+function renderSelectedImpiantoDetailPanel() {
+  const panels = [
+    { panel: ui.mainMapImpiantoDetailPanel, body: ui.mainMapImpiantoDetailBody },
+    { panel: ui.mapImpiantoDetailPanel, body: ui.mapImpiantoDetailBody }
+  ].filter((entry) => entry.panel && entry.body);
+  if (!panels.length) return;
+  if (!selectedImpiantoId || !selectedImpiantoData) {
+    panels.forEach(({ panel, body }) => {
+      panel.classList.add("hidden");
+      body.innerHTML = "";
+    });
+    return;
+  }
+  const tipo = selectedImpiantoData.tipoManutenzione || classifyTipoManutenzione(selectedImpiantoData.codicePrezzo);
+  const markup = buildImpiantoMapPopup(selectedImpiantoData, tipo);
+  panels.forEach(({ panel, body }) => {
+    body.innerHTML = markup;
+    panel.classList.remove("hidden");
+  });
+  bindPersistentImpiantoDetailActions();
+}
+
+function bindPersistentImpiantoDetailActions() {
+  [ui.mainMapImpiantoDetailPanel, ui.mapImpiantoDetailPanel].filter(Boolean).forEach((panel) => {
+    panel.querySelectorAll("[data-map-popup-action='navigate']").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
+        const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
+        if (!impianto) return;
+        await navigateToImpianto(impianto);
+      });
+    });
+    panel.querySelectorAll("[data-map-popup-action='whatsapp']").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
+        const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
+        if (!impianto) return;
+        triggerImpiantoWhatsAppAction(impianto);
+      });
+    });
+    panel.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
+        const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
+        if (!impianto) return;
+        focusImpiantoInList(impianto, true);
+        closeMapFullscreenPage();
+      });
+    });
+    panel.querySelectorAll("[data-map-popup-action='note']").forEach((button) => {
+      button.addEventListener("click", () => {
+        const noteId = button.getAttribute("data-note-id") || "";
+        const note = currentCommessaNotes.find((item) => item.id === noteId);
+        if (!note) return;
+        openCommessaNotesPage();
+        setTimeout(() => openCommessaNoteDetail(note), 50);
+      });
+    });
+    panel.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
+      button.addEventListener("click", (clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        closeSelectedImpiantoDetail({ closePopup: true });
+      });
+    });
+  });
 }
 
 function getImpiantoPopupNotes(impianto) {
@@ -10969,7 +11075,7 @@ function bindImpiantoMapPopupActions(event, popupMap) {
     button.addEventListener("click", (clickEvent) => {
       clickEvent.preventDefault();
       clickEvent.stopPropagation();
-      if (popupMap === fullscreenMap && popupKey === selectedFullscreenImpiantoId) selectedFullscreenImpiantoId = "";
+      if (popupMap === fullscreenMap && popupKey === selectedImpiantoId) closeSelectedImpiantoDetail({ closePopup: false });
       popupMap.closePopup(event.popup);
     });
   });

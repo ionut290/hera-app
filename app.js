@@ -500,6 +500,8 @@ const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
 let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
+let currentWeatherTarget = { lat: 44.4949, lon: 11.3426 };
+let currentCivilProtectionAlert = { level: "green", label: "Nessuna allerta", url: "" };
 let currentImpianti = [];
 let currentCommessaNotes = [];
 let commessaNoteImpiantoSearchTerm = "";
@@ -1111,6 +1113,13 @@ ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
 ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
 ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
+ui.weatherCard?.addEventListener("click", openWeatherExternalDetail);
+ui.weatherCard?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openWeatherExternalDetail();
+  }
+});
 ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
 ui.backFromPersonalServicesBtn.addEventListener("click", closePersonalServicesPage);
@@ -7520,6 +7529,7 @@ function subscribeImpianti() {
       renderImpianti();
       renderMap();
       evaluateImpiantoProximityAlerts();
+      if (!currentUserPos) fetchWeather();
 
       const currentDoneSignature = rawImpianti
         .filter((impianto) => Boolean(impianto.done))
@@ -11763,32 +11773,67 @@ function evaluateTimbraturaReminders(now = new Date()) {
   });
 }
 
+const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/mappe-rischi/bollettino-di-criticita/";
+const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
+const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
+const ALERT_LEVEL_META = {
+  green: { rank: 0, emoji: "🟢", className: "alert-green", label: "Nessuna allerta" },
+  yellow: { rank: 1, emoji: "🟡", className: "alert-yellow", label: "Allerta Protezione Civile" },
+  orange: { rank: 2, emoji: "🟠", className: "alert-orange", label: "Allerta Protezione Civile" },
+  red: { rank: 3, emoji: "🔴", className: "alert-red", label: "Allerta Protezione Civile" }
+};
+const ALERT_KEYWORDS = [
+  { key: "temporali", label: "Temporali", patterns: ["temporali", "temporale"] },
+  { key: "vento", label: "vento", patterns: ["vento", "venti", "burrasca"] },
+  { key: "neve", label: "neve", patterns: ["neve", "nevicate"] },
+  { key: "ghiaccio", label: "ghiaccio", patterns: ["ghiaccio", "gelate"] },
+  { key: "alluvione", label: "alluvione", patterns: ["idraulico", "idrogeologico", "alluvione", "allagamenti"] },
+  { key: "nebbia", label: "nebbia", patterns: ["nebbia", "nebbie"] },
+  { key: "caldo", label: "caldo estremo", patterns: ["caldo", "ondate di calore", "temperature elevate"] }
+];
+
 async function fetchWeather() {
+  const target = getWeatherTargetCoordinates();
+  currentWeatherTarget = target;
+  renderCivilProtectionAlert({ level: "green", label: "Verifica Protezione Civile...", url: CIVIL_PROTECTION_ALERT_PAGE, loading: true });
+
   try {
-    const lat = currentUserPos ? currentUserPos.lat : 44.4949;
-    const lon = currentUserPos ? currentUserPos.lng : 11.3426;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability,snowfall,visibility,weather_code&forecast_days=2`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${target.lat}&longitude=${target.lon}&current=temperature_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m&forecast_days=2`;
     const response = await fetch(url);
     if (!response.ok) throw new Error("meteo non disponibile");
     const data = await response.json();
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
-    renderWeatherDetails(data);
+    await renderWeatherDetails(data, target);
   } catch (error) {
     ui.weatherSummary.textContent = "Meteo non disponibile.";
     ui.weatherRisks.innerHTML = "<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>";
+    renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
     ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
   }
 }
 
-function renderWeatherDetails(data) {
+function getWeatherTargetCoordinates() {
+  if (currentUserPos) return { lat: Number(currentUserPos.lat), lon: Number(currentUserPos.lng), source: "gps" };
+  const gpsImpianti = currentImpianti
+    .map((impianto) => ({ lat: Number(impianto.gpsY), lon: Number(impianto.gpsX) }))
+    .filter((pos) => Number.isFinite(pos.lat) && Number.isFinite(pos.lon));
+  if (gpsImpianti.length) {
+    const sum = gpsImpianti.reduce((acc, pos) => ({ lat: acc.lat + pos.lat, lon: acc.lon + pos.lon }), { lat: 0, lon: 0 });
+    return { lat: sum.lat / gpsImpianti.length, lon: sum.lon / gpsImpianti.length, source: "commessa" };
+  }
+  return { lat: 44.4949, lon: 11.3426, source: "fallback" };
+}
+
+async function renderWeatherDetails(data, target) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
   const rains = (data.hourly && data.hourly.precipitation_probability) || [];
   const snows = (data.hourly && data.hourly.snowfall) || [];
   const visibilities = (data.hourly && data.hourly.visibility) || [];
   const codes = (data.hourly && data.hourly.weather_code) || [];
+  const winds = (data.hourly && data.hourly.wind_speed_10m) || [];
   const maxRain = Math.max(...rains.slice(0, 12).map((value) => Number(value) || 0), 0);
   const snowSum = snows.slice(0, 12).reduce((acc, value) => acc + (Number(value) || 0), 0);
   const minVisibility = Math.min(...visibilities.slice(0, 12).map((value) => Number(value) || Number.MAX_SAFE_INTEGER));
@@ -11800,7 +11845,11 @@ function renderWeatherDetails(data) {
   if (snowSum > 0) risks.push("❄️ Possibile neve");
   if (hasFogCode || minVisibility < 1200) risks.push("🌫️ Possibile nebbia");
   if (riskIce) risks.push("🧊 Possibile ghiaccio");
-  ui.weatherRisks.innerHTML = risks.map((risk) => `<span class='weather-risk-chip'>${risk}</span>`).join("");
+
+  const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
+  const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
+  ui.weatherRisks.innerHTML = `${riskChips}${buildCivilProtectionAlertChip(alert)}`;
+  renderCivilProtectionAlert(alert);
 
   const rows = times.slice(0, 12).map((time, idx) => {
     const hour = new Date(time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -11809,6 +11858,185 @@ function renderWeatherDetails(data) {
     return `<p><b>${hour}</b> • ${label} • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}% • ❄️ ${Number(snows[idx] || 0).toFixed(1)} mm • 👁️ ${visKm} km</p>`;
   }).join("");
   ui.weatherDetails.innerHTML = rows || "<p class='muted'>Nessun dato meteo.</p>";
+}
+
+async function getCivilProtectionAlert(target, forecast = {}) {
+  const region = await reverseGeocodeRegion(target).catch(() => "");
+  const officialText = await fetchCivilProtectionOfficialText().catch(() => "");
+  const officialAlert = parseCivilProtectionAlertText(officialText, region);
+  const forecastAlert = buildOperationalForecastAlert(forecast);
+  const alert = pickHighestAlert([officialAlert, forecastAlert]);
+  return {
+    ...alert,
+    region,
+    url: CIVIL_PROTECTION_ALERT_PAGE,
+    label: alert.label || "Nessuna allerta"
+  };
+}
+
+async function reverseGeocodeRegion(target) {
+  const key = `heraWeatherRegion:${target.lat.toFixed(2)}:${target.lon.toFixed(2)}`;
+  const cached = localStorage.getItem(key);
+  if (cached) return cached;
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(target.lat)}&lon=${encodeURIComponent(target.lon)}&zoom=8&addressdetails=1`;
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) return "";
+  const data = await response.json();
+  const region = normalizeItalianRegionName(data?.address?.state || data?.address?.region || "");
+  if (region) localStorage.setItem(key, region);
+  return region;
+}
+
+function normalizeItalianRegionName(region) {
+  return String(region || "")
+    .replace(/^regione\s+/i, "")
+    .replace(/emilia-romagna/i, "Emilia Romagna")
+    .replace(/trentino-alto adige\/südtirol/i, "Trentino Alto Adige")
+    .trim();
+}
+
+async function fetchCivilProtectionOfficialText() {
+  const cached = getCachedCivilProtectionText();
+  if (cached) return cached;
+  const githubText = await fetchLatestCivilProtectionXmlText().catch(() => "");
+  if (githubText) {
+    cacheCivilProtectionText(githubText);
+    return githubText;
+  }
+  const response = await fetch(CIVIL_PROTECTION_ALERT_PAGE, { cache: "no-store" });
+  if (!response.ok) return "";
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const text = doc.body?.textContent || html;
+  cacheCivilProtectionText(text);
+  return text;
+}
+
+async function fetchLatestCivilProtectionXmlText() {
+  const response = await fetch(CIVIL_PROTECTION_GITHUB_API, { headers: { Accept: "application/vnd.github+json" } });
+  if (!response.ok) return "";
+  const files = await response.json();
+  const latest = (Array.isArray(files) ? files : [])
+    .filter((file) => String(file.name || "").toLowerCase().endsWith(".xml") && file.download_url)
+    .sort((a, b) => String(b.name).localeCompare(String(a.name)))
+    .at(0);
+  if (!latest) return "";
+  const xmlResponse = await fetch(latest.download_url, { cache: "no-store" });
+  return xmlResponse.ok ? xmlResponse.text() : "";
+}
+
+function getCachedCivilProtectionText() {
+  try {
+    const cached = JSON.parse(localStorage.getItem("heraCivilProtectionAlertText") || "null");
+    if (cached && Date.now() - Number(cached.savedAt || 0) < 60 * 60 * 1000) return String(cached.text || "");
+  } catch (error) {
+    console.warn("Cache Protezione Civile non leggibile:", error);
+  }
+  return "";
+}
+
+function cacheCivilProtectionText(text) {
+  try {
+    localStorage.setItem("heraCivilProtectionAlertText", JSON.stringify({ text, savedAt: Date.now() }));
+  } catch (error) {
+    console.warn("Cache Protezione Civile non salvata:", error);
+  }
+}
+
+function parseCivilProtectionAlertText(text, region) {
+  const normalizedText = String(text || "").replace(/<[^>]+>/g, "\n");
+  const lines = normalizedText.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const regionNeedle = normalizeForSearch(region);
+  let currentLevel = "green";
+  let currentPhenomenon = "Protezione Civile";
+  const alerts = [];
+
+  lines.forEach((line) => {
+    const upper = line.toUpperCase();
+    const level = levelFromText(upper);
+    if (upper.includes("ALLERTA") || upper.includes("CRITICITA")) {
+      currentLevel = level || currentLevel;
+      currentPhenomenon = phenomenonFromText(line) || currentPhenomenon;
+    }
+    const lineHasRegion = regionNeedle && normalizeForSearch(line).includes(regionNeedle);
+    const isNationalNoAlert = upper.includes("NESSUNA ALLERTA") || upper.includes("ASSENZA DI FENOMENI SIGNIFICATIVI");
+    if (lineHasRegion && ALERT_LEVEL_META[currentLevel]?.rank > 0) {
+      alerts.push({ level: currentLevel, label: buildAlertLabel(currentLevel, currentPhenomenon), phenomenon: currentPhenomenon });
+    } else if (!regionNeedle && isNationalNoAlert) {
+      alerts.push({ level: "green", label: "Nessuna allerta", phenomenon: "" });
+    }
+  });
+
+  return pickHighestAlert(alerts.length ? alerts : [{ level: "green", label: "Nessuna allerta", phenomenon: "" }]);
+}
+
+function normalizeForSearch(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function levelFromText(text) {
+  if (text.includes("ROSSA") || text.includes("ELEVATA")) return "red";
+  if (text.includes("ARANCIONE") || text.includes("MODERATA")) return "orange";
+  if (text.includes("GIALLA") || text.includes("ORDINARIA")) return "yellow";
+  if (text.includes("VERDE") || text.includes("NESSUNA ALLERTA")) return "green";
+  return "";
+}
+
+function phenomenonFromText(text) {
+  const normalized = normalizeForSearch(text);
+  const match = ALERT_KEYWORDS.find((item) => item.patterns.some((pattern) => normalized.includes(normalizeForSearch(pattern))));
+  return match?.label || "Protezione Civile";
+}
+
+function buildOperationalForecastAlert({ temps = [], winds = [], snows = [], visibilities = [], codes = [] } = {}) {
+  const maxWind = Math.max(...winds.slice(0, 12).map((value) => Number(value) || 0), 0);
+  const snowSum = snows.slice(0, 12).reduce((acc, value) => acc + (Number(value) || 0), 0);
+  const minTemp = Math.min(...temps.slice(0, 12).map((value) => Number(value) || Number.MAX_SAFE_INTEGER));
+  const maxTemp = Math.max(...temps.slice(0, 12).map((value) => Number(value) || -100), -100);
+  const minVisibility = Math.min(...visibilities.slice(0, 12).map((value) => Number(value) || Number.MAX_SAFE_INTEGER));
+  const hasStormCode = codes.slice(0, 12).some((value) => [95, 96, 99].includes(Number(value)));
+  if (maxWind >= 75) return { level: "orange", label: buildAlertLabel("orange", "vento"), phenomenon: "vento" };
+  if (snowSum >= 20) return { level: "orange", label: buildAlertLabel("orange", "neve"), phenomenon: "neve" };
+  if (hasStormCode) return { level: "yellow", label: buildAlertLabel("yellow", "Temporali"), phenomenon: "Temporali" };
+  if (minTemp <= -2) return { level: "yellow", label: buildAlertLabel("yellow", "ghiaccio"), phenomenon: "ghiaccio" };
+  if (minVisibility < 500) return { level: "yellow", label: buildAlertLabel("yellow", "nebbia"), phenomenon: "nebbia" };
+  if (maxTemp >= 38) return { level: "yellow", label: buildAlertLabel("yellow", "caldo estremo"), phenomenon: "caldo estremo" };
+  return { level: "green", label: "Nessuna allerta", phenomenon: "" };
+}
+
+function pickHighestAlert(alerts) {
+  return alerts.reduce((best, alert) => {
+    const level = alert?.level || "green";
+    return ALERT_LEVEL_META[level].rank > ALERT_LEVEL_META[best.level].rank ? alert : best;
+  }, { level: "green", label: "Nessuna allerta", phenomenon: "" });
+}
+
+function buildAlertLabel(level, phenomenon) {
+  if (level === "green") return "Nessuna allerta";
+  return phenomenon && phenomenon !== "Protezione Civile" ? `Allerta ${phenomenon}` : "Allerta Protezione Civile";
+}
+
+function buildCivilProtectionAlertChip(alert) {
+  const level = alert?.level || "green";
+  const meta = ALERT_LEVEL_META[level] || ALERT_LEVEL_META.green;
+  const text = alert?.loading ? "Verifica Protezione Civile..." : `${meta.emoji} ${alert?.label || meta.label}`;
+  return `<span class='weather-risk-chip ${meta.className}' title='Avviso Protezione Civile${alert?.region ? ` • ${escapeHTML(alert.region)}` : ""}'>${escapeHTML(text)}</span>`;
+}
+
+function renderCivilProtectionAlert(alert) {
+  currentCivilProtectionAlert = { ...currentCivilProtectionAlert, ...(alert || {}) };
+  const level = currentCivilProtectionAlert.level || "green";
+  const showBanner = ALERT_LEVEL_META[level]?.rank >= ALERT_LEVEL_META.orange.rank;
+  ui.weatherAlertBanner?.classList.toggle("hidden", !showBanner);
+}
+
+function openWeatherExternalDetail() {
+  const target = currentWeatherTarget || getWeatherTargetCoordinates();
+  const hasCivilProtectionAlert = ALERT_LEVEL_META[currentCivilProtectionAlert?.level || "green"].rank > 0;
+  const url = hasCivilProtectionAlert
+    ? (currentCivilProtectionAlert.url || CIVIL_PROTECTION_ALERT_PAGE)
+    : `${METEO_3B_BASE_URL}?lat=${encodeURIComponent(target.lat)}&lon=${encodeURIComponent(target.lon)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function openWeatherModal() {

@@ -537,10 +537,10 @@ h2 { font-size: 1.05rem; }
 }
 
 .weather-risks {
-  margin-top: 10px;
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .weather-risk-chip {
@@ -550,9 +550,46 @@ h2 { font-size: 1.05rem; }
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1e3a8a;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 4px 10px;
+  line-height: 1.1;
+  padding: 3px 8px;
+}
+
+.weather-risk-chip.alert-green {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.weather-risk-chip.alert-yellow {
+  background: #fefce8;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+.weather-risk-chip.alert-orange {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.weather-risk-chip.alert-red {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.weather-alert-banner {
+  margin: 6px 0 0;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.15;
+  padding: 5px 8px;
 }
 
 .actions-row,

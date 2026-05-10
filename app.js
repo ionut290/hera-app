@@ -9677,7 +9677,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.querySelector(".remove-squadra-btn").addEventListener("click", () => {
     row.remove();
     renumberSquadraRows();
-    if (!ui.squadraRows.children.length) addSquadraRow();
+    updateEmptySquadraRowsHint();
   });
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
@@ -9765,6 +9765,17 @@ function renumberSquadraRows() {
   });
 }
 
+function updateEmptySquadraRowsHint() {
+  if (!ui.squadraHint || !canManageData()) return;
+  if (!ui.squadraRows.children.length) {
+    ui.squadraHint.textContent = "Nessuna squadra nel modulo: salva per eliminare la composizione della commessa in questa data, oppure premi “Aggiungi squadra”.";
+  }
+}
+
+function isSquadraRowFilled(row) {
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario);
+}
+
 function readSquadraRows() {
   return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
     caposquadra: String(row.querySelector(".squadra-caposquadra-input")?.value || "").trim(),
@@ -9782,7 +9793,7 @@ function readSquadraRows() {
       .join(", "),
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim()
-  })).filter((row) => row.caposquadra || row.personale || row.mezzi || row.impianti || row.note || row.orario);
+  })).filter(isSquadraRowFilled);
 }
 
 function getLegacySquadreRows(data) {
@@ -9858,7 +9869,7 @@ async function saveSquadraComposition(event) {
   }
   const squadreRows = readSquadraRows();
   if (!squadreRows.length) {
-    alert("Inserisci almeno una squadra.");
+    await deleteSquadraCompositionForDate(commessaId, dateKey);
     return;
   }
   const duplicateRows = findDuplicateSquadraRows(squadreRows);
@@ -9879,25 +9890,25 @@ async function saveSquadraComposition(event) {
   const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
   try {
     await db.runTransaction(async (transaction) => {
-    const historySnap = await transaction.get(historyRef);
-    const currentRows = historySnap.exists
-      ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
-      : [];
-    const mergedRows = squadreRows;
-    const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
-    if (transactionDuplicates.length) {
-      throw new Error("DUPLICATE_SQUADRA");
-    }
-    const nextPayload = {
-      ...payload,
-      squadre: mergedRows,
-      existingSquadreCountBeforeSave: currentRows.length
-    };
-    transaction.set(currentRef, nextPayload, { merge: true });
-    transaction.set(historyRef, {
-      ...nextPayload,
-      dateKey
-    }, { merge: true });
+      const historySnap = await transaction.get(historyRef);
+      const currentRows = historySnap.exists
+        ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
+        : [];
+      const mergedRows = squadreRows;
+      const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
+      if (transactionDuplicates.length) {
+        throw new Error("DUPLICATE_SQUADRA");
+      }
+      const nextPayload = {
+        ...payload,
+        squadre: mergedRows,
+        existingSquadreCountBeforeSave: currentRows.length
+      };
+      transaction.set(currentRef, nextPayload, { merge: true });
+      transaction.set(historyRef, {
+        ...nextPayload,
+        dateKey
+      }, { merge: true });
     });
   } catch (error) {
     if (error?.message === "DUPLICATE_SQUADRA") {
@@ -9921,6 +9932,73 @@ async function saveSquadraComposition(event) {
     });
   }
   ui.squadraCalendarDate.value = dateKey;
+}
+
+async function deleteSquadraCompositionForDate(commessaId, dateKey) {
+  if (!canManageData()) return;
+  const commessaNome = (commesseById.get(commessaId) || {}).nome || "Commessa";
+  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+  if (!window.confirm(`Eliminare tutte le squadre di ${commessaNome} per il ${dateLabel}?`)) return;
+
+  const currentRef = db.collection("squadreCommesse").doc(commessaId);
+  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  await db.runTransaction(async (transaction) => {
+    const currentSnap = await transaction.get(currentRef);
+    transaction.delete(historyRef);
+    if (!currentSnap.exists || currentSnap.data()?.riferimentoData === dateKey) {
+      transaction.delete(currentRef);
+    }
+  });
+  ui.squadraRows.innerHTML = "";
+  addSquadraRow();
+  ui.squadraCalendarDate.value = dateKey;
+  renderCommesseHomeList();
+  renderSquadre();
+}
+
+async function deleteSavedSquadraRow(commessaId, dateKey, rowIndex) {
+  if (!canManageData()) return;
+  const commessaNome = (commesseById.get(commessaId) || {}).nome || "Commessa";
+  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+  if (!window.confirm(`Eliminare Squadra ${rowIndex + 1} di ${commessaNome} per il ${dateLabel}?`)) return;
+
+  const currentRef = db.collection("squadreCommesse").doc(commessaId);
+  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  await db.runTransaction(async (transaction) => {
+    const historySnap = await transaction.get(historyRef);
+    const currentSnap = await transaction.get(currentRef);
+    if (!historySnap.exists) return;
+    const historyData = historySnap.data() || {};
+    const rows = Array.isArray(historyData.squadre) ? historyData.squadre : getLegacySquadreRows(historyData);
+    if (rowIndex < 0 || rowIndex >= rows.length) return;
+    const nextRows = rows.filter((_, index) => index !== rowIndex);
+    if (!nextRows.length) {
+      transaction.delete(historyRef);
+    } else {
+      transaction.set(historyRef, {
+        ...historyData,
+        squadre: nextRows,
+        dateKey,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+      }, { merge: true });
+    }
+
+    if (currentSnap.exists && currentSnap.data()?.riferimentoData === dateKey) {
+      if (!nextRows.length) {
+        transaction.delete(currentRef);
+      } else {
+        transaction.set(currentRef, {
+          ...currentSnap.data(),
+          squadre: nextRows,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+        }, { merge: true });
+      }
+    }
+  });
+  renderCommesseHomeList();
+  renderSquadre();
 }
 
 function getDateKeyFromLocalDate(date) {
@@ -10006,7 +10084,7 @@ function renderSquadre() {
   const commesseConSquadre = commesse.filter((commessa) => {
     const squad = storicoDelGiorno.get(commessa.id) || {};
     const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
-    return rows.some((row) => row.personale || row.mezzi);
+    return rows.some(isSquadraRowFilled);
   });
   if (!commesseConSquadre.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra inserita per questo giorno.</p>";
@@ -10028,7 +10106,10 @@ function renderSquadre() {
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      return `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`;
+      const deleteButton = canManageData()
+        ? `<button type="button" class="btn btn-small delete-squadra-row-btn" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-row-index="${idx}">🗑️ Elimina squadra</button>`
+        : "";
+      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>${deleteButton}</div>`;
     }).join("");
     item.innerHTML = `
       <div class="squadra-item-head">
@@ -10043,6 +10124,11 @@ function renderSquadre() {
     if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    item.querySelectorAll(".delete-squadra-row-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        deleteSavedSquadraRow(btn.dataset.commessaId || "", btn.dataset.dateKey || "", Number(btn.dataset.rowIndex));
+      });
     });
     ui.squadreLista.appendChild(item);
   });

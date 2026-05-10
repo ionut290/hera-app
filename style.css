@@ -1305,6 +1305,43 @@ textarea:focus-visible {
   background: #dbeafe;
 }
 
+
+.main-map-impianto-detail-panel {
+  margin-top: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+}
+
+.main-map-impianto-detail-panel.hidden {
+  display: none;
+}
+
+.main-map-impianto-detail-panel .map-popup-card {
+  max-height: min(70dvh, 620px);
+}
+
+.map-impianto-detail-panel {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 1360;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100% - 24px);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.26);
+}
+
+.map-impianto-detail-panel.hidden {
+  display: none;
+}
+
+.map-impianto-detail-panel .map-popup-card {
+  max-height: min(72dvh, calc(100dvh - var(--map-fullscreen-toolbar-space) - 28px));
+}
+
 .map-fullscreen-feedback-banner {
   position: absolute;
   right: max(10px, env(safe-area-inset-right, 0px));
@@ -2291,6 +2328,8 @@ textarea:focus-visible {
   .map-fullscreen-map-wrap { height: calc(100dvh - var(--map-fullscreen-toolbar-space)); }
   #map-fullscreen-view { min-height: 100%; }
   .impianto-map-popup--fullscreen .leaflet-popup-content { width: min(96vw, 420px) !important; max-width: 96vw; }
+  .map-impianto-detail-panel { top: 8px; right: 8px; left: 8px; width: auto; max-height: calc(100% - 16px); }
+  .map-impianto-detail-panel .map-popup-card,
   .map-popup-card { max-height: min(72dvh, 560px); }
   .map-popup-header { padding: 11px 12px 8px; }
   .map-popup-header h3 { font-size: 1.03rem; }

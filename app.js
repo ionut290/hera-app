@@ -160,6 +160,7 @@ const ui = {
   commessaOperationalCard: document.getElementById("commessa-operational-card"),
   impiantiCard: document.getElementById("impianti-card"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
+  operatorPositionsToggleBtn: document.getElementById("operator-positions-toggle-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
   commessaNotesPage: document.getElementById("commessa-notes-page"),
   commessaNotesBackBtn: document.getElementById("commessa-notes-back-btn"),
@@ -518,6 +519,7 @@ let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeSquadreViewConfig = null;
 let unsubscribeUsers = null;
+let unsubscribeOperatorPositions = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
@@ -531,6 +533,8 @@ let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let chatNotificationsInitialized = false;
 let platformUsers = [];
+let operatorPositions = [];
+let operatorPositionsVisible = true;
 let deniedImpiantoActions = new Set();
 const usedActionKeys = new Set();
 let mediaRecorder = null;
@@ -1061,6 +1065,7 @@ ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.commessaNoteNewBtn?.addEventListener("click", () => openCommessaNoteForm());
@@ -1839,6 +1844,7 @@ auth.onAuthStateChanged((user) => {
   stopMezziSubscription();
   stopSquadreSubscription();
   stopUsersSubscription();
+  stopOperatorPositionsSubscription();
   stopAdminUsersSubscription();
   stopResourcesSubscription();
   stopGlobalCommesseSubscription();
@@ -1876,6 +1882,7 @@ auth.onAuthStateChanged((user) => {
   privateDocsRecords = [];
   posDocuments = [];
   gpsUpdateRequests = [];
+  operatorPositions = [];
   hoursApprovalRequests = [];
   renderPrivateDocsList();
   renderPosDocuments();
@@ -1905,8 +1912,9 @@ auth.onAuthStateChanged((user) => {
     upsertCurrentPlatformUser();
     subscribeCommesse();
     subscribeChat();
-    subscribeUsers();
     subscribeAdminUsers();
+    subscribeUsers();
+    subscribeOperatorPositions();
     subscribeDriveBridge();
     subscribePersonale();
     subscribeMezzi();
@@ -1940,6 +1948,12 @@ function updateAdminControls() {
   const canManage = canManageData();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
+  ui.operatorPositionsToggleBtn?.classList.toggle("hidden", !canManage);
+  if (ui.operatorPositionsToggleBtn) {
+    ui.operatorPositionsToggleBtn.disabled = !canManage;
+    ui.operatorPositionsToggleBtn.setAttribute("aria-pressed", String(canManage && operatorPositionsVisible));
+    ui.operatorPositionsToggleBtn.textContent = operatorPositionsVisible ? "📍 Posizione squadre" : "📍 Posizione squadre nascosta";
+  }
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
@@ -10720,19 +10734,6 @@ function getCommessaAccentColor(commessaId, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function getPlatformUserPosition(user) {
-  const position = user?.lastPosition || {};
-  const lat = Number(position.lat);
-  const lng = Number(position.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return {
-    lat,
-    lng,
-    accuracy: Number(position.accuracy || 0),
-    updatedAt: position.updatedAt || user.lastSeenAt || null
-  };
-}
-
 function getTimestampDate(value) {
   if (!value) return null;
   if (typeof value.toDate === "function") return value.toDate();
@@ -10741,8 +10742,23 @@ function getTimestampDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getOperatorMarkerLabel(user) {
-  const label = getPlatformUserLabel(user).replace(/<[^>]*>/g, "").trim();
+function buildOperatorPositionPopup(position) {
+  const label = position.operatorName || position.displayName || position.email || "Operatore";
+  const updatedAt = getTimestampDate(position.updatedAt);
+  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
+  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
+  const squadraLabel = [position.squadraLabel, position.squadraName].filter(Boolean).join(" • ") || "Squadra non associata";
+  const commessaLabel = position.commessaName || "Commessa non associata";
+  return [
+    `<b>👷 ${escapeHTML(label)}</b>`,
+    `<small>Squadra: ${escapeHTML(squadraLabel)}</small>`,
+    `<small>Commessa: ${escapeHTML(commessaLabel)}</small>`,
+    `<small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`
+  ].join("<br>");
+}
+
+function getOperatorPositionMarkerLabel(position) {
+  const label = String(position.operatorName || position.displayName || position.email || "Operatore").trim();
   const initials = label
     .split(/[\s._@-]+/)
     .map((part) => part.trim()[0])
@@ -10753,53 +10769,62 @@ function getOperatorMarkerLabel(user) {
   return initials || "👷";
 }
 
-function buildOperatorPositionPopup(user, position) {
-  const label = getPlatformUserLabel(user);
-  const updatedAt = getTimestampDate(position.updatedAt);
-  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
-  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
-  return `<b>👷 ${escapeHTML(label)}</b><br><small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`;
-}
-
-function addOperatorMarkerToLayer(user, position, layer) {
-  const markerLabel = getOperatorMarkerLabel(user);
+function addOperatorPositionMarkerToLayer(position, layer) {
+  const markerLabel = getOperatorPositionMarkerLabel(position);
+  const title = position.operatorName || position.displayName || position.email || "Operatore";
   return L.marker([position.lat, position.lng], {
     icon: L.divIcon({
       className: "",
-      html: `<div class='marker-operator' title='${escapeHTML(getPlatformUserLabel(user))}'>${escapeHTML(markerLabel)}</div>`,
+      html: `<div class='marker-operator' title='${escapeHTML(title)}'>${escapeHTML(markerLabel)}</div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14]
     })
-  }).addTo(layer).bindPopup(buildOperatorPositionPopup(user, position));
+  }).addTo(layer).bindPopup(buildOperatorPositionPopup(position));
 }
 
-function getOperatorPositionUsersForMap() {
-  const byId = new Map(platformUsers.map((user) => [user.id, user]));
+function getOperatorPositionsForMap() {
+  if (!canManageData() || !operatorPositionsVisible) return [];
+  const byId = new Map(operatorPositions.map((position) => [position.id || position.uid, position]));
   if (currentUser && currentUserPos) {
+    const currentAssignment = getCurrentOperatorPositionAssignment();
     byId.set(currentUser.uid, {
       ...(byId.get(currentUser.uid) || {}),
       id: currentUser.uid,
       uid: currentUser.uid,
       email: currentUser.email || "",
       displayName: currentUser.displayName || currentUser.email || "Utente",
-      lastPosition: {
-        lat: currentUserPos.lat,
-        lng: currentUserPos.lng,
-        accuracy: currentUserPos.accuracy || 0,
-        updatedAt: new Date()
-      }
+      operatorName: currentAssignment.operatorName || currentUser.displayName || currentUser.email || "Utente",
+      ...currentAssignment,
+      lat: currentUserPos.lat,
+      lng: currentUserPos.lng,
+      accuracy: currentUserPos.accuracy || 0,
+      updatedAt: new Date()
     });
   }
-  return Array.from(byId.values()).filter((user) => getPlatformUserPosition(user));
+  return Array.from(byId.values()).filter((position) => {
+    const lat = Number(position.lat);
+    const lng = Number(position.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    position.lat = lat;
+    position.lng = lng;
+    position.accuracy = Number(position.accuracy || 0);
+    return true;
+  });
 }
 
 function renderOperatorPositionMarkers(bounds) {
-  getOperatorPositionUsersForMap().forEach((user) => {
-    const position = getPlatformUserPosition(user);
-    addOperatorMarkerToLayer(user, position, markerLayer);
-    addOperatorMarkerToLayer(user, position, fullscreenMarkerLayer);
+  getOperatorPositionsForMap().forEach((position) => {
+    addOperatorPositionMarkerToLayer(position, markerLayer);
+    addOperatorPositionMarkerToLayer(position, fullscreenMarkerLayer);
     bounds.push([position.lat, position.lng]);
   });
+}
+
+function toggleOperatorPositionsVisibility() {
+  if (!canManageData()) return;
+  operatorPositionsVisible = !operatorPositionsVisible;
+  updateAdminControls();
+  renderMap();
 }
 
 function renderMap() {
@@ -11823,21 +11848,40 @@ function shouldPublishOperatorPosition(coords) {
   return movedMeters >= 25 || now - lastPositionPublishAt >= 60 * 1000;
 }
 
+function getCurrentOperatorPositionAssignment() {
+  const dateKey = getActiveSquadreDateKey();
+  const assignment = getCurrentUserAssignedCommesseForDate(dateKey)[0];
+  const matchedRow = assignment?.matchedRows?.[0] || null;
+  return {
+    operatorName: matchedRow?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore",
+    squadraIndex: matchedRow?.squadraIndex || "",
+    squadraLabel: matchedRow?.squadraLabel || "",
+    squadraName: matchedRow?.row?.nome || matchedRow?.row?.name || "",
+    commessaId: assignment?.commessaId || "",
+    commessaName: assignment?.commessaName || "",
+    riferimentoData: dateKey || ""
+  };
+}
+
 async function publishCurrentOperatorPosition(coords) {
   if (!shouldPublishOperatorPosition(coords)) return;
   lastPositionPublishAt = Date.now();
   lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
   try {
+    await db.collection("operatorPositions").doc(currentUser.uid).set({
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      ...getCurrentOperatorPositionAssignment(),
+      lat: Number(coords.latitude),
+      lng: Number(coords.longitude),
+      accuracy: Number(coords.accuracy || 0),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     await db.collection("platformUsers").doc(currentUser.uid).set({
       uid: currentUser.uid,
       email: currentUser.email || "",
       displayName: currentUser.displayName || currentUser.email || "Utente",
-      lastPosition: {
-        lat: Number(coords.latitude),
-        lng: Number(coords.longitude),
-        accuracy: Number(coords.accuracy || 0),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      },
       lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   } catch (error) {
@@ -11860,7 +11904,9 @@ function initGeolocation() {
     };
     publishCurrentOperatorPosition(pos.coords);
     evaluateTimbraturaReminders();
-    ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza e operatori visibili sulla mappa.";
+    ui.gpsStatus.textContent = canManageData()
+      ? "Posizione attiva: impianti ordinati per distanza e squadre visibili sulla mappa."
+      : "Posizione attiva: impianti ordinati per distanza.";
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
@@ -12620,14 +12666,6 @@ async function upsertCurrentPlatformUser() {
     displayName: currentUser.displayName || currentUser.email || "Utente",
     isAdmin: canManageData(),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
-    ...(currentUserPos ? {
-      lastPosition: {
-        lat: Number(currentUserPos.lat),
-        lng: Number(currentUserPos.lng),
-        accuracy: Number(currentUserPos.accuracy || 0),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }
-    } : {}),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
@@ -12644,6 +12682,10 @@ function subscribeAdminUsers() {
     subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
+    if (currentUser) {
+      subscribeUsers();
+      subscribeOperatorPositions();
+    }
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
     adminEmails = new Set([ADMIN_EMAIL]);
@@ -12651,6 +12693,10 @@ function subscribeAdminUsers() {
     subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
+    if (currentUser) {
+      subscribeUsers();
+      subscribeOperatorPositions();
+    }
   });
 }
 
@@ -12664,7 +12710,12 @@ function stopAdminUsersSubscription() {
 }
 
 function subscribeUsers() {
-  unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
+  stopUsersSubscription();
+  if (!currentUser) return;
+  const source = canManageData()
+    ? db.collection("platformUsers")
+    : db.collection("platformUsers").where(firebase.firestore.FieldPath.documentId(), "==", currentUser.uid);
+  unsubscribeUsers = source.onSnapshot((snapshot) => {
     platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
     syncNotificationAutoPreferenceFromProfile();
@@ -12677,7 +12728,37 @@ function subscribeUsers() {
     renderExternalApps();
     renderMap();
     checkAndSendHoursDeadlineAlerts();
+  }, (error) => {
+    console.error("Errore caricamento utenti:", error);
+    platformUsers = [];
+    renderChatRecipients();
+    renderHeaderActivitySummary();
   });
+}
+
+function subscribeOperatorPositions() {
+  stopOperatorPositionsSubscription();
+  if (!currentUser || !canManageData()) {
+    operatorPositions = [];
+    renderMap();
+    return;
+  }
+  unsubscribeOperatorPositions = db.collection("operatorPositions").onSnapshot((snapshot) => {
+    operatorPositions = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderMap();
+  }, (error) => {
+    console.error("Errore caricamento posizioni squadre:", error);
+    operatorPositions = [];
+    renderMap();
+  });
+}
+
+function stopOperatorPositionsSubscription() {
+  if (unsubscribeOperatorPositions) {
+    unsubscribeOperatorPositions();
+    unsubscribeOperatorPositions = null;
+  }
+  operatorPositions = [];
 }
 
 function stopUsersSubscription() {

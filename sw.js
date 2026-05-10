@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v5";
+const CACHE_NAME = "hera-app-shell-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -25,6 +25,7 @@ const hasNoStoreDirective = (headers) => {
 
 const shouldHandleRequest = (request, url) => {
   if (request.method !== "GET") return false;
+  if (url.origin !== self.location.origin) return false;
   if (!CACHEABLE_DESTINATIONS.has(request.destination)) return false;
   if (hasNoStoreDirective(request.headers)) return false;
   if (isDynamicEndpoint(url)) return false;

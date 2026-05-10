@@ -61,9 +61,21 @@ service cloud.firestore {
         ];
     }
 
+    function validOperatorPositionWrite(userId) {
+      return isSelf(userId)
+        && request.resource.data.userId == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.stato in ["online", "offline"]
+        && request.resource.data.status in ["online", "offline"];
+    }
+
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
-      allow create, update: if isSelf(userId);
+      allow create, update: if validOperatorPositionWrite(userId);
       allow delete: if isAdmin() || isSelf(userId);
     }
 

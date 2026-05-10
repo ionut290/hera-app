@@ -1059,6 +1059,18 @@ textarea:focus-visible {
 
 .squadra-item p { margin: 7px 0; }
 
+.squadra-saved-row {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.delete-squadra-row-btn {
+  justify-self: start;
+}
+
 .commessa-btn {
   text-align: left;
   width: 100%;

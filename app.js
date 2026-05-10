@@ -185,6 +185,7 @@ const ui = {
   commessaNoteDetail: document.getElementById("commessa-note-detail"),
   mapFullscreenPage: document.getElementById("map-fullscreen-page"),
   mapFullscreenBackBtn: document.getElementById("map-fullscreen-back-btn"),
+  mapSatelliteToggleBtn: document.getElementById("map-satellite-toggle-btn"),
   mapDrawAreaBtn: document.getElementById("map-draw-area-btn"),
   mapDrawUndoBtn: document.getElementById("map-draw-undo-btn"),
   mapDrawRedoBtn: document.getElementById("map-draw-redo-btn"),
@@ -604,6 +605,8 @@ let selectedGlobalSegnalazioneKey = "";
 let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: false };
 let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
 let isMapFullscreenPageOpen = false;
+let fullscreenMapMode = "standard";
+let activeFullscreenPopupImpiantoKey = "";
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
@@ -927,28 +930,47 @@ let impiantoNextActionHighlightEnabled = false;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
 driveAccessToken = window.googleDriveAccessToken || "";
 
-const map = L.map("map", { markerZoomAnimation: true });
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+const STANDARD_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const STANDARD_TILE_OPTIONS = {
   maxZoom: 19,
   attribution: "&copy; OpenStreetMap"
-}).addTo(map);
+};
+const SATELLITE_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SATELLITE_TILE_OPTIONS = {
+  maxZoom: 19,
+  attribution: "Tiles &copy; Esri"
+};
+const HYBRID_LABEL_TILE_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const HYBRID_LABEL_TILE_OPTIONS = {
+  maxZoom: 19,
+  attribution: "Labels &copy; Esri"
+};
+
+const map = L.map("map", { markerZoomAnimation: true });
+L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(map);
 map.setView(mainMapViewState.center, mainMapViewState.zoom);
 map.doubleClickZoom.disable();
 
 const markerLayer = L.layerGroup().addTo(map);
-const fullscreenMap = L.map("map-fullscreen-view", { markerZoomAnimation: true });
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap"
-}).addTo(fullscreenMap);
+const fullscreenMap = L.map("map-fullscreen-view", { markerZoomAnimation: true, closePopupOnClick: false });
+const fullscreenStandardTileLayer = L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(fullscreenMap);
+const fullscreenSatelliteTileLayer = L.tileLayer(SATELLITE_TILE_URL, SATELLITE_TILE_OPTIONS);
+const fullscreenHybridTileLayer = L.layerGroup([
+  L.tileLayer(SATELLITE_TILE_URL, SATELLITE_TILE_OPTIONS),
+  L.tileLayer(HYBRID_LABEL_TILE_URL, HYBRID_LABEL_TILE_OPTIONS)
+]);
 fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom);
 const fullscreenMarkerLayer = L.layerGroup().addTo(fullscreenMap);
 const fullscreenDrawLayer = L.layerGroup().addTo(fullscreenMap);
+const fullscreenBaseLayers = {
+  "Mappa standard": fullscreenStandardTileLayer,
+  "Satellite": fullscreenSatelliteTileLayer,
+  "Ibrida": fullscreenHybridTileLayer
+};
+L.control.layers(fullscreenBaseLayers, null, { position: "topright" }).addTo(fullscreenMap);
+
 const globalMap = L.map("global-map", { markerZoomAnimation: true });
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap contributors"
-}).addTo(globalMap);
+L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" }).addTo(globalMap);
 globalMap.setView(globalMapViewState.center, globalMapViewState.zoom);
 const globalMarkerLayer = L.layerGroup().addTo(globalMap);
 map.on("moveend zoomend", () => {
@@ -979,6 +1001,13 @@ globalMap.on("moveend zoomend", () => {
     zoom: globalMap.getZoom(),
     hasUserMoved: true
   };
+});
+fullscreenMap.on("baselayerchange", (event) => {
+  const layerName = String(event.name || "").toLowerCase();
+  if (layerName.includes("satellite")) fullscreenMapMode = "satellite";
+  else if (layerName.includes("ibrida")) fullscreenMapMode = "hybrid";
+  else fullscreenMapMode = "standard";
+  updateFullscreenMapModeButton();
 });
 const fullscreenMapContainer = fullscreenMap.getContainer();
 fullscreenMapContainer.addEventListener("pointerdown", onFullscreenMapPointerDown);
@@ -1031,6 +1060,7 @@ ui.commessaNoteImpiantoSearch?.addEventListener("blur", () => setTimeout(() => {
 }, 120));
 ui.commessaNoteImpiantoClearBtn?.addEventListener("click", clearCommessaNoteImpiantoSelection);
 ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
+ui.mapSatelliteToggleBtn?.addEventListener("click", toggleFullscreenSatelliteMode);
 ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
 ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
 ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
@@ -2079,6 +2109,35 @@ function closeMapFullscreenPage() {
   syncDrawAreaToolbarState();
   setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
+}
+
+
+function applyFullscreenMapMode(mode) {
+  const nextMode = ["standard", "satellite", "hybrid"].includes(mode) ? mode : "standard";
+  const nextLayer = nextMode === "satellite"
+    ? fullscreenSatelliteTileLayer
+    : nextMode === "hybrid"
+      ? fullscreenHybridTileLayer
+      : fullscreenStandardTileLayer;
+  Object.values(fullscreenBaseLayers).forEach((layer) => {
+    if (fullscreenMap.hasLayer(layer) && layer !== nextLayer) fullscreenMap.removeLayer(layer);
+  });
+  if (!fullscreenMap.hasLayer(nextLayer)) nextLayer.addTo(fullscreenMap);
+  fullscreenMapMode = nextMode;
+  updateFullscreenMapModeButton();
+}
+
+function toggleFullscreenSatelliteMode() {
+  applyFullscreenMapMode(fullscreenMapMode === "satellite" ? "standard" : "satellite");
+  refreshFullscreenMapLayout();
+}
+
+function updateFullscreenMapModeButton() {
+  if (!ui.mapSatelliteToggleBtn) return;
+  const isSatellite = fullscreenMapMode === "satellite";
+  ui.mapSatelliteToggleBtn.textContent = isSatellite ? "🗺 Standard" : "🛰 Satellite";
+  ui.mapSatelliteToggleBtn.setAttribute("aria-pressed", isSatellite ? "true" : "false");
+  ui.mapSatelliteToggleBtn.classList.toggle("is-active", isSatellite);
 }
 
 function refreshFullscreenMapLayout() {
@@ -10489,12 +10548,17 @@ function renderMap() {
   clearMap();
 
   const bounds = [];
+  let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
-    const marker = addImpiantoMarkerToMapLayer(impianto, markerLayer);
-    if (marker) impiantoMarkerByKey.set(buildImpiantoKey(impianto), marker);
-    const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer);
-    if (fullscreenMarker) bounds.push([impianto.gpsY, impianto.gpsX]);
+    const impiantoKey = buildImpiantoKey(impianto);
+    const marker = addImpiantoMarkerToMapLayer(impianto, markerLayer, map);
+    if (marker) impiantoMarkerByKey.set(impiantoKey, marker);
+    const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer, fullscreenMap);
+    if (fullscreenMarker) {
+      bounds.push([impianto.gpsY, impianto.gpsX]);
+      if (impiantoKey && impiantoKey === activeFullscreenPopupImpiantoKey) markerForActiveFullscreenPopup = fullscreenMarker;
+    }
   });
 
   if (currentUserPos) {
@@ -10527,9 +10591,14 @@ function renderMap() {
     map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
   fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
+  if (markerForActiveFullscreenPopup) {
+    requestAnimationFrame(() => {
+      if (activeFullscreenPopupImpiantoKey) markerForActiveFullscreenPopup.openPopup();
+    });
+  }
 }
 
-function addImpiantoMarkerToMapLayer(impianto, targetLayer) {
+function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
   if (impianto.gpsY == null || impianto.gpsX == null) return null;
 
   const markerClass = getMarkerClass(impianto);
@@ -10542,46 +10611,139 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer) {
     })
   });
   const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
-  marker.bindPopup(buildImpiantoMapPopup(impianto, tipo));
-  marker.on("click", () => focusImpiantoInList(impianto, false));
+  marker.bindPopup(buildImpiantoMapPopup(impianto, tipo), {
+    autoClose: false,
+    closeOnClick: false,
+    closeButton: false,
+    keepInView: true,
+    maxWidth: targetMap === fullscreenMap ? 420 : 340,
+    minWidth: targetMap === fullscreenMap ? 280 : 220,
+    className: targetMap === fullscreenMap ? "impianto-map-popup impianto-map-popup--fullscreen" : "impianto-map-popup"
+  });
+  marker.on("click", () => {
+    if (targetMap === fullscreenMap) activeFullscreenPopupImpiantoKey = buildImpiantoKey(impianto);
+    focusImpiantoInList(impianto, false);
+  });
   marker.addTo(targetLayer);
   return marker;
 }
 
 function buildImpiantoMapPopup(impianto, tipo) {
   const impiantoKey = buildImpiantoKey(impianto);
+  const doneInfo = formatDoneDateTime(impianto.doneAt);
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  const coordinates = impianto.gpsY != null && impianto.gpsX != null
+    ? `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`
+    : "-";
+  const via = impianto.indirizzo || impianto.descrizioneVia || impianto.via || "-";
+  const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || impianto.lavorazioniRichieste || tipo || "-";
+  const stato = impianto.done ? "Fatto" : "Da fare";
+  const operatore = impianto.doneBy || impianto.operatore || impianto.operator || impianto.navigatedBy || "-";
+  const squadra = impianto.squadra || impianto.squadraAssegnata || impianto.team || "";
+  const noteImpianto = getImpiantoPopupNotes(impianto);
+  const linkedNotesMarkup = linkedNotes.length
+    ? linkedNotes.map((note) => `
+        <button type="button" class="map-popup-note-btn" data-map-popup-action="note" data-note-id="${escapeHTML(note.id || "")}">
+          ${escapeHTML(getCommessaNoteTitle(note))}
+        </button>
+      `).join("")
+    : "<span>-</span>";
+
   return `
     <div class="map-popup-card" data-impianto-key="${escapeHTML(impiantoKey)}">
-      <p><b>${escapeHTML(impianto.denominazione || "Impianto")}</b></p>
-      <p>Comune: ${escapeHTML(impianto.comune || "-")}</p>
-      <p>Indirizzo: ${escapeHTML(impianto.indirizzo || "-")}</p>
-      <p>Tipo: ${escapeHTML(tipo)}</p>
-      <p>Stato: ${impianto.done ? "Fatto" : "Da fare"}</p>
+      <div class="map-popup-header">
+        <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
+        <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup">×</button>
+      </div>
+      <div class="map-popup-scroll">
+        <dl class="map-popup-details">
+          <div><dt>ID SAP</dt><dd>${escapeHTML(impianto.idSap || impianto.codiceSap || "-")}</dd></div>
+          <div><dt>Comune</dt><dd>${escapeHTML(impianto.comune || "-")}</dd></div>
+          <div><dt>Indirizzo / via</dt><dd>${escapeHTML(via)}</dd></div>
+          <div><dt>Tipologia impianto</dt><dd>${escapeHTML(tipologia)}</dd></div>
+          <div><dt>Stato lavoro</dt><dd>${escapeHTML(stato)}</dd></div>
+          <div><dt>Data fatto</dt><dd>${escapeHTML(doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`)}</dd></div>
+          <div><dt>Operatore / squadra</dt><dd>${escapeHTML([operatore, squadra].filter((value) => value && value !== "-").join(" • ") || "-")}</dd></div>
+          <div><dt>Segnalazione collegata</dt><dd class="map-popup-notes-list">${linkedNotesMarkup}</dd></div>
+          <div><dt>Note impianto</dt><dd>${escapeHTML(noteImpianto || "-")}</dd></div>
+          <div><dt>Coordinate GPS</dt><dd>${escapeHTML(coordinates)}</dd></div>
+        </dl>
+      </div>
       <div class="map-popup-actions">
-        <button type="button" class="btn btn-small" data-map-popup-action="navigate" data-impianto-key="${escapeHTML(impiantoKey)}">Naviga</button>
-        <button type="button" class="btn btn-small" data-map-popup-action="close">Chiudi</button>
+        <button type="button" class="btn btn-small btn-primary" data-map-popup-action="navigate" data-impianto-key="${escapeHTML(impiantoKey)}">NAVIGA</button>
+        <button type="button" class="btn btn-small btn-whatsapp" data-map-popup-action="whatsapp" data-impianto-key="${escapeHTML(impiantoKey)}">WHATSAPP</button>
+        <button type="button" class="btn btn-small" data-map-popup-action="detail" data-impianto-key="${escapeHTML(impiantoKey)}">DETTAGLIO IMPIANTO</button>
       </div>
     </div>
   `;
 }
 
-map.on("popupopen", (event) => {
+function getImpiantoPopupNotes(impianto) {
+  return [
+    impianto.noteImpianto,
+    impianto.note,
+    impianto.notes,
+    impianto.annotazioni,
+    impianto.descrizione,
+    impianto.descrizioneImpianto
+  ].map((value) => String(value || "").trim()).find(Boolean) || "";
+}
+
+function findCurrentImpiantoByKey(key) {
+  return currentImpianti.find((item) => buildImpiantoKey(item) === key);
+}
+
+function bindImpiantoMapPopupActions(event, popupMap) {
   const popupElement = event.popup?.getElement();
   if (!popupElement) return;
+  const card = popupElement.querySelector(".map-popup-card[data-impianto-key]");
+  const popupKey = card?.getAttribute("data-impianto-key") || "";
+
   popupElement.querySelectorAll("[data-map-popup-action='navigate']").forEach((button) => {
     button.addEventListener("click", async () => {
-      const key = button.getAttribute("data-impianto-key");
-      const impianto = currentImpianti.find((item) => buildImpiantoKey(item) === key);
+      const key = button.getAttribute("data-impianto-key") || popupKey;
+      const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
       await navigateToImpianto(impianto);
     });
   });
-  popupElement.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
+  popupElement.querySelectorAll("[data-map-popup-action='whatsapp']").forEach((button) => {
     button.addEventListener("click", () => {
-      map.closePopup(event.popup);
+      const key = button.getAttribute("data-impianto-key") || popupKey;
+      const impianto = findCurrentImpiantoByKey(key);
+      if (!impianto) return;
+      triggerImpiantoWhatsAppAction(impianto);
     });
   });
-});
+  popupElement.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.getAttribute("data-impianto-key") || popupKey;
+      const impianto = findCurrentImpiantoByKey(key);
+      if (!impianto) return;
+      activeFullscreenPopupImpiantoKey = popupMap === fullscreenMap ? key : activeFullscreenPopupImpiantoKey;
+      focusImpiantoInList(impianto, true);
+      if (popupMap === fullscreenMap) closeMapFullscreenPage();
+    });
+  });
+  popupElement.querySelectorAll("[data-map-popup-action='note']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const noteId = button.getAttribute("data-note-id") || "";
+      const note = currentCommessaNotes.find((item) => item.id === noteId);
+      if (!note) return;
+      openCommessaNotesPage();
+      setTimeout(() => openCommessaNoteDetail(note), 50);
+    });
+  });
+  popupElement.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (popupMap === fullscreenMap && popupKey === activeFullscreenPopupImpiantoKey) activeFullscreenPopupImpiantoKey = "";
+      popupMap.closePopup(event.popup);
+    });
+  });
+}
+
+map.on("popupopen", (event) => bindImpiantoMapPopupActions(event, map));
+fullscreenMap.on("popupopen", (event) => bindImpiantoMapPopupActions(event, fullscreenMap));
 
 function focusImpiantoInList(impianto, scroll = true) {
   const key = buildImpiantoKey(impianto);

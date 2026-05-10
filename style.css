@@ -3189,12 +3189,6 @@ textarea:focus-visible {
   border: 1px solid #fbbf24;
 }
 
-.badge-sync-pending {
-  background: #dbeafe;
-  color: #1d4ed8;
-  border: 1px solid #93c5fd;
-}
-
 .pending-whatsapp-card {
   border-color: #fbbf24;
   background: #fffbeb;

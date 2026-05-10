@@ -1413,8 +1413,9 @@ textarea:focus-visible {
   height: 36px;
   border: 0;
   border-radius: 999px;
-  background: #e2e8f0;
-  color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2);
   font-size: 1.35rem;
   font-weight: 800;
   line-height: 1;

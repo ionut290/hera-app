@@ -556,6 +556,8 @@ let squadreLoadState = { status: "idle", message: "" };
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
+let startupAssignedCommessaAutoOpenDone = false;
+let sharedSquadreViewConfigLoaded = false;
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
@@ -1845,6 +1847,8 @@ auth.onAuthStateChanged((user) => {
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   manualSquadreFilterDateKey = "";
   sharedSquadreDateKey = "";
+  startupAssignedCommessaAutoOpenDone = false;
+  sharedSquadreViewConfigLoaded = false;
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
@@ -4108,6 +4112,74 @@ function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
   return null;
 }
 
+function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey()) {
+  if (!currentUser || !dateKey) return [];
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const identities = getCurrentUserIdentityParts();
+  const matches = [];
+
+  Array.from(commesseById.values()).forEach((commessa) => {
+    const squadData = storicoDelGiorno.get(commessa.id) || null;
+    if (!squadData) return;
+    const squadRows = Array.isArray(squadData.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+    const matchedRows = [];
+
+    squadRows.forEach((row, index) => {
+      const rowMembers = [
+        ...parseMultiEntryValue(row?.personale || ""),
+        ...parseMultiEntryValue(row?.caposquadra || "")
+      ];
+      const matchedName = rowMembers.find((name) => doSquadraMemberAndUserMatch(name, identities));
+      if (matchedName) {
+        matchedRows.push({
+          squadraIndex: index + 1,
+          squadraLabel: `Squadra ${index + 1}`,
+          matchedName,
+          row
+        });
+      }
+    });
+
+    if (matchedRows.length) {
+      matches.push({
+        commessa,
+        commessaId: commessa.id,
+        commessaName: commessa.nome || "Commessa",
+        squadData,
+        matchedRows
+      });
+    }
+  });
+
+  return matches;
+}
+
+function tryAutoOpenAssignedCommessaAtStartup() {
+  if (startupAssignedCommessaAutoOpenDone || !currentUser) return;
+  if (parseCommessaHash().id) {
+    startupAssignedCommessaAutoOpenDone = true;
+    return;
+  }
+  if (!sharedSquadreViewConfigLoaded) return;
+  if (commesseLoadState.status !== "loaded" && commesseLoadState.status !== "empty") return;
+  if (squadreLoadState.status !== "loaded") return;
+
+  const dateKey = getActiveSquadreDateKey();
+  const assignments = getCurrentUserAssignedCommesseForDate(dateKey);
+  startupAssignedCommessaAutoOpenDone = true;
+  if (!assignments.length) return;
+
+  const primary = assignments[0];
+  selectCommessa(primary.commessaId, primary.commessaName, primary.commessa.codice || "");
+
+  const otherAssignments = assignments.slice(1);
+  if (otherAssignments.length) {
+    const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+    const otherNames = otherAssignments.map((assignment) => `• ${assignment.commessaName}`).join("\n");
+    alert(`Sei assegnato a più commesse per il ${dateLabel}. Ho aperto ${primary.commessaName}. Altre commesse trovate:\n${otherNames}`);
+  }
+}
+
 function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
   if (!currentUser) return false;
   if (canManageData()) return true;
@@ -6046,6 +6118,7 @@ function subscribeCommesse() {
         const restored = commesseById.get(activeStoredId);
         if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
       }
+      tryAutoOpenAssignedCommessaAtStartup();
       renderNextActionCard();
     }, (error) => {
       console.error("Errore caricamento commesse:", error);
@@ -9530,6 +9603,7 @@ function subscribeSquadre() {
     squadreLoadState = { status: "loaded", message: "" };
     renderSquadre();
     renderCommesseHomeList();
+    tryAutoOpenAssignedCommessaAtStartup();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
       applyHoursSuggestedOperators(card, { force: true });
     });
@@ -9543,10 +9617,14 @@ function subscribeSquadre() {
     const data = doc.exists ? doc.data() || {} : {};
     sharedSquadreDateKey = String(data.selectedDateKey || "").trim();
     manualSquadreFilterDateKey = sharedSquadreDateKey;
+    sharedSquadreViewConfigLoaded = true;
     syncSquadreDateInputs();
     renderSquadre();
+    tryAutoOpenAssignedCommessaAtStartup();
   }, (error) => {
     console.error("Errore caricamento giorno squadre condiviso:", error);
+    sharedSquadreViewConfigLoaded = true;
+    tryAutoOpenAssignedCommessaAtStartup();
   });
 }
 
@@ -10025,8 +10103,8 @@ async function persistSharedSquadreDate(dateKey) {
 
 function setSquadreDateOverride(dateKey) {
   const selectedDateKey = String(dateKey || "").trim();
-  manualSquadreFilterDateKey = selectedDateKey && selectedDateKey !== automaticSquadreDateKey ? selectedDateKey : "";
-  sharedSquadreDateKey = manualSquadreFilterDateKey;
+  manualSquadreFilterDateKey = selectedDateKey;
+  sharedSquadreDateKey = selectedDateKey;
   syncSquadreDateInputs();
   renderSquadre();
   persistSharedSquadreDate(manualSquadreFilterDateKey).catch((error) => {
@@ -10095,10 +10173,7 @@ function renderSquadre() {
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      const deleteButton = canManageData()
-        ? `<button type="button" class="btn btn-small delete-squadra-row-btn" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-row-index="${idx}">🗑️ Elimina squadra</button>`
-        : "";
-      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>${deleteButton}</div>`;
+      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
     item.innerHTML = `
       <div class="squadra-item-head">
@@ -10113,11 +10188,6 @@ function renderSquadre() {
     if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
-    });
-    item.querySelectorAll(".delete-squadra-row-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        deleteSavedSquadraRow(btn.dataset.commessaId || "", btn.dataset.dateKey || "", Number(btn.dataset.rowIndex));
-      });
     });
     ui.squadreLista.appendChild(item);
   });

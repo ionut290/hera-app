@@ -614,7 +614,7 @@ let mainMapViewState = { center: [44.4949, 11.3426], zoom: 11, hasUserMoved: fal
 let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: false };
 let isMapFullscreenPageOpen = false;
 let fullscreenMapMode = "standard";
-let activeFullscreenPopupImpiantoKey = "";
+let selectedFullscreenImpiantoId = "";
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
@@ -2115,6 +2115,8 @@ function openMapFullscreenPage() {
 
 function closeMapFullscreenPage() {
   if (!ui.mapFullscreenPage) return;
+  selectedFullscreenImpiantoId = "";
+  fullscreenMap.closePopup();
   isMapFullscreenPageOpen = false;
   drawAreaModeActive = false;
   isDrawingStrokeActive = false;
@@ -10794,7 +10796,7 @@ function renderMap() {
     const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer, fullscreenMap);
     if (fullscreenMarker) {
       bounds.push([impianto.gpsY, impianto.gpsX]);
-      if (impiantoKey && impiantoKey === activeFullscreenPopupImpiantoKey) markerForActiveFullscreenPopup = fullscreenMarker;
+      if (impiantoKey && impiantoKey === selectedFullscreenImpiantoId) markerForActiveFullscreenPopup = fullscreenMarker;
     }
   });
 
@@ -10810,11 +10812,17 @@ function renderMap() {
     map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
   fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
-  if (markerForActiveFullscreenPopup) {
-    requestAnimationFrame(() => {
-      if (activeFullscreenPopupImpiantoKey) markerForActiveFullscreenPopup.openPopup();
-    });
-  }
+  keepSelectedFullscreenPopupOpen(markerForActiveFullscreenPopup);
+}
+
+function keepSelectedFullscreenPopupOpen(markerForSelectedImpianto) {
+  if (!selectedFullscreenImpiantoId || !markerForSelectedImpianto) return;
+  const reopenPopup = () => {
+    if (!selectedFullscreenImpiantoId || !fullscreenMarkerLayer.hasLayer(markerForSelectedImpianto)) return;
+    markerForSelectedImpianto.openPopup();
+  };
+  requestAnimationFrame(reopenPopup);
+  setTimeout(reopenPopup, 80);
 }
 
 function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
@@ -10840,7 +10848,11 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
     className: targetMap === fullscreenMap ? "impianto-map-popup impianto-map-popup--fullscreen" : "impianto-map-popup"
   });
   marker.on("click", () => {
-    if (targetMap === fullscreenMap) activeFullscreenPopupImpiantoKey = buildImpiantoKey(impianto);
+    if (targetMap === fullscreenMap) {
+      const nextImpiantoId = buildImpiantoKey(impianto);
+      if (selectedFullscreenImpiantoId && selectedFullscreenImpiantoId !== nextImpiantoId) fullscreenMap.closePopup();
+      selectedFullscreenImpiantoId = nextImpiantoId;
+    }
     focusImpiantoInList(impianto, false);
   });
   marker.addTo(targetLayer);
@@ -10872,7 +10884,7 @@ function buildImpiantoMapPopup(impianto, tipo) {
     <div class="map-popup-card" data-impianto-key="${escapeHTML(impiantoKey)}">
       <div class="map-popup-header">
         <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
-        <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup">×</button>
+        <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup dettaglio impianto" title="Chiudi">×</button>
       </div>
       <div class="map-popup-scroll">
         <dl class="map-popup-details">
@@ -10939,7 +10951,7 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       const key = button.getAttribute("data-impianto-key") || popupKey;
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
-      activeFullscreenPopupImpiantoKey = popupMap === fullscreenMap ? key : activeFullscreenPopupImpiantoKey;
+      selectedFullscreenImpiantoId = popupMap === fullscreenMap ? key : selectedFullscreenImpiantoId;
       focusImpiantoInList(impianto, true);
       if (popupMap === fullscreenMap) closeMapFullscreenPage();
     });
@@ -10954,8 +10966,10 @@ function bindImpiantoMapPopupActions(event, popupMap) {
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='close']").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (popupMap === fullscreenMap && popupKey === activeFullscreenPopupImpiantoKey) activeFullscreenPopupImpiantoKey = "";
+    button.addEventListener("click", (clickEvent) => {
+      clickEvent.preventDefault();
+      clickEvent.stopPropagation();
+      if (popupMap === fullscreenMap && popupKey === selectedFullscreenImpiantoId) selectedFullscreenImpiantoId = "";
       popupMap.closePopup(event.popup);
     });
   });

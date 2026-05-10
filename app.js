@@ -590,6 +590,8 @@ let chatRetentionTimer = null;
 let hoursDeadlineAlertTimer = null;
 let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
+let lastPositionPublishAt = 0;
+let lastPublishedUserPos = null;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
 let unsubscribeGlobalCommesse = null;
@@ -9647,7 +9649,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.innerHTML = `
     <div class="squadra-row-head">
       <strong>Squadra ${index}</strong>
-      <button type="button" class="btn remove-squadra-btn">Rimuovi</button>
+      <button type="button" class="btn remove-squadra-btn">Elimina squadra</button>
     </div>
     <label class="squadra-simple-field">Caposquadra
       <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
@@ -9952,51 +9954,6 @@ async function deleteSquadraCompositionForDate(commessaId, dateKey) {
   ui.squadraRows.innerHTML = "";
   addSquadraRow();
   ui.squadraCalendarDate.value = dateKey;
-  renderCommesseHomeList();
-  renderSquadre();
-}
-
-async function deleteSavedSquadraRow(commessaId, dateKey, rowIndex) {
-  if (!canManageData()) return;
-  const commessaNome = (commesseById.get(commessaId) || {}).nome || "Commessa";
-  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
-  if (!window.confirm(`Eliminare Squadra ${rowIndex + 1} di ${commessaNome} per il ${dateLabel}?`)) return;
-
-  const currentRef = db.collection("squadreCommesse").doc(commessaId);
-  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
-  await db.runTransaction(async (transaction) => {
-    const historySnap = await transaction.get(historyRef);
-    const currentSnap = await transaction.get(currentRef);
-    if (!historySnap.exists) return;
-    const historyData = historySnap.data() || {};
-    const rows = Array.isArray(historyData.squadre) ? historyData.squadre : getLegacySquadreRows(historyData);
-    if (rowIndex < 0 || rowIndex >= rows.length) return;
-    const nextRows = rows.filter((_, index) => index !== rowIndex);
-    if (!nextRows.length) {
-      transaction.delete(historyRef);
-    } else {
-      transaction.set(historyRef, {
-        ...historyData,
-        squadre: nextRows,
-        dateKey,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
-      }, { merge: true });
-    }
-
-    if (currentSnap.exists && currentSnap.data()?.riferimentoData === dateKey) {
-      if (!nextRows.length) {
-        transaction.delete(currentRef);
-      } else {
-        transaction.set(currentRef, {
-          ...currentSnap.data(),
-          squadre: nextRows,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
-        }, { merge: true });
-      }
-    }
-  });
   renderCommesseHomeList();
   renderSquadre();
 }
@@ -10630,6 +10587,88 @@ function getCommessaAccentColor(commessaId, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
+function getPlatformUserPosition(user) {
+  const position = user?.lastPosition || {};
+  const lat = Number(position.lat);
+  const lng = Number(position.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    lat,
+    lng,
+    accuracy: Number(position.accuracy || 0),
+    updatedAt: position.updatedAt || user.lastSeenAt || null
+  };
+}
+
+function getTimestampDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getOperatorMarkerLabel(user) {
+  const label = getPlatformUserLabel(user).replace(/<[^>]*>/g, "").trim();
+  const initials = label
+    .split(/[\s._@-]+/)
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return initials || "👷";
+}
+
+function buildOperatorPositionPopup(user, position) {
+  const label = getPlatformUserLabel(user);
+  const updatedAt = getTimestampDate(position.updatedAt);
+  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
+  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
+  return `<b>👷 ${escapeHTML(label)}</b><br><small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`;
+}
+
+function addOperatorMarkerToLayer(user, position, layer) {
+  const markerLabel = getOperatorMarkerLabel(user);
+  return L.marker([position.lat, position.lng], {
+    icon: L.divIcon({
+      className: "",
+      html: `<div class='marker-operator' title='${escapeHTML(getPlatformUserLabel(user))}'>${escapeHTML(markerLabel)}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    })
+  }).addTo(layer).bindPopup(buildOperatorPositionPopup(user, position));
+}
+
+function getOperatorPositionUsersForMap() {
+  const byId = new Map(platformUsers.map((user) => [user.id, user]));
+  if (currentUser && currentUserPos) {
+    byId.set(currentUser.uid, {
+      ...(byId.get(currentUser.uid) || {}),
+      id: currentUser.uid,
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      lastPosition: {
+        lat: currentUserPos.lat,
+        lng: currentUserPos.lng,
+        accuracy: currentUserPos.accuracy || 0,
+        updatedAt: new Date()
+      }
+    });
+  }
+  return Array.from(byId.values()).filter((user) => getPlatformUserPosition(user));
+}
+
+function renderOperatorPositionMarkers(bounds) {
+  getOperatorPositionUsersForMap().forEach((user) => {
+    const position = getPlatformUserPosition(user);
+    addOperatorMarkerToLayer(user, position, markerLayer);
+    addOperatorMarkerToLayer(user, position, fullscreenMarkerLayer);
+    bounds.push([position.lat, position.lng]);
+  });
+}
+
 function renderMap() {
   clearMap();
 
@@ -10647,25 +10686,7 @@ function renderMap() {
     }
   });
 
-  if (currentUserPos) {
-    L.marker([currentUserPos.lat, currentUserPos.lng], {
-      icon: L.divIcon({
-        className: "",
-        html: "<div class='marker-operator'>👷</div>",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      })
-    }).addTo(markerLayer).bindPopup("Operatore al lavoro");
-    L.marker([currentUserPos.lat, currentUserPos.lng], {
-      icon: L.divIcon({
-        className: "",
-        html: "<div class='marker-operator'>👷</div>",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      })
-    }).addTo(fullscreenMarkerLayer).bindPopup("Operatore al lavoro");
-    bounds.push([currentUserPos.lat, currentUserPos.lng]);
-  }
+  renderOperatorPositionMarkers(bounds);
 
   if (bounds.length > 0 && !mainMapViewState.hasUserMoved) {
     map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
@@ -11450,6 +11471,41 @@ async function fetchOverpassWithFallback(query) {
   throw lastError || new Error("Overpass non disponibile");
 }
 
+function shouldPublishOperatorPosition(coords) {
+  if (!currentUser || !coords) return false;
+  const now = Date.now();
+  if (!lastPublishedUserPos) return true;
+  const movedMeters = haversine(
+    lastPublishedUserPos.lat,
+    lastPublishedUserPos.lng,
+    coords.latitude,
+    coords.longitude
+  ) * 1000;
+  return movedMeters >= 25 || now - lastPositionPublishAt >= 60 * 1000;
+}
+
+async function publishCurrentOperatorPosition(coords) {
+  if (!shouldPublishOperatorPosition(coords)) return;
+  lastPositionPublishAt = Date.now();
+  lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
+  try {
+    await db.collection("platformUsers").doc(currentUser.uid).set({
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      lastPosition: {
+        lat: Number(coords.latitude),
+        lng: Number(coords.longitude),
+        accuracy: Number(coords.accuracy || 0),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Aggiornamento posizione operatore non riuscito:", error);
+  }
+}
+
 function initGeolocation() {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
@@ -11460,10 +11516,12 @@ function initGeolocation() {
   const onPosition = (pos) => {
     currentUserPos = {
       lat: pos.coords.latitude,
-      lng: pos.coords.longitude
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy || 0
     };
+    publishCurrentOperatorPosition(pos.coords);
     evaluateTimbraturaReminders();
-    ui.gpsStatus.textContent = "Posizione attiva per ordinare gli impianti per distanza.";
+    ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza e operatori visibili sulla mappa.";
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
@@ -12005,6 +12063,14 @@ async function upsertCurrentPlatformUser() {
     displayName: currentUser.displayName || currentUser.email || "Utente",
     isAdmin: canManageData(),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
+    ...(currentUserPos ? {
+      lastPosition: {
+        lat: Number(currentUserPos.lat),
+        lng: Number(currentUserPos.lng),
+        accuracy: Number(currentUserPos.accuracy || 0),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }
+    } : {}),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
@@ -12052,6 +12118,7 @@ function subscribeUsers() {
     renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
+    renderMap();
     checkAndSendHoursDeadlineAlerts();
   });
 }

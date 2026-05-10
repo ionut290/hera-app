@@ -10063,7 +10063,10 @@ function renderSquadre() {
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      return `<p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>`;
+      const deleteButton = canManageData()
+        ? `<button type="button" class="btn btn-small delete-squadra-row-btn" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-row-index="${idx}">🗑️ Elimina squadra</button>`
+        : "";
+      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p>${deleteButton}</div>`;
     }).join("");
     item.innerHTML = `
       <div class="squadra-item-head">
@@ -10078,6 +10081,11 @@ function renderSquadre() {
     if (title) head.appendChild(title);
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    item.querySelectorAll(".delete-squadra-row-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        deleteSavedSquadraRow(btn.dataset.commessaId || "", btn.dataset.dateKey || "", Number(btn.dataset.rowIndex));
+      });
     });
     ui.squadreLista.appendChild(item);
   });

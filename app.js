@@ -187,6 +187,7 @@ const ui = {
   mapFullscreenPage: document.getElementById("map-fullscreen-page"),
   mapFullscreenBackBtn: document.getElementById("map-fullscreen-back-btn"),
   mapSatelliteToggleBtn: document.getElementById("map-satellite-toggle-btn"),
+  mapRadarToggleBtn: document.getElementById("map-radar-toggle-btn"),
   mapDrawAreaBtn: document.getElementById("map-draw-area-btn"),
   mapDrawUndoBtn: document.getElementById("map-draw-undo-btn"),
   mapDrawRedoBtn: document.getElementById("map-draw-redo-btn"),
@@ -612,6 +613,16 @@ let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
 let lastPositionPublishAt = 0;
 let lastPublishedUserPos = null;
+let latestGeolocationCoords = null;
+let radarPaneInitialized = false;
+let radarActive = false;
+let radarFrames = [];
+let radarFrameIndex = 0;
+let radarLayer = null;
+let radarControlsEl = null;
+let radarPlayTimer = null;
+let radarPlaying = true;
+let radarLoading = false;
 let activeNearbyImpiantoContext = null;
 let globalNotificationsInitialized = false;
 let unsubscribeGlobalCommesse = null;
@@ -1087,6 +1098,7 @@ ui.commessaNoteImpiantoSearch?.addEventListener("blur", () => setTimeout(() => {
 ui.commessaNoteImpiantoClearBtn?.addEventListener("click", clearCommessaNoteImpiantoSelection);
 ui.mapFullscreenBackBtn?.addEventListener("click", closeMapFullscreenPage);
 ui.mapSatelliteToggleBtn?.addEventListener("click", toggleFullscreenSatelliteMode);
+ui.mapRadarToggleBtn?.addEventListener("click", toggleWeatherRadar);
 ui.mapDrawAreaBtn?.addEventListener("click", toggleDrawAreaMode);
 ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
 ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
@@ -1240,6 +1252,7 @@ ui.notificationDocViewerModal?.addEventListener("click", (event) => {
 });
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
+window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1901,6 +1914,8 @@ auth.onAuthStateChanged((user) => {
   gpsUpdateRequests = [];
   operatorPositions = [];
   hoursApprovalRequests = [];
+  lastPublishedUserPos = null;
+  lastPositionPublishAt = 0;
   renderPrivateDocsList();
   renderPosDocuments();
   renderResourceButtonsForCommessa();
@@ -1927,6 +1942,7 @@ auth.onAuthStateChanged((user) => {
   if (loggedIn) {
     startPresenceHeartbeat();
     upsertCurrentPlatformUser();
+    initGeolocation({ forcePublishCurrent: true });
     subscribeCommesse();
     subscribeChat();
     subscribeAdminUsers();
@@ -1948,6 +1964,7 @@ auth.onAuthStateChanged((user) => {
     startChatRetentionLoop();
     startHoursDeadlineAlertLoop();
   } else {
+    markCurrentOperatorOffline();
     subscribeCommesse();
     subscribeSquadre();
     subscribePosDocuments();
@@ -2154,6 +2171,7 @@ function openMapFullscreenPage() {
 
 function closeMapFullscreenPage() {
   if (!ui.mapFullscreenPage) return;
+  destroyWeatherRadar();
   closeSelectedImpiantoDetail({ closePopup: true });
   isMapFullscreenPageOpen = false;
   drawAreaModeActive = false;
@@ -2167,6 +2185,186 @@ function closeMapFullscreenPage() {
   setTimeout(() => map.invalidateSize(), 60);
 }
 
+
+
+function ensureRadarPane() {
+  if (radarPaneInitialized || !fullscreenMap) return;
+  const pane = fullscreenMap.getPane("radarPane") || fullscreenMap.createPane("radarPane");
+  pane.style.zIndex = "350";
+  pane.style.pointerEvents = "none";
+  radarPaneInitialized = true;
+}
+
+function formatRadarFrameTime(frame) {
+  const timestamp = Number(frame?.time || 0) * 1000;
+  if (!timestamp) return "--:--";
+  return new Date(timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+}
+
+function buildRadarTileUrl(frame) {
+  const host = String(frame?.host || "https://tilecache.rainviewer.com").replace(/\/$/, "");
+  const path = String(frame?.path || "");
+  return `${host}${path}/256/{z}/{x}/{y}/2/1_1.png`;
+}
+
+function updateRadarButtonState() {
+  if (!ui.mapRadarToggleBtn) return;
+  ui.mapRadarToggleBtn.classList.toggle("active", radarActive);
+  ui.mapRadarToggleBtn.setAttribute("aria-pressed", String(radarActive));
+  ui.mapRadarToggleBtn.disabled = radarLoading;
+}
+
+function stopRadarPlayback() {
+  if (radarPlayTimer) {
+    clearInterval(radarPlayTimer);
+    radarPlayTimer = null;
+  }
+}
+
+function syncRadarControls() {
+  if (!radarControlsEl) return;
+  const frame = radarFrames[radarFrameIndex] || null;
+  const playBtn = radarControlsEl.querySelector("[data-radar-play]");
+  const slider = radarControlsEl.querySelector("[data-radar-slider]");
+  const timeLabel = radarControlsEl.querySelector("[data-radar-time]");
+  if (playBtn) {
+    playBtn.textContent = radarPlaying ? "⏸" : "▶";
+    playBtn.setAttribute("aria-label", radarPlaying ? "Pausa radar meteo" : "Avvia radar meteo");
+  }
+  if (slider) {
+    slider.max = String(Math.max(radarFrames.length - 1, 0));
+    slider.value = String(radarFrameIndex);
+  }
+  if (timeLabel) timeLabel.textContent = frame ? `Radar ${formatRadarFrameTime(frame)}` : "Radar --:--";
+}
+
+function showRadarFrame(index) {
+  if (!radarActive || !radarFrames.length) return;
+  radarFrameIndex = Math.max(0, Math.min(index, radarFrames.length - 1));
+  const frame = radarFrames[radarFrameIndex];
+  const nextLayer = L.tileLayer(buildRadarTileUrl(frame), {
+    pane: "radarPane",
+    opacity: 0,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 1,
+    crossOrigin: true,
+    attribution: "Radar © RainViewer"
+  });
+  nextLayer.addTo(fullscreenMap);
+  nextLayer.once("load", () => {
+    nextLayer.setOpacity(0.58);
+    if (radarLayer && radarLayer !== nextLayer) fullscreenMap.removeLayer(radarLayer);
+    radarLayer = nextLayer;
+  });
+  setTimeout(() => {
+    if (radarLayer !== nextLayer && fullscreenMap.hasLayer(nextLayer)) {
+      nextLayer.setOpacity(0.58);
+      if (radarLayer) fullscreenMap.removeLayer(radarLayer);
+      radarLayer = nextLayer;
+    }
+  }, 900);
+  syncRadarControls();
+}
+
+function startRadarPlayback() {
+  stopRadarPlayback();
+  if (!radarActive || !radarPlaying || radarFrames.length < 2) return;
+  radarPlayTimer = setInterval(() => {
+    showRadarFrame((radarFrameIndex + 1) % radarFrames.length);
+  }, 1200);
+}
+
+function createRadarControls() {
+  destroyRadarControlsOnly();
+  const wrap = document.querySelector(".map-fullscreen-map-wrap");
+  if (!wrap) return;
+  radarControlsEl = document.createElement("div");
+  radarControlsEl.className = "weather-radar-controls";
+  radarControlsEl.innerHTML = `
+    <button class="weather-radar-play" type="button" data-radar-play aria-label="Pausa radar meteo">⏸</button>
+    <div class="weather-radar-timeline">
+      <span class="weather-radar-time" data-radar-time>Radar --:--</span>
+      <input type="range" min="0" max="0" value="0" step="1" data-radar-slider aria-label="Timeline radar meteo">
+    </div>
+    <a class="weather-radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+  `;
+  radarControlsEl.querySelector("[data-radar-play]")?.addEventListener("click", () => {
+    radarPlaying = !radarPlaying;
+    syncRadarControls();
+    startRadarPlayback();
+  });
+  radarControlsEl.querySelector("[data-radar-slider]")?.addEventListener("input", (event) => {
+    radarPlaying = false;
+    stopRadarPlayback();
+    showRadarFrame(Number(event.target.value || 0));
+  });
+  wrap.appendChild(radarControlsEl);
+  syncRadarControls();
+}
+
+function destroyRadarControlsOnly() {
+  if (radarControlsEl) {
+    radarControlsEl.remove();
+    radarControlsEl = null;
+  }
+}
+
+async function loadWeatherRadarFrames() {
+  const response = await fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" });
+  if (!response.ok) throw new Error(`RainViewer ${response.status}`);
+  const data = await response.json();
+  const host = data.host || "https://tilecache.rainviewer.com";
+  return [...(data.radar?.past || []), ...(data.radar?.nowcast || [])]
+    .filter((frame) => frame && frame.path && frame.time)
+    .map((frame) => ({ ...frame, host }));
+}
+
+async function enableWeatherRadar() {
+  if (!isMapFullscreenPageOpen || radarActive || radarLoading) return;
+  radarLoading = true;
+  updateRadarButtonState();
+  try {
+    ensureRadarPane();
+    radarFrames = await loadWeatherRadarFrames();
+    if (!radarFrames.length) throw new Error("Nessun fotogramma radar disponibile");
+    radarActive = true;
+    radarPlaying = true;
+    radarFrameIndex = Math.max(0, radarFrames.length - 1);
+    createRadarControls();
+    showRadarFrame(radarFrameIndex);
+    startRadarPlayback();
+  } catch (error) {
+    console.error("Errore radar meteo:", error);
+    setFullscreenFeedback("Radar meteo non disponibile al momento.");
+    destroyWeatherRadar();
+  } finally {
+    radarLoading = false;
+    updateRadarButtonState();
+  }
+}
+
+function destroyWeatherRadar() {
+  stopRadarPlayback();
+  if (radarLayer && fullscreenMap?.hasLayer(radarLayer)) fullscreenMap.removeLayer(radarLayer);
+  radarLayer = null;
+  radarFrames = [];
+  radarFrameIndex = 0;
+  radarActive = false;
+  radarPlaying = true;
+  radarLoading = false;
+  destroyRadarControlsOnly();
+  updateRadarButtonState();
+}
+
+function toggleWeatherRadar() {
+  if (!isMapFullscreenPageOpen) return;
+  if (radarActive || radarLoading) {
+    destroyWeatherRadar();
+    return;
+  }
+  enableWeatherRadar();
+}
 
 function applyFullscreenMapMode(mode) {
   const nextMode = ["standard", "satellite", "hybrid"].includes(mode) ? mode : "standard";
@@ -12187,8 +12385,9 @@ async function fetchOverpassWithFallback(query) {
   throw lastError || new Error("Overpass non disponibile");
 }
 
-function shouldPublishOperatorPosition(coords) {
+function shouldPublishOperatorPosition(coords, options = {}) {
   if (!currentUser || !coords) return false;
+  if (options.force) return true;
   const now = Date.now();
   if (!lastPublishedUserPos) return true;
   const movedMeters = haversine(
@@ -12197,7 +12396,7 @@ function shouldPublishOperatorPosition(coords) {
     coords.latitude,
     coords.longitude
   ) * 1000;
-  return movedMeters >= 25 || now - lastPositionPublishAt >= 60 * 1000;
+  return movedMeters >= 20 || now - lastPositionPublishAt >= 15 * 1000;
 }
 
 function getCurrentOperatorPositionAssignment() {
@@ -12209,26 +12408,42 @@ function getCurrentOperatorPositionAssignment() {
     squadraIndex: matchedRow?.squadraIndex || "",
     squadraLabel: matchedRow?.squadraLabel || "",
     squadraName: matchedRow?.row?.nome || matchedRow?.row?.name || "",
-    commessaId: assignment?.commessaId || "",
-    commessaName: assignment?.commessaName || "",
+    commessaId: assignment?.commessaId || selectedCommessaId || "",
+    commessaName: assignment?.commessaName || selectedCommessaName || "",
     riferimentoData: dateKey || ""
   };
 }
 
-async function publishCurrentOperatorPosition(coords) {
-  if (!shouldPublishOperatorPosition(coords)) return;
+async function publishCurrentOperatorPosition(coords, options = {}) {
+  if (!shouldPublishOperatorPosition(coords, options)) return;
   lastPositionPublishAt = Date.now();
   lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
   try {
+    const assignment = getCurrentOperatorPositionAssignment();
     await db.collection("operatorPositions").doc(currentUser.uid).set({
+      userId: currentUser.uid,
       uid: currentUser.uid,
       email: currentUser.email || "",
       displayName: currentUser.displayName || currentUser.email || "Utente",
-      ...getCurrentOperatorPositionAssignment(),
+      nomeOperatore: assignment.operatorName || currentUser.displayName || currentUser.email || "Operatore",
+      operatorName: assignment.operatorName || currentUser.displayName || currentUser.email || "Operatore",
+      squadra: assignment.squadraLabel || assignment.squadraName || "",
+      squadraIndex: assignment.squadraIndex || "",
+      squadraLabel: assignment.squadraLabel || "",
+      squadraName: assignment.squadraName || "",
+      commessaAttiva: assignment.commessaName || "",
+      commessaId: assignment.commessaId || "",
+      commessaName: assignment.commessaName || "",
+      riferimentoData: assignment.riferimentoData || "",
       lat: Number(coords.latitude),
       lng: Number(coords.longitude),
+      latitude: Number(coords.latitude),
+      longitude: Number(coords.longitude),
       accuracy: Number(coords.accuracy || 0),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      stato: "online",
+      status: "online",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
     await db.collection("platformUsers").doc(currentUser.uid).set({
       uid: currentUser.uid,
@@ -12241,20 +12456,38 @@ async function publishCurrentOperatorPosition(coords) {
   }
 }
 
-function initGeolocation() {
+function markCurrentOperatorOffline() {
+  if (!currentUser) return;
+  db.collection("operatorPositions").doc(currentUser.uid).set({
+    userId: currentUser.uid,
+    uid: currentUser.uid,
+    stato: "offline",
+    status: "offline",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch((error) => console.warn("Aggiornamento stato operatore non riuscito:", error));
+}
+
+function initGeolocation(options = {}) {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
     return;
   }
+  if (options.forcePublishCurrent && latestGeolocationCoords && currentUser) {
+    publishCurrentOperatorPosition(latestGeolocationCoords, { force: true });
+    options.forcePublishCurrent = false;
+  }
   if (geolocationWatchId != null) navigator.geolocation.clearWatch(geolocationWatchId);
 
   const onPosition = (pos) => {
+    latestGeolocationCoords = pos.coords;
     currentUserPos = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       accuracy: pos.coords.accuracy || 0
     };
-    publishCurrentOperatorPosition(pos.coords);
+    publishCurrentOperatorPosition(pos.coords, { force: Boolean(options.forcePublishCurrent) });
+    options.forcePublishCurrent = false;
     evaluateTimbraturaReminders();
     ui.gpsStatus.textContent = canManageData()
       ? "Posizione attiva: impianti ordinati per distanza e squadre visibili sulla mappa."
@@ -12268,7 +12501,7 @@ function initGeolocation() {
     onPosition(pos);
     fetchWeather();
   }, () => {
-    ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+    ui.gpsStatus.textContent = "Posizione non disponibile";
     fetchWeather();
   }, {
     enableHighAccuracy: true,
@@ -12276,7 +12509,7 @@ function initGeolocation() {
   });
 
   geolocationWatchId = navigator.geolocation.watchPosition(onPosition, () => {
-    ui.gpsStatus.textContent = "Posizione non disponibile. Elenco non ordinato per distanza reale.";
+    ui.gpsStatus.textContent = "Posizione non disponibile";
   }, {
     enableHighAccuracy: true,
     maximumAge: 10000,

@@ -153,6 +153,7 @@
       <section id="commessa-operational-card" class="card">
         <div class="commessa-tools-bar">
           <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
+          <button id="operator-positions-toggle-btn" class="btn hidden" type="button" aria-pressed="true">📍 Posizione squadre</button>
           <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-controls="commessa-notes-page">📝 NOTE COMMESSA</button>
           <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
         </div>
@@ -168,6 +169,17 @@
           <div id="main-map-impianto-detail-body"></div>
         </aside>
         <p id="gps-status" class="muted"></p>
+      </section>
+
+      <section id="pending-whatsapp-card" class="card pending-whatsapp-card hidden" aria-live="polite">
+        <div class="section-head">
+          <div>
+            <h2>WhatsApp in attesa</h2>
+            <p id="pending-whatsapp-summary" class="muted">Nessun messaggio in attesa.</p>
+          </div>
+          <span id="pending-whatsapp-badge" class="badge badge-warning hidden">WhatsApp in attesa</span>
+        </div>
+        <div id="pending-whatsapp-list" class="simple-list"></div>
       </section>
 
 

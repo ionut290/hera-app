@@ -3181,3 +3181,25 @@ textarea:focus-visible {
     justify-self: start;
   }
 }
+
+.badge-warning,
+.badge-whatsapp-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.badge-sync-pending {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.pending-whatsapp-card {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.pending-whatsapp-item .pending-error {
+  color: #b91c1c;
+}

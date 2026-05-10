@@ -160,6 +160,7 @@ const ui = {
   commessaOperationalCard: document.getElementById("commessa-operational-card"),
   impiantiCard: document.getElementById("impianti-card"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
+  operatorPositionsToggleBtn: document.getElementById("operator-positions-toggle-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
   commessaNotesPage: document.getElementById("commessa-notes-page"),
   commessaNotesBackBtn: document.getElementById("commessa-notes-back-btn"),
@@ -196,6 +197,10 @@ const ui = {
   mapFullscreenFeedbackClose: document.getElementById("map-fullscreen-feedback-close"),
   mainMapImpiantoDetailPanel: document.getElementById("main-map-impianto-detail-panel"),
   mainMapImpiantoDetailBody: document.getElementById("main-map-impianto-detail-body"),
+  pendingWhatsappCard: document.getElementById("pending-whatsapp-card"),
+  pendingWhatsappSummary: document.getElementById("pending-whatsapp-summary"),
+  pendingWhatsappBadge: document.getElementById("pending-whatsapp-badge"),
+  pendingWhatsappList: document.getElementById("pending-whatsapp-list"),
   mapImpiantoDetailPanel: document.getElementById("map-impianto-detail-panel"),
   mapImpiantoDetailBody: document.getElementById("map-impianto-detail-body"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
@@ -518,6 +523,7 @@ let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeSquadreViewConfig = null;
 let unsubscribeUsers = null;
+let unsubscribeOperatorPositions = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
@@ -531,6 +537,8 @@ let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let chatNotificationsInitialized = false;
 let platformUsers = [];
+let operatorPositions = [];
+let operatorPositionsVisible = true;
 let deniedImpiantoActions = new Set();
 const usedActionKeys = new Set();
 let mediaRecorder = null;
@@ -570,6 +578,8 @@ const expandedImpiantoManagementKeys = new Set();
 let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 let pendingSheetExports = [];
+let pendingImpiantoActions = [];
+let pendingWhatsappAlertShownForSyncIds = new Set();
 let sheetRetryTimer = null;
 let isProcessingAdminSheetQueue = false;
 const commessaSheetSyncTimers = new Map();
@@ -908,6 +918,7 @@ let adminEmails = new Set([ADMIN_EMAIL]);
 let posDocuments = [];
 let unsubscribePosDocuments = null;
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
+const PENDING_IMPIANTO_ACTIONS_KEY = "heraPendingImpiantoActions";
 const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
@@ -1061,6 +1072,7 @@ ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.commessaNoteNewBtn?.addEventListener("click", () => openCommessaNoteForm());
@@ -1807,6 +1819,16 @@ function weatherCodeLabel(weatherCode) {
   return weatherMap[code] || "ℹ️ Condizioni variabili";
 }
 
+pendingImpiantoActions = loadPendingImpiantoActions();
+renderPendingWhatsappList();
+
+window.addEventListener("online", () => {
+  syncPendingImpiantoActions();
+});
+window.addEventListener("offline", () => {
+  renderPendingWhatsappList();
+});
+
 auth.onAuthStateChanged((user) => {
   currentUser = user || null;
   const loggedIn = Boolean(user);
@@ -1839,6 +1861,7 @@ auth.onAuthStateChanged((user) => {
   stopMezziSubscription();
   stopSquadreSubscription();
   stopUsersSubscription();
+  stopOperatorPositionsSubscription();
   stopAdminUsersSubscription();
   stopResourcesSubscription();
   stopGlobalCommesseSubscription();
@@ -1876,6 +1899,7 @@ auth.onAuthStateChanged((user) => {
   privateDocsRecords = [];
   posDocuments = [];
   gpsUpdateRequests = [];
+  operatorPositions = [];
   hoursApprovalRequests = [];
   renderPrivateDocsList();
   renderPosDocuments();
@@ -1905,8 +1929,9 @@ auth.onAuthStateChanged((user) => {
     upsertCurrentPlatformUser();
     subscribeCommesse();
     subscribeChat();
-    subscribeUsers();
     subscribeAdminUsers();
+    subscribeUsers();
+    subscribeOperatorPositions();
     subscribeDriveBridge();
     subscribePersonale();
     subscribeMezzi();
@@ -1932,6 +1957,8 @@ auth.onAuthStateChanged((user) => {
   }
   renderHeaderActivitySummary();
   renderExternalApps();
+  renderPendingWhatsappList();
+  syncPendingImpiantoActions();
   fetchWeather();
   renderNextActionCard();
 });
@@ -1940,6 +1967,12 @@ function updateAdminControls() {
   const canManage = canManageData();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
+  ui.operatorPositionsToggleBtn?.classList.toggle("hidden", !canManage);
+  if (ui.operatorPositionsToggleBtn) {
+    ui.operatorPositionsToggleBtn.disabled = !canManage;
+    ui.operatorPositionsToggleBtn.setAttribute("aria-pressed", String(canManage && operatorPositionsVisible));
+    ui.operatorPositionsToggleBtn.textContent = operatorPositionsVisible ? "📍 Posizione squadre" : "📍 Posizione squadre nascosta";
+  }
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
@@ -7535,6 +7568,301 @@ function getTargetCommessaName() {
   return (commesseById.get(targetId) || {}).nome || selectedCommessaName || "Commessa";
 }
 
+function isNetworkOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+function loadPendingImpiantoActions() {
+  try {
+    const raw = localStorage.getItem(PENDING_IMPIANTO_ACTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.id && item.type === "done") : [];
+  } catch (error) {
+    console.warn("Azioni impianto pending non leggibili:", error);
+    return [];
+  }
+}
+
+function savePendingImpiantoActions() {
+  try {
+    localStorage.setItem(PENDING_IMPIANTO_ACTIONS_KEY, JSON.stringify(pendingImpiantoActions));
+  } catch (error) {
+    console.warn("Azioni impianto pending non salvate:", error);
+  }
+}
+
+function getCurrentUserPendingActions() {
+  const uid = currentUser?.uid || "";
+  if (!uid) return [];
+  return pendingImpiantoActions.filter((action) => !action.userId || action.userId === uid);
+}
+
+function isPendingWhatsappAction(action) {
+  return action
+    && action.type === "done"
+    && action.whatsappStatus !== "sent";
+}
+
+function getPendingWhatsappActions() {
+  return getCurrentUserPendingActions()
+    .filter(isPendingWhatsappAction)
+    .sort((a, b) => String(b.doneAt || "").localeCompare(String(a.doneAt || "")));
+}
+
+function isActionWaitingForSync(action) {
+  return ["pending", "syncing", "syncFailed"].includes(String(action?.status || "pending"));
+}
+
+function doesPendingActionMatchImpianto(action, commessaId, impianto) {
+  if (!action || action.commessaId !== commessaId) return false;
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (action.impiantoKey && impiantoKey && action.impiantoKey === impiantoKey) return true;
+  const actionIds = new Set(Array.isArray(action.impiantoIds) ? action.impiantoIds : []);
+  return getImpiantoDocIds(impianto).some((id) => actionIds.has(id));
+}
+
+function getPendingActionForImpianto(commessaId, impianto) {
+  return getCurrentUserPendingActions().find((action) => isPendingWhatsappAction(action) && doesPendingActionMatchImpianto(action, commessaId, impianto));
+}
+
+function clearPendingImpiantoFlags(impianto) {
+  if (!impianto?.pendingActionId && !impianto?.pendingActionStatus && !impianto?.pendingWhatsappStatus) return impianto;
+  const { pendingActionId, pendingActionStatus, pendingWhatsappStatus, ...clean } = impianto;
+  return clean;
+}
+
+function applyPendingActionsToImpianti(impianti, commessaId) {
+  const activeActions = getCurrentUserPendingActions()
+    .filter((action) => action.commessaId === commessaId && isActionWaitingForSync(action));
+  return impianti.map((impianto) => {
+    const cleanImpianto = clearPendingImpiantoFlags(impianto);
+    const action = activeActions.find((entry) => doesPendingActionMatchImpianto(entry, commessaId, cleanImpianto));
+    if (!action) return cleanImpianto;
+    return {
+      ...cleanImpianto,
+      done: true,
+      doneAt: action.doneAt ? new Date(action.doneAt) : cleanImpianto.doneAt,
+      doneBy: action.doneBy || cleanImpianto.doneBy || "Operatore",
+      pendingActionId: action.id,
+      pendingActionStatus: action.status || "pending",
+      pendingWhatsappStatus: action.whatsappStatus || "pending"
+    };
+  });
+}
+
+function getSerializableImpiantoSnapshot(impianto) {
+  const keys = [
+    "denominazione", "comune", "indirizzo", "idSap", "codicePrezzo", "voceRiferimento",
+    "lavorazioniRichieste", "tipologiaIntervento", "gpsY", "gpsX", "hasStraordinario",
+    "tipoManutenzione"
+  ];
+  return keys.reduce((acc, key) => {
+    if (impianto[key] !== undefined) acc[key] = impianto[key];
+    return acc;
+  }, {});
+}
+
+function upsertPendingDoneAction(impianto, impiantoIds, doneAtLocal, doneByLocal) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  const existingIndex = pendingImpiantoActions.findIndex((action) => (
+    action.type === "done"
+    && action.userId === currentUser?.uid
+    && action.commessaId === selectedCommessaId
+    && action.impiantoKey === impiantoKey
+    && action.whatsappStatus !== "sent"
+  ));
+  const actionId = existingIndex >= 0 ? pendingImpiantoActions[existingIndex].id : `${currentUser?.uid || "user"}:${selectedCommessaId}:${impiantoKey || impiantoIds[0] || "impianto"}:${Date.now()}`;
+  const payload = buildImpiantoWhatsAppPayload({ ...impianto, doneAt: doneAtLocal, doneBy: doneByLocal }, {
+    doneAt: doneAtLocal,
+    operatorName: doneByLocal
+  });
+  const action = {
+    ...(existingIndex >= 0 ? pendingImpiantoActions[existingIndex] : {}),
+    id: actionId,
+    type: "done",
+    status: "pending",
+    whatsappStatus: "pending",
+    userId: currentUser?.uid || "",
+    userEmail: currentUser?.email || "",
+    commessaId: selectedCommessaId,
+    commessaName: selectedCommessaName || "Commessa",
+    impiantoIds,
+    impiantoKey,
+    impiantoName: impianto.denominazione || "Impianto",
+    impianto: getSerializableImpiantoSnapshot(impianto),
+    doneAt: doneAtLocal.toISOString(),
+    doneBy: doneByLocal,
+    whatsappMessage: payload.message,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  if (existingIndex >= 0) pendingImpiantoActions.splice(existingIndex, 1, action);
+  else pendingImpiantoActions.push(action);
+  savePendingImpiantoActions();
+  renderPendingWhatsappList();
+  return action;
+}
+
+function markPendingActionStatus(actionId, patch) {
+  const index = pendingImpiantoActions.findIndex((action) => action.id === actionId);
+  if (index < 0) return null;
+  pendingImpiantoActions[index] = {
+    ...pendingImpiantoActions[index],
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+  savePendingImpiantoActions();
+  renderPendingWhatsappList();
+  if (selectedCommessaId) {
+    currentImpianti = applyPendingActionsToImpianti(currentImpianti, selectedCommessaId);
+    renderImpianti();
+    renderMap();
+  }
+  return pendingImpiantoActions[index];
+}
+
+function buildPendingActionImpianto(action) {
+  return {
+    ...(action.impianto || {}),
+    id: Array.isArray(action.impiantoIds) ? action.impiantoIds[0] : "",
+    sourceIds: Array.isArray(action.impiantoIds) ? action.impiantoIds : [],
+    done: true,
+    doneAt: action.doneAt ? new Date(action.doneAt) : new Date(),
+    doneBy: action.doneBy || "Operatore"
+  };
+}
+
+async function syncPendingImpiantoActions() {
+  if (isNetworkOffline() || !currentUser) {
+    renderPendingWhatsappList();
+    return;
+  }
+  const actionsToSync = getCurrentUserPendingActions().filter((action) => isActionWaitingForSync(action));
+  if (!actionsToSync.length) {
+    renderPendingWhatsappList();
+    return;
+  }
+  const syncedWhatsappActions = [];
+  for (const action of actionsToSync) {
+    const impiantoIds = Array.isArray(action.impiantoIds) ? action.impiantoIds.filter(Boolean) : [];
+    if (!action.commessaId || !impiantoIds.length) continue;
+    markPendingActionStatus(action.id, { status: "syncing", lastError: "" });
+    try {
+      const doneAtDate = action.doneAt ? new Date(action.doneAt) : new Date();
+      await setImpiantoDone(action.commessaId, impiantoIds, true, {
+        doneAt: doneAtDate,
+        doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore"
+      });
+      const exportPayload = {
+        commessaId: action.commessaId,
+        commessaName: action.commessaName || "Commessa",
+        impianto: buildPendingActionImpianto(action)
+      };
+      if (!canManageData()) await queueSheetExportForAdmin(exportPayload);
+      else scheduleCommessaSheetSync(action.commessaId, action.commessaName || "Commessa", 200);
+      await publishGlobalNotificationEvent("impianto-done", {
+        title: "Impianto completato",
+        body: `${action.doneBy || "Operatore"} ha premuto FATTO su ${action.impiantoName || "Impianto"} (${action.commessaName || "Commessa"}).`,
+        commessaId: action.commessaId,
+        commessaName: action.commessaName || "Commessa",
+        impiantoName: action.impiantoName || "Impianto",
+        impiantoKey: action.impiantoKey || ""
+      });
+      const updatedAction = markPendingActionStatus(action.id, {
+        status: "synced",
+        syncedAt: new Date().toISOString(),
+        whatsappStatus: action.whatsappStatus === "sent" ? "sent" : "pending",
+        lastError: ""
+      });
+      if (updatedAction && updatedAction.whatsappStatus !== "sent") syncedWhatsappActions.push(updatedAction);
+    } catch (error) {
+      console.error("Sincronizzazione pendingAction FATTO non riuscita:", error);
+      markPendingActionStatus(action.id, {
+        status: "syncFailed",
+        lastError: String(error && error.message ? error.message : error).slice(0, 500)
+      });
+    }
+  }
+  if (selectedCommessaId) {
+    currentImpianti = applyPendingActionsToImpianti(currentImpianti, selectedCommessaId);
+    renderImpianti();
+    renderMap();
+  }
+  const alertable = syncedWhatsappActions.filter((action) => !pendingWhatsappAlertShownForSyncIds.has(action.id));
+  if (alertable.length) {
+    alertable.forEach((action) => pendingWhatsappAlertShownForSyncIds.add(action.id));
+    alert("Ci sono messaggi WhatsApp da inviare");
+  }
+  renderPendingWhatsappList();
+}
+
+function openPendingWhatsApp(actionId) {
+  if (isNetworkOffline()) {
+    alert("WhatsApp non può essere inviato automaticamente offline. Torna online e premi di nuovo Invia WhatsApp.");
+    return;
+  }
+  const action = pendingImpiantoActions.find((item) => item.id === actionId);
+  if (!action) return;
+  const message = action.whatsappMessage || buildImpiantoWhatsAppPayload(buildPendingActionImpianto(action), {
+    doneAt: action.doneAt ? new Date(action.doneAt) : new Date(),
+    operatorName: action.doneBy || "Operatore"
+  }).message;
+  const opened = safeOpenWhatsAppMessage(message);
+  if (!opened) {
+    alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
+    return;
+  }
+  markPendingActionStatus(actionId, {
+    whatsappStatus: "whatsappOpened",
+    whatsappOpenedAt: new Date().toISOString()
+  });
+}
+
+function markPendingWhatsAppSent(actionId) {
+  const currentStatus = pendingImpiantoActions.find((item) => item.id === actionId)?.status || "pending";
+  markPendingActionStatus(actionId, {
+    whatsappStatus: "sent",
+    sentAt: new Date().toISOString(),
+    status: isActionWaitingForSync({ status: currentStatus }) ? currentStatus : "complete"
+  });
+}
+
+function renderPendingWhatsappList() {
+  if (!ui.pendingWhatsappCard || !ui.pendingWhatsappList || !ui.pendingWhatsappSummary) return;
+  const actions = getPendingWhatsappActions();
+  const count = actions.length;
+  ui.pendingWhatsappCard.classList.toggle("hidden", count === 0);
+  ui.pendingWhatsappBadge?.classList.toggle("hidden", count === 0);
+  ui.pendingWhatsappSummary.textContent = count
+    ? `${count} messagg${count === 1 ? "io" : "i"} WhatsApp da inviare manualmente appena sei online.`
+    : "Nessun messaggio in attesa.";
+  ui.pendingWhatsappList.innerHTML = "";
+  actions.forEach((action) => {
+    const row = document.createElement("div");
+    row.className = "simple-list-item stacked pending-whatsapp-item";
+    const doneLabel = action.doneAt ? new Date(action.doneAt).toLocaleString("it-IT") : "-";
+    const syncLabel = isActionWaitingForSync(action)
+      ? "FATTO - DA SINCRONIZZARE"
+      : "FATTO sincronizzato";
+    const whatsappLabel = action.whatsappStatus === "whatsappOpened" ? "WhatsApp aperto" : "WhatsApp in attesa";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHTML(action.impiantoName || "Impianto")}</strong>
+        <p class="muted">${escapeHTML(action.commessaName || "Commessa")} • ${escapeHTML(doneLabel)} • ${escapeHTML(syncLabel)} • ${escapeHTML(whatsappLabel)}</p>
+        ${action.lastError ? `<p class="muted pending-error">Ultimo errore sync: ${escapeHTML(action.lastError)}</p>` : ""}
+      </div>
+    `;
+    const actionsBox = document.createElement("div");
+    actionsBox.className = "item-actions";
+    const sendBtn = createButton("Invia WhatsApp", () => openPendingWhatsApp(action.id));
+    sendBtn.disabled = isNetworkOffline();
+    actionsBox.appendChild(sendBtn);
+    actionsBox.appendChild(createButton("Segna come inviato", () => markPendingWhatsAppSent(action.id)));
+    row.appendChild(actionsBox);
+    ui.pendingWhatsappList.appendChild(row);
+  });
+}
+
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
   let previousDoneSignature = null;
@@ -7545,7 +7873,7 @@ function subscribeImpianti() {
     .collection("impianti")
     .onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      currentImpianti = combineImpiantiForView(rawImpianti);
+      currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
       renderHeaderActivitySummary();
       renderImpianti();
       renderMap();
@@ -8691,6 +9019,8 @@ function renderImpianti() {
     article.className = `impianto-item ${impianto.done ? "done" : "todo"}`;
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
+    const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+    const waitingForSync = isActionWaitingForSync(pendingAction);
     article.dataset.impiantoKey = impiantoKey;
     article.classList.toggle("is-expanded", detailsVisible);
     if (highlightedImpiantoKey === impiantoKey) article.classList.add("highlight");
@@ -8709,6 +9039,8 @@ function renderImpianti() {
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
+      ${waitingForSync ? `<span class="badge badge-sync-pending">FATTO - DA SINCRONIZZARE</span>` : ""}
+      ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
       <small class="impianto-travel-meta">
         ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
       </small>
@@ -8727,7 +9059,7 @@ function renderImpianti() {
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
-      <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
+      <p><b>Stato:</b> ${waitingForSync ? "FATTO - DA SINCRONIZZARE" : (impianto.done ? "Fatto" : "Da fare")}</p>
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
     if (linkedNotes.length) {
@@ -8791,6 +9123,11 @@ function renderImpianti() {
       "✉️",
       "Invia messaggio",
       async () => {
+        if (isNetworkOffline()) {
+          if (!impianto.done) await markImpiantoDone(impianto);
+          else alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
+          return;
+        }
         const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
         if (!whatsappOpened) return;
         if (!impianto.done) markImpiantoDoneVisualFallback(impianto);
@@ -8818,8 +9155,9 @@ function renderImpianti() {
       "✅",
       "Fatto",
       async () => {
+        const wasOffline = isNetworkOffline();
         const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked) triggerImpiantoWhatsAppAction(impianto);
+        if (doneMarked && !wasOffline) triggerImpiantoWhatsAppAction(impianto);
       },
       Boolean(impianto.done),
       true,
@@ -9089,7 +9427,7 @@ async function navigateToImpianto(impianto) {
 async function markImpiantoDone(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
-  if (!canManageData()) {
+  if (!canManageData() && !isNetworkOffline()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;
@@ -9108,11 +9446,33 @@ async function markImpiantoDone(impianto) {
   const doneAtLocal = new Date();
   const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   trackLocalSheetMutation(selectedCommessaId);
+
+  if (isNetworkOffline()) {
+    const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    updateImpiantoLocalState(ids, {
+      done: true,
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      pendingActionId: pendingAction.id,
+      pendingActionStatus: "pending",
+      pendingWhatsappStatus: "pending"
+    });
+    setImpiantiViewMode("done");
+    alert("Sei offline: FATTO salvato localmente. WhatsApp resta in attesa e sarà disponibile quando torna internet.");
+    return true;
+  }
+
   try {
     updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
-    await setImpiantoDone(selectedCommessaId, ids, true);
+    await setImpiantoDone(selectedCommessaId, ids, true, { doneAt: doneAtLocal, doneBy: doneByLocal });
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
+    if (isNetworkOffline()) {
+      const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+      updateImpiantoLocalState(ids, { pendingActionId: pendingAction.id, pendingActionStatus: "pending", pendingWhatsappStatus: "pending" });
+      return true;
+    }
     retrySetImpiantoDone(selectedCommessaId, ids, true);
   }
 
@@ -10264,7 +10624,8 @@ function getPersonaleDisplayName(person) {
 async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const user = auth.currentUser;
   if (!user) return;
-  const doneAt = done ? firebase.firestore.Timestamp.fromDate(new Date()) : null;
+  const doneAtDate = options.doneAt instanceof Date ? options.doneAt : new Date();
+  const doneAt = done ? firebase.firestore.Timestamp.fromDate(doneAtDate) : null;
 
   if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
   const ref = db.collection("commesse").doc(commessaId).collection("impianti");
@@ -10272,7 +10633,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
     const payload = {
       done,
       doneAt,
-      doneBy: done ? (user.displayName || user.email || "Operatore") : ""
+      doneBy: done ? (options.doneBy || user.displayName || user.email || "Operatore") : ""
     };
     if (!done) {
       const resetAtDate = options.resetAt instanceof Date ? options.resetAt : new Date();
@@ -10301,22 +10662,17 @@ function canTriggerImpiantoWhatsApp(impianto, notify = true) {
 
 function triggerImpiantoWhatsAppAction(impianto) {
   if (!canTriggerImpiantoWhatsApp(impianto, true)) return false;
-  openWhatsApp(impianto);
-  return true;
+  return openWhatsApp(impianto);
 }
 
-function openWhatsApp(impianto, options = {}) {
+function buildImpiantoWhatsAppPayload(impianto, options = {}) {
   const user = auth.currentUser;
-  if (!user) {
-    alert("Devi fare login.");
-    return;
-  }
-
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const title = isOnlyOrdinaria
     ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
-  const doneInfo = formatDoneDateTime(impianto.doneAt);
+  const doneAt = options.doneAt || impianto.doneAt || new Date();
+  const doneInfo = formatDoneDateTime(doneAt);
   const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
   const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
   const linkedNotes = getCommessaNoteLinkedNotes(impianto);
@@ -10327,6 +10683,7 @@ function openWhatsApp(impianto, options = {}) {
         ...linkedNotes.map((note) => `${getCommessaNoteTitle(note)}\n${note.text || "-"}`)
       ]
     : [];
+  const operatorName = options.operatorName || user?.displayName || user?.email || impianto.doneBy || "-";
   const message = [
     `${title} - Report operativo`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
@@ -10334,18 +10691,30 @@ function openWhatsApp(impianto, options = {}) {
     `🛣️ Via: ${impianto.indirizzo || "-"}`,
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
-    `👷 Operatore: ${user.displayName || user.email || "-"}`,
+    `👷 Operatore: ${operatorName}`,
     `📅 Data: ${date}`,
     `🕒 Ora: ${time}`,
     ...segnalazioniLines
   ].join("\n");
 
   const encodedMessage = encodeURIComponent(message);
-  const appUrl = `whatsapp://send?text=${encodedMessage}`;
-  const useContactPicker = options?.preferContactPicker !== false;
-  const webUrl = useContactPicker
-    ? `https://wa.me/?text=${encodedMessage}`
-    : `https://api.whatsapp.com/send?text=${encodedMessage}`;
+  return {
+    message,
+    appUrl: `whatsapp://send?text=${encodedMessage}`,
+    webUrl: options.preferContactPicker === false
+      ? `https://api.whatsapp.com/send?text=${encodedMessage}`
+      : `https://wa.me/?text=${encodedMessage}`
+  };
+}
+
+function openWhatsApp(impianto, options = {}) {
+  const user = auth.currentUser;
+  if (!user) {
+    alert("Devi fare login.");
+    return false;
+  }
+
+  const { message, appUrl, webUrl } = buildImpiantoWhatsAppPayload(impianto, options);
   const targetWindow = options?.targetWindow;
   const disableWebFallback = Boolean(options?.disableWebFallback);
   if (targetWindow && !targetWindow.closed) {
@@ -10363,7 +10732,7 @@ function openWhatsApp(impianto, options = {}) {
         }
       }, 700);
     }
-    return;
+    return true;
   }
   const target = options?.target || "_blank";
   const opened = safeOpenWhatsAppMessage(message, {
@@ -10375,6 +10744,7 @@ function openWhatsApp(impianto, options = {}) {
   if (!opened && !disableWebFallback) {
     openExternalUrl(webUrl, { target: "_blank", features: "noopener", allowSameWindowFallback: true });
   }
+  return Boolean(opened);
 }
 
 function openImpiantoReportModal(impianto) {
@@ -10720,19 +11090,6 @@ function getCommessaAccentColor(commessaId, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function getPlatformUserPosition(user) {
-  const position = user?.lastPosition || {};
-  const lat = Number(position.lat);
-  const lng = Number(position.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return {
-    lat,
-    lng,
-    accuracy: Number(position.accuracy || 0),
-    updatedAt: position.updatedAt || user.lastSeenAt || null
-  };
-}
-
 function getTimestampDate(value) {
   if (!value) return null;
   if (typeof value.toDate === "function") return value.toDate();
@@ -10741,8 +11098,23 @@ function getTimestampDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getOperatorMarkerLabel(user) {
-  const label = getPlatformUserLabel(user).replace(/<[^>]*>/g, "").trim();
+function buildOperatorPositionPopup(position) {
+  const label = position.operatorName || position.displayName || position.email || "Operatore";
+  const updatedAt = getTimestampDate(position.updatedAt);
+  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
+  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
+  const squadraLabel = [position.squadraLabel, position.squadraName].filter(Boolean).join(" • ") || "Squadra non associata";
+  const commessaLabel = position.commessaName || "Commessa non associata";
+  return [
+    `<b>👷 ${escapeHTML(label)}</b>`,
+    `<small>Squadra: ${escapeHTML(squadraLabel)}</small>`,
+    `<small>Commessa: ${escapeHTML(commessaLabel)}</small>`,
+    `<small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`
+  ].join("<br>");
+}
+
+function getOperatorPositionMarkerLabel(position) {
+  const label = String(position.operatorName || position.displayName || position.email || "Operatore").trim();
   const initials = label
     .split(/[\s._@-]+/)
     .map((part) => part.trim()[0])
@@ -10753,53 +11125,62 @@ function getOperatorMarkerLabel(user) {
   return initials || "👷";
 }
 
-function buildOperatorPositionPopup(user, position) {
-  const label = getPlatformUserLabel(user);
-  const updatedAt = getTimestampDate(position.updatedAt);
-  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
-  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
-  return `<b>👷 ${escapeHTML(label)}</b><br><small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`;
-}
-
-function addOperatorMarkerToLayer(user, position, layer) {
-  const markerLabel = getOperatorMarkerLabel(user);
+function addOperatorPositionMarkerToLayer(position, layer) {
+  const markerLabel = getOperatorPositionMarkerLabel(position);
+  const title = position.operatorName || position.displayName || position.email || "Operatore";
   return L.marker([position.lat, position.lng], {
     icon: L.divIcon({
       className: "",
-      html: `<div class='marker-operator' title='${escapeHTML(getPlatformUserLabel(user))}'>${escapeHTML(markerLabel)}</div>`,
+      html: `<div class='marker-operator' title='${escapeHTML(title)}'>${escapeHTML(markerLabel)}</div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14]
     })
-  }).addTo(layer).bindPopup(buildOperatorPositionPopup(user, position));
+  }).addTo(layer).bindPopup(buildOperatorPositionPopup(position));
 }
 
-function getOperatorPositionUsersForMap() {
-  const byId = new Map(platformUsers.map((user) => [user.id, user]));
+function getOperatorPositionsForMap() {
+  if (!canManageData() || !operatorPositionsVisible) return [];
+  const byId = new Map(operatorPositions.map((position) => [position.id || position.uid, position]));
   if (currentUser && currentUserPos) {
+    const currentAssignment = getCurrentOperatorPositionAssignment();
     byId.set(currentUser.uid, {
       ...(byId.get(currentUser.uid) || {}),
       id: currentUser.uid,
       uid: currentUser.uid,
       email: currentUser.email || "",
       displayName: currentUser.displayName || currentUser.email || "Utente",
-      lastPosition: {
-        lat: currentUserPos.lat,
-        lng: currentUserPos.lng,
-        accuracy: currentUserPos.accuracy || 0,
-        updatedAt: new Date()
-      }
+      operatorName: currentAssignment.operatorName || currentUser.displayName || currentUser.email || "Utente",
+      ...currentAssignment,
+      lat: currentUserPos.lat,
+      lng: currentUserPos.lng,
+      accuracy: currentUserPos.accuracy || 0,
+      updatedAt: new Date()
     });
   }
-  return Array.from(byId.values()).filter((user) => getPlatformUserPosition(user));
+  return Array.from(byId.values()).filter((position) => {
+    const lat = Number(position.lat);
+    const lng = Number(position.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    position.lat = lat;
+    position.lng = lng;
+    position.accuracy = Number(position.accuracy || 0);
+    return true;
+  });
 }
 
 function renderOperatorPositionMarkers(bounds) {
-  getOperatorPositionUsersForMap().forEach((user) => {
-    const position = getPlatformUserPosition(user);
-    addOperatorMarkerToLayer(user, position, markerLayer);
-    addOperatorMarkerToLayer(user, position, fullscreenMarkerLayer);
+  getOperatorPositionsForMap().forEach((position) => {
+    addOperatorPositionMarkerToLayer(position, markerLayer);
+    addOperatorPositionMarkerToLayer(position, fullscreenMarkerLayer);
     bounds.push([position.lat, position.lng]);
   });
+}
+
+function toggleOperatorPositionsVisibility() {
+  if (!canManageData()) return;
+  operatorPositionsVisible = !operatorPositionsVisible;
+  updateAdminControls();
+  renderMap();
 }
 
 function renderMap() {
@@ -11823,21 +12204,40 @@ function shouldPublishOperatorPosition(coords) {
   return movedMeters >= 25 || now - lastPositionPublishAt >= 60 * 1000;
 }
 
+function getCurrentOperatorPositionAssignment() {
+  const dateKey = getActiveSquadreDateKey();
+  const assignment = getCurrentUserAssignedCommesseForDate(dateKey)[0];
+  const matchedRow = assignment?.matchedRows?.[0] || null;
+  return {
+    operatorName: matchedRow?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore",
+    squadraIndex: matchedRow?.squadraIndex || "",
+    squadraLabel: matchedRow?.squadraLabel || "",
+    squadraName: matchedRow?.row?.nome || matchedRow?.row?.name || "",
+    commessaId: assignment?.commessaId || "",
+    commessaName: assignment?.commessaName || "",
+    riferimentoData: dateKey || ""
+  };
+}
+
 async function publishCurrentOperatorPosition(coords) {
   if (!shouldPublishOperatorPosition(coords)) return;
   lastPositionPublishAt = Date.now();
   lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
   try {
+    await db.collection("operatorPositions").doc(currentUser.uid).set({
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: currentUser.displayName || currentUser.email || "Utente",
+      ...getCurrentOperatorPositionAssignment(),
+      lat: Number(coords.latitude),
+      lng: Number(coords.longitude),
+      accuracy: Number(coords.accuracy || 0),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     await db.collection("platformUsers").doc(currentUser.uid).set({
       uid: currentUser.uid,
       email: currentUser.email || "",
       displayName: currentUser.displayName || currentUser.email || "Utente",
-      lastPosition: {
-        lat: Number(coords.latitude),
-        lng: Number(coords.longitude),
-        accuracy: Number(coords.accuracy || 0),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      },
       lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   } catch (error) {
@@ -11860,7 +12260,9 @@ function initGeolocation() {
     };
     publishCurrentOperatorPosition(pos.coords);
     evaluateTimbraturaReminders();
-    ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza e operatori visibili sulla mappa.";
+    ui.gpsStatus.textContent = canManageData()
+      ? "Posizione attiva: impianti ordinati per distanza e squadre visibili sulla mappa."
+      : "Posizione attiva: impianti ordinati per distanza.";
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
@@ -12620,14 +13022,6 @@ async function upsertCurrentPlatformUser() {
     displayName: currentUser.displayName || currentUser.email || "Utente",
     isAdmin: canManageData(),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
-    ...(currentUserPos ? {
-      lastPosition: {
-        lat: Number(currentUserPos.lat),
-        lng: Number(currentUserPos.lng),
-        accuracy: Number(currentUserPos.accuracy || 0),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }
-    } : {}),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
@@ -12644,6 +13038,11 @@ function subscribeAdminUsers() {
     subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
+    if (currentUser) {
+      subscribeUsers();
+      subscribeOperatorPositions();
+      syncPendingImpiantoActions();
+    }
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
     adminEmails = new Set([ADMIN_EMAIL]);
@@ -12651,6 +13050,11 @@ function subscribeAdminUsers() {
     subscribePosDocuments();
     renderCommesseManagementList();
     renderAdminUsers();
+    if (currentUser) {
+      subscribeUsers();
+      subscribeOperatorPositions();
+      syncPendingImpiantoActions();
+    }
   });
 }
 
@@ -12664,7 +13068,12 @@ function stopAdminUsersSubscription() {
 }
 
 function subscribeUsers() {
-  unsubscribeUsers = db.collection("platformUsers").onSnapshot((snapshot) => {
+  stopUsersSubscription();
+  if (!currentUser) return;
+  const source = canManageData()
+    ? db.collection("platformUsers")
+    : db.collection("platformUsers").where(firebase.firestore.FieldPath.documentId(), "==", currentUser.uid);
+  unsubscribeUsers = source.onSnapshot((snapshot) => {
     platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
     syncNotificationAutoPreferenceFromProfile();
@@ -12677,7 +13086,37 @@ function subscribeUsers() {
     renderExternalApps();
     renderMap();
     checkAndSendHoursDeadlineAlerts();
+  }, (error) => {
+    console.error("Errore caricamento utenti:", error);
+    platformUsers = [];
+    renderChatRecipients();
+    renderHeaderActivitySummary();
   });
+}
+
+function subscribeOperatorPositions() {
+  stopOperatorPositionsSubscription();
+  if (!currentUser || !canManageData()) {
+    operatorPositions = [];
+    renderMap();
+    return;
+  }
+  unsubscribeOperatorPositions = db.collection("operatorPositions").onSnapshot((snapshot) => {
+    operatorPositions = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderMap();
+  }, (error) => {
+    console.error("Errore caricamento posizioni squadre:", error);
+    operatorPositions = [];
+    renderMap();
+  });
+}
+
+function stopOperatorPositionsSubscription() {
+  if (unsubscribeOperatorPositions) {
+    unsubscribeOperatorPositions();
+    unsubscribeOperatorPositions = null;
+  }
+  operatorPositions = [];
 }
 
 function stopUsersSubscription() {

@@ -1182,9 +1182,14 @@ textarea:focus-visible {
 }
 
 #map-fullscreen-page {
+  --map-fullscreen-toolbar-space: calc(48px + env(safe-area-inset-top, 0px));
   position: fixed;
   inset: 0;
   z-index: 1300;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
   background: #fff;
   padding: 0;
 }
@@ -1192,30 +1197,132 @@ textarea:focus-visible {
 .map-fullscreen-page-card {
   min-height: 100dvh;
   height: 100dvh;
-  width: 100vw;
+  width: 100%;
   margin: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 8px;
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: #fff;
 }
 
 .map-fullscreen-toolbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 1400;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: calc(48px + env(safe-area-inset-top, 0px));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: calc(6px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 6px max(8px, env(safe-area-inset-left, 0px));
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom: 1px solid rgba(214, 223, 236, 0.9);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.map-fullscreen-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.map-fullscreen-toolbar .btn {
+  flex: 0 0 auto;
+  min-height: 34px;
+  min-width: max-content;
+  padding: 6px 9px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.map-fullscreen-map-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  height: calc(100dvh - var(--map-fullscreen-toolbar-space));
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: #dbeafe;
 }
 
 #map-fullscreen-view {
+  position: absolute;
+  inset: 0;
   height: 100%;
-  min-height: 0;
+  min-height: 100%;
   width: 100%;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
+  background: #dbeafe;
+}
+
+.map-fullscreen-feedback-banner {
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right, 0px));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  left: max(10px, env(safe-area-inset-left, 0px));
+  z-index: 1350;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(191, 219, 254, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  color: var(--text);
+}
+
+.map-fullscreen-feedback-banner p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.map-fullscreen-feedback-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-fullscreen-feedback-close:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 2px;
+}
+
+#map-fullscreen-view.map-fullscreen-view--drawing {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#map-fullscreen-view.map-fullscreen-view--drawing .leaflet-container,
+#map-fullscreen-view.map-fullscreen-view--drawing .leaflet-pane {
+  touch-action: none;
 }
 
 .map-popup-card p {
@@ -2011,8 +2118,11 @@ textarea:focus-visible {
   .page-head { align-items: stretch; }
   #map { height: min(32dvh, 260px); min-height: 170px; }
   #global-map { height: min(40dvh, 360px); min-height: 240px; }
-  .map-fullscreen-page-card { padding: 8px; }
-  #map-fullscreen-view { min-height: 0; }
+  #map-fullscreen-page { --map-fullscreen-toolbar-space: calc(44px + env(safe-area-inset-top, 0px)); }
+  .map-fullscreen-toolbar { min-height: calc(44px + env(safe-area-inset-top, 0px)); padding-top: calc(5px + env(safe-area-inset-top, 0px)); padding-bottom: 5px; }
+  .map-fullscreen-toolbar .btn { min-height: 32px; padding: 5px 8px; font-size: 0.8rem; }
+  .map-fullscreen-map-wrap { height: calc(100dvh - var(--map-fullscreen-toolbar-space)); }
+  #map-fullscreen-view { min-height: 100%; }
   .impianti-lista { gap: 6px; }
   .impianto-item { padding: 6px; }
   .impianto-item p { margin: 2px 0; font-size: 0.9rem; }

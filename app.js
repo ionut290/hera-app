@@ -190,7 +190,9 @@ const ui = {
   mapDrawRedoBtn: document.getElementById("map-draw-redo-btn"),
   mapDrawClearBtn: document.getElementById("map-draw-clear-btn"),
   mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
+  mapFullscreenFeedbackBanner: document.getElementById("map-fullscreen-feedback-banner"),
   mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
+  mapFullscreenFeedbackClose: document.getElementById("map-fullscreen-feedback-close"),
   impiantiPageTitle: document.getElementById("impianti-page-title"),
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
@@ -1034,6 +1036,7 @@ ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
 ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
 ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
+ui.mapFullscreenFeedbackClose?.addEventListener("click", () => ui.mapFullscreenFeedbackBanner?.classList.add("hidden"));
 ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
@@ -2051,14 +2054,17 @@ function openMapFullscreenPage() {
   ui.impiantiPage.classList.add("hidden");
   ui.mapFullscreenPage.classList.remove("hidden");
   ui.mapFullscreenBtn.textContent = "⤢ Mappa a schermo intero";
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   syncDrawAreaToolbarState();
-  setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
+  setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
     refreshFullscreenMapLayout();
     renderMap();
   }, 60);
+  setTimeout(() => {
+    if (fullscreenMap) fullscreenMap.invalidateSize({ pan: false, animate: false });
+  }, 300);
 }
 
 function closeMapFullscreenPage() {
@@ -2069,9 +2075,9 @@ function closeMapFullscreenPage() {
   setFullscreenMapInteractivity(true);
   ui.mapFullscreenPage.classList.add("hidden");
   ui.impiantiPage.classList.remove("hidden");
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   syncDrawAreaToolbarState();
-  setFullscreenFeedback("Usa “Disegna la tua area” per definire il perimetro di lavoro.");
+  setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
 }
 
@@ -2083,6 +2089,7 @@ function refreshFullscreenMapLayout() {
 
 function setFullscreenFeedback(message) {
   if (ui.mapFullscreenFeedback) ui.mapFullscreenFeedback.textContent = message;
+  if (ui.mapFullscreenFeedbackBanner) ui.mapFullscreenFeedbackBanner.classList.remove("hidden");
 }
 
 function toggleDrawAreaMode() {
@@ -2093,13 +2100,13 @@ function toggleDrawAreaMode() {
     isDrawingStrokeActive = false;
     setFullscreenMapInteractivity(false);
     renderDrawnArea();
-    ui.mapDrawAreaBtn.textContent = "✅ Termina disegno";
+    ui.mapDrawAreaBtn.textContent = "✅ Termina";
     syncDrawAreaToolbarState();
-    setFullscreenFeedback("Disegno attivo: trascina il dito sulla mappa per tracciare liberamente l'area.");
+    setFullscreenFeedback("Modalità disegno attiva: trascina il dito per tracciare l'area.");
     return;
   }
   setFullscreenMapInteractivity(true);
-  ui.mapDrawAreaBtn.textContent = "✏️ Disegna sulla mappa";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   isDrawingStrokeActive = false;
   syncDrawAreaToolbarState();
   if (drawnAreaPoints.length < 3) {
@@ -2127,7 +2134,8 @@ function setFullscreenMapInteractivity(enabled) {
   });
   const container = fullscreenMap.getContainer();
   if (!container) return;
-  container.style.touchAction = enabled ? "auto" : "none";
+  container.style.touchAction = enabled ? "pan-x pan-y" : "none";
+  container.classList.toggle("map-fullscreen-view--drawing", !enabled);
 }
 
 function mapPointerEventToLatLng(event) {
@@ -2139,6 +2147,9 @@ function mapPointerEventToLatLng(event) {
 function onFullscreenMapPointerDown(event) {
   if (!drawAreaModeActive) return;
   event.preventDefault();
+  if (event.pointerId !== undefined && event.currentTarget?.setPointerCapture) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
   isDrawingStrokeActive = true;
   drawnAreaPoints = [];
   drawnAreaRedoStack = [];
@@ -2165,6 +2176,13 @@ function onFullscreenMapPointerMove(event) {
 function onFullscreenMapPointerUp(event) {
   if (!drawAreaModeActive || !isDrawingStrokeActive) return;
   event.preventDefault();
+  if (event.pointerId !== undefined && event.currentTarget?.releasePointerCapture) {
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      console.warn("Pointer capture già rilasciato", error);
+    }
+  }
   isDrawingStrokeActive = false;
   if (drawnAreaPoints.length >= 3) {
     const first = drawnAreaPoints[0];

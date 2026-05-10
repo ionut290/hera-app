@@ -240,16 +240,21 @@
 
     <section id="map-fullscreen-page" class="hidden">
       <section class="map-fullscreen-page-card">
-        <div class="section-head map-fullscreen-toolbar">
-          <button id="map-fullscreen-back-btn" class="btn" type="button">← Torna indietro</button>
-          <button id="map-draw-area-btn" class="btn" type="button">✏️ Disegna sulla mappa</button>
-          <button id="map-draw-undo-btn" class="btn" type="button" disabled>↩️ Annulla tratto</button>
-          <button id="map-draw-redo-btn" class="btn" type="button" disabled>↪️ Rifai</button>
+        <div class="section-head map-fullscreen-toolbar" aria-label="Azioni mappa a schermo intero">
+          <button id="map-fullscreen-back-btn" class="btn" type="button">← Indietro</button>
+          <button id="map-draw-area-btn" class="btn" type="button">✏️ Disegna</button>
+          <button id="map-draw-undo-btn" class="btn" type="button" disabled>↩️ Annulla</button>
+          <button id="map-draw-redo-btn" class="btn" type="button" disabled>🔁 Rifai</button>
           <button id="map-draw-clear-btn" class="btn" type="button" disabled>🧹 Cancella</button>
-          <button id="map-share-area-whatsapp-btn" class="btn" type="button" disabled>📤 Condividi su WhatsApp</button>
+          <button id="map-share-area-whatsapp-btn" class="btn" type="button" disabled>📤 WhatsApp</button>
         </div>
-        <div id="map-fullscreen-view"></div>
-        <p id="map-fullscreen-feedback" class="muted">Usa “Disegna la tua area” per definire il perimetro di lavoro.</p>
+        <div class="map-fullscreen-map-wrap">
+          <div id="map-fullscreen-view"></div>
+          <div id="map-fullscreen-feedback-banner" class="map-fullscreen-feedback-banner" role="status" aria-live="polite">
+            <p id="map-fullscreen-feedback">Usa “Disegna” per definire il perimetro di lavoro.</p>
+            <button id="map-fullscreen-feedback-close" class="map-fullscreen-feedback-close" type="button" aria-label="Nascondi istruzioni">×</button>
+          </div>
+        </div>
       </section>
     </section>
   </main>

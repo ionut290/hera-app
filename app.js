@@ -4923,21 +4923,139 @@ function doesHoursEntryMatchSquadra(entry, squadraIndex = "") {
   return !entryIndexes.size || entryIndexes.has(targetIndex);
 }
 
-function hasHoursRecordForCommessaDateSquadra(commessaId, dateValue, squadraIndex = "") {
+function getHoursParticipantId(row = {}, entry = {}, options = {}) {
+  const allowSquadraFallback = options.allowSquadraFallback !== false;
+  const savedParticipantId = String(row.participantId || "").trim();
+  if (savedParticipantId) return savedParticipantId;
+  const directId = String(
+    row.utenteId
+    || row.userId
+    || row.uid
+    || row.operatoreId
+    || row.personaleId
+    || ""
+  ).trim();
+  if (directId) return `utente:${directId}`;
+  const normalizedOperator = normalizeHoursOperatorName(row.operatore || row.nome || row.name || "");
+  if (normalizedOperator) return `utente:${normalizedOperator}`;
+  const squadraId = String(
+    row.squadraId
+    || entry.squadraId
+    || row.squadraIndex
+    || entry.squadraIndex
+    || ""
+  ).trim();
+  if (allowSquadraFallback && squadraId) return `squadra:${squadraId}`;
+  return "";
+}
+
+function buildHoursFullKey(commessaId, dateValue, participantId) {
   const id = String(commessaId || "").trim();
   const dateKey = String(dateValue || "").trim();
-  if (!id || !dateKey) return false;
+  const participant = String(participantId || "").trim();
+  if (!id || !dateKey || !participant) return "";
+  return `${id}__${dateKey}__${participant}`;
+}
+
+function getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue) {
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const participants = new Map();
+  squadRows.forEach((row, index) => {
+    if (!isSquadraRowFilled(row)) return;
+    const squadraIndex = index + 1;
+    const squadraLabel = `Squadra ${squadraIndex}`;
+    const names = parseMultiEntryValue(row?.personale || "");
+    if (names.length) {
+      names.forEach((name) => {
+        const participantId = getHoursParticipantId(
+          { operatore: name, squadraIndex, squadraLabel },
+          { squadraIndex, squadraLabel },
+          { allowSquadraFallback: false }
+        );
+        const key = buildHoursFullKey(commessaId, dateValue, participantId);
+        if (!key) return;
+        participants.set(key, {
+          key,
+          participantId,
+          operatore: name,
+          squadraIndex,
+          squadraLabel
+        });
+      });
+      return;
+    }
+    const participantId = getHoursParticipantId(
+      { squadraIndex, squadraLabel },
+      { squadraIndex, squadraLabel },
+      { allowSquadraFallback: true }
+    );
+    const key = buildHoursFullKey(commessaId, dateValue, participantId);
+    if (!key) return;
+    participants.set(key, {
+      key,
+      participantId,
+      operatore: squadraLabel,
+      squadraIndex,
+      squadraLabel
+    });
+  });
+  return participants;
+}
+
+function getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue) {
+  const id = String(commessaId || "").trim();
+  const dateKey = String(dateValue || "").trim();
+  const completed = new Map();
+  if (!id || !dateKey) return completed;
   const sources = [
     ...allHoursReports,
     ...allHoursApprovalRequests.filter((request) => String(request.status || "").trim() !== "rejected")
   ];
-  return sources.some((record) => {
-    if (String(record?.date || "").trim() !== dateKey) return false;
-    return (Array.isArray(record?.entries) ? record.entries : []).some((entry) => (
-      String(entry?.commessaId || "").trim() === id
-      && doesHoursEntryMatchSquadra(entry, squadraIndex)
-      && (Array.isArray(entry?.rows) ? entry.rows : []).some((row) => Number(row?.ore || 0) > 0)
-    ));
+  sources.forEach((record) => {
+    if (String(record?.date || "").trim() !== dateKey) return;
+    (Array.isArray(record?.entries) ? record.entries : []).forEach((entry) => {
+      if (String(entry?.commessaId || "").trim() !== id) return;
+      (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+        if (Number(row?.ore || 0) <= 0) return;
+        const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true });
+        const key = buildHoursFullKey(id, dateKey, participantId);
+        if (!key) return;
+        completed.set(key, {
+          key,
+          participantId,
+          operatore: row?.operatore || "",
+          squadraIndex: row?.squadraIndex || entry?.squadraIndex || "",
+          squadraLabel: row?.squadraLabel || entry?.squadraLabel || ""
+        });
+      });
+    });
+  });
+  return completed;
+}
+
+function getMissingHoursParticipantsForCommessaDate(commessaId, dateValue) {
+  const required = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
+  const completed = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
+  return Array.from(required.values()).filter((participant) => !completed.has(participant.key));
+}
+
+function areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateValue) {
+  const required = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
+  if (!required.size) return false;
+  const completed = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
+  return Array.from(required.keys()).every((key) => completed.has(key));
+}
+
+function hasHoursRecordForCommessaDateSquadra(commessaId, dateValue, squadraIndex = "") {
+  const id = String(commessaId || "").trim();
+  const dateKey = String(dateValue || "").trim();
+  const targetIndex = String(squadraIndex || "").trim();
+  if (!id || !dateKey) return false;
+  const completed = getCompletedHoursParticipantsForCommessaDate(id, dateKey);
+  return Array.from(completed.values()).some((participant) => {
+    if (!targetIndex) return true;
+    return String(participant.squadraIndex || "").trim() === targetIndex;
   });
 }
 
@@ -4946,13 +5064,14 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   if (!hoursReportsLoaded || !hoursApprovalsLoaded) return null;
   const squadData = getSquadraDataForCommessaDate(commessaId, dateKey);
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
-  const hasAssignedSquadra = squadRows.some((row) => String(row?.personale || "").trim() || String(row?.mezzi || "").trim());
+  const hasAssignedSquadra = squadRows.some(isSquadraRowFilled);
   if (!dateKey || !hasAssignedSquadra) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   const squadraIndex = assignment?.squadraIndex || "";
   if (!canManageData() && !assignment) return null;
-  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
-  return { dateKey, assignment, squadData, squadRows, squadraIndex };
+  const missingParticipants = getMissingHoursParticipantsForCommessaDate(commessaId, dateKey);
+  if (!missingParticipants.length || areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
+  return { dateKey, assignment, squadData, squadRows, squadraIndex, missingParticipants };
 }
 
 function createAddHoursButton(commessa, dateValue = "") {
@@ -5037,7 +5156,17 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
   }
   const targetDateValue = context.dateKey;
   const assignment = context.assignment;
-  const teamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
+  const allTeamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
+  const missingKeys = new Set((context.missingParticipants || []).map((participant) => participant.key));
+  const teamRows = allTeamRows.filter((row) => {
+    const participantId = getHoursParticipantId(row, { squadraIndex: row.squadraIndex, squadraLabel: row.squadraLabel }, { allowSquadraFallback: true });
+    return missingKeys.has(buildHoursFullKey(id, targetDateValue, participantId));
+  });
+  if (!teamRows.length) {
+    alert("Le ore per oggi sono già state inserite.");
+    renderSquadre();
+    return;
+  }
   const squadraLabel = assignment?.squadraLabel || (canManageData() ? "Tutte le squadre" : "");
   if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
   ui.hoursCommesseList.innerHTML = "";
@@ -5266,7 +5395,25 @@ function normalizeHoursOperatorName(value) {
   return String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
 }
 
-function findDuplicateHoursInDraft(entries) {
+
+function attachHoursFullKeysToEntries(entries = [], dateValue = "") {
+  return entries.map((entry) => {
+    const commessaId = String(entry?.commessaId || "").trim();
+    return {
+      ...entry,
+      rows: (Array.isArray(entry?.rows) ? entry.rows : []).map((row) => {
+        const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true });
+        return {
+          ...row,
+          participantId,
+          hoursKey: buildHoursFullKey(commessaId, dateValue, participantId)
+        };
+      })
+    };
+  });
+}
+
+function findDuplicateHoursInDraft(entries, dateValue = "") {
   const map = new Map();
   const duplicates = [];
   entries.forEach((entry) => {
@@ -5277,7 +5424,8 @@ function findDuplicateHoursInDraft(entries) {
       const normalizedOperator = normalizeHoursOperatorName(operatore);
       const ore = Number(row?.ore || 0);
       if (!normalizedOperator || ore <= 0) return;
-      const key = `${commessaId}__${normalizedOperator}`;
+      const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true }) || `utente:${normalizedOperator}`;
+      const key = buildHoursFullKey(commessaId, dateValue, participantId) || `${commessaId}__${participantId}`;
       if (map.has(key)) {
         duplicates.push({
           commessaId,
@@ -5303,7 +5451,9 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
       const normalizedOperator = normalizeHoursOperatorName(operatore);
       const ore = Number(row?.ore || 0);
       if (!normalizedOperator || ore <= 0) return;
-      requestedKeys.set(`${commessaId}__${normalizedOperator}`, {
+      const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true }) || `utente:${normalizedOperator}`;
+      const key = buildHoursFullKey(commessaId, dateValue, participantId) || `${commessaId}__${dateValue}__${participantId}`;
+      requestedKeys.set(key, {
         commessaId,
         commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
         operatore
@@ -5327,7 +5477,9 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
         const normalizedOperator = normalizeHoursOperatorName(operatore);
         const ore = Number(row?.ore || 0);
         if (!normalizedOperator || ore <= 0) return;
-        const match = requestedKeys.get(`${commessaId}__${normalizedOperator}`);
+        const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true }) || `utente:${normalizedOperator}`;
+        const key = buildHoursFullKey(commessaId, dateValue, participantId) || `${commessaId}__${dateValue}__${participantId}`;
+        const match = requestedKeys.get(key);
         if (!match) return;
         conflicts.push({
           commessaName: entry.commessaName || match.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
@@ -5491,20 +5643,19 @@ async function finalizeHoursReport(event) {
       };
     });
   }
+  payload.entries = attachHoursFullKeysToEntries(payload.entries, dateValue);
   ui.hoursFinalizeBtn.disabled = true;
   ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
-    const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
+    const duplicateDraft = findDuplicateHoursInDraft(payload.entries, dateValue);
     if (duplicateDraft.length) {
-      const first = duplicateDraft[0];
-      ui.hoursFeedback.textContent = `Duplicato bloccato: ${first.operatore || "Operatore"} risulta già inserito nella commessa ${first.commessaName || "Commessa"} per questa data.`;
+      ui.hoursFeedback.textContent = "Le ore per oggi sono già state inserite.";
       return;
     }
 
     const existingConflicts = await findExistingHoursConflicts(dateValue, payload.entries);
     if (existingConflicts.length) {
-      const first = existingConflicts[0];
-      ui.hoursFeedback.textContent = `Inserimento bloccato: ${first.operatore || "Operatore"} ha già ore salvate nella commessa ${first.commessaName || "Commessa"} in data ${dateValue}. Per reinserire, elimina prima la riga dal visualizzatore ore.`;
+      ui.hoursFeedback.textContent = "Le ore per oggi sono già state inserite.";
       return;
     }
 
@@ -14348,8 +14499,7 @@ async function approveHoursRequestLevel2(request) {
     { skipApprovalRequestId: request.id }
   );
   if (conflicts.length) {
-    const first = conflicts[0];
-    alert(`Conferma bloccata: ${first.operatore || "Operatore"} ha già ore inserite nella commessa ${first.commessaName || "Commessa"} per questa data. Elimina prima la riga esistente.`);
+    alert("Le ore per oggi sono già state inserite.");
     return;
   }
   const reportPayload = {

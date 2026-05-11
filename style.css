@@ -3291,6 +3291,28 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.squadra-commessa-link {
+  margin: -4px -4px 8px;
+  padding: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.squadra-commessa-link:hover,
+.squadra-commessa-link:focus-visible {
+  background: #eef2ff;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2), 0 8px 18px rgba(99, 102, 241, 0.12);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.squadra-commessa-link:active {
+  background: #e0e7ff;
+  transform: translateY(0);
+}
+
 .squadra-item-head strong {
   min-width: 0;
   overflow-wrap: anywhere;

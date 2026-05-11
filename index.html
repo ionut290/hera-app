@@ -110,19 +110,16 @@
         <p id="commessa-attiva" class="muted commessa-active-chip">Seleziona una commessa.</p>
       </section>
 
-      <section class="card">
+      <section class="card squadre-card">
         <div class="section-head squadre-section-head">
           <h2>Squadre per commessa</h2>
           <button id="toggle-commesse-home-btn" class="btn squadre-commesse-toggle" type="button" aria-controls="commesse-home-card" aria-expanded="false">Tutte le commesse</button>
-          <span class="pill">Operativo</span>
+          <span class="pill squadre-status-pill">Operativo</span>
         </div>
-        <div id="squadre-filter-controls" class="inline-form squadre-filter-controls hidden">
-          <label for="squadre-filter-date">Giorno squadre</label>
-          <input id="squadre-filter-date" type="date">
-          <button id="squadre-filter-clear-btn" class="btn" type="button">Usa giorno automatico</button>
+        <div id="squadre-filter-controls" class="inline-form squadre-filter-controls hidden" aria-label="Filtro giorno squadre">
+          <input id="squadre-filter-date" type="date" aria-label="Giorno squadre">
+          <button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
         </div>
-        <p id="squadre-filter-status" class="muted"></p>
-        <p id="squadre-next-action" class="muted">Prossima azione consigliata: premi sul tuo mezzo per trovare il distributore.</p>
         <div id="squadre-lista" class="squadre-lista"></div>
       </section>
     </section>

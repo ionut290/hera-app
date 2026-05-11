@@ -1161,7 +1161,7 @@ function syncCommesseHomeToggle() {
   if (ui.toggleCommesseHomeBtn) {
     ui.toggleCommesseHomeBtn.setAttribute("aria-expanded", isVisible ? "true" : "false");
     ui.toggleCommesseHomeBtn.classList.toggle("active", isVisible);
-    ui.toggleCommesseHomeBtn.textContent = isVisible ? "Nascondi commesse" : "Tutte le commesse";
+    ui.toggleCommesseHomeBtn.textContent = isVisible ? "Nascondi" : "Tutte le commesse";
     ui.toggleCommesseHomeBtn.setAttribute(
       "aria-label",
       isVisible ? "Nascondi elenco completo commesse" : "Mostra elenco completo commesse"
@@ -3245,9 +3245,6 @@ function renderNextActionCard() {
   ui.nextActionSummary.textContent = `Prossima azione consigliata: ${primary.label}.`;
   if (ui.commesseNextAction) {
     ui.commesseNextAction.textContent = `Prossima azione consigliata: ${primary.label}.`;
-  }
-  if (ui.squadreNextAction) {
-    ui.squadreNextAction.textContent = "Prossima azione consigliata: premi sul tuo mezzo per trovare il distributore.";
   }
   renderImpiantoNextActionUI();
 }
@@ -11418,13 +11415,6 @@ function renderSquadre() {
   const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
-  if (ui.squadreFilterStatus) {
-    const selectedDateLabel = new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString("it-IT");
-    ui.squadreFilterStatus.textContent = sharedSquadreDateKey
-      ? `Giorno squadre condiviso: mostro a tutti le squadre del ${selectedDateLabel}.`
-      : `Filtro automatico attivo: mostro le squadre del ${selectedDateLabel}.`;
-  }
-
   if (squadreLoadState.status === "loading") {
     ui.squadreLista.innerHTML = "<p class='muted'>Caricamento squadre...</p>";
     return;

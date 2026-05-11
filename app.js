@@ -5696,11 +5696,15 @@ async function sendHoursApprovalChatNotification({ recipients = [], text, sender
   });
 }
 
+function getKnownAdminChatRecipients() {
+  return platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+}
+
 async function notifyLevel1ForHoursApproval(requestId, payload) {
-  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  const adminUsers = getKnownAdminChatRecipients();
   const recipientsMap = new Map(adminUsers.map((user) => [user.id, user]));
   const requesterUser = platformUsers.find((user) => String(user.uid || "") === String(payload?.createdByUid || ""));
-  if (requesterUser?.id) recipientsMap.set(requesterUser.id, requesterUser);
+  if (adminUsers.length && requesterUser?.id) recipientsMap.set(requesterUser.id, requesterUser);
   const dateLabel = payload?.date
     ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
     : "-";
@@ -5720,7 +5724,7 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
 }
 
 async function notifyAdminsForFinalHoursApproval(requestId, payload, approverName) {
-  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  const adminUsers = getKnownAdminChatRecipients();
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const text = `🕒 Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
   await sendHoursApprovalChatNotification({

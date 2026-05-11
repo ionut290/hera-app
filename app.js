@@ -5190,22 +5190,17 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     return;
   }
   const targetDateValue = context.dateKey;
-  const assignment = context.assignment;
   const teamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
-  const squadraLabel = assignment?.squadraLabel || (canManageData() ? "Tutte le squadre" : "");
   if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
   ui.hoursCommesseList.innerHTML = "";
   addHoursCommessaBlock({
     commessaId: id,
-    lockedCommessa: true,
-    squadraIndex: assignment?.squadraIndex || "",
-    squadraLabel,
-    insertedBy: currentUser.displayName || currentUser.email || "Operatore",
-    rows: teamRows.length ? teamRows : [{
+    rows: teamRows.length ? teamRows.map((row) => ({
+      operatore: row.operatore || "",
+      ore: row.ore || ""
+    })) : [{
       operatore: getHoursOperatorForCurrentUser(id, targetDateValue),
-      ore: "",
-      squadraIndex: assignment?.squadraIndex || "",
-      squadraLabel: assignment?.squadraLabel || ""
+      ore: ""
     }]
   });
   window.location.hash = "ore";
@@ -5357,9 +5352,9 @@ function addHoursCommessaBlock(blockData = null) {
   if (blockData) {
     if (blockData.commessaId) {
       commessaSelect.value = blockData.commessaId;
-      card.dataset.lockedCommessaId = blockData.commessaId;
     }
     if (blockData.lockedCommessa) {
+      card.dataset.lockedCommessaId = blockData.commessaId || "";
       card.dataset.lockedCommessa = "true";
       commessaSelect.classList.add("hidden");
       commessaSelect.disabled = true;

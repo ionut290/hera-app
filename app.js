@@ -1158,16 +1158,36 @@ function syncCommesseHomeToggle() {
   const isVisible = Boolean(isCommesseHomeCardVisible);
   ui.commesseHomeCard?.classList.toggle("hidden", !isVisible);
   ui.commesseHomeCard?.setAttribute("aria-hidden", isVisible ? "false" : "true");
-  ui.toggleCommesseHomeBtn?.setAttribute("aria-expanded", isVisible ? "true" : "false");
-  ui.toggleCommesseHomeBtn?.classList.toggle("active", isVisible);
+  if (ui.toggleCommesseHomeBtn) {
+    ui.toggleCommesseHomeBtn.setAttribute("aria-expanded", isVisible ? "true" : "false");
+    ui.toggleCommesseHomeBtn.classList.toggle("active", isVisible);
+    ui.toggleCommesseHomeBtn.textContent = isVisible ? "Nascondi commesse" : "Tutte le commesse";
+    ui.toggleCommesseHomeBtn.setAttribute(
+      "aria-label",
+      isVisible ? "Nascondi elenco completo commesse" : "Mostra elenco completo commesse"
+    );
+  }
+}
+
+function showCommesseHomeCard() {
+  if (ui.homePage?.classList.contains("hidden")) {
+    if (isMapFullscreenPageOpen) closeMapFullscreenPage();
+    window.location.hash = "";
+    applyRoute();
+  }
+  isCommesseHomeCardVisible = true;
+  syncCommesseHomeToggle();
+  renderCommesseHomeList();
+  ui.commesseHomeCard?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function toggleCommesseHomeCard() {
-  isCommesseHomeCardVisible = !isCommesseHomeCardVisible;
-  syncCommesseHomeToggle();
-  if (isCommesseHomeCardVisible) {
-    ui.commesseHomeCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!isCommesseHomeCardVisible) {
+    showCommesseHomeCard();
+    return;
   }
+  isCommesseHomeCardVisible = false;
+  syncCommesseHomeToggle();
 }
 ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);

@@ -5104,9 +5104,8 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   const squadraIndex = assignment?.squadraIndex || "";
   if (!canManageData() && !assignment) return null;
-  const missingParticipants = getMissingHoursParticipantsForCommessaDate(commessaId, dateKey);
-  if (!missingParticipants.length || areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
-  return { dateKey, assignment, squadData, squadRows, squadraIndex, missingParticipants };
+  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
+  return { dateKey, assignment, squadData, squadRows, squadraIndex };
 }
 
 function createAddHoursButton(commessa, dateValue = "") {
@@ -5183,29 +5182,30 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     alert("Commessa non disponibile per l'inserimento ore.");
     return;
   }
-  const context = getQuickHoursContextForCommessa(id, dateValue);
-  if (!context) {
-    alert("Il pulsante ore è disponibile solo per squadre assegnate senza ore già inserite.");
+  const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+  if (!canCurrentUserInsertHoursForCommessa(id, targetDateValue)) {
+    alert("Permesso negato: puoi inserire ore solo per le commesse dove sei assegnato in squadra.");
+    return;
+  }
+  const assignment = getCurrentUserSquadraAssignment(id, targetDateValue);
+  const squadraIndex = assignment?.squadraIndex || "";
+  if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue, squadraIndex)) {
+    alert("Le ore per oggi sono già state inserite e sono visibili in Visualizza ore.");
     renderSquadre();
     return;
   }
-  const targetDateValue = context.dateKey;
-  const teamRows = getHoursRowsForCommessaSquadra(id, targetDateValue);
+
+  openHoursPage();
   if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
-  ui.hoursCommesseList.innerHTML = "";
-  addHoursCommessaBlock({
-    commessaId: id,
-    rows: teamRows.length ? teamRows.map((row) => ({
-      operatore: row.operatore || "",
-      ore: row.ore || ""
-    })) : [{
-      operatore: getHoursOperatorForCurrentUser(id, targetDateValue),
-      ore: ""
-    }]
-  });
-  window.location.hash = "ore";
-  applyRoute();
-  closeSideMenu();
+  if (ui.hoursCommesseList) {
+    ui.hoursCommesseList.innerHTML = "";
+    const card = addHoursCommessaBlock({ commessaId: id });
+    applyHoursSuggestedOperators(card, { force: true });
+  }
+  if (ui.hoursFeedback) {
+    const commessaName = commesseById.get(id)?.nome || "Commessa";
+    ui.hoursFeedback.textContent = `Compila le ore per ${commessaName}: il pulsante +ORE apre il form standard Gestione ore.`;
+  }
   setTimeout(() => ui.hoursForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
 }
 
@@ -5391,6 +5391,7 @@ function addHoursCommessaBlock(blockData = null) {
   }
   renderHoursCardCommessaButtons(card);
   renderHoursSummary();
+  return card;
 }
 
 function collectHoursEntries() {
@@ -14418,6 +14419,38 @@ function canApproveHoursLevel1(request) {
   return String(request.createdByUid || "") === String(currentUser.uid || "");
 }
 
+function hasValidHoursRows(record = {}) {
+  return (Array.isArray(record.entries) ? record.entries : []).some((entry) => (
+    String(entry?.commessaId || "").trim()
+    && (Array.isArray(entry?.rows) ? entry.rows : []).some((row) => (
+      String(row?.operatore || "").trim() && Number(row?.ore || 0) > 0
+    ))
+  ));
+}
+
+function isBlockingHoursApprovalWithoutVisibleRecord(request = {}) {
+  const status = String(request.status || "").trim();
+  if (status === "rejected" || status === "approved") return false;
+  return !hasValidHoursRows(request);
+}
+
+async function unblockInvalidHoursRequest(request) {
+  if (!canManageData()) {
+    alert("Solo l'admin può sbloccare una richiesta ore incompleta.");
+    return;
+  }
+  if (!request?.id) return;
+  const ok = window.confirm(`Sbloccare la richiesta ore ${request.id}? Verrà marcata come rifiutata perché non contiene un record ore completo.`);
+  if (!ok) return;
+  await db.collection("oreApprovalRequests").doc(request.id).set({
+    status: "rejected",
+    rejectedBy: currentUser.email || currentUser.displayName || "admin",
+    rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    rejectionReason: "Sblocco admin: blocco ore senza record ore completo visibile.",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
 function renderHoursApprovalRequests() {
   if (!ui.hoursApprovalsList || !ui.hoursApprovalsFeedback) return;
   if (!currentUser) {
@@ -14449,20 +14482,25 @@ function renderHoursApprovalRequests() {
       const tot = (entry.rows || []).reduce((sum, row) => sum + (Number(row.ore || 0) || 0), 0);
       return `<li>${escapeHTML(entry.commessaName || "Commessa")}: ${escapeHTML(String(tot))}h</li>`;
     }).join("");
+    const hasInvalidBlock = isBlockingHoursApprovalWithoutVisibleRecord(request);
     card.innerHTML = `
       <p><b>ID:</b> ${escapeHTML(request.id || "-")}</p>
       <p><b>Data:</b> ${escapeHTML(dateLabel)} • <b>Creato da:</b> ${escapeHTML(author)}</p>
       <p><b>Stato:</b> ${escapeHTML(statusText)}</p>
       <ul>${summary || "<li>Nessuna commessa</li>"}</ul>
+      ${hasInvalidBlock ? `<p class="warning"><b>Errore:</b> risulta un blocco ore ma il record ore non è stato trovato. Contattare amministratore.</p>` : ""}
       ${request.rejectionReason ? `<p><b>Motivo rifiuto:</b> ${escapeHTML(request.rejectionReason)}</p>` : ""}
     `;
     const actions = document.createElement("div");
     actions.className = "item-actions";
-    if (request.status === "pending_level1" && canApproveHoursLevel1(request)) {
+    if (hasInvalidBlock && canManageData()) {
+      actions.appendChild(createButton("Sblocca blocco ore", () => unblockInvalidHoursRequest(request)));
+    }
+    if (!hasInvalidBlock && request.status === "pending_level1" && canApproveHoursLevel1(request)) {
       actions.appendChild(createButton("Accetta livello 1", () => approveHoursRequestLevel1(request)));
       actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
     }
-    if (request.status === "pending_admin" && canManageData()) {
+    if (!hasInvalidBlock && request.status === "pending_admin" && canManageData()) {
       actions.appendChild(createButton("Accetta admin finale", () => approveHoursRequestLevel2(request)));
       actions.appendChild(createButton("Rifiuta", () => rejectHoursRequest(request)));
     }

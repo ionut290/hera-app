@@ -653,6 +653,10 @@ let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
 let selectedImpiantoId = "";
 let selectedImpiantoData = null;
+const impiantoWeatherStatusCache = new Map();
+const impiantoWeatherPendingKeys = new Set();
+let impiantoWeatherRefreshTimer = null;
+let impiantoWeatherRenderTimer = null;
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
@@ -7013,6 +7017,7 @@ function subscribeGlobalImpianti() {
       renderGlobalSegnalazioneImpiantiOptions();
       renderGlobalImpianti();
       renderGlobalMap();
+      preloadImpiantiWeather(globalImpianti);
     }, (error) => {
       console.error("Errore caricamento impianti Global:", error);
       ui.globalImpiantiLista.innerHTML = "<p class='muted'>Errore caricamento impianti Global.</p>";
@@ -7328,7 +7333,7 @@ function renderGlobalImpianti(options = {}) {
     return `
       <button type="button" class="simple-list-item global-suggestion-item ${isSelected ? "is-selected" : ""}" data-global-impianto-key="${escapeHTML(key)}">
         <span>
-          <b>${escapeHTML(impianto.denominazione || "Impianto")}</b><br>
+          <b>${escapeHTML(impianto.denominazione || "Impianto")}</b> ${buildImpiantoWeatherBadgeMarkup(impianto)}<br>
           <small>${escapeHTML(impianto.idSap || "-")} • ${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.area || impianto.competenza || "-")}</small>
         </span>
       </button>
@@ -7368,7 +7373,7 @@ function renderGlobalMap() {
     const ditta = getGlobalDittaLabel(impianto);
     const markerColor = dittaColorMap.get(ditta) || "#2563eb";
     const markerDetails = [
-      `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b>`,
+      `<b>${escapeHTML(impianto.denominazione || "Impianto")}</b> ${buildImpiantoWeatherBadgeMarkup(impianto)}`,
       `Codice Hera: ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}`,
       `Comune: ${escapeHTML(impianto.comune || "-")}`,
       `Area: ${escapeHTML(impianto.area || impianto.competenza || "-")}`,
@@ -7403,6 +7408,7 @@ function renderGlobalMap() {
   } else {
     globalMap.setView(globalMapViewState.center, globalMapViewState.zoom, { animate: false });
   }
+  preloadImpiantiWeather(getVisibleMapImpianti(globalMap, source));
 }
 
 function getGlobalDittaLabel(impianto) {
@@ -7441,7 +7447,8 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
     ["Ditta esecutrice", impianto.dittaEsecutrice || "-"]
   ];
   Object.entries(impianto.extraFields || {}).forEach(([key, value]) => details.push([formatExtraFieldLabel(key), value]));
-  ui.globalImpiantoDetailsBody.innerHTML = details
+  const weatherBadge = `<p><b>Meteo:</b> ${buildImpiantoWeatherBadgeMarkup(impianto)}</p>`;
+  ui.globalImpiantoDetailsBody.innerHTML = weatherBadge + details
     .map(([label, value]) => `<p><b>${escapeHTML(label)}:</b> ${escapeHTML(String(value == null || value === "" ? "-" : value))}</p>`)
     .join("");
   if (ui.globalImpiantoNavigateBtn) {
@@ -8543,6 +8550,7 @@ function subscribeImpianti() {
       renderHeaderActivitySummary();
       renderImpianti();
       renderMap();
+      preloadImpiantiWeather(currentImpianti);
       evaluateImpiantoProximityAlerts();
       if (!currentUserPos) fetchWeather();
 
@@ -9703,6 +9711,7 @@ function renderImpianti() {
     header.className = "impianto-summary-btn";
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
+      ${buildImpiantoWeatherBadgeMarkup(impianto)}
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
@@ -10040,18 +10049,183 @@ function buildImpiantoMapsUrl(impianto) {
   return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lon}`;
 }
 
+
+function getImpiantoWeatherCacheKey(impianto) {
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (impiantoKey) return impiantoKey;
+  if (!coordinates) return "";
+  return `${coordinates.lat.toFixed(5)},${coordinates.lon.toFixed(5)}`;
+}
+
+function isImpiantoWeatherCacheFresh(entry) {
+  return Boolean(entry && Date.now() - Number(entry.updatedAt || 0) < IMPIANTO_WEATHER_CACHE_TTL_MS);
+}
+
+function getCachedImpiantoWeatherStatus(impianto) {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  return key ? impiantoWeatherStatusCache.get(key) || null : null;
+}
+
+function getImpiantoWeatherBadgeState(impianto) {
+  const entry = getCachedImpiantoWeatherStatus(impianto);
+  if (!entry) return { level: "unavailable", label: "Meteo non disponibile", text: "⚪ Meteo non disponibile" };
+  const label = entry.badgeLabel || (entry.riskLevel === "red" ? "Allerta meteo" : entry.riskLevel === "yellow" ? "Attenzione" : "Meteo OK");
+  const emoji = entry.riskLevel === "red" ? "🔴" : entry.riskLevel === "yellow" ? "🟡" : entry.riskLevel === "green" ? "🟢" : "⚪";
+  return { level: entry.riskLevel || "unavailable", label, text: `${emoji} ${label}` };
+}
+
+function buildImpiantoWeatherBadgeMarkup(impianto) {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  const state = getImpiantoWeatherBadgeState(impianto);
+  return `<span class="impianto-weather-badge weather-${escapeHTML(state.level)}" data-weather-badge="${escapeHTML(key)}" title="${escapeHTML(state.label)}">${escapeHTML(state.text)}</span>`;
+}
+
+function updateImpiantoWeatherBadgesInPlace() {
+  document.querySelectorAll("[data-weather-badge]").forEach((badge) => {
+    const key = badge.getAttribute("data-weather-badge") || "";
+    const impianto = currentImpianti.find((item) => getImpiantoWeatherCacheKey(item) === key)
+      || globalImpianti.find((item) => getImpiantoWeatherCacheKey(item) === key)
+      || (selectedGlobalImpianto && getImpiantoWeatherCacheKey(selectedGlobalImpianto) === key ? selectedGlobalImpianto : null)
+      || (selectedImpiantoData && getImpiantoWeatherCacheKey(selectedImpiantoData) === key ? selectedImpiantoData : null);
+    if (!impianto) return;
+    const state = getImpiantoWeatherBadgeState(impianto);
+    badge.className = `impianto-weather-badge weather-${state.level}`;
+    badge.textContent = state.text;
+    badge.title = state.label;
+  });
+}
+
+function scheduleImpiantoWeatherBadgeRender() {
+  clearTimeout(impiantoWeatherRenderTimer);
+  impiantoWeatherRenderTimer = setTimeout(() => {
+    updateImpiantoWeatherBadgesInPlace();
+    if (selectedImpiantoData) renderSelectedImpiantoDetailPanel();
+    if (selectedGlobalImpianto && !ui.globalImpiantoDetails?.classList.contains("hidden")) openGlobalImpiantoDetails(selectedGlobalImpianto);
+  }, 120);
+}
+
+function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert = null) {
+  const current = weatherData?.current || {};
+  const nextHourSlots = getNavigationWeatherNextHourSlots(weatherData);
+  const messages = buildNavigationWeatherMessages(weatherData);
+  const currentCode = Number(current.weather_code);
+  const currentPrecipitation = getPrecipitationAmount(current);
+  const hasCurrentRain = currentPrecipitation > 0 || NAVIGATION_WEATHER_RAIN_CODES.has(currentCode);
+  const hasNextHourRain = nextHourSlots.some((slot) => {
+    const probability = Number(slot.precipitation_probability) || 0;
+    return getPrecipitationAmount(slot) > 0 || probability >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || NAVIGATION_WEATHER_RAIN_CODES.has(Number(slot.weather_code));
+  });
+  const civilLevel = civilProtectionAlert?.level || "green";
+  const hasCivilProtectionAlert = ALERT_LEVEL_META[civilLevel]?.rank > 0;
+  let riskLevel = "green";
+  if (hasCivilProtectionAlert && ALERT_LEVEL_META[civilLevel]?.rank >= ALERT_LEVEL_META.orange.rank) riskLevel = "red";
+  else if (messages.some((message) => /rischio meteo rilevante|temporale|vento forte/i.test(message))) riskLevel = "red";
+  else if (messages.length || hasCivilProtectionAlert || hasCurrentRain || hasNextHourRain) riskLevel = "yellow";
+
+  const alertMessages = [];
+  if (hasCivilProtectionAlert) alertMessages.push(formatCivilProtectionNavigationMessage(civilProtectionAlert));
+  alertMessages.push(...messages);
+  const shortAlertText = [...new Set(alertMessages)].slice(0, 5).join("; ") || "Meteo OK";
+  const badgeLabel = riskLevel === "red"
+    ? (hasCivilProtectionAlert ? "Allerta meteo" : "Rischio")
+    : riskLevel === "yellow"
+      ? (hasNextHourRain ? "Pioggia prevista" : hasCurrentRain ? "Pioggia in corso" : "Attenzione")
+      : "Meteo OK";
+
+  return {
+    impiantoKey: getImpiantoWeatherCacheKey(impianto),
+    weatherState: weatherCodeLabel(current.weather_code),
+    hasCurrentRain,
+    hasNextHourRain,
+    civilProtectionAlert: hasCivilProtectionAlert ? civilProtectionAlert : null,
+    riskLevel,
+    alertText: shortAlertText,
+    badgeLabel,
+    messages: [...new Set(alertMessages)].slice(0, 5),
+    updatedAt: Date.now()
+  };
+}
+
+async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
+  if (!key || !coordinates) return null;
+  const cached = impiantoWeatherStatusCache.get(key);
+  if (!force && isImpiantoWeatherCacheFresh(cached)) return cached;
+  if (impiantoWeatherPendingKeys.has(key)) return cached || null;
+  impiantoWeatherPendingKeys.add(key);
+  try {
+    const weatherData = await fetchImpiantoNavigationWeather(coordinates);
+    const civilProtectionAlert = await getOfficialCivilProtectionAlertForNavigation(coordinates).catch((error) => {
+      console.warn("Allerta Protezione Civile non disponibile per impianto:", error);
+      return null;
+    });
+    const status = buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert);
+    impiantoWeatherStatusCache.set(key, status);
+    return status;
+  } catch (error) {
+    console.warn("Meteo impianto non disponibile:", error);
+    const fallback = {
+      impiantoKey: key,
+      weatherState: "non disponibile",
+      hasCurrentRain: false,
+      hasNextHourRain: false,
+      civilProtectionAlert: null,
+      riskLevel: "unavailable",
+      alertText: "Meteo non disponibile",
+      badgeLabel: "Meteo non disponibile",
+      messages: [],
+      updatedAt: Date.now()
+    };
+    impiantoWeatherStatusCache.set(key, fallback);
+    return fallback;
+  } finally {
+    impiantoWeatherPendingKeys.delete(key);
+    scheduleImpiantoWeatherBadgeRender();
+  }
+}
+
+function preloadImpiantiWeather(impianti = [], { limit = IMPIANTO_WEATHER_REFRESH_LIMIT } = {}) {
+  const candidates = impianti
+    .filter((impianto) => getImpiantoNavigationCoordinates(impianto))
+    .filter((impianto) => !isImpiantoWeatherCacheFresh(getCachedImpiantoWeatherStatus(impianto)))
+    .slice(0, limit);
+  if (!candidates.length) return;
+  clearTimeout(impiantoWeatherRefreshTimer);
+  impiantoWeatherRefreshTimer = setTimeout(async () => {
+    for (let index = 0; index < candidates.length; index += IMPIANTO_WEATHER_BATCH_SIZE) {
+      const batch = candidates.slice(index, index + IMPIANTO_WEATHER_BATCH_SIZE);
+      await Promise.allSettled(batch.map((impianto) => refreshImpiantoWeatherStatus(impianto)));
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+  }, 250);
+}
+
+function getVisibleMapImpianti(targetMap = map, source = currentImpianti) {
+  const bounds = targetMap?.getBounds?.();
+  if (!bounds) return source;
+  return source.filter((impianto) => {
+    const coordinates = getImpiantoNavigationCoordinates(impianto);
+    return coordinates && bounds.contains([coordinates.lat, coordinates.lon]);
+  });
+}
+
 async function confirmNavigationWeatherIfNeeded(impianto) {
   const coordinates = getImpiantoNavigationCoordinates(impianto);
   if (!coordinates) return true;
 
-  try {
-    const warning = await getNavigationWeatherWarning(impianto, coordinates);
-    if (!warning.messages.length) return true;
-    return await showNavigationWeatherWarning(warning.messages);
-  } catch (error) {
-    console.warn("Controllo meteo navigazione non disponibile:", error);
+  const cachedStatus = getCachedImpiantoWeatherStatus(impianto);
+  if (!cachedStatus || cachedStatus.riskLevel === "unavailable") {
+    preloadImpiantiWeather([impianto], { limit: 1 });
     return true;
   }
+  if (!isImpiantoWeatherCacheFresh(cachedStatus)) {
+    refreshImpiantoWeatherStatus(impianto, { force: true });
+  }
+  if (!["yellow", "red"].includes(cachedStatus.riskLevel)) return true;
+  const messages = cachedStatus.messages?.length ? cachedStatus.messages : [cachedStatus.alertText || cachedStatus.badgeLabel || "attenzione meteo"];
+  return await showNavigationWeatherWarning(messages);
 }
 
 async function getNavigationWeatherWarning(impianto, coordinates) {
@@ -10215,14 +10389,14 @@ function formatCivilProtectionNavigationMessage(alert) {
 }
 
 function showNavigationWeatherWarning(messages) {
+  const summary = messages.join("; ");
   if (!ui.navigationWeatherWarningModal || !ui.navigationWeatherWarningList) {
-    return Promise.resolve(window.confirm(`⚠️ AVVISO METEO
-Nell’area dell’impianto è previsto/attivo:
-${messages.join("\n")}
-
+    return Promise.resolve(window.confirm(`⚠️ Nell’area dell’impianto è previsto: ${summary}.
 Vuoi continuare la navigazione?`));
   }
 
+  const summaryEl = document.getElementById("navigation-weather-warning-summary");
+  if (summaryEl) summaryEl.textContent = summary;
   ui.navigationWeatherWarningList.innerHTML = messages.map((message) => `<li>${escapeHTML(message)}</li>`).join("");
   ui.navigationWeatherWarningModal.classList.remove("hidden");
   ui.navigationWeatherWarningModal.setAttribute("aria-hidden", "false");
@@ -12107,6 +12281,7 @@ function renderMap() {
   }
   fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   syncSelectedImpiantoDetailAfterRefresh(markerForActiveFullscreenPopup);
+  preloadImpiantiWeather(getVisibleMapImpianti(map, currentImpianti));
 }
 
 function syncSelectedImpiantoDetailAfterRefresh(markerForSelectedImpianto) {
@@ -12263,6 +12438,7 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
       <div class="map-popup-header">
         <div class="map-popup-title">
           <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
+          ${buildImpiantoWeatherBadgeMarkup(impianto)}
           ${headerSubtitle}
         </div>
         <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup dettaglio impianto" title="Chiudi">×</button>
@@ -12465,6 +12641,9 @@ function bindImpiantoMapPopupActions(event, popupMap) {
 
 map.on("popupopen", (event) => bindImpiantoMapPopupActions(event, map));
 fullscreenMap.on("popupopen", (event) => bindImpiantoMapPopupActions(event, fullscreenMap));
+map.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(map, currentImpianti)));
+fullscreenMap.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(fullscreenMap, currentImpianti)));
+globalMap.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(globalMap, globalImpianti)));
 
 function focusImpiantoInList(impianto, scroll = true) {
   const key = buildImpiantoKey(impianto);
@@ -13356,6 +13535,9 @@ const NAVIGATION_WEATHER_LIGHT_RAIN_MAX_MM = 2;
 const NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY = 40;
 const NAVIGATION_WEATHER_THUNDER_CODES = new Set([95, 96, 99]);
 const NAVIGATION_WEATHER_RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]);
+const IMPIANTO_WEATHER_CACHE_TTL_MS = 15 * 60 * 1000;
+const IMPIANTO_WEATHER_REFRESH_LIMIT = 12;
+const IMPIANTO_WEATHER_BATCH_SIZE = 3;
 
 
 async function fetchWeather() {

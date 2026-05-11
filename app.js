@@ -112,6 +112,7 @@ const ui = {
   commessaCode: document.getElementById("commessa-code"),
   commessaType: document.getElementById("commessa-type"),
   commessaParent: document.getElementById("commessa-parent"),
+  commesseHomeCard: document.getElementById("commesse-home-card"),
   commesseLista: document.getElementById("commesse-lista"),
   commessaAttiva: document.getElementById("commessa-attiva"),
   commesseNextAction: document.getElementById("commesse-next-action"),
@@ -229,7 +230,7 @@ const ui = {
   squadraHint: document.getElementById("squadra-hint"),
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
-  squadreWhatsappAllBtn: document.getElementById("squadre-whatsapp-all-btn"),
+  toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
@@ -560,6 +561,7 @@ let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let commesseLoadState = { status: "idle", message: "" };
+let isCommesseHomeCardVisible = false;
 let commessaStatsById = new Map();
 let commessaHoursById = new Map();
 let commessaWorkSummariesById = new Map();
@@ -1137,7 +1139,7 @@ ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
 ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
 ui.mapFullscreenFeedbackClose?.addEventListener("click", () => ui.mapFullscreenFeedbackBanner?.classList.add("hidden"));
-ui.squadreWhatsappAllBtn?.addEventListener("click", shareAllSquadreToWhatsApp);
+ui.toggleCommesseHomeBtn?.addEventListener("click", toggleCommesseHomeCard);
 ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
@@ -1151,6 +1153,22 @@ ui.squadraCalendarDate.addEventListener("change", () => {
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
 ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
+
+function syncCommesseHomeToggle() {
+  const isVisible = Boolean(isCommesseHomeCardVisible);
+  ui.commesseHomeCard?.classList.toggle("hidden", !isVisible);
+  ui.commesseHomeCard?.setAttribute("aria-hidden", isVisible ? "false" : "true");
+  ui.toggleCommesseHomeBtn?.setAttribute("aria-expanded", isVisible ? "true" : "false");
+  ui.toggleCommesseHomeBtn?.classList.toggle("active", isVisible);
+}
+
+function toggleCommesseHomeCard() {
+  isCommesseHomeCardVisible = !isCommesseHomeCardVisible;
+  syncCommesseHomeToggle();
+  if (isCommesseHomeCardVisible) {
+    ui.commesseHomeCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
 ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
@@ -1924,6 +1942,8 @@ auth.onAuthStateChanged((user) => {
   updateCommessaContextUI();
   window.location.hash = "";
   commesseLoadState = { status: "idle", message: "" };
+  isCommesseHomeCardVisible = false;
+  syncCommesseHomeToggle();
   ui.commesseLista.innerHTML = "";
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
@@ -2090,7 +2110,7 @@ function updateAdminControls() {
     ui.externalAppForm.querySelector("button[type='submit']").disabled = !auth.currentUser;
   }
   ui.squadraCommessa.disabled = !canManage;
-  ui.squadreWhatsappAllBtn?.classList.toggle("hidden", !canManage);
+  syncCommesseHomeToggle();
   ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
   if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;

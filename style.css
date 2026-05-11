@@ -488,6 +488,21 @@ h2 { font-size: 1.05rem; }
   gap: 8px;
 }
 
+
+.squadre-section-head {
+  flex-wrap: wrap;
+}
+
+.squadre-commesse-toggle {
+  margin-left: auto;
+}
+
+.squadre-commesse-toggle.active {
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #dbeafe 0%, #eff6ff 100%);
+  color: #1d4ed8;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -2505,6 +2520,21 @@ textarea:focus-visible {
     padding-top: 7px;
     padding-bottom: 7px;
     animation-duration: 16s;
+  }
+
+
+  .squadre-section-head {
+    align-items: stretch;
+  }
+
+  .squadre-section-head h2 {
+    flex: 1 1 100%;
+  }
+
+  .squadre-commesse-toggle {
+    flex: 1 1 100%;
+    margin-left: 0;
+    width: 100%;
   }
 
   .weather-status-grid { grid-template-columns: 1fr; }

@@ -3711,17 +3711,40 @@ function resolveHoursStatsMonth() {
   return { monthValue, monthMeta: getMonthMeta(monthValue) };
 }
 
-async function fetchHoursReportsForMonth(monthValue, monthMeta) {
+async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
   if (!monthMeta) return [];
+  const includePendingApprovals = options?.includePendingApprovals === true;
   const fromDate = `${monthValue}-01`;
   const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
-  const snapshot = await db.collection("oreReports")
+  const reportsQuery = db.collection("oreReports")
     .where("date", ">=", fromDate)
     .where("date", "<=", toDate)
     .orderBy("date", "asc")
     .get();
-  const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  return reports;
+  const approvalsQuery = includePendingApprovals
+    ? db.collection("oreApprovalRequests")
+      .where("date", ">=", fromDate)
+      .where("date", "<=", toDate)
+      .orderBy("date", "asc")
+      .get()
+    : Promise.resolve(null);
+  const [reportsSnapshot, approvalsSnapshot] = await Promise.all([reportsQuery, approvalsQuery]);
+  const reports = reportsSnapshot.docs.map((doc) => ({
+    id: doc.id,
+    sourceCollection: "oreReports",
+    approvalStatus: "approved",
+    ...doc.data()
+  }));
+  const pendingApprovals = approvalsSnapshot
+    ? approvalsSnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        sourceCollection: "oreApprovalRequests",
+        ...doc.data()
+      }))
+      .filter((request) => !["approved", "rejected"].includes(String(request.status || "").trim()))
+    : [];
+  return [...reports, ...pendingApprovals].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
 }
 
 function ensureHoursViewModalOpen() {
@@ -3753,7 +3776,7 @@ async function loadHoursMonthlyTable() {
   ui.hoursTableFeedback.textContent = "Caricamento tabella ore...";
   ui.hoursTableContainer.innerHTML = "";
   try {
-    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
+    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
     renderHoursMonthlyTable(reports, commessaId, monthMeta);
   } catch (error) {
     console.error("Errore caricamento tabella mensile ore:", error);
@@ -3940,11 +3963,14 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
         if (!operatorsMap.has(operatore)) {
           operatorsMap.set(operatore, Array.from({ length: monthMeta.daysInMonth }, () => []));
         }
-        operatorsMap.get(operatore)[day - 1].push(ore);
+        const isPendingApproval = String(report.sourceCollection || "oreReports") === "oreApprovalRequests";
+        operatorsMap.get(operatore)[day - 1].push({ ore, isPendingApproval });
         const key = `${operatore}__${day}`;
         if (!hoursTableRowsMap.has(key)) hoursTableRowsMap.set(key, []);
         hoursTableRowsMap.get(key).push({
           reportId: report.id,
+          sourceCollection: report.sourceCollection || "oreReports",
+          approvalStatus: report.status || report.approvalStatus || "approved",
           reportDate,
           entryCommessaId: entry.commessaId,
           entryIndex,
@@ -3961,25 +3987,30 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   const daysHeader = Array.from({ length: monthMeta.daysInMonth }, (_, idx) => `<th>${idx + 1}</th>`).join("");
   const bodyRowsReal = operators.map((operatorName) => {
     const dayValues = operatorsMap.get(operatorName);
-    const total = dayValues.reduce((sum, dayItems) => sum + dayItems.reduce((daySum, ore) => daySum + Number(ore || 0), 0), 0);
+    const getDayItemHours = (item) => Number(typeof item === "object" ? item.ore : item || 0);
+    const total = dayValues.reduce((sum, dayItems) => sum + dayItems.reduce((daySum, item) => daySum + getDayItemHours(item), 0), 0);
     const cells = dayValues.map((dayItems, idx) => {
       const day = idx + 1;
       if (!dayItems.length) return "<td>-</td>";
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
-      const canManage = canManageData() && sources.length;
-      const dayTotal = dayItems.reduce((sum, value) => sum + Number(value || 0), 0);
+      const hasPendingApproval = sources.some((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+      const canManage = canManageData() && sources.length && !hasPendingApproval;
+      const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
       const hasDuplicates = dayItems.length > 1;
-      const valueLabel = hasDuplicates ? `⚠ ${dayItems.length} inserimenti` : `${formatHoursValue(dayTotal)}h`;
+      const valueLabelBase = hasDuplicates ? `⚠ ${dayItems.length} inserimenti` : `${formatHoursValue(dayTotal)}h`;
+      const valueLabel = hasPendingApproval ? `${valueLabelBase} ⏳` : valueLabelBase;
       const mergedDetails = hasDuplicates
         ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. Elimina le righe duplicate.`
         : "";
-      const title = canManage
-        ? hasDuplicates
-          ? `${mergedDetails}`
-          : `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
-        : `${operatorName} - giorno ${day}`;
-      return `<td><button type="button" class="hours-value-btn" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
+      const title = hasPendingApproval
+        ? `${operatorName} - giorno ${day}: ore in attesa di conferma admin.`
+        : canManage
+          ? hasDuplicates
+            ? `${mergedDetails}`
+            : `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
+          : `${operatorName} - giorno ${day}`;
+      return `<td><button type="button" class="hours-value-btn${hasPendingApproval ? " hours-value-pending" : ""}" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
     const totalLabel = formatHoursValue(total);
     return `<tr><th scope="row">${escapeHTML(operatorName)}</th>${cells}<td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
@@ -4011,7 +4042,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
     monthMeta,
     operators: operators.map((name) => ({
       name,
-      dayValues: (operatorsMap.get(name) || []).map((items) => items.reduce((sum, ore) => sum + Number(ore || 0), 0))
+      dayValues: (operatorsMap.get(name) || []).map((items) => items.reduce((sum, item) => sum + Number(typeof item === "object" ? item.ore : item || 0), 0))
     }))
   };
 
@@ -4019,9 +4050,13 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   if (!operators.length) {
     ui.hoursTableFeedback.textContent = "Nessuna ora trovata: mostro una tabella vuota (minimo 10 righe).";
   } else {
-    ui.hoursTableFeedback.textContent = canManageData()
-      ? "Clicca un valore per modificare o eliminare la registrazione ore."
-      : "Vista sola lettura: solo l'amministratore può modificare o eliminare le ore.";
+    const hasPendingApprovals = (Array.isArray(reports) ? reports : [])
+      .some((report) => String(report.sourceCollection || "oreReports") === "oreApprovalRequests");
+    ui.hoursTableFeedback.textContent = hasPendingApprovals
+      ? "Mostro anche le ore in attesa di conferma admin (⏳): saranno salvate definitivamente dopo l'approvazione."
+      : canManageData()
+        ? "Clicca un valore per modificare o eliminare la registrazione ore."
+        : "Vista sola lettura: solo l'amministratore può modificare o eliminare le ore.";
   }
 
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn").forEach((btn) => {
@@ -5644,21 +5679,41 @@ async function finalizeHoursReport(event) {
   }
 }
 
+async function sendHoursApprovalChatNotification({ recipients = [], text, senderName, metadata }) {
+  const normalizedRecipients = (Array.isArray(recipients) ? recipients : [])
+    .map((recipient) => String(recipient?.id || recipient?.uid || "").trim())
+    .filter(Boolean);
+  if (normalizedRecipients.length) {
+    await Promise.all(normalizedRecipients.map((recipientId) => sendPrivateChatNotification({
+      recipientId,
+      text,
+      senderName,
+      metadata
+    })));
+    return;
+  }
+  await sendChatMessage({
+    type: "text",
+    text,
+    recipientId: "",
+    kind: "system",
+    metadata
+  });
+}
+
 async function notifyLevel1ForHoursApproval(requestId, payload) {
   const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
   const recipientsMap = new Map(adminUsers.map((user) => [user.id, user]));
   const requesterUser = platformUsers.find((user) => String(user.uid || "") === String(payload?.createdByUid || ""));
   if (requesterUser?.id) recipientsMap.set(requesterUser.id, requesterUser);
-  const recipients = Array.from(recipientsMap.values());
-  if (!recipients.length) return;
   const dateLabel = payload?.date
     ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
     : "-";
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const entriesCount = Array.isArray(payload?.entries) ? payload.entries.length : 0;
   const text = `🕒 Richiesta ore ${requestId} da ${author} (${dateLabel}). Commesse: ${entriesCount}. Serve primo OK.`;
-  await Promise.all(recipients.map((recipient) => sendPrivateChatNotification({
-    recipientId: recipient.id,
+  await sendHoursApprovalChatNotification({
+    recipients: Array.from(recipientsMap.values()),
     text,
     senderName: currentUser.displayName || currentUser.email || "Operatore",
     metadata: {
@@ -5666,16 +5721,15 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
       approvalRequestId: requestId,
       action: "level1_ok"
     }
-  })));
+  });
 }
 
 async function notifyAdminsForFinalHoursApproval(requestId, payload, approverName) {
   const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
-  if (!adminUsers.length) return;
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const text = `🕒 Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
-  await Promise.all(adminUsers.map((adminUser) => sendPrivateChatNotification({
-    recipientId: adminUser.id,
+  await sendHoursApprovalChatNotification({
+    recipients: adminUsers,
     text,
     senderName: currentUser.displayName || currentUser.email || "Sistema",
     metadata: {
@@ -5683,7 +5737,7 @@ async function notifyAdminsForFinalHoursApproval(requestId, payload, approverNam
       approvalRequestId: requestId,
       action: "admin_final_ok"
     }
-  })));
+  });
 }
 
 async function sendPrivateChatNotification({ recipientId, text, senderName = "Sistema", metadata = null }) {
@@ -13997,10 +14051,12 @@ function subscribeChat() {
   chatNotificationsInitialized = false;
   unsubscribeChat = db
     .collection("chatMessages")
-    .orderBy("createdAt", "asc")
+    .orderBy("createdAt", "desc")
     .limit(500)
     .onSnapshot((snapshot) => {
-      chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      chatMessages = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .reverse();
       notifyForNewChatMessages(snapshot.docChanges());
       renderChat(chatMessages);
     }, (error) => {

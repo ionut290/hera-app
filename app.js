@@ -4936,6 +4936,48 @@ function appendAddHoursButtonIfAllowed(container, commessa, dateValue = "") {
   container.appendChild(createAddHoursButton(commessa, context.dateKey));
 }
 
+function normalizeCommessaNavigationName(value) {
+  return String(value || "").trim().toLocaleLowerCase("it-IT");
+}
+
+function getCommessaNavigationTarget(commessa = {}) {
+  const id = String(commessa.id || "").trim();
+  const name = String(commessa.nome || commessa.commessaNome || commessa.name || "").trim();
+  if (id) {
+    return {
+      id,
+      nome: commessa.nome || name || "Commessa",
+      codice: commessa.codice || ""
+    };
+  }
+  if (!name) return null;
+  const normalizedName = normalizeCommessaNavigationName(name);
+  const matchedCommessa = Array.from(commesseById.values()).find((item) => (
+    normalizeCommessaNavigationName(item?.nome) === normalizedName
+  ));
+  if (matchedCommessa) {
+    return {
+      id: matchedCommessa.id,
+      nome: matchedCommessa.nome || name,
+      codice: matchedCommessa.codice || ""
+    };
+  }
+  return {
+    id: name,
+    nome: name,
+    codice: commessa.codice || ""
+  };
+}
+
+function openCommessaFromSquadre(commessa = {}) {
+  const target = getCommessaNavigationTarget(commessa);
+  if (!target?.id) {
+    alert("Commessa non disponibile.");
+    return;
+  }
+  selectCommessa(target.id, target.nome || "Commessa", target.codice || "");
+}
+
 function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (!currentUser) {
     alert("Devi fare login per inserire le ore.");
@@ -11381,7 +11423,7 @@ function renderSquadre() {
       return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
     item.innerHTML = `
-      <div class="squadra-item-head">
+      <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
       </div>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
@@ -11389,8 +11431,16 @@ function renderSquadre() {
     `;
     const head = item.querySelector(".squadra-item-head");
     appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
-    const title = head?.querySelector("strong");
-    if (title) head.appendChild(title);
+    head?.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      openCommessaFromSquadre(commessa);
+    });
+    head?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      event.preventDefault();
+      openCommessaFromSquadre(commessa);
+    });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });

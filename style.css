@@ -489,12 +489,34 @@ h2 { font-size: 1.05rem; }
 }
 
 
+.squadre-card {
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+}
+
 .squadre-section-head {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.squadre-section-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 .squadre-commesse-toggle {
-  margin-left: auto;
+  margin-left: 0;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(30, 64, 175, 0.08);
 }
 
 .squadre-commesse-toggle.active {
@@ -512,6 +534,13 @@ h2 { font-size: 1.05rem; }
   font-weight: 700;
   font-size: 0.74rem;
   padding: 4px 10px;
+}
+
+.squadre-status-pill {
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .commessa-active-chip {
@@ -866,13 +895,34 @@ textarea:focus-visible {
   margin-top: 10px;
 }
 
-.squadre-filter-controls {
-  align-items: center;
-  margin-top: 10px;
+.squadre-card .squadre-lista {
+  margin-top: 8px;
 }
 
-.squadre-filter-controls label {
-  font-weight: 700;
+.squadre-filter-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.squadre-filter-controls input[type="date"] {
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  line-height: 1.1;
+}
+
+.squadre-auto-btn {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .commesse-lista {
@@ -2523,18 +2573,39 @@ textarea:focus-visible {
   }
 
 
+  .squadre-card {
+    padding: 8px 9px 10px;
+    border-radius: 12px;
+  }
+
   .squadre-section-head {
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 5px;
   }
 
   .squadre-section-head h2 {
-    flex: 1 1 100%;
+    font-size: 0.93rem;
   }
 
   .squadre-commesse-toggle {
-    flex: 1 1 100%;
-    margin-left: 0;
-    width: 100%;
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+
+  .squadre-status-pill {
+    padding: 3px 7px;
+    font-size: 0.64rem;
+  }
+
+  .squadre-filter-controls {
+    margin-top: 6px;
+  }
+
+  .squadre-filter-controls input[type="date"],
+  .squadre-auto-btn {
+    min-height: 32px;
+    font-size: 0.78rem;
   }
 
   .weather-status-grid { grid-template-columns: 1fr; }

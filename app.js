@@ -150,6 +150,14 @@ const ui = {
   impiantiPage: document.getElementById("impianti-page"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
   commessaFocusCode: document.getElementById("commessa-focus-code"),
+  commessaHomeBtn: document.getElementById("commessa-home-btn"),
+  commessaStatImpianti: document.getElementById("commessa-stat-impianti"),
+  commessaStatSegnalazioni: document.getElementById("commessa-stat-segnalazioni"),
+  commessaStatAvanzamento: document.getElementById("commessa-stat-avanzamento"),
+  commessaStatOre: document.getElementById("commessa-stat-ore"),
+  commessaStatGiorni: document.getElementById("commessa-stat-giorni"),
+  commessaActiveSquadreCount: document.getElementById("commessa-active-squadre-count"),
+  commessaSquadreDetailsBtn: document.getElementById("commessa-squadre-details-btn"),
   backToHomeBtn: document.getElementById("back-to-home-btn"),
   showNextActionBtn: document.getElementById("show-next-action-btn"),
   impiantiNextAction: document.getElementById("impianti-next-action"),
@@ -163,6 +171,7 @@ const ui = {
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
   operatorPositionsToggleBtn: document.getElementById("operator-positions-toggle-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
+  commessaCallBtn: document.getElementById("commessa-call-btn"),
   commessaNotesPage: document.getElementById("commessa-notes-page"),
   commessaNotesBackBtn: document.getElementById("commessa-notes-back-btn"),
   commessaNotesCard: document.getElementById("commessa-notes-card"),
@@ -1120,11 +1129,14 @@ ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
 ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
+ui.commessaCallBtn?.addEventListener("click", openCommessaPhoneResources);
+ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSection);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.commessaNoteNewBtn?.addEventListener("click", () => openCommessaNoteForm());
 ui.commessaNoteForm?.addEventListener("submit", saveCommessaNote);
@@ -2069,7 +2081,9 @@ function updateAdminControls() {
   if (ui.operatorPositionsToggleBtn) {
     ui.operatorPositionsToggleBtn.disabled = !canManage;
     ui.operatorPositionsToggleBtn.setAttribute("aria-pressed", String(canManage && operatorPositionsVisible));
-    ui.operatorPositionsToggleBtn.textContent = operatorPositionsVisible ? "📍 Posizione squadre" : "📍 Posizione squadre nascosta";
+    ui.operatorPositionsToggleBtn.innerHTML = operatorPositionsVisible
+      ? '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span> Pos. squadre'
+      : '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span> Pos. nascoste';
   }
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
@@ -6838,6 +6852,47 @@ function formatSingleCommessaSummary(commessaId) {
   return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${formatWorkSummaryParts(workSummary)}`;
 }
 
+function getSelectedCommessaDashboardStats() {
+  const liveTotal = currentImpianti.length;
+  const liveDone = currentImpianti.filter((impianto) => Boolean(impianto.done)).length;
+  const storedStats = getCommessaStats(selectedCommessaId);
+  const total = liveTotal || Number(storedStats.total || 0);
+  const done = liveTotal ? liveDone : Number(storedStats.done || 0);
+  const linkedNoteCount = currentCommessaNotes.filter((note) => String(note?.impiantoKey || note?.impiantoId || "").trim()).length;
+  const segnalazioni = linkedNoteCount || Number(storedStats.openAlerts || 0) || currentCommessaNotes.length;
+  const workSummary = getCommessaWorkSummary(selectedCommessaId);
+  const activeDateKey = getActiveSquadreDateKey();
+  const squadreCount = getSquadreCountForCommessaDate(selectedCommessaId, activeDateKey);
+  return {
+    total,
+    done,
+    segnalazioni,
+    avanzamento: formatProgress(done, total),
+    ore: Number(workSummary.totalHours || 0),
+    giorni: Number(workSummary.workedDays ?? workSummary.workedDateKeys?.size ?? 0),
+    squadreCount
+  };
+}
+
+function updateCommessaDashboard() {
+  if (!selectedCommessaId) return;
+  const stats = getSelectedCommessaDashboardStats();
+  if (ui.commessaStatImpianti) ui.commessaStatImpianti.textContent = String(stats.total || 0);
+  if (ui.commessaStatSegnalazioni) ui.commessaStatSegnalazioni.textContent = String(stats.segnalazioni || 0);
+  if (ui.commessaStatAvanzamento) ui.commessaStatAvanzamento.textContent = stats.avanzamento;
+  if (ui.commessaStatOre) ui.commessaStatOre.textContent = `${formatHoursNumber(stats.ore)} h`;
+  if (ui.commessaStatGiorni) ui.commessaStatGiorni.textContent = `${stats.giorni || 0} gg`;
+  if (ui.commessaActiveSquadreCount) {
+    ui.commessaActiveSquadreCount.textContent = `${stats.squadreCount || 0} squadr${stats.squadreCount === 1 ? "a attiva" : "e attive"}`;
+  }
+  if (ui.commessaCallBtn) {
+    const hasPhoneResources = getResourcesByCommessa(selectedCommessaId, "phone").length > 0;
+    ui.commessaCallBtn.classList.toggle("commessa-action-btn--disabled", !hasPhoneResources);
+    ui.commessaCallBtn.setAttribute("aria-disabled", String(!hasPhoneResources));
+  }
+}
+
+
 function toggleOrganizeCommesseScreen(show) {
   ui.organizeCommesseScreen?.classList.toggle("hidden", !show);
   ui.organizeCommesseScreen?.setAttribute("aria-hidden", show ? "false" : "true");
@@ -7098,6 +7153,7 @@ function subscribeStatsForCommesse() {
       recalculateCommessaWorkSummaries();
       renderCommesseHomeList();
       renderParentCommessaOverview();
+      updateCommessaDashboard();
     }, (error) => console.error("Errore stats commessa:", error));
     unsubscribeCommessaStats.set(commessaId, unsubscribe);
   });
@@ -7111,6 +7167,7 @@ function subscribeHoursStats() {
       recalculateCommessaWorkSummaries();
       renderParentCommessaOverview();
       renderSquadre();
+      updateCommessaDashboard();
     }, (error) => console.error("Errore stats ore commesse:", error));
   }
   if (!unsubscribeHoursApprovals) {
@@ -7208,7 +7265,7 @@ function canShowQuickSquadraButton(commessa) {
 
 function getSquadreCountForCommessaDate(commessaId, dateKey) {
   const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
-  const squad = storicoDelGiorno.get(commessaId) || {};
+  const squad = storicoDelGiorno.get(commessaId) || squadreByCommessa.get(commessaId) || {};
   const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
   return rows.filter((row) => String(row?.personale || "").trim() || String(row?.caposquadra || "").trim() || String(row?.mezzi || "").trim()).length;
 }
@@ -8675,6 +8732,21 @@ function renderResourceButtonsForCommessa() {
     btn.setAttribute("aria-label", `${resourceTypeLongLabel(type)} (${count})`);
     ui.commessaResourceButtons.appendChild(btn);
   });
+  updateCommessaDashboard();
+}
+
+function openCommessaPhoneResources() {
+  const phones = getResourcesByCommessa(selectedCommessaId, "phone");
+  if (!phones.length) {
+    alert("Nessun contatto telefonico disponibile per questa commessa.");
+    return;
+  }
+  openCommessaResourceWindow("phone");
+}
+
+function scrollToHomeSquadreSection() {
+  closeImpiantiPage();
+  setTimeout(() => ui.squadreLista?.closest(".squadre-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
 }
 
 function openCommessaResourceWindow(type) {
@@ -8866,6 +8938,7 @@ function selectCommessa(id, nome, codice = "") {
   const hierarchyText = parentCommessa ? `Subcommessa di ${parentCommessa.nome || "commessa padre"}: ${nome}` : `Commessa selezionata: ${nome}`;
   ui.commessaAttiva.textContent = codeText ? `${hierarchyText} • Cod. commessa: ${codeText}` : hierarchyText;
   updateCommessaContextUI();
+  updateCommessaDashboard();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
   ui.exportCurrentCommessaBtn.disabled = !auth.currentUser || !canManageData();
   updateCommessaButtonsActive();
@@ -8884,17 +8957,24 @@ function selectCommessa(id, nome, codice = "") {
 }
 
 function updateCommessaContextUI() {
+  const selected = commesseById.get(selectedCommessaId) || {};
+  const rawName = selectedCommessaName || "Commessa";
+  let displayName = rawName;
+  let codeText = String(selected.codice || "").trim();
+  if (!codeText) {
+    const splitMatch = String(rawName).trim().match(/^(.+?)\s+(\d{3,})$/);
+    if (splitMatch) {
+      displayName = splitMatch[1];
+      codeText = splitMatch[2];
+    }
+  }
   if (ui.commessaFocusLabel) {
-    ui.commessaFocusLabel.textContent = (selectedCommessaName || "Commessa").toUpperCase();
+    ui.commessaFocusLabel.textContent = displayName.toUpperCase();
   }
   if (ui.commessaFocusCode) {
-    const selected = commesseById.get(selectedCommessaId) || {};
-    const codeText = String(selected.codice || "").trim();
     const parent = selected.parentCommessaId ? commesseById.get(selected.parentCommessaId) : null;
-    const parts = [];
-    if (parent) parts.push(`SUBCOMMESSA DI: ${(parent.nome || "COMMESSA PADRE").toUpperCase()}`);
-    if (codeText) parts.push(`CODICE COMMESSA: ${codeText}`);
-    ui.commessaFocusCode.textContent = parts.join(" • ");
+    ui.commessaFocusCode.textContent = codeText;
+    ui.commessaFocusCode.title = parent ? `Subcommessa di: ${parent.nome || "commessa padre"}` : "";
   }
 }
 
@@ -9229,6 +9309,7 @@ function subscribeImpianti() {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
       renderHeaderActivitySummary();
+      updateCommessaDashboard();
       renderImpianti();
       renderMap();
       preloadImpiantiWeather(currentImpianti);
@@ -9280,6 +9361,7 @@ function subscribeCommessaNotes() {
           return firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt);
         });
       renderCommessaNotes();
+      updateCommessaDashboard();
       if (selectedCommessaId && ui.impiantiLista && !ui.impiantiPage?.classList.contains("hidden")) renderImpianti();
     }, (error) => {
       console.error(error);
@@ -11719,6 +11801,7 @@ function subscribeSquadre() {
       squadreByCommessa.set(doc.id, { id: doc.id, ...doc.data() });
     });
     renderSquadre();
+    updateCommessaDashboard();
     renderCommesseHomeList();
     autofillSquadraForm();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
@@ -11741,6 +11824,7 @@ function subscribeSquadre() {
     });
     squadreLoadState = { status: "loaded", message: "" };
     renderSquadre();
+    updateCommessaDashboard();
     renderCommesseHomeList();
     tryAutoOpenAssignedCommessaAtStartup();
     Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
@@ -11759,6 +11843,7 @@ function subscribeSquadre() {
     sharedSquadreViewConfigLoaded = true;
     syncSquadreDateInputs();
     renderSquadre();
+    updateCommessaDashboard();
     tryAutoOpenAssignedCommessaAtStartup();
   }, (error) => {
     console.error("Errore caricamento giorno squadre condiviso:", error);

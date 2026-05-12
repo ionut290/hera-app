@@ -2852,6 +2852,9 @@ textarea:focus-visible {
   background: #fff7d6;
   color: #92400e;
   border: 1px solid #facc15;
+}
+
+.hours-value-btn:disabled {
   cursor: default;
 }
 

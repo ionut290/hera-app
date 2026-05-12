@@ -3680,3 +3680,812 @@ textarea:focus-visible {
     text-overflow: ellipsis;
   }
 }
+
+/* Vista commessa operativa: layout compatto come dashboard mobile */
+.commessa-dashboard-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.commessa-dashboard-head {
+  display: grid;
+  grid-template-columns: 36px 46px minmax(0, 1fr) 40px 36px;
+  gap: 10px;
+  align-items: center;
+  justify-content: initial;
+}
+
+.commessa-back-btn,
+.commessa-settings-btn,
+.commessa-app-icon-btn,
+.commessa-home-btn {
+  border: 0;
+  background: transparent;
+  color: #071332;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.commessa-back-btn {
+  font-size: 2rem;
+  font-weight: 500;
+}
+
+.commessa-home-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #20c65a 0%, #08a942 100%);
+  color: #ffffff;
+  font-size: 1.75rem;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(8, 169, 66, 0.24);
+}
+
+.commessa-title-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.commessa-focus-label {
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  text-shadow: none;
+}
+
+.commessa-focus-code {
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  color: #071332;
+  font-weight: 900;
+}
+
+.commessa-app-icon-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(16, 185, 129, 0.38);
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.commessa-app-icon-btn img {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.commessa-settings-btn {
+  font-size: 1.45rem;
+}
+
+.commessa-next-action-toggle,
+.commessa-next-action-hint {
+  display: none !important;
+}
+
+.commessa-stat-strip {
+  margin-top: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 12px 8px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  background: #ffffff;
+}
+
+.commessa-stat-item {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  color: #0f1a3a;
+  text-align: center;
+}
+
+.commessa-stat-item strong {
+  font-size: 1rem;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.commessa-stat-item span:last-child {
+  font-size: 0.76rem;
+  color: #334155;
+}
+
+.commessa-stat-icon {
+  color: #0f1a3a;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.commessa-map-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.commessa-tools-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  overflow: visible;
+}
+
+.commessa-tools-bar .commessa-action-btn {
+  width: 100%;
+  min-height: 58px;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #101936;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+
+.commessa-tools-bar .commessa-action-btn span[aria-hidden="true"] {
+  font-size: 1.35rem;
+}
+
+.commessa-resource-buttons {
+  display: none;
+}
+
+.commessa-map-shell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #eef2f7;
+}
+
+#map {
+  height: min(42dvh, 260px);
+  min-height: 220px;
+  border: 0;
+  border-radius: 0;
+}
+
+.commessa-squadre-footer {
+  margin-top: 18px;
+  min-height: 52px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  color: #0f1a3a;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+}
+
+.commessa-squadre-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #12b856;
+  box-shadow: 0 0 0 4px rgba(18, 184, 86, 0.12);
+  flex: 0 0 auto;
+}
+
+.commessa-squadre-details-btn {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #08a942;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 8px 0 8px 8px;
+}
+
+#gps-status {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 760px) {
+  .commessa-dashboard-card {
+    padding: 10px 12px;
+  }
+
+  .commessa-dashboard-head {
+    grid-template-columns: 34px 44px minmax(0, 1fr) 38px 34px;
+    gap: 8px;
+  }
+
+  .commessa-focus-label,
+  .commessa-focus-code {
+    font-size: 1.18rem;
+  }
+
+  .commessa-stat-strip {
+    padding: 10px 6px;
+    gap: 4px;
+  }
+
+  .commessa-stat-item strong {
+    font-size: 0.95rem;
+  }
+
+  .commessa-stat-item span:last-child {
+    font-size: 0.68rem;
+  }
+
+  .commessa-tools-bar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .commessa-tools-bar > .btn,
+  .commessa-resource-buttons,
+  .commessa-resource-buttons .btn {
+    width: auto;
+  }
+
+  .commessa-tools-bar .commessa-action-btn {
+    min-height: 58px;
+    padding: 7px 4px;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+  }
+
+  #map {
+    height: min(36dvh, 260px);
+    min-height: 220px;
+  }
+
+  .commessa-squadre-footer {
+    margin-top: 18px;
+    padding: 9px 14px;
+    font-size: 0.92rem;
+  }
+}
+
+/* Rifinitura pixel-precisa della vista commessa richiesta */
+#impianti-page {
+  max-width: 620px;
+  width: 100%;
+  margin: 0 auto;
+  gap: 18px;
+}
+
+.commessa-dashboard-card,
+.commessa-dashboard-card:hover {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.commessa-dashboard-head {
+  grid-template-columns: 44px 54px minmax(0, 1fr) 42px 38px;
+  gap: 10px;
+  min-height: 54px;
+}
+
+.commessa-back-btn {
+  justify-content: start;
+  font-size: 2.25rem;
+  color: #07122f;
+}
+
+.commessa-home-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+}
+
+.commessa-home-btn svg {
+  width: 27px;
+  height: 27px;
+  fill: currentColor;
+}
+
+.commessa-title-wrap {
+  gap: 7px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.commessa-focus-label,
+.commessa-focus-code {
+  font-size: 1.36rem;
+  line-height: 1;
+}
+
+.commessa-focus-label {
+  color: #08a942;
+}
+
+.commessa-focus-code {
+  color: #07122f;
+}
+
+.commessa-app-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.commessa-settings-btn {
+  color: #07122f;
+  font-size: 1.55rem;
+}
+
+.commessa-stat-strip {
+  margin-top: 18px;
+  padding: 16px 12px 15px;
+  border-radius: 11px;
+  border-color: #e5eaf3;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.commessa-stat-item {
+  gap: 7px;
+}
+
+.commessa-stat-icon,
+.commessa-action-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.commessa-stat-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #07122f;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.commessa-stat-item strong {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.commessa-stat-item span:last-child {
+  font-size: 0.78rem;
+  line-height: 1.1;
+  color: #43506a;
+}
+
+.commessa-tools-bar {
+  margin: 0 0 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.commessa-tools-bar .commessa-action-btn,
+.commessa-tools-bar .commessa-action-btn:hover {
+  min-height: 60px;
+  border-radius: 10px;
+  background: #fff;
+  border-color: #e5eaf3;
+  color: #101936;
+  font-size: 0.93rem;
+  line-height: 1;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+  transform: none;
+}
+
+.commessa-action-icon svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.commessa-action-btn--map .commessa-action-icon {
+  color: #15b85a;
+}
+
+.commessa-action-btn--pin .commessa-action-icon {
+  color: #dc2626;
+}
+
+.commessa-action-btn--note .commessa-action-icon {
+  color: #f59e0b;
+}
+
+.commessa-action-btn--call .commessa-action-icon {
+  color: #3f3f46;
+}
+
+.commessa-action-btn--disabled {
+  opacity: 1;
+}
+
+.commessa-map-shell {
+  border-radius: 12px;
+  border-color: #dfe6ef;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+#map {
+  height: 258px;
+  min-height: 258px;
+}
+
+.commessa-squadre-footer {
+  margin-top: 18px;
+  min-height: 52px;
+  border-radius: 10px;
+  border-color: #e5eaf3;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.commessa-squadre-details-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #08a942;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 760px) {
+  #impianti-page {
+    gap: 16px;
+  }
+
+  .commessa-dashboard-head {
+    grid-template-columns: 38px 48px minmax(0, 1fr) 38px 32px;
+    gap: 8px;
+  }
+
+  .commessa-home-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .commessa-focus-label,
+  .commessa-focus-code {
+    font-size: clamp(1.05rem, 5.1vw, 1.34rem);
+  }
+
+  .commessa-stat-strip {
+    margin-top: 14px;
+    padding: 14px 6px 13px;
+  }
+
+  .commessa-stat-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .commessa-tools-bar {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .commessa-tools-bar .commessa-action-btn {
+    min-height: 60px;
+    font-size: 0.82rem;
+  }
+
+  .commessa-action-icon svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  #map {
+    height: 258px;
+    min-height: 258px;
+  }
+}
+
+/* Sposta le azioni nel punto dei due pulsanti rimossi e riduce molto gli ingombri */
+.commessa-dashboard-head {
+  grid-template-columns: 44px 54px minmax(0, 1fr) auto;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  justify-self: end;
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  overflow: visible;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover {
+  width: 46px;
+  height: 40px;
+  min-height: 40px;
+  padding: 4px 5px;
+  border-radius: 9px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 0.62rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.commessa-header-actions .commessa-action-icon svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.2;
+}
+
+.commessa-header-actions .commessa-action-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#commessa-operational-card > .commessa-resource-buttons {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 34px 44px minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 4px;
+  }
+
+  .commessa-header-actions .commessa-action-btn {
+    width: 38px;
+    height: 36px;
+    min-height: 36px;
+    padding: 3px;
+    border-radius: 8px;
+    font-size: 0.56rem;
+  }
+
+  .commessa-header-actions .commessa-action-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (max-width: 430px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 30px 40px minmax(58px, 1fr) auto;
+  }
+
+  .commessa-header-actions .commessa-action-btn {
+    width: 34px;
+  }
+
+  .commessa-header-actions .commessa-action-label {
+    display: none;
+  }
+}
+
+/* Correzione: pulsanti testata separati, non sovrapposti e con area touch adeguata */
+.commessa-dashboard-head {
+  grid-template-columns: 38px 48px minmax(0, 1fr) max-content;
+  column-gap: 10px;
+}
+
+.commessa-title-wrap {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.commessa-title-wrap .commessa-focus-label,
+.commessa-title-wrap .commessa-focus-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  flex: 0 0 auto;
+  min-width: max-content;
+  gap: 8px;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover,
+.commessa-header-actions .commessa-action-btn:focus-visible {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.commessa-header-actions .commessa-action-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.commessa-header-actions .commessa-action-label {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 32px 44px minmax(0, 1fr) max-content;
+    column-gap: 8px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 6px;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .commessa-header-actions .commessa-action-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 28px 40px minmax(42px, 1fr) max-content;
+    column-gap: 6px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 5px;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* KPI più colorati, animati e cliccabili */
+.commessa-stat-strip {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(16, 185, 129, 0.14), transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f6fbff 100%);
+}
+
+.commessa-stat-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.62) 42%, transparent 70%);
+  transform: translateX(-120%);
+  animation: commessaStatsShimmer 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.commessa-stat-item {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  padding: 8px 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.commessa-stat-item:nth-child(1) {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(255, 255, 255, 0.68));
+  --commessa-stat-color: #059669;
+}
+
+.commessa-stat-item:nth-child(2) {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.15), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #d97706;
+}
+
+.commessa-stat-item:nth-child(3) {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #2563eb;
+}
+
+.commessa-stat-item:nth-child(4) {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #7c3aed;
+}
+
+.commessa-stat-item:nth-child(5) {
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #0284c7;
+}
+
+.commessa-stat-item .commessa-stat-icon svg {
+  stroke: var(--commessa-stat-color, #07122f);
+  filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--commessa-stat-color, #07122f) 24%, transparent));
+  animation: commessaStatFloat 3.6s ease-in-out infinite;
+}
+
+.commessa-stat-item strong {
+  color: #07122f;
+}
+
+.commessa-stat-item span:last-child {
+  color: color-mix(in srgb, var(--commessa-stat-color, #43506a) 42%, #334155);
+}
+
+.commessa-stat-item:hover,
+.commessa-stat-item:focus-visible {
+  transform: translateY(-2px) scale(1.025);
+  border-color: color-mix(in srgb, var(--commessa-stat-color, #2563eb) 34%, #ffffff);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--commessa-stat-color, #2563eb) 16%, transparent);
+  outline: none;
+}
+
+.commessa-stat-item:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.commessa-stat-item:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--commessa-stat-color, #2563eb) 32%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes commessaStatsShimmer {
+  0%, 58% { transform: translateX(-120%); }
+  78%, 100% { transform: translateX(120%); }
+}
+
+@keyframes commessaStatFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commessa-stat-strip::before,
+  .commessa-stat-item .commessa-stat-icon svg {
+    animation: none;
+  }
+
+  .commessa-stat-item {
+    transition: none;
+  }
+}

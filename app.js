@@ -4160,6 +4160,18 @@ async function handleHoursValueAction(cellKey) {
       } else {
         await docRef.delete();
       }
+      if (normalizedAction !== "M") {
+        const deletedLockEntries = reportSources.map((source) => ({
+          commessaId: source.entryCommessaId || "",
+          commessaName: commesseById.get(source.entryCommessaId)?.nome || "Commessa",
+          rows: [{ operatore: source.operatore || "", ore: source.ore || 1 }]
+        }));
+        await updateHoursLocksForEntries(reportSources[0]?.reportDate || data.date || "", deletedLockEntries, {
+          status: "deleted",
+          reportId,
+          sourceCollection: collectionName
+        });
+      }
     }
     await loadSavedHoursReports();
     await loadHoursMonthlyTable();
@@ -5428,6 +5440,135 @@ function normalizeHoursOperatorName(value) {
   return String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
 }
 
+function encodeHoursLockPart(value) {
+  return encodeURIComponent(String(value || "").trim());
+}
+
+function getHoursLockDocId(dateValue, commessaId, operatore) {
+  const normalizedOperator = normalizeHoursOperatorName(operatore);
+  if (!dateValue || !commessaId || !normalizedOperator) return "";
+  return [dateValue, commessaId, normalizedOperator].map(encodeHoursLockPart).join("__");
+}
+
+function getHoursUniqueLocks(dateValue, entries) {
+  const locks = new Map();
+  const dateKey = String(dateValue || "").trim();
+  if (!dateKey) return [];
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    const commessaId = String(entry?.commessaId || "").trim();
+    if (!commessaId) return;
+    (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+      const operatore = String(row?.operatore || "").trim();
+      const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const ore = Number(row?.ore || 0);
+      const lockId = getHoursLockDocId(dateKey, commessaId, operatore);
+      if (!lockId || !normalizedOperator || ore <= 0) return;
+      if (!locks.has(lockId)) {
+        locks.set(lockId, {
+          id: lockId,
+          date: dateKey,
+          commessaId,
+          commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          operatore,
+          normalizedOperator
+        });
+      }
+    });
+  });
+  return Array.from(locks.values());
+}
+
+function isActiveHoursLock(lockData = {}, skipApprovalRequestId = "") {
+  const status = String(lockData.status || "").trim();
+  if (["rejected", "deleted", "void"].includes(status)) return false;
+  if (skipApprovalRequestId && String(lockData.approvalRequestId || "") === skipApprovalRequestId) return false;
+  return true;
+}
+
+async function reserveHoursApprovalRequestWithLocks(payload) {
+  const locks = getHoursUniqueLocks(payload?.date, payload?.entries);
+  const approvalRef = db.collection("oreApprovalRequests").doc();
+  await db.runTransaction(async (transaction) => {
+    const lockRefs = locks.map((lock) => ({
+      lock,
+      ref: db.collection("oreLocks").doc(lock.id)
+    }));
+    const lockSnapshots = await Promise.all(lockRefs.map(({ ref }) => transaction.get(ref)));
+    const conflicts = [];
+    lockSnapshots.forEach((snap, index) => {
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      if (!isActiveHoursLock(data)) return;
+      const fallback = lockRefs[index].lock;
+      conflicts.push({
+        commessaName: data.commessaName || fallback.commessaName || "Commessa",
+        operatore: data.operatore || fallback.operatore || "Operatore"
+      });
+    });
+    if (conflicts.length) {
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
+      error.code = "hours-duplicate-lock";
+      error.conflicts = conflicts;
+      throw error;
+    }
+
+    transaction.set(approvalRef, {
+      ...payload,
+      status: "pending_level1",
+      level1ApprovedBy: "",
+      level1ApprovedAt: null,
+      level2ApprovedBy: "",
+      level2ApprovedAt: null,
+      rejectedBy: "",
+      rejectedAt: null,
+      rejectionReason: "",
+      finalizedReportId: ""
+    });
+    lockRefs.forEach(({ lock, ref }) => {
+      transaction.set(ref, {
+        ...lock,
+        approvalRequestId: approvalRef.id,
+        reportId: "",
+        status: "pending_level1",
+        createdByUid: payload.createdByUid || "",
+        createdByEmail: payload.createdByEmail || "",
+        createdByName: payload.createdByName || "Operatore",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  });
+  return approvalRef;
+}
+
+async function updateHoursLocksForEntries(dateValue, entries, updates = {}) {
+  const locks = getHoursUniqueLocks(dateValue, entries);
+  if (!locks.length) return;
+  const batch = db.batch();
+  locks.forEach((lock) => {
+    batch.set(db.collection("oreLocks").doc(lock.id), {
+      ...lock,
+      ...updates,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  await batch.commit();
+}
+
+function formatHoursDuplicateMessage(conflicts = []) {
+  const unique = [];
+  const seen = new Set();
+  (Array.isArray(conflicts) ? conflicts : []).forEach((conflict) => {
+    const label = `${conflict.commessaName || "Commessa"}: ${conflict.operatore || "Operatore"}`;
+    const key = normalizeHoursOperatorName(label);
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(label);
+  });
+  const details = unique.length ? ` (${unique.slice(0, 3).join("; ")}${unique.length > 3 ? "; ..." : ""})` : "";
+  return `Le ore per questa data, commessa e operatore sono già state inserite${details}. Non puoi inserirle due volte.`;
+}
+
 
 function findDuplicateHoursInDraft(entries) {
   const map = new Map();
@@ -5648,28 +5789,17 @@ async function finalizeHoursReport(event) {
   try {
     const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
     if (duplicateDraft.length) {
-      ui.hoursFeedback.textContent = "Le ore per oggi sono già state inserite.";
+      ui.hoursFeedback.textContent = formatHoursDuplicateMessage(duplicateDraft);
       return;
     }
 
     const existingConflicts = await findExistingHoursConflicts(dateValue, payload.entries);
     if (existingConflicts.length) {
-      ui.hoursFeedback.textContent = "Le ore per oggi sono già state inserite.";
+      ui.hoursFeedback.textContent = formatHoursDuplicateMessage(existingConflicts);
       return;
     }
 
-    const approvalRef = await db.collection("oreApprovalRequests").add({
-      ...payload,
-      status: "pending_level1",
-      level1ApprovedBy: "",
-      level1ApprovedAt: null,
-      level2ApprovedBy: "",
-      level2ApprovedAt: null,
-      rejectedBy: "",
-      rejectedAt: null,
-      rejectionReason: "",
-      finalizedReportId: ""
-    });
+    const approvalRef = await reserveHoursApprovalRequestWithLocks(payload);
     await notifyHoursInsertedToChat(approvalRef.id, payload);
     await notifyLevel1ForHoursApproval(approvalRef.id, payload);
 
@@ -5681,7 +5811,11 @@ async function finalizeHoursReport(event) {
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
-    ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
+    if (error?.code === "hours-duplicate-lock") {
+      ui.hoursFeedback.textContent = formatHoursDuplicateMessage(error.conflicts);
+    } else {
+      ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
+    }
   } finally {
     if (!hoursFinalizeLocked) ui.hoursFinalizeBtn.disabled = false;
   }
@@ -14461,6 +14595,11 @@ async function unblockInvalidHoursRequest(request) {
     rejectionReason: "Sblocco admin: blocco ore senza record ore completo visibile.",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
+    status: "rejected",
+    approvalRequestId: request.id || "",
+    rejectedBy: currentUser.email || currentUser.displayName || "admin"
+  });
 }
 
 function renderHoursApprovalRequests() {
@@ -14534,6 +14673,10 @@ async function approveHoursRequestLevel1(request) {
     level1ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
+    status: "pending_admin",
+    approvalRequestId: request.id || ""
+  });
   await notifyAdminsForFinalHoursApproval(request.id, request, currentUser.displayName || currentUser.email || "utente");
   const requester = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (requester?.id) {
@@ -14560,7 +14703,7 @@ async function approveHoursRequestLevel2(request) {
     { skipApprovalRequestId: request.id }
   );
   if (conflicts.length) {
-    alert("Le ore per oggi sono già state inserite.");
+    alert(formatHoursDuplicateMessage(conflicts));
     return;
   }
   const reportPayload = {
@@ -14588,6 +14731,11 @@ async function approveHoursRequestLevel2(request) {
     driveBackupLink: driveLink,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
+    status: "approved",
+    approvalRequestId: request.id || "",
+    reportId: docRef.id
+  });
   const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (targetUser?.id) {
     await sendPrivateChatNotification({
@@ -14637,6 +14785,11 @@ async function rejectHoursRequestFromChat(requestId) {
     rejectionReason: "Rifiutata da chat admin",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
+    status: "rejected",
+    approvalRequestId: request.id || "",
+    rejectedBy: currentUser.email || currentUser.displayName || "admin"
+  });
   const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (targetUser?.id) {
     await sendPrivateChatNotification({
@@ -14662,6 +14815,11 @@ async function rejectHoursRequest(request) {
     rejectionReason: String(reason).trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
+  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
+    status: "rejected",
+    approvalRequestId: request.id || "",
+    rejectedBy: currentUser.email || currentUser.displayName || "utente"
+  });
   const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
   if (targetUser?.id) {
     await sendPrivateChatNotification({

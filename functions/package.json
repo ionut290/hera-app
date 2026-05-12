@@ -1,0 +1,13 @@
+{
+  "name": "hera-app-functions",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.3.2",
+    "googleapis": "^144.0.0"
+  }
+}

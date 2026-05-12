@@ -87,7 +87,7 @@
             <div class="weather-status-grid">
               <p id="user" class="status status-chip">Non loggato</p>
               <p id="user-name" class="muted status-chip">Nome utente: -</p>
-              <p id="drive-status" class="muted status-chip status-chip-drive">Google Drive non collegato.</p>
+              <p id="drive-status" class="muted status-chip status-chip-drive">Cloud amministratore non configurato</p>
             </div>
             <div class="weather-status-grid">
               <p id="pwa-notification-status" class="muted status-chip">Notifiche: verifica supporto...</p>
@@ -764,8 +764,8 @@
         <input id="private-docs-file" type="file" accept="*/*">
         <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
         <label class="checkbox-inline">
-          <input id="private-docs-drive-only" type="checkbox" checked>
-          Salva allegato su Google Drive personale (file più grandi, visibile solo al tuo account)
+          <input id="private-docs-drive-only" type="checkbox" checked disabled>
+          Salva allegato sul cloud centralizzato amministratore
         </label>
         <button id="private-docs-save-btn" class="btn btn-primary" type="submit">Salva documento</button>
       </form>
@@ -1041,6 +1041,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>

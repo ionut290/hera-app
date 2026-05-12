@@ -950,6 +950,7 @@ const STATIC_HOWTO_ITEMS = [
 ];
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
+const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
 const CENTRAL_DRIVE_DEFAULT_COMMESSA = "Generale";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -6519,7 +6520,7 @@ function updateDriveConnectVisibility() {
 }
 
 function isCentralDriveConfigured() {
-  return Boolean(driveBridgeState.configured || driveRootFolderId);
+  return Boolean(driveBridgeState.configured || driveAccessToken);
 }
 
 function getCentralDriveNotConfiguredMessage() {
@@ -6674,7 +6675,7 @@ async function autoConnectDriveBridge(options = {}) {
       ownerEmail,
       accessToken: driveAccessToken,
       refreshToken: "",
-      rootFolderId: driveRootFolderId,
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID,
       chatFolderId: driveChatFolderId,
       reportsFolderId: driveReportsFolderId,
       squadreFolderId: driveSquadreFolderId,
@@ -6684,7 +6685,7 @@ async function autoConnectDriveBridge(options = {}) {
     await db.collection("appConfig").doc("driveBridge").set({
       ownerEmail,
       configured: true,
-      rootFolderId: driveRootFolderId,
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID,
       rootFolderName: CENTRAL_DRIVE_ROOT_FOLDER_NAME,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
@@ -7527,7 +7528,7 @@ function subscribeDriveBridge() {
     driveBridgeState = {
       configured: Boolean(data?.configured || data?.rootFolderId),
       ownerEmail: owner,
-      rootFolderId: data?.rootFolderId || ""
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID
     };
 
     if (!driveBridgeState.configured) {
@@ -7535,7 +7536,7 @@ function subscribeDriveBridge() {
       return;
     }
 
-    driveRootFolderId = data.rootFolderId || driveRootFolderId || "";
+    driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
     if (canManageData()) {
       const storedToken = getStoredDriveToken();
       if (storedToken) {
@@ -7547,7 +7548,7 @@ function subscribeDriveBridge() {
         const secret = secretDoc.exists ? secretDoc.data() : {};
         driveAccessToken = secret.accessToken || driveAccessToken;
         window.googleDriveAccessToken = driveAccessToken || null;
-        driveRootFolderId = secret.rootFolderId || driveRootFolderId || "";
+        driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
         driveChatFolderId = secret.chatFolderId || driveChatFolderId || "";
         driveReportsFolderId = secret.reportsFolderId || driveReportsFolderId || "";
         driveSquadreFolderId = secret.squadreFolderId || driveSquadreFolderId || "";
@@ -16975,11 +16976,11 @@ async function saveToDrive(data) {
 // });
 
 async function ensureDriveFolders() {
-  driveRootFolderId = driveRootFolderId || await getOrCreateDriveFolder(CENTRAL_DRIVE_ROOT_FOLDER_NAME);
-  driveChatFolderId = await getOrCreateDriveFolder("FOTO", driveRootFolderId);
-  driveReportsFolderId = await getOrCreateDriveFolder("SEGNALAZIONI", driveRootFolderId);
-  driveSquadreFolderId = await getOrCreateDriveFolder("EXPORT", driveRootFolderId);
-  driveHelpCenterFolderId = await getOrCreateDriveFolder("EXPORT", driveRootFolderId);
+  driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
+  driveChatFolderId = "FOTO";
+  driveReportsFolderId = "SEGNALAZIONI";
+  driveSquadreFolderId = "EXPORT";
+  driveHelpCenterFolderId = "EXPORT";
 }
 
 function normalizeFaqData(data) {
@@ -17106,9 +17107,9 @@ async function exportFaqSnapshotToDrive(faqData = faqDataset) {
 
 async function getOrCreateDriveFolder(name, parentId = "") {
   const parentQuery = parentId ? ` and '${parentId}' in parents` : "";
-  const safeName = name.replaceAll("'", "\\'");
+  const safeName = escapeDriveQueryValue(name);
   const query = `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${safeName}'${parentQuery}`;
-  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)&orderBy=createdTime&pageSize=1`;
   const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
 
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
@@ -17197,16 +17198,34 @@ async function syncCommessaDoneImpiantiToDriveSheet(commessaId = selectedCommess
   });
 }
 
+async function getOrCreateCentralDriveTypeFolder(commessaName, driveType) {
+  await ensureDriveFolders();
+  const commessaFolderId = await getOrCreateDriveFolder(normalizeDriveFolderName(commessaName, CENTRAL_DRIVE_DEFAULT_COMMESSA), driveRootFolderId);
+  return getOrCreateDriveFolder(normalizeDriveFolderName(driveType, "EXPORT").toUpperCase(), commessaFolderId);
+}
+
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
+  const spreadsheetFolderId = await getOrCreateCentralDriveTypeFolder(commessaName, "EXPORT");
   const commessaData = commesseById.get(commessaId) || {};
   const configuredSheetId = String(commessaData.sheetSpreadsheetId || "").trim();
   if (configuredSheetId) {
     try {
-      const existingSheet = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?fields=id,name,mimeType`, { method: "GET" });
+      const existingSheet = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?fields=id,name,mimeType,parents`, { method: "GET" });
       if (existingSheet && existingSheet.id) {
+        const parents = Array.isArray(existingSheet.parents) ? existingSheet.parents : [];
+        if (!parents.includes(spreadsheetFolderId)) {
+          const removeParents = parents.filter(Boolean).join(",");
+          const moveParams = new URLSearchParams({ addParents: spreadsheetFolderId, fields: "id,parents" });
+          if (removeParents) moveParams.set("removeParents", removeParents);
+          await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?${moveParams.toString()}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+        }
         commessaSheetCache.set(commessaId, configuredSheetId);
         return { id: configuredSheetId };
       }
@@ -17219,15 +17238,15 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     }
   }
 
-  const safeName = commessaName.replaceAll("'", "\\'");
+  const safeName = escapeDriveQueryValue(commessaName);
   const query = [
     "mimeType='application/vnd.google-apps.spreadsheet'",
     "trashed=false",
-    `'${driveReportsFolderId}' in parents`,
+    `'${spreadsheetFolderId}' in parents`,
     `name='Commessa - ${safeName}'`
   ].join(" and ");
 
-  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)&orderBy=createdTime&pageSize=1`;
   const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
 
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
@@ -17246,7 +17265,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     body: JSON.stringify({
       name: `Commessa - ${commessaName}`,
       mimeType: "application/vnd.google-apps.spreadsheet",
-      parents: [driveReportsFolderId]
+      parents: [spreadsheetFolderId]
     })
   });
 
@@ -17306,35 +17325,7 @@ async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {
   if (!isCentralDriveConfigured() && !driveAccessToken) {
     throw new Error(getCentralDriveNotConfiguredMessage());
   }
-  if (!canManageData() || !driveAccessToken) {
-    return uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderId, options);
-  }
-  if (!folderId) await ensureDriveFolders();
-  const { signal = null } = options;
-  const commessaFolderId = await getOrCreateDriveFolder(getCurrentDriveCommessaName(options), driveRootFolderId);
-  const typeFolderId = await getOrCreateDriveFolder(inferCentralDriveType(folderId, options), commessaFolderId);
-
-  const metadata = {
-    name: fileName,
-    mimeType,
-    parents: [typeFolderId]
-  };
-
-  const form = new FormData();
-  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-  form.append("file", blob, fileName);
-
-  const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
-    method: "POST",
-    body: form,
-    signal
-  });
-
-  return {
-    fileId: uploaded.id,
-    webViewLink: uploaded.webViewLink || "",
-    directUrl: ""
-  };
+  return uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderId, options);
 }
 
 async function backupSquadreSnapshotToDrive(dateKey, squadraPayload) {

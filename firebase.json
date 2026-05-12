@@ -7,7 +7,8 @@
       ".firebaserc",
       "README.md",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "functions/**"
     ],
     "headers": [
       {
@@ -29,5 +30,8 @@
   },
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "functions": {
+    "source": "functions"
   }
 }

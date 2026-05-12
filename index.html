@@ -125,15 +125,50 @@
     </section>
 
     <section id="impianti-page" class="hidden">
-      <section class="card">
-        <div class="page-head">
-          <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
-          <button id="show-next-action-btn" class="btn" type="button">Mostra pulsante Naviga</button>
-          <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
-          <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
+      <section class="card commessa-dashboard-card">
+        <div class="page-head commessa-dashboard-head">
+          <button id="back-to-home-btn" class="commessa-back-btn" type="button" aria-label="Torna alle commesse">←</button>
+          <button id="commessa-home-btn" class="commessa-home-btn" type="button" aria-label="Vai alla home">⌂</button>
+          <div class="commessa-title-wrap">
+            <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
+            <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
+          </div>
+          <button class="commessa-app-icon-btn" type="button" aria-label="Hera App">
+            <img src="./icons/hera-icon.svg" alt="" aria-hidden="true">
+          </button>
+          <button class="commessa-settings-btn" type="button" aria-label="Impostazioni">⚙</button>
+          <button id="show-next-action-btn" class="btn commessa-next-action-toggle" type="button">Mostra pulsante Naviga</button>
           <h2 id="impianti-page-title" class="sr-only">Impianti commessa</h2>
         </div>
-        <p id="impianti-next-action" class="muted">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
+
+        <div class="commessa-stat-strip" aria-label="Riepilogo commessa">
+          <article class="commessa-stat-item">
+            <span class="commessa-stat-icon" aria-hidden="true">▱</span>
+            <strong id="commessa-stat-impianti">0</strong>
+            <span>impianti</span>
+          </article>
+          <article class="commessa-stat-item">
+            <span class="commessa-stat-icon" aria-hidden="true">♙</span>
+            <strong id="commessa-stat-segnalazioni">0</strong>
+            <span>segnalazioni</span>
+          </article>
+          <article class="commessa-stat-item">
+            <span class="commessa-stat-icon" aria-hidden="true">◐</span>
+            <strong id="commessa-stat-avanzamento">0%</strong>
+            <span>avanzamento</span>
+          </article>
+          <article class="commessa-stat-item">
+            <span class="commessa-stat-icon" aria-hidden="true">◷</span>
+            <strong id="commessa-stat-ore">0 h</strong>
+            <span>ore totali</span>
+          </article>
+          <article class="commessa-stat-item">
+            <span class="commessa-stat-icon" aria-hidden="true">▣</span>
+            <strong id="commessa-stat-giorni">0 gg</strong>
+            <span>lavorati</span>
+          </article>
+        </div>
+        <p id="impianti-next-action" class="muted commessa-next-action-hint">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
       </section>
 
       <section id="parent-commessa-overview" class="card parent-commessa-overview hidden" aria-hidden="true">
@@ -147,11 +182,12 @@
         <div id="parent-subcommesse-list" class="parent-subcommesse-list"></div>
       </section>
 
-      <section id="commessa-operational-card" class="card">
-        <div class="commessa-tools-bar">
-          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
-          <button id="operator-positions-toggle-btn" class="btn hidden" type="button" aria-pressed="true">📍 Posizione squadre</button>
-          <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-controls="commessa-notes-page">📝 NOTE COMMESSA</button>
+      <section id="commessa-operational-card" class="card commessa-map-card">
+        <div class="commessa-tools-bar" aria-label="Azioni commessa">
+          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn commessa-action-btn" type="button" aria-label="Apri mappa a schermo intero"><span aria-hidden="true">🗺️</span> Mappa</button>
+          <button id="operator-positions-toggle-btn" class="btn hidden commessa-action-btn" type="button" aria-pressed="true"><span aria-hidden="true">📍</span> Pos. squadre</button>
+          <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn commessa-action-btn" type="button" aria-controls="commessa-notes-page"><span aria-hidden="true">📝</span> Note</button>
+          <button id="commessa-call-btn" class="btn commessa-action-btn" type="button"><span aria-hidden="true">📞</span> Chiama</button>
           <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
         </div>
         <section id="commessa-resource-viewer" class="commessa-resource-viewer hidden">
@@ -161,10 +197,17 @@
           </div>
           <div id="commessa-resource-viewer-list" class="simple-list"></div>
         </section>
-        <div id="map"></div>
-        <aside id="main-map-impianto-detail-panel" class="main-map-impianto-detail-panel hidden" aria-live="polite" aria-label="Dettaglio impianto selezionato">
-          <div id="main-map-impianto-detail-body"></div>
-        </aside>
+        <div class="commessa-map-shell">
+          <div id="map"></div>
+          <aside id="main-map-impianto-detail-panel" class="main-map-impianto-detail-panel hidden" aria-live="polite" aria-label="Dettaglio impianto selezionato">
+            <div id="main-map-impianto-detail-body"></div>
+          </aside>
+        </div>
+        <div class="commessa-squadre-footer">
+          <span class="commessa-squadre-dot" aria-hidden="true"></span>
+          <strong id="commessa-active-squadre-count">0 squadre attive</strong>
+          <button id="commessa-squadre-details-btn" class="commessa-squadre-details-btn" type="button">Vedi dettagli <span aria-hidden="true">⌄</span></button>
+        </div>
         <p id="gps-status" class="muted"></p>
       </section>
 

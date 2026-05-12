@@ -4198,3 +4198,91 @@ textarea:focus-visible {
     min-height: 258px;
   }
 }
+
+/* Sposta le azioni nel punto dei due pulsanti rimossi e riduce molto gli ingombri */
+.commessa-dashboard-head {
+  grid-template-columns: 44px 54px minmax(0, 1fr) auto;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  justify-self: end;
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  overflow: visible;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover {
+  width: 46px;
+  height: 40px;
+  min-height: 40px;
+  padding: 4px 5px;
+  border-radius: 9px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 0.62rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.commessa-header-actions .commessa-action-icon svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.2;
+}
+
+.commessa-header-actions .commessa-action-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#commessa-operational-card > .commessa-resource-buttons {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 34px 44px minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 4px;
+  }
+
+  .commessa-header-actions .commessa-action-btn {
+    width: 38px;
+    height: 36px;
+    min-height: 36px;
+    padding: 3px;
+    border-radius: 8px;
+    font-size: 0.56rem;
+  }
+
+  .commessa-header-actions .commessa-action-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (max-width: 430px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 30px 40px minmax(58px, 1fr) auto;
+  }
+
+  .commessa-header-actions .commessa-action-btn {
+    width: 34px;
+  }
+
+  .commessa-header-actions .commessa-action-label {
+    display: none;
+  }
+}

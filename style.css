@@ -4286,3 +4286,98 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+/* Correzione: pulsanti testata separati, non sovrapposti e con area touch adeguata */
+.commessa-dashboard-head {
+  grid-template-columns: 38px 48px minmax(0, 1fr) max-content;
+  column-gap: 10px;
+}
+
+.commessa-title-wrap {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.commessa-title-wrap .commessa-focus-label,
+.commessa-title-wrap .commessa-focus-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  flex: 0 0 auto;
+  min-width: max-content;
+  gap: 8px;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover,
+.commessa-header-actions .commessa-action-btn:focus-visible {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.commessa-header-actions .commessa-action-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.commessa-header-actions .commessa-action-label {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 32px 44px minmax(0, 1fr) max-content;
+    column-gap: 8px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 6px;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .commessa-header-actions .commessa-action-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .commessa-dashboard-head {
+    grid-template-columns: 28px 40px minmax(42px, 1fr) max-content;
+    column-gap: 6px;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    gap: 5px;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}

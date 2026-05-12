@@ -2838,20 +2838,34 @@ textarea:focus-visible {
 }
 
 .hours-value-btn {
-  border: 0;
-  background: #eaf1ff;
-  color: var(--text);
-  border-radius: 8px;
-  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 7px;
   font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.2;
   cursor: pointer;
   min-width: 42px;
+  white-space: nowrap;
 }
 
+.hours-value-btn.hours-value-ok {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.hours-value-btn.hours-value-warning,
 .hours-value-btn.hours-value-pending {
-  background: #fff7d6;
+  background: #fef3c7;
   color: #92400e;
-  border: 1px solid #facc15;
+  border-color: #facc15;
+}
+
+.hours-value-btn.hours-value-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
 }
 
 .hours-value-btn:disabled {
@@ -3647,5 +3661,22 @@ textarea:focus-visible {
 @media (max-width: 520px) {
   .navigation-weather-warning-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .hours-month-table th,
+  .hours-month-table td {
+    padding: 5px 4px;
+    font-size: 0.82rem;
+    vertical-align: middle;
+  }
+
+  .hours-value-btn {
+    padding: 2px 5px;
+    font-size: 0.72rem;
+    max-width: 118px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

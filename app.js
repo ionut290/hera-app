@@ -3995,21 +3995,25 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
       const hasPendingApproval = sources.some((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
-      const canManage = canManageData() && sources.length && !hasPendingApproval;
+      const canManage = canManageData() && sources.length;
       const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
       const hasDuplicates = dayItems.length > 1;
-      const valueLabelBase = hasDuplicates ? `⚠ ${dayItems.length} inserimenti` : `${formatHoursValue(dayTotal)}h`;
+      const valueLabelBase = hasDuplicates
+        ? `${formatHoursValue(dayTotal)}h · ${dayItems.length} inserimenti`
+        : `${formatHoursValue(dayTotal)}h`;
       const valueLabel = hasPendingApproval ? `${valueLabelBase} ⏳` : valueLabelBase;
       const mergedDetails = hasDuplicates
         ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. Elimina le righe duplicate.`
         : "";
       const title = hasPendingApproval
-        ? `${operatorName} - giorno ${day}: ore in attesa di conferma admin.`
+        ? canManage
+          ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Totale mostrato: ${formatHoursValue(dayTotal)}h. Alcune ore sono in attesa di conferma admin.`
+          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h in attesa di conferma admin.`
         : canManage
           ? hasDuplicates
-            ? `${mergedDetails}`
+            ? `${mergedDetails} Totale mostrato: ${formatHoursValue(dayTotal)}h.`
             : `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
-          : `${operatorName} - giorno ${day}`;
+          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h`;
       return `<td><button type="button" class="hours-value-btn${hasPendingApproval ? " hours-value-pending" : ""}" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
     const totalLabel = formatHoursValue(total);
@@ -4122,11 +4126,16 @@ async function handleHoursValueAction(cellKey) {
   try {
     const groupedByReport = new Map();
     sources.forEach((source) => {
-      if (!groupedByReport.has(source.reportId)) groupedByReport.set(source.reportId, []);
-      groupedByReport.get(source.reportId).push(source);
+      const collectionName = String(source.sourceCollection || "oreReports") === "oreApprovalRequests"
+        ? "oreApprovalRequests"
+        : "oreReports";
+      const groupKey = `${collectionName}::${source.reportId}`;
+      if (!groupedByReport.has(groupKey)) groupedByReport.set(groupKey, { collectionName, reportId: source.reportId, sources: [] });
+      groupedByReport.get(groupKey).sources.push(source);
     });
-    for (const [reportId, reportSources] of groupedByReport.entries()) {
-      const docRef = db.collection("oreReports").doc(reportId);
+    for (const reportGroup of groupedByReport.values()) {
+      const { collectionName, reportId, sources: reportSources } = reportGroup;
+      const docRef = db.collection(collectionName).doc(reportId);
       const docSnap = await docRef.get();
       if (!docSnap.exists) continue;
       const data = docSnap.data() || {};
@@ -4144,7 +4153,10 @@ async function handleHoursValueAction(cellKey) {
         return { ...entry, rows: nextRows };
       }).filter((entry) => Array.isArray(entry.rows) && entry.rows.length);
       if (nextEntries.length) {
-        await docRef.update({ entries: nextEntries });
+        await docRef.update({
+          entries: nextEntries,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
       } else {
         await docRef.delete();
       }
@@ -4197,7 +4209,7 @@ async function exportHoursMonthlyTable() {
   }
   const commessaName = commesseById.get(commessaId)?.nome || "Commessa";
   const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
-  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
+  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
 
   const operatorDayMap = new Map();
   const operatorTotals = new Map();
@@ -4278,7 +4290,7 @@ async function exportHoursGlobalMonthlyTable() {
     return;
   }
 
-  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta);
+  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
   const commessaMap = new Map();
   reports.forEach((report) => {
     const day = Number(String(report.date || "").split("-")[2] || 0);

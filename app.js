@@ -607,6 +607,8 @@ let hoursDraftEntries = [];
 let hoursFinalizeLocked = false;
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
+let hoursSubmitInFlight = false;
+let hoursDuplicateCleanupPromise = null;
 let hoursApprovalRequests = [];
 let gpsUpdateRequests = [];
 let activeResourceTypeForViewer = "";
@@ -3629,7 +3631,7 @@ async function deletePosDocument(doc) {
 function renderSavedHoursReports(records = []) {
   if (!ui.hoursSavedList) return;
   if (!records.length) {
-    ui.hoursSavedList.innerHTML = "<p class='muted'>Nessun report ore disponibile.</p>";
+    ui.hoursSavedList.innerHTML = "<p class='muted'>Nessun report ore salvato per i filtri correnti.</p>";
     return;
   }
   ui.hoursSavedList.innerHTML = records.map((report) => {
@@ -3665,6 +3667,7 @@ async function loadSavedHoursReports() {
   if (ui.viewHoursBtn) ui.viewHoursBtn.disabled = true;
   if (ui.hoursSavedList) ui.hoursSavedList.innerHTML = "<p class='muted'>Caricamento ore salvate...</p>";
   try {
+    await ensureHoursReportsDeduplicated();
     const baseQuery = db.collection("oreReports");
     const snapshot = await baseQuery.orderBy("createdAt", "desc").limit(100).get();
     const reports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -3716,6 +3719,7 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
   const includePendingApprovals = options?.includePendingApprovals === true;
   const fromDate = `${monthValue}-01`;
   const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
+  await ensureHoursReportsDeduplicated();
   const reportsQuery = db.collection("oreReports")
     .where("date", ">=", fromDate)
     .where("date", "<=", toDate)
@@ -3998,23 +4002,32 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
       const canManage = canManageData() && sources.length;
       const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
       const hasDuplicates = dayItems.length > 1;
-      const valueLabelBase = hasDuplicates
-        ? `${formatHoursValue(dayTotal)}h · ${dayItems.length} inserimenti`
-        : `${formatHoursValue(dayTotal)}h`;
-      const valueLabel = hasPendingApproval ? `${valueLabelBase} ⏳` : valueLabelBase;
+      const hasDataError = sources.some((source) => !source.reportDate || !source.entryCommessaId || !source.operatore || Number(source.ore || 0) <= 0);
+      let valueLabel = `✅ ${formatHoursValue(dayTotal)}h · ore inserite`;
+      let statusClass = "hours-value-ok";
+      if (hasDataError) {
+        valueLabel = `❌ ${formatHoursValue(dayTotal)}h · errore dati`;
+        statusClass = "hours-value-error";
+      } else if (hasDuplicates) {
+        valueLabel = `⚠️ ${formatHoursValue(dayTotal)}h · duplicato da controllare`;
+        statusClass = "hours-value-warning";
+      } else if (hasPendingApproval) {
+        valueLabel = `⚠️ ${formatHoursValue(dayTotal)}h · da confermare`;
+        statusClass = "hours-value-warning";
+      }
       const mergedDetails = hasDuplicates
-        ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. Elimina le righe duplicate.`
+        ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. La pulizia automatica mantiene una sola registrazione valida.`
         : "";
       const title = hasPendingApproval
         ? canManage
-          ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Totale mostrato: ${formatHoursValue(dayTotal)}h. Alcune ore sono in attesa di conferma admin.`
-          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h in attesa di conferma admin.`
+          ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Totale mostrato: ${formatHoursValue(dayTotal)}h. Alcune ore sono da confermare.`
+          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h da confermare.`
         : canManage
           ? hasDuplicates
             ? `${mergedDetails} Totale mostrato: ${formatHoursValue(dayTotal)}h.`
-            : `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Ore salvate: ${valueLabel}.`
-          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h`;
-      return `<td><button type="button" class="hours-value-btn${hasPendingApproval ? " hours-value-pending" : ""}" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
+            : `Modifica o elimina la registrazione ore di ${operatorName} del giorno ${day}. Ore salvate correttamente: ${formatHoursValue(dayTotal)}h.`
+          : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h inserite.`;
+      return `<td><button type="button" class="hours-value-btn ${statusClass}" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
     const totalLabel = formatHoursValue(total);
     return `<tr><th scope="row">${escapeHTML(operatorName)}</th>${cells}<td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
@@ -4057,7 +4070,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
     const hasPendingApprovals = (Array.isArray(reports) ? reports : [])
       .some((report) => String(report.sourceCollection || "oreReports") === "oreApprovalRequests");
     ui.hoursTableFeedback.textContent = hasPendingApprovals
-      ? "Mostro anche le ore in attesa di conferma admin (⏳): saranno salvate definitivamente dopo l'approvazione."
+      ? "Mostro anche le ore da confermare: sono evidenziate in giallo finché l'admin non le approva."
       : canManageData()
         ? "Clicca un valore per modificare o eliminare la registrazione ore."
         : "Vista sola lettura: solo l'amministratore può modificare o eliminare le ore.";
@@ -5428,6 +5441,7 @@ function collectHoursEntries() {
     const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
       operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
       ore: Number(row.querySelector(".hours-ore")?.value || 0),
+      operatoreId: resolveHoursOperatorId(row.querySelector(".hours-operatore")?.value || ""),
       squadraIndex: String(row.dataset.squadraIndex || squadraIndex || "").trim(),
       squadraLabel: String(row.dataset.squadraLabel || squadraLabel || "").trim()
     })).filter((row) => row.operatore && row.ore > 0);
@@ -5438,6 +5452,19 @@ function collectHoursEntries() {
 
 function normalizeHoursOperatorName(value) {
   return String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+}
+
+function resolveHoursOperatorId(operatore) {
+  const normalizedOperator = normalizeHoursOperatorName(operatore);
+  if (!normalizedOperator) return "";
+  const person = personaleRecords.find((item) => normalizeHoursOperatorName(getPersonaleDisplayName(item)) === normalizedOperator);
+  return String(person?.id || normalizedOperator).trim();
+}
+
+function getHoursOperatorUniquePart(row = {}) {
+  const operatore = String(row?.operatore || row?.nome || row?.name || "").trim();
+  const normalizedOperator = normalizeHoursOperatorName(operatore);
+  return String(row?.operatoreId || row?.participantId || row?.personaleId || row?.userId || row?.uid || resolveHoursOperatorId(operatore) || normalizedOperator).trim();
 }
 
 function encodeHoursLockPart(value) {
@@ -5460,8 +5487,9 @@ function getHoursUniqueLocks(dateValue, entries) {
     (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
       const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const operatoreId = String(row?.operatoreId || row?.participantId || resolveHoursOperatorId(operatore) || normalizedOperator).trim();
       const ore = Number(row?.ore || 0);
-      const lockId = getHoursLockDocId(dateKey, commessaId, operatore);
+      const lockId = getHoursLockDocId(dateKey, commessaId, operatoreId || operatore);
       if (!lockId || !normalizedOperator || ore <= 0) return;
       if (!locks.has(lockId)) {
         locks.set(lockId, {
@@ -5470,6 +5498,8 @@ function getHoursUniqueLocks(dateValue, entries) {
           commessaId,
           commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
           operatore,
+          operatoreId,
+          uniqueKey: `${commessaId}__${dateKey}__${operatoreId || normalizedOperator}`,
           normalizedOperator
         });
       }
@@ -5555,6 +5585,182 @@ async function updateHoursLocksForEntries(dateValue, entries, updates = {}) {
   await batch.commit();
 }
 
+function getHoursTimestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeHoursReportEntriesForUniqueKeys(report = {}, seenKeys = new Set()) {
+  const dateValue = String(report.date || "").trim();
+  const entries = Array.isArray(report.entries) ? report.entries : [];
+  let changed = false;
+  const keptLocks = [];
+  const normalizedEntries = entries.map((entry) => {
+    const commessaId = String(entry?.commessaId || "").trim();
+    const rows = Array.isArray(entry?.rows) ? entry.rows : [];
+    if (!commessaId) {
+      if (rows.length) changed = true;
+      return { ...entry, rows: [] };
+    }
+    const nextRows = [];
+    rows.forEach((row) => {
+      const operatore = String(row?.operatore || "").trim();
+      const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const operatorKey = getHoursOperatorUniquePart(row);
+      const ore = Number(row?.ore || 0);
+      const uniqueKey = `${dateValue}__${commessaId}__${operatorKey}`;
+      if (!dateValue || !normalizedOperator || !operatorKey || ore <= 0 || seenKeys.has(uniqueKey)) {
+        changed = true;
+        return;
+      }
+      seenKeys.add(uniqueKey);
+      const cleanRow = { ...row, operatore, ore };
+      nextRows.push(cleanRow);
+      keptLocks.push({
+        commessaId,
+        commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+        rows: [cleanRow]
+      });
+    });
+    if (nextRows.length !== rows.length) changed = true;
+    return { ...entry, rows: nextRows };
+  }).filter((entry) => {
+    const keep = Array.isArray(entry.rows) && entry.rows.length;
+    if (!keep) changed = true;
+    return keep;
+  });
+  return { changed, entries: normalizedEntries, keptLocks };
+}
+
+async function repairDuplicateHoursReports(options = {}) {
+  if (!currentUser || !canManageData()) return { changed: false, repaired: 0, deleted: 0 };
+  if (hoursDuplicateCleanupPromise && options.force !== true) return hoursDuplicateCleanupPromise;
+  hoursDuplicateCleanupPromise = (async () => {
+    const snapshot = await db.collection("oreReports").get();
+    const reports = snapshot.docs
+      .map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() || {} }))
+      .sort((a, b) => {
+        const dateCmp = String(a.data.date || "").localeCompare(String(b.data.date || ""));
+        if (dateCmp) return dateCmp;
+        const timeCmp = getHoursTimestampMillis(a.data.createdAt) - getHoursTimestampMillis(b.data.createdAt);
+        return timeCmp || a.id.localeCompare(b.id);
+      });
+    const seenKeys = new Set();
+    const writes = [];
+    const lockWrites = [];
+    let repaired = 0;
+    let deleted = 0;
+
+    reports.forEach((report) => {
+      const result = normalizeHoursReportEntriesForUniqueKeys(report.data, seenKeys);
+      if (result.keptLocks.length) {
+        lockWrites.push({ report, entries: result.keptLocks });
+      }
+      if (!result.changed) return;
+      repaired += 1;
+      if (result.entries.length) {
+        writes.push({ type: "update", ref: report.ref, entries: result.entries });
+      } else {
+        deleted += 1;
+        writes.push({ type: "delete", ref: report.ref });
+      }
+    });
+
+    for (let index = 0; index < writes.length; index += 450) {
+      const batch = db.batch();
+      writes.slice(index, index + 450).forEach((write) => {
+        if (write.type === "delete") {
+          batch.delete(write.ref);
+          return;
+        }
+        batch.update(write.ref, {
+          entries: write.entries,
+          duplicateHoursRepairedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+    }
+
+    for (let index = 0; index < lockWrites.length; index += 150) {
+      const batch = db.batch();
+      lockWrites.slice(index, index + 150).forEach(({ report, entries }) => {
+        getHoursUniqueLocks(report.data.date || "", entries).forEach((lock) => {
+          batch.set(db.collection("oreLocks").doc(lock.id), {
+            ...lock,
+            approvalRequestId: "",
+            reportId: report.id,
+            status: "approved",
+            repairedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+      });
+      await batch.commit();
+    }
+
+    return { changed: Boolean(writes.length), repaired, deleted };
+  })().catch((error) => {
+    hoursDuplicateCleanupPromise = null;
+    throw error;
+  });
+  return hoursDuplicateCleanupPromise;
+}
+
+async function ensureHoursReportsDeduplicated() {
+  if (!currentUser || !canManageData()) return;
+  try {
+    const result = await repairDuplicateHoursReports();
+    if (result?.changed) {
+      console.info(`Pulizia ore duplicate completata: ${result.repaired} report riparati, ${result.deleted} eliminati.`);
+    }
+  } catch (error) {
+    console.error("Pulizia automatica duplicati ore non riuscita:", error);
+  }
+}
+
+async function createApprovedHoursReportWithLocks(request, reportPayload) {
+  const reportRef = db.collection("oreReports").doc();
+  const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
+  await db.runTransaction(async (transaction) => {
+    const lockRefs = locks.map((lock) => ({ lock, ref: db.collection("oreLocks").doc(lock.id) }));
+    const lockSnapshots = await Promise.all(lockRefs.map(({ ref }) => transaction.get(ref)));
+    const conflicts = [];
+    lockSnapshots.forEach((snap, index) => {
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      if (!isActiveHoursLock(data, request.id || "")) return;
+      const fallback = lockRefs[index].lock;
+      conflicts.push({
+        commessaName: data.commessaName || fallback.commessaName || "Commessa",
+        operatore: data.operatore || fallback.operatore || "Operatore"
+      });
+    });
+    if (conflicts.length) {
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
+      error.code = "hours-duplicate-lock";
+      error.conflicts = conflicts;
+      throw error;
+    }
+    transaction.set(reportRef, reportPayload);
+    lockRefs.forEach(({ lock, ref }) => {
+      transaction.set(ref, {
+        ...lock,
+        approvalRequestId: request.id || "",
+        reportId: reportRef.id,
+        status: "approved",
+        createdByUid: reportPayload.createdByUid || "",
+        createdByEmail: reportPayload.createdByEmail || "",
+        createdByName: reportPayload.createdByName || "Operatore",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  });
+  return reportRef;
+}
+
 function formatHoursDuplicateMessage(conflicts = []) {
   const unique = [];
   const seen = new Set();
@@ -5579,9 +5785,10 @@ function findDuplicateHoursInDraft(entries) {
     (entry.rows || []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
       const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const operatorKey = getHoursOperatorUniquePart(row);
       const ore = Number(row?.ore || 0);
-      if (!normalizedOperator || ore <= 0) return;
-      const key = `${commessaId}__${normalizedOperator}`;
+      if (!normalizedOperator || !operatorKey || ore <= 0) return;
+      const key = `${commessaId}__${operatorKey}`;
       if (map.has(key)) {
         duplicates.push({
           commessaId,
@@ -5605,9 +5812,10 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
     (entry.rows || []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
       const normalizedOperator = normalizeHoursOperatorName(operatore);
+      const operatorKey = getHoursOperatorUniquePart(row);
       const ore = Number(row?.ore || 0);
-      if (!normalizedOperator || ore <= 0) return;
-      requestedKeys.set(`${commessaId}__${normalizedOperator}`, {
+      if (!normalizedOperator || !operatorKey || ore <= 0) return;
+      requestedKeys.set(`${commessaId}__${operatorKey}`, {
         commessaId,
         commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
         operatore
@@ -5629,9 +5837,10 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
       (entry.rows || []).forEach((row) => {
         const operatore = String(row?.operatore || "").trim();
         const normalizedOperator = normalizeHoursOperatorName(operatore);
+        const operatorKey = getHoursOperatorUniquePart(row);
         const ore = Number(row?.ore || 0);
-        if (!normalizedOperator || ore <= 0) return;
-        const match = requestedKeys.get(`${commessaId}__${normalizedOperator}`);
+        if (!normalizedOperator || !operatorKey || ore <= 0) return;
+        const match = requestedKeys.get(`${commessaId}__${operatorKey}`) || requestedKeys.get(`${commessaId}__${normalizedOperator}`);
         if (!match) return;
         conflicts.push({
           commessaName: entry.commessaName || match.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
@@ -5731,6 +5940,7 @@ function setHoursFinalizeLocked(locked) {
 }
 
 function unlockHoursFinalizeButton() {
+  hoursSubmitInFlight = false;
   if (!hoursFinalizeLocked) return;
   setHoursFinalizeLocked(false);
   if (ui.hoursFeedback?.textContent && ui.hoursFeedback.textContent.includes("Richiesta inviata")) {
@@ -5740,8 +5950,10 @@ function unlockHoursFinalizeButton() {
 
 async function finalizeHoursReport(event) {
   event.preventDefault();
-  if (hoursFinalizeLocked) {
-    ui.hoursFeedback.textContent = "Richiesta già inviata. Modifica commesse/operatori/ore per riattivare “Fine: salva”.";
+  if (hoursFinalizeLocked || hoursSubmitInFlight) {
+    ui.hoursFeedback.textContent = hoursSubmitInFlight
+      ? "Invio già in corso: attendi il completamento prima di premere di nuovo."
+      : "Richiesta già inviata. Modifica commesse/operatori/ore per riattivare “Fine: salva”.";
     return;
   }
   if (!currentUser) {
@@ -5769,6 +5981,7 @@ async function finalizeHoursReport(event) {
         .filter((row) => row.operatore && row.ore > 0)
         .map((row) => ({
           operatore: row.operatore,
+          operatoreId: row.operatoreId || resolveHoursOperatorId(row.operatore),
           ore: row.ore
         }))
     })).filter((entry) => entry.commessaId && entry.rows.length),
@@ -5784,6 +5997,7 @@ async function finalizeHoursReport(event) {
       return;
     }
   }
+  hoursSubmitInFlight = true;
   ui.hoursFinalizeBtn.disabled = true;
   ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
@@ -5817,6 +6031,7 @@ async function finalizeHoursReport(event) {
       ui.hoursFeedback.textContent = "Errore durante il salvataggio del resoconto ore.";
     }
   } finally {
+    hoursSubmitInFlight = false;
     if (!hoursFinalizeLocked) ui.hoursFinalizeBtn.disabled = false;
   }
 }
@@ -14714,7 +14929,16 @@ async function approveHoursRequestLevel2(request) {
     createdByEmail: request.createdByEmail || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  const docRef = await db.collection("oreReports").add(reportPayload);
+  let docRef;
+  try {
+    docRef = await createApprovedHoursReportWithLocks(request, reportPayload);
+  } catch (error) {
+    if (error?.code === "hours-duplicate-lock") {
+      alert(formatHoursDuplicateMessage(error.conflicts));
+      return;
+    }
+    throw error;
+  }
   let driveLink = "";
   if (driveAccessToken) {
     if (!driveReportsFolderId) await ensureDriveFolders();

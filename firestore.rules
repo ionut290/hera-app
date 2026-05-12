@@ -73,6 +73,20 @@ service cloud.firestore {
         && request.resource.data.status in ["online", "offline"];
     }
 
+
+    match /appConfig/driveAdminSecret {
+      allow read, write: if isAdmin();
+    }
+
+    match /appConfig/driveBridge {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /appConfig/{configId} {
+      allow read, write: if signedIn() && !(configId in ["driveAdminSecret", "driveBridge"]);
+    }
+
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
       allow create, update: if validOperatorPositionWrite(userId);
@@ -88,7 +102,6 @@ service cloud.firestore {
 
     match /{collection}/{docId} {
       allow read, write: if request.auth != null && collection in [
-        "appConfig",
         "appNotifications",
         "chatMessages",
         "commessaResources",

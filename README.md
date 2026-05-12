@@ -94,6 +94,7 @@ Senza chiave VAPID l'app continua a funzionare normalmente: avrai notifiche loca
 - Solo l'utente admin (`ionut29019@gmail.com`) vede attivo il pulsante **Collega Google Drive**.
 - Tutti i nuovi upload vengono salvati dentro la cartella Drive principale `1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0` (`Varga Cantieri`).
 - L'app crea o riusa sempre le cartelle `Varga Cantieri / <Nome Commessa> / <tipo file>` (es. `FOTO`, `POS`, `ORE`, `EXPORT`, `SEGNALAZIONI`) senza creare nuove cartelle duplicate per la stessa commessa/tipo.
+- Quando l'admin collega Drive, eventuali dati Drive vecchi trovati nella cartella `Hera App - Dati` vengono spostati in `Varga Cantieri / VECCHI DATI` per conservarli dentro la nuova root.
 - Token e refresh token admin vengono salvati in `appConfig/driveAdminSecret`; `appConfig/driveBridge` espone solo lo stato centralizzato agli utenti autenticati.
 - I media chat vengono caricati su Drive tramite backend e salvati in Firestore come metadati/link.
 - Per ogni commessa viene usato un solo Google Sheet (`Commessa - <nome commessa>`) dentro `Varga Cantieri / <Nome Commessa> / EXPORT`.

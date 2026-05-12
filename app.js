@@ -953,6 +953,9 @@ const DRIVE_CHAT_MEDIA_MAX_MB = 512;
 const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
 const CENTRAL_DRIVE_DEFAULT_COMMESSA = "Generale";
+const CENTRAL_DRIVE_LEGACY_FOLDER_NAME = "VECCHI DATI";
+const LEGACY_DRIVE_ROOT_FOLDER_NAMES = ["Hera App - Dati"];
+const LEGACY_DRIVE_MIGRATION_KEY = "heraLegacyDriveMigrationDone";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 const POS_DEFAULT_CATEGORIES = ["POS", "PMS", "Schede lavorazioni", "Schede macchine e attrezzature", "Sicurezza", "Modulistica", "Altro"];
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
@@ -6689,6 +6692,7 @@ async function autoConnectDriveBridge(options = {}) {
       rootFolderName: CENTRAL_DRIVE_ROOT_FOLDER_NAME,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    await migrateLegacyDriveDataToCentralRoot({ force: true });
     updateDriveStatus(true);
   } catch (error) {
     console.error("Connessione automatica Drive non riuscita:", error);
@@ -7557,6 +7561,7 @@ function subscribeDriveBridge() {
         console.warn("Token Drive admin non leggibile, uso token locale se presente:", error);
       }
       updateDriveStatus(Boolean(driveAccessToken || driveRootFolderId));
+      migrateLegacyDriveDataToCentralRoot().catch((error) => console.warn("Migrazione dati Drive vecchi non completata:", error));
       processPendingSheetExports();
       processAdminSheetExportQueue();
       return;
@@ -17131,6 +17136,50 @@ async function getOrCreateDriveFolder(name, parentId = "") {
   return created.id;
 }
 
+async function findDriveFoldersByName(name, parentId = "") {
+  const parentQuery = parentId ? ` and '${parentId}' in parents` : "";
+  const safeName = escapeDriveQueryValue(name);
+  const query = `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${safeName}'${parentQuery}`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,createdTime)&orderBy=createdTime&pageSize=100`;
+  const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
+  return Array.isArray(searchResponse.files) ? searchResponse.files : [];
+}
+
+async function moveDriveFileToFolder(fileId, targetParentId, currentParents = []) {
+  if (!fileId || !targetParentId) return;
+  const removeParents = currentParents.filter((parentId) => parentId && parentId !== targetParentId).join(",");
+  const params = new URLSearchParams({ addParents: targetParentId, fields: "id,parents" });
+  if (removeParents) params.set("removeParents", removeParents);
+  await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+}
+
+async function migrateLegacyDriveDataToCentralRoot(options = {}) {
+  const { force = false } = options;
+  if (!canManageData() || !driveAccessToken) return;
+  const migrationKey = `${LEGACY_DRIVE_MIGRATION_KEY}:${CENTRAL_DRIVE_ROOT_FOLDER_ID}`;
+  if (!force && sessionStorage.getItem(migrationKey) === "true") return;
+  try {
+    await ensureDriveFolders();
+    const legacyContainerId = await getOrCreateDriveFolder(CENTRAL_DRIVE_LEGACY_FOLDER_NAME, CENTRAL_DRIVE_ROOT_FOLDER_ID);
+    for (const legacyName of LEGACY_DRIVE_ROOT_FOLDER_NAMES) {
+      const legacyFolders = await findDriveFoldersByName(legacyName);
+      for (const legacyFolder of legacyFolders) {
+        if (!legacyFolder.id || legacyFolder.id === CENTRAL_DRIVE_ROOT_FOLDER_ID || legacyFolder.id === legacyContainerId) continue;
+        const parents = Array.isArray(legacyFolder.parents) ? legacyFolder.parents : [];
+        if (parents.includes(legacyContainerId)) continue;
+        await moveDriveFileToFolder(legacyFolder.id, legacyContainerId, parents);
+      }
+    }
+    sessionStorage.setItem(migrationKey, "true");
+  } catch (error) {
+    console.warn("Migrazione dati Drive vecchi non completata:", error);
+  }
+}
+
 function getCommessaSheetHeaders() {
   return [[
     "Commessa", "Cantiere", "Distretto", "ID SAP", "Denominazione", "Comune", "Indirizzo", "Voce riferimento",
@@ -17321,9 +17370,45 @@ async function uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderI
   };
 }
 
+async function uploadBlobDirectToAdminDrive(blob, fileName, mimeType, folderId, options = {}) {
+  if (!driveAccessToken) {
+    throw new Error(getCentralDriveNotConfiguredMessage());
+  }
+  await ensureDriveFolders();
+  const { signal = null } = options;
+  const commessaFolderId = await getOrCreateDriveFolder(getCurrentDriveCommessaName(options), CENTRAL_DRIVE_ROOT_FOLDER_ID);
+  const typeFolderId = await getOrCreateDriveFolder(inferCentralDriveType(folderId, options), commessaFolderId);
+  const metadata = {
+    name: normalizeDriveFolderName(fileName, "file"),
+    mimeType: mimeType || "application/octet-stream",
+    parents: [typeFolderId]
+  };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append("file", blob, metadata.name);
+  const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
+    method: "POST",
+    body: form,
+    signal
+  });
+  return {
+    fileId: uploaded.id || "",
+    webViewLink: uploaded.webViewLink || "",
+    directUrl: ""
+  };
+}
+
 async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {}) {
   if (!isCentralDriveConfigured() && !driveAccessToken) {
     throw new Error(getCentralDriveNotConfiguredMessage());
+  }
+  if (canManageData() && driveAccessToken) {
+    try {
+      return await uploadBlobDirectToAdminDrive(blob, fileName, mimeType, folderId, options);
+    } catch (error) {
+      if (!functions || typeof functions.httpsCallable !== "function") throw error;
+      console.warn("Upload diretto admin non riuscito, provo backend centralizzato:", error);
+    }
   }
   return uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderId, options);
 }

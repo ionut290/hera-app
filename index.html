@@ -125,15 +125,52 @@
     </section>
 
     <section id="impianti-page" class="hidden">
-      <section class="card">
-        <div class="page-head">
-          <button id="back-to-home-btn" class="btn" type="button">← Torna alle commesse</button>
-          <button id="show-next-action-btn" class="btn" type="button">Mostra pulsante Naviga</button>
-          <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
-          <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
+      <section class="card commessa-dashboard-card">
+        <div class="page-head commessa-dashboard-head">
+          <button id="back-to-home-btn" class="commessa-back-btn" type="button" aria-label="Torna alle commesse">←</button>
+          <button id="commessa-home-btn" class="commessa-home-btn" type="button" aria-label="Vai alla home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2v8.3a1 1 0 0 1-1 1h-5v-5.8h-4v5.8H5a1 1 0 0 1-1-1z"/></svg></button>
+          <div class="commessa-title-wrap">
+            <p id="commessa-focus-label" class="commessa-focus-label">DEPURAZIONE</p>
+            <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
+          </div>
+          <div class="commessa-header-actions commessa-tools-bar" aria-label="Azioni commessa">
+            <button id="map-fullscreen-btn" class="btn map-fullscreen-btn commessa-action-btn commessa-action-btn--map" type="button" aria-label="Apri mappa a schermo intero" title="Mappa a schermo intero"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v14M15 6v14"/></svg></span><span class="commessa-action-label">Mappa</span></button>
+            <button id="operator-positions-toggle-btn" class="btn hidden commessa-action-btn commessa-action-btn--pin" type="button" aria-pressed="true" title="Posizione squadre"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Pos.</span></button>
+            <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn commessa-action-btn commessa-action-btn--note" type="button" aria-controls="commessa-notes-page" title="Note"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19h4l10-10-4-4L5 15v4Z"/><path d="m13.5 6.5 4 4"/></svg></span><span class="commessa-action-label">Note</span></button>
+            <button id="commessa-call-btn" class="btn commessa-action-btn commessa-action-btn--call" type="button" title="Chiama"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h3l1.5 4-2 1.2a12 12 0 0 0 5.3 5.3l1.2-2 4 1.5v3a2 2 0 0 1-2.2 2A16 16 0 0 1 5 6.2 2 2 0 0 1 7 4Z"/></svg></span><span class="commessa-action-label">Chiama</span></button>
+          </div>
+          <button id="show-next-action-btn" class="btn commessa-next-action-toggle" type="button">Mostra pulsante Naviga</button>
           <h2 id="impianti-page-title" class="sr-only">Impianti commessa</h2>
         </div>
-        <p id="impianti-next-action" class="muted">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
+
+        <div class="commessa-stat-strip" aria-label="Riepilogo commessa">
+          <article class="commessa-stat-item" role="button" tabindex="0" data-stat-action="impianti" aria-label="Vai agli impianti da fare">
+            <span class="commessa-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/></svg></span>
+            <strong id="commessa-stat-impianti">0</strong>
+            <span>impianti</span>
+          </article>
+          <article class="commessa-stat-item" role="button" tabindex="0" data-stat-action="segnalazioni" aria-label="Vai agli impianti con segnalazione">
+            <span class="commessa-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z"/><path d="M10 21h4"/></svg></span>
+            <strong id="commessa-stat-segnalazioni">0</strong>
+            <span>segnalazioni</span>
+          </article>
+          <article class="commessa-stat-item" role="button" tabindex="0" data-stat-action="avanzamento" aria-label="Vai agli impianti fatti">
+            <span class="commessa-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-8.2 5.3"/><path d="M12 3v9h9"/></svg></span>
+            <strong id="commessa-stat-avanzamento">0%</strong>
+            <span>avanzamento</span>
+          </article>
+          <article class="commessa-stat-item" role="button" tabindex="0" data-stat-action="ore" aria-label="Apri gestione ore">
+            <span class="commessa-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+            <strong id="commessa-stat-ore">0 h</strong>
+            <span>ore totali</span>
+          </article>
+          <article class="commessa-stat-item" role="button" tabindex="0" data-stat-action="giorni" aria-label="Apri gestione ore per i giorni lavorati">
+            <span class="commessa-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4v3M18 4v3M4 9h16"/><rect x="4" y="6" width="16" height="15" rx="2"/></svg></span>
+            <strong id="commessa-stat-giorni">0 gg</strong>
+            <span>lavorati</span>
+          </article>
+        </div>
+        <p id="impianti-next-action" class="muted commessa-next-action-hint">Prossima azione consigliata: usa il pulsante evidenziato qui sotto.</p>
       </section>
 
       <section id="parent-commessa-overview" class="card parent-commessa-overview hidden" aria-hidden="true">
@@ -147,13 +184,8 @@
         <div id="parent-subcommesse-list" class="parent-subcommesse-list"></div>
       </section>
 
-      <section id="commessa-operational-card" class="card">
-        <div class="commessa-tools-bar">
-          <button id="map-fullscreen-btn" class="btn map-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero">⤢ Mappa a schermo intero</button>
-          <button id="operator-positions-toggle-btn" class="btn hidden" type="button" aria-pressed="true">📍 Posizione squadre</button>
-          <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn" type="button" aria-controls="commessa-notes-page">📝 NOTE COMMESSA</button>
-          <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
-        </div>
+      <section id="commessa-operational-card" class="card commessa-map-card">
+        <div id="commessa-resource-buttons" class="commessa-resource-buttons"></div>
         <section id="commessa-resource-viewer" class="commessa-resource-viewer hidden">
           <div class="section-head">
             <h3 id="commessa-resource-viewer-title">Informazioni utili</h3>
@@ -161,10 +193,17 @@
           </div>
           <div id="commessa-resource-viewer-list" class="simple-list"></div>
         </section>
-        <div id="map"></div>
-        <aside id="main-map-impianto-detail-panel" class="main-map-impianto-detail-panel hidden" aria-live="polite" aria-label="Dettaglio impianto selezionato">
-          <div id="main-map-impianto-detail-body"></div>
-        </aside>
+        <div class="commessa-map-shell">
+          <div id="map"></div>
+          <aside id="main-map-impianto-detail-panel" class="main-map-impianto-detail-panel hidden" aria-live="polite" aria-label="Dettaglio impianto selezionato">
+            <div id="main-map-impianto-detail-body"></div>
+          </aside>
+        </div>
+        <div class="commessa-squadre-footer">
+          <span class="commessa-squadre-dot" aria-hidden="true"></span>
+          <strong id="commessa-active-squadre-count">0 squadre attive</strong>
+          <button id="commessa-squadre-details-btn" class="commessa-squadre-details-btn" type="button">Vedi dettagli <span aria-hidden="true">⌄</span></button>
+        </div>
         <p id="gps-status" class="muted"></p>
       </section>
 

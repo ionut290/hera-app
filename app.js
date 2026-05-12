@@ -7424,51 +7424,10 @@ function renderCommesseHomeList() {
 
 function renderParentCommessaOverview() {
   if (!ui.parentCommessaOverview) return;
-  if (!selectedCommessaId) {
-    ui.parentCommessaOverview.classList.add("hidden");
-    ui.parentCommessaOverview.setAttribute("aria-hidden", "true");
-    ui.commessaOperationalCard?.classList.remove("hidden");
-    ui.impiantiCard?.classList.remove("hidden");
-    return;
-  }
-
-  const subcommesse = sortCommesseByCreatedAtDesc(getSubcommesse(selectedCommessaId));
-  const isParent = subcommesse.length > 0;
-  ui.parentCommessaOverview.classList.remove("hidden");
-  ui.parentCommessaOverview.setAttribute("aria-hidden", "false");
+  ui.parentCommessaOverview.classList.add("hidden");
+  ui.parentCommessaOverview.setAttribute("aria-hidden", "true");
   ui.commessaOperationalCard?.classList.remove("hidden");
   ui.impiantiCard?.classList.remove("hidden");
-
-  if (ui.parentCommessaSummary) {
-    ui.parentCommessaSummary.textContent = isParent
-      ? formatParentCommessaSummary(getParentCommessaAggregate(selectedCommessaId))
-      : formatSingleCommessaSummary(selectedCommessaId);
-  }
-
-  ui.parentSubcommesseTitle?.classList.toggle("hidden", !isParent);
-  if (!ui.parentSubcommesseList) return;
-  ui.parentSubcommesseList.classList.toggle("hidden", !isParent);
-  ui.parentSubcommesseList.innerHTML = "";
-  if (!isParent) return;
-
-  subcommesse.forEach((sub) => {
-    const stats = getCommessaStats(sub.id);
-    const card = document.createElement("article");
-    card.className = "subcommessa-compact-card";
-    const codice = String(sub.codice || "").trim() || "-";
-    card.innerHTML = `
-      <div>
-        <h3>${escapeHTML(sub.nome || "Subcommessa senza nome")}</h3>
-        <p class="muted">Codice: ${escapeHTML(codice)}</p>
-        <p>${stats.done} / ${stats.total} impianti fatti • ${getCommessaHoursTotal(sub.id).toLocaleString("it-IT")} ore totali • ${stats.openAlerts} segnalazioni aperte</p>
-      </div>
-      <div class="item-actions">
-        <button class="btn subcommessa-open-btn" type="button" data-open-subcommessa="${escapeHTML(sub.id)}">Apri commessa</button>
-      </div>
-    `;
-    card.querySelector("[data-open-subcommessa]")?.addEventListener("click", () => selectCommessa(sub.id, sub.nome || "Subcommessa", sub.codice || ""));
-    ui.parentSubcommesseList.appendChild(card);
-  });
 }
 
 function renderCommessaSelects() {

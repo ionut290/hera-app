@@ -2,6 +2,7 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
+const functions = firebase.functions ? firebase.functions() : null;
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 let firebaseMessaging = null;
 
@@ -532,6 +533,7 @@ let commessaNoteImpiantoSearchTerm = "";
 let currentUser = null;
 let unsubscribeChat = null;
 let unsubscribeDriveBridge = null;
+let driveBridgeState = { configured: false, ownerEmail: "", rootFolderId: "" };
 let unsubscribePersonale = null;
 let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
@@ -936,11 +938,11 @@ const STATIC_HOWTO_ITEMS = [
   {
     id: "google-drive",
     domanda: "Come collego Google Drive?",
-    rispostaBreve: "Dopo il login, usa “Collega Google Drive” nel pannello utente.",
+    rispostaBreve: "Solo l’amministratore collega Google Drive; per gli utenti il cloud è automatico.",
     passi: [
       "Esegui login con Google con un account autorizzato.",
-      "Apri il pannello utente e premi “Collega Google Drive”.",
-      "Conferma i permessi richiesti e verifica lo stato collegato."
+      "Solo l’amministratore apre il pannello utente e preme “Collega Google Drive”.",
+      "Gli utenti normali non devono autenticare Drive: vedono solo lo stato del cloud centralizzato."
     ],
     tags: ["drive", "google", "integrazione"],
     updatedAt: HOWTO_UPDATED_AT
@@ -948,6 +950,12 @@ const STATIC_HOWTO_ITEMS = [
 ];
 
 const DRIVE_CHAT_MEDIA_MAX_MB = 512;
+const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
+const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
+const CENTRAL_DRIVE_DEFAULT_COMMESSA = "Generale";
+const CENTRAL_DRIVE_LEGACY_FOLDER_NAME = "VECCHI DATI";
+const LEGACY_DRIVE_ROOT_FOLDER_NAMES = ["Hera App - Dati"];
+const LEGACY_DRIVE_MIGRATION_KEY = "heraLegacyDriveMigrationDone";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 const POS_DEFAULT_CATEGORIES = ["POS", "PMS", "Schede lavorazioni", "Schede macchine e attrezzature", "Sicurezza", "Modulistica", "Altro"];
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
@@ -980,8 +988,8 @@ const HELP_CENTER_FAQ_FALLBACK = {
     {
       id: "faq-drive-connessione",
       domanda: "Come collego Google Drive?",
-      risposta: "Solo l'admin deve cliccare su Collega Google Drive: il bridge viene poi condiviso per tutti gli utenti loggati.",
-      passi: ["Login admin", "Premi Collega Google Drive", "Concedi autorizzazioni", "Verifica stato Drive attivo"]
+      risposta: "Solo l'admin deve collegare Google Drive: il cloud centralizzato viene poi usato automaticamente da tutti gli utenti loggati.",
+      passi: ["Login admin", "Premi Collega Google Drive", "Concedi autorizzazioni", "Verifica Cloud centralizzato attivo"]
     }
   ]
 };
@@ -990,7 +998,7 @@ let currentWorkflowStepId = localStorage.getItem(USER_WORKFLOW_STEP_KEY) || "";
 let impiantoNextActionIndex = 0;
 let impiantoNextActionHighlightEnabled = false;
 window.googleDriveAccessToken = localStorage.getItem("googleDriveAccessToken") || null;
-driveAccessToken = window.googleDriveAccessToken || "";
+driveAccessToken = "";
 
 const STANDARD_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const STANDARD_TILE_OPTIONS = {
@@ -1946,8 +1954,7 @@ auth.onAuthStateChanged((user) => {
   ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
   ui.switchAccountBtn.disabled = !loggedIn;
   ui.logoutBtn.disabled = !loggedIn;
-  ui.driveConnectBtn.disabled = !loggedIn;
-  ui.driveConnectBtn.classList.toggle("hidden", !loggedIn);
+  updateDriveConnectVisibility();
   ui.user.textContent = loggedIn
     ? `Loggato: ${user.email || "email non disponibile"}`
     : "Non loggato";
@@ -2025,14 +2032,6 @@ auth.onAuthStateChanged((user) => {
   clearMap();
   lastReadChatAt = null;
   resetDriveState();
-  if (loggedIn) {
-    const storedToken = getStoredDriveToken();
-    if (storedToken) {
-      driveAccessToken = storedToken;
-      window.googleDriveAccessToken = storedToken;
-      autoConnectDriveBridge({ notifyOnError: false });
-    }
-  }
   renderChat([]);
   applyRoute();
   subscribeWorkBanner();
@@ -2083,6 +2082,7 @@ auth.onAuthStateChanged((user) => {
 
 function updateAdminControls() {
   const canManage = canManageData();
+  updateDriveConnectVisibility();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
   ui.operatorPositionsToggleBtn?.classList.toggle("hidden", !canManage);
@@ -3518,6 +3518,7 @@ function getFilteredPosDocuments() {
 function renderPosDocuments() {
   if (!ui.posDocumentsList) return;
   const canManage = canManageData();
+  updateDriveConnectVisibility();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
@@ -6511,7 +6512,44 @@ function queuePendingSheetExport(payload) {
 }
 
 function getStoredDriveToken() {
-  return localStorage.getItem("googleDriveAccessToken") || "";
+  return canManageData() ? (localStorage.getItem("googleDriveAccessToken") || "") : "";
+}
+
+function updateDriveConnectVisibility() {
+  const showConnect = Boolean(currentUser && canManageData());
+  if (!ui.driveConnectBtn) return;
+  ui.driveConnectBtn.classList.toggle("hidden", !showConnect);
+  ui.driveConnectBtn.disabled = !showConnect;
+}
+
+function isCentralDriveConfigured() {
+  return Boolean(driveBridgeState.configured || driveAccessToken);
+}
+
+function getCentralDriveNotConfiguredMessage() {
+  return "Cloud amministratore non configurato";
+}
+
+function normalizeDriveFolderName(value, fallback = "Generale") {
+  return String(value || fallback).trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 120) || fallback;
+}
+
+function escapeDriveQueryValue(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function inferCentralDriveType(folderId = "", options = {}) {
+  const explicit = String(options.driveType || options.type || "").trim().toUpperCase();
+  if (explicit) return normalizeDriveFolderName(explicit, "EXPORT").toUpperCase();
+  if (folderId && folderId === driveChatFolderId) return "FOTO";
+  if (folderId && folderId === driveReportsFolderId) return "SEGNALAZIONI";
+  if (folderId && folderId === driveSquadreFolderId) return "EXPORT";
+  if (folderId && folderId === driveHelpCenterFolderId) return "EXPORT";
+  return "EXPORT";
+}
+
+function getCurrentDriveCommessaName(options = {}) {
+  return normalizeDriveFolderName(options.commessaName || selectedCommessaName || "", CENTRAL_DRIVE_DEFAULT_COMMESSA);
 }
 
 function trackLocalSheetMutation(commessaId) {
@@ -6588,17 +6626,12 @@ function isAndroidWebViewRuntime() {
 function loginWithGoogle(forceAccountSelection = false) {
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
-  provider.addScope("https://www.googleapis.com/auth/drive.file");
   if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
 
   // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
   if (isAndroidWebViewRuntime()) {
     auth.signInWithPopup(provider).then((result) => {
-      const accessToken = extractGoogleAccessToken(result);
-      if (accessToken) {
-        persistDriveAccessToken(accessToken);
-        autoConnectDriveBridge({ notifyOnError: false });
-      }
+      void result;
     }).catch((error) => {
       console.error("Login Google Android/WebView fallito:", error);
       alert("Errore login Android/WebView: " + error.message);
@@ -6608,12 +6641,7 @@ function loginWithGoogle(forceAccountSelection = false) {
 
   // Flusso web desktop/browser standard: manteniamo comportamento esistente.
   auth.signInWithPopup(provider).then((result) => {
-    // Gli scope extra (es. Drive) arrivano nel credential del login, non nel profilo utente Firebase.
-    const accessToken = extractGoogleAccessToken(result);
-    if (accessToken) {
-      persistDriveAccessToken(accessToken);
-      autoConnectDriveBridge({ notifyOnError: false });
-    }
+    void result;
   }).catch((error) => {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
       return auth.signInWithRedirect(provider);
@@ -6640,21 +6668,31 @@ function persistDriveAccessToken(accessToken) {
 }
 
 async function autoConnectDriveBridge(options = {}) {
-  if (!driveAccessToken) return;
+  if (!driveAccessToken || !canManageData()) return;
   const { notifyOnError = false } = options;
   try {
     await ensureDriveFolders();
     const driveUser = auth.currentUser || currentUser;
-    await db.collection("appConfig").doc("driveBridge").set({
-      ownerEmail: (driveUser && driveUser.email) ? driveUser.email : ADMIN_EMAIL,
+    const ownerEmail = (driveUser && driveUser.email) ? driveUser.email : ADMIN_EMAIL;
+    await db.collection("appConfig").doc("driveAdminSecret").set({
+      ownerEmail,
       accessToken: driveAccessToken,
-      rootFolderId: driveRootFolderId,
+      refreshToken: "",
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID,
       chatFolderId: driveChatFolderId,
       reportsFolderId: driveReportsFolderId,
       squadreFolderId: driveSquadreFolderId,
       helpCenterFolderId: driveHelpCenterFolderId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    await db.collection("appConfig").doc("driveBridge").set({
+      ownerEmail,
+      configured: true,
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID,
+      rootFolderName: CENTRAL_DRIVE_ROOT_FOLDER_NAME,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    await migrateLegacyDriveDataToCentralRoot({ force: true });
     updateDriveStatus(true);
   } catch (error) {
     console.error("Connessione automatica Drive non riuscita:", error);
@@ -7488,49 +7526,50 @@ async function createCommessa(event) {
 }
 
 function subscribeDriveBridge() {
-  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot((doc) => {
+  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot(async (doc) => {
     const data = doc.exists ? doc.data() : null;
-    if (!data || !data.accessToken) {
-      if (canManageData()) {
-        const storedToken = getStoredDriveToken();
-        if (storedToken) {
-          driveAccessToken = storedToken;
-          window.googleDriveAccessToken = storedToken;
-        }
-      }
-      updateDriveStatus(Boolean(driveAccessToken));
+    const owner = data?.ownerEmail || ADMIN_EMAIL;
+    driveBridgeState = {
+      configured: Boolean(data?.configured || data?.rootFolderId),
+      ownerEmail: owner,
+      rootFolderId: CENTRAL_DRIVE_ROOT_FOLDER_ID
+    };
+
+    if (!driveBridgeState.configured) {
+      updateDriveStatus(false);
       return;
     }
 
-    const owner = data.ownerEmail || ADMIN_EMAIL;
+    driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
     if (canManageData()) {
-      driveAccessToken = data.accessToken;
-      driveRootFolderId = data.rootFolderId || "";
-      driveChatFolderId = data.chatFolderId || "";
-      driveReportsFolderId = data.reportsFolderId || "";
-      driveSquadreFolderId = data.squadreFolderId || "";
-      driveHelpCenterFolderId = data.helpCenterFolderId || "";
-      ui.driveStatus.textContent = `Drive centralizzato attivo (${owner}).`;
+      const storedToken = getStoredDriveToken();
+      if (storedToken) {
+        driveAccessToken = storedToken;
+        window.googleDriveAccessToken = storedToken;
+      }
+      try {
+        const secretDoc = await db.collection("appConfig").doc("driveAdminSecret").get();
+        const secret = secretDoc.exists ? secretDoc.data() : {};
+        driveAccessToken = secret.accessToken || driveAccessToken;
+        window.googleDriveAccessToken = driveAccessToken || null;
+        driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
+        driveChatFolderId = secret.chatFolderId || driveChatFolderId || "";
+        driveReportsFolderId = secret.reportsFolderId || driveReportsFolderId || "";
+        driveSquadreFolderId = secret.squadreFolderId || driveSquadreFolderId || "";
+        driveHelpCenterFolderId = secret.helpCenterFolderId || driveHelpCenterFolderId || "";
+      } catch (error) {
+        console.warn("Token Drive admin non leggibile, uso token locale se presente:", error);
+      }
+      updateDriveStatus(Boolean(driveAccessToken || driveRootFolderId));
+      migrateLegacyDriveDataToCentralRoot().catch((error) => console.warn("Migrazione dati Drive vecchi non completata:", error));
       processPendingSheetExports();
       processAdminSheetExportQueue();
       return;
     }
 
-    const storedToken = getStoredDriveToken();
-    if (storedToken) {
-      driveAccessToken = storedToken;
-      window.googleDriveAccessToken = storedToken;
-    }
-    driveRootFolderId = data.rootFolderId || driveRootFolderId || "";
-    driveChatFolderId = data.chatFolderId || driveChatFolderId || "";
-    driveReportsFolderId = data.reportsFolderId || driveReportsFolderId || "";
-    driveSquadreFolderId = data.squadreFolderId || driveSquadreFolderId || "";
-    driveHelpCenterFolderId = data.helpCenterFolderId || driveHelpCenterFolderId || "";
-    if (driveAccessToken) {
-      ui.driveStatus.textContent = `Drive collegato (account utente) • report centralizzati (${owner}).`;
-    } else {
-      ui.driveStatus.textContent = `Report foglio gestito dall'admin (${owner}).`;
-    }
+    driveAccessToken = "";
+    window.googleDriveAccessToken = null;
+    updateDriveStatus(true);
   }, (error) => {
     console.error(error);
     ui.driveStatus.textContent = "Errore lettura configurazione Drive centralizzato.";
@@ -8542,21 +8581,16 @@ async function savePrivateDocument(event) {
     let fileSize = 0;
     let driveFileId = "";
     let driveWebViewLink = "";
-    const useDriveUpload = Boolean(ui.privateDocsDriveOnly?.checked);
+    const useDriveUpload = Boolean(file);
     if (file) {
       fileSize = Number(file.size || 0);
-      if (!useDriveUpload && fileSize > 700 * 1024) {
-        ui.privateDocsFeedback.textContent = "File troppo grande: usa il salvataggio Drive o file sotto 700KB.";
-        return;
-      }
       fileName = file.name || "documento";
       fileType = file.type || "application/octet-stream";
       if (useDriveUpload) {
-        ui.privateDocsFeedback.textContent = "Caricamento su Google Drive personale...";
-        const upload = await uploadPrivateDocumentToDrive(file, currentUser.uid);
-        driveFileId = upload.driveFileId;
-        driveWebViewLink = upload.driveWebViewLink;
-        fileName = upload.driveFileName || fileName;
+        ui.privateDocsFeedback.textContent = "Caricamento sul cloud centralizzato...";
+        const upload = await uploadBlobToDrive(file, fileName, fileType, driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: "Documenti personali" });
+        driveFileId = upload.fileId;
+        driveWebViewLink = upload.webViewLink;
       } else {
         fileDataUrl = await readFileAsDataUrl(file);
       }
@@ -15186,7 +15220,7 @@ async function approveHoursRequestLevel2(request) {
     if (!driveReportsFolderId) await ensureDriveFolders();
     const blob = new Blob([JSON.stringify({ id: docRef.id, ...reportPayload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
     const fileName = `ore_${reportPayload.date}_${docRef.id}.json`;
-    const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId);
+    const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId, { driveType: "ORE", commessaName: "ORE" });
     driveLink = upload?.webViewLink || "";
   }
   await db.collection("oreApprovalRequests").doc(request.id).set({
@@ -15676,8 +15710,8 @@ function cancelNotificationUpload() {
 
 async function uploadNotificationAttachments(files = [], options = {}) {
   if (!files.length) return [];
-  if (!driveAccessToken) {
-    throw new Error("Google Drive non collegato. Collega Drive per allegare documenti alle notifiche.");
+  if (!isCentralDriveConfigured() && !driveAccessToken) {
+    throw new Error("Cloud amministratore non configurato. Configura Drive admin per allegare documenti alle notifiche.");
   }
   if (!driveReportsFolderId) await ensureDriveFolders();
   const { signal = null, onProgress = null } = options;
@@ -16696,8 +16730,8 @@ async function sendMediaMessage(event) {
   if (!file) return;
 
   try {
-    if (!driveAccessToken) {
-      throw new Error("Collega Google Drive per inviare foto/video in chat.");
+    if (!isCentralDriveConfigured() && !driveAccessToken) {
+      throw new Error("Cloud amministratore non configurato. Contatta un admin per inviare foto/video.");
     }
 
     enforceMediaSize(file, DRIVE_CHAT_MEDIA_MAX_MB);
@@ -16751,8 +16785,8 @@ async function toggleVoiceRecording() {
 
     mediaRecorder.onstop = async () => {
       try {
-        if (!driveAccessToken) {
-          throw new Error("Collega Google Drive per inviare vocali.");
+        if (!isCentralDriveConfigured() && !driveAccessToken) {
+          throw new Error("Cloud amministratore non configurato. Contatta un admin per inviare vocali.");
         }
 
         const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
@@ -16834,12 +16868,22 @@ function resetDriveState() {
 }
 
 function updateDriveStatus(isConnected) {
-  const connected = isConnected || localStorage.getItem("googleDriveConnected") === "true";
+  const connected = Boolean(isConnected || driveBridgeState.configured);
   ui.driveStatus.classList.toggle("status-chip-drive", connected);
-  ui.driveStatus.textContent = connected ? "Drive collegato." : "Drive non collegato.";
+  if (connected) {
+    ui.driveStatus.textContent = canManageData()
+      ? `Cloud centralizzato attivo${driveBridgeState.ownerEmail ? ` (${driveBridgeState.ownerEmail})` : ""}.`
+      : "Archiviazione cloud attiva • Cloud centralizzato attivo";
+  } else {
+    ui.driveStatus.textContent = getCentralDriveNotConfiguredMessage();
+  }
 }
 
 async function connectGoogleDrive() {
+  if (!canManageData()) {
+    alert("Solo admin può configurare Google Drive.");
+    return;
+  }
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/drive.file");
@@ -16937,11 +16981,11 @@ async function saveToDrive(data) {
 // });
 
 async function ensureDriveFolders() {
-  driveRootFolderId = await getOrCreateDriveFolder("Hera App - Dati");
-  driveChatFolderId = await getOrCreateDriveFolder("Chat Media", driveRootFolderId);
-  driveReportsFolderId = await getOrCreateDriveFolder("Report Impianti", driveRootFolderId);
-  driveSquadreFolderId = await getOrCreateDriveFolder("Storico Squadre", driveRootFolderId);
-  driveHelpCenterFolderId = await getOrCreateDriveFolder("Help Center", driveReportsFolderId);
+  driveRootFolderId = CENTRAL_DRIVE_ROOT_FOLDER_ID;
+  driveChatFolderId = "FOTO";
+  driveReportsFolderId = "SEGNALAZIONI";
+  driveSquadreFolderId = "EXPORT";
+  driveHelpCenterFolderId = "EXPORT";
 }
 
 function normalizeFaqData(data) {
@@ -17040,7 +17084,7 @@ async function exportFaqSnapshotToDrive(faqData = faqDataset) {
     throw new Error("Solo un admin può esportare snapshot FAQ.");
   }
   if (!driveAccessToken) {
-    console.warn("Drive non collegato: salto export snapshot FAQ.");
+    console.warn("Cloud amministratore non configurato: salto export snapshot FAQ.");
     return null;
   }
 
@@ -17068,9 +17112,9 @@ async function exportFaqSnapshotToDrive(faqData = faqDataset) {
 
 async function getOrCreateDriveFolder(name, parentId = "") {
   const parentQuery = parentId ? ` and '${parentId}' in parents` : "";
-  const safeName = name.replaceAll("'", "\\'");
+  const safeName = escapeDriveQueryValue(name);
   const query = `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${safeName}'${parentQuery}`;
-  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)&orderBy=createdTime&pageSize=1`;
   const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
 
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
@@ -17090,6 +17134,50 @@ async function getOrCreateDriveFolder(name, parentId = "") {
   });
 
   return created.id;
+}
+
+async function findDriveFoldersByName(name, parentId = "") {
+  const parentQuery = parentId ? ` and '${parentId}' in parents` : "";
+  const safeName = escapeDriveQueryValue(name);
+  const query = `mimeType='application/vnd.google-apps.folder' and trashed=false and name='${safeName}'${parentQuery}`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,createdTime)&orderBy=createdTime&pageSize=100`;
+  const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
+  return Array.isArray(searchResponse.files) ? searchResponse.files : [];
+}
+
+async function moveDriveFileToFolder(fileId, targetParentId, currentParents = []) {
+  if (!fileId || !targetParentId) return;
+  const removeParents = currentParents.filter((parentId) => parentId && parentId !== targetParentId).join(",");
+  const params = new URLSearchParams({ addParents: targetParentId, fields: "id,parents" });
+  if (removeParents) params.set("removeParents", removeParents);
+  await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+}
+
+async function migrateLegacyDriveDataToCentralRoot(options = {}) {
+  const { force = false } = options;
+  if (!canManageData() || !driveAccessToken) return;
+  const migrationKey = `${LEGACY_DRIVE_MIGRATION_KEY}:${CENTRAL_DRIVE_ROOT_FOLDER_ID}`;
+  if (!force && sessionStorage.getItem(migrationKey) === "true") return;
+  try {
+    await ensureDriveFolders();
+    const legacyContainerId = await getOrCreateDriveFolder(CENTRAL_DRIVE_LEGACY_FOLDER_NAME, CENTRAL_DRIVE_ROOT_FOLDER_ID);
+    for (const legacyName of LEGACY_DRIVE_ROOT_FOLDER_NAMES) {
+      const legacyFolders = await findDriveFoldersByName(legacyName);
+      for (const legacyFolder of legacyFolders) {
+        if (!legacyFolder.id || legacyFolder.id === CENTRAL_DRIVE_ROOT_FOLDER_ID || legacyFolder.id === legacyContainerId) continue;
+        const parents = Array.isArray(legacyFolder.parents) ? legacyFolder.parents : [];
+        if (parents.includes(legacyContainerId)) continue;
+        await moveDriveFileToFolder(legacyFolder.id, legacyContainerId, parents);
+      }
+    }
+    sessionStorage.setItem(migrationKey, "true");
+  } catch (error) {
+    console.warn("Migrazione dati Drive vecchi non completata:", error);
+  }
 }
 
 function getCommessaSheetHeaders() {
@@ -17159,16 +17247,34 @@ async function syncCommessaDoneImpiantiToDriveSheet(commessaId = selectedCommess
   });
 }
 
+async function getOrCreateCentralDriveTypeFolder(commessaName, driveType) {
+  await ensureDriveFolders();
+  const commessaFolderId = await getOrCreateDriveFolder(normalizeDriveFolderName(commessaName, CENTRAL_DRIVE_DEFAULT_COMMESSA), driveRootFolderId);
+  return getOrCreateDriveFolder(normalizeDriveFolderName(driveType, "EXPORT").toUpperCase(), commessaFolderId);
+}
+
 async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   const cachedId = commessaSheetCache.get(commessaId);
   if (cachedId) return { id: cachedId };
 
+  const spreadsheetFolderId = await getOrCreateCentralDriveTypeFolder(commessaName, "EXPORT");
   const commessaData = commesseById.get(commessaId) || {};
   const configuredSheetId = String(commessaData.sheetSpreadsheetId || "").trim();
   if (configuredSheetId) {
     try {
-      const existingSheet = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?fields=id,name,mimeType`, { method: "GET" });
+      const existingSheet = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?fields=id,name,mimeType,parents`, { method: "GET" });
       if (existingSheet && existingSheet.id) {
+        const parents = Array.isArray(existingSheet.parents) ? existingSheet.parents : [];
+        if (!parents.includes(spreadsheetFolderId)) {
+          const removeParents = parents.filter(Boolean).join(",");
+          const moveParams = new URLSearchParams({ addParents: spreadsheetFolderId, fields: "id,parents" });
+          if (removeParents) moveParams.set("removeParents", removeParents);
+          await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${configuredSheetId}?${moveParams.toString()}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+        }
         commessaSheetCache.set(commessaId, configuredSheetId);
         return { id: configuredSheetId };
       }
@@ -17181,15 +17287,15 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     }
   }
 
-  const safeName = commessaName.replaceAll("'", "\\'");
+  const safeName = escapeDriveQueryValue(commessaName);
   const query = [
     "mimeType='application/vnd.google-apps.spreadsheet'",
     "trashed=false",
-    `'${driveReportsFolderId}' in parents`,
+    `'${spreadsheetFolderId}' in parents`,
     `name='Commessa - ${safeName}'`
   ].join(" and ");
 
-  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1`;
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime)&orderBy=createdTime&pageSize=1`;
   const searchResponse = await driveApiFetch(searchUrl, { method: "GET" });
 
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
@@ -17208,7 +17314,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
     body: JSON.stringify({
       name: `Commessa - ${commessaName}`,
       mimeType: "application/vnd.google-apps.spreadsheet",
-      parents: [driveReportsFolderId]
+      parents: [spreadsheetFolderId]
     })
   });
 
@@ -17228,41 +17334,83 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   return { id: created.id };
 }
 
-async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {}) {
-  if (!driveAccessToken) {
-    throw new Error("Google Drive non collegato.");
+function readBlobAsBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop() : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Lettura file non riuscita."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderId, options = {}) {
+  if (!isCentralDriveConfigured()) {
+    throw new Error(getCentralDriveNotConfiguredMessage());
   }
-  if (!folderId) await ensureDriveFolders();
-  const { signal = null } = options;
-
-  const metadata = {
-    name: fileName,
-    mimeType,
-    parents: [folderId || driveChatFolderId]
+  if (!functions || typeof functions.httpsCallable !== "function") {
+    throw new Error("Backend Firebase per upload centralizzato non disponibile.");
+  }
+  const base64 = await readBlobAsBase64(blob);
+  const uploadCentralDriveFile = functions.httpsCallable("uploadCentralDriveFile");
+  const result = await uploadCentralDriveFile({
+    fileName: normalizeDriveFolderName(fileName, "file"),
+    mimeType: mimeType || "application/octet-stream",
+    base64,
+    commessaName: getCurrentDriveCommessaName(options),
+    driveType: inferCentralDriveType(folderId, options)
+  });
+  const data = result?.data || {};
+  return {
+    fileId: data.fileId || "",
+    webViewLink: data.webViewLink || "",
+    directUrl: ""
   };
+}
 
+async function uploadBlobDirectToAdminDrive(blob, fileName, mimeType, folderId, options = {}) {
+  if (!driveAccessToken) {
+    throw new Error(getCentralDriveNotConfiguredMessage());
+  }
+  await ensureDriveFolders();
+  const { signal = null } = options;
+  const commessaFolderId = await getOrCreateDriveFolder(getCurrentDriveCommessaName(options), CENTRAL_DRIVE_ROOT_FOLDER_ID);
+  const typeFolderId = await getOrCreateDriveFolder(inferCentralDriveType(folderId, options), commessaFolderId);
+  const metadata = {
+    name: normalizeDriveFolderName(fileName, "file"),
+    mimeType: mimeType || "application/octet-stream",
+    parents: [typeFolderId]
+  };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-  form.append("file", blob, fileName);
-
+  form.append("file", blob, metadata.name);
   const uploaded = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink", {
     method: "POST",
     body: form,
     signal
   });
-
-  await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${uploaded.id}/permissions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role: "reader", type: "anyone" }),
-    signal
-  });
-
   return {
-    fileId: uploaded.id,
+    fileId: uploaded.id || "",
     webViewLink: uploaded.webViewLink || "",
-    directUrl: `https://drive.google.com/uc?export=download&id=${uploaded.id}`
+    directUrl: ""
   };
+}
+
+async function uploadBlobToDrive(blob, fileName, mimeType, folderId, options = {}) {
+  if (!isCentralDriveConfigured() && !driveAccessToken) {
+    throw new Error(getCentralDriveNotConfiguredMessage());
+  }
+  if (canManageData() && driveAccessToken) {
+    try {
+      return await uploadBlobDirectToAdminDrive(blob, fileName, mimeType, folderId, options);
+    } catch (error) {
+      if (!functions || typeof functions.httpsCallable !== "function") throw error;
+      console.warn("Upload diretto admin non riuscito, provo backend centralizzato:", error);
+    }
+  }
+  return uploadBlobThroughCentralBackend(blob, fileName, mimeType, folderId, options);
 }
 
 async function backupSquadreSnapshotToDrive(dateKey, squadraPayload) {
@@ -17272,7 +17420,7 @@ async function backupSquadreSnapshotToDrive(dateKey, squadraPayload) {
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
   const commessaLabel = String(squadraPayload.commessaNome || "Commessa").replace(/[^\w\-]+/g, "_");
   const fileName = `squadre_${dateKey}_${commessaLabel}.json`;
-  await uploadBlobToDrive(blob, fileName, "application/json", driveSquadreFolderId);
+  await uploadBlobToDrive(blob, fileName, "application/json", driveSquadreFolderId, { driveType: "EXPORT", commessaName: squadraPayload.commessaNome || "Squadre" });
 }
 
 async function buildAppBackupPayload(dateKey, squadraPayload) {
@@ -17322,7 +17470,7 @@ async function refreshDriveAccessToken() {
 
 async function driveApiFetch(url, options = {}) {
   if (!driveAccessToken) {
-    throw new Error("Google Drive non collegato. Premi 'Collega Google Drive'.");
+    throw new Error(getCentralDriveNotConfiguredMessage());
   }
 
   const headers = new Headers(options.headers || {});
@@ -17343,7 +17491,7 @@ async function driveApiFetch(url, options = {}) {
     }
     localStorage.removeItem("googleDriveAccessToken");
     updateDriveStatus(false);
-    throw new Error("Sessione Drive scaduta. Premi di nuovo 'Collega Google Drive'.");
+    throw new Error("Sessione Drive amministratore scaduta. Solo admin deve ricollegare Google Drive.");
   }
 
   if (!response.ok) {

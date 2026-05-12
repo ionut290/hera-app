@@ -90,15 +90,14 @@ Senza chiave VAPID l'app continua a funzionare normalmente: avrai notifiche loca
 
 ## Note Google Drive / Google Sheets
 
-- Il Drive usato è centralizzato: **ionut29019@gmail.com** collega il proprio account una volta, poi tutti gli utenti usano quel bridge.
+- Il Drive usato è centralizzato: **ionut29019@gmail.com** collega il proprio account una volta, poi tutti gli utenti passano dal backend Firebase.
 - Solo l'utente admin (`ionut29019@gmail.com`) vede attivo il pulsante **Collega Google Drive**.
-- L'app crea (se non esistono) le cartelle:
-  - `Hera App - Dati`
-  - `Hera App - Dati/Chat Media`
-  - `Hera App - Dati/Report Impianti`
-- Token/folder del bridge Drive vengono salvati in `appConfig/driveBridge` su Firestore per essere riusati da tutti gli utenti autenticati.
-- I media chat vengono caricati su Drive e salvati in Firestore come URL.
-- Per ogni commessa viene usato un solo Google Sheet (`Commessa - <nome commessa>`) dentro `Report Impianti`.
+- Tutti i nuovi upload vengono salvati dentro la cartella Drive principale `1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0` (`Varga Cantieri`).
+- L'app crea o riusa sempre le cartelle `Varga Cantieri / <Nome Commessa> / <tipo file>` (es. `FOTO`, `POS`, `ORE`, `EXPORT`, `SEGNALAZIONI`) senza creare nuove cartelle duplicate per la stessa commessa/tipo.
+- Quando l'admin collega Drive, eventuali dati Drive vecchi trovati nella cartella `Hera App - Dati` vengono spostati in `Varga Cantieri / VECCHI DATI` per conservarli dentro la nuova root.
+- Token e refresh token admin vengono salvati in `appConfig/driveAdminSecret`; `appConfig/driveBridge` espone solo lo stato centralizzato agli utenti autenticati.
+- I media chat vengono caricati su Drive tramite backend e salvati in Firestore come metadati/link.
+- Per ogni commessa viene usato un solo Google Sheet (`Commessa - <nome commessa>`) dentro `Varga Cantieri / <Nome Commessa> / EXPORT`.
 - In creazione commessa puoi impostare opzionalmente un **ID/link Google Sheet** già esistente: da quel momento il pulsante **Fatto** appende sempre lì (senza creare un nuovo file).
 - Quando un impianto viene segnato come **Fatto**, viene aggiunta una nuova riga nel foglio della commessa con i dati dell'impianto, data/ora esecuzione e operatore.
 

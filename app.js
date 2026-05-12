@@ -1162,6 +1162,14 @@ ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
 ui.viewAlertsBtn?.addEventListener("click", () => setImpiantiViewMode("alerts"));
+document.querySelectorAll(".commessa-stat-item[data-stat-action]").forEach((item) => {
+  item.addEventListener("click", () => handleCommessaStatAction(item.dataset.statAction || ""));
+  item.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handleCommessaStatAction(item.dataset.statAction || "");
+  });
+});
 ui.personaleForm.addEventListener("submit", addPersonale);
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
@@ -6889,6 +6897,32 @@ function updateCommessaDashboard() {
     const hasPhoneResources = getResourcesByCommessa(selectedCommessaId, "phone").length > 0;
     ui.commessaCallBtn.classList.toggle("commessa-action-btn--disabled", !hasPhoneResources);
     ui.commessaCallBtn.setAttribute("aria-disabled", String(!hasPhoneResources));
+  }
+}
+
+function scrollToImpiantiCard() {
+  ui.impiantiCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleCommessaStatAction(action) {
+  if (!selectedCommessaId) return;
+  if (action === "impianti") {
+    setImpiantiViewMode("todo");
+    scrollToImpiantiCard();
+    return;
+  }
+  if (action === "segnalazioni") {
+    setImpiantiViewMode("alerts");
+    scrollToImpiantiCard();
+    return;
+  }
+  if (action === "avanzamento") {
+    setImpiantiViewMode("done");
+    scrollToImpiantiCard();
+    return;
+  }
+  if (action === "ore" || action === "giorni") {
+    openHoursPage();
   }
 }
 

@@ -4381,3 +4381,111 @@ textarea:focus-visible {
     min-height: 36px;
   }
 }
+
+/* KPI più colorati, animati e cliccabili */
+.commessa-stat-strip {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(16, 185, 129, 0.14), transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f6fbff 100%);
+}
+
+.commessa-stat-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.62) 42%, transparent 70%);
+  transform: translateX(-120%);
+  animation: commessaStatsShimmer 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.commessa-stat-item {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  padding: 8px 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.commessa-stat-item:nth-child(1) {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(255, 255, 255, 0.68));
+  --commessa-stat-color: #059669;
+}
+
+.commessa-stat-item:nth-child(2) {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.15), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #d97706;
+}
+
+.commessa-stat-item:nth-child(3) {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #2563eb;
+}
+
+.commessa-stat-item:nth-child(4) {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #7c3aed;
+}
+
+.commessa-stat-item:nth-child(5) {
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.14), rgba(255, 255, 255, 0.7));
+  --commessa-stat-color: #0284c7;
+}
+
+.commessa-stat-item .commessa-stat-icon svg {
+  stroke: var(--commessa-stat-color, #07122f);
+  filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--commessa-stat-color, #07122f) 24%, transparent));
+  animation: commessaStatFloat 3.6s ease-in-out infinite;
+}
+
+.commessa-stat-item strong {
+  color: #07122f;
+}
+
+.commessa-stat-item span:last-child {
+  color: color-mix(in srgb, var(--commessa-stat-color, #43506a) 42%, #334155);
+}
+
+.commessa-stat-item:hover,
+.commessa-stat-item:focus-visible {
+  transform: translateY(-2px) scale(1.025);
+  border-color: color-mix(in srgb, var(--commessa-stat-color, #2563eb) 34%, #ffffff);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--commessa-stat-color, #2563eb) 16%, transparent);
+  outline: none;
+}
+
+.commessa-stat-item:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.commessa-stat-item:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--commessa-stat-color, #2563eb) 32%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes commessaStatsShimmer {
+  0%, 58% { transform: translateX(-120%); }
+  78%, 100% { transform: translateX(120%); }
+}
+
+@keyframes commessaStatFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commessa-stat-strip::before,
+  .commessa-stat-item .commessa-stat-icon svg {
+    animation: none;
+  }
+
+  .commessa-stat-item {
+    transition: none;
+  }
+}

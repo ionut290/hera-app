@@ -2081,7 +2081,9 @@ function updateAdminControls() {
   if (ui.operatorPositionsToggleBtn) {
     ui.operatorPositionsToggleBtn.disabled = !canManage;
     ui.operatorPositionsToggleBtn.setAttribute("aria-pressed", String(canManage && operatorPositionsVisible));
-    ui.operatorPositionsToggleBtn.innerHTML = operatorPositionsVisible ? '<span aria-hidden="true">📍</span> Pos. squadre' : '<span aria-hidden="true">📍</span> Pos. nascoste';
+    ui.operatorPositionsToggleBtn.innerHTML = operatorPositionsVisible
+      ? '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span> Pos. squadre'
+      : '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span> Pos. nascoste';
   }
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
@@ -6884,7 +6886,9 @@ function updateCommessaDashboard() {
     ui.commessaActiveSquadreCount.textContent = `${stats.squadreCount || 0} squadr${stats.squadreCount === 1 ? "a attiva" : "e attive"}`;
   }
   if (ui.commessaCallBtn) {
-    ui.commessaCallBtn.disabled = getResourcesByCommessa(selectedCommessaId, "phone").length === 0;
+    const hasPhoneResources = getResourcesByCommessa(selectedCommessaId, "phone").length > 0;
+    ui.commessaCallBtn.classList.toggle("commessa-action-btn--disabled", !hasPhoneResources);
+    ui.commessaCallBtn.setAttribute("aria-disabled", String(!hasPhoneResources));
   }
 }
 
@@ -8953,12 +8957,21 @@ function selectCommessa(id, nome, codice = "") {
 }
 
 function updateCommessaContextUI() {
+  const selected = commesseById.get(selectedCommessaId) || {};
+  const rawName = selectedCommessaName || "Commessa";
+  let displayName = rawName;
+  let codeText = String(selected.codice || "").trim();
+  if (!codeText) {
+    const splitMatch = String(rawName).trim().match(/^(.+?)\s+(\d{3,})$/);
+    if (splitMatch) {
+      displayName = splitMatch[1];
+      codeText = splitMatch[2];
+    }
+  }
   if (ui.commessaFocusLabel) {
-    ui.commessaFocusLabel.textContent = (selectedCommessaName || "Commessa").toUpperCase();
+    ui.commessaFocusLabel.textContent = displayName.toUpperCase();
   }
   if (ui.commessaFocusCode) {
-    const selected = commesseById.get(selectedCommessaId) || {};
-    const codeText = String(selected.codice || "").trim();
     const parent = selected.parentCommessaId ? commesseById.get(selected.parentCommessaId) : null;
     ui.commessaFocusCode.textContent = codeText;
     ui.commessaFocusCode.title = parent ? `Subcommessa di: ${parent.nome || "commessa padre"}` : "";

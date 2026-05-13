@@ -4809,3 +4809,202 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Gestione ore: pulsanti compatti e gerarchia azioni mobile-first */
+#hours-page .hours-main-actions {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.72fr) minmax(170px, 1.28fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+#hours-page .hours-main-actions > * {
+  flex: initial;
+  width: 100%;
+}
+
+.hours-finalize-primary {
+  min-height: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 52%, #10b981 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.26), 0 4px 10px rgba(16, 185, 129, 0.14);
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.hours-finalize-primary:hover:not(:disabled),
+.hours-finalize-primary:focus-visible:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 52%, #059669 100%);
+  border-color: transparent;
+  filter: saturate(1.05);
+  transform: scale(0.98);
+}
+
+.hours-finalize-primary:active:not(:disabled),
+.hours-finalize-primary.is-pressing:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.22), 0 2px 8px rgba(16, 185, 129, 0.12);
+}
+
+.hours-add-commessa-secondary {
+  min-height: 42px;
+  height: 42px;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.72);
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: none;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.hours-add-commessa-secondary:hover:not(:disabled),
+.hours-add-commessa-secondary:focus-visible:not(:disabled) {
+  background: rgba(248, 250, 252, 0.96);
+  border-color: #94a3b8;
+  transform: scale(0.98);
+}
+
+.hours-add-commessa-secondary:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.hours-commessa-head {
+  align-items: center;
+}
+
+.hours-commessa-head h3 {
+  margin: 0;
+}
+
+.hours-commessa-head .item-actions {
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-top: 0;
+  padding-bottom: 0;
+  overflow: visible;
+}
+
+#hours-page .hours-commessa-head .item-actions > * {
+  flex: 0 0 auto;
+}
+
+.hours-compact-pill {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  box-shadow: none;
+  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.hours-export-global-btn.hours-compact-pill {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.hours-remove-commessa-btn.hours-compact-pill {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.hours-compact-pill:hover:not(:disabled),
+.hours-compact-pill:focus-visible:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.hours-compact-pill:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.hours-report-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hours-report-actions > .btn,
+.hours-report-actions > input {
+  width: 100%;
+  min-width: 0;
+}
+
+.hours-report-btn {
+  min-height: 38px;
+  height: 38px;
+  padding: 6px 9px;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  font-weight: 750;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.hours-report-btn:hover:not(:disabled),
+.hours-report-btn:focus-visible:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.hours-report-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+#hours-stats-month.hours-month-compact {
+  min-height: 38px;
+  height: 38px;
+  padding: 6px 9px;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  background: #fff;
+}
+
+.hours-commessa-picker.is-open {
+  z-index: 80;
+}
+
+.hours-commessa-picker-toggle {
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.hours-commessa-picker-toggle:hover:not(:disabled),
+.hours-commessa-picker-toggle:focus-visible:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.hours-commessa-picker-toggle:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (max-width: 420px) {
+  #hours-page .hours-main-actions {
+    grid-template-columns: minmax(104px, 0.68fr) minmax(156px, 1.32fr);
+  }
+
+  .hours-add-commessa-secondary {
+    font-size: 0.8rem;
+    padding-inline: 8px;
+  }
+
+  .hours-finalize-primary {
+    font-size: 0.94rem;
+    padding-inline: 10px;
+  }
+
+  .hours-report-btn,
+  #hours-stats-month.hours-month-compact {
+    font-size: 0.78rem;
+    padding-inline: 7px;
+  }
+}

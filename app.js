@@ -4817,6 +4817,22 @@ function normalizeHoursCommessaSearch(value) {
     .trim();
 }
 
+function focusHoursCommessaSearch(container) {
+  const search = container?.querySelector(".hours-commessa-picker-search");
+  if (!(search instanceof HTMLInputElement)) return;
+  search.focus({ preventScroll: true });
+  search.setSelectionRange(search.value.length, search.value.length);
+}
+
+function closeOtherHoursCommessaPickers(activeContainer = null) {
+  document.querySelectorAll(".hours-commessa-picker.is-open").forEach((picker) => {
+    if (activeContainer && picker === activeContainer) return;
+    picker.classList.remove("is-open");
+    picker.querySelector(".hours-commessa-picker-menu")?.classList.add("hidden");
+    picker.querySelector(".hours-commessa-picker-toggle")?.setAttribute("aria-expanded", "false");
+  });
+}
+
 function renderHoursCommessaPicker(container, select, commesseInput = null, options = {}) {
   if (!container || !select) return;
   const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
@@ -4857,25 +4873,27 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
   `;
 
   const toggle = container.querySelector(".hours-commessa-picker-toggle");
-  toggle?.addEventListener("click", () => {
-    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: !isOpen, query });
-    if (!isOpen) {
-      requestAnimationFrame(() => container.querySelector(".hours-commessa-picker-search")?.focus());
-    }
+  toggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextOpenState = !isOpen;
+    if (nextOpenState) closeOtherHoursCommessaPickers(container);
+    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: nextOpenState, query });
+    if (nextOpenState) focusHoursCommessaSearch(container);
   });
 
   const search = container.querySelector(".hours-commessa-picker-search");
+  search?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
   search?.addEventListener("input", () => {
     renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: true, query: search.value });
-    requestAnimationFrame(() => {
-      const nextSearch = container.querySelector(".hours-commessa-picker-search");
-      nextSearch?.focus();
-      nextSearch?.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
-    });
+    requestAnimationFrame(() => focusHoursCommessaSearch(container));
   });
 
   container.querySelectorAll("[data-hours-commessa-option]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
       const commessaId = String(btn.dataset.hoursCommessaOption || "").trim();
       if (!commessaId) return;
       const changed = select.value !== commessaId;
@@ -4913,11 +4931,7 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element) || target.closest(".hours-commessa-picker")) return;
-  document.querySelectorAll(".hours-commessa-picker.is-open").forEach((picker) => {
-    picker.classList.remove("is-open");
-    picker.querySelector(".hours-commessa-picker-menu")?.classList.add("hidden");
-    picker.querySelector(".hours-commessa-picker-toggle")?.setAttribute("aria-expanded", "false");
-  });
+  closeOtherHoursCommessaPickers();
 });
 
 function normalizeSquadraMemberIdentity(value) {

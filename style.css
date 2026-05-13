@@ -4789,16 +4789,17 @@ textarea:focus-visible {
   }
 
   .hours-commessa-picker-menu {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    top: auto;
-    bottom: 10px;
-    max-height: min(70vh, 430px);
+    position: absolute;
+    top: calc(100% + 6px);
+    bottom: auto;
+    left: 0;
+    right: 0;
+    z-index: 1600;
+    max-height: min(62vh, 390px);
   }
 
   .hours-commessa-picker-list {
-    max-height: min(56vh, 330px);
+    max-height: min(48vh, 300px);
   }
 
   .hours-view-toolbar {
@@ -4971,7 +4972,7 @@ textarea:focus-visible {
 }
 
 .hours-commessa-picker.is-open {
-  z-index: 80;
+  z-index: 1600;
 }
 
 .hours-commessa-picker-toggle {

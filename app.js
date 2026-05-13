@@ -4817,8 +4817,11 @@ function normalizeHoursCommessaSearch(value) {
     .trim();
 }
 
-function shouldAutofocusHoursCommessaSearch() {
-  return !(window.matchMedia?.("(pointer: coarse)")?.matches || window.innerWidth <= 760);
+function focusHoursCommessaSearch(container) {
+  const search = container?.querySelector(".hours-commessa-picker-search");
+  if (!(search instanceof HTMLInputElement)) return;
+  search.focus({ preventScroll: true });
+  search.setSelectionRange(search.value.length, search.value.length);
 }
 
 function closeOtherHoursCommessaPickers(activeContainer = null) {
@@ -4872,26 +4875,25 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
   const toggle = container.querySelector(".hours-commessa-picker-toggle");
   toggle?.addEventListener("click", (event) => {
     event.preventDefault();
+    event.stopPropagation();
     const nextOpenState = !isOpen;
     if (nextOpenState) closeOtherHoursCommessaPickers(container);
     renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: nextOpenState, query });
-    if (nextOpenState && shouldAutofocusHoursCommessaSearch()) {
-      requestAnimationFrame(() => container.querySelector(".hours-commessa-picker-search")?.focus());
-    }
+    if (nextOpenState) focusHoursCommessaSearch(container);
   });
 
   const search = container.querySelector(".hours-commessa-picker-search");
+  search?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
   search?.addEventListener("input", () => {
     renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: true, query: search.value });
-    requestAnimationFrame(() => {
-      const nextSearch = container.querySelector(".hours-commessa-picker-search");
-      nextSearch?.focus();
-      nextSearch?.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
-    });
+    requestAnimationFrame(() => focusHoursCommessaSearch(container));
   });
 
   container.querySelectorAll("[data-hours-commessa-option]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
       const commessaId = String(btn.dataset.hoursCommessaOption || "").trim();
       if (!commessaId) return;
       const changed = select.value !== commessaId;

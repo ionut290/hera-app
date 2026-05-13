@@ -4623,3 +4623,189 @@ textarea:focus-visible {
     transition: none;
   }
 }
+
+/* Selettore commesse compatto per inserimento e visualizzazione ore */
+.hours-commessa-picker,
+.hours-commesse-buttons.hours-commessa-picker {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  z-index: 4;
+}
+
+.hours-commessa-picker-toggle {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--commessa-accent, var(--primary)) 48%, var(--border));
+  border-left: 5px solid var(--commessa-accent, var(--primary));
+  border-radius: 12px;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--commessa-accent, var(--primary)) 9%, #ffffff);
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.15;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.hours-commessa-picker-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.hours-commessa-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.hours-commessa-picker-arrow {
+  flex: 0 0 auto;
+  color: var(--commessa-accent, var(--primary));
+  font-size: 0.82rem;
+}
+
+.hours-commessa-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.2);
+  padding: 8px;
+}
+
+.hours-commessa-picker-search {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 9px;
+  margin-bottom: 7px;
+  font: inherit;
+}
+
+.hours-commessa-picker-list {
+  display: grid;
+  gap: 5px;
+  max-height: min(45vh, 300px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.hours-commessa-picker-option {
+  width: 100%;
+  min-height: 36px;
+  max-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--commessa-accent, var(--primary)) 34%, var(--border));
+  border-left: 4px solid var(--commessa-accent, var(--primary));
+  border-radius: 10px;
+  padding: 6px 9px;
+  background: color-mix(in srgb, var(--commessa-accent, var(--primary)) 7%, #ffffff);
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hours-commessa-picker-option:hover,
+.hours-commessa-picker-option:focus-visible,
+.hours-commessa-picker-option.is-active {
+  background: color-mix(in srgb, var(--commessa-accent, var(--primary)) 16%, #ffffff);
+  border-color: var(--commessa-accent, var(--primary));
+}
+
+.hours-commessa-empty {
+  margin: 4px 0;
+  padding: 8px;
+}
+
+.hours-view-toolbar {
+  display: grid;
+  gap: 8px;
+}
+
+.hours-view-toolbar > .item-actions:first-child {
+  display: grid;
+  grid-template-columns: minmax(140px, 190px) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+#hours-table-commesse-buttons.hours-commessa-picker {
+  max-width: 560px;
+}
+
+@media (max-width: 760px) {
+  .hours-commessa-card {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .hours-commessa-head {
+    align-items: flex-start;
+  }
+
+  .hours-commessa-head h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .hours-commessa-head .item-actions {
+    gap: 6px;
+  }
+
+  .hours-commessa-head .btn {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.78rem;
+  }
+
+  .hours-commessa-picker,
+  .hours-commesse-buttons.hours-commessa-picker {
+    max-width: none;
+  }
+
+  .hours-commessa-picker-toggle {
+    min-height: 38px;
+    padding: 6px 9px;
+  }
+
+  .hours-commessa-picker-menu {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: 10px;
+    max-height: min(70vh, 430px);
+  }
+
+  .hours-commessa-picker-list {
+    max-height: min(56vh, 330px);
+  }
+
+  .hours-view-toolbar {
+    padding-bottom: 8px;
+  }
+
+  .hours-view-toolbar > .item-actions:first-child {
+    grid-template-columns: 1fr;
+  }
+}

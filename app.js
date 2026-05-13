@@ -4806,54 +4806,115 @@ function renderHoursTableCommessaOptions(commesseInput = null) {
   renderHoursTableCommessaButtons(commesse);
 }
 
-function renderHoursCardCommessaButtons(card, commesseInput = null) {
-  if (!card) return;
-  const buttonsWrap = card.querySelector(".hours-commesse-buttons");
-  const select = card.querySelector(".hours-commessa-select");
-  if (!buttonsWrap || !select) return;
+function normalizeHoursCommessaSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function renderHoursCommessaPicker(container, select, commesseInput = null, options = {}) {
+  if (!container || !select) return;
   const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
   const selectedValue = String(select.value || "").trim();
+  const selectedIndex = commesse.findIndex((commessa) => commessa.id === selectedValue);
+  const selectedCommessa = selectedIndex >= 0 ? commesse[selectedIndex] : null;
+  const isOpen = options.keepOpen === true;
+  const query = String(options.query || "").trim();
+  const normalizedQuery = normalizeHoursCommessaSearch(query);
+  const disabled = select.disabled || options.disabled === true;
+  const selectedColor = selectedCommessa ? getCommessaAccentColor(selectedCommessa.id, selectedIndex) : "#64748b";
+  const filteredCommesse = normalizedQuery
+    ? commesse.filter((commessa) => normalizeHoursCommessaSearch(getCommessaDisplayName(commessa)).includes(normalizedQuery))
+    : commesse;
+
   if (!commesse.length) {
-    buttonsWrap.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
+    container.innerHTML = "<p class='muted hours-commessa-empty'>Nessuna commessa disponibile.</p>";
     return;
   }
-  buttonsWrap.innerHTML = commesse.map((commessa, idx) => (
-    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-commessa-choice="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`
-  )).join("");
-  buttonsWrap.querySelectorAll("[data-hours-commessa-choice]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const commessaId = String(btn.dataset.hoursCommessaChoice || "").trim();
-      if (!commessaId || select.value === commessaId) return;
-      select.value = commessaId;
-      unlockHoursFinalizeButton();
-      renderHoursCardCommessaButtons(card, commesse);
-      applyHoursSuggestedOperators(card, { force: true });
+
+  container.classList.toggle("is-open", isOpen);
+  container.innerHTML = `
+    <button type="button" class="hours-commessa-picker-toggle" style="--commessa-accent:${escapeHTML(selectedColor)}" aria-expanded="${isOpen ? "true" : "false"}" ${disabled ? "disabled" : ""}>
+      <span class="hours-commessa-picker-label">${escapeHTML(selectedCommessa ? getCommessaDisplayName(selectedCommessa) : "Seleziona commessa")}</span>
+      <span class="hours-commessa-picker-arrow" aria-hidden="true">▼</span>
+    </button>
+    <div class="hours-commessa-picker-menu ${isOpen ? "" : "hidden"}">
+      <input class="hours-commessa-picker-search" type="search" placeholder="Cerca commessa…" value="${escapeHTML(query)}" aria-label="Cerca commessa">
+      <div class="hours-commessa-picker-list" role="listbox" aria-label="Elenco commesse">
+        ${filteredCommesse.length ? filteredCommesse.map((commessa, idx) => {
+          const originalIndex = commesse.findIndex((item) => item.id === commessa.id);
+          const color = getCommessaAccentColor(commessa.id, originalIndex >= 0 ? originalIndex : idx);
+          const active = selectedValue === commessa.id;
+          return `<button type="button" class="hours-commessa-picker-option ${active ? "is-active" : ""}" data-hours-commessa-option="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(color)}" role="option" aria-selected="${active ? "true" : "false"}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`;
+        }).join("") : "<p class='muted hours-commessa-empty'>Nessuna commessa trovata.</p>"}
+      </div>
+    </div>
+  `;
+
+  const toggle = container.querySelector(".hours-commessa-picker-toggle");
+  toggle?.addEventListener("click", () => {
+    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: !isOpen, query });
+    if (!isOpen) {
+      requestAnimationFrame(() => container.querySelector(".hours-commessa-picker-search")?.focus());
+    }
+  });
+
+  const search = container.querySelector(".hours-commessa-picker-search");
+  search?.addEventListener("input", () => {
+    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: true, query: search.value });
+    requestAnimationFrame(() => {
+      const nextSearch = container.querySelector(".hours-commessa-picker-search");
+      nextSearch?.focus();
+      nextSearch?.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
     });
+  });
+
+  container.querySelectorAll("[data-hours-commessa-option]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const commessaId = String(btn.dataset.hoursCommessaOption || "").trim();
+      if (!commessaId) return;
+      const changed = select.value !== commessaId;
+      select.value = commessaId;
+      renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: false, query: "" });
+      if (changed && typeof options.onChange === "function") options.onChange(commessaId);
+    });
+  });
+}
+
+function renderHoursCardCommessaButtons(card, commesseInput = null) {
+  if (!card) return;
+  const pickerWrap = card.querySelector(".hours-commesse-buttons");
+  const select = card.querySelector(".hours-commessa-select");
+  renderHoursCommessaPicker(pickerWrap, select, commesseInput, {
+    onChange: () => {
+      unlockHoursFinalizeButton();
+      applyHoursSuggestedOperators(card, { force: true });
+    }
   });
 }
 
 function renderHoursTableCommessaButtons(commesseInput = null) {
   if (!ui.hoursTableCommesseButtons || !ui.hoursTableCommessaSelect) return;
-  const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
-  const selectedValue = String(ui.hoursTableCommessaSelect.value || "").trim();
-  if (!commesse.length) {
-    ui.hoursTableCommesseButtons.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
-    return;
-  }
-  ui.hoursTableCommesseButtons.innerHTML = commesse.map((commessa, idx) => (
-    `<button type="button" class="btn commessa-btn hours-commessa-choice-btn ${selectedValue === commessa.id ? "active is-active" : ""}" data-hours-table-commessa="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(getCommessaAccentColor(commessa.id, idx))}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`
-  )).join("");
-  ui.hoursTableCommesseButtons.querySelectorAll("[data-hours-table-commessa]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const commessaId = String(btn.dataset.hoursTableCommessa || "").trim();
-      if (!commessaId || ui.hoursTableCommessaSelect.value === commessaId) return;
-      ui.hoursTableCommessaSelect.value = commessaId;
-      renderHoursTableCommessaButtons(commesse);
-      loadHoursMonthlyTable();
-    });
+  renderHoursCommessaPicker(ui.hoursTableCommesseButtons, ui.hoursTableCommessaSelect, commesseInput, {
+    disabled: ui.hoursTableCommessaSelect.disabled,
+    onChange: () => loadHoursMonthlyTable()
   });
 }
 
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest(".hours-commessa-picker")) return;
+  document.querySelectorAll(".hours-commessa-picker.is-open").forEach((picker) => {
+    picker.classList.remove("is-open");
+    picker.querySelector(".hours-commessa-picker-menu")?.classList.add("hidden");
+    picker.querySelector(".hours-commessa-picker-toggle")?.setAttribute("aria-expanded", "false");
+  });
+});
 
 function normalizeSquadraMemberIdentity(value) {
   return String(value || "")
@@ -5386,7 +5447,7 @@ function addHoursCommessaBlock(blockData = null) {
       <option value="">Seleziona commessa</option>
     </select>
     <p class="hours-locked-commessa-label muted hidden"></p>
-    <div class="hours-commesse-buttons"></div>
+    <div class="hours-commesse-buttons hours-commessa-picker" aria-label="Seleziona commessa"></div>
     <p class="hours-team-label muted hidden"></p>
     <p class="hours-inserted-by-label muted hidden"></p>
     <div class="hours-operator-list"></div>

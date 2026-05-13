@@ -623,6 +623,7 @@ let hoursFinalizeLocked = false;
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
 let hoursSubmitInFlight = false;
+let hoursFinalizeStatusTimer = null;
 let hoursDuplicateCleanupPromise = null;
 let hoursApprovalRequests = [];
 let gpsUpdateRequests = [];
@@ -4879,6 +4880,9 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
       if (!commessaId) return;
       const changed = select.value !== commessaId;
       select.value = commessaId;
+      if (changed) {
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: false, query: "" });
       if (changed && typeof options.onChange === "function") options.onChange(commessaId);
     });
@@ -5439,8 +5443,8 @@ function addHoursCommessaBlock(blockData = null) {
     <div class="hours-commessa-head">
       <h3>Commessa</h3>
       <div class="item-actions">
-        <button type="button" class="btn hours-export-global-btn">Esporta Excel Global</button>
-        <button type="button" class="btn hours-remove-commessa-btn">Rimuovi commessa</button>
+        <button type="button" class="btn hours-compact-pill hours-export-global-btn">📊 Excel</button>
+        <button type="button" class="btn hours-compact-pill hours-remove-commessa-btn">🗑 Rimuovi</button>
       </div>
     </div>
     <select class="hours-commessa-select" required>
@@ -6187,6 +6191,29 @@ async function notifyHoursInsertedToChat(requestId, payload) {
   });
 }
 
+function setHoursFinalizeButtonText(state = "idle") {
+  const button = ui.hoursFinalizeBtn;
+  if (!button) return;
+  if (hoursFinalizeStatusTimer) {
+    clearTimeout(hoursFinalizeStatusTimer);
+    hoursFinalizeStatusTimer = null;
+  }
+  if (state === "loading") {
+    button.textContent = "⏳ Salvataggio…";
+    button.setAttribute("aria-busy", "true");
+    return;
+  }
+  button.removeAttribute("aria-busy");
+  if (state === "saved") {
+    button.textContent = "✅ Salvato";
+    hoursFinalizeStatusTimer = setTimeout(() => {
+      if (!hoursSubmitInFlight && !hoursFinalizeLocked) setHoursFinalizeButtonText("idle");
+    }, 1800);
+    return;
+  }
+  button.textContent = "✓ Fine: salva";
+}
+
 function setHoursFinalizeLocked(locked) {
   hoursFinalizeLocked = Boolean(locked);
   if (ui.hoursFinalizeBtn) {
@@ -6196,6 +6223,7 @@ function setHoursFinalizeLocked(locked) {
 
 function unlockHoursFinalizeButton() {
   hoursSubmitInFlight = false;
+  setHoursFinalizeButtonText("idle");
   if (!hoursFinalizeLocked) return;
   setHoursFinalizeLocked(false);
   if (ui.hoursFeedback?.textContent && ui.hoursFeedback.textContent.includes("Richiesta inviata")) {
@@ -6254,17 +6282,20 @@ async function finalizeHoursReport(event) {
   }
   hoursSubmitInFlight = true;
   ui.hoursFinalizeBtn.disabled = true;
+  setHoursFinalizeButtonText("loading");
   ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
   try {
     const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
     if (duplicateDraft.length) {
       ui.hoursFeedback.textContent = formatHoursDuplicateMessage(duplicateDraft, { admin: false });
+      setHoursFinalizeButtonText("idle");
       return;
     }
 
     const existingConflicts = await findExistingHoursConflicts(dateValue, payload.entries);
     if (existingConflicts.length) {
       ui.hoursFeedback.textContent = formatHoursDuplicateMessage(existingConflicts, { admin: false });
+      setHoursFinalizeButtonText("idle");
       return;
     }
 
@@ -6272,6 +6303,7 @@ async function finalizeHoursReport(event) {
     await notifyHoursInsertedToChat(approvalRef.id, payload);
     await notifyLevel1ForHoursApproval(approvalRef.id, payload);
 
+    setHoursFinalizeButtonText("saved");
     ui.hoursFeedback.textContent = `Richiesta inviata (ID ${approvalRef.id}). In attesa primo OK, poi conferma admin finale.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
@@ -6280,6 +6312,7 @@ async function finalizeHoursReport(event) {
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
+    setHoursFinalizeButtonText("idle");
     if (error?.code === "hours-duplicate-lock") {
       ui.hoursFeedback.textContent = formatHoursDuplicateMessage(error.conflicts, { admin: false });
     } else {
@@ -6287,7 +6320,10 @@ async function finalizeHoursReport(event) {
     }
   } finally {
     hoursSubmitInFlight = false;
-    if (!hoursFinalizeLocked) ui.hoursFinalizeBtn.disabled = false;
+    if (!hoursFinalizeLocked) {
+      ui.hoursFinalizeBtn.disabled = false;
+      setHoursFinalizeButtonText("idle");
+    }
   }
 }
 

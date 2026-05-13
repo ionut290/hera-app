@@ -324,10 +324,13 @@
     <div class="chat-modal-content">
       <div class="chat-modal-header">
         <h2>Chat completa</h2>
-        <button id="chat-close-btn" class="btn" type="button">Chiudi</button>
+        <div class="chat-header-actions">
+          <button id="chat-clear-btn" class="btn chat-clear-btn hidden" type="button" aria-label="Svuota chat">🗑️ <span>Svuota chat</span></button>
+          <button id="chat-close-btn" class="btn" type="button">Chiudi</button>
+        </div>
       </div>
 
-      <div id="chat-full-list" class="chat-full-list"></div>
+      <div id="chat-full-list" class="chat-full-list" aria-live="polite"></div>
 
       <form id="chat-send-form" class="chat-send-form">
         <select id="chat-recipient">
@@ -342,6 +345,20 @@
         </div>
         <p id="chat-feedback" class="muted"></p>
       </form>
+    </div>
+  </section>
+
+  <section id="chat-clear-confirm-modal" class="confirm-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="chat-clear-confirm-title">
+    <div class="confirm-modal-card">
+      <div class="confirm-modal-icon" aria-hidden="true">🗑️</div>
+      <div>
+        <h2 id="chat-clear-confirm-title">Svuota chat</h2>
+        <p>Tutti i messaggi della chat verranno eliminati.<br>Vuoi continuare?</p>
+      </div>
+      <div class="confirm-modal-actions">
+        <button id="chat-clear-cancel-btn" class="btn" type="button">Annulla</button>
+        <button id="chat-clear-confirm-btn" class="btn btn-danger" type="button">Svuota chat</button>
+      </div>
     </div>
   </section>
 

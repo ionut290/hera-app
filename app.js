@@ -139,6 +139,10 @@ const ui = {
   chatCounter: document.getElementById("chat-counter"),
   chatModal: document.getElementById("chat-modal"),
   chatCloseBtn: document.getElementById("chat-close-btn"),
+  chatClearBtn: document.getElementById("chat-clear-btn"),
+  chatClearConfirmModal: document.getElementById("chat-clear-confirm-modal"),
+  chatClearCancelBtn: document.getElementById("chat-clear-cancel-btn"),
+  chatClearConfirmBtn: document.getElementById("chat-clear-confirm-btn"),
   chatFullList: document.getElementById("chat-full-list"),
   chatSendForm: document.getElementById("chat-send-form"),
   chatRecipient: document.getElementById("chat-recipient"),
@@ -1133,6 +1137,12 @@ ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
 ui.commessaTargetSelect.addEventListener("change", onCommessaTargetChanged);
 ui.chatOpenBtn.addEventListener("click", openChatModal);
 ui.chatCloseBtn.addEventListener("click", closeChatModal);
+ui.chatClearBtn?.addEventListener("click", openChatClearConfirmModal);
+ui.chatClearCancelBtn?.addEventListener("click", closeChatClearConfirmModal);
+ui.chatClearConfirmBtn?.addEventListener("click", clearCurrentChatMessages);
+ui.chatClearConfirmModal?.addEventListener("click", (event) => {
+  if (event.target === ui.chatClearConfirmModal) closeChatClearConfirmModal();
+});
 ui.chatSendForm.addEventListener("submit", sendTextMessage);
 ui.chatMediaInput.addEventListener("change", sendMediaMessage);
 ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
@@ -2093,6 +2103,8 @@ function updateAdminControls() {
       ? '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Pos.</span>'
       : '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Off</span>';
   }
+  ui.chatClearBtn?.classList.toggle("hidden", !canManage);
+  if (ui.chatClearBtn) ui.chatClearBtn.disabled = !canManage;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
@@ -16312,7 +16324,7 @@ function stopChatSubscription() {
 async function renderChat(messages) {
   if (!currentUser) {
     ui.chatCounter.classList.add("hidden");
-    ui.chatFullList.innerHTML = "<p class='muted'>Fai login per usare la chat.</p>";
+    renderChatEmptyState("Fai login per usare la chat.");
     ui.chatSendBtn.disabled = true;
     ui.chatRecipient.disabled = true;
     ui.chatText.disabled = true;
@@ -16331,7 +16343,7 @@ async function renderChat(messages) {
 
   if (!visibleMessages.length) {
     ui.chatCounter.classList.add("hidden");
-    ui.chatFullList.innerHTML = "<p class='muted'>Nessun messaggio in chat.</p>";
+    renderChatEmptyState();
     return;
   }
 
@@ -16352,6 +16364,85 @@ async function renderChat(messages) {
 
   if (!ui.chatModal.classList.contains("hidden")) {
     markChatAsRead();
+  }
+}
+
+function renderChatEmptyState(message = "Nessun messaggio presente") {
+  if (!ui.chatFullList) return;
+  ui.chatFullList.innerHTML = `
+    <div class="chat-empty-state">
+      <div class="chat-empty-icon" aria-hidden="true">💬</div>
+      <p>${escapeHTML(message)}</p>
+    </div>
+  `;
+}
+
+function openChatClearConfirmModal() {
+  if (!canManageData()) return;
+  ui.chatClearConfirmModal?.classList.remove("hidden");
+  ui.chatClearConfirmModal?.setAttribute("aria-hidden", "false");
+  ui.chatClearConfirmBtn?.focus();
+}
+
+function closeChatClearConfirmModal() {
+  ui.chatClearConfirmModal?.classList.add("hidden");
+  ui.chatClearConfirmModal?.setAttribute("aria-hidden", "true");
+}
+
+async function clearCurrentChatMessages() {
+  if (!canManageData()) {
+    alert("Solo un admin può svuotare la chat.");
+    return;
+  }
+
+  closeChatClearConfirmModal();
+  const visibleMessageIds = chatMessages
+    .filter((message) => canViewMessage(message))
+    .map((message) => String(message.id || "").trim())
+    .filter(Boolean);
+
+  ui.chatClearBtn.disabled = true;
+  ui.chatClearConfirmBtn.disabled = true;
+  ui.chatFeedback.textContent = visibleMessageIds.length ? "Svuotamento chat in corso..." : "Chat già vuota.";
+
+  try {
+    await animateChatDeletion();
+    chatMessages = chatMessages.filter((message) => !visibleMessageIds.includes(String(message.id || "")));
+    await renderChat(chatMessages);
+
+    if (visibleMessageIds.length) {
+      await deleteChatMessagesByIds(visibleMessageIds);
+      ui.chatFeedback.textContent = "Chat svuotata.";
+    } else {
+      renderChatEmptyState();
+    }
+  } catch (error) {
+    console.error("Errore svuotamento chat:", error);
+    ui.chatFeedback.textContent = error?.message || "Impossibile svuotare la chat.";
+  } finally {
+    ui.chatClearConfirmBtn.disabled = false;
+    ui.chatClearBtn.disabled = !canManageData();
+  }
+}
+
+function animateChatDeletion() {
+  const messageNodes = Array.from(ui.chatFullList?.querySelectorAll(".chat-message") || []);
+  if (!messageNodes.length) return Promise.resolve();
+  messageNodes.forEach((node, index) => {
+    node.style.setProperty("--chat-delete-delay", `${Math.min(index * 24, 180)}ms`);
+    node.classList.add("is-deleting");
+  });
+  return new Promise((resolve) => window.setTimeout(resolve, 360));
+}
+
+async function deleteChatMessagesByIds(messageIds) {
+  const uniqueIds = Array.from(new Set(messageIds));
+  for (let index = 0; index < uniqueIds.length; index += 450) {
+    const batch = db.batch();
+    uniqueIds.slice(index, index + 450).forEach((messageId) => {
+      batch.delete(db.collection("chatMessages").doc(messageId));
+    });
+    await batch.commit();
   }
 }
 

@@ -2530,8 +2530,35 @@ textarea:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   border-bottom: 1px solid var(--border);
   padding: 12px;
+}
+
+.chat-modal-header h2 {
+  margin: 0;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-clear-btn {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fff 0%, #fff5f5 100%);
+  color: #991b1b;
+  box-shadow: 0 8px 18px rgba(185, 28, 28, 0.08);
+}
+
+.chat-clear-btn:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fee2e2;
 }
 
 .chat-full-list {
@@ -2550,6 +2577,18 @@ textarea:focus-visible {
   background: #ffffff;
   max-width: min(560px, 92%);
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  transform-origin: center right;
+  transition: opacity 0.28s ease, transform 0.28s ease, max-height 0.32s ease, margin 0.32s ease, padding 0.32s ease;
+}
+
+.chat-message.is-deleting {
+  opacity: 0;
+  transform: translateX(18px) scale(0.96);
+  max-height: 0;
+  margin: 0;
+  padding-block: 0;
+  overflow: hidden;
+  transition-delay: var(--chat-delete-delay, 0ms);
 }
 
 .chat-message.own {
@@ -2590,6 +2629,101 @@ textarea:focus-visible {
 .chat-private-content { display: none; margin-top: 8px; }
 .chat-private-content.is-open { display: block; }
 .btn-chat-private-toggle { margin-top: 6px; }
+
+.chat-empty-state {
+  min-height: min(320px, 52dvh);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px dashed rgba(100, 116, 139, 0.35);
+  border-radius: 18px;
+  padding: 28px 18px;
+  animation: chat-empty-fade-in 0.28s ease both;
+}
+
+.chat-empty-state p {
+  margin: 0;
+  font-weight: 700;
+  color: #334155;
+}
+
+.chat-empty-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #eff6ff, #dcfce7);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  font-size: 1.7rem;
+}
+
+@keyframes chat-empty-fade-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(4px);
+}
+
+.confirm-modal.hidden { display: none; }
+
+.confirm-modal-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(214, 223, 236, 0.9);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  animation: confirm-modal-pop 0.22s ease both;
+}
+
+.confirm-modal-card h2 {
+  margin: 0 0 6px;
+}
+
+.confirm-modal-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-modal-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 1.45rem;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@keyframes confirm-modal-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .hours-approval-box {
   margin-top: 12px;

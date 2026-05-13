@@ -4817,6 +4817,19 @@ function normalizeHoursCommessaSearch(value) {
     .trim();
 }
 
+function shouldAutofocusHoursCommessaSearch() {
+  return !(window.matchMedia?.("(pointer: coarse)")?.matches || window.innerWidth <= 760);
+}
+
+function closeOtherHoursCommessaPickers(activeContainer = null) {
+  document.querySelectorAll(".hours-commessa-picker.is-open").forEach((picker) => {
+    if (activeContainer && picker === activeContainer) return;
+    picker.classList.remove("is-open");
+    picker.querySelector(".hours-commessa-picker-menu")?.classList.add("hidden");
+    picker.querySelector(".hours-commessa-picker-toggle")?.setAttribute("aria-expanded", "false");
+  });
+}
+
 function renderHoursCommessaPicker(container, select, commesseInput = null, options = {}) {
   if (!container || !select) return;
   const commesse = Array.isArray(commesseInput) ? commesseInput : Array.from(commesseById.values());
@@ -4857,9 +4870,12 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
   `;
 
   const toggle = container.querySelector(".hours-commessa-picker-toggle");
-  toggle?.addEventListener("click", () => {
-    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: !isOpen, query });
-    if (!isOpen) {
+  toggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const nextOpenState = !isOpen;
+    if (nextOpenState) closeOtherHoursCommessaPickers(container);
+    renderHoursCommessaPicker(container, select, commesse, { ...options, keepOpen: nextOpenState, query });
+    if (nextOpenState && shouldAutofocusHoursCommessaSearch()) {
       requestAnimationFrame(() => container.querySelector(".hours-commessa-picker-search")?.focus());
     }
   });
@@ -4913,11 +4929,7 @@ function renderHoursTableCommessaButtons(commesseInput = null) {
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element) || target.closest(".hours-commessa-picker")) return;
-  document.querySelectorAll(".hours-commessa-picker.is-open").forEach((picker) => {
-    picker.classList.remove("is-open");
-    picker.querySelector(".hours-commessa-picker-menu")?.classList.add("hidden");
-    picker.querySelector(".hours-commessa-picker-toggle")?.setAttribute("aria-expanded", "false");
-  });
+  closeOtherHoursCommessaPickers();
 });
 
 function normalizeSquadraMemberIdentity(value) {

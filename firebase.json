@@ -33,8 +33,5 @@
   },
   "functions": {
     "source": "functions"
-  },
-  "database": {
-    "rules": "database.rules.json"
   }
 }

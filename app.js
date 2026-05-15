@@ -672,7 +672,9 @@ let selectedFullscreenImpiantoId = "";
 let selectedImpiantoId = "";
 let selectedImpiantoData = null;
 const impiantoWeatherStatusCache = new Map();
+const impiantoWeatherCoordinateCache = new Map();
 const impiantoWeatherPendingKeys = new Set();
+let impiantoWeatherPersistentCacheLoaded = false;
 let impiantoWeatherRefreshTimer = null;
 let impiantoWeatherRenderTimer = null;
 let drawAreaModeActive = false;
@@ -973,6 +975,7 @@ const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
+const IMPIANTO_WEATHER_LOCAL_CACHE_KEY = "heraImpiantoWeatherCache:v1";
 const SHEET_RETRY_MS = 30 * 1000;
 const HELP_CENTER_CONFIG_PATH = { collection: "appConfig", doc: "helpCenter" };
 const WORK_BANNER_CONFIG_PATH = { collection: "appConfig", doc: "workBanner" };
@@ -9078,6 +9081,7 @@ function selectCommessa(id, nome, codice = "") {
   mainMapViewState.hasUserMoved = false;
   activeNearbyImpiantoContext = null;
   localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
+  ensureImpiantoWeatherPersistentCacheLoaded();
   setImpiantiViewMode("todo");
   if (!ui.commessaTargetSelect.value) {
     ui.commessaTargetSelect.value = id;
@@ -9462,7 +9466,7 @@ function subscribeImpianti() {
       updateCommessaDashboard();
       renderImpianti();
       renderMap();
-      preloadImpiantiWeather(currentImpianti);
+      preloadCommessaWeatherForVisibleImpianti();
       evaluateImpiantoProximityAlerts();
       if (!currentUserPos) fetchWeather();
 
@@ -10971,27 +10975,128 @@ function getImpiantoWeatherCacheKey(impianto) {
   return `${coordinates.lat.toFixed(5)},${coordinates.lon.toFixed(5)}`;
 }
 
+function getImpiantoWeatherCoordinateKey(coordinates) {
+  if (!coordinates) return "";
+  return `${Number(coordinates.lat).toFixed(IMPIANTO_WEATHER_COORDINATE_PRECISION)},${Number(coordinates.lon).toFixed(IMPIANTO_WEATHER_COORDINATE_PRECISION)}`;
+}
+
 function isImpiantoWeatherCacheFresh(entry) {
   return Boolean(entry && Date.now() - Number(entry.updatedAt || 0) < IMPIANTO_WEATHER_CACHE_TTL_MS);
 }
 
+function ensureImpiantoWeatherPersistentCacheLoaded() {
+  if (impiantoWeatherPersistentCacheLoaded) return;
+  impiantoWeatherPersistentCacheLoaded = true;
+  try {
+    const raw = localStorage.getItem(IMPIANTO_WEATHER_LOCAL_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((entry) => {
+      if (!(entry?.impiantoId || entry?.impiantoKey) || !Number.isFinite(Number(entry.updatedAt))) return;
+      const normalized = normalizeStoredImpiantoWeatherStatus(entry);
+      impiantoWeatherStatusCache.set(normalized.impiantoKey, normalized);
+      if (normalized.coordinateKey) impiantoWeatherCoordinateCache.set(normalized.coordinateKey, normalized);
+    });
+  } catch (error) {
+    console.warn("Cache meteo impianti non leggibile:", error);
+  }
+}
+
+function normalizeStoredImpiantoWeatherStatus(entry) {
+  const lat = Number(entry.lat);
+  const lon = Number(entry.lon);
+  const coordinates = Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+  const syntheticState = ["ok", "pioggia", "vento", "temporale", "allerta"].includes(entry.syntheticState) ? entry.syntheticState : "ok";
+  const riskLevel = getRiskLevelFromSyntheticImpiantoWeatherState(syntheticState, entry.description);
+  const description = entry.description || "Meteo non disponibile";
+  return {
+    impiantoKey: String(entry.impiantoId || entry.impiantoKey || ""),
+    lat: coordinates?.lat ?? null,
+    lon: coordinates?.lon ?? null,
+    coordinateKey: getImpiantoWeatherCoordinateKey(coordinates),
+    syntheticState,
+    weatherState: description,
+    temperature: Number.isFinite(Number(entry.temperature)) ? Number(entry.temperature) : null,
+    rainProbability: Number.isFinite(Number(entry.rainProbability)) ? Number(entry.rainProbability) : null,
+    description,
+    hasCurrentRain: syntheticState === "pioggia",
+    hasNextHourRain: syntheticState === "pioggia",
+    civilProtectionAlert: null,
+    riskLevel,
+    alertText: description,
+    badgeLabel: getBadgeLabelFromSyntheticImpiantoWeatherState(syntheticState, description),
+    messages: syntheticState === "ok" ? [] : [description],
+    updatedAt: Number(entry.updatedAt) || Date.now()
+  };
+}
+
+function getRiskLevelFromSyntheticImpiantoWeatherState(syntheticState, description = "") {
+  if (!description || /non disponibile/i.test(description)) return "unavailable";
+  if (["allerta", "temporale", "vento"].includes(syntheticState)) return "red";
+  if (syntheticState === "pioggia") return "yellow";
+  return "green";
+}
+
+function getBadgeLabelFromSyntheticImpiantoWeatherState(syntheticState, description = "") {
+  if (!description || /non disponibile/i.test(description)) return "Meteo non disponibile";
+  return {
+    allerta: "Allerta meteo",
+    temporale: "Temporale",
+    vento: "Vento",
+    pioggia: "Pioggia",
+    ok: "Meteo OK"
+  }[syntheticState] || "Meteo non disponibile";
+}
+
+function persistImpiantoWeatherCache() {
+  try {
+    const entries = Array.from(impiantoWeatherStatusCache.values())
+      .filter((entry) => entry?.impiantoKey)
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+      .slice(0, IMPIANTO_WEATHER_LOCAL_CACHE_MAX_ENTRIES)
+      .map((entry) => ({
+        impiantoId: entry.impiantoKey,
+        lat: entry.lat ?? null,
+        lon: entry.lon ?? null,
+        syntheticState: entry.syntheticState || "ok",
+        temperature: entry.temperature ?? null,
+        rainProbability: entry.rainProbability ?? null,
+        description: entry.description || entry.badgeLabel || "Meteo non disponibile",
+        updatedAt: Number(entry.updatedAt) || Date.now()
+      }));
+    localStorage.setItem(IMPIANTO_WEATHER_LOCAL_CACHE_KEY, JSON.stringify(entries));
+  } catch (error) {
+    console.warn("Cache meteo impianti non salvata:", error);
+  }
+}
+
 function getCachedImpiantoWeatherStatus(impianto) {
+  ensureImpiantoWeatherPersistentCacheLoaded();
   const key = getImpiantoWeatherCacheKey(impianto);
-  return key ? impiantoWeatherStatusCache.get(key) || null : null;
+  if (key && impiantoWeatherStatusCache.has(key)) return impiantoWeatherStatusCache.get(key) || null;
+  const coordinateKey = getImpiantoWeatherCoordinateKey(getImpiantoNavigationCoordinates(impianto));
+  return coordinateKey ? impiantoWeatherCoordinateCache.get(coordinateKey) || null : null;
+}
+
+function isImpiantoWeatherUpdating(impianto) {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  const coordinateKey = getImpiantoWeatherCoordinateKey(getImpiantoNavigationCoordinates(impianto));
+  return Boolean((key && impiantoWeatherPendingKeys.has(key)) || (coordinateKey && impiantoWeatherPendingKeys.has(coordinateKey)));
 }
 
 function getImpiantoWeatherBadgeState(impianto) {
   const entry = getCachedImpiantoWeatherStatus(impianto);
-  if (!entry) return { level: "unavailable", label: "Meteo non disponibile", text: "⚪ Meteo non disponibile" };
+  if (!entry) return { level: "unavailable", label: "Meteo non disponibile", text: "⚪ Meteo non disponibile", updating: isImpiantoWeatherUpdating(impianto) };
   const label = entry.badgeLabel || (entry.riskLevel === "red" ? "Allerta meteo" : entry.riskLevel === "yellow" ? "Attenzione" : "Meteo OK");
   const emoji = entry.riskLevel === "red" ? "🔴" : entry.riskLevel === "yellow" ? "🟡" : entry.riskLevel === "green" ? "🟢" : "⚪";
-  return { level: entry.riskLevel || "unavailable", label, text: `${emoji} ${label}` };
+  const updatedLabel = entry.updatedAt ? ` • aggiornato ${new Date(entry.updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "";
+  return { level: entry.riskLevel || "unavailable", label: `${label}${updatedLabel}`, text: `${emoji} ${label}`, updating: isImpiantoWeatherUpdating(impianto) };
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {
   const key = getImpiantoWeatherCacheKey(impianto);
   const state = getImpiantoWeatherBadgeState(impianto);
-  return `<span class="impianto-weather-badge weather-${escapeHTML(state.level)}" data-weather-badge="${escapeHTML(key)}" title="${escapeHTML(state.label)}">${escapeHTML(state.text)}</span>`;
+  return `<span class="impianto-weather-wrap"><span class="impianto-weather-badge weather-${escapeHTML(state.level)}" data-weather-badge="${escapeHTML(key)}" title="${escapeHTML(state.label)}">${escapeHTML(state.text)}</span><small class="impianto-weather-updating${state.updating ? "" : " hidden"}" data-weather-updating="${escapeHTML(key)}">meteo in aggiornamento…</small></span>`;
 }
 
 function updateImpiantoWeatherBadgesInPlace() {
@@ -11006,6 +11111,9 @@ function updateImpiantoWeatherBadgesInPlace() {
     badge.className = `impianto-weather-badge weather-${state.level}`;
     badge.textContent = state.text;
     badge.title = state.label;
+    document.querySelectorAll(`[data-weather-updating="${cssEscapeValue(key)}"]`).forEach((updating) => {
+      updating.classList.toggle("hidden", !state.updating);
+    });
   });
 }
 
@@ -11022,6 +11130,7 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
   const current = weatherData?.current || {};
   const nextHourSlots = getNavigationWeatherNextHourSlots(weatherData);
   const messages = buildNavigationWeatherMessages(weatherData);
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
   const currentCode = Number(current.weather_code);
   const currentPrecipitation = getPrecipitationAmount(current);
   const hasCurrentRain = currentPrecipitation > 0 || NAVIGATION_WEATHER_RAIN_CODES.has(currentCode);
@@ -11045,10 +11154,28 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     : riskLevel === "yellow"
       ? (hasNextHourRain ? "Pioggia prevista" : hasCurrentRain ? "Pioggia in corso" : "Attenzione")
       : "Meteo OK";
+  const rainProbability = getMaxNavigationRainProbability(weatherData);
+  const syntheticState = getSyntheticImpiantoWeatherState({
+    riskLevel,
+    hasCivilProtectionAlert,
+    currentCode,
+    hasCurrentRain,
+    hasNextHourRain,
+    currentWind: Number(current.wind_speed_10m) || 0,
+    currentGust: Number(current.wind_gusts_10m) || 0
+  });
+  const description = badgeLabel === "Meteo OK" ? weatherCodeLabel(current.weather_code).replace(/^[^A-Za-zÀ-ÿ]+\s*/, "") : shortAlertText;
 
   return {
     impiantoKey: getImpiantoWeatherCacheKey(impianto),
+    lat: coordinates?.lat ?? null,
+    lon: coordinates?.lon ?? null,
+    coordinateKey: getImpiantoWeatherCoordinateKey(coordinates),
+    syntheticState,
     weatherState: weatherCodeLabel(current.weather_code),
+    temperature: Number.isFinite(Number(current.temperature_2m)) ? Number(current.temperature_2m) : null,
+    rainProbability,
+    description,
     hasCurrentRain,
     hasNextHourRain,
     civilProtectionAlert: hasCivilProtectionAlert ? civilProtectionAlert : null,
@@ -11060,14 +11187,38 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
   };
 }
 
+function getMaxNavigationRainProbability(data) {
+  const values = Array.isArray(data?.hourly?.precipitation_probability) ? data.hourly.precipitation_probability : [];
+  const numeric = values.map((value) => Number(value)).filter(Number.isFinite);
+  return numeric.length ? Math.max(...numeric) : null;
+}
+
+function getSyntheticImpiantoWeatherState({ riskLevel, hasCivilProtectionAlert, currentCode, hasCurrentRain, hasNextHourRain, currentWind, currentGust }) {
+  if (riskLevel === "red" || hasCivilProtectionAlert) return "allerta";
+  if (NAVIGATION_WEATHER_THUNDER_CODES.has(currentCode)) return "temporale";
+  if (currentWind >= NAVIGATION_WEATHER_STRONG_WIND_KMH || currentGust >= NAVIGATION_WEATHER_STRONG_GUST_KMH) return "vento";
+  if (hasCurrentRain || hasNextHourRain) return "pioggia";
+  return "ok";
+}
+
 async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
+  ensureImpiantoWeatherPersistentCacheLoaded();
   const key = getImpiantoWeatherCacheKey(impianto);
   const coordinates = getImpiantoNavigationCoordinates(impianto);
+  const coordinateKey = getImpiantoWeatherCoordinateKey(coordinates);
   if (!key || !coordinates) return null;
-  const cached = impiantoWeatherStatusCache.get(key);
+  const cached = getCachedImpiantoWeatherStatus(impianto);
+  const coordinateCached = coordinateKey ? impiantoWeatherCoordinateCache.get(coordinateKey) : null;
   if (!force && isImpiantoWeatherCacheFresh(cached)) return cached;
-  if (impiantoWeatherPendingKeys.has(key)) return cached || null;
+  if (!force && isImpiantoWeatherCacheFresh(coordinateCached)) {
+    const cloned = cloneImpiantoWeatherStatusForImpianto(coordinateCached, impianto, coordinates);
+    saveImpiantoWeatherStatus(cloned);
+    return cloned;
+  }
+  if (impiantoWeatherPendingKeys.has(key) || (coordinateKey && impiantoWeatherPendingKeys.has(coordinateKey))) return cached || coordinateCached || null;
   impiantoWeatherPendingKeys.add(key);
+  if (coordinateKey) impiantoWeatherPendingKeys.add(coordinateKey);
+  scheduleImpiantoWeatherBadgeRender();
   try {
     const weatherData = await fetchImpiantoNavigationWeather(coordinates);
     const civilProtectionAlert = await getOfficialCivilProtectionAlertForNavigation(coordinates).catch((error) => {
@@ -11075,13 +11226,20 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       return null;
     });
     const status = buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert);
-    impiantoWeatherStatusCache.set(key, status);
+    saveImpiantoWeatherStatus(status);
     return status;
   } catch (error) {
     console.warn("Meteo impianto non disponibile:", error);
     const fallback = {
       impiantoKey: key,
+      lat: coordinates.lat,
+      lon: coordinates.lon,
+      coordinateKey,
+      syntheticState: "ok",
       weatherState: "non disponibile",
+      temperature: null,
+      rainProbability: null,
+      description: "Meteo non disponibile",
       hasCurrentRain: false,
       hasNextHourRain: false,
       civilProtectionAlert: null,
@@ -11091,28 +11249,61 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       messages: [],
       updatedAt: Date.now()
     };
-    impiantoWeatherStatusCache.set(key, fallback);
+    saveImpiantoWeatherStatus(fallback);
     return fallback;
   } finally {
     impiantoWeatherPendingKeys.delete(key);
+    if (coordinateKey) impiantoWeatherPendingKeys.delete(coordinateKey);
     scheduleImpiantoWeatherBadgeRender();
   }
 }
 
-function preloadImpiantiWeather(impianti = [], { limit = IMPIANTO_WEATHER_REFRESH_LIMIT } = {}) {
-  const candidates = impianti
+function cloneImpiantoWeatherStatusForImpianto(entry, impianto, coordinates = getImpiantoNavigationCoordinates(impianto)) {
+  return {
+    ...entry,
+    impiantoKey: getImpiantoWeatherCacheKey(impianto),
+    lat: coordinates?.lat ?? entry.lat ?? null,
+    lon: coordinates?.lon ?? entry.lon ?? null,
+    coordinateKey: getImpiantoWeatherCoordinateKey(coordinates) || entry.coordinateKey || ""
+  };
+}
+
+function saveImpiantoWeatherStatus(status) {
+  if (!status?.impiantoKey) return;
+  impiantoWeatherStatusCache.set(status.impiantoKey, status);
+  if (status.coordinateKey) impiantoWeatherCoordinateCache.set(status.coordinateKey, status);
+  persistImpiantoWeatherCache();
+}
+
+function preloadImpiantiWeather(impianti = [], { limit = IMPIANTO_WEATHER_REFRESH_LIMIT, preferNearest = true } = {}) {
+  ensureImpiantoWeatherPersistentCacheLoaded();
+  const byCoordinate = new Map();
+  impianti
     .filter((impianto) => getImpiantoNavigationCoordinates(impianto))
     .filter((impianto) => !isImpiantoWeatherCacheFresh(getCachedImpiantoWeatherStatus(impianto)))
-    .slice(0, limit);
+    .sort((a, b) => (preferNearest ? distanceFromUser(a) - distanceFromUser(b) : 0))
+    .forEach((impianto) => {
+      const coordinateKey = getImpiantoWeatherCoordinateKey(getImpiantoNavigationCoordinates(impianto));
+      if (!coordinateKey || byCoordinate.has(coordinateKey)) return;
+      byCoordinate.set(coordinateKey, impianto);
+    });
+  const candidates = Array.from(byCoordinate.values()).slice(0, limit);
   if (!candidates.length) return;
   clearTimeout(impiantoWeatherRefreshTimer);
   impiantoWeatherRefreshTimer = setTimeout(async () => {
     for (let index = 0; index < candidates.length; index += IMPIANTO_WEATHER_BATCH_SIZE) {
       const batch = candidates.slice(index, index + IMPIANTO_WEATHER_BATCH_SIZE);
       await Promise.allSettled(batch.map((impianto) => refreshImpiantoWeatherStatus(impianto)));
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      await new Promise((resolve) => setTimeout(resolve, 180));
     }
   }, 250);
+}
+
+function preloadCommessaWeatherForVisibleImpianti() {
+  if (!selectedCommessaId || !currentImpianti.length) return;
+  const visible = getVisibleMapImpianti(map, currentImpianti);
+  const source = visible.length ? visible : currentImpianti;
+  preloadImpiantiWeather(source, { limit: IMPIANTO_WEATHER_REFRESH_LIMIT, preferNearest: true });
 }
 
 function getVisibleMapImpianti(targetMap = map, source = currentImpianti) {
@@ -11164,7 +11355,7 @@ async function fetchImpiantoNavigationWeather({ lat, lon }) {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
-    current: "precipitation,rain,showers,weather_code,wind_speed_10m,wind_gusts_10m",
+    current: "temperature_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_gusts_10m",
     minutely_15: "precipitation,weather_code,wind_speed_10m,wind_gusts_10m",
     hourly: "precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility",
     forecast_hours: "2",
@@ -13197,7 +13388,7 @@ function renderMap() {
   }
   fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   syncSelectedImpiantoDetailAfterRefresh(markerForActiveFullscreenPopup);
-  preloadImpiantiWeather(getVisibleMapImpianti(map, currentImpianti));
+  preloadCommessaWeatherForVisibleImpianti();
 }
 
 function syncSelectedImpiantoDetailAfterRefresh(markerForSelectedImpianto) {
@@ -13557,8 +13748,8 @@ function bindImpiantoMapPopupActions(event, popupMap) {
 
 map.on("popupopen", (event) => bindImpiantoMapPopupActions(event, map));
 fullscreenMap.on("popupopen", (event) => bindImpiantoMapPopupActions(event, fullscreenMap));
-map.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(map, currentImpianti)));
-fullscreenMap.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(fullscreenMap, currentImpianti)));
+map.on("moveend zoomend", () => preloadCommessaWeatherForVisibleImpianti());
+fullscreenMap.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(fullscreenMap, currentImpianti), { limit: IMPIANTO_WEATHER_REFRESH_LIMIT, preferNearest: true }));
 globalMap.on("moveend zoomend", () => preloadImpiantiWeather(getVisibleMapImpianti(globalMap, globalImpianti)));
 
 function focusImpiantoInList(impianto, scroll = true) {
@@ -14451,9 +14642,11 @@ const NAVIGATION_WEATHER_LIGHT_RAIN_MAX_MM = 2;
 const NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY = 40;
 const NAVIGATION_WEATHER_THUNDER_CODES = new Set([95, 96, 99]);
 const NAVIGATION_WEATHER_RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]);
-const IMPIANTO_WEATHER_CACHE_TTL_MS = 15 * 60 * 1000;
-const IMPIANTO_WEATHER_REFRESH_LIMIT = 12;
-const IMPIANTO_WEATHER_BATCH_SIZE = 3;
+const IMPIANTO_WEATHER_CACHE_TTL_MS = 45 * 60 * 1000;
+const IMPIANTO_WEATHER_REFRESH_LIMIT = 8;
+const IMPIANTO_WEATHER_BATCH_SIZE = 2;
+const IMPIANTO_WEATHER_COORDINATE_PRECISION = 3;
+const IMPIANTO_WEATHER_LOCAL_CACHE_MAX_ENTRIES = 400;
 
 
 async function fetchWeather() {

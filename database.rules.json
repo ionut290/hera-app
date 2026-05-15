@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "weather": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}

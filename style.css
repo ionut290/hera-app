@@ -2210,6 +2210,13 @@ textarea:focus-visible {
 }
 
 
+.impianto-weather-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .impianto-weather-badge {
   display: inline-flex;
   align-items: center;
@@ -2251,6 +2258,17 @@ textarea:focus-visible {
   border-color: #cbd5e1;
   background: #f8fafc;
   color: #64748b;
+}
+
+.impianto-weather-updating {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.impianto-weather-updating.hidden {
+  display: none;
 }
 
 .map-popup-actions .impianto-weather-badge {

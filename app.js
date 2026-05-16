@@ -10617,7 +10617,7 @@ function renderImpianti() {
 
   sorted.forEach((impianto) => {
     const article = document.createElement("article");
-    article.className = `impianto-item ${impianto.done ? "done" : "todo"}`;
+    article.className = `impianto-item card-impianto ${impianto.done ? "done" : "todo"}`;
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
@@ -10634,9 +10634,9 @@ function renderImpianti() {
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const mainColumn = document.createElement("div");
-    mainColumn.className = "impianto-main-column";
+    mainColumn.className = "impianto-main-column impianto-left";
     const weatherColumn = document.createElement("div");
-    weatherColumn.className = "impianto-weather-column";
+    weatherColumn.className = "impianto-weather-column weather-compact";
     weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
 
     const header = document.createElement("button");
@@ -10694,7 +10694,7 @@ function renderImpianti() {
     }
 
     const actions = document.createElement("div");
-    actions.className = "item-actions";
+    actions.className = "item-actions impianto-actions";
     const managementStack = document.createElement("div");
     managementStack.className = "impianto-management-stack";
     const managementActions = document.createElement("div");
@@ -11201,44 +11201,50 @@ function formatImpiantoWeatherTimeRange(start, end) {
   return `${startLabel}–${formatWeatherSlotTime(end)}`;
 }
 
+function formatCompactImpiantoWeatherStatus(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry)) {
+  const temperature = isPresentFiniteNumber(entry.temperature) ? ` · ${Math.round(Number(entry.temperature))}°C` : "";
+  const intensity = entry.rainIntensity ? `${entry.rainIntensity}` : "";
+  if (entry.hasCurrentRain) return `🌧 ${intensity || "Pioggia"} ora${temperature}`;
+  if (entry.hasNextHourRain || entry.rainExpected || entry.rainWindow) return `🌧 ${intensity || "Pioggia"}${temperature}`;
+  if (entry.riskLevel === "green") return `✓ Meteo ok${temperature}`;
+  if (entry.riskLevel === "red") return `⚠️ Rischio${temperature}`;
+  return `⚠️ ${label}${temperature}`;
+}
+
+function formatCompactImpiantoWeatherRiskLine(message = "") {
+  const normalized = String(message || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.includes("terreno")) return "⚠️ Terreno";
+  if (normalized.includes("sfalcio")) return "⚠️ Sfalcio";
+  if (normalized.includes("rinvio")) return "⚠️ Rinvio";
+  if (normalized.includes("allerta")) return "⚠️ Allerta";
+  if (normalized.includes("tempor")) return "⚠️ Temporali";
+  if (normalized.includes("ok")) return "✓ Lavoro";
+  return `⚠️ ${String(message).replace(/^⚠️?\s*/u, "").split(/[.;]/)[0].trim().slice(0, 18)}`;
+}
+
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
-  if (entry.riskLevel === "unavailable") return ["Meteo non disponibile"];
-  const lines = [];
-  const status = entry.statusLabel || entry.weatherState || label;
-  const temperature = isPresentFiniteNumber(entry.temperature) ? ` ${Math.round(Number(entry.temperature))}°C` : "";
-  lines.push(`${status}${temperature}`);
+  if (entry.riskLevel === "unavailable") return ["Meteo n/d"];
+  const lines = [formatCompactImpiantoWeatherStatus(entry, label)];
 
   if (entry.rainExpected || entry.rainWindow || entry.hasCurrentRain || entry.hasNextHourRain) {
     const range = formatImpiantoWeatherTimeRange(entry.rainStartTime ?? entry.rainWindow?.start, entry.rainEndTime ?? entry.rainWindow?.end);
-    lines.push(`🌧️ Pioggia prevista${range ? ` ${range}` : ""}`);
-  } else {
-    lines.push("Nessuna pioggia prevista nelle prossime ore");
+    if (range) lines.push(`🌧 ${range}`);
   }
 
   if (isPresentFiniteNumber(entry.precipitationProbability ?? entry.rainProbability)) {
-    lines.push(`Probabilità ${Math.round(Number(entry.precipitationProbability ?? entry.rainProbability))}%`);
-  }
-
-  if (isPresentFiniteNumber(entry.precipitationIntensity ?? entry.rainAmount) && Number(entry.precipitationIntensity ?? entry.rainAmount) > 0) {
-    lines.push(`${formatWeatherAmount(entry.precipitationIntensity ?? entry.rainAmount)} mm/h`);
+    lines.push(`Prob. ${Math.round(Number(entry.precipitationProbability ?? entry.rainProbability))}%`);
   }
 
   if (isPresentFiniteNumber(entry.windSpeed ?? entry.windSpeedKmh)) {
     const direction = entry.windDirection || entry.windDirectionLabel || "";
-    lines.push(`💨 Vento ${Math.round(Number(entry.windSpeed ?? entry.windSpeedKmh))} km/h${direction ? ` ${direction}` : ""}`);
-  } else {
-    lines.push("Vento non disponibile");
+    lines.push(`Vento ${Math.round(Number(entry.windSpeed ?? entry.windSpeedKmh))} km/h${direction ? ` ${direction}` : ""}`);
   }
 
-  if (isPresentFiniteNumber(entry.windGust ?? entry.windGustKmh)) {
-    lines.push(`Raffiche ${Math.round(Number(entry.windGust ?? entry.windGustKmh))} km/h`);
-  }
-
-  const riskMessage = entry.riskMessage || entry.operationMessage;
-  if (riskMessage) lines.push(riskMessage);
-  if (entry.stale && entry.updatedAt) lines.push(`dato aggiornato alle ${formatWeatherSlotTime(entry.updatedAt)}`);
-  else if (entry.weatherPartial && entry.updatedAt) lines.push(`dato aggiornato alle ${formatWeatherSlotTime(entry.updatedAt)}`);
-  return lines.filter(Boolean).slice(0, 8);
+  const riskLine = formatCompactImpiantoWeatherRiskLine(entry.riskMessage || entry.operationMessage);
+  if (riskLine) lines.push(riskLine);
+  if (entry.updatedAt) lines.push(`Agg. ${formatWeatherSlotTime(entry.updatedAt)}`);
+  return lines.filter(Boolean).slice(0, 5);
 }
 
 function formatImpiantoRainLine(entry = {}) {

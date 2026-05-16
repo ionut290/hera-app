@@ -10776,6 +10776,11 @@ function renderImpianti() {
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
+    if (canManageData()) {
+      const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => setImpiantoRequestDriveLink(impianto));
+      uploadPdfBtn.classList.add("pdf-request-btn");
+      managementActions.appendChild(uploadPdfBtn);
+    }
     if (managementActions.childElementCount > 0) {
       const manageBtn = createButton("⚙️ Gestione", () => {
         if (expandedImpiantoManagementKeys.has(impiantoKey)) expandedImpiantoManagementKeys.delete(impiantoKey);
@@ -10786,11 +10791,6 @@ function renderImpianti() {
       manageBtn.setAttribute("aria-expanded", isManagementExpanded ? "true" : "false");
       managementStack.appendChild(manageBtn);
       managementActions.classList.toggle("hidden", !isManagementExpanded);
-    }
-    if (canManageData()) {
-      const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => setImpiantoRequestDriveLink(impianto));
-      uploadPdfBtn.classList.add("pdf-request-btn");
-      managementStack.appendChild(uploadPdfBtn);
     }
     if (managementStack.childElementCount > 0) actions.appendChild(managementStack);
     const richiestaPdfUrl = String(
@@ -11037,6 +11037,7 @@ function normalizeStoredImpiantoWeatherStatus(entry) {
     syntheticState,
     weatherState: description,
     temperature: Number.isFinite(Number(entry.temperature)) ? Number(entry.temperature) : null,
+    apparentTemperature: Number.isFinite(Number(entry.apparentTemperature)) ? Number(entry.apparentTemperature) : null,
     rainProbability: Number.isFinite(Number(entry.rainProbability)) ? Number(entry.rainProbability) : null,
     description,
     hasCurrentRain: syntheticState === "pioggia",
@@ -11089,6 +11090,7 @@ function persistImpiantoWeatherCache() {
         lon: entry.lon ?? null,
         syntheticState: entry.syntheticState || "ok",
         temperature: entry.temperature ?? null,
+        apparentTemperature: entry.apparentTemperature ?? null,
         rainProbability: entry.rainProbability ?? null,
         rainWindow: entry.rainWindow || null,
         rainIntensity: entry.rainIntensity || "",
@@ -11128,10 +11130,10 @@ function getImpiantoWeatherBadgeState(impianto) {
   if (!entry) {
     return {
       level: "unavailable",
-      label: "Dati meteo parziali",
-      text: "⚪ Dati meteo parziali",
+      label: "Meteo non disponibile",
+      text: "Meteo non disponibile",
       updating,
-      lines: ["Dati meteo parziali"],
+      lines: ["Meteo non disponibile"],
       compact: true
     };
   }
@@ -11161,34 +11163,47 @@ function getImpiantoWeatherPrimaryLabel(entry = {}) {
   if (entry.riskLevel === "red") return "Rischio";
   if (entry.riskLevel === "yellow") return entry.hasCurrentRain || entry.hasNextHourRain ? "Pioggia prevista" : "Rischio";
   if (entry.riskLevel === "green") return "Meteo ok";
-  return "Dati meteo parziali";
+  return "Meteo non disponibile";
 }
 
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
-  const hasRain = Boolean(entry.hasCurrentRain || entry.hasNextHourRain || Number(entry.rainAmount) > 0 || Number(entry.rainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY);
-  if (entry.riskLevel === "green" && !hasRain) return [`${emoji} Meteo ok`];
-  if (entry.riskLevel === "unavailable") return ["Dati meteo parziali"];
+  if (entry.riskLevel === "unavailable" || entry.weatherPartial) return ["Meteo non disponibile"];
+  const hasRain = Boolean(entry.hasCurrentRain || entry.hasNextHourRain || entry.rainWindow || Number(entry.rainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY);
+  const lines = [];
 
-  const lines = [`${emoji} ${label}`];
-  const rainLine = formatImpiantoRainLine(entry);
-  if (rainLine) lines.push(rainLine);
-  if (isPresentFiniteNumber(entry.rainProbability)) lines.push(`Probabilità pioggia ${Math.round(Number(entry.rainProbability))}%`);
-  if (entry.weatherPartial) lines.push("Dati meteo parziali");
-  if (entry.operationMessage) lines.push(entry.operationMessage);
-  return lines.filter(Boolean);
+  if (hasRain) {
+    lines.push(`${entry.hasCurrentRain ? "🌧 Pioggia in corso" : "🌧 Pioggia prevista"}`);
+    const rainLine = formatImpiantoRainLine(entry);
+    if (rainLine) lines.push(rainLine);
+    if (isPresentFiniteNumber(entry.rainProbability)) lines.push(`Probabilità ${Math.round(Number(entry.rainProbability))}%`);
+  } else {
+    lines.push(`${emoji} ${label}`);
+    if (isPresentFiniteNumber(entry.apparentTemperature)) lines.push(`Percepita ${Math.round(Number(entry.apparentTemperature))}°C`);
+  }
+
+  const alertLine = getImpiantoWeatherAlertLine(entry);
+  if (alertLine) lines.push(alertLine);
+  if (entry.operationMessage && lines.length < 4) lines.push(entry.operationMessage);
+  return lines.filter(Boolean).slice(0, 4);
 }
 
 function formatImpiantoRainLine(entry = {}) {
   if (!entry.hasCurrentRain && !entry.hasNextHourRain && !entry.rainWindow) return "";
   const intensity = entry.rainIntensity ? ` • ${entry.rainIntensity}` : "";
-  if (entry.rainWindow?.label) return `Fascia oraria prevista: ${entry.rainWindow.label}${intensity}`;
-  return entry.rainIntensity ? `Pioggia prevista • ${entry.rainIntensity}` : "Pioggia prevista";
+  if (entry.rainWindow?.label) return `${entry.rainWindow.label}${intensity}`;
+  return entry.rainIntensity ? `Adesso • ${entry.rainIntensity}` : "Adesso";
+}
+
+function getImpiantoWeatherAlertLine(entry = {}) {
+  if (entry.civilProtectionAlert) return "⚠ Allerta meteo";
+  if (Array.isArray(entry.messages) && entry.messages.some((message) => /temporale/i.test(message))) return "⚠ Temporali";
+  return "";
 }
 
 function getImpiantoWeatherLineClass(line = "", index = 0) {
   const normalized = String(line || "").toLowerCase();
-  if (normalized.includes("rischio") || normalized.includes("allerta") || normalized.includes("rinvio")) return " is-risk";
-  if (normalized.includes("pioggia") || normalized.includes("mm") || normalized.includes("prob.")) return " is-rain";
+  if (normalized.includes("rischio") || normalized.includes("allerta") || normalized.includes("rinvio") || normalized.includes("attenzione") || normalized.includes("temporali")) return " is-risk";
+  if (normalized.includes("pioggia") || normalized.includes("probabilità") || normalized.includes("prob.")) return " is-rain";
   if (normalized.includes("vento") || normalized.startsWith("💨") || normalized.includes("dato vento")) return " is-wind";
   if (index === 0) return " is-primary";
   return "";
@@ -11326,11 +11341,21 @@ function isRainWeatherSlot(slot) {
 function getImpiantoWeatherForecastSlots(data) {
   const now = Date.now();
   const maxForecast = now + 12 * 60 * 60 * 1000;
-  const minutelySlots = buildNavigationWeatherSlots(data?.minutely_15 || {}, data, "minutely_15")
-    .filter((slot) => slot.timestamp >= now - 15 * 60 * 1000 && slot.timestamp <= maxForecast);
   const hourlySlots = buildNavigationWeatherSlots(data?.hourly || {}, data, "hourly")
     .filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= maxForecast);
+  const minutelySlots = buildNavigationWeatherSlots(data?.minutely_15 || {}, data, "minutely_15")
+    .filter((slot) => slot.timestamp >= now - 15 * 60 * 1000 && slot.timestamp <= maxForecast)
+    .map((slot) => enrichWeatherSlotWithHourlyProbability(slot, hourlySlots));
   return minutelySlots.length ? minutelySlots : hourlySlots;
+}
+
+function enrichWeatherSlotWithHourlyProbability(slot, hourlySlots = []) {
+  if (isPresentFiniteNumber(slot?.precipitation_probability) || !hourlySlots.length) return slot;
+  const nearestHourly = hourlySlots
+    .filter((hourlySlot) => isPresentFiniteNumber(hourlySlot.precipitation_probability))
+    .sort((a, b) => Math.abs(Number(a.timestamp) - Number(slot.timestamp)) - Math.abs(Number(b.timestamp) - Number(slot.timestamp)))[0];
+  if (!nearestHourly || Math.abs(Number(nearestHourly.timestamp) - Number(slot.timestamp)) > 60 * 60 * 1000) return slot;
+  return { ...slot, precipitation_probability: nearestHourly.precipitation_probability };
 }
 
 function getCurrentWindDetails(data) {
@@ -11440,6 +11465,7 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     syntheticState,
     weatherState: weatherCodeLabel(current.weather_code),
     temperature: Number.isFinite(Number(current.temperature_2m)) ? Number(current.temperature_2m) : null,
+    apparentTemperature: Number.isFinite(Number(current.apparent_temperature)) ? Number(current.apparent_temperature) : null,
     rainProbability,
     description,
     hasCurrentRain,
@@ -11513,6 +11539,7 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       syntheticState: "ok",
       weatherState: "non disponibile",
       temperature: null,
+      apparentTemperature: null,
       rainProbability: null,
       description: "Meteo non disponibile",
       hasCurrentRain: false,
@@ -11692,21 +11719,57 @@ async function getNavigationWeatherWarning(impianto, coordinates) {
 }
 
 async function fetchImpiantoNavigationWeather({ lat, lon }) {
-  const params = new URLSearchParams({
-    latitude: String(lat),
-    longitude: String(lon),
-    current: "temperature_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-    minutely_15: "precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-    hourly: "precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility",
-    wind_speed_unit: "kmh",
-    forecast_hours: "12",
-    forecast_minutely_15: "48",
-    forecast_days: "1",
-    timezone: "auto"
-  });
-  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Open-Meteo ${response.status}`);
-  return response.json();
+  const requests = [
+    {
+      provider: "Open-Meteo",
+      params: {
+        latitude: String(lat),
+        longitude: String(lon),
+        current: "temperature_2m,apparent_temperature,precipitation,rain,showers,weather_code",
+        minutely_15: "precipitation,weather_code",
+        hourly: "precipitation_probability,precipitation,rain,showers,weather_code,apparent_temperature,visibility",
+        forecast_hours: "12",
+        forecast_minutely_15: "48",
+        forecast_days: "1",
+        timezone: "auto"
+      }
+    },
+    {
+      provider: "Open-Meteo fallback",
+      params: {
+        latitude: String(lat),
+        longitude: String(lon),
+        current: "temperature_2m,apparent_temperature,precipitation,rain,showers,weather_code",
+        hourly: "precipitation_probability,precipitation,rain,showers,weather_code,apparent_temperature,visibility",
+        forecast_hours: "24",
+        forecast_days: "1",
+        timezone: "auto"
+      }
+    }
+  ];
+  let lastError = null;
+  for (const request of requests) {
+    try {
+      const params = new URLSearchParams(request.params);
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`${request.provider} ${response.status}`);
+      const data = await response.json();
+      validateImpiantoWeatherPayload(data, request.provider);
+      return { ...data, provider: request.provider };
+    } catch (error) {
+      lastError = error;
+      console.warn(`${request.provider} non disponibile:`, error);
+    }
+  }
+  throw lastError || new Error("Meteo non disponibile");
+}
+
+function validateImpiantoWeatherPayload(data, provider = "meteo") {
+  if (!data || typeof data !== "object") throw new Error(`${provider}: risposta non valida`);
+  const hasCurrentWeather = isPresentFiniteNumber(data.current?.weather_code) || isPresentFiniteNumber(data.current?.precipitation);
+  const hasHourlyProbability = Array.isArray(data.hourly?.precipitation_probability) && data.hourly.precipitation_probability.some(isPresentFiniteNumber);
+  const hasHourlyWeather = Array.isArray(data.hourly?.weather_code) && data.hourly.weather_code.some(isPresentFiniteNumber);
+  if (!hasCurrentWeather && !hasHourlyProbability && !hasHourlyWeather) throw new Error(`${provider}: campi meteo assenti`);
 }
 
 function buildNavigationWeatherMessages(data) {

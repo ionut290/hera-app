@@ -631,6 +631,9 @@ let hoursDraftEntries = [];
 let hoursFinalizeLocked = false;
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
+let loadingOre = false;
+let hoursTableLoadPromise = null;
+let hoursTableLoadRequestId = 0;
 let hoursSubmitInFlight = false;
 let hoursFinalizeStatusTimer = null;
 let hoursDuplicateCleanupPromise = null;
@@ -3825,36 +3828,131 @@ function ensureHoursViewModalOpen() {
   ui.hoursViewModal.setAttribute("aria-hidden", "false");
 }
 
+function logHoursDebug(label, value) {
+  console.log(`[ORE] ${label}:`, value);
+}
+
+function getSelectedHoursCommessaInfo(commessaId) {
+  const commessa = commesseById.get(String(commessaId || ""));
+  return {
+    id: String(commessaId || "").trim(),
+    nome: String(commessa?.nome || "").trim(),
+    codice: String(commessa?.codice || "").trim()
+  };
+}
+
+function normalizeHoursCommessaMatchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function doesHoursEntryMatchCommessa(entry, selectedCommessaId) {
+  const selected = getSelectedHoursCommessaInfo(selectedCommessaId);
+  const selectedValues = [selected.id, selected.codice, selected.nome]
+    .map(normalizeHoursCommessaMatchValue)
+    .filter(Boolean);
+  const entryValues = [entry?.commessaId, entry?.commessaCode, entry?.codice, entry?.commessaName]
+    .map(normalizeHoursCommessaMatchValue)
+    .filter(Boolean);
+  return selectedValues.some((value) => entryValues.includes(value));
+}
+
+function setHoursExportButtonsLoading(isLoading) {
+  const monthlyWithoutRows = hoursTableContext?.mode === "monthly" && !hoursTableContext?.operators?.length;
+  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = isLoading || !hoursTableContext || monthlyWithoutRows;
+  if (ui.hoursTableExportGlobalBtn) ui.hoursTableExportGlobalBtn.disabled = isLoading;
+}
+
+function buildHoursMonthlyExportData(reports, commessaId, monthMeta) {
+  const operatorDayMap = new Map();
+  const operatorTotals = new Map();
+  const operatorCommessaTotals = new Map();
+  (Array.isArray(reports) ? reports : []).forEach((report) => {
+    const day = Number(String(report.date || "").split("-")[2] || 0);
+    const entries = Array.isArray(report.entries) ? report.entries : [];
+    entries.forEach((entry) => {
+      const entryCommessaId = String(entry.commessaId || "").trim();
+      const entryCommessaName = String(entry.commessaName || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
+      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+        const operatore = String(row.operatore || "").trim();
+        const ore = Number(row.ore || 0);
+        if (!operatore || ore <= 0) return;
+        const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+        if (!operatorTotals.has(operatorNorm)) operatorTotals.set(operatorNorm, { name: operatore, total: 0 });
+        operatorTotals.get(operatorNorm).total += ore;
+        const byCommessaKey = `${operatorNorm}__${entryCommessaId || entryCommessaName}`;
+        if (!operatorCommessaTotals.has(byCommessaKey)) operatorCommessaTotals.set(byCommessaKey, { operatore, commessaName: entryCommessaName, total: 0 });
+        operatorCommessaTotals.get(byCommessaKey).total += ore;
+        if (!doesHoursEntryMatchCommessa(entry, commessaId) || !day || day < 1 || day > monthMeta.daysInMonth) return;
+        if (!operatorDayMap.has(operatore)) operatorDayMap.set(operatore, Array(monthMeta.daysInMonth).fill(0));
+        operatorDayMap.get(operatore)[day - 1] += ore;
+      });
+    });
+  });
+  return { operatorDayMap, operatorTotals, operatorCommessaTotals };
+}
+
 async function loadHoursMonthlyTable() {
-  if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
+  if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return null;
+  const requestId = hoursTableLoadRequestId + 1;
+  hoursTableLoadRequestId = requestId;
   hoursTableContext = null;
+  loadingOre = true;
   if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = false;
   renderHoursTableCommessaButtons();
-  if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+  setHoursExportButtonsLoading(true);
   const monthValue = String(ui.hoursTableMonth?.value || "").trim();
   const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
+  const commessaInfo = getSelectedHoursCommessaInfo(commessaId);
   const monthMeta = getMonthMeta(monthValue);
+  logHoursDebug("mese selezionato", monthValue);
+  logHoursDebug("anno", monthMeta?.year || "non valido");
+  logHoursDebug("mese numerico", monthMeta?.month || "non valido");
+  logHoursDebug("commessa selezionata", commessaInfo.codice || commessaInfo.nome || commessaInfo.id || "nessuna");
   if (!monthMeta) {
     ui.hoursTableFeedback.textContent = "Seleziona un mese valido.";
     ui.hoursTableContainer.innerHTML = "";
-    return;
+    loadingOre = false;
+    setHoursExportButtonsLoading(false);
+    return null;
   }
   if (!commessaId) {
     ui.hoursTableFeedback.textContent = "Seleziona una commessa per vedere la tabella.";
     ui.hoursTableContainer.innerHTML = "";
-    return;
+    loadingOre = false;
+    setHoursExportButtonsLoading(false);
+    return null;
   }
   if (ui.hoursStatsMonth) ui.hoursStatsMonth.value = monthValue;
   ui.hoursTableFeedback.textContent = "Caricamento tabella ore...";
   ui.hoursTableContainer.innerHTML = "";
-  try {
-    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
-    renderHoursMonthlyTable(reports, commessaId, monthMeta);
-  } catch (error) {
-    console.error("Errore caricamento tabella mensile ore:", error);
-    ui.hoursTableFeedback.textContent = "Errore caricamento tabella ore.";
-    ui.hoursTableContainer.innerHTML = "";
-  }
+  const loadPromise = (async () => {
+    try {
+      const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
+      if (requestId !== hoursTableLoadRequestId) return null;
+      logHoursDebug("record ore trovati", Array.isArray(reports) ? reports.length : 0);
+      const context = renderHoursMonthlyTable(reports, commessaId, monthMeta, { monthValue });
+      logHoursDebug("dati usati per tabella", context);
+      return context;
+    } catch (error) {
+      if (requestId === hoursTableLoadRequestId) {
+        console.error("Errore caricamento tabella mensile ore:", error);
+        ui.hoursTableFeedback.textContent = "Errore caricamento ore. Controlla i dati o riprova.";
+        ui.hoursTableContainer.innerHTML = "";
+      }
+      return null;
+    } finally {
+      loadingOre = false;
+      if (requestId === hoursTableLoadRequestId) setHoursExportButtonsLoading(false);
+    }
+  })();
+  hoursTableLoadPromise = loadPromise;
+  return loadPromise;
 }
 
 async function loadHoursTotalByOperator() {
@@ -4016,7 +4114,7 @@ async function loadHoursTotalByOperatorAndCommessa() {
   }
 }
 
-function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
+function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   const operatorsMap = new Map();
   hoursTableRowsMap = new Map();
@@ -4027,7 +4125,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
     if (!day || day < 1 || day > monthMeta.daysInMonth) return;
     const entries = Array.isArray(report.entries) ? report.entries : [];
     entries.forEach((entry, entryIndex) => {
-      if (String(entry.commessaId || "") !== commessaId) return;
+      if (!doesHoursEntryMatchCommessa(entry, commessaId)) return;
       (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
         const operatore = String(row.operatore || "").trim();
         const ore = Number(row.ore || 0);
@@ -4107,6 +4205,22 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   ));
   const bodyRows = [...bodyRowsReal, ...emptyRows].join("");
 
+  if (!operators.length) {
+    hoursTableContext = {
+      mode: "monthly",
+      monthValue: String(options.monthValue || ""),
+      monthLabel: `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`,
+      commessaId,
+      commessaName,
+      monthMeta,
+      operators: []
+    };
+    ui.hoursTableContainer.innerHTML = `<p class="muted hours-empty-message">Nessuna ora registrata per questa commessa nel mese selezionato.</p>`;
+    ui.hoursTableFeedback.textContent = "Nessuna ora registrata per questa commessa nel mese selezionato.";
+    if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+    return hoursTableContext;
+  }
+
   ui.hoursTableContainer.innerHTML = `
     <table class="hours-month-table">
       <thead>
@@ -4122,7 +4236,9 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
   hoursTableContext = {
     mode: "monthly",
+    monthValue: String(options.monthValue || ""),
     monthLabel,
+    commessaId,
     commessaName,
     monthMeta,
     operators: operators.map((name) => ({
@@ -4158,6 +4274,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta) {
   } else {
     ui.hoursTableContainer.scrollLeft = 0;
   }
+  return hoursTableContext;
 }
 
 async function handleHoursValueAction(cellKey) {
@@ -4263,112 +4380,121 @@ async function handleHoursValueAction(cellKey) {
 }
 
 async function exportHoursMonthlyTable() {
-  const mode = String(hoursTableContext?.mode || "monthly");
-  if (mode === "tot_operator") {
-    const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
-    const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
-    if (!rows.length) {
-      alert("Nessun totale operatore da esportare.");
+  try {
+    if (loadingOre && hoursTableLoadPromise) await hoursTableLoadPromise;
+    const mode = String(hoursTableContext?.mode || "monthly");
+    if (mode === "tot_operator") {
+      const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
+      const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
+      logHoursDebug("dati usati per export", { mode, monthValue, rows });
+      if (!rows.length) {
+        alert("Nessun totale operatore da esportare.");
+        return;
+      }
+      const aoa = [["Mese", monthValue], [], ["Operatore", "Totale ore"]];
+      rows.forEach((row) => aoa.push([row.name, row.total]));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Totale operatori");
+      XLSX.writeFile(wb, `totale_operatori_${monthValue}.xlsx`);
       return;
     }
-    const aoa = [["Mese", monthValue], [], ["Operatore", "Totale ore"]];
-    rows.forEach((row) => aoa.push([row.name, row.total]));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Totale operatori");
-    XLSX.writeFile(wb, `totale_operatori_${monthValue}.xlsx`);
-    return;
-  }
-  if (mode === "tot_operator_commessa") {
-    const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
-    const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
-    if (!rows.length) {
-      alert("Nessun totale operatore per commessa da esportare.");
+    if (mode === "tot_operator_commessa") {
+      const monthValue = String(hoursTableContext?.monthValue || ui.hoursStatsMonth?.value || "").trim();
+      const rows = Array.isArray(hoursTableContext?.rows) ? hoursTableContext.rows : [];
+      logHoursDebug("dati usati per export", { mode, monthValue, rows });
+      if (!rows.length) {
+        alert("Nessun totale operatore per commessa da esportare.");
+        return;
+      }
+      const aoa = [["Mese", monthValue], [], ["Commessa", "Operatore", "Totale ore"]];
+      rows.forEach((row) => aoa.push([row.commessaName, row.operatore, row.total]));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Operatore x commessa");
+      XLSX.writeFile(wb, `totale_operatori_commesse_${monthValue}.xlsx`);
       return;
     }
-    const aoa = [["Mese", monthValue], [], ["Commessa", "Operatore", "Totale ore"]];
-    rows.forEach((row) => aoa.push([row.commessaName, row.operatore, row.total]));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Operatore x commessa");
-    XLSX.writeFile(wb, `totale_operatori_commesse_${monthValue}.xlsx`);
-    return;
-  }
 
-  const monthValue = String(ui.hoursTableMonth?.value || ui.hoursStatsMonth?.value || "").trim();
-  const monthMeta = getMonthMeta(monthValue);
-  const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
-  if (!monthMeta || !commessaId) {
-    alert("Seleziona mese e commessa prima di esportare Excel.");
-    return;
-  }
-  const commessaName = commesseById.get(commessaId)?.nome || "Commessa";
-  const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
-  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
+    const monthValue = String(ui.hoursTableMonth?.value || ui.hoursStatsMonth?.value || "").trim();
+    const monthMeta = getMonthMeta(monthValue);
+    const commessaId = String(ui.hoursTableCommessaSelect?.value || "").trim();
+    const commessaInfo = getSelectedHoursCommessaInfo(commessaId);
+    logHoursDebug("mese selezionato", monthValue);
+    logHoursDebug("anno", monthMeta?.year || "non valido");
+    logHoursDebug("mese numerico", monthMeta?.month || "non valido");
+    logHoursDebug("commessa selezionata", commessaInfo.codice || commessaInfo.nome || commessaInfo.id || "nessuna");
+    if (!monthMeta || !commessaId) {
+      alert("Seleziona mese e commessa prima di esportare Excel.");
+      return;
+    }
+    const contextMatchesSelection = hoursTableContext?.mode === "monthly"
+      && hoursTableContext.monthValue === monthValue
+      && String(hoursTableContext.commessaId || "") === commessaId;
+    if (!contextMatchesSelection) {
+      const loadedContext = await loadHoursMonthlyTable();
+      if (!loadedContext?.operators?.length) {
+        alert("Nessuna ora registrata per questa commessa nel mese selezionato.");
+        return;
+      }
+    }
+    if (hoursTableContext?.mode === "monthly" && !hoursTableContext?.operators?.length) {
+      alert("Nessuna ora registrata per questa commessa nel mese selezionato.");
+      return;
+    }
+    const commessaName = commesseById.get(commessaId)?.nome || "Commessa";
+    const monthLabel = `${String(monthMeta.month).padStart(2, "0")}/${monthMeta.year}`;
+    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
+    const { operatorDayMap, operatorTotals, operatorCommessaTotals } = buildHoursMonthlyExportData(reports, commessaId, monthMeta);
+    logHoursDebug("record trovati", Array.isArray(reports) ? reports.length : 0);
+    logHoursDebug("dati usati per export", { monthValue, commessa: commessaInfo, operatoriCommessa: Array.from(operatorDayMap.entries()) });
+    if (!operatorDayMap.size) {
+      alert("Nessuna ora registrata per questa commessa nel mese selezionato.");
+      return;
+    }
 
-  const operatorDayMap = new Map();
-  const operatorTotals = new Map();
-  const operatorCommessaTotals = new Map();
-  reports.forEach((report) => {
-    const day = Number(String(report.date || "").split("-")[2] || 0);
-    const entries = Array.isArray(report.entries) ? report.entries : [];
-    entries.forEach((entry) => {
-      const entryCommessaId = String(entry.commessaId || "").trim();
-      const entryCommessaName = String(entry.commessaName || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
-      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
-        const operatore = String(row.operatore || "").trim();
-        const ore = Number(row.ore || 0);
-        if (!operatore || ore <= 0) return;
-        const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
-        if (!operatorTotals.has(operatorNorm)) operatorTotals.set(operatorNorm, { name: operatore, total: 0 });
-        operatorTotals.get(operatorNorm).total += ore;
-        const byCommessaKey = `${operatorNorm}__${entryCommessaId}`;
-        if (!operatorCommessaTotals.has(byCommessaKey)) operatorCommessaTotals.set(byCommessaKey, { operatore, commessaName: entryCommessaName, total: 0 });
-        operatorCommessaTotals.get(byCommessaKey).total += ore;
-        if (entryCommessaId !== commessaId || !day) return;
-        if (!operatorDayMap.has(operatore)) operatorDayMap.set(operatore, Array(monthMeta.daysInMonth).fill(0));
-        operatorDayMap.get(operatore)[day - 1] += ore;
-      });
+    const headerRow = ["Operatore"];
+    for (let day = 1; day <= monthMeta.daysInMonth; day += 1) headerRow.push(String(day));
+    headerRow.push("Totale");
+    const aoa = [
+      [`Commessa: ${commessaName}`],
+      [`Mese: ${monthLabel}`],
+      [],
+      headerRow
+    ];
+    const selectedCommessaOperators = Array.from(operatorDayMap.keys()).sort((a, b) => a.localeCompare(b, "it"));
+    selectedCommessaOperators.forEach((name) => {
+      const values = operatorDayMap.get(name) || [];
+      const total = values.reduce((sum, value) => sum + value, 0);
+      aoa.push([name, ...values, total]);
     });
-  });
+    while (aoa.length < 14) {
+      aoa.push(["", ...Array(monthMeta.daysInMonth).fill(""), ""]);
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), "Ore mensili");
 
-  const headerRow = ["Operatore"];
-  for (let day = 1; day <= monthMeta.daysInMonth; day += 1) headerRow.push(String(day));
-  headerRow.push("Totale");
-  const aoa = [
-    [`Commessa: ${commessaName}`],
-    [`Mese: ${monthLabel}`],
-    [],
-    headerRow
-  ];
-  const selectedCommessaOperators = Array.from(operatorDayMap.keys()).sort((a, b) => a.localeCompare(b, "it"));
-  selectedCommessaOperators.forEach((name) => {
-    const values = operatorDayMap.get(name) || [];
-    const total = values.reduce((sum, value) => sum + value, 0);
-    aoa.push([name, ...values, total]);
-  });
-  while (aoa.length < 14) {
-    aoa.push(["", ...Array(monthMeta.daysInMonth).fill(""), ""]);
+    const operatorTotalsRows = [["Operatore", "Totale ore"]];
+    Array.from(operatorTotals.values())
+      .sort((a, b) => a.name.localeCompare(b.name, "it"))
+      .forEach((item) => operatorTotalsRows.push([item.name, item.total]));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorTotalsRows), "Totale operatori");
+
+    const operatorCommessaRows = [["Commessa", "Operatore", "Totale ore"]];
+    Array.from(operatorCommessaTotals.values())
+      .sort((a, b) => {
+        const c = a.commessaName.localeCompare(b.commessaName, "it");
+        return c || a.operatore.localeCompare(b.operatore, "it");
+      })
+      .forEach((item) => operatorCommessaRows.push([item.commessaName, item.operatore, item.total]));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorCommessaRows), "Operatore x commessa");
+
+    const safeCommessa = String(commessaName || "commessa").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+    const safeMonth = monthLabel.replace("/", "-");
+    XLSX.writeFile(workbook, `ore_${safeCommessa}_${safeMonth}.xlsx`);
+  } catch (error) {
+    console.error("Errore export Excel ore:", error);
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore export Excel ore. Controlla i dati o riprova.";
+    alert("Errore export Excel ore. Controlla i dati o riprova.");
   }
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), "Ore mensili");
-
-  const operatorTotalsRows = [["Operatore", "Totale ore"]];
-  Array.from(operatorTotals.values())
-    .sort((a, b) => a.name.localeCompare(b.name, "it"))
-    .forEach((item) => operatorTotalsRows.push([item.name, item.total]));
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorTotalsRows), "Totale operatori");
-
-  const operatorCommessaRows = [["Commessa", "Operatore", "Totale ore"]];
-  Array.from(operatorCommessaTotals.values())
-    .sort((a, b) => {
-      const c = a.commessaName.localeCompare(b.commessaName, "it");
-      return c || a.operatore.localeCompare(b.operatore, "it");
-    })
-    .forEach((item) => operatorCommessaRows.push([item.commessaName, item.operatore, item.total]));
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(operatorCommessaRows), "Operatore x commessa");
-
-  const safeCommessa = String(commessaName || "commessa").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
-  const safeMonth = monthLabel.replace("/", "-");
-  XLSX.writeFile(workbook, `ore_${safeCommessa}_${safeMonth}.xlsx`);
 }
 
 async function exportHoursGlobalMonthlyTable() {
@@ -4383,8 +4509,14 @@ async function exportHoursGlobalMonthlyTable() {
     return;
   }
 
-  const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
-  const commessaMap = new Map();
+  try {
+    logHoursDebug("mese selezionato", monthValue);
+    logHoursDebug("anno", monthMeta.year);
+    logHoursDebug("mese numerico", monthMeta.month);
+    const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
+    logHoursDebug("record trovati", Array.isArray(reports) ? reports.length : 0);
+    const commessaMap = new Map();
+    let totalValidGlobalRows = 0;
   reports.forEach((report) => {
     const day = Number(String(report.date || "").split("-")[2] || 0);
     if (!day || day < 1 || day > monthMeta.daysInMonth) return;
@@ -4402,6 +4534,7 @@ async function exportHoursGlobalMonthlyTable() {
         const operatore = String(row.operatore || "").trim();
         const ore = Number(row.ore || 0);
         if (!operatore || ore <= 0) return;
+        totalValidGlobalRows += 1;
         const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
         if (!commessaBucket.operatorsMap.has(operatorNorm)) {
           commessaBucket.operatorsMap.set(operatorNorm, {
@@ -4414,8 +4547,14 @@ async function exportHoursGlobalMonthlyTable() {
     });
   });
 
-  if (!commessaMap.size) {
-    alert("Nessuna ora trovata per il mese selezionato.");
+  logHoursDebug("dati usati per export", { mode: "global", monthValue, commesse: Array.from(commessaMap.values()).map((item) => ({
+    commessaName: item.commessaName,
+    commessaCode: item.commessaCode,
+    operatori: Array.from(item.operatorsMap.values())
+  })) });
+  if (!commessaMap.size || totalValidGlobalRows <= 0) {
+    alert("Nessuna ora registrata nel mese selezionato per l'export globale.");
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Nessuna ora registrata nel mese selezionato per l'export globale.";
     return;
   }
 
@@ -4788,6 +4927,11 @@ async function exportHoursGlobalMonthlyTable() {
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Errore export Excel Global ore:", error);
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore export Excel Global. Controlla i dati o riprova.";
+    alert("Errore export Excel Global. Controlla i dati o riprova.");
+  }
 }
 
 function renderHoursOperatoriOptions() {

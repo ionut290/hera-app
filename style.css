@@ -5445,28 +5445,35 @@ textarea:focus-visible {
 
 .impianto-main-column,
 .impianto-left {
-  align-content: space-between;
-  min-height: 112px;
-  gap: 8px;
+  align-content: start;
+  min-height: 0;
+  gap: 4px;
 }
 
 .impianto-summary-btn {
-  gap: 6px 8px;
+  gap: 3px 6px;
   padding: 0;
 }
 
 .impianto-summary-btn strong {
   color: #1479ff;
-  font-size: clamp(1.05rem, 3.8vw, 1.38rem);
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+  display: -webkit-box;
+  flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  font-size: clamp(0.94rem, 2.7vw, 1rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 .impianto-summary-btn .badge {
-  padding: 4px 10px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 900;
   line-height: 1;
 }
@@ -5478,20 +5485,19 @@ textarea:focus-visible {
   color: #1d6eea;
 }
 
-.impianto-travel-meta,
-.impianto-eta-meta {
+.impianto-travel-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: #6b7280;
-  font-size: 0.82rem;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.impianto-eta-meta {
   flex-basis: 100%;
-  color: #475569;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .impianto-travel-meta .traffic-level {
@@ -5504,33 +5510,33 @@ textarea:focus-visible {
 }
 
 .impianto-actions {
-  gap: 9px;
+  gap: 6px;
   align-items: center;
-  margin-top: auto;
+  margin-top: 2px;
   padding-bottom: 0;
   flex-wrap: nowrap;
 }
 
 .action-icon-btn[data-action-key="navigate"],
 .action-icon-btn[data-action-key="whatsapp"] {
-  width: 42px;
-  min-width: 42px;
-  min-height: 42px !important;
-  filter: drop-shadow(0 5px 9px rgba(15, 23, 42, 0.12));
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px !important;
+  filter: drop-shadow(0 4px 7px rgba(15, 23, 42, 0.1));
 }
 
 .action-icon-btn[data-action-key="navigate"] {
   border: 1px solid #d8e7ff;
-  border-radius: 13px;
+  border-radius: 12px;
   background-color: #eef6ff;
-  background-size: 25px 25px;
+  background-size: 22px 22px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M9 24 39 10 26 40l-5-13-12-3Z' fill='%231579ff'/%3E%3Cpath d='M21 27 39 10' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' opacity='.8'/%3E%3C/svg%3E");
 }
 
 .action-icon-btn[data-action-key="whatsapp"] {
   border-radius: 999px;
   background-color: #22c55e;
-  background-size: 42px 42px;
+  background-size: 36px 36px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='25%25' r='75%25'%3E%3Cstop stop-color='%236ee78f'/%3E%3Cstop offset='1' stop-color='%2316a34a'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='24' cy='24' r='22' fill='url(%23g)'/%3E%3Cpath d='M24 12a12 12 0 0 0-10 18l-1.4 5.4 5.6-1.3A12 12 0 1 0 24 12Zm6.8 17.2c-.3.9-1.8 1.8-3 1.9-.8.1-1.9 0-6-1.8-5-2.1-8.2-7.2-8.4-7.5-.3-.4-2-2.6-2-5 0-2.3 1.2-3.5 1.7-4 .4-.5.9-.6 1.3-.6h1c.3 0 .8-.1 1.2.9.4 1.1 1.5 3.7 1.6 4 .1.2.2.6 0 1-.2.4-.4.6-.7.9-.4.4-.8.8-1.1 1.1-.3.4-.7.8-.3 1.5.4.8 1.7 2.7 3.6 4.4 2.5 2.2 4.5 2.9 5.2 3.2.6.2 1 .2 1.4-.2.4-.5 1.6-1.9 2-2.5.4-.6.9-.5 1.5-.3.6.2 3.8 1.8 4.4 2.1.6.3 1 .5 1.2.8.1.2.1 1.2-.2 2.1Z' fill='%23ffffff' transform='scale(.72) translate(9.3 8.8)'/%3E%3C/svg%3E");
 }
 
@@ -5538,15 +5544,15 @@ textarea:focus-visible {
 .gestione-toggle-btn {
   width: auto;
   max-width: none;
-  min-height: 38px;
-  padding: 8px 13px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 1.5px solid #fb923c;
   border-radius: 999px;
   background: #ffffff;
   color: #ea580c;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 900;
-  box-shadow: 0 5px 10px rgba(234, 88, 12, 0.08);
+  box-shadow: 0 4px 8px rgba(234, 88, 12, 0.07);
 }
 
 .impianto-weather-column,
@@ -5712,17 +5718,16 @@ textarea:focus-visible {
     border-radius: 17px;
   }
   .impianto-main-column,
-  .impianto-left { min-height: 106px; }
-  .impianto-summary-btn strong { font-size: clamp(1rem, 4.4vw, 1.18rem); }
-  .impianto-summary-btn .badge { font-size: 0.66rem; padding: 3px 8px; }
-  .impianto-travel-meta,
-  .impianto-eta-meta { font-size: 0.72rem; gap: 4px; }
-  .impianto-actions { gap: 6px; }
+  .impianto-left { min-height: 0; }
+  .impianto-summary-btn strong { font-size: clamp(0.94rem, 3.8vw, 1rem); }
+  .impianto-summary-btn .badge { font-size: 0.62rem; padding: 2px 7px; }
+  .impianto-travel-meta { font-size: 0.7rem; gap: 3px; }
+  .impianto-actions { gap: 5px; }
   .action-icon-btn[data-action-key="navigate"],
-  .action-icon-btn[data-action-key="whatsapp"] { width: 36px; min-width: 36px; min-height: 36px !important; background-size: 36px 36px; }
-  .action-icon-btn[data-action-key="navigate"] { background-size: 22px 22px; }
+  .action-icon-btn[data-action-key="whatsapp"] { width: 34px; min-width: 34px; min-height: 34px !important; background-size: 34px 34px; }
+  .action-icon-btn[data-action-key="navigate"] { background-size: 20px 20px; }
   .impianto-management-stack .gestione-toggle-btn,
-  .gestione-toggle-btn { min-height: 34px; padding: 7px 10px; font-size: 0.72rem; }
+  .gestione-toggle-btn { min-height: 31px; padding: 5px 9px; font-size: 0.7rem; }
   .impianto-weather-column,
   .weather-compact,
   .weather-widget,

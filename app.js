@@ -10674,9 +10674,8 @@ function renderImpianti() {
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
       <small class="impianto-travel-meta">
-        <span>${distance}</span><span aria-hidden="true">•</span><span>Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span></span>
+        <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
       </small>
-      <small class="impianto-eta-meta">ETA ${travelMeta.etaLabel}</small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {

@@ -10589,6 +10589,30 @@ function setImpiantiViewMode(mode) {
   renderImpianti();
 }
 
+function getPlantMq(plant) {
+  return plant?.mq || plant?.superficieMq || plant?.superficie_mq || plant?.areaMq || plant?.area_mq || null;
+}
+
+function createPlantMqBox(plant) {
+  const mqValue = getPlantMq(plant);
+  const box = document.createElement("div");
+  box.className = "area-mq-box";
+  box.title = "Superficie impianto";
+
+  const icon = document.createElement("span");
+  icon.className = "area-mq-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "📐";
+
+  const value = document.createElement("span");
+  value.className = "area-mq-value";
+  value.textContent = mqValue ? `${mqValue} mq` : "-- mq";
+
+  box.appendChild(icon);
+  box.appendChild(value);
+  return box;
+}
+
 function matchesImpiantoSearch(impianto) {
   if (!impiantiSearchTerm) return true;
   const haystack = [
@@ -10821,6 +10845,7 @@ function renderImpianti() {
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
     if (managementStack.childElementCount > 0) actions.appendChild(managementStack);
+    actions.appendChild(createPlantMqBox(impianto));
     const richiestaPdfUrl = String(
       impianto.linkRichiestaDrive
       || impianto.linkDocumentoRichiesta

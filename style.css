@@ -5744,3 +5744,182 @@ textarea:focus-visible {
   .impianto-weather-wind { font-size: 0.62rem; }
   .impianto-weather-rain { font-size: 0.59rem; }
 }
+
+.impianto-weather-column {
+  cursor: pointer;
+}
+
+.impianto-weather-column:focus-within .impianto-weather-card,
+.impianto-weather-column:hover .impianto-weather-card {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.impianto-weather-detail-hint,
+.impianto-weather-sfalcio-alert {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.58rem;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.impianto-weather-sfalcio-alert {
+  color: #92400e;
+}
+
+.impianto-weather-detail-hint {
+  color: #2563eb;
+}
+
+.impianto-actions {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.impianto-management-stack .gestione-toggle-btn,
+.gestione-toggle-btn {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.impianto-weather-detail-view {
+  display: grid;
+  gap: 12px;
+}
+
+.impianto-weather-detail-head {
+  align-items: flex-start;
+}
+
+.impianto-weather-detail-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.impianto-weather-detail-content {
+  display: grid;
+  gap: 12px;
+}
+
+.weather-detail-section,
+.weather-detail-risk-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.weather-detail-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: #0f172a;
+}
+
+.weather-detail-current {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.weather-detail-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #f1f5f9;
+  font-size: 1.6rem;
+}
+
+.weather-detail-current ul,
+.weather-detail-forecast-list,
+.weather-detail-indications {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.weather-detail-current li,
+.weather-detail-forecast-row,
+.weather-detail-indications li {
+  margin: 6px 0;
+  line-height: 1.35;
+}
+
+.weather-detail-forecast-row {
+  border-radius: 10px;
+  padding: 7px 9px;
+  list-style-position: inside;
+  background: #f8fafc;
+}
+
+.weather-detail-forecast-row.risk-basso {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.weather-detail-forecast-row.risk-medio {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.weather-detail-forecast-row.risk-alto {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.weather-detail-risk-box {
+  font-size: 1rem;
+}
+
+.weather-detail-risk-box p {
+  margin: 6px 0 0;
+}
+
+.weather-detail-risk-box.risk-green {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.weather-detail-risk-box.risk-yellow {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.weather-detail-risk-box.risk-red {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+@media (max-width: 760px) {
+  .impianto-actions {
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .impianto-weather-detail-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .impianto-weather-detail-head .btn-primary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

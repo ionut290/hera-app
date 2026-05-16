@@ -11678,7 +11678,7 @@ function buildSfalcioOperationalIndications(status = {}, slot = null) {
 
 function buildWeatherDetailMetric(label, value, icon = "") {
   if (value === null || value === undefined || value === "") return "";
-  return `<div class="weather-detail-metric"><span class="weather-detail-metric-label">${escapeHTML(icon)} ${escapeHTML(label)}</span><strong>${escapeHTML(String(value))}</strong></div>`;
+  return `<div class="weather-detail-metric weather-info-box"><span class="weather-detail-metric-label weather-info-label">${escapeHTML(icon)} ${escapeHTML(label)}</span><strong class="weather-info-value">${escapeHTML(String(value))}</strong></div>`;
 }
 
 function buildWeatherRadarUrl(impianto, coordinates) {
@@ -11703,12 +11703,12 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const rainWindowText = status.rainWindow?.label ? `Pioggia prevista ${status.rainWindow.label}` : "Pioggia non prevista a breve";
   const currentMetrics = [
     buildWeatherDetailMetric("Meteo", status.weatherState || status.description, "🌤️"),
-    buildWeatherDetailMetric("Temperatura", isPresentFiniteNumber(status.temperature) ? `${Math.round(Number(status.temperature))}°` : "", "🌡️"),
     buildWeatherDetailMetric("Percepita", isPresentFiniteNumber(status.apparentTemperature) ? `${Math.round(Number(status.apparentTemperature))}°` : "", "🤚"),
-    buildWeatherDetailMetric("Umidità", isPresentFiniteNumber(current.relative_humidity_2m) ? `${Math.round(Number(current.relative_humidity_2m))}%` : "", "💧"),
     buildWeatherDetailMetric("Vento", windValue, "🌬️"),
-    buildWeatherDetailMetric("Raffiche", gustValue, "💨"),
     buildWeatherDetailMetric("Pioggia", rainProbabilityValue, "🌧️"),
+    buildWeatherDetailMetric("Temperatura", isPresentFiniteNumber(status.temperature) ? `${Math.round(Number(status.temperature))}°` : "", "🌡️"),
+    buildWeatherDetailMetric("Umidità", isPresentFiniteNumber(current.relative_humidity_2m) ? `${Math.round(Number(current.relative_humidity_2m))}%` : "", "💧"),
+    buildWeatherDetailMetric("Raffiche", gustValue, "💨"),
     status.rainWindow?.label ? buildWeatherDetailMetric("Prossima pioggia", status.rainWindow.label, "⏱️") : ""
   ].filter(Boolean).join("");
   const forecastRows = slots.slice(0, 12).map((slot, index) => {
@@ -11720,7 +11720,7 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
     const slotWind = isPresentFiniteNumber(wind) ? `${Math.round(Number(wind))} km/h${formatWeatherDetailDirection(slot) ? ` ${formatWeatherDetailDirection(slot)}` : ""}` : "n/d";
     const slotGust = isPresentFiniteNumber(gust) ? `${Math.round(Number(gust))} km/h` : "n/d";
     const slotIndications = buildSfalcioOperationalIndications(status, slot).slice(0, 4).map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
-    return `<details class="weather-detail-hour-card risk-${meta.className}">
+    return `<details class="weather-detail-hour-card hourly-card risk-${meta.className}">
       <summary><span class="weather-detail-hour-time">${escapeHTML(formatWeatherSlotTime(slot.timestamp))}</span><span class="weather-detail-hour-icon">${escapeHTML(weatherCodeLabel(slot.weather_code).split(" ")[0] || "☁️")}</span><span class="weather-detail-hour-rain">🌧️ ${escapeHTML(probability)}</span>${isPresentFiniteNumber(wind) ? `<span class="weather-detail-hour-wind">🌬️ ${Math.round(Number(wind))}</span>` : ""}<span class="weather-detail-risk-badge risk-${meta.className}">${meta.label}</span></summary>
       <div class="weather-detail-hour-panel">
         <p><b>Meteo previsto:</b> ${escapeHTML(weatherCodeLabel(slot.weather_code))}${isPresentFiniteNumber(slot.temperature_2m) ? ` • ${Math.round(Number(slot.temperature_2m))}°` : ""}</p>
@@ -11734,17 +11734,17 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const indicationItems = indications.map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
   const radarUrl = buildWeatherRadarUrl(impianto, coordinates);
   ui.impiantoWeatherDetailContent.innerHTML = `
-    <article class="weather-detail-risk-summary risk-${riskMeta.className}">
+    <article class="weather-detail-risk-summary risk-card risk-${riskMeta.className}">
       <strong>${riskMeta.icon} ${riskMeta.title}</strong>
       <div class="weather-detail-risk-grid">
-        <span>${escapeHTML(rainWindowText)}</span>
-        ${rainProbabilityValue ? `<span>Pioggia ${escapeHTML(rainProbabilityValue)}</span>` : ""}
-        ${windValue ? `<span>Vento ${escapeHTML(windValue)}</span>` : ""}
-        ${gustValue ? `<span>Raffiche ${escapeHTML(gustValue)}</span>` : ""}
+        <span class="risk-row">${escapeHTML(rainWindowText)}</span>
+        ${rainProbabilityValue ? `<span class="risk-row">Pioggia ${escapeHTML(rainProbabilityValue)}</span>` : ""}
+        ${windValue ? `<span class="risk-row">Vento ${escapeHTML(windValue)}</span>` : ""}
+        ${gustValue ? `<span class="risk-row">Raffiche ${escapeHTML(gustValue)}</span>` : ""}
       </div>
     </article>
-    <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
-    <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
+    <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid current-weather-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
+    <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline hourly-forecast-list" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
     <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">
       <span><b>🌦️ Radar meteo</b><small>Visualizza evoluzione precipitazioni</small></span><span aria-hidden="true">›</span>
     </a>

@@ -1954,11 +1954,15 @@ textarea:focus-visible {
 }
 
 .impianto-weather-column,
-.weather-compact {
+.weather-compact,
+.weather-widget,
+.impianto-weather {
   display: flex;
   width: 160px;
   max-width: 160px;
-  min-width: 0;
+  min-width: 160px;
+  min-height: 90px;
+  max-height: 120px;
   height: auto;
   align-self: start;
   justify-self: end;
@@ -1966,6 +1970,16 @@ textarea:focus-visible {
   font-size: 11px;
   line-height: 1.15;
   overflow: hidden;
+  box-sizing: border-box;
+  contain: layout paint;
+}
+
+.weather-compact *,
+.weather-widget *,
+.impianto-weather * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
 }
 
 .impianto-item p { margin: 4px 0; }
@@ -2279,13 +2293,19 @@ textarea:focus-visible {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 90px;
+  max-height: 120px;
   height: auto;
+  overflow: hidden;
 }
 
 .impianto-weather-column .impianto-weather-wrap,
 .weather-compact .impianto-weather-wrap {
   width: 100%;
+  min-height: 90px;
+  max-height: 120px;
   height: auto;
+  overflow: hidden;
 }
 
 .impianto-weather-badge {
@@ -2316,7 +2336,8 @@ textarea:focus-visible {
   min-width: 0;
   max-width: 160px;
   height: auto;
-  min-height: 0;
+  min-height: 90px;
+  max-height: 120px;
   padding: 6px;
   border-radius: 9px;
   text-align: left;
@@ -2330,7 +2351,9 @@ textarea:focus-visible {
   width: 100%;
   max-width: 160px;
   height: auto;
-  min-height: 0;
+  min-height: 90px;
+  max-height: 120px;
+  overflow: hidden;
 }
 
 .impianto-weather-column .impianto-weather-card.is-compact,
@@ -2341,7 +2364,8 @@ textarea:focus-visible {
   min-width: 0;
   max-width: 160px;
   height: auto;
-  min-height: 0;
+  min-height: 90px;
+  max-height: 120px;
   border-radius: 9px;
   padding: 6px;
   white-space: normal;
@@ -2350,8 +2374,9 @@ textarea:focus-visible {
 .impianto-weather-line {
   display: inline-block;
   max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 2px 5px;
@@ -2541,10 +2566,14 @@ textarea:focus-visible {
 }
 
 .impianto-weather-updating {
+  display: block;
+  width: 100%;
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .impianto-weather-updating.hidden {
@@ -3135,12 +3164,12 @@ textarea:focus-visible {
   .impianto-item,
   .card-impianto { grid-template-columns: minmax(0, 1fr) 135px; gap: 6px; padding: 6px; }
   .impianto-weather-column,
-  .weather-compact { width: 135px; max-width: 135px; justify-self: end; font-size: 10px; }
+  .weather-compact { width: 135px; max-width: 135px; min-width: 135px; min-height: 90px; max-height: 120px; justify-self: end; font-size: 10px; }
   .impianto-item p { margin: 2px 0; font-size: 0.9rem; }
   .impianto-summary-btn { gap: 2px 5px; }
   .impianto-summary-btn strong { font-size: 0.92rem; }
   .impianto-weather-card,
-  .weather-compact .impianto-weather-card { width: 100%; min-width: 0; max-width: 135px; height: auto; min-height: 0; padding: 5px; }
+  .weather-compact .impianto-weather-card { width: 100%; min-width: 0; max-width: 135px; height: auto; min-height: 90px; max-height: 120px; padding: 5px; }
   .impianto-weather-line { font-size: 0.62rem; padding: 2px 4px; }
   .impianto-weather-line.is-primary { font-size: 0.64rem; }
   .item-actions { gap: 6px; }

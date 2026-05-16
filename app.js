@@ -676,6 +676,7 @@ let selectedImpiantoData = null;
 const impiantoWeatherStatusCache = new Map();
 const impiantoWeatherCoordinateCache = new Map();
 const impiantoWeatherPendingKeys = new Set();
+const impiantoWeatherFeedbackByKey = new Map();
 let impiantoWeatherPersistentCacheLoaded = false;
 let impiantoWeatherRefreshTimer = null;
 let impiantoWeatherRenderTimer = null;
@@ -11150,15 +11151,34 @@ function isImpiantoWeatherUpdating(impianto) {
   return Boolean((key && impiantoWeatherPendingKeys.has(key)) || (coordinateKey && impiantoWeatherPendingKeys.has(coordinateKey)));
 }
 
+function getImpiantoWeatherFeedback(impianto) {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  const coordinateKey = getImpiantoWeatherCoordinateKey(getImpiantoNavigationCoordinates(impianto));
+  return (key && impiantoWeatherFeedbackByKey.get(key))
+    || (coordinateKey && impiantoWeatherFeedbackByKey.get(coordinateKey))
+    || null;
+}
+
+function setImpiantoWeatherFeedback(impianto, message = "") {
+  const key = getImpiantoWeatherCacheKey(impianto);
+  const coordinateKey = getImpiantoWeatherCoordinateKey(getImpiantoNavigationCoordinates(impianto));
+  [key, coordinateKey].filter(Boolean).forEach((cacheKey) => {
+    if (message) impiantoWeatherFeedbackByKey.set(cacheKey, message);
+    else impiantoWeatherFeedbackByKey.delete(cacheKey);
+  });
+}
+
 function getImpiantoWeatherBadgeState(impianto) {
   const entry = getCachedImpiantoWeatherStatus(impianto);
   const updating = isImpiantoWeatherUpdating(impianto);
+  const feedback = getImpiantoWeatherFeedback(impianto);
   if (!entry) {
     return {
       level: "unavailable",
       label: "Meteo non disponibile",
       text: "Meteo non disponibile",
       updating,
+      feedback,
       iconType: "cloud",
       lines: ["Meteo non disponibile"],
       compact: true
@@ -11174,6 +11194,7 @@ function getImpiantoWeatherBadgeState(impianto) {
     label: `${label}${updatedLabel}${entry.weatherPartial ? " • Dati meteo parziali" : ""}`,
     text: `${emoji} ${label}`,
     updating,
+    feedback,
     iconType: entry.iconType || entry.syntheticState || "cloud",
     lines,
     compact: lines.length <= 1
@@ -11223,6 +11244,12 @@ function formatCompactImpiantoWeatherRiskLine(message = "") {
   return `⚠️ ${String(message).replace(/^⚠️?\s*/u, "").split(/[.;]/)[0].trim().slice(0, 18)}`;
 }
 
+function truncateImpiantoWeatherLine(line = "", maxLength = 24) {
+  const value = String(line || "").trim();
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
   if (entry.riskLevel === "unavailable") return ["Meteo n/d"];
   const lines = [formatCompactImpiantoWeatherStatus(entry, label)];
@@ -11244,7 +11271,7 @@ function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPri
   const riskLine = formatCompactImpiantoWeatherRiskLine(entry.riskMessage || entry.operationMessage);
   if (riskLine) lines.push(riskLine);
   if (entry.updatedAt) lines.push(`Agg. ${formatWeatherSlotTime(entry.updatedAt)}`);
-  return lines.filter(Boolean).slice(0, 5);
+  return lines.filter(Boolean).map((line) => truncateImpiantoWeatherLine(line)).slice(0, 5);
 }
 
 function formatImpiantoRainLine(entry = {}) {
@@ -11271,7 +11298,7 @@ function getImpiantoWeatherLineClass(line = "", index = 0) {
 
 function buildImpiantoWeatherCardInnerMarkup(state) {
   const level = escapeHTML(state.level);
-  const lines = state.lines?.length ? state.lines : [state.text];
+  const lines = (state.lines?.length ? state.lines : [state.text]).map((line) => truncateImpiantoWeatherLine(line));
   const iconType = escapeHTML(state.iconType || "cloud");
   return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}"><span class="impianto-weather-animated-icon weather-icon-${iconType}" aria-hidden="true"></span>${lines.map((line, index) => `<span class="impianto-weather-line${getImpiantoWeatherLineClass(line, index)}">${escapeHTML(line)}</span>`).join("")}</span>`;
 }
@@ -11279,7 +11306,8 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
 function buildImpiantoWeatherBadgeMarkup(impianto) {
   const key = getImpiantoWeatherCacheKey(impianto);
   const state = getImpiantoWeatherBadgeState(impianto);
-  return `<span class="impianto-weather-wrap" data-weather-card="${escapeHTML(key)}">${buildImpiantoWeatherCardInnerMarkup(state)}<small class="impianto-weather-updating${state.updating ? "" : " hidden"}" data-weather-updating="${escapeHTML(key)}">meteo in aggiornamento…</small></span>`;
+  const feedbackText = state.feedback || (state.updating ? "Aggiornamento…" : "");
+  return `<span class="impianto-weather-wrap" data-weather-card="${escapeHTML(key)}">${buildImpiantoWeatherCardInnerMarkup(state)}<small class="impianto-weather-updating${feedbackText ? "" : " hidden"}" data-weather-updating="${escapeHTML(key)}">${escapeHTML(feedbackText)}</small></span>`;
 }
 
 function findImpiantoByWeatherKey(key) {
@@ -11295,7 +11323,8 @@ function updateImpiantoWeatherBadgesInPlace() {
     const impianto = findImpiantoByWeatherKey(key);
     if (!impianto) return;
     const state = getImpiantoWeatherBadgeState(impianto);
-    wrap.innerHTML = `${buildImpiantoWeatherCardInnerMarkup(state)}<small class="impianto-weather-updating${state.updating ? "" : " hidden"}" data-weather-updating="${escapeHTML(key)}">meteo in aggiornamento…</small>`;
+    const feedbackText = state.feedback || (state.updating ? "Aggiornamento…" : "");
+    wrap.innerHTML = `${buildImpiantoWeatherCardInnerMarkup(state)}<small class="impianto-weather-updating${feedbackText ? "" : " hidden"}" data-weather-updating="${escapeHTML(key)}">${escapeHTML(feedbackText)}</small>`;
   });
 }
 
@@ -11743,6 +11772,7 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
   scheduleImpiantoWeatherBadgeRender();
   try {
     const status = await getTomorrowWeatherForPlant(impianto);
+    setImpiantoWeatherFeedback(impianto, "");
     saveImpiantoWeatherStatus(status);
     return status;
   } catch (error) {
@@ -11751,7 +11781,7 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       const stale = cloneImpiantoWeatherStatusForImpianto(cached || coordinateCached, impianto, coordinates);
       stale.weatherPartial = true;
       stale.stale = true;
-      saveImpiantoWeatherStatus(stale);
+      setImpiantoWeatherFeedback(impianto, "Agg. non riuscito");
       return stale;
     }
     const fallback = {
@@ -11783,6 +11813,7 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       messages: [],
       updatedAt: Date.now()
     };
+    setImpiantoWeatherFeedback(impianto, "Agg. non riuscito");
     saveImpiantoWeatherStatus(fallback);
     return fallback;
   } finally {

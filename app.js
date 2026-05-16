@@ -8048,6 +8048,7 @@ async function importPendingGlobalRows() {
     if (row.indirizzo && !existing.indirizzo) basePatch.indirizzo = row.indirizzo;
     if (row.tipologiaImpianto && !existing.tipologiaImpianto) basePatch.tipologiaImpianto = row.tipologiaImpianto;
     if (row.dittaEsecutrice && !existing.dittaEsecutrice) basePatch.dittaEsecutrice = row.dittaEsecutrice;
+    if (row.areaMq != null && existing.areaMq == null) basePatch.areaMq = row.areaMq;
     if (row.gpsY != null && existing.gpsY == null) basePatch.gpsY = row.gpsY;
     if (row.gpsX != null && existing.gpsX == null) basePatch.gpsX = row.gpsX;
 
@@ -8058,6 +8059,7 @@ async function importPendingGlobalRows() {
         tipologiaIntervento: mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento),
         lavorazioniRichieste: mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste),
         frequenzaAnnua: mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua),
+        areaMq: row.areaMq ?? existing.areaMq ?? null,
         extraFields: mergedExtraFields,
         hasOrdinario: hasOrdinario(mergedCodicePrezzo),
         hasStraordinario: hasStraordinario(mergedCodicePrezzo),
@@ -8117,6 +8119,7 @@ async function updateExistingGlobalRowsOnly() {
     if (row.area && !match.record.area) patch.area = row.area;
     if (row.tipologiaImpianto && !match.record.tipologiaImpianto) patch.tipologiaImpianto = row.tipologiaImpianto;
     if (row.dittaEsecutrice && !match.record.dittaEsecutrice) patch.dittaEsecutrice = row.dittaEsecutrice;
+    if (row.areaMq != null && match.record.areaMq == null) patch.areaMq = row.areaMq;
     if (row.idSap && !match.record.idSap) patch.idSap = row.idSap;
     if (!Object.keys(patch).length) continue;
     await ref.doc(match.record.id).set(patch, { merge: true });
@@ -9943,6 +9946,7 @@ async function importPendingRows() {
     merged.tipologiaIntervento = mergeMultiValue(merged.tipologiaIntervento, data.tipologiaIntervento);
     merged.lavorazioniRichieste = mergeMultiValue(merged.lavorazioniRichieste, data.lavorazioniRichieste);
     merged.frequenzaAnnua = mergeMultiValue(merged.frequenzaAnnua, data.frequenzaAnnua);
+    if (merged.areaMq == null && data.areaMq != null) merged.areaMq = data.areaMq;
   });
 
   const rowsToCreate = [];
@@ -9959,6 +9963,7 @@ async function importPendingRows() {
     const mergedTipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
     const mergedLavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
     const mergedFrequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
+    const mergedAreaMq = row.areaMq != null ? row.areaMq : (existing.areaMq ?? null);
     const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
     const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
     const changed = mergedCodicePrezzo !== String(existing.codicePrezzo || "")
@@ -9966,6 +9971,7 @@ async function importPendingRows() {
       || mergedTipologiaIntervento !== String(existing.tipologiaIntervento || "")
       || mergedLavorazioniRichieste !== String(existing.lavorazioniRichieste || "")
       || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "")
+      || mergedAreaMq !== (existing.areaMq ?? null)
       || extraFieldsChanged;
     if (!changed) return;
     rowsToUpdate.push({
@@ -9975,6 +9981,7 @@ async function importPendingRows() {
       tipologiaIntervento: mergedTipologiaIntervento,
       lavorazioniRichieste: mergedLavorazioniRichieste,
       frequenzaAnnua: mergedFrequenzaAnnua,
+      areaMq: mergedAreaMq,
       extraFields: mergedExtraFields
     });
     existing.codicePrezzo = mergedCodicePrezzo;
@@ -9982,6 +9989,7 @@ async function importPendingRows() {
     existing.tipologiaIntervento = mergedTipologiaIntervento;
     existing.lavorazioniRichieste = mergedLavorazioniRichieste;
     existing.frequenzaAnnua = mergedFrequenzaAnnua;
+    existing.areaMq = mergedAreaMq;
   });
 
   const operations = [
@@ -10013,6 +10021,7 @@ async function importPendingRows() {
           tipologiaIntervento: row.tipologiaIntervento,
           lavorazioniRichieste: row.lavorazioniRichieste,
           frequenzaAnnua: row.frequenzaAnnua,
+          areaMq: row.areaMq ?? null,
           extraFields: row.extraFields || {},
           hasOrdinario: hasOrdinario(row.codicePrezzo),
           hasStraordinario: hasStraordinario(row.codicePrezzo),
@@ -10058,6 +10067,7 @@ async function addManualImpianto(event) {
     voceRiferimento: "",
     codicePrezzo: String(ui.manualImpiantoCodice.value || "").trim(),
     sfalci: "",
+    areaMq: null,
     frequenzaAnnua: "",
     tipologiaIntervento: "",
     lavorazioniRichieste: "",
@@ -10116,8 +10126,19 @@ function normalizeRow(row) {
   if (indirizzoEntry.key) consumedKeys.add(indirizzoEntry.key);
   const tipologiaImpiantoEntry = getValueWithMatchedKey(keys, ["tipologiaimpianto", "tipoimpianto"]);
   if (tipologiaImpiantoEntry.key) consumedKeys.add(tipologiaImpiantoEntry.key);
+  const mqEntry = getValueWithMatchedKey(keys, [
+    "sfalciareeverdimqpotaturasiepim",
+    "sfalciareeverdimq",
+    "potaturasiepim",
+    "superficiemq",
+    "mq",
+    "superficie",
+    "area"
+  ]);
+  const parsedAreaMq = parseAreaMqValue(mqEntry.value);
+  if (mqEntry.key && parsedAreaMq != null) consumedKeys.add(mqEntry.key);
   const areaEntry = getValueWithMatchedKey(keys, ["area", "competenza"]);
-  if (areaEntry.key) consumedKeys.add(areaEntry.key);
+  if (areaEntry.key && (areaEntry.key !== mqEntry.key || parsedAreaMq == null)) consumedKeys.add(areaEntry.key);
   const dittaEsecutriceEntry = getValueWithMatchedKey(keys, ["dittaesecutrice", "ditaesecutrice", "dittaappaltatrice", "ditta"]);
   if (dittaEsecutriceEntry.key) consumedKeys.add(dittaEsecutriceEntry.key);
   const voceEntry = getValueWithMatchedKey(keys, ["vocediriferimentoelencoprezzi", "voce", "riferimento", "codiceintervento"]);
@@ -10146,12 +10167,13 @@ function normalizeRow(row) {
     indirizzo: indirizzoEntry.value,
     descrizioneVia: indirizzoEntry.value,
     tipologiaImpianto: tipologiaImpiantoEntry.value,
-    area: areaEntry.value,
-    competenza: areaEntry.value,
+    area: areaEntry.key === mqEntry.key && parsedAreaMq != null ? "" : areaEntry.value,
+    competenza: areaEntry.key === mqEntry.key && parsedAreaMq != null ? "" : areaEntry.value,
+    areaMq: parsedAreaMq,
     dittaEsecutrice: dittaEsecutriceEntry.value,
     voceRiferimento: voceEntry.value,
     codicePrezzo: codicePrezzoEntry.value,
-    sfalci: getValue(keys, ["sfalciareeverdimqpotaturasiepim", "superficiemq"]),
+    sfalci: parsedAreaMq == null ? "" : mqEntry.value,
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
     tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]) || tipologiaImpiantoEntry.value,
     lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
@@ -10191,6 +10213,7 @@ function mergeRowsByImpianto(rows) {
     existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
     existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
+    if (existing.areaMq == null && row.areaMq != null) existing.areaMq = row.areaMq;
 
     if (!existing.distretto && row.distretto) existing.distretto = row.distretto;
     if (!existing.comune && row.comune) existing.comune = row.comune;
@@ -10234,6 +10257,7 @@ function combineImpiantiForView(impianti) {
     existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, item.tipologiaIntervento);
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, item.lavorazioniRichieste);
     existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, item.frequenzaAnnua);
+    if (existing.areaMq == null && item.areaMq != null) existing.areaMq = item.areaMq;
 
     existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
     existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
@@ -10368,6 +10392,48 @@ function parseCoordinate(value) {
   const normalized = String(value || "").replace(",", ".").trim();
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAreaMqValue(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  let normalized = raw
+    .replace(/\s+/g, "")
+    .replace(/[^0-9,.-]/g, "")
+    .replace(/(?!^)-/g, "");
+  if (!/[0-9]/.test(normalized)) return null;
+  const hasComma = normalized.includes(",");
+  const hasDot = normalized.includes(".");
+  if (hasComma && hasDot) {
+    const decimalSeparator = normalized.lastIndexOf(",") > normalized.lastIndexOf(".") ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = normalized.split(thousandsSeparator).join("").replace(decimalSeparator, ".");
+  } else if (hasComma) {
+    const commaParts = normalized.split(",");
+    const lastPart = commaParts[commaParts.length - 1] || "";
+    normalized = commaParts.length > 2 || lastPart.length === 3
+      ? commaParts.join("")
+      : normalized.replace(",", ".");
+  } else if (hasDot) {
+    const dotParts = normalized.split(".");
+    const lastPart = dotParts[dotParts.length - 1] || "";
+    normalized = dotParts.length > 2 || lastPart.length === 3
+      ? dotParts.join("")
+      : normalized;
+  }
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatAreaMqValue(value) {
+  const parsed = typeof value === "number" ? value : parseAreaMqValue(value);
+  if (!Number.isFinite(parsed)) return "--";
+  const rounded = Number(parsed.toFixed(2));
+  const sign = rounded < 0 ? "-" : "";
+  const [integerPart, decimalPart = ""] = String(Math.abs(rounded)).split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const formattedDecimal = decimalPart.replace(/0+$/, "");
+  return formattedDecimal ? `${sign}${formattedInteger},${formattedDecimal}` : `${sign}${formattedInteger}`;
 }
 
 function parseCoordinatePair(value) {
@@ -10590,7 +10656,7 @@ function setImpiantiViewMode(mode) {
 }
 
 function getPlantMq(plant) {
-  return plant?.mq || plant?.superficieMq || plant?.superficie_mq || plant?.areaMq || plant?.area_mq || null;
+  return plant?.areaMq ?? plant?.sfalciMq ?? plant?.sfalci ?? plant?.mq ?? plant?.superficieMq ?? plant?.superficie_mq ?? plant?.area_mq ?? null;
 }
 
 function createPlantMqBox(plant) {
@@ -10606,7 +10672,7 @@ function createPlantMqBox(plant) {
 
   const value = document.createElement("span");
   value.className = "area-mq-value";
-  value.textContent = mqValue ? `${mqValue} mq` : "-- mq";
+  value.textContent = `${formatAreaMqValue(mqValue)} mq`;
 
   box.appendChild(icon);
   box.appendChild(value);
@@ -10888,7 +10954,7 @@ function openImpiantoEditor(impianto) {
   ui.editFrequenzaAnnua.value = impianto.frequenzaAnnua || "";
   ui.editTipologiaIntervento.value = impianto.tipologiaIntervento || "";
   ui.editLavorazioniRichieste.value = impianto.lavorazioniRichieste || "";
-  ui.editSfalci.value = impianto.sfalci || "";
+  ui.editSfalci.value = impianto.sfalci || (impianto.areaMq == null ? "" : formatAreaMqValue(impianto.areaMq));
   ui.editGpsY.value = impianto.gpsY == null ? "" : String(impianto.gpsY);
   ui.editGpsX.value = impianto.gpsX == null ? "" : String(impianto.gpsX);
   ui.impiantoEditFeedback.textContent = "";
@@ -10926,6 +10992,7 @@ async function saveImpiantoEdits(event) {
     tipologiaIntervento: String(ui.editTipologiaIntervento.value || "").trim(),
     lavorazioniRichieste: String(ui.editLavorazioniRichieste.value || "").trim(),
     sfalci: String(ui.editSfalci.value || "").trim(),
+    areaMq: parseAreaMqValue(ui.editSfalci.value),
     gpsY,
     gpsX,
     hasOrdinario: hasOrdinario(ui.editCodicePrezzo.value || ""),

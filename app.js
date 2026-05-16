@@ -11035,10 +11035,14 @@ function normalizeStoredImpiantoWeatherStatus(entry) {
     lon: coordinates?.lon ?? null,
     coordinateKey: getImpiantoWeatherCoordinateKey(coordinates),
     syntheticState,
+    statusLabel: entry.statusLabel || description,
+    iconType: entry.iconType || syntheticState,
     weatherState: description,
     temperature: Number.isFinite(Number(entry.temperature)) ? Number(entry.temperature) : null,
     apparentTemperature: Number.isFinite(Number(entry.apparentTemperature)) ? Number(entry.apparentTemperature) : null,
-    rainProbability: Number.isFinite(Number(entry.rainProbability)) ? Number(entry.rainProbability) : null,
+    rainProbability: Number.isFinite(Number(entry.rainProbability ?? entry.precipitationProbability)) ? Number(entry.rainProbability ?? entry.precipitationProbability) : null,
+    precipitationProbability: Number.isFinite(Number(entry.precipitationProbability ?? entry.rainProbability)) ? Number(entry.precipitationProbability ?? entry.rainProbability) : null,
+    precipitationIntensity: isPresentFiniteNumber(entry.precipitationIntensity ?? entry.rainAmount) ? Number(entry.precipitationIntensity ?? entry.rainAmount) : null,
     description,
     hasCurrentRain: syntheticState === "pioggia",
     hasNextHourRain: syntheticState === "pioggia",
@@ -11046,14 +11050,23 @@ function normalizeStoredImpiantoWeatherStatus(entry) {
     riskLevel,
     alertText: description,
     badgeLabel: getBadgeLabelFromSyntheticImpiantoWeatherState(syntheticState, description),
+    rainExpected: Boolean(entry.rainExpected || entry.rainWindow),
+    rainStartTime: isPresentFiniteNumber(entry.rainStartTime ?? entry.rainWindow?.start) ? Number(entry.rainStartTime ?? entry.rainWindow?.start) : null,
+    rainEndTime: isPresentFiniteNumber(entry.rainEndTime ?? entry.rainWindow?.end) ? Number(entry.rainEndTime ?? entry.rainWindow?.end) : null,
     rainWindow: entry.rainWindow || null,
     rainIntensity: entry.rainIntensity || "",
     rainAmount: isPresentFiniteNumber(entry.rainAmount) ? Number(entry.rainAmount) : null,
-    windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh ?? entry.importantWindKmh) ? Number(entry.windSpeedKmh ?? entry.importantWindKmh) : null,
+    windSpeed: isPresentFiniteNumber(entry.windSpeed ?? entry.windSpeedKmh ?? entry.importantWindKmh) ? Number(entry.windSpeed ?? entry.windSpeedKmh ?? entry.importantWindKmh) : null,
+    windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh ?? entry.windSpeed ?? entry.importantWindKmh) ? Number(entry.windSpeedKmh ?? entry.windSpeed ?? entry.importantWindKmh) : null,
     windDirectionDegrees: isPresentFiniteNumber(entry.windDirectionDegrees) ? Number(entry.windDirectionDegrees) : null,
-    windDirectionLabel: entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+    windDirection: entry.windDirection || entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+    windDirectionLabel: entry.windDirectionLabel || entry.windDirection || getWindDirectionLabel(entry.windDirectionDegrees),
+    windGust: isPresentFiniteNumber(entry.windGust ?? entry.windGustKmh) ? Number(entry.windGust ?? entry.windGustKmh) : null,
+    windGustKmh: isPresentFiniteNumber(entry.windGustKmh ?? entry.windGust) ? Number(entry.windGustKmh ?? entry.windGust) : null,
     importantWindKmh: isPresentFiniteNumber(entry.importantWindKmh) ? Number(entry.importantWindKmh) : null,
-    operationMessage: entry.operationMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia", importantWindKmh: entry.importantWindKmh }),
+    riskMessage: entry.riskMessage || entry.operationMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia", importantWindKmh: entry.importantWindKmh }),
+    operationMessage: entry.operationMessage || entry.riskMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia", importantWindKmh: entry.importantWindKmh }),
+    stale: Boolean(entry.stale),
     weatherPartial: Boolean(entry.weatherPartial),
     messages: syntheticState === "ok" ? [] : [description],
     updatedAt: Number(entry.updatedAt) || Date.now()
@@ -11089,17 +11102,30 @@ function persistImpiantoWeatherCache() {
         lat: entry.lat ?? null,
         lon: entry.lon ?? null,
         syntheticState: entry.syntheticState || "ok",
+        statusLabel: entry.statusLabel || entry.weatherState || entry.description || "",
+        iconType: entry.iconType || entry.syntheticState || "cloud",
         temperature: entry.temperature ?? null,
         apparentTemperature: entry.apparentTemperature ?? null,
-        rainProbability: entry.rainProbability ?? null,
+        rainProbability: entry.rainProbability ?? entry.precipitationProbability ?? null,
+        precipitationProbability: entry.precipitationProbability ?? entry.rainProbability ?? null,
+        precipitationIntensity: entry.precipitationIntensity ?? entry.rainAmount ?? null,
+        rainExpected: Boolean(entry.rainExpected || entry.rainWindow),
+        rainStartTime: entry.rainStartTime ?? entry.rainWindow?.start ?? null,
+        rainEndTime: entry.rainEndTime ?? entry.rainWindow?.end ?? null,
         rainWindow: entry.rainWindow || null,
         rainIntensity: entry.rainIntensity || "",
         rainAmount: isPresentFiniteNumber(entry.rainAmount) ? Number(entry.rainAmount) : null,
-        windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh) ? Number(entry.windSpeedKmh) : null,
+        windSpeed: isPresentFiniteNumber(entry.windSpeed ?? entry.windSpeedKmh) ? Number(entry.windSpeed ?? entry.windSpeedKmh) : null,
+        windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh ?? entry.windSpeed) ? Number(entry.windSpeedKmh ?? entry.windSpeed) : null,
         windDirectionDegrees: isPresentFiniteNumber(entry.windDirectionDegrees) ? Number(entry.windDirectionDegrees) : null,
-        windDirectionLabel: entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+        windDirection: entry.windDirection || entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+        windDirectionLabel: entry.windDirectionLabel || entry.windDirection || getWindDirectionLabel(entry.windDirectionDegrees),
+        windGust: isPresentFiniteNumber(entry.windGust ?? entry.windGustKmh) ? Number(entry.windGust ?? entry.windGustKmh) : null,
+        windGustKmh: isPresentFiniteNumber(entry.windGustKmh ?? entry.windGust) ? Number(entry.windGustKmh ?? entry.windGust) : null,
         importantWindKmh: isPresentFiniteNumber(entry.importantWindKmh) ? Number(entry.importantWindKmh) : null,
-        operationMessage: entry.operationMessage || "",
+        riskMessage: entry.riskMessage || entry.operationMessage || "",
+        operationMessage: entry.operationMessage || entry.riskMessage || "",
+        stale: Boolean(entry.stale),
         weatherPartial: Boolean(entry.weatherPartial),
         description: entry.description || entry.badgeLabel || "Meteo non disponibile",
         updatedAt: Number(entry.updatedAt) || Date.now()
@@ -11133,6 +11159,7 @@ function getImpiantoWeatherBadgeState(impianto) {
       label: "Meteo non disponibile",
       text: "Meteo non disponibile",
       updating,
+      iconType: "cloud",
       lines: ["Meteo non disponibile"],
       compact: true
     };
@@ -11147,6 +11174,7 @@ function getImpiantoWeatherBadgeState(impianto) {
     label: `${label}${updatedLabel}${entry.weatherPartial ? " • Dati meteo parziali" : ""}`,
     text: `${emoji} ${label}`,
     updating,
+    iconType: entry.iconType || entry.syntheticState || "cloud",
     lines,
     compact: lines.length <= 1
   };
@@ -11166,25 +11194,51 @@ function getImpiantoWeatherPrimaryLabel(entry = {}) {
   return "Meteo non disponibile";
 }
 
-function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
-  if (entry.riskLevel === "unavailable" || entry.weatherPartial) return ["Meteo non disponibile"];
-  const hasRain = Boolean(entry.hasCurrentRain || entry.hasNextHourRain || entry.rainWindow || Number(entry.rainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY);
-  const lines = [];
+function formatImpiantoWeatherTimeRange(start, end) {
+  if (!Number.isFinite(Number(start))) return "";
+  const startLabel = formatWeatherSlotTime(start);
+  if (!Number.isFinite(Number(end)) || Number(end) <= Number(start)) return startLabel;
+  return `${startLabel}–${formatWeatherSlotTime(end)}`;
+}
 
-  if (hasRain) {
-    lines.push(`${entry.hasCurrentRain ? "🌧 Pioggia in corso" : "🌧 Pioggia prevista"}`);
-    const rainLine = formatImpiantoRainLine(entry);
-    if (rainLine) lines.push(rainLine);
-    if (isPresentFiniteNumber(entry.rainProbability)) lines.push(`Probabilità ${Math.round(Number(entry.rainProbability))}%`);
+function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
+  if (entry.riskLevel === "unavailable") return ["Meteo non disponibile"];
+  const lines = [];
+  const status = entry.statusLabel || entry.weatherState || label;
+  const temperature = isPresentFiniteNumber(entry.temperature) ? ` ${Math.round(Number(entry.temperature))}°C` : "";
+  lines.push(`${status}${temperature}`);
+
+  if (entry.rainExpected || entry.rainWindow || entry.hasCurrentRain || entry.hasNextHourRain) {
+    const range = formatImpiantoWeatherTimeRange(entry.rainStartTime ?? entry.rainWindow?.start, entry.rainEndTime ?? entry.rainWindow?.end);
+    lines.push(`🌧️ Pioggia prevista${range ? ` ${range}` : ""}`);
   } else {
-    lines.push(`${emoji} ${label}`);
-    if (isPresentFiniteNumber(entry.apparentTemperature)) lines.push(`Percepita ${Math.round(Number(entry.apparentTemperature))}°C`);
+    lines.push("Nessuna pioggia prevista nelle prossime ore");
   }
 
-  const alertLine = getImpiantoWeatherAlertLine(entry);
-  if (alertLine) lines.push(alertLine);
-  if (entry.operationMessage && lines.length < 4) lines.push(entry.operationMessage);
-  return lines.filter(Boolean).slice(0, 4);
+  if (isPresentFiniteNumber(entry.precipitationProbability ?? entry.rainProbability)) {
+    lines.push(`Probabilità ${Math.round(Number(entry.precipitationProbability ?? entry.rainProbability))}%`);
+  }
+
+  if (isPresentFiniteNumber(entry.precipitationIntensity ?? entry.rainAmount) && Number(entry.precipitationIntensity ?? entry.rainAmount) > 0) {
+    lines.push(`${formatWeatherAmount(entry.precipitationIntensity ?? entry.rainAmount)} mm/h`);
+  }
+
+  if (isPresentFiniteNumber(entry.windSpeed ?? entry.windSpeedKmh)) {
+    const direction = entry.windDirection || entry.windDirectionLabel || "";
+    lines.push(`💨 Vento ${Math.round(Number(entry.windSpeed ?? entry.windSpeedKmh))} km/h${direction ? ` ${direction}` : ""}`);
+  } else {
+    lines.push("Vento non disponibile");
+  }
+
+  if (isPresentFiniteNumber(entry.windGust ?? entry.windGustKmh)) {
+    lines.push(`Raffiche ${Math.round(Number(entry.windGust ?? entry.windGustKmh))} km/h`);
+  }
+
+  const riskMessage = entry.riskMessage || entry.operationMessage;
+  if (riskMessage) lines.push(riskMessage);
+  if (entry.stale && entry.updatedAt) lines.push(`dato aggiornato alle ${formatWeatherSlotTime(entry.updatedAt)}`);
+  else if (entry.weatherPartial && entry.updatedAt) lines.push(`dato aggiornato alle ${formatWeatherSlotTime(entry.updatedAt)}`);
+  return lines.filter(Boolean).slice(0, 8);
 }
 
 function formatImpiantoRainLine(entry = {}) {
@@ -11212,7 +11266,8 @@ function getImpiantoWeatherLineClass(line = "", index = 0) {
 function buildImpiantoWeatherCardInnerMarkup(state) {
   const level = escapeHTML(state.level);
   const lines = state.lines?.length ? state.lines : [state.text];
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}">${lines.map((line, index) => `<span class="impianto-weather-line${getImpiantoWeatherLineClass(line, index)}">${escapeHTML(line)}</span>`).join("")}</span>`;
+  const iconType = escapeHTML(state.iconType || "cloud");
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}"><span class="impianto-weather-animated-icon weather-icon-${iconType}" aria-hidden="true"></span>${lines.map((line, index) => `<span class="impianto-weather-line${getImpiantoWeatherLineClass(line, index)}">${escapeHTML(line)}</span>`).join("")}</span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {
@@ -11502,6 +11557,166 @@ function getSyntheticImpiantoWeatherState({ riskLevel, hasCivilProtectionAlert, 
   return "ok";
 }
 
+
+function getTomorrowHourlySlots(payload = {}) {
+  const hourly = payload?.timelines?.hourly;
+  if (Array.isArray(hourly)) {
+    return hourly.map((slot) => ({ time: slot.time || slot.startTime, values: slot.values || {} })).filter((slot) => slot.time);
+  }
+  const timelines = Array.isArray(payload?.data?.timelines) ? payload.data.timelines : (Array.isArray(payload?.timelines) ? payload.timelines : []);
+  const timeline = timelines.find((item) => item.timestep === "1h" || item.timestep === "1H" || item.timestep === "hourly") || timelines[0];
+  const intervals = Array.isArray(timeline?.intervals) ? timeline.intervals : [];
+  return intervals.map((slot) => ({ time: slot.startTime || slot.time, values: slot.values || {} })).filter((slot) => slot.time);
+}
+
+function getTomorrowWeatherLabelAndIcon(code) {
+  const weatherCode = Number(code);
+  const map = {
+    1000: ["Sereno", "sun"],
+    1100: ["Prevalentemente sereno", "sun"],
+    1101: ["Parzialmente nuvoloso", "cloud"],
+    1102: ["Molto nuvoloso", "cloud"],
+    1001: ["Nuvoloso", "cloud"],
+    2000: ["Nebbia", "cloud"],
+    2100: ["Nebbia leggera", "cloud"],
+    4000: ["Pioviggine", "rain"],
+    4001: ["Pioggia", "rain"],
+    4200: ["Pioggia debole", "rain"],
+    4201: ["Pioggia forte", "rain"],
+    5000: ["Neve", "cloud"],
+    5001: ["Nevischio", "rain"],
+    5100: ["Neve debole", "cloud"],
+    5101: ["Neve forte", "cloud"],
+    6000: ["Pioggia gelata", "rain"],
+    6200: ["Pioggia gelata debole", "rain"],
+    6201: ["Pioggia gelata forte", "rain"],
+    7000: ["Grandine", "rain"],
+    7101: ["Grandine forte", "rain"],
+    7102: ["Grandine debole", "rain"],
+    8000: ["Temporale", "thunder"]
+  };
+  const [statusLabel, iconType] = map[weatherCode] || ["Condizioni variabili", "cloud"];
+  return { statusLabel, iconType };
+}
+
+function isTomorrowRainSlot(slot = {}) {
+  const values = slot.values || {};
+  return (Number(values.rainIntensity) || 0) > 0
+    || (Number(values.precipitationIntensity) || 0) > 0
+    || (Number(values.precipitationProbability) || 0) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY
+    || [4000, 4001, 4200, 4201, 5001, 6000, 6200, 6201, 7000, 7101, 7102, 8000].includes(Number(values.weatherCode));
+}
+
+function getTomorrowRainAmount(values = {}) {
+  const rain = Number(values.rainIntensity);
+  if (Number.isFinite(rain) && rain > 0) return rain;
+  const precipitation = Number(values.precipitationIntensity);
+  if (Number.isFinite(precipitation) && precipitation > 0) return precipitation;
+  return null;
+}
+
+function getTomorrowRiskLevel({ iconType, rainExpected, precipitationProbability, precipitationIntensity, windSpeed, windGust }) {
+  if (iconType === "thunder" || Number(precipitationIntensity) >= NAVIGATION_WEATHER_RELEVANT_RAIN_MM || Number(windGust) >= NAVIGATION_WEATHER_STRONG_GUST_KMH || Number(windSpeed) >= NAVIGATION_WEATHER_STRONG_WIND_KMH) return "red";
+  if (rainExpected || Number(precipitationProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY) return "yellow";
+  return "green";
+}
+
+function getTomorrowRiskMessage({ riskLevel, iconType, rainExpected, windSpeed, windGust }) {
+  if (iconType === "thunder") return "⚠️ Attenzione: possibili temporali durante il lavoro";
+  if (riskLevel === "red" && (Number(windGust) >= NAVIGATION_WEATHER_STRONG_GUST_KMH || Number(windSpeed) >= NAVIGATION_WEATHER_STRONG_WIND_KMH)) return "⚠️ Attenzione: vento forte, valuta sicurezza operatore";
+  if (rainExpected) return "⚠️ Attenzione: possibile pioggia durante il lavoro";
+  return "✅ Condizioni meteo compatibili con il lavoro";
+}
+
+function normalizeTomorrowWeatherForPlant(impianto, payload) {
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
+  const slots = getTomorrowHourlySlots(payload)
+    .map((slot) => ({ ...slot, timestamp: new Date(slot.time).getTime() }))
+    .filter((slot) => Number.isFinite(slot.timestamp))
+    .sort((a, b) => a.timestamp - b.timestamp);
+  if (!slots.length) throw new Error("Tomorrow.io: previsione oraria assente");
+
+  const now = Date.now();
+  const forecastSlots = slots.filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= now + 12 * 60 * 60 * 1000);
+  const currentSlot = forecastSlots.find((slot) => slot.timestamp >= now - 30 * 60 * 1000) || forecastSlots[0] || slots[0];
+  const currentValues = currentSlot.values || {};
+  const weatherMeta = getTomorrowWeatherLabelAndIcon(currentValues.weatherCode);
+  const rainSlots = forecastSlots.filter(isTomorrowRainSlot);
+  const rainWindow = buildRainWindowLabel(rainSlots, forecastSlots);
+  const relevantRainSlots = rainWindow
+    ? rainSlots.filter((slot) => slot.timestamp >= rainWindow.start && slot.timestamp <= (rainWindow.end || rainWindow.start))
+    : rainSlots;
+  const probabilityValues = (relevantRainSlots.length ? relevantRainSlots : forecastSlots)
+    .map((slot) => Number(slot.values?.precipitationProbability))
+    .filter(Number.isFinite);
+  const intensityValues = (relevantRainSlots.length ? relevantRainSlots : [currentSlot])
+    .map((slot) => getTomorrowRainAmount(slot.values))
+    .filter((value) => Number.isFinite(Number(value)) && Number(value) > 0)
+    .map(Number);
+  const precipitationProbability = probabilityValues.length ? Math.max(...probabilityValues) : null;
+  const precipitationIntensity = intensityValues.length ? Math.max(...intensityValues) : null;
+  const windSpeed = isPresentFiniteNumber(currentValues.windSpeed) ? Number(currentValues.windSpeed) * 3.6 : null;
+  const windGust = isPresentFiniteNumber(currentValues.windGust) ? Number(currentValues.windGust) * 3.6 : null;
+  const windDirection = isPresentFiniteNumber(currentValues.windDirection) ? getWindDirectionLabel(currentValues.windDirection) : "";
+  const rainExpected = Boolean(rainWindow);
+  const iconType = (windSpeed >= NAVIGATION_WEATHER_STRONG_WIND_KMH || windGust >= NAVIGATION_WEATHER_STRONG_GUST_KMH) && weatherMeta.iconType !== "thunder" && !rainExpected
+    ? "wind"
+    : weatherMeta.iconType;
+  const riskLevel = getTomorrowRiskLevel({ iconType, rainExpected, precipitationProbability, precipitationIntensity, windSpeed, windGust });
+  const riskMessage = getTomorrowRiskMessage({ riskLevel, iconType, rainExpected, windSpeed, windGust });
+  const updatedAt = Date.now();
+
+  return {
+    statusLabel: weatherMeta.statusLabel,
+    iconType,
+    temperature: isPresentFiniteNumber(currentValues.temperature) ? Number(currentValues.temperature) : null,
+    rainExpected,
+    rainStartTime: rainWindow?.start || null,
+    rainEndTime: rainWindow?.end || null,
+    precipitationProbability,
+    precipitationIntensity,
+    windSpeed,
+    windDirection,
+    windGust,
+    riskLevel,
+    riskMessage,
+    updatedAt,
+    impiantoKey: getImpiantoWeatherCacheKey(impianto),
+    lat: coordinates?.lat ?? null,
+    lon: coordinates?.lon ?? null,
+    coordinateKey: getImpiantoWeatherCoordinateKey(coordinates),
+    syntheticState: iconType === "thunder" ? "temporale" : iconType === "wind" ? "vento" : rainExpected ? "pioggia" : "ok",
+    weatherState: weatherMeta.statusLabel,
+    rainProbability: precipitationProbability,
+    description: weatherMeta.statusLabel,
+    hasCurrentRain: isTomorrowRainSlot(currentSlot),
+    hasNextHourRain: rainExpected,
+    civilProtectionAlert: null,
+    alertText: riskMessage,
+    badgeLabel: rainExpected ? "Pioggia prevista" : weatherMeta.statusLabel,
+    rainWindow,
+    rainIntensity: precipitationIntensity > 0 ? `${formatWeatherAmount(precipitationIntensity)} mm/h` : "",
+    rainAmount: precipitationIntensity,
+    windSpeedKmh: windSpeed,
+    windDirectionDegrees: isPresentFiniteNumber(currentValues.windDirection) ? Number(currentValues.windDirection) : null,
+    windDirectionLabel: windDirection,
+    importantWindKmh: Math.max(Number(windSpeed) || 0, Number(windGust) || 0) >= NAVIGATION_WEATHER_STRONG_WIND_KMH ? Math.max(Number(windSpeed) || 0, Number(windGust) || 0) : null,
+    windGustKmh: windGust,
+    operationMessage: riskMessage,
+    weatherPartial: false,
+    messages: riskLevel === "green" ? [] : [riskMessage]
+  };
+}
+
+async function getTomorrowWeatherForPlant(plant) {
+  const coordinates = getImpiantoNavigationCoordinates(plant);
+  if (!coordinates) throw new Error("Coordinate impianto non disponibili");
+  if (!functions || typeof functions.httpsCallable !== "function") throw new Error("Backend meteo Tomorrow.io non disponibile");
+  const callable = functions.httpsCallable("getTomorrowWeatherForPlant");
+  const result = await callable({ lat: coordinates.lat, lon: coordinates.lon });
+  return normalizeTomorrowWeatherForPlant(plant, result?.data || result);
+}
+
 async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
   ensureImpiantoWeatherPersistentCacheLoaded();
   const key = getImpiantoWeatherCacheKey(impianto);
@@ -11521,16 +11736,18 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
   if (coordinateKey) impiantoWeatherPendingKeys.add(coordinateKey);
   scheduleImpiantoWeatherBadgeRender();
   try {
-    const weatherData = await fetchImpiantoNavigationWeather(coordinates);
-    const civilProtectionAlert = await getOfficialCivilProtectionAlertForNavigation(coordinates).catch((error) => {
-      console.warn("Allerta Protezione Civile non disponibile per impianto:", error);
-      return null;
-    });
-    const status = buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert);
+    const status = await getTomorrowWeatherForPlant(impianto);
     saveImpiantoWeatherStatus(status);
     return status;
   } catch (error) {
-    console.warn("Meteo impianto non disponibile:", error);
+    console.warn("Meteo Tomorrow.io impianto non disponibile:", error);
+    if (cached || coordinateCached) {
+      const stale = cloneImpiantoWeatherStatusForImpianto(cached || coordinateCached, impianto, coordinates);
+      stale.weatherPartial = true;
+      stale.stale = true;
+      saveImpiantoWeatherStatus(stale);
+      return stale;
+    }
     const fallback = {
       impiantoKey: key,
       lat: coordinates.lat,
@@ -15050,9 +15267,9 @@ const NAVIGATION_WEATHER_LIGHT_RAIN_MAX_MM = 2;
 const NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY = 40;
 const NAVIGATION_WEATHER_THUNDER_CODES = new Set([95, 96, 99]);
 const NAVIGATION_WEATHER_RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]);
-const IMPIANTO_WEATHER_CACHE_TTL_MS = 45 * 60 * 1000;
-const IMPIANTO_WEATHER_REFRESH_LIMIT = 8;
-const IMPIANTO_WEATHER_BATCH_SIZE = 2;
+const IMPIANTO_WEATHER_CACHE_TTL_MS = 20 * 60 * 1000;
+const IMPIANTO_WEATHER_REFRESH_LIMIT = 40;
+const IMPIANTO_WEATHER_BATCH_SIZE = 3;
 const IMPIANTO_WEATHER_COORDINATE_PRECISION = 3;
 const IMPIANTO_WEATHER_LOCAL_CACHE_MAX_ENTRIES = 400;
 

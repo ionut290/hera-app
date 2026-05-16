@@ -3789,7 +3789,6 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
   const includePendingApprovals = options?.includePendingApprovals === true;
   const fromDate = `${monthValue}-01`;
   const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
-  await ensureHoursReportsDeduplicated();
   const reportsQuery = db.collection("oreReports")
     .where("date", ">=", fromDate)
     .where("date", "<=", toDate)
@@ -3851,17 +3850,45 @@ function normalizeHoursCommessaMatchValue(value) {
     .trim();
 }
 
+function resolveHoursEntryCommessa(entry = {}) {
+  const directId = String(entry?.commessaId || "").trim();
+  if (directId && commesseById.has(directId)) {
+    const commessa = commesseById.get(directId) || {};
+    return { id: directId, nome: String(commessa.nome || entry.commessaName || "Commessa").trim(), codice: String(commessa.codice || entry.commessaCode || entry.codice || "").trim(), key: directId };
+  }
+  const candidates = [entry?.commessaId, entry?.commessaCode, entry?.codice, entry?.commessaName]
+    .map(normalizeHoursCommessaMatchValue)
+    .filter(Boolean);
+  const matched = Array.from(commesseById.values()).find((commessa) => {
+    const values = [commessa.id, commessa.codice, commessa.nome, getCommessaDisplayName(commessa)]
+      .map(normalizeHoursCommessaMatchValue)
+      .filter(Boolean);
+    return candidates.some((candidate) => values.includes(candidate));
+  });
+  if (matched?.id) {
+    return { id: matched.id, nome: String(matched.nome || entry.commessaName || "Commessa").trim(), codice: String(matched.codice || entry.commessaCode || entry.codice || "").trim(), key: matched.id };
+  }
+  const fallbackKey = String(entry?.commessaId || entry?.commessaCode || entry?.codice || entry?.commessaName || "").trim();
+  return {
+    id: directId,
+    nome: String(entry?.commessaName || fallbackKey || "Commessa").trim(),
+    codice: String(entry?.commessaCode || entry?.codice || "").trim(),
+    key: fallbackKey
+  };
+}
+
 function doesHoursEntryMatchCommessa(entry, selectedCommessaId) {
   const selected = getSelectedHoursCommessaInfo(selectedCommessaId);
+  const resolved = resolveHoursEntryCommessa(entry);
+  if (selected.id && resolved.id && selected.id === resolved.id) return true;
   const selectedValues = [selected.id, selected.codice, selected.nome]
     .map(normalizeHoursCommessaMatchValue)
     .filter(Boolean);
-  const entryValues = [entry?.commessaId, entry?.commessaCode, entry?.codice, entry?.commessaName]
+  const entryValues = [resolved.id, resolved.key, resolved.codice, resolved.nome, entry?.commessaId, entry?.commessaCode, entry?.codice, entry?.commessaName]
     .map(normalizeHoursCommessaMatchValue)
     .filter(Boolean);
   return selectedValues.some((value) => entryValues.includes(value));
 }
-
 function setHoursExportButtonsLoading(isLoading) {
   const monthlyWithoutRows = hoursTableContext?.mode === "monthly" && !hoursTableContext?.operators?.length;
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = isLoading || !hoursTableContext || monthlyWithoutRows;
@@ -3876,8 +3903,9 @@ function buildHoursMonthlyExportData(reports, commessaId, monthMeta) {
     const day = Number(String(report.date || "").split("-")[2] || 0);
     const entries = Array.isArray(report.entries) ? report.entries : [];
     entries.forEach((entry) => {
-      const entryCommessaId = String(entry.commessaId || "").trim();
-      const entryCommessaName = String(entry.commessaName || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
+      const entryCommessaInfo = resolveHoursEntryCommessa(entry);
+      const entryCommessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
+      const entryCommessaName = String(entryCommessaInfo.nome || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
       (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
         const operatore = String(row.operatore || "").trim();
         const ore = Number(row.ore || 0);
@@ -4059,8 +4087,9 @@ async function loadHoursTotalByOperatorAndCommessa() {
     reports.forEach((report) => {
       const entries = Array.isArray(report.entries) ? report.entries : [];
       entries.forEach((entry) => {
-        const commessaId = String(entry.commessaId || "").trim();
-        const commessaName = String(entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa").trim();
+        const entryCommessaInfo = resolveHoursEntryCommessa(entry);
+        const commessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
+        const commessaName = String(entryCommessaInfo.nome || entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa").trim();
         (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
           const operatore = String(row.operatore || "").trim();
           const ore = Number(row.ore || 0);
@@ -4125,6 +4154,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     if (!day || day < 1 || day > monthMeta.daysInMonth) return;
     const entries = Array.isArray(report.entries) ? report.entries : [];
     entries.forEach((entry, entryIndex) => {
+      const entryCommessaInfo = resolveHoursEntryCommessa(entry);
       if (!doesHoursEntryMatchCommessa(entry, commessaId)) return;
       (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
         const operatore = String(row.operatore || "").trim();
@@ -4142,7 +4172,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
           sourceCollection: report.sourceCollection || "oreReports",
           approvalStatus: report.status || report.approvalStatus || "approved",
           reportDate,
-          entryCommessaId: entry.commessaId,
+          entryCommessaId: entryCommessaInfo.id || entryCommessaInfo.key || entry.commessaId,
           entryIndex,
           rowIndex,
           operatore,
@@ -4522,10 +4552,11 @@ async function exportHoursGlobalMonthlyTable() {
     if (!day || day < 1 || day > monthMeta.daysInMonth) return;
     const entries = Array.isArray(report.entries) ? report.entries : [];
     entries.forEach((entry) => {
-      const commessaId = String(entry.commessaId || "").trim();
+      const entryCommessaInfo = resolveHoursEntryCommessa(entry);
+      const commessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
       if (!commessaId) return;
-      const commessaName = String(entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa").trim() || "Commessa";
-      const commessaCode = String(commesseById.get(commessaId)?.codice || "").trim();
+      const commessaName = String(entryCommessaInfo.nome || entry.commessaName || commesseById.get(entryCommessaInfo.id)?.nome || "Commessa").trim() || "Commessa";
+      const commessaCode = String(entryCommessaInfo.codice || commesseById.get(entryCommessaInfo.id)?.codice || "").trim();
       if (!commessaMap.has(commessaId)) {
         commessaMap.set(commessaId, { commessaName, commessaCode, operatorsMap: new Map() });
       }
@@ -5772,7 +5803,8 @@ function getHoursUniqueLocks(dateValue, entries) {
   const dateKey = String(dateValue || "").trim();
   if (!dateKey) return [];
   (Array.isArray(entries) ? entries : []).forEach((entry) => {
-    const commessaId = String(entry?.commessaId || "").trim();
+    const commessaInfo = resolveHoursEntryCommessa(entry);
+    const commessaId = String(commessaInfo.id || commessaInfo.key || "").trim();
     if (!commessaId) return;
     (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
@@ -5787,7 +5819,7 @@ function getHoursUniqueLocks(dateValue, entries) {
           id: lockId,
           date: dateKey,
           commessaId,
-          commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          commessaName: commessaInfo.nome || entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
           operatore,
           operatoreId,
           uniqueKey: row?.uniqueKey || buildHoursUniqueKey(dateKey, commessaId, row) || `${commessaId}_${dateKey}_${operatoreId || normalizedOperator}`,
@@ -5913,7 +5945,7 @@ function buildHoursUniqueKey(dateValue, commessaId, row = {}) {
 
 function addHoursUniqueKeysToEntries(dateValue, entries = []) {
   return (Array.isArray(entries) ? entries : []).map((entry) => {
-    const commessaId = String(entry?.commessaId || "").trim();
+    const commessaId = String(resolveHoursEntryCommessa(entry).id || resolveHoursEntryCommessa(entry).key || "").trim();
     return {
       ...entry,
       rows: (Array.isArray(entry?.rows) ? entry.rows : []).map((row) => ({
@@ -5953,7 +5985,8 @@ function collectHoursRowRefs(records = []) {
     const docId = String(recordWrapper.id || record.id || "").trim();
     const entries = Array.isArray(record.entries) ? record.entries : [];
     entries.forEach((entry, entryIndex) => {
-      const commessaId = String(entry?.commessaId || "").trim();
+      const commessaInfo = resolveHoursEntryCommessa(entry);
+      const commessaId = String(commessaInfo.id || commessaInfo.key || "").trim();
       if (!commessaId) return;
       (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row, rowIndex) => {
         const ore = Number(row?.ore || 0);
@@ -6223,7 +6256,8 @@ function findDuplicateHoursInDraft(entries) {
   const map = new Map();
   const duplicates = [];
   entries.forEach((entry) => {
-    const commessaId = String(entry?.commessaId || "").trim();
+    const commessaInfo = resolveHoursEntryCommessa(entry);
+    const commessaId = String(commessaInfo.id || commessaInfo.key || "").trim();
     if (!commessaId) return;
     (entry.rows || []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
@@ -6235,7 +6269,7 @@ function findDuplicateHoursInDraft(entries) {
       if (map.has(key)) {
         duplicates.push({
           commessaId,
-          commessaName: entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
+          commessaName: commessaInfo.nome || entry.commessaName || commesseById.get(commessaId)?.nome || "Commessa",
           operatore
         });
         return;
@@ -6250,7 +6284,8 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
   const skipApprovalRequestId = String(options?.skipApprovalRequestId || "").trim();
   const requestedKeys = new Map();
   entries.forEach((entry) => {
-    const commessaId = String(entry?.commessaId || "").trim();
+    const commessaInfo = resolveHoursEntryCommessa(entry);
+    const commessaId = String(commessaInfo.id || commessaInfo.key || "").trim();
     if (!commessaId) return;
     (entry.rows || []).forEach((row) => {
       const operatore = String(row?.operatore || "").trim();
@@ -6277,7 +6312,8 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
   const conflicts = [];
   const collectConflicts = (reportEntries = []) => {
     reportEntries.forEach((entry) => {
-      const commessaId = String(entry?.commessaId || "").trim();
+      const commessaInfo = resolveHoursEntryCommessa(entry);
+      const commessaId = String(commessaInfo.id || commessaInfo.key || "").trim();
       if (!commessaId) return;
       (entry.rows || []).forEach((row) => {
         const operatore = String(row?.operatore || "").trim();

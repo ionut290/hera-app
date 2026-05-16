@@ -7109,7 +7109,16 @@ function updateCommessaDashboard() {
   if (ui.commessaStatAvanzamento) {
     ui.commessaStatAvanzamento.textContent = stats.avanzamento;
     const progressDetails = formatMqProgressDetails(stats);
-    if (ui.commessaStatAvanzamentoDetail) ui.commessaStatAvanzamentoDetail.textContent = progressDetails;
+    if (ui.commessaStatAvanzamentoDetail) {
+      const mqDetailRows = [
+        ["MQ eseguiti", stats.totaleMqEseguiti],
+        ["MQ rimanenti", stats.mqRimanenti],
+        ["Totale MQ", stats.totaleMqPrevisti]
+      ];
+      ui.commessaStatAvanzamentoDetail.innerHTML = mqDetailRows
+        .map(([label, value]) => `<span>${label}: ${escapeHTML(formatMqNumber(value || 0))}</span>`)
+        .join("");
+    }
     const progressItem = ui.commessaStatAvanzamento.closest?.(".commessa-stat-item");
     if (progressItem) {
       progressItem.title = progressDetails;

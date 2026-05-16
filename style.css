@@ -2565,6 +2565,26 @@ textarea:focus-visible {
   }
 }
 
+
+.impianto-weather-retry-btn {
+  justify-self: start;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.impianto-weather-retry-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .impianto-weather-updating {
   display: block;
   width: 100%;

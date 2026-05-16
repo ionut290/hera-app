@@ -10635,6 +10635,7 @@ function renderImpianti() {
     const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
+    const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
     const mainColumn = document.createElement("div");
     mainColumn.className = "impianto-main-column impianto-left";
     const weatherColumn = document.createElement("div");
@@ -10646,12 +10647,13 @@ function renderImpianti() {
     header.className = "impianto-summary-btn";
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
-      <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
+      <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
       <small class="impianto-travel-meta">
-        ${distance} • Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span> • ETA ${travelMeta.etaLabel}
+        <span>${distance}</span><span aria-hidden="true">•</span><span>Traffico <span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span></span>
       </small>
+      <small class="impianto-eta-meta">ETA ${travelMeta.etaLabel}</small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {
@@ -11224,6 +11226,7 @@ function getImpiantoWeatherBadgeState(impianto) {
       updating: false,
       feedback: "",
       iconType: "cloud",
+      display: { description: "Coordinate mancanti", temperature: "--°", wind: "", rain: "" },
       lines: ["Coordinate mancanti"],
       compact: true,
       canRetry: false,
@@ -11238,6 +11241,7 @@ function getImpiantoWeatherBadgeState(impianto) {
       updating,
       feedback,
       iconType: "cloud",
+      display: { description: updating ? "Aggiornamento meteo…" : "Meteo non disponibile", temperature: "--°", wind: "", rain: "" },
       lines: [updating ? "Aggiornamento meteo…" : "Meteo temporaneamente non disponibile"],
       compact: true,
       canRetry: !updating,
@@ -11249,13 +11253,15 @@ function getImpiantoWeatherBadgeState(impianto) {
   const emoji = getImpiantoWeatherLevelEmoji(level);
   const updatedLabel = entry.updatedAt ? ` • aggiornato ${new Date(entry.updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "";
   const lines = buildImpiantoWeatherCardLines(entry, label, emoji);
+  const iconType = getImpiantoWeatherIconType(entry, entry.iconType || entry.syntheticState || "cloud");
   return {
     level,
     label: `${label}${updatedLabel}${entry.weatherPartial ? " • Dati meteo parziali" : ""}`,
     text: `${emoji} ${label}`,
     updating,
     feedback,
-    iconType: entry.iconType || entry.syntheticState || "cloud",
+    iconType,
+    display: buildImpiantoWeatherDisplay(entry, label),
     lines,
     compact: lines.length <= 1,
     canRetry: level === "unavailable" && !updating && entry.canRetry !== false,
@@ -11315,23 +11321,64 @@ function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPri
   const lines = [formatCompactImpiantoWeatherStatus(entry, label)];
 
   const range = formatImpiantoWeatherTimeRange(entry.rainStartTime ?? entry.rainWindow?.start, entry.rainEndTime ?? entry.rainWindow?.end);
-  lines.push(range ? `Prossima pioggia ${range}` : "Nessuna pioggia prevista");
-
-  if (isPresentFiniteNumber(entry.currentRainProbability)) {
-    lines.push(`Pioggia ora ${Math.round(Number(entry.currentRainProbability))}%`);
-  } else if (isPresentFiniteNumber(entry.precipitationProbability ?? entry.rainProbability)) {
-    lines.push(`Pioggia ${Math.round(Number(entry.precipitationProbability ?? entry.rainProbability))}%`);
-  } else {
-    lines.push("Pioggia n/d");
-  }
+  if (range && (entry.hasNextHourRain || entry.rainWindow || entry.rainExpected)) lines.push(`Prossima pioggia ${range}`);
 
   const realWindSpeed = Number(entry.windSpeed ?? entry.windSpeedKmh);
-  if (isPresentFiniteNumber(realWindSpeed) && realWindSpeed > 0) {
+  if (isPresentFiniteNumber(realWindSpeed) && realWindSpeed > 0.4) {
     const direction = entry.windDirection || entry.windDirectionLabel || "";
     lines.push(`Vento ${Math.round(realWindSpeed)} km/h${direction ? ` ${direction}` : ""}`);
   }
 
-  return lines.filter(Boolean).map((line) => truncateImpiantoWeatherLine(line)).slice(0, 4);
+  return lines.filter(Boolean).map((line) => truncateImpiantoWeatherLine(line, 32)).slice(0, 4);
+}
+
+function getImpiantoWeatherIconType(entry = {}, fallback = "cloud") {
+  const text = `${entry.weatherState || ""} ${entry.description || ""} ${entry.badgeLabel || ""}`.toLowerCase();
+  const state = String(entry.syntheticState || fallback || "cloud").toLowerCase();
+  if (state.includes("temporale") || /tempor|fulmin|thunder/.test(text)) return "storm";
+  if (state.includes("vento") || /vento forte|raffica/.test(text)) return "wind";
+  if (state.includes("pioggia") || /piogg|rovesc|rain/.test(text)) return /moderata|forte|intens/.test(text) ? "rain" : "rain-light";
+  if (/nebb|fog|foschia/.test(text)) return "fog";
+  if (/copert|overcast/.test(text)) return "overcast";
+  if (/nubi sparse|parzial|poco nuvol|partly|scattered/.test(text)) return "partly";
+  if (/seren|clear|sole/.test(text) || state === "ok") return "sun";
+  return fallback || "cloud";
+}
+
+function buildImpiantoWeatherDisplay(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry)) {
+  const description = String(entry.weatherState || entry.description || label || "Meteo").replace(/^[^A-Za-zÀ-ÿ]+\s*/u, "").trim();
+  const temperature = isPresentFiniteNumber(entry.temperature) ? `${Math.round(Number(entry.temperature))}°` : "--°";
+  const windSpeed = Number(entry.windSpeed ?? entry.windSpeedKmh);
+  const windDirection = entry.windDirection || entry.windDirectionLabel || "";
+  const wind = isPresentFiniteNumber(windSpeed) && windSpeed > 0.4 ? `${Math.round(windSpeed)} km/h${windDirection ? ` ${windDirection}` : ""}` : "";
+  const rainRange = formatImpiantoWeatherTimeRange(entry.rainStartTime ?? entry.rainWindow?.start, entry.rainEndTime ?? entry.rainWindow?.end);
+  const rain = rainRange && (entry.hasNextHourRain || entry.rainWindow || entry.rainExpected) ? `Prossima pioggia ${rainRange}` : "";
+  return {
+    description: truncateImpiantoWeatherLine(description || label || "Meteo", 34),
+    temperature,
+    wind: truncateImpiantoWeatherLine(wind, 24),
+    rain: truncateImpiantoWeatherLine(rain, 30)
+  };
+}
+
+function buildImpiantoWeatherIconSvg(type = "cloud") {
+  const normalized = String(type || "cloud").toLowerCase();
+  const cloud = `<g filter="url(#softShadow)"><path d="M41 74h48c10 0 18-7 18-17 0-9-7-16-16-17-4-12-15-20-29-20-16 0-29 10-32 25-9 1-16 7-16 15 0 8 7 14 27 14Z" fill="url(#cloudGrad)"/></g>`;
+  const defs = `<defs><filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#0f172a" flood-opacity=".18"/></filter><radialGradient id="sunGrad" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#fff7ad"/><stop offset=".55" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></radialGradient><linearGradient id="cloudGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cbd5e1"/></linearGradient><linearGradient id="darkCloudGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#94a3b8"/><stop offset="1" stop-color="#475569"/></linearGradient><linearGradient id="dropGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs>`;
+  const sun = `<g filter="url(#softShadow)"><circle cx="55" cy="50" r="25" fill="url(#sunGrad)"/><g stroke="#fbbf24" stroke-width="7" stroke-linecap="round" opacity=".75"><path d="M55 12v10M55 78v10M17 50h10M83 50h10M28 23l7 7M75 70l7 7M82 23l-7 7M35 70l-7 7"/></g></g>`;
+  const rainDrops = `<g fill="url(#dropGrad)" filter="url(#softShadow)"><path d="M43 82c5 7 5 13 0 15-5-2-5-8 0-15Z"/><path d="M64 82c5 7 5 13 0 15-5-2-5-8 0-15Z"/><path d="M85 82c5 7 5 13 0 15-5-2-5-8 0-15Z"/></g>`;
+  const rainMore = `<g fill="url(#dropGrad)" filter="url(#softShadow)"><path d="M34 82c5 7 5 13 0 15-5-2-5-8 0-15Z"/><path d="M51 86c5 7 5 13 0 15-5-2-5-8 0-15Z"/><path d="M68 82c5 7 5 13 0 15-5-2-5-8 0-15Z"/><path d="M86 86c5 7 5 13 0 15-5-2-5-8 0-15Z"/></g>`;
+  const darkCloud = cloud.replace('fill="url(#cloudGrad)"', 'fill="url(#darkCloudGrad)"');
+  let body = cloud;
+  if (normalized === "sun") body = sun;
+  else if (normalized === "partly") body = `${sun.replace('cx="55" cy="50"', 'cx="45" cy="42"')}${cloud}`;
+  else if (normalized === "overcast" || normalized === "cloud") body = `${cloud}<path d="M23 65h60c8 0 14-5 14-12" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round" opacity=".8"/>`;
+  else if (normalized === "rain-light") body = `${cloud}${rainDrops}`;
+  else if (normalized === "rain") body = `${darkCloud}${rainMore}`;
+  else if (normalized === "storm" || normalized === "allerta" || normalized === "temporale") body = `${darkCloud}${rainMore}<path d="M61 67 48 96h17l-6 23 24-38H66l10-14Z" fill="#facc15" filter="url(#softShadow)"/>`;
+  else if (normalized === "fog") body = `<g stroke="#94a3b8" stroke-width="9" stroke-linecap="round" filter="url(#softShadow)"><path d="M20 43h88"/><path d="M35 61h73"/><path d="M20 79h70"/><path d="M39 97h69"/></g>`;
+  else if (normalized === "wind" || normalized === "vento") body = `<g fill="none" stroke="#2563eb" stroke-width="9" stroke-linecap="round" filter="url(#softShadow)"><path d="M18 43h62c13 0 13-20 0-20-7 0-11 4-13 9"/><path d="M18 65h84c14 0 14 22 0 22-8 0-13-5-15-11"/><path d="M18 87h49"/></g>`;
+  return `<svg class="impianto-weather-svg" viewBox="0 0 128 128" aria-hidden="true">${defs}${body}</svg>`;
 }
 
 function formatImpiantoRainLine(entry = {}) {
@@ -11372,12 +11419,16 @@ function handleImpiantoWeatherRetryClick(event) {
 
 function buildImpiantoWeatherCardInnerMarkup(state) {
   const level = escapeHTML(state.level);
-  const lines = (state.lines?.length ? state.lines : [state.text]).map((line) => truncateImpiantoWeatherLine(line));
-  const iconType = escapeHTML(state.iconType || "cloud");
+  const iconType = state.iconType || "cloud";
+  const display = state.display || { description: state.text || "Meteo", temperature: "--°", wind: "", rain: "" };
   const retryMarkup = state.canRetry && state.retryKey
     ? `<button type="button" class="impianto-weather-retry-btn" data-weather-retry="${escapeHTML(state.retryKey)}">Riprova</button>`
     : "";
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}"><span class="impianto-weather-animated-icon weather-icon-${iconType}" aria-hidden="true"></span>${lines.map((line, index) => `<span class="impianto-weather-line${getImpiantoWeatherLineClass(line, index)}">${escapeHTML(line)}</span>`).join("")}${retryMarkup}</span>`;
+  const windMarkup = display.wind
+    ? `<span class="impianto-weather-wind"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-2.6-4.5"/><path d="M3 13h16a3 3 0 1 1-2.6 4.5"/><path d="M3 18h8"/></svg>${escapeHTML(display.wind)}</span>`
+    : "";
+  const rainMarkup = display.rain ? `<span class="impianto-weather-rain">${escapeHTML(display.rain)}</span>` : "";
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${retryMarkup}</span></span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {

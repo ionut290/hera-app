@@ -11671,212 +11671,10 @@ function getSyntheticImpiantoWeatherState({ riskLevel, hasCivilProtectionAlert, 
 }
 
 
-function getTomorrowHourlySlots(payload = {}) {
-  const hourly = payload?.timelines?.hourly;
-  if (Array.isArray(hourly)) {
-    return hourly.map((slot) => ({ time: slot.time || slot.startTime, values: slot.values || {} })).filter((slot) => slot.time);
-  }
-  const timelines = Array.isArray(payload?.data?.timelines) ? payload.data.timelines : (Array.isArray(payload?.timelines) ? payload.timelines : []);
-  const timeline = timelines.find((item) => item.timestep === "1h" || item.timestep === "1H" || item.timestep === "hourly") || timelines[0];
-  const intervals = Array.isArray(timeline?.intervals) ? timeline.intervals : [];
-  return intervals.map((slot) => ({ time: slot.startTime || slot.time, values: slot.values || {} })).filter((slot) => slot.time);
-}
-
-function getTomorrowWeatherLabelAndIcon(code) {
-  const weatherCode = Number(code);
-  const map = {
-    1000: ["Sereno", "sun"],
-    1100: ["Prevalentemente sereno", "sun"],
-    1101: ["Parzialmente nuvoloso", "cloud"],
-    1102: ["Molto nuvoloso", "cloud"],
-    1001: ["Nuvoloso", "cloud"],
-    2000: ["Nebbia", "cloud"],
-    2100: ["Nebbia leggera", "cloud"],
-    4000: ["Pioviggine", "rain"],
-    4001: ["Pioggia", "rain"],
-    4200: ["Pioggia debole", "rain"],
-    4201: ["Pioggia forte", "rain"],
-    5000: ["Neve", "cloud"],
-    5001: ["Nevischio", "rain"],
-    5100: ["Neve debole", "cloud"],
-    5101: ["Neve forte", "cloud"],
-    6000: ["Pioggia gelata", "rain"],
-    6200: ["Pioggia gelata debole", "rain"],
-    6201: ["Pioggia gelata forte", "rain"],
-    7000: ["Grandine", "rain"],
-    7101: ["Grandine forte", "rain"],
-    7102: ["Grandine debole", "rain"],
-    8000: ["Temporale", "thunder"]
-  };
-  const [statusLabel, iconType] = map[weatherCode] || ["Condizioni variabili", "cloud"];
-  return { statusLabel, iconType };
-}
-
-function getTomorrowSlotRainProbability(slot = {}) {
-  const value = Number(slot?.values?.precipitationProbability);
-  return Number.isFinite(value) ? value : null;
-}
-
-function getTomorrowSlotRainIntensity(slot = {}) {
-  const value = Number(slot?.values?.rainIntensity);
-  return Number.isFinite(value) ? value : null;
-}
-
-function getTomorrowRainIntensityLabel(intensity) {
-  if (!Number.isFinite(Number(intensity))) return "";
-  const amount = Number(intensity);
-  if (amount <= 0) return "";
-  if (amount <= 0.5) return "debole";
-  if (amount <= 4) return "moderata";
-  return "forte";
-}
-
-function isTomorrowRainSlot(slot = {}) {
-  const probability = getTomorrowSlotRainProbability(slot);
-  return Number.isFinite(probability) && probability > NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY;
-}
-
-function buildTomorrowRainWindowLabel(rainSlots = [], allSlots = []) {
-  if (!rainSlots.length) return null;
-  const sortedRainSlots = [...rainSlots].sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
-  const intervalMs = getWeatherSlotIntervalMinutes(allSlots.length ? allSlots : sortedRainSlots) * 60000;
-  const firstWindow = [sortedRainSlots[0]];
-  for (let index = 1; index < sortedRainSlots.length; index += 1) {
-    const slot = sortedRainSlots[index];
-    const previous = firstWindow[firstWindow.length - 1];
-    if (Number(slot.timestamp) - Number(previous.timestamp) <= intervalMs * 1.5) firstWindow.push(slot);
-    else break;
-  }
-  const start = Number(firstWindow[0]?.timestamp);
-  const end = Number(firstWindow[firstWindow.length - 1]?.timestamp) + intervalMs;
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  return {
-    start,
-    end,
-    label: `${formatWeatherSlotTime(start)}–${formatWeatherSlotTime(end)}`
-  };
-}
-
-function getTomorrowRiskLevel({ iconType, rainExpected, currentRainProbability, currentRainIntensity, windSpeed, windGust }) {
-  if (iconType === "thunder" || Number(currentRainIntensity) > 4 || Number(windGust) >= NAVIGATION_WEATHER_STRONG_GUST_KMH || Number(windSpeed) >= NAVIGATION_WEATHER_STRONG_WIND_KMH) return "red";
-  if (rainExpected || Number(currentRainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || Number(currentRainIntensity) > 0) return "yellow";
-  return "green";
-}
-
-function getTomorrowRiskMessage({ riskLevel, iconType, rainExpected, currentRainIntensity, windSpeed, windGust }) {
-  if (iconType === "thunder") return "⚠️ Attenzione: possibili temporali durante il lavoro";
-  if (riskLevel === "red" && (Number(windGust) >= NAVIGATION_WEATHER_STRONG_GUST_KMH || Number(windSpeed) >= NAVIGATION_WEATHER_STRONG_WIND_KMH)) return "⚠️ Attenzione: vento forte, valuta sicurezza operatore";
-  if (Number(currentRainIntensity) > 4) return "⚠️ Pioggia forte in corso, valuta rinvio";
-  if (rainExpected) return "⚠️ Attenzione: possibile pioggia durante il lavoro";
-  return "✅ Condizioni meteo compatibili con il lavoro";
-}
-
-function normalizeTomorrowWeatherForPlant(impianto, payload) {
-  const coordinates = getImpiantoNavigationCoordinates(impianto);
-  const slots = getTomorrowHourlySlots(payload)
-    .map((slot) => ({ ...slot, timestamp: new Date(slot.time).getTime() }))
-    .filter((slot) => Number.isFinite(slot.timestamp))
-    .sort((a, b) => a.timestamp - b.timestamp);
-  if (!coordinates || !slots.length) throw new Error("Tomorrow.io: dati orari impianto assenti");
-
-  const now = Date.now();
-  const forecastSlots = slots.filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= now + 12 * 60 * 60 * 1000);
-  if (!forecastSlots.length) throw new Error("Tomorrow.io: previsione oraria assente");
-  const currentSlot = forecastSlots
-    .filter((slot) => slot.timestamp <= now)
-    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))[0]
-    || forecastSlots[0];
-  const currentValues = currentSlot.values || {};
-  const currentRainProbability = getTomorrowSlotRainProbability(currentSlot);
-  const currentRainIntensity = getTomorrowSlotRainIntensity(currentSlot);
-  if (!Number.isFinite(currentRainProbability) || !Number.isFinite(currentRainIntensity)) {
-    throw new Error("Tomorrow.io: probabilità o intensità pioggia oraria mancante");
-  }
-
-  const weatherMeta = getTomorrowWeatherLabelAndIcon(currentValues.weatherCode);
-  const rainSlots = forecastSlots.filter(isTomorrowRainSlot);
-  const rainWindow = buildTomorrowRainWindowLabel(rainSlots, forecastSlots);
-  const rawWindSpeed = isPresentFiniteNumber(currentValues.windSpeed) ? Number(currentValues.windSpeed) * 3.6 : null;
-  const rawWindGust = isPresentFiniteNumber(currentValues.windGust) ? Number(currentValues.windGust) * 3.6 : null;
-  const windSpeed = isPresentFiniteNumber(rawWindSpeed) && Number(rawWindSpeed) > 0 ? Number(rawWindSpeed) : null;
-  const windGust = isPresentFiniteNumber(rawWindGust) && Number(rawWindGust) > 0 ? Number(rawWindGust) : null;
-  const windDirectionDegrees = isPresentFiniteNumber(currentValues.windDirection) ? Number(currentValues.windDirection) : null;
-  const windDirection = windSpeed ? getWindDirectionLabel(windDirectionDegrees) : "";
-
-  const rainIntensityLabel = getTomorrowRainIntensityLabel(currentRainIntensity);
-  const hasCurrentRain = Number(currentRainIntensity) > 0;
-  const meaningfulCurrentRainProbability = currentRainProbability >= 25 || hasCurrentRain ? currentRainProbability : null;
-  const rainExpected = Boolean(rainWindow);
-  const iconType = (windSpeed >= NAVIGATION_WEATHER_STRONG_WIND_KMH || windGust >= NAVIGATION_WEATHER_STRONG_GUST_KMH) && weatherMeta.iconType !== "thunder" && !rainExpected && !hasCurrentRain
-    ? "wind"
-    : (hasCurrentRain || rainExpected ? "rain" : weatherMeta.iconType);
-  const riskLevel = getTomorrowRiskLevel({ iconType, rainExpected, currentRainProbability, currentRainIntensity, windSpeed, windGust });
-  const riskMessage = getTomorrowRiskMessage({ riskLevel, iconType, rainExpected, currentRainIntensity, windSpeed, windGust });
-  const updatedAt = Date.now();
-
-  console.debug("[Meteo impianto] rainProbability reale", currentRainProbability);
-  console.debug("[Meteo impianto] rainIntensity reale", currentRainIntensity);
-  console.debug("[Meteo impianto] vento reale", { windSpeed, windDirectionDegrees, windDirection, windGust });
-
-  return {
-    statusLabel: weatherMeta.statusLabel,
-    iconType,
-    temperature: isPresentFiniteNumber(currentValues.temperature) ? Number(currentValues.temperature) : null,
-    rainExpected,
-    rainStartTime: rainWindow?.start || null,
-    rainEndTime: rainWindow?.end || null,
-    precipitationProbability: meaningfulCurrentRainProbability,
-    precipitationIntensity: currentRainIntensity,
-    windSpeed,
-    windDirection,
-    windGust,
-    riskLevel,
-    riskMessage,
-    updatedAt,
-    impiantoKey: getImpiantoWeatherCacheKey(impianto),
-    lat: coordinates.lat,
-    lon: coordinates.lon,
-    coordinateKey: getImpiantoWeatherCoordinateKey(coordinates),
-    syntheticState: iconType === "thunder" ? "temporale" : iconType === "wind" ? "vento" : (hasCurrentRain || rainExpected ? "pioggia" : "ok"),
-    weatherState: weatherMeta.statusLabel,
-    rainProbability: meaningfulCurrentRainProbability,
-    currentRainProbability,
-    description: weatherMeta.statusLabel,
-    hasCurrentRain,
-    hasNextHourRain: rainExpected,
-    civilProtectionAlert: null,
-    alertText: riskMessage,
-    badgeLabel: hasCurrentRain ? "Pioggia in corso" : rainExpected ? "Pioggia prevista" : weatherMeta.statusLabel,
-    rainWindow,
-    rainIntensity: rainIntensityLabel,
-    rainAmount: hasCurrentRain ? currentRainIntensity : null,
-    windSpeedKmh: windSpeed ? Math.round(windSpeed) : null,
-    windDirectionDegrees: windSpeed ? windDirectionDegrees : null,
-    windDirectionLabel: windSpeed ? windDirection : "",
-    importantWindKmh: Math.max(Number(windSpeed) || 0, Number(windGust) || 0) >= NAVIGATION_WEATHER_STRONG_WIND_KMH ? Math.max(Number(windSpeed) || 0, Number(windGust) || 0) : null,
-    windGustKmh: isPresentFiniteNumber(windGust) ? Math.round(windGust) : null,
-    operationMessage: riskMessage,
-    weatherPartial: false,
-    messages: riskLevel === "green" ? [] : [riskMessage]
-  };
-}
-
-async function getTomorrowWeatherForPlant(plant) {
+async function getWeatherForPlantFromMainSource(plant) {
   const coordinates = getImpiantoNavigationCoordinates(plant);
   if (!coordinates) throw new Error("Coordinate impianto non disponibili");
-  if (!functions || typeof functions.httpsCallable !== "function") throw new Error("Backend meteo Tomorrow.io non disponibile");
-  console.debug("[Meteo impianto] coordinate usate", { impianto: plant?.denominazione || plant?.idSap || getImpiantoWeatherCacheKey(plant), lat: coordinates.lat, lon: coordinates.lon });
-  const callable = functions.httpsCallable("getTomorrowWeatherForPlant");
-  const result = await callable({ lat: coordinates.lat, lon: coordinates.lon });
-  const payload = result?.data || result;
-  console.debug("[Meteo impianto] API response", payload);
-  return normalizeTomorrowWeatherForPlant(plant, payload);
-}
-
-async function getOpenMeteoWeatherForPlant(plant) {
-  const coordinates = getImpiantoNavigationCoordinates(plant);
-  if (!coordinates) throw new Error("Coordinate impianto non disponibili");
-  const payload = await fetchImpiantoNavigationWeather(coordinates);
+  const payload = await fetchWeatherForecast(coordinates, { operational: true, cache: "no-store" });
   return buildImpiantoWeatherStatus(plant, payload, null);
 }
 
@@ -11903,15 +11701,10 @@ async function getPlantWeather(plant) {
   }
 
   try {
-    return await getTomorrowWeatherForPlant(plant);
-  } catch (tomorrowError) {
-    console.error("Meteo Tomorrow.io impianto non disponibile, provo Open-Meteo:", tomorrowError);
-    try {
-      return await getOpenMeteoWeatherForPlant(plant);
-    } catch (openMeteoError) {
-      console.error("Meteo Open-Meteo impianto non disponibile:", openMeteoError);
-      throw openMeteoError;
-    }
+    return await getWeatherForPlantFromMainSource(plant);
+  } catch (error) {
+    console.error("Meteo impianto non disponibile dalla fonte principale:", error);
+    throw error;
   }
 }
 
@@ -12141,49 +11934,7 @@ async function getNavigationWeatherWarning(impianto, coordinates) {
 }
 
 async function fetchImpiantoNavigationWeather({ lat, lon }) {
-  const requests = [
-    {
-      provider: "Open-Meteo",
-      params: {
-        latitude: String(lat),
-        longitude: String(lon),
-        current: "temperature_2m,apparent_temperature,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-        minutely_15: "precipitation,weather_code",
-        hourly: "precipitation_probability,precipitation,rain,showers,weather_code,apparent_temperature,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-        forecast_hours: "12",
-        forecast_minutely_15: "48",
-        forecast_days: "1",
-        timezone: "auto"
-      }
-    },
-    {
-      provider: "Open-Meteo fallback",
-      params: {
-        latitude: String(lat),
-        longitude: String(lon),
-        current: "temperature_2m,apparent_temperature,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-        hourly: "precipitation_probability,precipitation,rain,showers,weather_code,apparent_temperature,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-        forecast_hours: "24",
-        forecast_days: "1",
-        timezone: "auto"
-      }
-    }
-  ];
-  let lastError = null;
-  for (const request of requests) {
-    try {
-      const params = new URLSearchParams(request.params);
-      const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`${request.provider} ${response.status}`);
-      const data = await response.json();
-      validateImpiantoWeatherPayload(data, request.provider);
-      return { ...data, provider: request.provider };
-    } catch (error) {
-      lastError = error;
-      console.warn(`${request.provider} non disponibile:`, error);
-    }
-  }
-  throw lastError || new Error("Meteo non disponibile");
+  return fetchWeatherForecast({ lat, lon }, { operational: true, cache: "no-store" });
 }
 
 function validateImpiantoWeatherPayload(data, provider = "meteo") {
@@ -15479,16 +15230,45 @@ const IMPIANTO_WEATHER_COORDINATE_PRECISION = 5;
 const IMPIANTO_WEATHER_LOCAL_CACHE_MAX_ENTRIES = 400;
 
 
+function buildWeatherForecastRequestParams(target, { operational = false } = {}) {
+  const baseParams = {
+    latitude: String(target.lat),
+    longitude: String(target.lon),
+    current: "temperature_2m,wind_speed_10m,weather_code",
+    hourly: "temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m",
+    forecast_days: "2"
+  };
+
+  if (!operational) return baseParams;
+
+  return {
+    ...baseParams,
+    current: "temperature_2m,apparent_temperature,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    minutely_15: "precipitation,weather_code",
+    hourly: "temperature_2m,precipitation_probability,precipitation,rain,showers,snowfall,visibility,weather_code,apparent_temperature,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    forecast_hours: "12",
+    forecast_minutely_15: "48",
+    forecast_days: "1",
+    timezone: "auto"
+  };
+}
+
+async function fetchWeatherForecast(target, options = {}) {
+  const params = new URLSearchParams(buildWeatherForecastRequestParams(target, options));
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: options.cache || "default" });
+  if (!response.ok) throw new Error("meteo non disponibile");
+  const data = await response.json();
+  if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo");
+  return { ...data, provider: "Open-Meteo" };
+}
+
 async function fetchWeather() {
   const target = getWeatherTargetCoordinates();
   currentWeatherTarget = target;
   renderCivilProtectionAlert({ level: "green", label: "Verifica Protezione Civile...", url: CIVIL_PROTECTION_ALERT_PAGE, loading: true });
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${target.lat}&longitude=${target.lon}&current=temperature_2m,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m&forecast_days=2`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("meteo non disponibile");
-    const data = await response.json();
+    const data = await fetchWeatherForecast(target);
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;

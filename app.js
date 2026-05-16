@@ -11518,55 +11518,173 @@ function getWeatherSlotGustKmh(slot = {}) {
   return convertWindSpeedToKmh(raw, slot.wind_gust_unit || "km/h");
 }
 
-function getWeatherDetailRiskForSlot(slot = {}) {
+function normalizeWeatherRiskLevel(level) {
+  if (level === "alto" || level === "red") return "alto";
+  if (level === "medio" || level === "yellow" || level === "orange") return "medio";
+  return "basso";
+}
+
+function getWeatherRiskMeta(level) {
+  return {
+    basso: {
+      className: "low",
+      colorClass: "green",
+      icon: "🟢",
+      label: "BASSO",
+      title: "RISCHIO OPERATIVO BASSO",
+      finalTitle: "Lavoro regolare",
+      finalText: "Condizioni compatibili con lavoro regolare. Mantenere i controlli ordinari su mezzi, area e operatori."
+    },
+    medio: {
+      className: "medium",
+      colorClass: "yellow",
+      icon: "🟡",
+      label: "MEDIO",
+      title: "RISCHIO OPERATIVO MEDIO",
+      finalTitle: "Procedere con cautela",
+      finalText: "Procedere con cautela. Verificare terreno, vento e pioggia."
+    },
+    alto: {
+      className: "high",
+      colorClass: "red",
+      icon: "🔴",
+      label: "ALTO",
+      title: "RISCHIO OPERATIVO ALTO",
+      finalTitle: "Valutare sospensione attività",
+      finalText: "Rischio alto. Valutare sospensione o rinvio finché temporali, raffiche, gelo o caldo intenso non sono terminati."
+    }
+  }[normalizeWeatherRiskLevel(level)];
+}
+
+function getWeatherSlotTemperature(slot = {}) {
+  return Number(slot.temperature_2m ?? slot.temperature ?? slot.apparent_temperature);
+}
+
+function isThunderWeatherCode(code) {
+  return NAVIGATION_WEATHER_THUNDER_CODES.has(Number(code));
+}
+
+function isFogOrLowVisibility(slot = {}) {
+  const code = Number(slot.weather_code);
+  return [45, 48].includes(code) || (Number(slot.visibility) > 0 && Number(slot.visibility) < 1000);
+}
+
+function isWetWeatherSlot(slot = {}) {
+  return getPrecipitationAmount(slot) > 0 || Number(slot.precipitation_probability) >= 35 || NAVIGATION_WEATHER_RAIN_CODES.has(Number(slot.weather_code));
+}
+
+function hasFireRiskWeather(status = {}, slots = []) {
+  const current = status.currentWeather || {};
+  const temp = Math.max(Number(status.temperature) || -99, Number(current.temperature_2m) || -99, ...slots.slice(0, 6).map((slot) => getWeatherSlotTemperature(slot) || -99));
+  const humidity = Number(current.relative_humidity_2m);
+  const rainProbability = Number(status.rainProbability ?? status.currentRainProbability) || 0;
+  return temp >= 35 && rainProbability < 20 && (!Number.isFinite(humidity) || humidity <= 35);
+}
+
+function getWeatherDetailRiskForSlot(slot = {}, status = {}) {
   const wind = getWeatherSlotWindKmh(slot) || 0;
   const gust = getWeatherSlotGustKmh(slot) || 0;
   const code = Number(slot.weather_code);
-  const rain = getPrecipitationAmount(slot);
   const prob = Number(slot.precipitation_probability) || 0;
-  if (NAVIGATION_WEATHER_THUNDER_CODES.has(code) || wind > 35 || gust > 45 || rain >= NAVIGATION_WEATHER_RELEVANT_RAIN_MM || [65, 82, 96, 99].includes(code)) return "alto";
-  if (rain > 0 || prob >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || wind >= 20) return "medio";
+  const temp = getWeatherSlotTemperature(slot);
+  const hasThunder = isThunderWeatherCode(code);
+  const hasFrost = Number.isFinite(temp) && temp <= 0;
+  const hasIntenseHeat = Number.isFinite(temp) && temp >= 35;
+  const hasAlert = Boolean(status.civilProtectionAlert);
+  if (prob > 65 || hasThunder || wind > 40 || gust > 55 || hasIntenseHeat || hasFrost || hasAlert) return "alto";
+  if ((prob >= 35 && prob <= 65) || (wind >= 25 && wind <= 40) || (gust >= 35 && gust <= 55) || isWetWeatherSlot(slot) || (Number.isFinite(temp) && temp >= 30)) return "medio";
   return "basso";
 }
 
 function buildDettaglioMeteoRiskAnalysis(status = {}) {
   const slots = Array.isArray(status.forecastSlots) ? status.forecastSlots : [];
   const current = status.currentWeather || {};
-  const nextHour = slots.filter((slot) => Number(slot.timestamp) >= Date.now() - 15 * 60 * 1000 && Number(slot.timestamp) <= Date.now() + 60 * 60 * 1000);
-  const all = [...nextHour, current].filter(Boolean);
+  const nearSlots = slots.filter((slot) => Number(slot.timestamp) >= Date.now() - 15 * 60 * 1000 && Number(slot.timestamp) <= Date.now() + 3 * 60 * 60 * 1000);
   const currentWind = Number(status.windSpeedKmh ?? current.wind_speed_10m) || 0;
   const currentGust = Number(status.windGustKmh ?? current.wind_gusts_10m) || 0;
-  const maxWind = Math.max(currentWind, ...slots.slice(0, 6).map((slot) => getWeatherSlotWindKmh(slot) || 0));
-  const maxGust = Math.max(currentGust, ...slots.slice(0, 6).map((slot) => getWeatherSlotGustKmh(slot) || 0));
-  const thunderWithinHour = nextHour.some((slot) => NAVIGATION_WEATHER_THUNDER_CODES.has(Number(slot.weather_code)));
-  const intenseRain = all.some((slot) => getPrecipitationAmount(slot) >= NAVIGATION_WEATHER_RELEVANT_RAIN_MM || [65, 82, 96, 99].includes(Number(slot.weather_code)));
-  const lightRainOrWet = Boolean(status.hasCurrentRain || status.hasNextHourRain || all.some((slot) => getPrecipitationAmount(slot) > 0 || Number(slot.precipitation_probability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY));
-  const hot = Number(status.temperature) > 32 || Number(current.temperature_2m) > 32;
-  let level = "green";
-  if (thunderWithinHour || maxWind > 35 || maxGust > 45 || intenseRain) level = "red";
-  else if (lightRainOrWet || (maxWind >= 20 && maxWind <= 35) || hot) level = "yellow";
-  return { level, thunderWithinHour, intenseRain, lightRainOrWet, hot, maxWind, maxGust };
+  const maxWind = Math.max(currentWind, ...nearSlots.map((slot) => getWeatherSlotWindKmh(slot) || 0));
+  const maxGust = Math.max(currentGust, ...nearSlots.map((slot) => getWeatherSlotGustKmh(slot) || 0));
+  const rainProbability = Math.max(Number(status.rainProbability ?? status.currentRainProbability) || 0, ...nearSlots.map((slot) => Number(slot.precipitation_probability) || 0));
+  const thunderWithinWindow = nearSlots.some((slot) => isThunderWeatherCode(slot.weather_code)) || isThunderWeatherCode(current.weather_code);
+  const wetGround = Boolean(status.hasCurrentRain || status.hasNextHourRain || Number(status.rainAmount) > 0 || nearSlots.some(isWetWeatherSlot));
+  const temperatures = [Number(status.temperature), Number(current.temperature_2m), ...nearSlots.map(getWeatherSlotTemperature)].filter(Number.isFinite);
+  const minTemperature = temperatures.length ? Math.min(...temperatures) : null;
+  const maxTemperature = temperatures.length ? Math.max(...temperatures) : null;
+  const frostRisk = Number.isFinite(minTemperature) && minTemperature <= 0;
+  const hotModerate = Number.isFinite(maxTemperature) && maxTemperature >= 30;
+  const intenseHeat = Number.isFinite(maxTemperature) && maxTemperature >= 35;
+  const lowVisibility = nearSlots.some(isFogOrLowVisibility) || isFogOrLowVisibility(current);
+  const fireRiskHigh = hasFireRiskWeather(status, nearSlots);
+  const hasCivilProtectionAlert = Boolean(status.civilProtectionAlert);
+  const slotRisks = nearSlots.map((slot) => getWeatherDetailRiskForSlot(slot, status));
+  let level = "basso";
+  if (rainProbability > 65 || thunderWithinWindow || maxWind > 40 || maxGust > 55 || intenseHeat || frostRisk || fireRiskHigh || hasCivilProtectionAlert || slotRisks.includes("alto")) level = "alto";
+  else if ((rainProbability >= 35 && rainProbability <= 65) || (maxWind >= 25 && maxWind <= 40) || (maxGust >= 35 && maxGust <= 55) || wetGround || hotModerate || slotRisks.includes("medio")) level = "medio";
+  return { level, rainProbability, thunderWithinWindow, wetGround, hotModerate, intenseHeat, frostRisk, lowVisibility, fireRiskHigh, hasCivilProtectionAlert, maxWind, maxGust, minTemperature, maxTemperature };
 }
 
-function buildSfalcioOperationalIndications(status = {}) {
-  const analysis = buildDettaglioMeteoRiskAnalysis(status);
-  const slots = Array.isArray(status.forecastSlots) ? status.forecastSlots : [];
-  const current = status.currentWeather || {};
+function buildSfalcioOperationalIndications(status = {}, slot = null) {
+  const scopedStatus = slot ? { ...status, forecastSlots: [slot], rainProbability: slot.precipitation_probability ?? status.rainProbability, windSpeedKmh: getWeatherSlotWindKmh(slot) ?? status.windSpeedKmh, windGustKmh: getWeatherSlotGustKmh(slot) ?? status.windGustKmh, temperature: getWeatherSlotTemperature(slot) ?? status.temperature, currentWeather: { ...(status.currentWeather || {}), ...slot } } : status;
+  const analysis = buildDettaglioMeteoRiskAnalysis(scopedStatus);
+  const slots = slot ? [slot] : (Array.isArray(status.forecastSlots) ? status.forecastSlots : []);
+  const current = scopedStatus.currentWeather || {};
   const messages = [];
-  const add = (key, text) => { if (!messages.some((item) => item.key === key)) messages.push({ key, text }); };
-  const wet = analysis.lightRainOrWet || Number(status.rainAmount) > 0;
-  if (wet) add("erba-bagnata", "Attenzione terreno scivoloso. Ridurre velocità di lavoro e usare DPI antiscivolo.");
-  if (status.hasNextHourRain || slots.some((slot) => Number(slot.precipitation_probability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || getPrecipitationAmount(slot) > 0)) add("pioggia-prevista", "Valutare rinvio dello sfalcio o completare prima le zone più urgenti.");
-  if (analysis.maxWind >= 20) add("vento-forte", "Attenzione durante uso decespugliatore. Possibile proiezione materiale e polvere.");
-  if (analysis.hot) add("caldo-intenso", "Aumentare pause, bere spesso, evitare sforzi continui nelle ore più calde.");
-  if (analysis.thunderWithinHour || slots.some((slot) => NAVIGATION_WEATHER_THUNDER_CODES.has(Number(slot.weather_code)))) add("temporali", "Sospendere attività all’aperto. Evitare alberi, pali, recinzioni e mezzi metallici.");
-  if (wet && (Number(status.rainAmount) >= 2 || Number(status.rainProbability) >= 60)) add("terreno-umido", "Rischio impantanamento mezzi. Evitare zone morbide e controllare accessi.");
-  if (analysis.maxGust > 0) add("raffiche", "Attenzione caduta rami. Non lavorare sotto alberature instabili.");
-  if (wet && Number(status.rainAmount) >= 1) add("fango", "Usare mezzi con cautela. Evitare manovre brusche e controllare stabilità terreno.");
-  if ((Number(status.temperature) > 30 || Number(current.temperature_2m) > 30) && !wet) add("incendi", "Evitare scintille, controllare motori caldi e non lavorare vicino a erba secca con attrezzi che possono generare calore.");
-  if (slots.some((slot) => Number(slot.visibility) > 0 && Number(slot.visibility) < 1000)) add("visibilita", "Aumentare distanza di sicurezza tra operatori e mezzi.");
-  if (!messages.length) add("regolare", "Condizioni favorevoli allo sfalcio: procedere mantenendo controlli ordinari su terreno, mezzi e area di lancio materiali.");
-  return messages;
+  const add = (key, text, priority = 50) => {
+    if (!messages.some((item) => item.key === key)) messages.push({ key, text, priority });
+  };
+  const rainProbability = Math.max(Number(scopedStatus.rainProbability ?? scopedStatus.currentRainProbability) || 0, ...slots.map((item) => Number(item.precipitation_probability) || 0));
+  const wet = analysis.wetGround || rainProbability >= 35 || slots.some(isWetWeatherSlot);
+  const maxWind = Math.max(Number(scopedStatus.windSpeedKmh) || 0, ...slots.map((item) => getWeatherSlotWindKmh(item) || 0));
+  const maxGust = Math.max(Number(scopedStatus.windGustKmh) || 0, ...slots.map((item) => getWeatherSlotGustKmh(item) || 0));
+  const thunder = analysis.thunderWithinWindow || slots.some((item) => isThunderWeatherCode(item.weather_code));
+  const temp = Math.max(Number(scopedStatus.temperature) || -99, Number(current.temperature_2m) || -99, ...slots.map((item) => getWeatherSlotTemperature(item) || -99));
+  if (thunder) {
+    add("temporali-stop", "Temporali vicini: sospendere attività all’aperto e rientrare in zona sicura o mezzo aziendale.", 1);
+    add("temporali-metallo", "Non usare attrezzi metallici in campo aperto; allontanarsi da alberi isolati, pali e recinzioni metalliche.", 2);
+  }
+  if (rainProbability > 65 || wet) {
+    add("erba-bagnata", "Erba bagnata: ridurre velocità di lavoro e usare DPI antiscivolo.", 5);
+    add("pendenze", "Evitare pendenze e scarpate se il terreno è scivoloso.", 6);
+    add("rinvio-pioggia", "Valutare rinvio dello sfalcio se la pioggia è imminente; completare prima zone urgenti o vicine agli accessi.", 7);
+  }
+  if (wet && (rainProbability >= 50 || Number(scopedStatus.rainAmount) >= 1 || slots.some((item) => getPrecipitationAmount(item) >= 1))) {
+    add("terreno-umido", "Terreno molto umido: rischio impantanamento mezzi. Evitare zone morbide e controllare accessi prima di entrare.", 10);
+    add("solchi", "Usare trattore, rasaerba o mezzi solo se il terreno regge e non creare solchi profondi nelle aree verdi.", 11);
+  }
+  if (maxWind >= 25 || maxGust >= 35) {
+    add("vento-decespugliatore", "Vento forte: attenzione uso decespugliatore e orientare il lavoro evitando proiezioni verso colleghi.", 15);
+    add("raffiche-rami", "Raffiche: attenzione caduta rami. Non lavorare sotto alberature instabili o vicino a rami secchi.", 16);
+    add("occhi-viso", "Proteggere occhi e viso da polvere, erba e materiale proiettato.", 17);
+  }
+  if (temp >= 30) {
+    add("caldo", "Caldo intenso: aumentare pause e idratazione, usare cappello, acqua e pause all’ombra.", 20);
+    add("ore-calde", "Evitare lavori pesanti nelle ore più calde e controllare affaticamento della squadra.", 21);
+  }
+  if (analysis.frostRisk || temp <= 2) {
+    add("gelo", "Gelo o temperatura bassa: attenzione scivolamento su scale, tombini e rampe; usare guanti adeguati.", 25);
+  }
+  if (analysis.lowVisibility || slots.some(isFogOrLowVisibility)) {
+    add("visibilita", "Nebbia o scarsa visibilità: aumentare distanza tra operatori, usare giubbino alta visibilità e lampeggianti mezzi.", 30);
+  }
+  if (analysis.fireRiskHigh) {
+    add("incendi", "Rischio incendi alto: evitare scintille, controllare motori caldi e marmitte, segnalare subito fumo.", 35);
+  }
+  add("mezzi", "Prima di entrare verificare accessi e terreno; usare mezzi con cautela in pendenza e vicino a fossi.", 60);
+  add("decespugliatore-dpi", "Controllare distanza di sicurezza tra operatori; usare visiera, cuffie, guanti e scarpe antinfortunistiche.", 61);
+  add("materiale-proiettato", "Attenzione a sassi, vetri e materiale proiettato: non lavorare troppo vicino a persone, auto o vetrate.", 62);
+  if (analysis.level === "basso") add("regolare", "Condizioni favorevoli allo sfalcio: procedere mantenendo controlli ordinari su terreno, mezzi e area di lancio materiali.", 40);
+  return messages.sort((a, b) => a.priority - b.priority);
+}
+
+function buildWeatherDetailMetric(label, value, icon = "") {
+  if (value === null || value === undefined || value === "") return "";
+  return `<div class="weather-detail-metric"><span class="weather-detail-metric-label">${escapeHTML(icon)} ${escapeHTML(label)}</span><strong>${escapeHTML(String(value))}</strong></div>`;
+}
+
+function buildWeatherRadarUrl(impianto, coordinates) {
+  if (coordinates && isPresentFiniteNumber(coordinates.lat) && isPresentFiniteNumber(coordinates.lon)) return `${METEO_3B_BASE_URL}?lat=${encodeURIComponent(coordinates.lat)}&lon=${encodeURIComponent(coordinates.lon)}`;
+  const query = [impianto?.comune, impianto?.provincia].filter(Boolean).join(" ").trim() || "italia";
+  return `${METEO_3B_BASE_URL}/${encodeURIComponent(query.toLowerCase().replace(/\s+/g, "-"))}`;
 }
 
 function renderDettaglioMeteoImpianto(impiantoKey) {
@@ -11577,29 +11695,65 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const current = status.currentWeather || {};
   const slots = Array.isArray(status.forecastSlots) ? status.forecastSlots : [];
   const analysis = buildDettaglioMeteoRiskAnalysis(status);
-  const riskMeta = {
-    green: { icon: "🟢", title: "Lavoro regolare", text: "Condizioni buone. Procedere normalmente." },
-    yellow: { icon: "🟡", title: "Attenzione", text: "Procedere con cautela. Verificare terreno, vento e pioggia." },
-    red: { icon: "🔴", title: "Sospendere o rinviare", text: "Rischio alto. Temporali, vento forte o pioggia intensa. Valutare sospensione attività." }
-  }[analysis.level] || {};
+  const riskMeta = getWeatherRiskMeta(analysis.level);
   ui.impiantoWeatherDetailSubtitle.textContent = `${impianto.denominazione || "Impianto"} • ${impianto.comune || "Comune non indicato"}`;
-  const wind = isPresentFiniteNumber(status.windSpeedKmh) ? `${Math.round(Number(status.windSpeedKmh))} km/h${status.windDirectionLabel ? ` ${status.windDirectionLabel}` : ""}` : "-";
-  const gust = isPresentFiniteNumber(status.windGustKmh ?? current.wind_gusts_10m) ? `<li><b>Raffiche:</b> ${Math.round(Number(status.windGustKmh ?? current.wind_gusts_10m))} km/h</li>` : "";
-  const humidity = isPresentFiniteNumber(current.relative_humidity_2m) ? `<li><b>Umidità:</b> ${Math.round(Number(current.relative_humidity_2m))}%</li>` : "";
-  const rainNow = getPrecipitationAmount(current) > 0 ? `<li><b>Pioggia ora:</b> ${formatWeatherAmount(getPrecipitationAmount(current))} mm</li>` : "";
-  const nextRain = status.rainWindow?.label ? `<li><b>Prossima pioggia:</b> ${escapeHTML(status.rainWindow.label)}</li>` : "";
-  const forecastRows = slots.slice(0, 8).map((slot) => {
-    const risk = getWeatherDetailRiskForSlot(slot);
-    const windLine = isPresentFiniteNumber(getWeatherSlotWindKmh(slot)) ? `vento ${Math.round(getWeatherSlotWindKmh(slot))} km/h` : "vento -";
-    const probability = isPresentFiniteNumber(slot.precipitation_probability) ? `${Math.round(Number(slot.precipitation_probability))}%` : "-";
-    return `<li class="weather-detail-forecast-row risk-${risk}"><span>${escapeHTML(formatWeatherSlotTime(slot.timestamp))} · ${escapeHTML(weatherCodeLabel(slot.weather_code))} · ${formatWeatherDetailValue(slot.temperature_2m, "°")} · pioggia ${probability} · ${escapeHTML(windLine)} · rischio ${risk}</span></li>`;
-  }).join("") || "<li class='muted'>Previsioni prossime ore non disponibili.</li>";
-  const indications = buildSfalcioOperationalIndications(status).map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
+  const windValue = isPresentFiniteNumber(status.windSpeedKmh) ? `${Math.round(Number(status.windSpeedKmh))} km/h${status.windDirectionLabel ? ` ${status.windDirectionLabel}` : ""}` : "";
+  const gustValue = isPresentFiniteNumber(status.windGustKmh ?? current.wind_gusts_10m) ? `${Math.round(Number(status.windGustKmh ?? current.wind_gusts_10m))} km/h` : "";
+  const rainProbabilityValue = isPresentFiniteNumber(status.rainProbability) ? `${Math.round(Number(status.rainProbability))}%` : "";
+  const rainWindowText = status.rainWindow?.label ? `Pioggia prevista ${status.rainWindow.label}` : "Pioggia non prevista a breve";
+  const currentMetrics = [
+    buildWeatherDetailMetric("Meteo", status.weatherState || status.description, "🌤️"),
+    buildWeatherDetailMetric("Temperatura", isPresentFiniteNumber(status.temperature) ? `${Math.round(Number(status.temperature))}°` : "", "🌡️"),
+    buildWeatherDetailMetric("Percepita", isPresentFiniteNumber(status.apparentTemperature) ? `${Math.round(Number(status.apparentTemperature))}°` : "", "🤚"),
+    buildWeatherDetailMetric("Umidità", isPresentFiniteNumber(current.relative_humidity_2m) ? `${Math.round(Number(current.relative_humidity_2m))}%` : "", "💧"),
+    buildWeatherDetailMetric("Vento", windValue, "🌬️"),
+    buildWeatherDetailMetric("Raffiche", gustValue, "💨"),
+    buildWeatherDetailMetric("Pioggia", rainProbabilityValue, "🌧️"),
+    status.rainWindow?.label ? buildWeatherDetailMetric("Prossima pioggia", status.rainWindow.label, "⏱️") : ""
+  ].filter(Boolean).join("");
+  const forecastRows = slots.slice(0, 12).map((slot, index) => {
+    const risk = getWeatherDetailRiskForSlot(slot, status);
+    const meta = getWeatherRiskMeta(risk);
+    const wind = getWeatherSlotWindKmh(slot);
+    const gust = getWeatherSlotGustKmh(slot);
+    const probability = isPresentFiniteNumber(slot.precipitation_probability) ? `${Math.round(Number(slot.precipitation_probability))}%` : "n/d";
+    const slotWind = isPresentFiniteNumber(wind) ? `${Math.round(Number(wind))} km/h${formatWeatherDetailDirection(slot) ? ` ${formatWeatherDetailDirection(slot)}` : ""}` : "n/d";
+    const slotGust = isPresentFiniteNumber(gust) ? `${Math.round(Number(gust))} km/h` : "n/d";
+    const slotIndications = buildSfalcioOperationalIndications(status, slot).slice(0, 4).map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
+    return `<details class="weather-detail-hour-card risk-${meta.className}">
+      <summary><span class="weather-detail-hour-time">${escapeHTML(formatWeatherSlotTime(slot.timestamp))}</span><span class="weather-detail-hour-icon">${escapeHTML(weatherCodeLabel(slot.weather_code).split(" ")[0] || "☁️")}</span><span class="weather-detail-hour-rain">🌧️ ${escapeHTML(probability)}</span>${isPresentFiniteNumber(wind) ? `<span class="weather-detail-hour-wind">🌬️ ${Math.round(Number(wind))}</span>` : ""}<span class="weather-detail-risk-badge risk-${meta.className}">${meta.label}</span></summary>
+      <div class="weather-detail-hour-panel">
+        <p><b>Meteo previsto:</b> ${escapeHTML(weatherCodeLabel(slot.weather_code))}${isPresentFiniteNumber(slot.temperature_2m) ? ` • ${Math.round(Number(slot.temperature_2m))}°` : ""}</p>
+        <p><b>Probabilità pioggia:</b> ${escapeHTML(probability)} • <b>Vento:</b> ${escapeHTML(slotWind)} • <b>Raffiche:</b> ${escapeHTML(slotGust)}</p>
+        <p><b>Rischio operativo:</b> ${meta.icon} ${meta.label}</p>
+        <ul>${slotIndications}</ul>
+      </div>
+    </details>`;
+  }).join("") || "<p class='muted'>Previsioni prossime ore non disponibili.</p>";
+  const indications = buildSfalcioOperationalIndications(status);
+  const indicationItems = indications.map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
+  const radarUrl = buildWeatherRadarUrl(impianto, coordinates);
   ui.impiantoWeatherDetailContent.innerHTML = `
-    <article class="weather-detail-section"><h3>METEO ATTUALE</h3><div class="weather-detail-current"><div class="weather-detail-icon">${getImpiantoWeatherLevelEmoji(status.riskLevel)}</div><ul><li><b>Descrizione:</b> ${escapeHTML(status.weatherState || status.description || "-")}</li><li><b>Temperatura:</b> ${formatWeatherDetailValue(status.temperature, "°")}</li><li><b>Percepita:</b> ${formatWeatherDetailValue(status.apparentTemperature, "°")}</li><li><b>Vento:</b> ${escapeHTML(wind)}</li>${gust}${humidity}<li><b>Probabilità pioggia:</b> ${isPresentFiniteNumber(status.rainProbability) ? `${Math.round(Number(status.rainProbability))}%` : "-"}</li>${rainNow}${nextRain}</ul></div></article>
-    <article class="weather-detail-section"><h3>PREVISIONI PROSSIME ORE</h3><ul class="weather-detail-forecast-list">${forecastRows}</ul></article>
-    <article class="weather-detail-section"><h3>INDICAZIONI PER MANUTENZIONE VERDE / SFALCIO</h3><ul class="weather-detail-indications">${indications}</ul></article>
-    <article class="weather-detail-risk-box risk-${analysis.level}"><strong>${riskMeta.icon} ${riskMeta.title}</strong><p>${riskMeta.text}</p></article>
+    <article class="weather-detail-risk-summary risk-${riskMeta.className}">
+      <strong>${riskMeta.icon} ${riskMeta.title}</strong>
+      <div class="weather-detail-risk-grid">
+        <span>${escapeHTML(rainWindowText)}</span>
+        ${rainProbabilityValue ? `<span>Pioggia ${escapeHTML(rainProbabilityValue)}</span>` : ""}
+        ${windValue ? `<span>Vento ${escapeHTML(windValue)}</span>` : ""}
+        ${gustValue ? `<span>Raffiche ${escapeHTML(gustValue)}</span>` : ""}
+      </div>
+    </article>
+    <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
+    <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
+    <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">
+      <span><b>🌦️ Radar meteo</b><small>Visualizza evoluzione precipitazioni</small></span><span aria-hidden="true">›</span>
+    </a>
+    <article class="weather-detail-section weather-detail-indications-card">
+      <input class="weather-detail-indications-toggle" id="weather-detail-indications-toggle" type="checkbox">
+      <div class="weather-detail-indications-head"><h3>Indicazioni operative</h3><label class="weather-detail-show-all" for="weather-detail-indications-toggle"><span class="show-more">Mostra tutte</span><span class="show-less">Mostra meno</span></label></div>
+      <ul class="weather-detail-indications">${indicationItems}</ul>
+    </article>
+    <article class="weather-detail-risk-box risk-${riskMeta.colorClass}"><strong>${riskMeta.icon} ATTENZIONE</strong><p><b>${riskMeta.finalTitle}.</b> ${riskMeta.finalText}</p></article>
   `;
 }
 

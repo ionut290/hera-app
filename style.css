@@ -6483,3 +6483,109 @@ textarea:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* Riepilogo commessa: tre card KPI ampie e leggibili */
+.commessa-stat-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+  padding: 18px;
+}
+
+.commessa-stat-item {
+  min-width: 0;
+  min-height: 176px;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 20px 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.commessa-stat-item:nth-child(1) {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(255, 255, 255, 0.74));
+  --commessa-stat-color: #059669;
+}
+
+.commessa-stat-item:nth-child(2) {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.15), rgba(255, 255, 255, 0.72));
+  --commessa-stat-color: #2563eb;
+}
+
+.commessa-stat-item:nth-child(3) {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.15), rgba(255, 255, 255, 0.72));
+  --commessa-stat-color: #7c3aed;
+}
+
+.commessa-stat-item .commessa-stat-icon svg {
+  width: 36px;
+  height: 36px;
+}
+
+.commessa-stat-item strong {
+  max-width: 100%;
+  color: #07122f;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.commessa-stat-item .commessa-stat-label,
+.commessa-stat-item > span:not(.commessa-stat-icon) {
+  max-width: 100%;
+  color: color-mix(in srgb, var(--commessa-stat-color, #43506a) 46%, #334155);
+  font-size: clamp(0.78rem, 1.5vw, 0.92rem);
+  line-height: 1.18;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.commessa-stat-detail {
+  grid-column: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 0;
+  color: #475569;
+  font-size: clamp(0.62rem, 1.2vw, 0.74rem);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.commessa-stat-detail span,
+.commessa-stat-item .commessa-stat-detail span:last-child {
+  max-width: 100%;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  line-height: inherit;
+  text-align: center;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .commessa-stat-strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .commessa-stat-item {
+    min-height: 150px;
+    padding: 18px 16px;
+  }
+
+  .commessa-stat-detail {
+    font-size: 0.66rem;
+  }
+}

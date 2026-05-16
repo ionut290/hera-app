@@ -6575,17 +6575,71 @@ textarea:focus-visible {
 
 @media (max-width: 760px) {
   .commessa-stat-strip {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+    padding: 8px;
   }
 
   .commessa-stat-item {
-    min-height: 150px;
-    padding: 18px 16px;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    gap: 5px;
+    padding: 10px 6px;
+    overflow: hidden;
+  }
+
+  .commessa-stat-item .commessa-stat-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .commessa-stat-item strong {
+    font-size: clamp(1.12rem, 5.6vw, 1.5rem);
+  }
+
+  .commessa-stat-item .commessa-stat-label,
+  .commessa-stat-item > span:not(.commessa-stat-icon) {
+    font-size: clamp(0.54rem, 2.35vw, 0.68rem);
+    line-height: 1.05;
   }
 
   .commessa-stat-detail {
-    font-size: 0.66rem;
+    gap: 1px;
+    font-size: clamp(0.48rem, 2.1vw, 0.58rem);
+    line-height: 1.08;
+  }
+}
+
+@media (max-width: 380px) {
+  .commessa-stat-strip {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .commessa-stat-item {
+    gap: 4px;
+    padding: 8px 4px;
+  }
+
+  .commessa-stat-item .commessa-stat-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .commessa-stat-item strong {
+    font-size: clamp(1rem, 5vw, 1.25rem);
+  }
+
+  .commessa-stat-item .commessa-stat-label,
+  .commessa-stat-item > span:not(.commessa-stat-icon) {
+    font-size: 0.5rem;
+    letter-spacing: 0.025em;
+  }
+
+  .commessa-stat-detail {
+    font-size: 0.45rem;
   }
 }

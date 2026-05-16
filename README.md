@@ -54,6 +54,13 @@ firebase deploy --only hosting
 - Se un layer non è esposto dal provider o dal piano attivo, l'app mostra “Dato non disponibile” e lascia la mappa navigabile.
 - I tile meteo usano `maxNativeZoom` e `maxZoom` separati: oltre lo zoom nativo il layer viene scalato da Leaflet invece di richiedere tile non supportati.
 
+## Meteo impianti Tomorrow.io
+
+- Le card meteo degli impianti nella vista commessa usano Tomorrow.io tramite Cloud Function Firebase, così la chiave non viene esposta nel frontend.
+- Configura la variabile ambiente backend `TOMORROW_API_KEY` prima del deploy delle functions. In alternativa, per compatibilità con Firebase Functions config legacy, puoi impostare `tomorrow.api_key`.
+- Endpoint usato dal backend: Forecast/Timelines Tomorrow.io con `location=<lat>,<lon>`, `timesteps=1h`, `units=metric` e campi `temperature`, `weatherCode`, `precipitationProbability`, `precipitationIntensity`, `rainIntensity`, `windSpeed`, `windDirection`, `windGust`.
+- Se Tomorrow.io non risponde, la vista commessa riusa l'ultimo dato locale salvato e mostra l'orario di aggiornamento.
+
 ## Note Firestore
 
 La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.

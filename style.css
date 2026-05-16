@@ -1867,8 +1867,7 @@ textarea:focus-visible {
   text-transform: uppercase;
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.28);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .global-map-pin.is-selected {
@@ -2304,10 +2303,10 @@ textarea:focus-visible {
   justify-items: start;
   width: fit-content;
   min-width: 0;
-  max-width: 168px;
+  max-width: 210px;
   height: auto;
   min-height: 0;
-  padding: 4px 6px;
+  padding: 5px 7px;
   border-radius: 9px;
   text-align: left;
   white-space: normal;
@@ -2316,7 +2315,7 @@ textarea:focus-visible {
 
 .impianto-weather-column .impianto-weather-card {
   width: fit-content;
-  max-width: 168px;
+  max-width: 210px;
   height: auto;
   min-height: 0;
 }
@@ -2326,19 +2325,18 @@ textarea:focus-visible {
   display: inline-grid;
   width: fit-content;
   min-width: 0;
-  max-width: 168px;
+  max-width: 210px;
   height: auto;
   min-height: 0;
   border-radius: 9px;
-  padding: 4px 6px;
+  padding: 5px 7px;
   white-space: normal;
 }
 
 .impianto-weather-line {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 1px 4px;
@@ -2397,6 +2395,133 @@ textarea:focus-visible {
   border-color: #cbd5e1;
   background: #f8fafc;
   color: #64748b;
+}
+
+
+.impianto-weather-animated-icon {
+  position: relative;
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 1px;
+  border-radius: 999px;
+  justify-self: start;
+  overflow: hidden;
+}
+
+.impianto-weather-animated-icon::before,
+.impianto-weather-animated-icon::after {
+  content: "";
+  position: absolute;
+  display: block;
+}
+
+.weather-icon-sun {
+  background: radial-gradient(circle at center, #facc15 0 36%, transparent 38%), conic-gradient(from 0deg, rgba(250, 204, 21, 0.95) 0 8%, transparent 8% 16%);
+  animation: impianto-weather-spin 7s linear infinite;
+}
+
+.weather-icon-cloud::before {
+  left: 4px;
+  bottom: 6px;
+  width: 18px;
+  height: 9px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  box-shadow: 5px -5px 0 1px #e2e8f0, -2px -2px 0 #e2e8f0;
+  animation: impianto-weather-drift 2.8s ease-in-out infinite;
+}
+
+.weather-icon-rain::before {
+  left: 3px;
+  top: 4px;
+  width: 18px;
+  height: 8px;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 4px -3px 0 #cbd5e1;
+}
+
+.weather-icon-rain::after {
+  left: 6px;
+  top: 15px;
+  width: 3px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 7px -2px 0 #38bdf8, 13px 0 0 #2563eb;
+  animation: impianto-weather-rain 0.9s linear infinite;
+}
+
+.weather-icon-wind::before {
+  left: 3px;
+  top: 7px;
+  width: 20px;
+  height: 12px;
+  border-top: 2px solid #64748b;
+  border-bottom: 2px solid #94a3b8;
+  border-radius: 999px;
+  animation: impianto-weather-wind 1.2s ease-in-out infinite;
+}
+
+.weather-icon-wind::after {
+  left: 7px;
+  top: 13px;
+  width: 15px;
+  border-top: 2px solid #cbd5e1;
+  animation: impianto-weather-wind 1.2s ease-in-out infinite reverse;
+}
+
+.weather-icon-thunder::before {
+  left: 4px;
+  top: 4px;
+  width: 17px;
+  height: 8px;
+  border-radius: 999px;
+  background: #64748b;
+  box-shadow: 4px -3px 0 #94a3b8;
+}
+
+.weather-icon-thunder::after {
+  left: 10px;
+  top: 11px;
+  width: 8px;
+  height: 13px;
+  background: #facc15;
+  clip-path: polygon(45% 0, 100% 0, 62% 44%, 100% 44%, 26% 100%, 42% 55%, 0 55%);
+  animation: impianto-weather-flash 1.3s steps(2, end) infinite;
+}
+
+@keyframes impianto-weather-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes impianto-weather-drift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(2px); }
+}
+
+@keyframes impianto-weather-rain {
+  from { transform: translateY(-2px); opacity: 0.65; }
+  to { transform: translateY(3px); opacity: 1; }
+}
+
+@keyframes impianto-weather-wind {
+  0%, 100% { transform: translateX(0); opacity: 0.7; }
+  50% { transform: translateX(3px); opacity: 1; }
+}
+
+@keyframes impianto-weather-flash {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .impianto-weather-animated-icon,
+  .impianto-weather-animated-icon::before,
+  .impianto-weather-animated-icon::after {
+    animation: none !important;
+  }
 }
 
 .impianto-weather-updating {
@@ -4540,8 +4665,7 @@ textarea:focus-visible {
 .commessa-header-actions .commessa-action-label {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 #commessa-operational-card > .commessa-resource-buttons {
@@ -4601,8 +4725,7 @@ textarea:focus-visible {
 .commessa-title-wrap .commessa-focus-label,
 .commessa-title-wrap .commessa-focus-code {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   white-space: nowrap;
 }
 
@@ -4827,8 +4950,7 @@ textarea:focus-visible {
 
 .hours-commessa-picker-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   white-space: nowrap;
   text-align: left;
 }
@@ -4885,8 +5007,7 @@ textarea:focus-visible {
   font-weight: 650;
   line-height: 1.1;
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   white-space: nowrap;
   cursor: pointer;
 }

@@ -235,7 +235,10 @@ exports.getTomorrowWeatherForPlant = functions.https.onCall(async (data, context
     if (!response.ok) {
       throw new functions.https.HttpsError("unavailable", `Tomorrow.io ${response.status}: ${text.slice(0, 160)}`);
     }
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    console.log("[getTomorrowWeatherForPlant] coordinate usate", { lat, lon });
+    console.log("[getTomorrowWeatherForPlant] API response", parsed);
+    return parsed;
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError("unavailable", error?.message || "Meteo Tomorrow.io non disponibile");

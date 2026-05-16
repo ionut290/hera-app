@@ -165,6 +165,7 @@ const ui = {
   commessaStatImpianti: document.getElementById("commessa-stat-impianti"),
   commessaStatSegnalazioni: document.getElementById("commessa-stat-segnalazioni"),
   commessaStatAvanzamento: document.getElementById("commessa-stat-avanzamento"),
+  commessaStatAvanzamentoDetail: document.getElementById("commessa-stat-avanzamento-detail"),
   commessaStatOre: document.getElementById("commessa-stat-ore"),
   commessaStatGiorni: document.getElementById("commessa-stat-giorni"),
   commessaActiveSquadreCount: document.getElementById("commessa-active-squadre-count"),
@@ -6937,7 +6938,19 @@ function refreshCommesseDependentUI(includeRemoteStats = true) {
 
 
 function getEmptyCommessaStats() {
-  return { total: 0, done: 0, openAlerts: 0, firstDoneAtMs: 0, firstDoneDateKey: "", lastResetAtMs: 0, lastResetDateKey: "" };
+  return {
+    total: 0,
+    done: 0,
+    openAlerts: 0,
+    firstDoneAtMs: 0,
+    firstDoneDateKey: "",
+    lastResetAtMs: 0,
+    lastResetDateKey: "",
+    totaleMqPrevisti: 0,
+    totaleMqEseguiti: 0,
+    mqRimanenti: 0,
+    avanzamentoMq: 0
+  };
 }
 
 function dateKeyFromMillis(millis) {
@@ -6955,6 +6968,7 @@ function calculateImpiantiStats(rawImpianti = []) {
   const doneImpianti = combined.filter((impianto) => Boolean(impianto.done));
   const done = doneImpianti.length;
   const openAlerts = combined.filter((impianto) => hasOpenImpiantoAlert(impianto)).length;
+  const mqStats = calculateImpiantiMqProgress(combined);
   const firstDoneAtMs = doneImpianti.reduce((earliest, impianto) => {
     const doneAtMs = firestoreDateToMillis(impianto.doneAt);
     if (!doneAtMs) return earliest;
@@ -6971,7 +6985,8 @@ function calculateImpiantiStats(rawImpianti = []) {
     firstDoneAtMs,
     firstDoneDateKey: dateKeyFromMillis(firstDoneAtMs),
     lastResetAtMs,
-    lastResetDateKey: dateKeyFromMillis(lastResetAtMs)
+    lastResetDateKey: dateKeyFromMillis(lastResetAtMs),
+    ...mqStats
   };
 }
 
@@ -7026,6 +7041,14 @@ function formatProgress(done, total) {
   return `${Math.round((Number(done || 0) / total) * 100)}%`;
 }
 
+function formatMqNumber(value) {
+  return formatAreaMqValue(value);
+}
+
+function formatMqProgressDetails(stats = {}) {
+  return `MQ eseguiti: ${formatMqNumber(stats.totaleMqEseguiti || 0)} • MQ rimanenti: ${formatMqNumber(stats.mqRimanenti || 0)} • Totale MQ: ${formatMqNumber(stats.totaleMqPrevisti || 0)}`;
+}
+
 function formatHoursNumber(value) {
   return Number(value || 0).toLocaleString("it-IT", { maximumFractionDigits: 2 });
 }
@@ -7045,7 +7068,7 @@ function formatParentCommessaSummary(aggregate) {
 function formatSingleCommessaSummary(commessaId) {
   const stats = getCommessaStats(commessaId);
   const workSummary = getCommessaWorkSummary(commessaId);
-  return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(stats.done, stats.total)} • ${formatWorkSummaryParts(workSummary)}`;
+  return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${stats.avanzamentoMq || 0}% • ${formatMqProgressDetails(stats)} • ${formatWorkSummaryParts(workSummary)}`;
 }
 
 function getSelectedCommessaDashboardStats() {
@@ -7057,13 +7080,21 @@ function getSelectedCommessaDashboardStats() {
   const linkedNoteCount = currentCommessaNotes.filter((note) => String(note?.impiantoKey || note?.impiantoId || "").trim()).length;
   const segnalazioni = linkedNoteCount || Number(storedStats.openAlerts || 0) || currentCommessaNotes.length;
   const workSummary = getCommessaWorkSummary(selectedCommessaId);
+  const liveMqStats = liveTotal ? calculateImpiantiMqProgress(currentImpianti) : null;
+  const mqStats = liveMqStats || {
+    totaleMqPrevisti: Number(storedStats.totaleMqPrevisti || 0),
+    totaleMqEseguiti: Number(storedStats.totaleMqEseguiti || 0),
+    mqRimanenti: Number(storedStats.mqRimanenti || 0),
+    avanzamentoMq: Number(storedStats.avanzamentoMq || 0)
+  };
   const activeDateKey = getActiveSquadreDateKey();
   const squadreCount = getSquadreCountForCommessaDate(selectedCommessaId, activeDateKey);
   return {
     total,
     done,
     segnalazioni,
-    avanzamento: formatProgress(done, total),
+    avanzamento: `${mqStats.avanzamentoMq || 0}%`,
+    ...mqStats,
     ore: Number(workSummary.totalHours || 0),
     giorni: Number(workSummary.workedDays ?? workSummary.workedDateKeys?.size ?? 0),
     squadreCount
@@ -7075,7 +7106,16 @@ function updateCommessaDashboard() {
   const stats = getSelectedCommessaDashboardStats();
   if (ui.commessaStatImpianti) ui.commessaStatImpianti.textContent = String(stats.total || 0);
   if (ui.commessaStatSegnalazioni) ui.commessaStatSegnalazioni.textContent = String(stats.segnalazioni || 0);
-  if (ui.commessaStatAvanzamento) ui.commessaStatAvanzamento.textContent = stats.avanzamento;
+  if (ui.commessaStatAvanzamento) {
+    ui.commessaStatAvanzamento.textContent = stats.avanzamento;
+    const progressDetails = formatMqProgressDetails(stats);
+    if (ui.commessaStatAvanzamentoDetail) ui.commessaStatAvanzamentoDetail.textContent = progressDetails;
+    const progressItem = ui.commessaStatAvanzamento.closest?.(".commessa-stat-item");
+    if (progressItem) {
+      progressItem.title = progressDetails;
+      progressItem.setAttribute("aria-label", `Vai agli impianti fatti. ${progressDetails}`);
+    }
+  }
   if (ui.commessaStatOre) ui.commessaStatOre.textContent = `${formatHoursNumber(stats.ore)} h`;
   if (ui.commessaStatGiorni) ui.commessaStatGiorni.textContent = `${stats.giorni || 0} gg`;
   if (ui.commessaActiveSquadreCount) {
@@ -9947,6 +9987,9 @@ async function importPendingRows() {
     merged.lavorazioniRichieste = mergeMultiValue(merged.lavorazioniRichieste, data.lavorazioniRichieste);
     merged.frequenzaAnnua = mergeMultiValue(merged.frequenzaAnnua, data.frequenzaAnnua);
     if (merged.areaMq == null && data.areaMq != null) merged.areaMq = data.areaMq;
+    if (merged.sfalciMq == null && data.sfalciMq != null) merged.sfalciMq = data.sfalciMq;
+    if (merged.sfalciVerdiMq == null && data.sfalciVerdiMq != null) merged.sfalciVerdiMq = data.sfalciVerdiMq;
+    if (merged.potaturaSiepiM == null && data.potaturaSiepiM != null) merged.potaturaSiepiM = data.potaturaSiepiM;
   });
 
   const rowsToCreate = [];
@@ -9964,6 +10007,9 @@ async function importPendingRows() {
     const mergedLavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
     const mergedFrequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
     const mergedAreaMq = row.areaMq != null ? row.areaMq : (existing.areaMq ?? null);
+    const mergedSfalciMq = row.sfalciMq != null ? row.sfalciMq : (existing.sfalciMq ?? null);
+    const mergedSfalciVerdiMq = row.sfalciVerdiMq != null ? row.sfalciVerdiMq : (existing.sfalciVerdiMq ?? null);
+    const mergedPotaturaSiepiM = row.potaturaSiepiM != null ? row.potaturaSiepiM : (existing.potaturaSiepiM ?? null);
     const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
     const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
     const changed = mergedCodicePrezzo !== String(existing.codicePrezzo || "")
@@ -9972,6 +10018,9 @@ async function importPendingRows() {
       || mergedLavorazioniRichieste !== String(existing.lavorazioniRichieste || "")
       || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "")
       || mergedAreaMq !== (existing.areaMq ?? null)
+      || mergedSfalciMq !== (existing.sfalciMq ?? null)
+      || mergedSfalciVerdiMq !== (existing.sfalciVerdiMq ?? null)
+      || mergedPotaturaSiepiM !== (existing.potaturaSiepiM ?? null)
       || extraFieldsChanged;
     if (!changed) return;
     rowsToUpdate.push({
@@ -9982,6 +10031,9 @@ async function importPendingRows() {
       lavorazioniRichieste: mergedLavorazioniRichieste,
       frequenzaAnnua: mergedFrequenzaAnnua,
       areaMq: mergedAreaMq,
+      sfalciMq: mergedSfalciMq,
+      sfalciVerdiMq: mergedSfalciVerdiMq,
+      potaturaSiepiM: mergedPotaturaSiepiM,
       extraFields: mergedExtraFields
     });
     existing.codicePrezzo = mergedCodicePrezzo;
@@ -9990,6 +10042,9 @@ async function importPendingRows() {
     existing.lavorazioniRichieste = mergedLavorazioniRichieste;
     existing.frequenzaAnnua = mergedFrequenzaAnnua;
     existing.areaMq = mergedAreaMq;
+    existing.sfalciMq = mergedSfalciMq;
+    existing.sfalciVerdiMq = mergedSfalciVerdiMq;
+    existing.potaturaSiepiM = mergedPotaturaSiepiM;
   });
 
   const operations = [
@@ -10022,6 +10077,9 @@ async function importPendingRows() {
           lavorazioniRichieste: row.lavorazioniRichieste,
           frequenzaAnnua: row.frequenzaAnnua,
           areaMq: row.areaMq ?? null,
+          sfalciMq: row.sfalciMq ?? null,
+          sfalciVerdiMq: row.sfalciVerdiMq ?? null,
+          potaturaSiepiM: row.potaturaSiepiM ?? null,
           extraFields: row.extraFields || {},
           hasOrdinario: hasOrdinario(row.codicePrezzo),
           hasStraordinario: hasStraordinario(row.codicePrezzo),
@@ -10126,17 +10184,27 @@ function normalizeRow(row) {
   if (indirizzoEntry.key) consumedKeys.add(indirizzoEntry.key);
   const tipologiaImpiantoEntry = getValueWithMatchedKey(keys, ["tipologiaimpianto", "tipoimpianto"]);
   if (tipologiaImpiantoEntry.key) consumedKeys.add(tipologiaImpiantoEntry.key);
-  const mqEntry = getValueWithMatchedKey(keys, [
-    "sfalciareeverdimqpotaturasiepim",
+  const sfalciEntry = getExactValueWithMatchedKey(keys, [
+    "sfalciverdimq",
     "sfalciareeverdimq",
+    "sfalciareeverdimqpotaturasiepim"
+  ]);
+  const potaturaSiepiEntry = getExactValueWithMatchedKey(keys, [
     "potaturasiepim",
+    "potaturasiepi"
+  ]);
+  const fallbackMqEntry = getExactValueWithMatchedKey(keys, [
     "superficiemq",
     "mq",
-    "superficie",
-    "area"
+    "superficie"
   ]);
+  const mqEntry = sfalciEntry.value ? sfalciEntry : (potaturaSiepiEntry.value ? potaturaSiepiEntry : fallbackMqEntry);
+  const parsedSfalciMq = parseAreaMqValue(sfalciEntry.value);
+  const parsedPotaturaSiepiM = parseAreaMqValue(potaturaSiepiEntry.value);
   const parsedAreaMq = parseAreaMqValue(mqEntry.value);
-  if (mqEntry.key && parsedAreaMq != null) consumedKeys.add(mqEntry.key);
+  if (sfalciEntry.key && parsedSfalciMq != null) consumedKeys.add(sfalciEntry.key);
+  if (potaturaSiepiEntry.key && parsedPotaturaSiepiM != null) consumedKeys.add(potaturaSiepiEntry.key);
+  if (fallbackMqEntry.key && parsedAreaMq != null) consumedKeys.add(fallbackMqEntry.key);
   const areaEntry = getValueWithMatchedKey(keys, ["area", "competenza"]);
   if (areaEntry.key && (areaEntry.key !== mqEntry.key || parsedAreaMq == null)) consumedKeys.add(areaEntry.key);
   const dittaEsecutriceEntry = getValueWithMatchedKey(keys, ["dittaesecutrice", "ditaesecutrice", "dittaappaltatrice", "ditta"]);
@@ -10170,10 +10238,14 @@ function normalizeRow(row) {
     area: areaEntry.key === mqEntry.key && parsedAreaMq != null ? "" : areaEntry.value,
     competenza: areaEntry.key === mqEntry.key && parsedAreaMq != null ? "" : areaEntry.value,
     areaMq: parsedAreaMq,
+    sfalciMq: parsedSfalciMq,
+    sfalciVerdiMq: parsedSfalciMq,
+    potaturaSiepiM: parsedPotaturaSiepiM,
     dittaEsecutrice: dittaEsecutriceEntry.value,
     voceRiferimento: voceEntry.value,
     codicePrezzo: codicePrezzoEntry.value,
-    sfalci: parsedAreaMq == null ? "" : mqEntry.value,
+    sfalci: parsedSfalciMq == null ? "" : sfalciEntry.value,
+    potaturaSiepi: parsedPotaturaSiepiM == null ? "" : potaturaSiepiEntry.value,
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
     tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]) || tipologiaImpiantoEntry.value,
     lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
@@ -10258,6 +10330,9 @@ function combineImpiantiForView(impianti) {
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, item.lavorazioniRichieste);
     existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, item.frequenzaAnnua);
     if (existing.areaMq == null && item.areaMq != null) existing.areaMq = item.areaMq;
+    if (existing.sfalciMq == null && item.sfalciMq != null) existing.sfalciMq = item.sfalciMq;
+    if (existing.sfalciVerdiMq == null && item.sfalciVerdiMq != null) existing.sfalciVerdiMq = item.sfalciVerdiMq;
+    if (existing.potaturaSiepiM == null && item.potaturaSiepiM != null) existing.potaturaSiepiM = item.potaturaSiepiM;
 
     existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
     existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
@@ -10338,6 +10413,13 @@ function getValueWithMatchedKey(obj, aliases) {
   for (const alias of aliases) {
     const matchedKey = keys.find((key) => key.includes(alias) && obj[key]);
     if (matchedKey) return { value: obj[matchedKey], key: matchedKey };
+  }
+  return { value: "", key: "" };
+}
+
+function getExactValueWithMatchedKey(obj, aliases) {
+  for (const alias of aliases) {
+    if (obj[alias]) return { value: obj[alias], key: alias };
   }
   return { value: "", key: "" };
 }
@@ -10655,14 +10737,55 @@ function setImpiantiViewMode(mode) {
   renderImpianti();
 }
 
-function getPlantMq(plant) {
-  return plant?.areaMq ?? plant?.sfalciMq ?? plant?.sfalci ?? plant?.mq ?? plant?.superficieMq ?? plant?.superficie_mq ?? plant?.area_mq ?? null;
+function getFirstParsedAreaValue(values = []) {
+  for (const value of values) {
+    const parsed = parseAreaMqValue(value);
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+function getPlantSfalciMq(plant = {}) {
+  const importedSfalciMq = getFirstParsedAreaValue([plant.sfalciMq, plant.sfalciVerdiMq, plant.sfalciVerdi, plant.sfalci]);
+  if (importedSfalciMq != null) return importedSfalciMq;
+  const hasPotaturaValue = getFirstParsedAreaValue([plant.potaturaSiepiM, plant.potaturaSiepi]) != null;
+  return hasPotaturaValue ? null : getFirstParsedAreaValue([plant.areaMq]);
+}
+
+function getPlantMq(plant = {}) {
+  return getFirstParsedAreaValue([
+    plant.sfalciMq,
+    plant.sfalciVerdiMq,
+    plant.sfalciVerdi,
+    plant.potaturaSiepiM,
+    plant.potaturaSiepi,
+    plant.areaMq,
+    plant.sfalci,
+    plant.mq,
+    plant.superficieMq,
+    plant.superficie_mq,
+    plant.area_mq
+  ]);
+}
+
+function calculateImpiantiMqProgress(impianti = []) {
+  const totaleMqPrevisti = impianti.reduce((sum, impianto) => sum + Number(getPlantSfalciMq(impianto) || 0), 0);
+  const totaleMqEseguiti = impianti.reduce((sum, impianto) => {
+    if (!impianto.done) return sum;
+    return sum + Number(getPlantSfalciMq(impianto) || 0);
+  }, 0);
+  const avanzamentoMq = totaleMqPrevisti > 0
+    ? Math.round((totaleMqEseguiti / totaleMqPrevisti) * 100)
+    : 0;
+  const mqRimanenti = Math.max(totaleMqPrevisti - totaleMqEseguiti, 0);
+  return { totaleMqPrevisti, totaleMqEseguiti, mqRimanenti, avanzamentoMq };
 }
 
 function createPlantMqBox(plant) {
   const mqValue = getPlantMq(plant);
+  if (mqValue == null) return null;
   const box = document.createElement("div");
-  box.className = "area-mq-box";
+  box.className = "area-mq-box mq-chip";
   box.title = "Superficie impianto";
 
   const icon = document.createElement("span");
@@ -10911,7 +11034,8 @@ function renderImpianti() {
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
     if (managementStack.childElementCount > 0) actions.appendChild(managementStack);
-    actions.appendChild(createPlantMqBox(impianto));
+    const mqBox = createPlantMqBox(impianto);
+    if (mqBox) actions.appendChild(mqBox);
     const richiestaPdfUrl = String(
       impianto.linkRichiestaDrive
       || impianto.linkDocumentoRichiesta

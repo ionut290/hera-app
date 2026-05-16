@@ -6179,3 +6179,211 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+
+/* Meteo operativo: layout mobile-first senza overflow orizzontale */
+.weather-page,
+.weather-page * {
+  box-sizing: border-box;
+}
+
+.weather-page {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
+
+.weather-page .impianto-weather-detail-view,
+.weather-page .impianto-weather-detail-head,
+.weather-page .impianto-weather-detail-head > div,
+.weather-page .impianto-weather-detail-content,
+.weather-page .weather-detail-section,
+.weather-page .weather-detail-risk-summary,
+.weather-page .weather-detail-risk-grid,
+.weather-page .weather-detail-current-grid,
+.weather-page .weather-detail-metric,
+.weather-page .weather-detail-radar-card,
+.weather-page .weather-detail-indications-card,
+.weather-page .weather-detail-risk-box {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.weather-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-subtitle {
+  display: block;
+  max-width: calc(100vw - 90px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-row,
+.weather-detail-hour-rain,
+.weather-detail-hour-wind,
+.weather-detail-hour-time,
+.weather-info-label,
+.weather-info-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-row {
+  display: block;
+  width: 100%;
+}
+
+.weather-detail-hour-panel {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.hourly-forecast-list {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hourly-card {
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .weather-page {
+    padding: 12px;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+  }
+
+  .weather-page .impianto-weather-detail-view {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .weather-page .impianto-weather-detail-head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .weather-page .weather-detail-refresh-btn {
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .weather-title {
+    font-size: 22px;
+    line-height: 1.05;
+    margin-bottom: 2px;
+  }
+
+  .weather-subtitle {
+    font-size: 14px;
+    max-width: calc(100vw - 90px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .risk-card {
+    padding: 14px;
+  }
+
+  .risk-card h2,
+  .risk-card strong {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .weather-detail-risk-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .risk-row {
+    font-size: 18px;
+    padding: 10px 12px;
+  }
+
+  .current-weather-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .weather-info-box {
+    padding: 10px;
+    min-height: 74px;
+  }
+
+  .weather-info-label {
+    font-size: 15px;
+  }
+
+  .weather-info-value {
+    font-size: 20px;
+  }
+
+  .hourly-forecast-list {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 8px;
+    margin-inline: 0;
+  }
+
+  .hourly-card {
+    min-width: 130px;
+    max-width: 130px;
+    flex: 0 0 auto;
+  }
+
+  .weather-detail-hour-card summary {
+    min-height: 104px;
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .weather-detail-hour-time {
+    font-size: 14px;
+  }
+
+  .weather-detail-hour-icon {
+    font-size: 18px;
+  }
+
+  .weather-detail-section,
+  .weather-detail-risk-box,
+  .weather-detail-radar-card {
+    padding: 12px;
+  }
+
+  .weather-detail-section h3,
+  .weather-detail-indications-head h3 {
+    font-size: 16px;
+  }
+
+  .chat-fab {
+    width: 54px;
+    height: 54px;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    font-size: 1.35rem;
+  }
+}

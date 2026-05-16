@@ -11037,9 +11037,12 @@ function normalizeStoredImpiantoWeatherStatus(entry) {
     badgeLabel: getBadgeLabelFromSyntheticImpiantoWeatherState(syntheticState, description),
     rainWindow: entry.rainWindow || null,
     rainIntensity: entry.rainIntensity || "",
-    rainAmount: Number.isFinite(Number(entry.rainAmount)) ? Number(entry.rainAmount) : null,
-    importantWindKmh: Number.isFinite(Number(entry.importantWindKmh)) ? Number(entry.importantWindKmh) : null,
-    operationMessage: entry.operationMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia" }),
+    rainAmount: isPresentFiniteNumber(entry.rainAmount) ? Number(entry.rainAmount) : null,
+    windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh ?? entry.importantWindKmh) ? Number(entry.windSpeedKmh ?? entry.importantWindKmh) : null,
+    windDirectionDegrees: isPresentFiniteNumber(entry.windDirectionDegrees) ? Number(entry.windDirectionDegrees) : null,
+    windDirectionLabel: entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+    importantWindKmh: isPresentFiniteNumber(entry.importantWindKmh) ? Number(entry.importantWindKmh) : null,
+    operationMessage: entry.operationMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia", importantWindKmh: entry.importantWindKmh }),
     weatherPartial: Boolean(entry.weatherPartial),
     messages: syntheticState === "ok" ? [] : [description],
     updatedAt: Number(entry.updatedAt) || Date.now()
@@ -11079,8 +11082,11 @@ function persistImpiantoWeatherCache() {
         rainProbability: entry.rainProbability ?? null,
         rainWindow: entry.rainWindow || null,
         rainIntensity: entry.rainIntensity || "",
-        rainAmount: Number.isFinite(Number(entry.rainAmount)) ? Number(entry.rainAmount) : null,
-        importantWindKmh: Number.isFinite(Number(entry.importantWindKmh)) ? Number(entry.importantWindKmh) : null,
+        rainAmount: isPresentFiniteNumber(entry.rainAmount) ? Number(entry.rainAmount) : null,
+        windSpeedKmh: isPresentFiniteNumber(entry.windSpeedKmh) ? Number(entry.windSpeedKmh) : null,
+        windDirectionDegrees: isPresentFiniteNumber(entry.windDirectionDegrees) ? Number(entry.windDirectionDegrees) : null,
+        windDirectionLabel: entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees),
+        importantWindKmh: isPresentFiniteNumber(entry.importantWindKmh) ? Number(entry.importantWindKmh) : null,
         operationMessage: entry.operationMessage || "",
         weatherPartial: Boolean(entry.weatherPartial),
         description: entry.description || entry.badgeLabel || "Meteo non disponibile",
@@ -11150,30 +11156,53 @@ function getImpiantoWeatherPrimaryLabel(entry = {}) {
 
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
   const hasRain = Boolean(entry.hasCurrentRain || entry.hasNextHourRain || Number(entry.rainAmount) > 0 || Number(entry.rainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY);
-  if (entry.riskLevel === "green" && !hasRain) return [`${emoji} Meteo ok`];
-  if (entry.riskLevel === "unavailable") return ["Dati meteo parziali"];
+  if (entry.riskLevel === "green" && !hasRain) return [`${emoji} Meteo ok`, formatImpiantoWindLine(entry)];
+  if (entry.riskLevel === "unavailable") return ["Dati meteo parziali", formatImpiantoWindLine(entry)];
 
   const lines = [`${emoji} ${label}`];
-  const timingParts = [];
-  if (entry.rainWindow?.label) timingParts.push(entry.rainWindow.label);
-  if (entry.rainIntensity) timingParts.push(entry.rainIntensity);
-  if (timingParts.length) lines.push(timingParts.join(" · "));
+  const rainLine = formatImpiantoRainLine(entry);
+  if (rainLine) lines.push(rainLine);
 
   const quantityParts = [];
-  if (Number.isFinite(Number(entry.rainProbability))) quantityParts.push(`Prob. ${Math.round(Number(entry.rainProbability))}%`);
-  if (Number.isFinite(Number(entry.rainAmount))) quantityParts.push(`${formatWeatherAmount(entry.rainAmount)} mm`);
+  if (isPresentFiniteNumber(entry.rainProbability)) quantityParts.push(`Prob. ${Math.round(Number(entry.rainProbability))}%`);
+  if (isPresentFiniteNumber(entry.rainAmount)) quantityParts.push(`${formatWeatherAmount(entry.rainAmount)} mm`);
   if (quantityParts.length) lines.push(quantityParts.join(" · "));
 
-  if (Number.isFinite(Number(entry.importantWindKmh))) lines.push(`Vento ${Math.round(Number(entry.importantWindKmh))} km/h`);
+  lines.push(formatImpiantoWindLine(entry));
   if (entry.weatherPartial) lines.push("Dati meteo parziali");
   if (entry.operationMessage) lines.push(`⚠️ ${entry.operationMessage}`);
-  return lines;
+  return lines.filter(Boolean);
+}
+
+function formatImpiantoRainLine(entry = {}) {
+  if (!entry.hasCurrentRain && !entry.hasNextHourRain && !entry.rainWindow) return "";
+  const intensity = entry.rainIntensity ? `${entry.rainIntensity} pioggia` : "Pioggia";
+  if (entry.rainWindow?.start && entry.rainWindow?.end && entry.rainWindow.start !== entry.rainWindow.end) {
+    return `🌧️ ${intensity} dalle ${formatWeatherSlotTime(entry.rainWindow.start)} alle ${formatWeatherSlotTime(entry.rainWindow.end)}`;
+  }
+  if (entry.rainWindow?.start) return `🌧️ ${intensity} ore ${formatWeatherSlotTime(entry.rainWindow.start)}`;
+  return `🌧️ ${intensity}`;
+}
+
+function formatImpiantoWindLine(entry = {}) {
+  if (!isPresentFiniteNumber(entry.windSpeedKmh)) return "Dato vento non disponibile";
+  const direction = entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees);
+  return `💨 ${Math.round(Number(entry.windSpeedKmh))} km/h${direction ? ` ${direction}` : ""}`;
+}
+
+function getImpiantoWeatherLineClass(line = "", index = 0) {
+  const normalized = String(line || "").toLowerCase();
+  if (normalized.includes("rischio") || normalized.includes("allerta") || normalized.includes("rinvio")) return " is-risk";
+  if (normalized.includes("pioggia") || normalized.includes("mm") || normalized.includes("prob.")) return " is-rain";
+  if (normalized.includes("vento") || normalized.startsWith("💨") || normalized.includes("dato vento")) return " is-wind";
+  if (index === 0) return " is-primary";
+  return "";
 }
 
 function buildImpiantoWeatherCardInnerMarkup(state) {
   const level = escapeHTML(state.level);
   const lines = state.lines?.length ? state.lines : [state.text];
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}">${lines.map((line, index) => `<span class="impianto-weather-line${index === 0 ? " is-primary" : ""}">${escapeHTML(line)}</span>`).join("")}</span>`;
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}">${lines.map((line, index) => `<span class="impianto-weather-line${getImpiantoWeatherLineClass(line, index)}">${escapeHTML(line)}</span>`).join("")}</span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {
@@ -11214,6 +11243,32 @@ function formatWeatherAmount(value) {
   return amount >= 10 ? String(Math.round(amount)) : amount.toFixed(1);
 }
 
+function isPresentFiniteNumber(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+}
+
+function convertWindSpeedToKmh(value, unit = "km/h") {
+  if (!isPresentFiniteNumber(value)) return null;
+  const speed = Number(value);
+  const normalizedUnit = String(unit || "km/h").toLowerCase();
+  if (["km/h", "kmh", "kilometres per hour", "kilometers per hour"].includes(normalizedUnit)) return speed;
+  if (["m/s", "ms", "meter/s", "metre/s"].includes(normalizedUnit)) return speed * 3.6;
+  if (["mph"].includes(normalizedUnit)) return speed * 1.609344;
+  if (["kn", "kt", "knot", "knots"].includes(normalizedUnit)) return speed * 1.852;
+  return speed;
+}
+
+function getWindDirectionLabel(degrees) {
+  if (!isPresentFiniteNumber(degrees)) return "";
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((Number(degrees) % 360) + 360) % 360;
+  return directions[Math.round(normalized / 45) % directions.length];
+}
+
+function getWeatherSeriesUnit(data, section, field, fallback = "") {
+  return data?.[`${section}_units`]?.[field] || fallback;
+}
+
 function formatWeatherSlotTime(timestamp) {
   if (!Number.isFinite(Number(timestamp))) return "";
   return new Date(Number(timestamp)).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
@@ -11227,14 +11282,24 @@ function getWeatherSlotIntervalMinutes(slots = []) {
 
 function buildRainWindowLabel(rainSlots = [], allSlots = []) {
   if (!rainSlots.length) return null;
-  const intervalMs = getWeatherSlotIntervalMinutes(allSlots.length ? allSlots : rainSlots) * 60000;
-  const start = Number(rainSlots[0].timestamp);
-  const end = Number(rainSlots[rainSlots.length - 1].timestamp) + intervalMs;
+  const sortedRainSlots = [...rainSlots].sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+  const intervalMs = getWeatherSlotIntervalMinutes(allSlots.length ? allSlots : sortedRainSlots) * 60000;
+  const firstWindow = [];
+  sortedRainSlots.forEach((slot) => {
+    if (!firstWindow.length) {
+      firstWindow.push(slot);
+      return;
+    }
+    const previous = firstWindow[firstWindow.length - 1];
+    if (Number(slot.timestamp) - Number(previous.timestamp) <= intervalMs * 1.5) firstWindow.push(slot);
+  });
+  const start = Number(firstWindow[0]?.timestamp);
+  const end = firstWindow.length > 1 ? Number(firstWindow[firstWindow.length - 1].timestamp) + intervalMs : start;
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return {
     start,
     end,
-    label: `${formatWeatherSlotTime(start)}–${formatWeatherSlotTime(end)}`
+    label: start === end ? formatWeatherSlotTime(start) : `${formatWeatherSlotTime(start)}–${formatWeatherSlotTime(end)}`
   };
 }
 
@@ -11258,29 +11323,73 @@ function getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain, hasNext
   return "Ok lavoro";
 }
 
+function isRainWeatherSlot(slot) {
+  const probability = Number(slot?.precipitation_probability) || 0;
+  return getPrecipitationAmount(slot) > 0 || probability >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || NAVIGATION_WEATHER_RAIN_CODES.has(Number(slot?.weather_code));
+}
+
+function getImpiantoWeatherForecastSlots(data) {
+  const now = Date.now();
+  const maxForecast = now + 12 * 60 * 60 * 1000;
+  const minutelySlots = buildNavigationWeatherSlots(data?.minutely_15 || {}, data, "minutely_15")
+    .filter((slot) => slot.timestamp >= now - 15 * 60 * 1000 && slot.timestamp <= maxForecast);
+  const hourlySlots = buildNavigationWeatherSlots(data?.hourly || {}, data, "hourly")
+    .filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= maxForecast);
+  return minutelySlots.length ? minutelySlots : hourlySlots;
+}
+
+function getCurrentWindDetails(data) {
+  const current = data?.current || {};
+  const currentUnit = getWeatherSeriesUnit(data, "current", "wind_speed_10m", "km/h");
+  const speedKmh = convertWindSpeedToKmh(current.wind_speed_10m, currentUnit);
+  const firstForecastWind = getImpiantoWeatherForecastSlots(data).find((slot) => isPresentFiniteNumber(slot.wind_speed_10m) || isPresentFiniteNumber(slot.wind_direction_10m));
+  const directionDegrees = isPresentFiniteNumber(current.wind_direction_10m)
+    ? Number(current.wind_direction_10m)
+    : (isPresentFiniteNumber(firstForecastWind?.wind_direction_10m) ? Number(firstForecastWind.wind_direction_10m) : null);
+  if (isPresentFiniteNumber(speedKmh)) {
+    return {
+      speedKmh,
+      directionDegrees,
+      directionLabel: getWindDirectionLabel(directionDegrees)
+    };
+  }
+  if (!firstForecastWind || !isPresentFiniteNumber(firstForecastWind.wind_speed_10m)) return { speedKmh: null, directionDegrees: null, directionLabel: "" };
+  const forecastSpeed = convertWindSpeedToKmh(firstForecastWind.wind_speed_10m, firstForecastWind.wind_speed_unit || getWeatherSeriesUnit(data, "hourly", "wind_speed_10m", "km/h"));
+  const forecastDirection = isPresentFiniteNumber(firstForecastWind.wind_direction_10m) ? Number(firstForecastWind.wind_direction_10m) : null;
+  return {
+    speedKmh: forecastSpeed,
+    directionDegrees: forecastDirection,
+    directionLabel: getWindDirectionLabel(forecastDirection)
+  };
+}
+
 function buildImpiantoWeatherOperationalDetails(weatherData, { hasCurrentRain, hasNextHourRain, riskLevel }) {
   const current = weatherData?.current || {};
-  const allSlots = getNavigationWeatherNextHourSlots(weatherData);
-  const rainSlots = allSlots.filter((slot) => {
-    const probability = Number(slot.precipitation_probability) || 0;
-    return getPrecipitationAmount(slot) > 0 || probability >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY || NAVIGATION_WEATHER_RAIN_CODES.has(Number(slot.weather_code));
-  });
-  const rainAmount = rainSlots.reduce((sum, slot) => sum + getPrecipitationAmount(slot), hasCurrentRain ? getPrecipitationAmount(current) : 0);
-  const rainProbability = rainSlots.reduce((max, slot) => Math.max(max, Number(slot.precipitation_probability) || 0), Number(weatherData?.current?.precipitation_probability) || 0);
-  const strongestRainSlot = [...rainSlots, ...(hasCurrentRain ? [current] : [])]
+  const allSlots = getImpiantoWeatherForecastSlots(weatherData);
+  const rainSlots = allSlots.filter(isRainWeatherSlot);
+  const rainWindow = buildRainWindowLabel(rainSlots.length ? rainSlots : (hasCurrentRain ? [{ ...current, timestamp: Date.now() }] : []), allSlots);
+  const windowRainSlots = rainWindow
+    ? rainSlots.filter((slot) => Number(slot.timestamp) >= rainWindow.start && Number(slot.timestamp) <= (rainWindow.end || rainWindow.start))
+    : rainSlots;
+  const relevantRainSlots = windowRainSlots.length ? windowRainSlots : rainSlots;
+  const rainAmount = relevantRainSlots.reduce((sum, slot) => sum + getPrecipitationAmount(slot), hasCurrentRain ? getPrecipitationAmount(current) : 0);
+  const rainProbability = relevantRainSlots.reduce((max, slot) => Math.max(max, Number(slot.precipitation_probability) || 0), 0);
+  const strongestRainSlot = [...relevantRainSlots, ...(hasCurrentRain ? [current] : [])]
     .sort((a, b) => getPrecipitationAmount(b) - getPrecipitationAmount(a))[0] || null;
   const rainIntensity = hasCurrentRain || hasNextHourRain
     ? getRainIntensity(Math.max(rainAmount, getPrecipitationAmount(strongestRainSlot)), rainProbability, strongestRainSlot?.weather_code ?? current.weather_code)
     : "";
-  const currentWind = Math.max(Number(current.wind_speed_10m) || 0, Number(current.wind_gusts_10m) || 0);
-  const forecastWind = allSlots.reduce((max, slot) => Math.max(max, Number(slot.wind_speed_10m) || 0, Number(slot.wind_gusts_10m) || 0), 0);
-  const importantWindKmh = Math.max(currentWind, forecastWind) >= NAVIGATION_WEATHER_STRONG_WIND_KMH ? Math.max(currentWind, forecastWind) : null;
-  const weatherPartial = (hasCurrentRain || hasNextHourRain || riskLevel !== "green") && (!rainSlots.length && !hasCurrentRain || (!Number.isFinite(rainProbability) && !Number.isFinite(Number(rainAmount))));
+  const wind = getCurrentWindDetails(weatherData);
+  const importantWindKmh = isPresentFiniteNumber(wind.speedKmh) && Number(wind.speedKmh) >= NAVIGATION_WEATHER_STRONG_WIND_KMH ? Number(wind.speedKmh) : null;
+  const weatherPartial = (hasCurrentRain || hasNextHourRain || riskLevel !== "green") && ((!rainSlots.length && !hasCurrentRain) || (!isPresentFiniteNumber(rainProbability) && !isPresentFiniteNumber(rainAmount)));
   return {
-    rainWindow: buildRainWindowLabel(rainSlots.length ? rainSlots : (hasCurrentRain ? [{ ...current, timestamp: Date.now() }] : []), allSlots),
+    rainWindow,
     rainIntensity,
-    rainAmount: Number.isFinite(Number(rainAmount)) ? rainAmount : null,
-    rainProbability: Number.isFinite(Number(rainProbability)) && rainProbability > 0 ? rainProbability : null,
+    rainAmount: isPresentFiniteNumber(rainAmount) ? rainAmount : null,
+    rainProbability: isPresentFiniteNumber(rainProbability) && rainProbability > 0 ? rainProbability : null,
+    windSpeedKmh: wind.speedKmh,
+    windDirectionDegrees: wind.directionDegrees,
+    windDirectionLabel: wind.directionLabel,
     importantWindKmh,
     operationMessage: getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain, hasNextHourRain, rainIntensity, importantWindKmh }),
     weatherPartial: Boolean(weatherPartial)
@@ -11323,8 +11432,8 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     currentCode,
     hasCurrentRain,
     hasNextHourRain,
-    currentWind: Number(current.wind_speed_10m) || 0,
-    currentGust: Number(current.wind_gusts_10m) || 0
+    currentWind: weatherDetails.windSpeedKmh ?? 0,
+    currentGust: convertWindSpeedToKmh(current.wind_gusts_10m, getWeatherSeriesUnit(weatherData, "current", "wind_gusts_10m", "km/h")) ?? 0
   });
   const description = badgeLabel === "Meteo OK" ? weatherCodeLabel(current.weather_code).replace(/^[^A-Za-zÀ-ÿ]+\s*/, "") : shortAlertText;
 
@@ -11347,6 +11456,9 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     rainWindow: weatherDetails.rainWindow,
     rainIntensity: weatherDetails.rainIntensity,
     rainAmount: weatherDetails.rainAmount,
+    windSpeedKmh: weatherDetails.windSpeedKmh,
+    windDirectionDegrees: weatherDetails.windDirectionDegrees,
+    windDirectionLabel: weatherDetails.windDirectionLabel,
     importantWindKmh: weatherDetails.importantWindKmh,
     operationMessage: weatherDetails.operationMessage,
     weatherPartial: weatherDetails.weatherPartial,
@@ -11417,6 +11529,9 @@ async function refreshImpiantoWeatherStatus(impianto, { force = false } = {}) {
       rainWindow: null,
       rainIntensity: "",
       rainAmount: null,
+      windSpeedKmh: null,
+      windDirectionDegrees: null,
+      windDirectionLabel: "",
       importantWindKmh: null,
       operationMessage: "",
       weatherPartial: true,
@@ -11475,9 +11590,7 @@ function preloadImpiantiWeather(impianti = [], { limit = IMPIANTO_WEATHER_REFRES
 
 function preloadCommessaWeatherForVisibleImpianti() {
   if (!selectedCommessaId || !currentImpianti.length) return;
-  const visible = getVisibleMapImpianti(map, currentImpianti);
-  const source = visible.length ? visible : currentImpianti;
-  preloadImpiantiWeather(source, { limit: IMPIANTO_WEATHER_REFRESH_LIMIT, preferNearest: true });
+  preloadImpiantiWeather(currentImpianti, { limit: currentImpianti.length, preferNearest: true });
 }
 
 
@@ -11587,10 +11700,12 @@ async function fetchImpiantoNavigationWeather({ lat, lon }) {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
-    current: "temperature_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_gusts_10m",
-    minutely_15: "precipitation,weather_code,wind_speed_10m,wind_gusts_10m",
-    hourly: "precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility",
-    forecast_hours: "2",
+    current: "temperature_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    minutely_15: "precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    hourly: "precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility",
+    wind_speed_unit: "kmh",
+    forecast_hours: "12",
+    forecast_minutely_15: "48",
     forecast_days: "1",
     timezone: "auto"
   });
@@ -11604,8 +11719,8 @@ function buildNavigationWeatherMessages(data) {
   const current = data?.current || {};
   const currentPrecipitation = getPrecipitationAmount(current);
   const currentCode = Number(current.weather_code);
-  const currentWind = Number(current.wind_speed_10m) || 0;
-  const currentGust = Number(current.wind_gusts_10m) || 0;
+  const currentWind = convertWindSpeedToKmh(current.wind_speed_10m, getWeatherSeriesUnit(data, "current", "wind_speed_10m", "km/h")) ?? 0;
+  const currentGust = convertWindSpeedToKmh(current.wind_gusts_10m, getWeatherSeriesUnit(data, "current", "wind_gusts_10m", "km/h")) ?? 0;
   const nextHourSlots = getNavigationWeatherNextHourSlots(data);
 
   if (NAVIGATION_WEATHER_THUNDER_CODES.has(currentCode)) {
@@ -11632,7 +11747,7 @@ function buildNavigationWeatherMessages(data) {
   if (currentWind >= NAVIGATION_WEATHER_STRONG_WIND_KMH || currentGust >= NAVIGATION_WEATHER_STRONG_GUST_KMH) {
     messages.push("Vento forte attivo nella zona");
   }
-  const firstWindSlot = nextHourSlots.find((slot) => (Number(slot.wind_speed_10m) || 0) >= NAVIGATION_WEATHER_STRONG_WIND_KMH || (Number(slot.wind_gusts_10m) || 0) >= NAVIGATION_WEATHER_STRONG_GUST_KMH);
+  const firstWindSlot = nextHourSlots.find((slot) => (convertWindSpeedToKmh(slot.wind_speed_10m, slot.wind_speed_unit) ?? 0) >= NAVIGATION_WEATHER_STRONG_WIND_KMH || (convertWindSpeedToKmh(slot.wind_gusts_10m, slot.wind_speed_unit) ?? 0) >= NAVIGATION_WEATHER_STRONG_GUST_KMH);
   if (firstWindSlot) {
     messages.push(`Vento forte previsto ${formatNavigationWeatherSlotEta(firstWindSlot)}`);
   }
@@ -11646,13 +11761,14 @@ function buildNavigationWeatherMessages(data) {
 function getNavigationWeatherNextHourSlots(data) {
   const now = Date.now();
   const nextHour = now + 60 * 60 * 1000;
-  const minutelySlots = buildNavigationWeatherSlots(data?.minutely_15 || {}).filter((slot) => slot.timestamp >= now - 15 * 60 * 1000 && slot.timestamp <= nextHour);
+  const minutelySlots = buildNavigationWeatherSlots(data?.minutely_15 || {}, data, "minutely_15").filter((slot) => slot.timestamp >= now - 15 * 60 * 1000 && slot.timestamp <= nextHour);
   if (minutelySlots.length) return minutelySlots;
-  return buildNavigationWeatherSlots(data?.hourly || {}).filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= nextHour);
+  return buildNavigationWeatherSlots(data?.hourly || {}, data, "hourly").filter((slot) => slot.timestamp >= now - 60 * 60 * 1000 && slot.timestamp <= nextHour);
 }
 
-function buildNavigationWeatherSlots(series) {
+function buildNavigationWeatherSlots(series, data = null, section = "hourly") {
   const times = Array.isArray(series?.time) ? series.time : [];
+  const windSpeedUnit = data ? getWeatherSeriesUnit(data, section, "wind_speed_10m", "km/h") : "km/h";
   return times.map((time, idx) => ({
     time,
     timestamp: new Date(time).getTime(),
@@ -11662,6 +11778,8 @@ function buildNavigationWeatherSlots(series) {
     showers: series.showers?.[idx],
     weather_code: series.weather_code?.[idx],
     wind_speed_10m: series.wind_speed_10m?.[idx],
+    wind_speed_unit: windSpeedUnit,
+    wind_direction_10m: series.wind_direction_10m?.[idx],
     wind_gusts_10m: series.wind_gusts_10m?.[idx],
     visibility: series.visibility?.[idx]
   })).filter((slot) => Number.isFinite(slot.timestamp));

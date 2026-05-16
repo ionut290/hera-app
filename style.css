@@ -5510,11 +5510,12 @@ textarea:focus-visible {
 }
 
 .impianto-actions {
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   margin-top: 2px;
   padding-bottom: 0;
   flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .action-icon-btn[data-action-key="navigate"],
@@ -5722,12 +5723,12 @@ textarea:focus-visible {
   .impianto-summary-btn strong { font-size: clamp(0.94rem, 3.8vw, 1rem); }
   .impianto-summary-btn .badge { font-size: 0.62rem; padding: 2px 7px; }
   .impianto-travel-meta { font-size: 0.7rem; gap: 3px; }
-  .impianto-actions { gap: 5px; }
+  .impianto-actions { gap: 4px; flex-wrap: nowrap; overflow-x: auto; }
   .action-icon-btn[data-action-key="navigate"],
-  .action-icon-btn[data-action-key="whatsapp"] { width: 34px; min-width: 34px; min-height: 34px !important; background-size: 34px 34px; }
-  .action-icon-btn[data-action-key="navigate"] { background-size: 20px 20px; }
+  .action-icon-btn[data-action-key="whatsapp"] { width: 32px; min-width: 32px; min-height: 32px !important; background-size: 32px 32px; }
+  .action-icon-btn[data-action-key="navigate"] { background-size: 19px 19px; }
   .impianto-management-stack .gestione-toggle-btn,
-  .gestione-toggle-btn { min-height: 31px; padding: 5px 9px; font-size: 0.7rem; }
+  .gestione-toggle-btn { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 0.68rem; }
   .impianto-weather-column,
   .weather-compact,
   .weather-widget,
@@ -5800,8 +5801,8 @@ textarea:focus-visible {
 
 .area-mq-box {
   width: auto;
-  min-width: 78px;
-  height: 36px;
+  min-width: 82px;
+  height: 42px;
   border: 1px solid #cfe2ff;
   border-radius: 14px;
   background: #f4f9ff;
@@ -5810,10 +5811,10 @@ textarea:focus-visible {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0 8px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 800;
   line-height: 1;
   box-sizing: border-box;
   flex: 0 0 auto;
@@ -5826,7 +5827,7 @@ textarea:focus-visible {
 }
 
 .area-mq-value {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -5834,16 +5835,16 @@ textarea:focus-visible {
 
 @media (max-width: 760px) {
   .area-mq-box {
-    min-width: 74px;
-    height: 34px;
+    min-width: 68px;
+    height: 32px;
     border-radius: 12px;
     gap: 3px;
     padding: 0 6px;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .area-mq-icon {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .area-mq-value {
@@ -6439,4 +6440,46 @@ textarea:focus-visible {
     bottom: max(10px, env(safe-area-inset-bottom, 0px));
     font-size: 1.35rem;
   }
+}
+
+@media (max-width: 380px) {
+  .impianto-actions { gap: 2px; }
+  .action-icon-btn[data-action-key="navigate"],
+  .action-icon-btn[data-action-key="whatsapp"],
+  .impianto-management-stack .gestione-toggle-btn,
+  .gestione-toggle-btn {
+    width: 28px;
+    min-width: 28px;
+    min-height: 28px !important;
+    padding: 0;
+    font-size: 0.62rem;
+  }
+  .action-icon-btn[data-action-key="whatsapp"] { background-size: 28px 28px; }
+  .action-icon-btn[data-action-key="navigate"] { background-size: 17px 17px; }
+  .area-mq-box { min-width: 62px; height: 28px; padding: 0 4px; }
+  .area-mq-value { font-size: 9px; }
+}
+
+.commessa-stat-detail {
+  grid-column: 1 / -1;
+  display: block;
+  margin-top: 2px;
+  color: #475569;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+@media (max-width: 760px) {
+  .commessa-stat-detail {
+    font-size: 0.52rem;
+  }
+}
+
+.commessa-stat-item > span:not(.commessa-stat-icon) {
+  color: color-mix(in srgb, var(--commessa-stat-color, #43506a) 42%, #334155);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }

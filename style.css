@@ -5027,3 +5027,51 @@ textarea:focus-visible {
     padding-inline: 7px;
   }
 }
+
+/* Pulsante manuale meteo commessa: compatto nella testata senza alterare il meteo Home */
+.commessa-header-actions .commessa-action-btn--weather {
+  font-size: 1rem;
+  letter-spacing: -0.08em;
+}
+
+.commessa-header-actions .commessa-action-btn--weather.is-loading {
+  opacity: 0.78;
+  cursor: wait;
+}
+
+.commessa-weather-refresh-status {
+  grid-column: 3 / -1;
+  justify-self: end;
+  margin: -4px 0 0;
+  max-width: min(100%, 320px);
+  min-height: 1rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: right;
+  color: #475569;
+}
+
+.commessa-weather-refresh-status:empty {
+  display: none;
+}
+
+.commessa-weather-refresh-status[data-state="success"] {
+  color: #047857;
+}
+
+.commessa-weather-refresh-status[data-state="empty"] {
+  color: #92400e;
+}
+
+.commessa-weather-refresh-status[data-state="error"] {
+  color: #b91c1c;
+}
+
+@media (max-width: 430px) {
+  .commessa-weather-refresh-status {
+    grid-column: 1 / -1;
+    justify-self: end;
+    font-size: 0.68rem;
+  }
+}

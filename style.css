@@ -1941,7 +1941,21 @@ textarea:focus-visible {
   padding: 8px;
   background: #fbfdff;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.impianto-main-column {
+  display: grid;
   gap: 6px;
+  min-width: 0;
+}
+
+.impianto-weather-column {
+  display: flex;
+  min-width: 0;
+  align-self: stretch;
 }
 
 .impianto-item p { margin: 4px 0; }
@@ -1952,20 +1966,22 @@ textarea:focus-visible {
   background: transparent;
   text-align: left;
   padding: 2px 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(108px, 132px);
-  gap: 2px 8px;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  align-items: center;
   cursor: pointer;
 }
 
 .impianto-summary-btn strong {
+  flex: 0 0 100%;
+  min-width: 0;
   font-size: 0.98rem;
   line-height: 1.25;
 }
 
 .impianto-summary-btn small {
-  grid-column: 1 / -1;
+  flex: 0 0 100%;
   color: var(--muted);
 }
 
@@ -2096,6 +2112,36 @@ textarea:focus-visible {
   border-top: 1px dashed #cbd5e1;
 }
 
+.impianto-main-column > .item-actions {
+  justify-content: flex-start;
+  overflow-x: visible;
+  flex-wrap: wrap;
+}
+
+.impianto-management-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.impianto-management-stack .btn {
+  min-height: 28px;
+  padding: 5px 7px;
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+
+.impianto-management-stack .gestione-toggle-btn {
+  width: fit-content;
+  max-width: 92px;
+}
+
+.impianto-management-stack .pdf-request-btn {
+  max-width: 118px;
+  white-space: normal;
+}
+
 .gestione-toggle-btn {
   background: #fff7ed;
   border-color: #fdba74;
@@ -2213,11 +2259,16 @@ textarea:focus-visible {
 
 .impianto-weather-wrap {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: flex-end;
   gap: 4px;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.impianto-weather-column .impianto-weather-wrap {
+  width: 100%;
+  height: 100%;
 }
 
 .impianto-weather-badge {
@@ -2241,16 +2292,30 @@ textarea:focus-visible {
 
 .impianto-weather-card {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  align-content: center;
   justify-items: start;
   width: 100%;
   min-width: 108px;
   max-width: 132px;
-  padding: 3px 5px;
+  padding: 5px 7px;
   border-radius: 10px;
   text-align: left;
   white-space: normal;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.impianto-weather-column .impianto-weather-card {
+  max-width: none;
+  min-height: 100%;
+}
+
+.impianto-weather-column .impianto-weather-card.is-compact {
+  display: grid;
+  width: 100%;
+  min-height: 100%;
+  border-radius: 10px;
+  white-space: normal;
 }
 
 .impianto-weather-card.is-compact {
@@ -2352,10 +2417,8 @@ textarea:focus-visible {
   margin-left: 4px;
 }
 
-.impianto-summary-btn .impianto-weather-wrap {
-  grid-column: 2;
-  grid-row: 1 / span 3;
-  justify-self: end;
+.impianto-weather-column .impianto-weather-wrap {
+  justify-self: stretch;
 }
 
 .badge-ordinaria {
@@ -2922,11 +2985,11 @@ textarea:focus-visible {
   .map-popup-actions { grid-template-columns: 1fr; gap: 7px; }
   .map-popup-actions .btn { width: 100%; min-height: 44px; font-size: 0.86rem; }
   .impianti-lista { gap: 6px; }
-  .impianto-item { padding: 6px; }
+  .impianto-item { grid-template-columns: minmax(0, 1fr) minmax(150px, 190px); padding: 6px; }
   .impianto-item p { margin: 2px 0; font-size: 0.9rem; }
-  .impianto-summary-btn { grid-template-columns: minmax(0, 1fr) minmax(100px, 124px); gap: 2px 6px; }
+  .impianto-summary-btn { gap: 2px 5px; }
   .impianto-summary-btn strong { font-size: 0.92rem; }
-  .impianto-weather-card { min-width: 100px; max-width: 124px; padding: 4px 6px; }
+  .impianto-weather-card { min-width: 100px; max-width: none; padding: 4px 6px; }
   .impianto-weather-line { font-size: 0.58rem; padding: 1px 4px; }
   .impianto-weather-line.is-primary { font-size: 0.6rem; }
   .item-actions { gap: 6px; }

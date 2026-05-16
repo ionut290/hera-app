@@ -10633,12 +10633,17 @@ function renderImpianti() {
     const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
+    const mainColumn = document.createElement("div");
+    mainColumn.className = "impianto-main-column";
+    const weatherColumn = document.createElement("div");
+    weatherColumn.className = "impianto-weather-column";
+    weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
+
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
     header.innerHTML = `
       <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
-      ${buildImpiantoWeatherBadgeMarkup(impianto)}
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(tipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
@@ -10651,7 +10656,7 @@ function renderImpianti() {
       expandedImpiantoKey = expandedImpiantoKey === impiantoKey ? "" : impiantoKey;
       renderImpianti();
     });
-    article.appendChild(header);
+    mainColumn.appendChild(header);
 
     const details = document.createElement("div");
     details.className = "impianto-details";
@@ -10680,7 +10685,7 @@ function renderImpianti() {
       });
       details.appendChild(notesBox);
     }
-    article.appendChild(details);
+    mainColumn.appendChild(details);
 
     if (!impianto.done) {
       clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
@@ -10690,6 +10695,8 @@ function renderImpianti() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
+    const managementStack = document.createElement("div");
+    managementStack.className = "impianto-management-stack";
     const managementActions = document.createElement("div");
     managementActions.className = "item-actions item-actions-gestione";
     const isManagementExpanded = expandedImpiantoManagementKeys.has(impiantoKey);
@@ -10777,14 +10784,15 @@ function renderImpianti() {
       });
       manageBtn.classList.add("gestione-toggle-btn");
       manageBtn.setAttribute("aria-expanded", isManagementExpanded ? "true" : "false");
-      actions.appendChild(manageBtn);
+      managementStack.appendChild(manageBtn);
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
     if (canManageData()) {
       const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => setImpiantoRequestDriveLink(impianto));
       uploadPdfBtn.classList.add("pdf-request-btn");
-      actions.appendChild(uploadPdfBtn);
+      managementStack.appendChild(uploadPdfBtn);
     }
+    if (managementStack.childElementCount > 0) actions.appendChild(managementStack);
     const richiestaPdfUrl = String(
       impianto.linkRichiestaDrive
       || impianto.linkDocumentoRichiesta
@@ -10804,9 +10812,11 @@ function renderImpianti() {
       actions.appendChild(noPdfLabel);
     }
 
-    if (actions.childElementCount > 0) article.appendChild(actions);
-    if (managementActions.childElementCount > 0) article.appendChild(managementActions);
+    if (actions.childElementCount > 0) mainColumn.appendChild(actions);
+    if (managementActions.childElementCount > 0) mainColumn.appendChild(managementActions);
 
+    article.appendChild(mainColumn);
+    article.appendChild(weatherColumn);
     ui.impiantiLista.appendChild(article);
   });
   renderNextActionCard();
@@ -11156,38 +11166,23 @@ function getImpiantoWeatherPrimaryLabel(entry = {}) {
 
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
   const hasRain = Boolean(entry.hasCurrentRain || entry.hasNextHourRain || Number(entry.rainAmount) > 0 || Number(entry.rainProbability) >= NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY);
-  if (entry.riskLevel === "green" && !hasRain) return [`${emoji} Meteo ok`, formatImpiantoWindLine(entry)];
-  if (entry.riskLevel === "unavailable") return ["Dati meteo parziali", formatImpiantoWindLine(entry)];
+  if (entry.riskLevel === "green" && !hasRain) return [`${emoji} Meteo ok`];
+  if (entry.riskLevel === "unavailable") return ["Dati meteo parziali"];
 
   const lines = [`${emoji} ${label}`];
   const rainLine = formatImpiantoRainLine(entry);
   if (rainLine) lines.push(rainLine);
-
-  const quantityParts = [];
-  if (isPresentFiniteNumber(entry.rainProbability)) quantityParts.push(`Prob. ${Math.round(Number(entry.rainProbability))}%`);
-  if (isPresentFiniteNumber(entry.rainAmount)) quantityParts.push(`${formatWeatherAmount(entry.rainAmount)} mm`);
-  if (quantityParts.length) lines.push(quantityParts.join(" · "));
-
-  lines.push(formatImpiantoWindLine(entry));
+  if (isPresentFiniteNumber(entry.rainProbability)) lines.push(`Probabilità pioggia ${Math.round(Number(entry.rainProbability))}%`);
   if (entry.weatherPartial) lines.push("Dati meteo parziali");
-  if (entry.operationMessage) lines.push(`⚠️ ${entry.operationMessage}`);
+  if (entry.operationMessage) lines.push(entry.operationMessage);
   return lines.filter(Boolean);
 }
 
 function formatImpiantoRainLine(entry = {}) {
   if (!entry.hasCurrentRain && !entry.hasNextHourRain && !entry.rainWindow) return "";
-  const intensity = entry.rainIntensity ? `${entry.rainIntensity} pioggia` : "Pioggia";
-  if (entry.rainWindow?.start && entry.rainWindow?.end && entry.rainWindow.start !== entry.rainWindow.end) {
-    return `🌧️ ${intensity} dalle ${formatWeatherSlotTime(entry.rainWindow.start)} alle ${formatWeatherSlotTime(entry.rainWindow.end)}`;
-  }
-  if (entry.rainWindow?.start) return `🌧️ ${intensity} ore ${formatWeatherSlotTime(entry.rainWindow.start)}`;
-  return `🌧️ ${intensity}`;
-}
-
-function formatImpiantoWindLine(entry = {}) {
-  if (!isPresentFiniteNumber(entry.windSpeedKmh)) return "Dato vento non disponibile";
-  const direction = entry.windDirectionLabel || getWindDirectionLabel(entry.windDirectionDegrees);
-  return `💨 ${Math.round(Number(entry.windSpeedKmh))} km/h${direction ? ` ${direction}` : ""}`;
+  const intensity = entry.rainIntensity ? ` • ${entry.rainIntensity}` : "";
+  if (entry.rainWindow?.label) return `Fascia oraria prevista: ${entry.rainWindow.label}${intensity}`;
+  return entry.rainIntensity ? `Pioggia prevista • ${entry.rainIntensity}` : "Pioggia prevista";
 }
 
 function getImpiantoWeatherLineClass(line = "", index = 0) {

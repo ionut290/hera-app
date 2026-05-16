@@ -176,6 +176,8 @@ const ui = {
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
   operatorPositionsToggleBtn: document.getElementById("operator-positions-toggle-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
+  commessaWeatherRefreshBtn: document.getElementById("commessa-weather-refresh-btn"),
+  commessaWeatherRefreshStatus: document.getElementById("commessa-weather-refresh-status"),
   commessaCallBtn: document.getElementById("commessa-call-btn"),
   commessaNotesPage: document.getElementById("commessa-notes-page"),
   commessaNotesBackBtn: document.getElementById("commessa-notes-back-btn"),
@@ -677,6 +679,7 @@ const impiantoWeatherPendingKeys = new Set();
 let impiantoWeatherPersistentCacheLoaded = false;
 let impiantoWeatherRefreshTimer = null;
 let impiantoWeatherRenderTimer = null;
+let commessaWeatherManualRefreshInFlight = false;
 let drawAreaModeActive = false;
 let drawnAreaPoints = [];
 let drawnAreaRedoStack = [];
@@ -1157,6 +1160,7 @@ ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummar
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
 ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
+ui.commessaWeatherRefreshBtn?.addEventListener("click", refreshSelectedCommessaWeather);
 ui.commessaCallBtn?.addEventListener("click", openCommessaPhoneResources);
 ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSection);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
@@ -3108,6 +3112,8 @@ function applyRoute() {
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
   ui.commessaNotesToggleBtn?.classList.toggle("hidden", showResourceViewer);
+  ui.commessaWeatherRefreshBtn?.classList.toggle("hidden", showResourceViewer);
+  ui.commessaWeatherRefreshStatus?.classList.toggle("hidden", showResourceViewer);
   ui.commessaNotesCard?.classList.toggle("hidden", showResourceViewer);
   const mapElement = document.getElementById("map");
   if (mapElement) mapElement.classList.toggle("hidden", showResourceViewer);
@@ -3181,6 +3187,8 @@ function closeImpiantiPage() {
   localStorage.removeItem(LAST_OPENED_COMMESSA_KEY);
   window.location.hash = "";
   ui.exportCurrentCommessaBtn.disabled = true;
+  setCommessaWeatherRefreshStatus("");
+  updateCommessaWeatherRefreshButtonState();
   document.body.classList.remove("resource-view-open");
   closeCommessaResourceViewer();
   applyRoute();
@@ -7057,6 +7065,7 @@ function updateCommessaDashboard() {
   if (ui.commessaActiveSquadreCount) {
     ui.commessaActiveSquadreCount.textContent = `${stats.squadreCount || 0} squadr${stats.squadreCount === 1 ? "a attiva" : "e attive"}`;
   }
+  updateCommessaWeatherRefreshButtonState();
   if (ui.commessaCallBtn) {
     const hasPhoneResources = getResourcesByCommessa(selectedCommessaId, "phone").length > 0;
     ui.commessaCallBtn.classList.toggle("commessa-action-btn--disabled", !hasPhoneResources);
@@ -9078,6 +9087,7 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome, codice = "") {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  setCommessaWeatherRefreshStatus("");
   mainMapViewState.hasUserMoved = false;
   activeNearbyImpiantoContext = null;
   localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
@@ -11304,6 +11314,70 @@ function preloadCommessaWeatherForVisibleImpianti() {
   const visible = getVisibleMapImpianti(map, currentImpianti);
   const source = visible.length ? visible : currentImpianti;
   preloadImpiantiWeather(source, { limit: IMPIANTO_WEATHER_REFRESH_LIMIT, preferNearest: true });
+}
+
+
+function setCommessaWeatherRefreshStatus(message, state = "") {
+  if (!ui.commessaWeatherRefreshStatus) return;
+  ui.commessaWeatherRefreshStatus.textContent = message || "";
+  ui.commessaWeatherRefreshStatus.dataset.state = state || "";
+}
+
+function updateCommessaWeatherRefreshButtonState() {
+  if (!ui.commessaWeatherRefreshBtn) return;
+  const disabled = commessaWeatherManualRefreshInFlight || !selectedCommessaId || !currentImpianti.length;
+  ui.commessaWeatherRefreshBtn.disabled = disabled;
+  ui.commessaWeatherRefreshBtn.classList.toggle("is-loading", commessaWeatherManualRefreshInFlight);
+  ui.commessaWeatherRefreshBtn.setAttribute("aria-busy", String(commessaWeatherManualRefreshInFlight));
+}
+
+async function refreshSelectedCommessaWeather() {
+  if (commessaWeatherManualRefreshInFlight || !selectedCommessaId) return;
+  const commessaId = selectedCommessaId;
+  const impianti = [...currentImpianti];
+  const candidates = impianti.filter((impianto) => getImpiantoNavigationCoordinates(impianto));
+
+  if (!candidates.length) {
+    setCommessaWeatherRefreshStatus("Nessun dato meteo disponibile", "empty");
+    return;
+  }
+
+  commessaWeatherManualRefreshInFlight = true;
+  updateCommessaWeatherRefreshButtonState();
+  setCommessaWeatherRefreshStatus("Aggiornamento meteo…", "loading");
+
+  try {
+    clearTimeout(impiantoWeatherRefreshTimer);
+    const results = [];
+    for (let index = 0; index < candidates.length; index += IMPIANTO_WEATHER_BATCH_SIZE) {
+      if (selectedCommessaId !== commessaId) return;
+      const batch = candidates.slice(index, index + IMPIANTO_WEATHER_BATCH_SIZE);
+      const settled = await Promise.allSettled(batch.map((impianto) => refreshImpiantoWeatherStatus(impianto, { force: true })));
+      results.push(...settled);
+      if (index + IMPIANTO_WEATHER_BATCH_SIZE < candidates.length) {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      }
+    }
+
+    if (selectedCommessaId !== commessaId) return;
+    const statuses = results
+      .filter((result) => result.status === "fulfilled" && result.value)
+      .map((result) => result.value);
+    const hasAvailableWeather = statuses.some((status) => status.riskLevel !== "unavailable");
+
+    if (!statuses.length || !hasAvailableWeather) {
+      setCommessaWeatherRefreshStatus("Nessun dato meteo disponibile", "empty");
+    } else {
+      setCommessaWeatherRefreshStatus("Meteo commessa aggiornato", "success");
+    }
+    scheduleImpiantoWeatherBadgeRender();
+  } catch (error) {
+    console.error("Errore aggiornamento meteo commessa:", error);
+    if (selectedCommessaId === commessaId) setCommessaWeatherRefreshStatus("Errore aggiornamento meteo", "error");
+  } finally {
+    commessaWeatherManualRefreshInFlight = false;
+    if (selectedCommessaId === commessaId) updateCommessaWeatherRefreshButtonState();
+  }
 }
 
 function getVisibleMapImpianti(targetMap = map, source = currentImpianti) {

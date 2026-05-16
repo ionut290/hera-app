@@ -3253,6 +3253,8 @@ textarea:focus-visible {
 .hours-table-wrap {
   overflow-x: auto;
   max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .hours-month-table {
@@ -3291,11 +3293,14 @@ textarea:focus-visible {
 .hours-view-content {
   width: min(98vw, 1400px);
   height: min(92vh, 100dvh);
+  max-width: calc(100vw - 12px);
+  max-height: calc(100dvh - 12px);
   margin: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-bottom: 10px;
+  overflow: hidden;
 }
 
 .hours-view-toolbar {
@@ -3315,6 +3320,20 @@ textarea:focus-visible {
 .hours-view-content > #hours-table-feedback,
 .hours-view-content > #hours-table-container {
   padding: 0 10px;
+}
+
+.hours-view-content > #hours-table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.hours-empty-message {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  margin: 4px 0;
+  padding: 14px;
+  background: #f8fbff;
 }
 
 #hours-table-month,
@@ -5157,8 +5176,17 @@ textarea:focus-visible {
     max-height: min(48vh, 300px);
   }
 
+  .hours-view-content {
+    width: calc(100vw - 8px);
+    max-width: calc(100vw - 8px);
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+    border-radius: 12px;
+  }
+
   .hours-view-toolbar {
-    padding-bottom: 8px;
+    padding: 0 8px 8px;
+    overflow-x: hidden;
   }
 
   .hours-view-toolbar > .item-actions:first-child {

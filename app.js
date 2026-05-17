@@ -12938,12 +12938,12 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const indicationItems = indications.map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
   const radarUrl = buildWeatherRadarUrl(impianto, coordinates);
   const atexButtonKey = buildImpiantoKey(impianto) || impiantoKey;
-  const atexActionMarkup = `
+  const atexActionMarkup = isCurrentCommessaInrete() ? `
     <button type="button" class="weather-detail-atex-action" data-atex-procedure="${escapeHTML(atexButtonKey)}" aria-label="Apri istruzioni ATEX per questo impianto">
       <span class="weather-detail-atex-icon" aria-hidden="true">⚠️</span>
       <span><strong>ATTENZIONE ATEX</strong><small>Premi per istruzioni</small></span>
     </button>
-  `;
+  ` : "";
   ui.impiantoWeatherDetailContent.innerHTML = `
     <article class="weather-detail-risk-summary risk-card risk-${riskMeta.className}">
       <strong>${riskMeta.icon} ${riskMeta.title}</strong>

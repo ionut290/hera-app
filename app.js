@@ -12104,6 +12104,109 @@ function buildAtexList(items = []) {
   return `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
 }
 
+function normalizeAtexCommessaMatchValue(value) {
+  return normalizeAtexSearchValue(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function getSelectedAtexCommessaName() {
+  const selected = commesseById.get(selectedCommessaId) || {};
+  return selectedCommessaName || selected.nome || selected.name || selected.codice || selected.code || selectedCommessaId || "Commessa non indicata";
+}
+
+function getAtexClientContactsForCommessa() {
+  const clients = [
+    { area: "Bologna", name: "Carani Claudio", phone: "347 7614277" },
+    { area: "Modena", name: "Montagnana Giorgio", phone: "320 4791013" },
+    { area: "Ferrara", name: "Mateo Gardelini", phone: "348 0900290" }
+  ];
+  const selected = commesseById.get(selectedCommessaId) || {};
+  const haystack = [
+    selectedCommessaName,
+    selectedCommessaId,
+    selected.nome,
+    selected.name,
+    selected.codice,
+    selected.code,
+    selected.cliente,
+    selected.customer,
+    selected.category,
+    selected.categoria,
+    selected.tipologia
+  ].map(normalizeAtexCommessaMatchValue).join(" ");
+  const matched = clients.find((client) => haystack.includes(normalizeAtexCommessaMatchValue(client.area)));
+  if (matched) return [{ ...matched, role: `Cliente INRETE ${matched.area}`, callFirst: true }];
+  return clients.map((client) => ({
+    ...client,
+    role: `Cliente INRETE ${client.area}`,
+    note: "cliente di riferimento da verificare",
+    callFirst: true
+  }));
+}
+
+function sanitizePhoneHref(phone = "") {
+  const value = String(phone || "").trim();
+  return value.startsWith("+") ? `+${value.replace(/\D/g, "")}` : value.replace(/\D/g, "");
+}
+
+function sanitizeWhatsappPhone(phone = "") {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function getAtexWhatsappText(impianto = {}) {
+  const operator = currentUser?.displayName || currentUser?.email || "Operatore non indicato";
+  return [
+    "⚠️ PROBLEMA ATEX RILEVATO",
+    `Commessa: ${getSelectedAtexCommessaName()}`,
+    `Impianto: ${impianto.denominazione || impianto.nome || "Impianto non indicato"}`,
+    `Comune: ${impianto.comune || "Comune non indicato"}`,
+    `Operatore: ${operator}`,
+    "Serve intervento/verifica urgente."
+  ].join("\n");
+}
+
+function buildAtexContactCard(contact, whatsappText) {
+  const phoneHref = sanitizePhoneHref(contact.phone);
+  const whatsappPhone = sanitizeWhatsappPhone(contact.phone);
+  const whatsappUrl = `https://wa.me/${encodeURIComponent(whatsappPhone)}?text=${encodeURIComponent(whatsappText)}`;
+  const noteMarkup = contact.note ? `<span class="atex-contact-note">${escapeHTML(contact.note)}</span>` : "";
+  const badgeMarkup = contact.callFirst ? `<span class="atex-call-first-badge">CHIAMARE PRIMA</span>` : "";
+  return `
+    <section class="atex-contact-card${contact.callFirst ? " is-primary" : ""}">
+      <div class="atex-contact-head">
+        <span class="atex-contact-role">${escapeHTML(contact.role)}</span>
+        ${badgeMarkup}
+      </div>
+      ${noteMarkup}
+      <strong class="atex-contact-name">${escapeHTML(contact.name)}</strong>
+      <span class="atex-contact-phone">Tel: ${escapeHTML(contact.phone)}</span>
+      <div class="atex-contact-actions">
+        <a class="atex-contact-action call" href="tel:${escapeHTML(phoneHref)}">📞 CHIAMA</a>
+        <a class="atex-contact-action whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener noreferrer">💬 WHAZZUP</a>
+      </div>
+    </section>
+  `;
+}
+
+function buildAtexEmergencyContactsSection(impianto = {}) {
+  const contacts = [
+    ...getAtexClientContactsForCommessa(),
+    { role: "Capo squadra", name: "Varga Ionel", phone: "0039 389 2352575" },
+    { role: "Responsabile commessa", name: "Alessandro Minarini", phone: "+39 335 6815371" },
+    { role: "Numero unico emergenze", name: "Numero unico emergenze", phone: "112" },
+    { role: "Vigili del Fuoco", name: "Vigili del Fuoco", phone: "115" },
+    { role: "Emergenza sanitaria / ambulanza", name: "Emergenza sanitaria / ambulanza", phone: "118" },
+    { role: "Carabinieri", name: "Carabinieri", phone: "112" },
+    { role: "Polizia", name: "Polizia", phone: "113" }
+  ];
+  const whatsappText = getAtexWhatsappText(impianto);
+  return `
+    <article class="atex-procedure-section atex-emergency-section">
+      <h3>6. CONTATTI EMERGENZA ATEX</h3>
+      <div class="atex-contacts-grid">${contacts.map((contact) => buildAtexContactCard(contact, whatsappText)).join("")}</div>
+    </article>
+  `;
+}
+
 
 function getAtexIllustrationSvg(type = "safety") {
   const svgMap = {
@@ -12300,8 +12403,10 @@ function renderAtexProcedurePage(impiantoKey) {
       </div>
     </article>
 
+    ${buildAtexEmergencyContactsSection(impianto)}
+
     <article class="atex-procedure-section atex-status-section">
-      <h3>6. STATO SICUREZZA</h3>
+      <h3>7. STATO SICUREZZA</h3>
       <div class="atex-status-grid">
         <div class="atex-status-card is-green">🟢 <strong>SICUREZZA OPERATIVA</strong></div>
         <div class="atex-status-card is-yellow">🟡 <strong>ATTENZIONE</strong></div>
@@ -12311,7 +12416,7 @@ function renderAtexProcedurePage(impiantoKey) {
     </article>
 
     <article class="atex-procedure-section atex-form-section">
-      <h3>7. MODULO ATEX</h3>
+      <h3>8. MODULO ATEX</h3>
       <button class="btn btn-primary atex-open-form-btn" type="button" data-open-atex-form>📄 COMPILA MODULO ATEX</button>
       <form id="atex-module-form" class="atex-module-form hidden">
         <div class="atex-form-grid">
@@ -12832,6 +12937,13 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const indications = buildSfalcioOperationalIndications(status);
   const indicationItems = indications.map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
   const radarUrl = buildWeatherRadarUrl(impianto, coordinates);
+  const atexButtonKey = buildImpiantoKey(impianto) || impiantoKey;
+  const atexActionMarkup = isCurrentCommessaInrete() ? `
+    <button type="button" class="weather-detail-atex-action" data-atex-procedure="${escapeHTML(atexButtonKey)}" aria-label="Apri istruzioni ATEX per questo impianto">
+      <span class="weather-detail-atex-icon" aria-hidden="true">⚠️</span>
+      <span><strong>ATTENZIONE ATEX</strong><small>Premi per istruzioni</small></span>
+    </button>
+  ` : "";
   ui.impiantoWeatherDetailContent.innerHTML = `
     <article class="weather-detail-risk-summary risk-card risk-${riskMeta.className}">
       <strong>${riskMeta.icon} ${riskMeta.title}</strong>
@@ -12842,6 +12954,7 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
         ${gustValue ? `<span class="risk-row">Raffiche ${escapeHTML(gustValue)}</span>` : ""}
       </div>
     </article>
+    ${atexActionMarkup}
     <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid current-weather-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
     <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline hourly-forecast-list" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
     <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">

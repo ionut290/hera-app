@@ -159,6 +159,10 @@ const ui = {
   impiantoWeatherDetailRefreshBtn: document.getElementById("impianto-weather-detail-refresh-btn"),
   impiantoWeatherDetailFeedback: document.getElementById("impianto-weather-detail-feedback"),
   impiantoWeatherDetailContent: document.getElementById("impianto-weather-detail-content"),
+  atexProcedurePage: document.getElementById("atex-procedure-page"),
+  atexProcedureBackBtn: document.getElementById("atex-procedure-back-btn"),
+  atexProcedureSubtitle: document.getElementById("atex-procedure-subtitle"),
+  atexProcedureContent: document.getElementById("atex-procedure-content"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
   commessaFocusCode: document.getElementById("commessa-focus-code"),
   commessaHomeBtn: document.getElementById("commessa-home-btn"),
@@ -1174,6 +1178,7 @@ ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
 ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.impiantoWeatherDetailBackBtn?.addEventListener("click", closeDettaglioMeteoImpianto);
 ui.impiantoWeatherDetailRefreshBtn?.addEventListener("click", refreshDettaglioMeteoImpianto);
+ui.atexProcedureBackBtn?.addEventListener("click", closeAtexProcedurePage);
 ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
@@ -1182,6 +1187,7 @@ ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositions
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaWeatherRefreshBtn?.addEventListener("click", refreshSelectedCommessaWeather);
 document.addEventListener("click", handleImpiantoWeatherRetryClick);
+document.addEventListener("click", handleAtexProcedureButtonClick);
 ui.commessaCallBtn?.addEventListener("click", openCommessaPhoneResources);
 ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSection);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
@@ -3084,14 +3090,15 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "" };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "" };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
     resource: params.get("resource") || "",
     notes: params.has("notes"),
     impianto: params.get("impianto") || "",
-    meteo: params.get("meteo") || ""
+    meteo: params.get("meteo") || "",
+    atex: params.get("atex") || ""
   };
 }
 
@@ -3125,11 +3132,13 @@ function applyRoute() {
   const showPersonalServices = Boolean(personalServiceMatch);
   const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showWeatherDetail = Boolean(commessaRoute.meteo && selectedCommessaId === commessaIdFromHash && !showNotesPage);
-  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
+  const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
+  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
+  ui.atexProcedurePage?.classList.toggle("hidden", !showAtexProcedure);
   ui.commessaNotesPage?.classList.toggle("hidden", !showNotesPage);
   ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
@@ -3155,6 +3164,9 @@ function applyRoute() {
   }
   if (showWeatherDetail) {
     renderDettaglioMeteoImpianto(commessaRoute.meteo);
+  }
+  if (showAtexProcedure) {
+    renderAtexProcedurePage(commessaRoute.atex);
   }
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
@@ -9679,6 +9691,7 @@ function selectCommessa(id, nome, codice = "") {
   setCurrentWorkflowStep("open-commessa");
   const commessaRoute = parseCommessaHash();
   if (commessaRoute.notes) openCommessaNotesPage();
+  else if (commessaRoute.atex) openImpiantiPage(`&atex=${encodeURIComponent(commessaRoute.atex)}`);
   else openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
 }
 
@@ -11372,7 +11385,7 @@ function renderImpianti() {
     weatherColumn.className = "impianto-weather-column weather-compact";
     weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
     weatherColumn.addEventListener("click", (event) => {
-      if (event.target?.closest?.("[data-weather-retry]")) return;
+      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure]")) return;
       openDettaglioMeteoImpianto(impianto);
     });
     weatherColumn.addEventListener("keydown", (event) => {
@@ -11959,6 +11972,166 @@ function setImpiantoWeatherFeedback(impianto, message = "") {
   });
 }
 
+
+function normalizeAtexSearchValue(value) {
+  return String(value || "").trim().toLocaleUpperCase("it-IT");
+}
+
+function valueContainsAtex(value) {
+  return /\bATEX\b/.test(normalizeAtexSearchValue(value));
+}
+
+function isTruthyAtexFlag(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  const normalized = normalizeAtexSearchValue(value);
+  return ["ATEX", "TRUE", "SI", "SÌ", "YES", "1", "EX"].includes(normalized) || valueContainsAtex(normalized);
+}
+
+function isInreteCommessa(commessa = {}) {
+  return [
+    commessa.nome,
+    commessa.name,
+    commessa.codice,
+    commessa.code,
+    commessa.id,
+    commessa.cliente,
+    commessa.customer,
+    commessa.category,
+    commessa.categoria,
+    commessa.tipologia
+  ].some((value) => normalizeAtexSearchValue(value).includes("INRETE"));
+}
+
+function isCurrentCommessaInrete() {
+  const selected = commesseById.get(selectedCommessaId) || {};
+  return isInreteCommessa({
+    id: selectedCommessaId,
+    nome: selectedCommessaName,
+    ...selected
+  });
+}
+
+function hasImpiantoAtexFlag(impianto = {}) {
+  const explicitFlags = [
+    impianto.atex,
+    impianto.isAtex,
+    impianto.flagAtex,
+    impianto.atexFlag,
+    impianto.areaAtex,
+    impianto.zonaAtex,
+    impianto.ex
+  ];
+  if (explicitFlags.some(isTruthyAtexFlag)) return true;
+  return [
+    impianto.category,
+    impianto.categoria,
+    impianto.flag,
+    impianto.flags,
+    impianto.tipo,
+    impianto.tipologia,
+    impianto.tipologiaImpianto,
+    impianto.lavorazioniRichieste,
+    impianto.note,
+    impianto.codicePrezzo,
+    impianto.voceRiferimento,
+    impianto.denominazione
+  ].some(valueContainsAtex);
+}
+
+function shouldShowAtexButtonForImpianto(impianto = {}) {
+  return Boolean(isCurrentCommessaInrete() || hasImpiantoAtexFlag(impianto));
+}
+
+function getAtexProcedureImpiantoByKey(key) {
+  return getDettaglioMeteoImpiantoByKey(key);
+}
+
+function openAtexProcedurePage(impianto) {
+  if (!selectedCommessaId || !impianto) return;
+  const key = buildImpiantoKey(impianto);
+  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&atex=${encodeURIComponent(key)}`;
+  applyRoute();
+}
+
+function closeAtexProcedurePage() {
+  openImpiantiPage();
+}
+
+function handleAtexProcedureButtonClick(event) {
+  const button = event.target?.closest?.("[data-atex-procedure]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const key = button.getAttribute("data-atex-procedure") || button.closest("[data-weather-card]")?.getAttribute("data-weather-card") || "";
+  const impianto = findImpiantoByWeatherKey(key) || getAtexProcedureImpiantoByKey(key);
+  if (!impianto) return;
+  openAtexProcedurePage(impianto);
+}
+
+function renderAtexProcedurePage(impiantoKey) {
+  if (!ui.atexProcedureContent) return;
+  const impianto = getAtexProcedureImpiantoByKey(impiantoKey) || {};
+  const impiantoName = impianto.denominazione || "Impianto";
+  if (ui.atexProcedureSubtitle) {
+    ui.atexProcedureSubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
+  }
+  ui.atexProcedureContent.innerHTML = `
+    <article class="atex-procedure-alert">
+      <strong>⚠️ PROCEDURA SICUREZZA ATEX</strong>
+      <p>Prima di iniziare attività in area classificata, verificare autorizzazioni, strumenti e condizioni operative.</p>
+    </article>
+    <article class="atex-procedure-section">
+      <h3>Checklist sicurezza</h3>
+      <ul>
+        <li>Confermare classificazione area, permesso di lavoro e responsabile operativo.</li>
+        <li>Verificare assenza di odori anomali, sversamenti, fiamme libere o sorgenti di innesco.</li>
+        <li>Delimitare l’area e mantenere comunicazione attiva con la squadra.</li>
+      </ul>
+    </article>
+    <article class="atex-procedure-section">
+      <h3>Utilizzo Altair</h3>
+      <ul>
+        <li>Accendere e azzerare lo strumento in aria pulita prima dell’accesso.</li>
+        <li>Controllare batteria, sensori e allarmi acustici/visivi.</li>
+        <li>Monitorare continuamente LEL/O₂/gas rilevanti e uscire subito in caso di allarme.</li>
+      </ul>
+    </article>
+    <article class="atex-procedure-section">
+      <h3>Norme ATEX</h3>
+      <ul>
+        <li>Operare solo con attrezzature compatibili con la zona classificata.</li>
+        <li>Rispettare segnaletica, procedure aziendali e indicazioni del preposto.</li>
+        <li>Sospendere le attività se cambiano le condizioni di sicurezza.</li>
+      </ul>
+    </article>
+    <article class="atex-procedure-section">
+      <h3>DPI obbligatori</h3>
+      <ul>
+        <li>Indumenti antistatici, scarpe antinfortunistiche antistatiche e guanti idonei.</li>
+        <li>Elmetto, occhiali/visiera e protezioni respiratorie se previste dalla valutazione.</li>
+        <li>Rilevatore Altair indossato e visibile durante tutta l’attività.</li>
+      </ul>
+    </article>
+    <article class="atex-procedure-section atex-procedure-forbidden">
+      <h3>Divieti</h3>
+      <ul>
+        <li>Vietati fumo, fiamme libere, scintille e uso di dispositivi non certificati.</li>
+        <li>Vietato lavorare da soli o bypassare allarmi/interblocchi.</li>
+        <li>Vietato proseguire con valori fuori soglia o in assenza di permesso valido.</li>
+      </ul>
+    </article>
+    <article class="atex-procedure-section">
+      <h3>Compilazione modulo ATEX</h3>
+      <ul>
+        <li>Registrare impianto, data/ora, operatori, letture Altair iniziali e finali.</li>
+        <li>Annotare DPI, attrezzature utilizzate, esito checklist e firma del preposto.</li>
+        <li>Segnalare anomalie e allegare evidenze prima di chiudere l’intervento.</li>
+      </ul>
+    </article>
+  `;
+}
+
 function getImpiantoWeatherBadgeState(impianto) {
   const key = getImpiantoWeatherCacheKey(impianto);
   const coordinates = getImpiantoNavigationCoordinates(impianto);
@@ -11977,7 +12150,8 @@ function getImpiantoWeatherBadgeState(impianto) {
       lines: ["Coordinate mancanti"],
       compact: true,
       canRetry: false,
-      retryKey: key
+      retryKey: key,
+      showAtex: shouldShowAtexButtonForImpianto(impianto)
     };
   }
   if (!entry) {
@@ -11992,7 +12166,8 @@ function getImpiantoWeatherBadgeState(impianto) {
       lines: [updating ? "Aggiornamento meteo…" : "Meteo temporaneamente non disponibile"],
       compact: true,
       canRetry: !updating,
-      retryKey: key
+      retryKey: key,
+      showAtex: shouldShowAtexButtonForImpianto(impianto)
     };
   }
   const level = entry.riskLevel || "unavailable";
@@ -12012,7 +12187,8 @@ function getImpiantoWeatherBadgeState(impianto) {
     lines,
     compact: lines.length <= 1,
     canRetry: level === "unavailable" && !updating && entry.canRetry !== false,
-    retryKey: key
+    retryKey: key,
+    showAtex: shouldShowAtexButtonForImpianto(impianto)
   };
 }
 
@@ -12188,8 +12364,11 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
     : "";
   const rainMarkup = display.rain ? `<span class="impianto-weather-rain">${escapeHTML(display.rain)}</span>` : "";
   const alertMarkup = Array.isArray(display.alerts) ? display.alerts.slice(0, 2).map((line) => `<span class="impianto-weather-sfalcio-alert">${escapeHTML(line)}</span>`).join("") : "";
-  const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettagli <span aria-hidden="true">›</span></span>`;
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${retryMarkup}${detailHint}</span></span>`;
+  const atexMarkup = state.showAtex && state.retryKey
+    ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
+    : "";
+  const detailHint = state.canRetry || state.showAtex ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettagli <span aria-hidden="true">›</span></span>`;
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${atexMarkup}${retryMarkup}${detailHint}</span></span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {

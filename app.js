@@ -4212,11 +4212,18 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
         const key = `${operatore}__${day}`;
         if (!hoursTableRowsMap.has(key)) hoursTableRowsMap.set(key, []);
         hoursTableRowsMap.get(key).push({
+          recordId: report.id,
           reportId: report.id,
           sourceCollection: report.sourceCollection || "oreReports",
           approvalStatus: report.status || report.approvalStatus || "approved",
           reportDate,
+          monthValue: `${monthMeta.year}-${String(monthMeta.month).padStart(2, "0")}`,
+          year: monthMeta.year,
+          month: monthMeta.month,
           entryCommessaId: entryCommessaInfo.id || entryCommessaInfo.key || entry.commessaId,
+          entryCommessaName: entryCommessaInfo.nome || entry.commessaName || commesseById.get(entryCommessaInfo.id || entryCommessaInfo.key)?.nome || "Commessa",
+          cellKey: key,
+          rowUniqueKey: row.uniqueKey || buildHoursUniqueKey(reportDate, entryCommessaInfo.id || entryCommessaInfo.key || entry.commessaId, row),
           entryIndex,
           rowIndex,
           operatore,
@@ -4397,100 +4404,47 @@ async function approvePendingHoursSourcesFromTable(sources = []) {
     if (!groupedByRequest.has(requestId)) groupedByRequest.set(requestId, []);
     groupedByRequest.get(requestId).push(source);
   });
-  const approvedReportIds = [];
+  const results = [];
   for (const [requestId, requestSources] of groupedByRequest.entries()) {
-    const requestRef = db.collection("oreApprovalRequests").doc(requestId);
-    const reportRef = db.collection("oreReports").doc();
-    await db.runTransaction(async (transaction) => {
-      const requestSnap = await transaction.get(requestRef);
-      if (!requestSnap.exists) throw new Error("Richiesta ore non trovata.");
-      const request = { id: requestId, ...(requestSnap.data() || {}) };
-      if (["approved", "rejected"].includes(String(request.status || "").trim())) {
-        throw new Error("Richiesta ore non più confermabile.");
-      }
-      const targetsByEntry = new Map();
-      requestSources.forEach((source) => {
-        const entryIndex = Number(source.entryIndex);
-        const rowIndex = Number(source.rowIndex);
-        if (!Number.isInteger(entryIndex) || !Number.isInteger(rowIndex)) return;
-        if (!targetsByEntry.has(entryIndex)) targetsByEntry.set(entryIndex, new Set());
-        targetsByEntry.get(entryIndex).add(rowIndex);
-      });
-      const approvedEntries = [];
-      const remainingEntries = [];
-      (Array.isArray(request.entries) ? request.entries : []).forEach((entry, entryIndex) => {
-        const targetRows = targetsByEntry.get(entryIndex);
-        const approvedRows = [];
-        const remainingRows = [];
-        (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
-          if (targetRows?.has(rowIndex)) approvedRows.push(row);
-          else remainingRows.push(row);
-        });
-        if (approvedRows.length) approvedEntries.push({ ...entry, rows: approvedRows });
-        if (remainingRows.length) remainingEntries.push({ ...entry, rows: remainingRows });
-      });
-      if (!approvedEntries.length) throw new Error("Nessuna ora da confermare trovata.");
-      const reportPayload = {
-        date: request.date || requestSources[0]?.reportDate || "",
-        entries: addHoursUniqueKeysToEntries(request.date || requestSources[0]?.reportDate || "", approvedEntries),
-        createdByUid: request.createdByUid || "",
-        createdByName: request.createdByName || request.createdByEmail || "Operatore",
-        createdByEmail: request.createdByEmail || "",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
-      const lockRefs = locks.map((lock) => ({ lock, ref: db.collection("oreLocks").doc(lock.id) }));
-      const lockSnapshots = await Promise.all(lockRefs.map(({ ref }) => transaction.get(ref)));
-      const conflicts = [];
-      lockSnapshots.forEach((snap, index) => {
-        if (!snap.exists) return;
-        const data = snap.data() || {};
-        if (!isActiveHoursLock(data, requestId)) return;
-        const fallback = lockRefs[index].lock;
-        conflicts.push({
-          commessaName: data.commessaName || fallback.commessaName || "Commessa",
-          operatore: data.operatore || fallback.operatore || "Operatore"
-        });
-      });
-      if (conflicts.length) {
-        const error = new Error(formatHoursDuplicateMessage(conflicts, { admin: true }));
-        error.code = "hours-duplicate-lock";
-        throw error;
-      }
-      transaction.set(reportRef, reportPayload);
-      lockRefs.forEach(({ lock, ref }) => {
-        transaction.set(ref, {
-          ...lock,
-          approvalRequestId: requestId,
-          reportId: reportRef.id,
-          status: "approved",
-          createdByUid: reportPayload.createdByUid || "",
-          createdByEmail: reportPayload.createdByEmail || "",
-          createdByName: reportPayload.createdByName || "Operatore",
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-      });
-      const requestUpdate = remainingEntries.length
-        ? {
-            entries: remainingEntries,
-            partialFinalizedReportIds: firebase.firestore.FieldValue.arrayUnion(reportRef.id),
-            level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
-            level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }
-        : {
-            entries: [],
-            status: "approved",
-            level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
-            level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            finalizedReportId: reportRef.id,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          };
-      transaction.set(requestRef, requestUpdate, { merge: true });
-    });
-    approvedReportIds.push(reportRef.id);
+    try {
+      const request = await getHoursApprovalRequestById(requestId);
+      if (!request) throw new Error("Richiesta ore non trovata.");
+      const result = await saveApprovedHoursRequest(request, { sources: requestSources, fallbackDate: requestSources[0]?.reportDate || "" });
+      results.push({ ok: true, requestId, reportId: result.reportId, sources: requestSources });
+    } catch (error) {
+      console.error("Errore conferma ore:", error);
+      results.push({ ok: false, requestId, error, sources: requestSources });
+    }
   }
-  return approvedReportIds;
+  return results;
+}
+
+function markConfirmedHoursCells(keys = []) {
+  const keySet = new Set((Array.isArray(keys) ? keys : []).map((key) => String(key || "")).filter(Boolean));
+  if (!keySet.size || !ui.hoursTableContainer) return;
+  keySet.forEach((key) => {
+    const sources = hoursTableRowsMap.get(key) || [];
+    sources.forEach((source) => {
+      if (String(source.sourceCollection || "oreReports") !== "oreApprovalRequests") return;
+      source.sourceCollection = "oreReports";
+      source.approvalStatus = "approved";
+    });
+  });
+  ui.hoursTableContainer.querySelectorAll(".hours-value-btn[data-hours-key]").forEach((btn) => {
+    const key = String(btn.dataset.hoursKey || "");
+    if (!keySet.has(key)) return;
+    const valueText = String(btn.textContent || "").replace(/^⚠️\s*/, "✅ ").replace(" · da confermare", " · ore inserite");
+    btn.textContent = valueText;
+    btn.classList.remove("hours-value-warning", "hours-value-pending-approval");
+    btn.classList.add("hours-value-ok");
+    btn.dataset.hoursPending = "0";
+    btn.title = btn.title.replace("Conferma le ore", "Ore confermate").replace(" da confermare", " confermate");
+  });
+  const pendingVisibleKeys = Array.from(ui.hoursTableContainer.querySelectorAll(".hours-value-btn[data-hours-pending='1']"))
+    .map((btn) => String(btn.dataset.hoursKey || ""))
+    .filter(Boolean);
+  if (hoursTableContext) hoursTableContext.pendingVisibleKeys = pendingVisibleKeys;
+  setHoursConfirmVisibleButtonState(canManageData() && pendingVisibleKeys.length > 0, false);
 }
 
 async function confirmPendingHoursFromTable(sources, options = {}) {
@@ -4505,15 +4459,28 @@ async function confirmPendingHoursFromTable(sources, options = {}) {
   if (!confirmed) return;
   if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Conferma ore in corso...";
   setHoursConfirmVisibleButtonState(canManageData() && Boolean(hoursTableContext?.pendingVisibleKeys?.length), true);
-  try {
-    await approvePendingHoursSourcesFromTable(pendingSources);
-    await loadSavedHoursReports();
-    await loadHoursMonthlyTable();
-  } catch (error) {
-    console.error("Errore conferma ore dalla tabella:", error);
-    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore: ore non confermate. Riprova.";
+  const results = await approvePendingHoursSourcesFromTable(pendingSources);
+  const successfulResults = results.filter((result) => result.ok);
+  const failedResults = results.filter((result) => !result.ok);
+  const successfulKeys = Array.from(new Set(successfulResults.flatMap((result) =>
+    (Array.isArray(result.sources) ? result.sources : []).map((source) => source.cellKey || `${source.operatore}__${Number(String(source.reportDate || "").split("-")[2] || 0)}`)
+  ).filter(Boolean)));
+  if (successfulKeys.length) markConfirmedHoursCells(successfulKeys);
+  if (successfulResults.length) await loadSavedHoursReports();
+  if (failedResults.length) {
+    const firstError = failedResults[0]?.error;
+    if (options.allVisible) {
+      if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = successfulResults.length
+        ? "Alcune ore non sono state confermate."
+        : (firstError?.message || "Alcune ore non sono state confermate.");
+    } else if (ui.hoursTableFeedback) {
+      ui.hoursTableFeedback.textContent = firstError?.message || "Errore: ore non confermate. Riprova.";
+    }
     setHoursConfirmVisibleButtonState(canManageData() && Boolean(hoursTableContext?.pendingVisibleKeys?.length), false);
+    return;
   }
+  if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Ore confermate correttamente.";
+  setHoursConfirmVisibleButtonState(canManageData() && Boolean(hoursTableContext?.pendingVisibleKeys?.length), false);
 }
 
 async function handleConfirmVisiblePendingHours() {
@@ -4528,7 +4495,8 @@ async function handleConfirmVisiblePendingHours() {
   }
   await confirmPendingHoursFromTable(pendingSources, {
     text: "Vuoi confermare tutte le ore visibili in questa tabella?",
-    confirmLabel: "Conferma ore"
+    confirmLabel: "Conferma ore",
+    allVisible: true
   });
 }
 
@@ -6469,6 +6437,116 @@ async function createApprovedHoursReportWithLocks(request, reportPayload) {
     });
   });
   return reportRef;
+}
+
+
+function buildHoursEntriesFromApprovalSources(request, sources = []) {
+  const targetsByEntry = new Map();
+  (Array.isArray(sources) ? sources : []).forEach((source) => {
+    const entryIndex = Number(source.entryIndex);
+    const rowIndex = Number(source.rowIndex);
+    if (!Number.isInteger(entryIndex) || !Number.isInteger(rowIndex)) return;
+    if (!targetsByEntry.has(entryIndex)) targetsByEntry.set(entryIndex, new Set());
+    targetsByEntry.get(entryIndex).add(rowIndex);
+  });
+  const approvedEntries = [];
+  const remainingEntries = [];
+  (Array.isArray(request?.entries) ? request.entries : []).forEach((entry, entryIndex) => {
+    const targetRows = targetsByEntry.get(entryIndex);
+    const approvedRows = [];
+    const remainingRows = [];
+    (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
+      if (!targetsByEntry.size || targetRows?.has(rowIndex)) approvedRows.push(row);
+      else remainingRows.push(row);
+    });
+    if (approvedRows.length) approvedEntries.push({ ...entry, rows: approvedRows });
+    if (targetsByEntry.size && remainingRows.length) remainingEntries.push({ ...entry, rows: remainingRows });
+  });
+  return {
+    approvedEntries,
+    remainingEntries,
+    isPartial: targetsByEntry.size > 0
+  };
+}
+
+async function saveApprovedHoursRequest(request, options = {}) {
+  if (!canManageData()) {
+    throw new Error("Solo admin può confermare il livello finale.");
+  }
+  if (!request?.id) {
+    throw new Error("ID richiesta ore non valido.");
+  }
+  if (String(request.status || "") !== "pending_admin") {
+    throw new Error("Questa richiesta non è più in attesa dell'approvazione admin.");
+  }
+  const { approvedEntries, remainingEntries, isPartial } = buildHoursEntriesFromApprovalSources(request, options.sources || []);
+  if (!approvedEntries.length) {
+    throw new Error("Nessuna ora da confermare trovata.");
+  }
+  const duplicateDraft = findDuplicateHoursInDraft(approvedEntries);
+  if (duplicateDraft.length) {
+    const error = new Error(formatHoursDuplicateMessage(duplicateDraft, { admin: true }));
+    error.code = "hours-duplicate-draft";
+    error.conflicts = duplicateDraft;
+    throw error;
+  }
+  const dateValue = String(request.date || options.fallbackDate || "").trim();
+  const conflicts = await findExistingHoursConflicts(dateValue, approvedEntries, { skipApprovalRequestId: request.id });
+  if (conflicts.length) {
+    const error = new Error(formatHoursDuplicateMessage(conflicts, { admin: true }));
+    error.code = "hours-duplicate-lock";
+    error.conflicts = conflicts;
+    throw error;
+  }
+  const reportPayload = {
+    date: dateValue,
+    entries: approvedEntries,
+    createdByUid: request.createdByUid || "",
+    createdByName: request.createdByName || request.createdByEmail || "Operatore",
+    createdByEmail: request.createdByEmail || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  let docRef;
+  try {
+    docRef = await createApprovedHoursReportWithLocks(request, reportPayload);
+  } catch (error) {
+    if (error?.code === "hours-duplicate-lock") {
+      error.message = formatHoursDuplicateMessage(error.conflicts, { admin: true });
+    }
+    throw error;
+  }
+  let driveLink = "";
+  if (!isPartial && driveAccessToken) {
+    if (!driveReportsFolderId) await ensureDriveFolders();
+    const blob = new Blob([JSON.stringify({ id: docRef.id, ...reportPayload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
+    const fileName = `ore_${reportPayload.date}_${docRef.id}.json`;
+    const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId, { driveType: "ORE", commessaName: "ORE" });
+    driveLink = upload?.webViewLink || "";
+  }
+  const requestUpdate = isPartial && remainingEntries.length
+    ? {
+        entries: remainingEntries,
+        partialFinalizedReportIds: firebase.firestore.FieldValue.arrayUnion(docRef.id),
+        level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
+        level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }
+    : {
+        entries: [],
+        status: "approved",
+        level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
+        level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        finalizedReportId: docRef.id,
+        driveBackupLink: driveLink,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+  await db.collection("oreApprovalRequests").doc(request.id).set(requestUpdate, { merge: true });
+  await updateHoursLocksForEntries(dateValue, approvedEntries, {
+    status: "approved",
+    approvalRequestId: request.id || "",
+    reportId: docRef.id
+  });
+  return { reportId: docRef.id, approvedEntries, remainingEntries };
 }
 
 function formatHoursDuplicateMessage(conflicts = [], options = {}) {
@@ -17139,76 +17217,25 @@ async function approveHoursRequestLevel1(request) {
 }
 
 async function approveHoursRequestLevel2(request) {
-  if (!canManageData()) {
-    alert("Solo admin può confermare il livello finale.");
-    return;
-  }
-  if (request.status !== "pending_admin") {
-    alert("Questa richiesta non è più in attesa dell'approvazione admin.");
-    return;
-  }
-  const duplicateDraft = findDuplicateHoursInDraft(Array.isArray(request.entries) ? request.entries : []);
-  if (duplicateDraft.length) {
-    alert(formatHoursDuplicateMessage(duplicateDraft, { admin: true }));
-    return;
-  }
-  const conflicts = await findExistingHoursConflicts(
-    String(request.date || "").trim(),
-    Array.isArray(request.entries) ? request.entries : [],
-    { skipApprovalRequestId: request.id }
-  );
-  if (conflicts.length) {
-    alert(formatHoursDuplicateMessage(conflicts, { admin: true }));
-    return;
-  }
-  const reportPayload = {
-    date: request.date || "",
-    entries: Array.isArray(request.entries) ? request.entries : [],
-    createdByUid: request.createdByUid || "",
-    createdByName: request.createdByName || request.createdByEmail || "Operatore",
-    createdByEmail: request.createdByEmail || "",
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  let docRef;
   try {
-    docRef = await createApprovedHoursReportWithLocks(request, reportPayload);
+    const result = await saveApprovedHoursRequest(request);
+    const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
+    if (targetUser?.id) {
+      await sendPrivateChatNotification({
+        recipientId: targetUser.id,
+        text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${result.reportId}.`,
+        senderName: currentUser.displayName || currentUser.email || "Admin"
+      });
+    }
+    loadSavedHoursReports();
   } catch (error) {
-    if (error?.code === "hours-duplicate-lock") {
-      alert(formatHoursDuplicateMessage(error.conflicts, { admin: true }));
+    if (error?.code === "hours-duplicate-lock" || error?.code === "hours-duplicate-draft") {
+      alert(error.message || formatHoursDuplicateMessage(error.conflicts, { admin: true }));
       return;
     }
+    alert(error?.message || "Errore durante la conferma ore.");
     throw error;
   }
-  let driveLink = "";
-  if (driveAccessToken) {
-    if (!driveReportsFolderId) await ensureDriveFolders();
-    const blob = new Blob([JSON.stringify({ id: docRef.id, ...reportPayload, createdAtIso: new Date().toISOString() }, null, 2)], { type: "application/json" });
-    const fileName = `ore_${reportPayload.date}_${docRef.id}.json`;
-    const upload = await uploadBlobToDrive(blob, fileName, "application/json", driveReportsFolderId, { driveType: "ORE", commessaName: "ORE" });
-    driveLink = upload?.webViewLink || "";
-  }
-  await db.collection("oreApprovalRequests").doc(request.id).set({
-    status: "approved",
-    level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
-    level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    finalizedReportId: docRef.id,
-    driveBackupLink: driveLink,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-  await updateHoursLocksForEntries(request.date || "", request.entries || [], {
-    status: "approved",
-    approvalRequestId: request.id || "",
-    reportId: docRef.id
-  });
-  const targetUser = platformUsers.find((user) => String(user.uid || "") === String(request.createdByUid || ""));
-  if (targetUser?.id) {
-    await sendPrivateChatNotification({
-      recipientId: targetUser.id,
-      text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${docRef.id}.`,
-      senderName: currentUser.displayName || currentUser.email || "Admin"
-    });
-  }
-  loadSavedHoursReports();
 }
 
 async function approveHoursRequestFromChat(requestId) {

@@ -6704,3 +6704,145 @@ textarea:focus-visible {
     font-size: 0.45rem;
   }
 }
+
+.impianto-weather-atex-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 17px;
+  border: 1px solid #fb923c;
+  border-radius: 999px;
+  background: #ffedd5;
+  color: #9a3412;
+  font-size: 0.58rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.impianto-weather-atex-btn:hover,
+.impianto-weather-atex-btn:focus-visible {
+  background: #fed7aa;
+  border-color: #f97316;
+  color: #7c2d12;
+  outline: none;
+}
+
+.atex-page,
+.atex-page * {
+  box-sizing: border-box;
+}
+
+.atex-page {
+  width: 100%;
+  min-height: 100vh;
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  background: #fff7ed;
+}
+
+.atex-procedure-view {
+  display: grid;
+  gap: 12px;
+  max-width: 920px;
+  margin: 0 auto;
+  border-color: #fed7aa;
+  background: #fffbf5;
+}
+
+.atex-procedure-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: start;
+}
+
+.atex-procedure-head h2 {
+  margin: 0;
+  color: #7c2d12;
+  font-size: clamp(1.25rem, 4.8vw, 2rem);
+  line-height: 1.05;
+}
+
+.atex-procedure-head .muted {
+  margin: 3px 0 0;
+  color: #9a3412;
+}
+
+.atex-procedure-content {
+  display: grid;
+  gap: 10px;
+}
+
+.atex-procedure-alert,
+.atex-procedure-section {
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px;
+  color: #431407;
+  box-shadow: 0 8px 20px rgba(154, 52, 18, 0.08);
+}
+
+.atex-procedure-alert {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+
+.atex-procedure-alert strong {
+  display: block;
+  color: #7c2d12;
+  font-size: 1rem;
+}
+
+.atex-procedure-alert p,
+.atex-procedure-section p {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+
+.atex-procedure-section h3 {
+  margin: 0 0 8px;
+  color: #9a3412;
+  font-size: 0.95rem;
+}
+
+.atex-procedure-section ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.atex-procedure-section li {
+  margin: 6px 0;
+  line-height: 1.35;
+}
+
+.atex-procedure-forbidden {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+@media (max-width: 760px) {
+  .impianto-weather-atex-btn {
+    min-height: 16px;
+    padding: 2px 5px;
+    font-size: 0.55rem;
+  }
+
+  .atex-page {
+    padding: 12px;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .atex-procedure-view {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px;
+    padding: 10px;
+  }
+}

@@ -850,8 +850,25 @@
           <button id="hours-table-export-global-btn" class="btn" type="button">Esporta Excel Global</button>
         </div>
       </div>
-      <p id="hours-table-feedback" class="muted"></p>
+      <div class="hours-table-feedback-row">
+        <p id="hours-table-feedback" class="muted"></p>
+        <button id="hours-confirm-visible-btn" class="btn hidden" type="button">Conferma tutte le ore visibili</button>
+      </div>
       <div id="hours-table-container" class="hours-table-wrap"></div>
+    </div>
+  </section>
+
+  <section id="hours-confirm-modal" class="confirm-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="hours-confirm-title">
+    <div class="confirm-modal-card hours-confirm-card">
+      <div class="confirm-modal-icon hours-confirm-icon" aria-hidden="true">✅</div>
+      <div>
+        <h2 id="hours-confirm-title">Confermare ore?</h2>
+        <p id="hours-confirm-text">Vuoi confermare le ore?</p>
+      </div>
+      <div class="confirm-modal-actions">
+        <button id="hours-confirm-cancel-btn" class="btn" type="button">Annulla</button>
+        <button id="hours-confirm-ok-btn" class="btn btn-primary" type="button">Conferma ore</button>
+      </div>
     </div>
   </section>
 

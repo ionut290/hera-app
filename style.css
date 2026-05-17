@@ -3317,9 +3317,37 @@ textarea:focus-visible {
 }
 
 .hours-view-content > .muted,
-.hours-view-content > #hours-table-feedback,
+.hours-view-content > .hours-table-feedback-row,
 .hours-view-content > #hours-table-container {
   padding: 0 10px;
+}
+
+.hours-table-feedback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hours-table-feedback-row #hours-table-feedback {
+  margin: 0;
+  flex: 1 1 240px;
+}
+
+#hours-confirm-visible-btn {
+  padding: 5px 9px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+#hours-confirm-visible-btn.hidden {
+  display: none;
+}
+
+.hours-confirm-icon {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .hours-view-content > #hours-table-container {
@@ -3368,7 +3396,8 @@ textarea:focus-visible {
 }
 
 .hours-value-btn.hours-value-warning,
-.hours-value-btn.hours-value-pending {
+.hours-value-btn.hours-value-pending,
+.hours-value-btn.hours-value-pending-approval {
   background: #fef3c7;
   color: #92400e;
   border-color: #facc15;
@@ -4182,6 +4211,10 @@ textarea:focus-visible {
     padding: 5px 4px;
     font-size: 0.82rem;
     vertical-align: middle;
+  }
+
+  #hours-confirm-visible-btn {
+    width: 100%;
   }
 
   .hours-value-btn {

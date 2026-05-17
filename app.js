@@ -409,7 +409,13 @@ const ui = {
   hoursTableExportBtn: document.getElementById("hours-table-export-btn"),
   hoursTableExportGlobalBtn: document.getElementById("hours-table-export-global-btn"),
   hoursTableFeedback: document.getElementById("hours-table-feedback"),
+  hoursConfirmVisibleBtn: document.getElementById("hours-confirm-visible-btn"),
   hoursTableContainer: document.getElementById("hours-table-container"),
+  hoursConfirmModal: document.getElementById("hours-confirm-modal"),
+  hoursConfirmTitle: document.getElementById("hours-confirm-title"),
+  hoursConfirmText: document.getElementById("hours-confirm-text"),
+  hoursConfirmCancelBtn: document.getElementById("hours-confirm-cancel-btn"),
+  hoursConfirmOkBtn: document.getElementById("hours-confirm-ok-btn"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -631,6 +637,7 @@ let hoursDraftEntries = [];
 let hoursFinalizeLocked = false;
 let hoursTableRowsMap = new Map();
 let hoursTableContext = null;
+let hoursConfirmModalResolve = null;
 let loadingOre = false;
 let hoursTableLoadPromise = null;
 let hoursTableLoadRequestId = 0;
@@ -1323,6 +1330,12 @@ ui.hoursTotalOperatorBtn?.addEventListener("click", loadHoursTotalByOperator);
 ui.hoursTotalOperatorCommessaBtn?.addEventListener("click", loadHoursTotalByOperatorAndCommessa);
 ui.hoursTableExportBtn?.addEventListener("click", exportHoursMonthlyTable);
 ui.hoursTableExportGlobalBtn?.addEventListener("click", exportHoursGlobalMonthlyTable);
+ui.hoursConfirmVisibleBtn?.addEventListener("click", handleConfirmVisiblePendingHours);
+ui.hoursConfirmCancelBtn?.addEventListener("click", () => closeHoursConfirmModal(false));
+ui.hoursConfirmOkBtn?.addEventListener("click", () => closeHoursConfirmModal(true));
+ui.hoursConfirmModal?.addEventListener("click", (event) => {
+  if (event.target === ui.hoursConfirmModal) closeHoursConfirmModal(false);
+});
 ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
 ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
@@ -3769,6 +3782,34 @@ function closeHoursViewModal() {
   ui.hoursViewModal?.setAttribute("aria-hidden", "true");
 }
 
+function setHoursConfirmVisibleButtonState(show, disabled = false) {
+  if (!ui.hoursConfirmVisibleBtn) return;
+  ui.hoursConfirmVisibleBtn.classList.toggle("hidden", !show);
+  ui.hoursConfirmVisibleBtn.disabled = Boolean(disabled);
+}
+
+function openHoursConfirmModal({ title = "Confermare ore?", text = "Vuoi confermare le ore?", confirmLabel = "Conferma ore" } = {}) {
+  if (!ui.hoursConfirmModal) return Promise.resolve(window.confirm(text));
+  if (ui.hoursConfirmTitle) ui.hoursConfirmTitle.textContent = title;
+  if (ui.hoursConfirmText) ui.hoursConfirmText.textContent = text;
+  if (ui.hoursConfirmOkBtn) ui.hoursConfirmOkBtn.textContent = confirmLabel;
+  ui.hoursConfirmModal.classList.remove("hidden");
+  ui.hoursConfirmModal.setAttribute("aria-hidden", "false");
+  ui.hoursConfirmOkBtn?.focus();
+  return new Promise((resolve) => {
+    hoursConfirmModalResolve = resolve;
+  });
+}
+
+function closeHoursConfirmModal(confirmed) {
+  if (!ui.hoursConfirmModal || ui.hoursConfirmModal.classList.contains("hidden")) return;
+  ui.hoursConfirmModal.classList.add("hidden");
+  ui.hoursConfirmModal.setAttribute("aria-hidden", "true");
+  const resolve = hoursConfirmModalResolve;
+  hoursConfirmModalResolve = null;
+  if (resolve) resolve(Boolean(confirmed));
+}
+
 function getMonthMeta(monthValue) {
   if (!/^\d{4}-\d{2}$/.test(monthValue || "")) return null;
   const [yearText, monthText] = monthValue.split("-");
@@ -3930,6 +3971,7 @@ async function loadHoursMonthlyTable() {
   const requestId = hoursTableLoadRequestId + 1;
   hoursTableLoadRequestId = requestId;
   hoursTableContext = null;
+  setHoursConfirmVisibleButtonState(false);
   loadingOre = true;
   if (ui.hoursTableCommessaSelect) ui.hoursTableCommessaSelect.disabled = false;
   renderHoursTableCommessaButtons();
@@ -3986,6 +4028,7 @@ async function loadHoursMonthlyTable() {
 async function loadHoursTotalByOperator() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   hoursTableContext = null;
+  setHoursConfirmVisibleButtonState(false);
   if (!currentUser) {
     ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
     ui.hoursTableContainer.innerHTML = "";
@@ -4063,6 +4106,7 @@ async function loadHoursTotalByOperator() {
 async function loadHoursTotalByOperatorAndCommessa() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return;
   hoursTableContext = null;
+  setHoursConfirmVisibleButtonState(false);
   if (!currentUser) {
     ui.hoursTableFeedback.textContent = "Devi fare login per visualizzare i totali.";
     ui.hoursTableContainer.innerHTML = "";
@@ -4194,7 +4238,8 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
       if (!dayItems.length) return "<td>-</td>";
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
-      const hasPendingApproval = sources.some((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+      const pendingSources = sources.filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+      const hasPendingApproval = pendingSources.length > 0;
       const canManage = canManageData() && sources.length;
       const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
       const hasDuplicates = dayItems.length > 1;
@@ -4209,21 +4254,21 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
         statusClass = "hours-value-warning";
       } else if (hasPendingApproval) {
         valueLabel = `⚠️ ${formatHoursValue(dayTotal)}h · da confermare`;
-        statusClass = "hours-value-warning";
+        statusClass = "hours-value-warning hours-value-pending-approval";
       }
       const mergedDetails = hasDuplicates
         ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. La pulizia automatica mantiene una sola registrazione valida.`
         : "";
       const title = hasPendingApproval
         ? canManage
-          ? `Modifica o elimina ${sources.length} registrazione/i di ${operatorName} del giorno ${day}. Totale mostrato: ${formatHoursValue(dayTotal)}h. Alcune ore sono da confermare.`
+          ? `Conferma le ore di ${operatorName} del giorno ${day}. Totale mostrato: ${formatHoursValue(dayTotal)}h.`
           : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h da confermare.`
         : canManage
           ? hasDuplicates
             ? `${mergedDetails} Totale mostrato: ${formatHoursValue(dayTotal)}h.`
             : `Modifica o elimina la registrazione ore di ${operatorName} del giorno ${day}. Ore salvate correttamente: ${formatHoursValue(dayTotal)}h.`
           : `${operatorName} - giorno ${day}: ${formatHoursValue(dayTotal)}h inserite.`;
-      return `<td><button type="button" class="hours-value-btn ${statusClass}" data-hours-key="${escapeHTML(key)}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
+      return `<td><button type="button" class="hours-value-btn ${statusClass}" data-hours-key="${escapeHTML(key)}" data-hours-pending="${hasPendingApproval && !hasDataError && !hasDuplicates ? "1" : "0"}" ${canManage ? "" : "disabled"} title="${escapeHTML(title)}">${escapeHTML(valueLabel)}</button></td>`;
     }).join("");
     const totalLabel = formatHoursValue(total);
     return `<tr><th scope="row">${escapeHTML(operatorName)}</th>${cells}<td><b>${escapeHTML(totalLabel)}h</b></td></tr>`;
@@ -4248,6 +4293,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     ui.hoursTableContainer.innerHTML = `<p class="muted hours-empty-message">Nessuna ora registrata per questa commessa nel mese selezionato.</p>`;
     ui.hoursTableFeedback.textContent = "Nessuna ora registrata per questa commessa nel mese selezionato.";
     if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = true;
+    setHoursConfirmVisibleButtonState(false);
     return hoursTableContext;
   }
 
@@ -4274,8 +4320,15 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     operators: operators.map((name) => ({
       name,
       dayValues: (operatorsMap.get(name) || []).map((items) => items.reduce((sum, item) => sum + Number(typeof item === "object" ? item.ore : item || 0), 0))
-    }))
+    })),
+    pendingVisibleKeys: []
   };
+
+  const pendingVisibleKeys = Array.from(ui.hoursTableContainer.querySelectorAll(".hours-value-btn[data-hours-pending='1']"))
+    .map((btn) => String(btn.dataset.hoursKey || ""))
+    .filter(Boolean);
+  if (hoursTableContext) hoursTableContext.pendingVisibleKeys = pendingVisibleKeys;
+  setHoursConfirmVisibleButtonState(canManageData() && pendingVisibleKeys.length > 0, false);
 
   if (ui.hoursTableExportBtn) ui.hoursTableExportBtn.disabled = false;
   if (!operators.length) {
@@ -4307,10 +4360,193 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
   return hoursTableContext;
 }
 
+
+function getPendingHoursSourcesForKeys(keys = []) {
+  const selected = [];
+  const seen = new Set();
+  (Array.isArray(keys) ? keys : []).forEach((key) => {
+    const sources = hoursTableRowsMap.get(String(key || "")) || [];
+    sources.forEach((source) => {
+      if (String(source.sourceCollection || "oreReports") !== "oreApprovalRequests") return;
+      const sourceKey = `${source.reportId}__${source.entryIndex}__${source.rowIndex}`;
+      if (seen.has(sourceKey)) return;
+      seen.add(sourceKey);
+      selected.push(source);
+    });
+  });
+  return selected;
+}
+
+function getHoursSourceDayLabel(source) {
+  const dateValue = String(source?.reportDate || "").trim();
+  if (!dateValue) return "selezionato";
+  const [year, month, day] = dateValue.split("-");
+  if (year && month && day) return `${day}/${month}/${year}`;
+  return dateValue;
+}
+
+async function approvePendingHoursSourcesFromTable(sources = []) {
+  if (!canManageData()) throw new Error("Solo admin può confermare le ore.");
+  const pendingSources = (Array.isArray(sources) ? sources : [])
+    .filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests" && source.reportId);
+  if (!pendingSources.length) return [];
+  const groupedByRequest = new Map();
+  pendingSources.forEach((source) => {
+    const requestId = String(source.reportId || "").trim();
+    if (!requestId) return;
+    if (!groupedByRequest.has(requestId)) groupedByRequest.set(requestId, []);
+    groupedByRequest.get(requestId).push(source);
+  });
+  const approvedReportIds = [];
+  for (const [requestId, requestSources] of groupedByRequest.entries()) {
+    const requestRef = db.collection("oreApprovalRequests").doc(requestId);
+    const reportRef = db.collection("oreReports").doc();
+    await db.runTransaction(async (transaction) => {
+      const requestSnap = await transaction.get(requestRef);
+      if (!requestSnap.exists) throw new Error("Richiesta ore non trovata.");
+      const request = { id: requestId, ...(requestSnap.data() || {}) };
+      if (["approved", "rejected"].includes(String(request.status || "").trim())) {
+        throw new Error("Richiesta ore non più confermabile.");
+      }
+      const targetsByEntry = new Map();
+      requestSources.forEach((source) => {
+        const entryIndex = Number(source.entryIndex);
+        const rowIndex = Number(source.rowIndex);
+        if (!Number.isInteger(entryIndex) || !Number.isInteger(rowIndex)) return;
+        if (!targetsByEntry.has(entryIndex)) targetsByEntry.set(entryIndex, new Set());
+        targetsByEntry.get(entryIndex).add(rowIndex);
+      });
+      const approvedEntries = [];
+      const remainingEntries = [];
+      (Array.isArray(request.entries) ? request.entries : []).forEach((entry, entryIndex) => {
+        const targetRows = targetsByEntry.get(entryIndex);
+        const approvedRows = [];
+        const remainingRows = [];
+        (Array.isArray(entry.rows) ? entry.rows : []).forEach((row, rowIndex) => {
+          if (targetRows?.has(rowIndex)) approvedRows.push(row);
+          else remainingRows.push(row);
+        });
+        if (approvedRows.length) approvedEntries.push({ ...entry, rows: approvedRows });
+        if (remainingRows.length) remainingEntries.push({ ...entry, rows: remainingRows });
+      });
+      if (!approvedEntries.length) throw new Error("Nessuna ora da confermare trovata.");
+      const reportPayload = {
+        date: request.date || requestSources[0]?.reportDate || "",
+        entries: addHoursUniqueKeysToEntries(request.date || requestSources[0]?.reportDate || "", approvedEntries),
+        createdByUid: request.createdByUid || "",
+        createdByName: request.createdByName || request.createdByEmail || "Operatore",
+        createdByEmail: request.createdByEmail || "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
+      const lockRefs = locks.map((lock) => ({ lock, ref: db.collection("oreLocks").doc(lock.id) }));
+      const lockSnapshots = await Promise.all(lockRefs.map(({ ref }) => transaction.get(ref)));
+      const conflicts = [];
+      lockSnapshots.forEach((snap, index) => {
+        if (!snap.exists) return;
+        const data = snap.data() || {};
+        if (!isActiveHoursLock(data, requestId)) return;
+        const fallback = lockRefs[index].lock;
+        conflicts.push({
+          commessaName: data.commessaName || fallback.commessaName || "Commessa",
+          operatore: data.operatore || fallback.operatore || "Operatore"
+        });
+      });
+      if (conflicts.length) {
+        const error = new Error(formatHoursDuplicateMessage(conflicts, { admin: true }));
+        error.code = "hours-duplicate-lock";
+        throw error;
+      }
+      transaction.set(reportRef, reportPayload);
+      lockRefs.forEach(({ lock, ref }) => {
+        transaction.set(ref, {
+          ...lock,
+          approvalRequestId: requestId,
+          reportId: reportRef.id,
+          status: "approved",
+          createdByUid: reportPayload.createdByUid || "",
+          createdByEmail: reportPayload.createdByEmail || "",
+          createdByName: reportPayload.createdByName || "Operatore",
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      const requestUpdate = remainingEntries.length
+        ? {
+            entries: remainingEntries,
+            partialFinalizedReportIds: firebase.firestore.FieldValue.arrayUnion(reportRef.id),
+            level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
+            level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }
+        : {
+            entries: [],
+            status: "approved",
+            level2ApprovedBy: currentUser.email || currentUser.displayName || "admin",
+            level2ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            finalizedReportId: reportRef.id,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+      transaction.set(requestRef, requestUpdate, { merge: true });
+    });
+    approvedReportIds.push(reportRef.id);
+  }
+  return approvedReportIds;
+}
+
+async function confirmPendingHoursFromTable(sources, options = {}) {
+  const pendingSources = (Array.isArray(sources) ? sources : [])
+    .filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+  if (!pendingSources.length) return;
+  const confirmed = await openHoursConfirmModal({
+    title: "Confermare ore?",
+    text: options.text || "Vuoi confermare le ore?",
+    confirmLabel: options.confirmLabel || "Conferma ore"
+  });
+  if (!confirmed) return;
+  if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Conferma ore in corso...";
+  setHoursConfirmVisibleButtonState(canManageData() && Boolean(hoursTableContext?.pendingVisibleKeys?.length), true);
+  try {
+    await approvePendingHoursSourcesFromTable(pendingSources);
+    await loadSavedHoursReports();
+    await loadHoursMonthlyTable();
+  } catch (error) {
+    console.error("Errore conferma ore dalla tabella:", error);
+    if (ui.hoursTableFeedback) ui.hoursTableFeedback.textContent = "Errore: ore non confermate. Riprova.";
+    setHoursConfirmVisibleButtonState(canManageData() && Boolean(hoursTableContext?.pendingVisibleKeys?.length), false);
+  }
+}
+
+async function handleConfirmVisiblePendingHours() {
+  if (!canManageData()) return;
+  const visibleKeys = Array.from(ui.hoursTableContainer?.querySelectorAll(".hours-value-btn[data-hours-pending='1']") || [])
+    .map((btn) => String(btn.dataset.hoursKey || ""))
+    .filter(Boolean);
+  const pendingSources = getPendingHoursSourcesForKeys(visibleKeys);
+  if (!pendingSources.length) {
+    setHoursConfirmVisibleButtonState(false);
+    return;
+  }
+  await confirmPendingHoursFromTable(pendingSources, {
+    text: "Vuoi confermare tutte le ore visibili in questa tabella?",
+    confirmLabel: "Conferma ore"
+  });
+}
+
 async function handleHoursValueAction(cellKey) {
   if (!canManageData()) return;
   let sources = hoursTableRowsMap.get(String(cellKey || ""));
   if (!sources || !sources.length) return;
+  const pendingSources = sources.filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+  if (pendingSources.length && pendingSources.length === sources.length) {
+    const firstSource = pendingSources[0] || {};
+    const operatorLabel = String(firstSource.operatore || "OPERATORE").trim() || "OPERATORE";
+    const dayLabel = getHoursSourceDayLabel(firstSource);
+    await confirmPendingHoursFromTable(pendingSources, {
+      text: `Vuoi confermare le ore di ${operatorLabel} per il giorno ${dayLabel}?`,
+      confirmLabel: "Conferma ore"
+    });
+    return;
+  }
   const action = window.prompt("Admin: scrivi M per modificare oppure E per eliminare.", "M");
   const normalizedAction = String(action || "").trim().toUpperCase();
   if (!normalizedAction) return;

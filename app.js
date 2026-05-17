@@ -12104,7 +12104,39 @@ function buildAtexList(items = []) {
   return `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
 }
 
+
+function getAtexIllustrationSvg(type = "safety") {
+  const svgMap = {
+    safety: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 240" role="img"><defs><linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fed7aa"/><stop offset="1" stop-color="#dcfce7"/></linearGradient></defs><rect width="420" height="240" rx="28" fill="url(#sky)"/><path d="M0 174c60-26 118-22 178 2s119 26 242-12v76H0z" fill="#86efac"/><rect x="48" y="71" width="118" height="86" rx="14" fill="#fff7ed" stroke="#9a3412" stroke-width="6"/><path d="M78 124h59M78 101h59" stroke="#9a3412" stroke-width="10" stroke-linecap="round"/><circle cx="292" cy="96" r="46" fill="#fb923c"/><path d="M292 57l36 70h-72z" fill="#fff7ed" stroke="#7c2d12" stroke-width="7"/><path d="M292 78v24" stroke="#7c2d12" stroke-width="8" stroke-linecap="round"/><circle cx="292" cy="114" r="5" fill="#7c2d12"/><path d="M208 163c26-30 65-30 91 0" fill="none" stroke="#166534" stroke-width="10" stroke-linecap="round"/></svg>`,
+    checklist: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210" role="img"><rect width="320" height="210" rx="24" fill="#ffedd5"/><rect x="76" y="30" width="168" height="150" rx="18" fill="#fffaf3" stroke="#fdba74" stroke-width="6"/><rect x="119" y="19" width="82" height="28" rx="12" fill="#9a3412"/><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M105 78l13 13 29-31" stroke="#16a34a" stroke-width="10"/><path d="M162 80h48" stroke="#7c2d12" stroke-width="8"/><path d="M105 124l13 13 29-31" stroke="#16a34a" stroke-width="10"/><path d="M162 126h48" stroke="#7c2d12" stroke-width="8"/></g></svg>`,
+    altair: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img"><rect width="320" height="240" rx="28" fill="#fff7ed"/><rect x="96" y="26" width="128" height="188" rx="30" fill="#2f2f2f" stroke="#111827" stroke-width="8"/><rect x="118" y="52" width="84" height="50" rx="10" fill="#93c5fd"/><text x="160" y="83" text-anchor="middle" font-family="Arial" font-size="20" font-weight="900" fill="#0f172a">4XR</text><circle cx="160" cy="139" r="28" fill="#f97316"/><circle cx="160" cy="139" r="13" fill="#ffedd5"/><circle cx="124" cy="179" r="10" fill="#fb923c"/><circle cx="160" cy="179" r="10" fill="#22c55e"/><circle cx="196" cy="179" r="10" fill="#ef4444"/><path d="M125 28c4-16 66-16 70 0" fill="none" stroke="#6b7280" stroke-width="10" stroke-linecap="round"/></svg>`,
+    forbidden: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" role="img"><rect width="220" height="150" rx="20" fill="#fef2f2"/><circle cx="110" cy="75" r="47" fill="#fff" stroke="#dc2626" stroke-width="14"/><path d="M78 107l64-64" stroke="#dc2626" stroke-width="14" stroke-linecap="round"/><path d="M107 43c17 17-17 22 0 39 16 17-15 24 6 39" fill="none" stroke="#7f1d1d" stroke-width="8" stroke-linecap="round"/></svg>`,
+    dpi: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" role="img"><rect width="220" height="150" rx="20" fill="#fff7ed"/><path d="M63 103c8-31 28-50 47-50s39 19 47 50z" fill="#fb923c" stroke="#9a3412" stroke-width="6"/><path d="M72 69c5-23 23-39 38-39s33 16 38 39" fill="#fdba74"/><rect x="54" y="101" width="112" height="18" rx="9" fill="#7c2d12"/><path d="M85 76h50" stroke="#fff7ed" stroke-width="8" stroke-linecap="round"/></svg>`,
+    alarm: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" role="img"><rect width="220" height="150" rx="20" fill="#fffbeb"/><path d="M110 24l70 102H40z" fill="#facc15" stroke="#92400e" stroke-width="8" stroke-linejoin="round"/><path d="M110 61v32" stroke="#7c2d12" stroke-width="10" stroke-linecap="round"/><circle cx="110" cy="111" r="6" fill="#7c2d12"/></svg>`,
+    danger: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" role="img"><rect width="220" height="150" rx="20" fill="#fff7ed"/><path d="M44 100c42-45 91-45 132 0" fill="none" stroke="#16a34a" stroke-width="12" stroke-linecap="round"/><rect x="73" y="45" width="74" height="56" rx="12" fill="#431407"/><circle cx="110" cy="73" r="22" fill="#fb923c"/><path d="M110 55v36M92 73h36" stroke="#fff7ed" stroke-width="7" stroke-linecap="round"/></svg>`
+  };
+  return svgMap[type] || svgMap.safety;
+}
+
+function buildAtexImageCard(type, alt, extraClass = "") {
+  const src = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(getAtexIllustrationSvg(type))}`;
+  return `<figure class="atex-image-card ${escapeHTML(extraClass)}"><img src="${src}" alt="${escapeHTML(alt)}" loading="lazy"></figure>`;
+}
+
 function handleAtexProcedureContentClick(event) {
+  const checklistToggle = event.target?.closest?.("[data-atex-checklist-toggle]");
+  if (checklistToggle) {
+    event.preventDefault();
+    const targetId = checklistToggle.getAttribute("aria-controls");
+    const panel = targetId ? document.getElementById(targetId) : null;
+    const arrow = checklistToggle.querySelector("[data-atex-checklist-arrow]");
+    const isOpen = checklistToggle.getAttribute("aria-expanded") === "true";
+    checklistToggle.setAttribute("aria-expanded", String(!isOpen));
+    if (panel) panel.hidden = isOpen;
+    if (arrow) arrow.textContent = isOpen ? "▼" : "▲";
+    return;
+  }
+
   const openFormButton = event.target?.closest?.("[data-open-atex-form]");
   if (!openFormButton) return;
   event.preventDefault();
@@ -12186,13 +12218,14 @@ function renderAtexProcedurePage(impiantoKey) {
     "Controllo assenza inneschi/scintille"
   ];
   const altairChecks = [
-    "Accendere il dispositivo prima di entrare in area",
+    "Accendere il dispositivo prima di entrare o avvicinarsi all’area",
     "Attendere autotest completo",
     "Verificare batteria sufficiente",
     "Verificare sensori attivi",
-    "Eseguire bump test se previsto",
+    "Eseguire bump test se previsto dalla procedura aziendale",
     "Non entrare in zona se il dispositivo segnala errore",
-    "Tenere il dispositivo vicino alla respirazione"
+    "Tenere il dispositivo vicino alla respirazione",
+    "Controllare continuamente eventuali allarmi acustici, visivi o vibrazione"
   ];
   const statusIndicators = ["Vento", "Meteo", "Pioggia", "Segnalazioni", "Sensori", "Checklist"];
   ui.atexProcedureContent.innerHTML = `
@@ -12201,26 +12234,57 @@ function renderAtexProcedurePage(impiantoKey) {
       <p>Leggere attentamente e completare tutti i controlli prima di iniziare ogni attività.</p>
     </article>
 
+    <article class="atex-procedure-section atex-hero-section">
+      ${buildAtexImageCard("safety", "Area verde esterna con segnalazione sicurezza ATEX", "atex-hero-image")}
+      <div>
+        <h3>SICUREZZA ATEX IN AREA VERDE ESTERNA</h3>
+        <p>Procedura operativa sintetica per lavorare solo nelle aree verdi autorizzate, mantenendo controlli, DPI e comunicazioni sempre attivi.</p>
+      </div>
+    </article>
+
     <article class="atex-procedure-section atex-access-limits">
       <h3>2. LIMITAZIONE ACCESSI</h3>
       <p><strong>È vietato entrare all’interno delle strutture.</strong></p>
       <p>L’accesso è consentito solo nel cortile e nelle aree verdi esterne autorizzate.</p>
     </article>
 
-    <article class="atex-procedure-section">
-      <h3>3. CONTROLLI OBBLIGATORI PRIMA ATTIVITÀ</h3>
-      <div class="atex-checklist-grid">${buildAtexChecklist(mandatoryChecks)}</div>
+    <article class="atex-procedure-section atex-team-warning">
+      <strong>ATTENZIONE</strong>
+      <p>Le squadre di manutenzione verde NON devono entrare nelle strutture, locali tecnici, vasche, pozzetti o ambienti confinati.</p>
+      <p>È consentito operare solo nel cortile e nelle aree verdi esterne autorizzate.</p>
+      <p>In caso di dubbio fermarsi e contattare il responsabile.</p>
+    </article>
+
+    <article class="atex-procedure-section atex-collapsible-section">
+      <button class="atex-section-toggle" type="button" data-atex-checklist-toggle aria-expanded="false" aria-controls="atex-mandatory-checklist">
+        <span>3. CONTROLLI OBBLIGATORI PRIMA ATTIVITÀ</span>
+        <span class="atex-section-arrow" data-atex-checklist-arrow aria-hidden="true">▼</span>
+      </button>
+      <div id="atex-mandatory-checklist" class="atex-collapsible-panel" hidden>
+        ${buildAtexImageCard("checklist", "Checklist sicurezza prima attività", "atex-checklist-image")}
+        <div class="atex-checklist-grid">${buildAtexChecklist(mandatoryChecks)}</div>
+      </div>
     </article>
 
     <article class="atex-procedure-section atex-altair-box">
-      <h3>4. UTILIZZO DISPOSITIVO ALTAIR</h3>
+      <h3>4. UTILIZZO DISPOSITIVO ALTAIR 4XR</h3>
+      <div class="atex-altair-layout">
+        ${buildAtexImageCard("altair", "Dispositivo rilevatore multigas Altair 4XR", "atex-altair-image")}
+        <div class="atex-device-card">
+          <p><strong>Nome dispositivo:</strong> Altair 4XR</p>
+          <p><strong>Uso:</strong> rilevatore multigas personale</p>
+          <p><strong>Obbligo:</strong> accendere prima di avvicinarsi alla zona ATEX</p>
+          <p><strong>Posizione:</strong> tenere vicino alla zona di respirazione</p>
+        </div>
+      </div>
       ${buildAtexList(altairChecks)}
       <div class="atex-alarm-box">
         <strong>In caso di allarme:</strong>
         <ul>
-          <li>interrompere immediatamente attività</li>
-          <li>allontanarsi dalla zona</li>
+          <li>interrompere immediatamente l’attività</li>
+          <li>allontanarsi dalla zona in sicurezza</li>
           <li>avvisare squadra e responsabile</li>
+          <li>non rientrare senza autorizzazione</li>
           <li>vietato riavviare attività senza verifica</li>
         </ul>
       </div>
@@ -12229,10 +12293,10 @@ function renderAtexProcedurePage(impiantoKey) {
     <article class="atex-procedure-section">
       <h3>5. NORME OPERATIVE ATEX</h3>
       <div class="atex-rules-grid">
-        <section class="atex-rule-box atex-rule-forbidden"><h4>🔥 DIVIETI</h4>${buildAtexList(["Vietato fumare", "Vietato usare fiamme libere", "Vietato produrre scintille", "Vietato utilizzare utensili non certificati", "Vietato usare telefoni non autorizzati in area ATEX"])}</section>
-        <section class="atex-rule-box"><h4>🦺 DPI OBBLIGATORI</h4>${buildAtexList(["Scarpe antistatiche", "Guanti idonei", "Visiera/protezione occhi", "Alta visibilità", "DPI previsti dalla commessa"])}</section>
-        <section class="atex-rule-box"><h4>⚠️ COMPORTAMENTO OPERATIVO</h4>${buildAtexList(["Lavorare sempre in squadra", "Mantenere distanza sicurezza", "Controllare costantemente atmosfera", "Fermare attività in caso di dubbio", "Segnalare immediatamente anomalie"])}</section>
-        <section class="atex-rule-box"><h4>🌬 GAS E VENTILAZIONE</h4>${buildAtexList(["Controllare direzione vento", "Evitare ristagni gas", "Non entrare in pozzetti senza verifica", "Aerare zona prima attività"])}</section>
+        <section class="atex-rule-box atex-rule-forbidden">${buildAtexImageCard("forbidden", "Divieti in zona ATEX", "atex-rule-image")}<h4>🔥 DIVIETI</h4>${buildAtexList(["Vietato fumare", "Vietato usare fiamme libere", "Vietato produrre scintille", "Vietato utilizzare utensili non certificati", "Vietato usare telefoni non autorizzati in area ATEX"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("dpi", "DPI obbligatori", "atex-rule-image")}<h4>🦺 DPI OBBLIGATORI</h4>${buildAtexList(["Scarpe antistatiche", "Guanti idonei", "Visiera/protezione occhi", "Alta visibilità", "DPI previsti dalla commessa"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("alarm", "Allarme sicurezza", "atex-rule-image")}<h4>⚠️ COMPORTAMENTO OPERATIVO</h4>${buildAtexList(["Lavorare sempre in squadra", "Mantenere distanza sicurezza", "Controllare costantemente atmosfera", "Fermare attività in caso di dubbio", "Segnalare immediatamente anomalie"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("danger", "Zona pericolosa esterna", "atex-rule-image")}<h4>🌬 GAS E VENTILAZIONE</h4>${buildAtexList(["Controllare direzione vento", "Evitare ristagni gas", "Non entrare in pozzetti senza verifica", "Aerare zona prima attività"])}</section>
       </div>
     </article>
 

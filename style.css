@@ -6827,6 +6827,181 @@ textarea:focus-visible {
   background: #fff7ed;
 }
 
+.atex-access-limits {
+  border-color: #f97316;
+  background: #fff7ed;
+}
+
+.atex-access-limits p strong {
+  color: #9a3412;
+}
+
+.atex-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.atex-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fffaf3;
+  font-weight: 800;
+}
+
+.atex-check-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #ea580c;
+}
+
+.atex-altair-box {
+  border-color: #fdba74;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.atex-alarm-box {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.atex-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.atex-rule-box {
+  min-height: 100%;
+  padding: 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  background: #fffaf3;
+}
+
+.atex-rule-box h4 {
+  margin: 0 0 8px;
+  color: #7c2d12;
+  font-size: 0.9rem;
+}
+
+.atex-rule-forbidden {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.atex-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.atex-status-card {
+  padding: 10px;
+  border-radius: 14px;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.atex-status-card.is-green {
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.atex-status-card.is-yellow {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #713f12;
+}
+
+.atex-status-card.is-red {
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.atex-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.atex-indicators span {
+  padding: 5px 8px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.atex-open-form-btn {
+  width: 100%;
+  justify-content: center;
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.atex-module-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #fed7aa;
+}
+
+.atex-module-form.hidden {
+  display: none;
+}
+
+.atex-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.atex-module-form label {
+  display: grid;
+  gap: 5px;
+  color: #7c2d12;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.atex-module-form input,
+.atex-module-form select,
+.atex-module-form textarea {
+  width: 100%;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #431407;
+  font: inherit;
+  font-weight: 700;
+  padding: 9px 10px;
+}
+
+.atex-module-form textarea {
+  resize: vertical;
+}
+
+.atex-form-wide {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 760px) {
   .impianto-weather-atex-btn {
     min-height: 16px;
@@ -6844,5 +7019,15 @@ textarea:focus-visible {
     max-width: 100%;
     border-radius: 18px;
     padding: 10px;
+  }
+
+  .atex-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atex-checklist-grid,
+  .atex-rules-grid,
+  .atex-form-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -6836,6 +6836,145 @@ textarea:focus-visible {
   color: #9a3412;
 }
 
+
+.atex-hero-section,
+.atex-altair-layout,
+.atex-collapsible-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.atex-hero-section {
+  grid-template-columns: minmax(150px, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.atex-team-warning {
+  border-color: #fb923c;
+  background: #ffedd5;
+}
+
+.atex-team-warning strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #9a3412;
+  color: #ffffff;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+
+.atex-image-card {
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  background: #fffaf3;
+  overflow: hidden;
+}
+
+.atex-image-card img {
+  display: block;
+  width: 100%;
+  max-height: 170px;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+.atex-hero-image img {
+  max-height: 150px;
+}
+
+.atex-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9a3412;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atex-section-toggle:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.32);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.atex-section-arrow {
+  flex: 0 0 auto;
+  color: #7c2d12;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.atex-collapsible-panel {
+  margin-top: 10px;
+}
+
+.atex-collapsible-panel[hidden] {
+  display: none;
+}
+
+.atex-checklist-image {
+  max-width: 230px;
+}
+
+.atex-checklist-image img {
+  max-height: 118px;
+}
+
+.atex-altair-layout {
+  grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1.3fr);
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+.atex-altair-image img {
+  max-height: 190px;
+  object-fit: contain;
+}
+
+.atex-device-card {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.atex-device-card p {
+  margin: 0;
+}
+
+.atex-device-card strong {
+  color: #7c2d12;
+}
+
+.atex-rule-image {
+  margin-bottom: 8px;
+  padding: 4px;
+  border-radius: 16px;
+}
+
+.atex-rule-image img {
+  max-height: 82px;
+  border-radius: 12px;
+}
+
 .atex-checklist-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -7023,6 +7162,29 @@ textarea:focus-visible {
 
   .atex-status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .atex-hero-section,
+  .atex-altair-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .atex-image-card img {
+    max-height: 140px;
+  }
+
+  .atex-checklist-image {
+    max-width: 100%;
+  }
+
+  .atex-section-toggle {
+    align-items: flex-start;
+    font-size: 0.9rem;
+    line-height: 1.25;
+  }
+
+  .atex-rule-image img {
+    max-height: 76px;
   }
 
   .atex-checklist-grid,

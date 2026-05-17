@@ -1179,6 +1179,8 @@ ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
 ui.impiantoWeatherDetailBackBtn?.addEventListener("click", closeDettaglioMeteoImpianto);
 ui.impiantoWeatherDetailRefreshBtn?.addEventListener("click", refreshDettaglioMeteoImpianto);
 ui.atexProcedureBackBtn?.addEventListener("click", closeAtexProcedurePage);
+ui.atexProcedureContent?.addEventListener("click", handleAtexProcedureContentClick);
+ui.atexProcedureContent?.addEventListener("submit", saveAtexProcedureForm);
 ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
@@ -12069,6 +12071,101 @@ function handleAtexProcedureButtonClick(event) {
   openAtexProcedurePage(impianto);
 }
 
+function getCurrentAtexProcedureContext() {
+  const route = parseCommessaHash();
+  const impiantoKey = route.atex || "";
+  const impianto = getAtexProcedureImpiantoByKey(impiantoKey) || {};
+  return { impiantoKey, impianto };
+}
+
+function formatAtexDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatAtexTimeValue(date = new Date()) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function buildAtexChecklist(items = []) {
+  return items.map((item, index) => `
+    <label class="atex-check-row">
+      <input type="checkbox" name="check_${index}" value="${escapeHTML(item)}">
+      <span>${escapeHTML(item)}</span>
+    </label>
+  `).join("");
+}
+
+function buildAtexList(items = []) {
+  return `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
+}
+
+function handleAtexProcedureContentClick(event) {
+  const openFormButton = event.target?.closest?.("[data-open-atex-form]");
+  if (!openFormButton) return;
+  event.preventDefault();
+  const form = ui.atexProcedureContent?.querySelector?.("#atex-module-form");
+  if (!form) return;
+  form.classList.remove("hidden");
+  openFormButton.classList.add("hidden");
+  form.querySelector("input, select, textarea")?.focus?.();
+}
+
+async function saveAtexProcedureForm(event) {
+  const form = event.target?.closest?.("#atex-module-form");
+  if (!form) return;
+  event.preventDefault();
+  const feedback = form.querySelector("[data-atex-form-feedback]");
+  const submitButton = form.querySelector("button[type='submit']");
+  const { impiantoKey, impianto } = getCurrentAtexProcedureContext();
+  const formData = new FormData(form);
+  const payload = {
+    commessaId: selectedCommessaId || "",
+    commessaName: selectedCommessaName || "",
+    impiantoKey,
+    impiantoName: impianto.denominazione || formData.get("impianto") || "",
+    impiantoComune: impianto.comune || "",
+    operatore: String(formData.get("operatore") || "").trim(),
+    squadra: String(formData.get("squadra") || "").trim(),
+    impianto: String(formData.get("impianto") || "").trim(),
+    data: String(formData.get("data") || "").trim(),
+    ora: String(formData.get("ora") || "").trim(),
+    presenzaGas: String(formData.get("presenzaGas") || "").trim(),
+    altairVerificato: String(formData.get("altairVerificato") || "").trim(),
+    dpiVerificati: String(formData.get("dpiVerificati") || "").trim(),
+    noteOperative: String(formData.get("noteOperative") || "").trim(),
+    firma: String(formData.get("firma") || "").trim(),
+    checklist: Array.from(form.querySelectorAll(".atex-check-row input:checked")).map((input) => input.value),
+    createdByUid: auth.currentUser?.uid || "",
+    createdByEmail: auth.currentUser?.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (!payload.operatore || !payload.squadra || !payload.impianto || !payload.data || !payload.ora || !payload.firma) {
+    if (feedback) feedback.textContent = "Compila operatore, squadra, impianto, data, ora e firma.";
+    return;
+  }
+  try {
+    if (submitButton) submitButton.disabled = true;
+    if (feedback) feedback.textContent = "Salvataggio modulo ATEX in corso…";
+    await db.collection("commesse").doc(selectedCommessaId).collection("atexModules").add(payload);
+    form.reset();
+    form.querySelector("[name='impianto']").value = payload.impianto;
+    form.querySelector("[name='data']").value = formatAtexDateValue();
+    form.querySelector("[name='ora']").value = formatAtexTimeValue();
+    if (feedback) feedback.textContent = "Modulo ATEX salvato e collegato a commessa e impianto.";
+  } catch (error) {
+    console.error("Modulo ATEX non salvato:", error);
+    if (feedback) feedback.textContent = "Errore durante il salvataggio del modulo ATEX. Riprova.";
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
 function renderAtexProcedurePage(impiantoKey) {
   if (!ui.atexProcedureContent) return;
   const impianto = getAtexProcedureImpiantoByKey(impiantoKey) || {};
@@ -12076,58 +12173,98 @@ function renderAtexProcedurePage(impiantoKey) {
   if (ui.atexProcedureSubtitle) {
     ui.atexProcedureSubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   }
+  const mandatoryChecks = [
+    "Verifica presenza gas",
+    "Controllo zona classificata",
+    "Controllo DPI",
+    "Verifica estintore",
+    "Verifica vie di fuga",
+    "Controllo vento e ventilazione area",
+    "Controllo autorizzazione lavoro",
+    "Compilazione modulo ATEX",
+    "Verifica comunicazione squadra",
+    "Controllo assenza inneschi/scintille"
+  ];
+  const altairChecks = [
+    "Accendere il dispositivo prima di entrare in area",
+    "Attendere autotest completo",
+    "Verificare batteria sufficiente",
+    "Verificare sensori attivi",
+    "Eseguire bump test se previsto",
+    "Non entrare in zona se il dispositivo segnala errore",
+    "Tenere il dispositivo vicino alla respirazione"
+  ];
+  const statusIndicators = ["Vento", "Meteo", "Pioggia", "Segnalazioni", "Sensori", "Checklist"];
   ui.atexProcedureContent.innerHTML = `
     <article class="atex-procedure-alert">
-      <strong>⚠️ PROCEDURA SICUREZZA ATEX</strong>
-      <p>Prima di iniziare attività in area classificata, verificare autorizzazioni, strumenti e condizioni operative.</p>
+      <strong>1. AVVISO IMPORTANTE</strong>
+      <p>Leggere attentamente e completare tutti i controlli prima di iniziare ogni attività.</p>
     </article>
+
+    <article class="atex-procedure-section atex-access-limits">
+      <h3>2. LIMITAZIONE ACCESSI</h3>
+      <p><strong>È vietato entrare all’interno delle strutture.</strong></p>
+      <p>L’accesso è consentito solo nel cortile e nelle aree verdi esterne autorizzate.</p>
+    </article>
+
     <article class="atex-procedure-section">
-      <h3>Checklist sicurezza</h3>
-      <ul>
-        <li>Confermare classificazione area, permesso di lavoro e responsabile operativo.</li>
-        <li>Verificare assenza di odori anomali, sversamenti, fiamme libere o sorgenti di innesco.</li>
-        <li>Delimitare l’area e mantenere comunicazione attiva con la squadra.</li>
-      </ul>
+      <h3>3. CONTROLLI OBBLIGATORI PRIMA ATTIVITÀ</h3>
+      <div class="atex-checklist-grid">${buildAtexChecklist(mandatoryChecks)}</div>
     </article>
+
+    <article class="atex-procedure-section atex-altair-box">
+      <h3>4. UTILIZZO DISPOSITIVO ALTAIR</h3>
+      ${buildAtexList(altairChecks)}
+      <div class="atex-alarm-box">
+        <strong>In caso di allarme:</strong>
+        <ul>
+          <li>interrompere immediatamente attività</li>
+          <li>allontanarsi dalla zona</li>
+          <li>avvisare squadra e responsabile</li>
+          <li>vietato riavviare attività senza verifica</li>
+        </ul>
+      </div>
+    </article>
+
     <article class="atex-procedure-section">
-      <h3>Utilizzo Altair</h3>
-      <ul>
-        <li>Accendere e azzerare lo strumento in aria pulita prima dell’accesso.</li>
-        <li>Controllare batteria, sensori e allarmi acustici/visivi.</li>
-        <li>Monitorare continuamente LEL/O₂/gas rilevanti e uscire subito in caso di allarme.</li>
-      </ul>
+      <h3>5. NORME OPERATIVE ATEX</h3>
+      <div class="atex-rules-grid">
+        <section class="atex-rule-box atex-rule-forbidden"><h4>🔥 DIVIETI</h4>${buildAtexList(["Vietato fumare", "Vietato usare fiamme libere", "Vietato produrre scintille", "Vietato utilizzare utensili non certificati", "Vietato usare telefoni non autorizzati in area ATEX"])}</section>
+        <section class="atex-rule-box"><h4>🦺 DPI OBBLIGATORI</h4>${buildAtexList(["Scarpe antistatiche", "Guanti idonei", "Visiera/protezione occhi", "Alta visibilità", "DPI previsti dalla commessa"])}</section>
+        <section class="atex-rule-box"><h4>⚠️ COMPORTAMENTO OPERATIVO</h4>${buildAtexList(["Lavorare sempre in squadra", "Mantenere distanza sicurezza", "Controllare costantemente atmosfera", "Fermare attività in caso di dubbio", "Segnalare immediatamente anomalie"])}</section>
+        <section class="atex-rule-box"><h4>🌬 GAS E VENTILAZIONE</h4>${buildAtexList(["Controllare direzione vento", "Evitare ristagni gas", "Non entrare in pozzetti senza verifica", "Aerare zona prima attività"])}</section>
+      </div>
     </article>
-    <article class="atex-procedure-section">
-      <h3>Norme ATEX</h3>
-      <ul>
-        <li>Operare solo con attrezzature compatibili con la zona classificata.</li>
-        <li>Rispettare segnaletica, procedure aziendali e indicazioni del preposto.</li>
-        <li>Sospendere le attività se cambiano le condizioni di sicurezza.</li>
-      </ul>
+
+    <article class="atex-procedure-section atex-status-section">
+      <h3>6. STATO SICUREZZA</h3>
+      <div class="atex-status-grid">
+        <div class="atex-status-card is-green">🟢 <strong>SICUREZZA OPERATIVA</strong></div>
+        <div class="atex-status-card is-yellow">🟡 <strong>ATTENZIONE</strong></div>
+        <div class="atex-status-card is-red">🔴 <strong>RISCHIO ALTO</strong></div>
+      </div>
+      <div class="atex-indicators">${statusIndicators.map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>
     </article>
-    <article class="atex-procedure-section">
-      <h3>DPI obbligatori</h3>
-      <ul>
-        <li>Indumenti antistatici, scarpe antinfortunistiche antistatiche e guanti idonei.</li>
-        <li>Elmetto, occhiali/visiera e protezioni respiratorie se previste dalla valutazione.</li>
-        <li>Rilevatore Altair indossato e visibile durante tutta l’attività.</li>
-      </ul>
-    </article>
-    <article class="atex-procedure-section atex-procedure-forbidden">
-      <h3>Divieti</h3>
-      <ul>
-        <li>Vietati fumo, fiamme libere, scintille e uso di dispositivi non certificati.</li>
-        <li>Vietato lavorare da soli o bypassare allarmi/interblocchi.</li>
-        <li>Vietato proseguire con valori fuori soglia o in assenza di permesso valido.</li>
-      </ul>
-    </article>
-    <article class="atex-procedure-section">
-      <h3>Compilazione modulo ATEX</h3>
-      <ul>
-        <li>Registrare impianto, data/ora, operatori, letture Altair iniziali e finali.</li>
-        <li>Annotare DPI, attrezzature utilizzate, esito checklist e firma del preposto.</li>
-        <li>Segnalare anomalie e allegare evidenze prima di chiudere l’intervento.</li>
-      </ul>
+
+    <article class="atex-procedure-section atex-form-section">
+      <h3>7. MODULO ATEX</h3>
+      <button class="btn btn-primary atex-open-form-btn" type="button" data-open-atex-form>📄 COMPILA MODULO ATEX</button>
+      <form id="atex-module-form" class="atex-module-form hidden">
+        <div class="atex-form-grid">
+          <label>Operatore<input name="operatore" type="text" autocomplete="name" required></label>
+          <label>Squadra<input name="squadra" type="text" required></label>
+          <label>Impianto<input name="impianto" type="text" value="${escapeHTML(impiantoName)}" required></label>
+          <label>Data<input name="data" type="date" value="${formatAtexDateValue()}" required></label>
+          <label>Ora<input name="ora" type="time" value="${formatAtexTimeValue()}" required></label>
+          <label>Presenza gas<select name="presenzaGas" required><option value="NO">NO</option><option value="SI">SI</option></select></label>
+          <label>Altair verificato<select name="altairVerificato" required><option value="SI">SI</option><option value="NO">NO</option></select></label>
+          <label>DPI verificati<select name="dpiVerificati" required><option value="SI">SI</option><option value="NO">NO</option></select></label>
+          <label class="atex-form-wide">Note operative<textarea name="noteOperative" rows="4" placeholder="Annotazioni, anomalie, valori o comunicazioni operative"></textarea></label>
+          <label class="atex-form-wide">Firma semplice<input name="firma" type="text" placeholder="Nome e cognome" required></label>
+        </div>
+        <button class="btn btn-primary" type="submit">Salva modulo ATEX</button>
+        <p class="muted" data-atex-form-feedback role="status" aria-live="polite"></p>
+      </form>
     </article>
   `;
 }
@@ -12367,8 +12504,8 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
   const atexMarkup = state.showAtex && state.retryKey
     ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
     : "";
-  const detailHint = state.canRetry || state.showAtex ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettagli <span aria-hidden="true">›</span></span>`;
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${atexMarkup}${retryMarkup}${detailHint}</span></span>`;
+  const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">›</span></span>`;
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${retryMarkup}</span></span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {

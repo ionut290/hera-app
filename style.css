@@ -6006,6 +6006,57 @@ textarea:focus-visible {
   color: #991b1b;
 }
 
+.weather-detail-atex-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  border: 2px solid #9a3412;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fb923c 0%, #9a3412 100%);
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(154, 52, 18, 0.24);
+}
+
+.weather-detail-atex-action:hover,
+.weather-detail-atex-action:focus-visible {
+  background: linear-gradient(135deg, #f97316 0%, #7c2d12 100%);
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
+}
+
+.weather-detail-atex-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 247, 237, 0.22);
+  font-size: 1.45rem;
+}
+
+.weather-detail-atex-action strong,
+.weather-detail-atex-action small {
+  display: block;
+}
+
+.weather-detail-atex-action strong {
+  font-size: clamp(1.05rem, 5vw, 1.35rem);
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+}
+
+.weather-detail-atex-action small {
+  margin-top: 3px;
+  color: #ffedd5;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
 .weather-detail-risk-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7084,6 +7135,116 @@ textarea:focus-visible {
   color: #9a3412;
   font-size: 0.72rem;
   font-weight: 900;
+}
+
+.atex-emergency-section {
+  border-color: #fb923c;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.atex-contacts-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.atex-contact-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #431407;
+}
+
+.atex-contact-card.is-primary {
+  border-width: 2px;
+  border-color: #f97316;
+  background: #fff7ed;
+  box-shadow: 0 10px 24px rgba(249, 115, 22, 0.16);
+}
+
+.atex-contact-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.atex-contact-role {
+  color: #9a3412;
+  font-size: 0.76rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.atex-call-first-badge,
+.atex-contact-note {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+}
+
+.atex-call-first-badge {
+  padding: 5px 8px;
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.atex-contact-note {
+  padding: 4px 7px;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.atex-contact-name {
+  color: #431407;
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.atex-contact-phone {
+  color: #7c2d12;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.atex-contact-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.atex-contact-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.atex-contact-action.call {
+  background: #c2410c;
+}
+
+.atex-contact-action.whatsapp {
+  background: #15803d;
+}
+
+.atex-contact-action:hover,
+.atex-contact-action:focus-visible {
+  filter: brightness(0.94);
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
 }
 
 .atex-open-form-btn {

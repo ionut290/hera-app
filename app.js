@@ -7550,12 +7550,15 @@ function getParentCommessaAggregate(parentCommessaId) {
     acc.total += stats.total;
     acc.done += stats.done;
     acc.openAlerts += stats.openAlerts;
+    acc.totaleMqPrevisti += Number(stats.totaleMqPrevisti || 0);
+    acc.totaleMqEseguiti += Number(stats.totaleMqEseguiti || 0);
+    acc.mqRimanenti += Number(stats.mqRimanenti || 0);
     acc.hours += Number(workSummary.totalHours || 0);
     (workSummary.workedDateKeys || new Set()).forEach((dateKey) => acc.workedDateKeys.add(dateKey));
     const firstDoneAtMs = Number(workSummary.firstDoneAtMs || stats.firstDoneAtMs || 0);
     if (firstDoneAtMs) acc.firstDoneAtMs = acc.firstDoneAtMs ? Math.min(acc.firstDoneAtMs, firstDoneAtMs) : firstDoneAtMs;
     return acc;
-  }, { subCount: 0, total: 0, done: 0, openAlerts: 0, hours: 0, workedDateKeys: new Set(), firstDoneAtMs: 0 });
+  }, { subCount: 0, total: 0, done: 0, openAlerts: 0, totaleMqPrevisti: 0, totaleMqEseguiti: 0, mqRimanenti: 0, hours: 0, workedDateKeys: new Set(), firstDoneAtMs: 0 });
 }
 
 function formatProgress(done, total) {
@@ -7594,6 +7597,28 @@ function formatSingleCommessaSummary(commessaId) {
 }
 
 function getSelectedCommessaDashboardStats() {
+  const selectedSubcommesse = selectedCommessaId ? getSubcommesse(selectedCommessaId) : [];
+  if (selectedSubcommesse.length) {
+    const aggregate = getParentCommessaAggregate(selectedCommessaId);
+    const activeDateKey = getActiveSquadreDateKey();
+    const squadreCount = selectedSubcommesse.reduce((sum, subcommessa) => sum + getSquadreCountForCommessaDate(subcommessa.id, activeDateKey), 0);
+    const avanzamentoMq = aggregate.totaleMqPrevisti > 0
+      ? Math.round((aggregate.totaleMqEseguiti / aggregate.totaleMqPrevisti) * 100)
+      : Number.parseInt(formatProgress(aggregate.done, aggregate.total), 10) || 0;
+    return {
+      total: aggregate.total,
+      done: aggregate.done,
+      segnalazioni: aggregate.openAlerts,
+      avanzamento: `${avanzamentoMq}%`,
+      totaleMqPrevisti: aggregate.totaleMqPrevisti,
+      totaleMqEseguiti: aggregate.totaleMqEseguiti,
+      mqRimanenti: aggregate.mqRimanenti,
+      ore: Number(aggregate.hours || 0),
+      giorni: aggregate.workedDateKeys?.size || 0,
+      squadreCount
+    };
+  }
+
   const liveTotal = currentImpianti.length;
   const liveDone = currentImpianti.filter((impianto) => Boolean(impianto.done)).length;
   const storedStats = getCommessaStats(selectedCommessaId);
@@ -8184,10 +8209,53 @@ function renderCommesseHomeList() {
 
 function renderParentCommessaOverview() {
   if (!ui.parentCommessaOverview) return;
-  ui.parentCommessaOverview.classList.add("hidden");
-  ui.parentCommessaOverview.setAttribute("aria-hidden", "true");
-  ui.commessaOperationalCard?.classList.remove("hidden");
-  ui.impiantiCard?.classList.remove("hidden");
+  const selected = commesseById.get(selectedCommessaId) || {};
+  const subcommesse = selectedCommessaId ? sortCommesseByCreatedAtDesc(getSubcommesse(selectedCommessaId)) : [];
+  const isParentCommessa = subcommesse.length > 0;
+
+  ui.parentCommessaOverview.classList.toggle("hidden", !isParentCommessa);
+  ui.parentCommessaOverview.setAttribute("aria-hidden", isParentCommessa ? "false" : "true");
+  ui.commessaOperationalCard?.classList.toggle("hidden", isParentCommessa);
+  ui.impiantiCard?.classList.toggle("hidden", isParentCommessa);
+
+  if (!isParentCommessa) {
+    if (ui.parentSubcommesseList) ui.parentSubcommesseList.innerHTML = "";
+    return;
+  }
+
+  const selectedName = selected.nome || selectedCommessaName || "Commessa";
+  const aggregate = getParentCommessaAggregate(selectedCommessaId);
+  if (ui.parentCommessaSummary) {
+    ui.parentCommessaSummary.textContent = `${selectedName}: ${formatParentCommessaSummary(aggregate)}`;
+  }
+  if (ui.parentSubcommesseTitle) {
+    ui.parentSubcommesseTitle.textContent = `Elenco subcommesse di ${selectedName}`;
+  }
+  if (!ui.parentSubcommesseList) return;
+  ui.parentSubcommesseList.innerHTML = "";
+
+  subcommesse.forEach((subcommessa) => {
+    const row = document.createElement("article");
+    row.className = "subcommessa-compact-card";
+    const info = document.createElement("div");
+    const codeText = String(subcommessa.codice || "").trim();
+    info.innerHTML = `
+      <h3>${escapeHTML(subcommessa.nome || "Subcommessa senza nome")}</h3>
+      <p class="muted">${escapeHTML(formatSingleCommessaSummary(subcommessa.id))}</p>
+      ${codeText ? `<p class="muted">Cod. ${escapeHTML(codeText)}</p>` : ""}
+    `;
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    const openBtn = createButton("Apri subcommessa", () => selectCommessa(subcommessa.id, subcommessa.nome || "Subcommessa", subcommessa.codice || ""));
+    openBtn.classList.add("subcommessa-open-btn");
+    actions.appendChild(openBtn);
+    if (canManageData()) {
+      actions.appendChild(createButton("Sposta in principale", () => moveSubcommessaToMain(subcommessa.id)));
+    }
+    row.appendChild(info);
+    row.appendChild(actions);
+    ui.parentSubcommesseList.appendChild(row);
+  });
 }
 
 function renderCommessaSelects() {
@@ -9698,17 +9766,22 @@ function selectCommessa(id, nome, codice = "") {
   updateCommessaButtonsActive();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
-  renderParentCommessaOverview();
 
   stopImpiantiSubscription();
   stopCommessaNotesSubscription();
-  subscribeImpianti();
-  subscribeCommessaNotes();
+  const hasSubcommesse = getSubcommesse(id).length > 0;
+  renderParentCommessaOverview();
+  updateCommessaDashboard();
+  if (!hasSubcommesse) {
+    subscribeImpianti();
+    subscribeCommessaNotes();
+  }
   setCurrentWorkflowStep("open-commessa");
   const commessaRoute = parseCommessaHash();
-  if (commessaRoute.notes) openCommessaNotesPage();
-  else if (commessaRoute.atex) openImpiantiPage(`&atex=${encodeURIComponent(commessaRoute.atex)}`);
-  else openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
+  if (!hasSubcommesse && commessaRoute.notes) openCommessaNotesPage();
+  else if (!hasSubcommesse && commessaRoute.atex) openImpiantiPage(`&atex=${encodeURIComponent(commessaRoute.atex)}`);
+  else if (!hasSubcommesse) openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
+  else openImpiantiPage("");
 }
 
 function updateCommessaContextUI() {

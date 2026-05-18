@@ -163,6 +163,10 @@ const ui = {
   atexProcedureBackBtn: document.getElementById("atex-procedure-back-btn"),
   atexProcedureSubtitle: document.getElementById("atex-procedure-subtitle"),
   atexProcedureContent: document.getElementById("atex-procedure-content"),
+  impiantoSafetyPage: document.getElementById("impianto-safety-page"),
+  impiantoSafetyBackBtn: document.getElementById("impianto-safety-back-btn"),
+  impiantoSafetySubtitle: document.getElementById("impianto-safety-subtitle"),
+  impiantoSafetyContent: document.getElementById("impianto-safety-content"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
   commessaFocusCode: document.getElementById("commessa-focus-code"),
   commessaHomeBtn: document.getElementById("commessa-home-btn"),
@@ -1181,6 +1185,9 @@ ui.impiantoWeatherDetailRefreshBtn?.addEventListener("click", refreshDettaglioMe
 ui.atexProcedureBackBtn?.addEventListener("click", closeAtexProcedurePage);
 ui.atexProcedureContent?.addEventListener("click", handleAtexProcedureContentClick);
 ui.atexProcedureContent?.addEventListener("submit", saveAtexProcedureForm);
+ui.impiantoSafetyBackBtn?.addEventListener("click", closeImpiantoSafetyPage);
+ui.impiantoSafetyContent?.addEventListener("click", handleImpiantoSafetyContentClick);
+ui.impiantoSafetyContent?.addEventListener("submit", saveImpiantoSafetyContactForm);
 ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
@@ -1190,6 +1197,7 @@ ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaWeatherRefreshBtn?.addEventListener("click", refreshSelectedCommessaWeather);
 document.addEventListener("click", handleImpiantoWeatherRetryClick);
 document.addEventListener("click", handleAtexProcedureButtonClick);
+document.addEventListener("click", handleImpiantoSafetyButtonClick);
 ui.commessaCallBtn?.addEventListener("click", openCommessaPhoneResources);
 ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSection);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
@@ -3092,7 +3100,7 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "" };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "", safety: "" };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
@@ -3100,7 +3108,8 @@ function parseCommessaHash(hash = window.location.hash || "") {
     notes: params.has("notes"),
     impianto: params.get("impianto") || "",
     meteo: params.get("meteo") || "",
-    atex: params.get("atex") || ""
+    atex: params.get("atex") || "",
+    safety: params.get("safety") || ""
   };
 }
 
@@ -3135,12 +3144,14 @@ function applyRoute() {
   const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showWeatherDetail = Boolean(commessaRoute.meteo && selectedCommessaId === commessaIdFromHash && !showNotesPage);
   const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
-  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
+  const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
+  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showImpiantoSafety);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showImpiantoSafety || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
   ui.atexProcedurePage?.classList.toggle("hidden", !showAtexProcedure);
+  ui.impiantoSafetyPage?.classList.toggle("hidden", !showImpiantoSafety);
   ui.commessaNotesPage?.classList.toggle("hidden", !showNotesPage);
   ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
@@ -3169,6 +3180,9 @@ function applyRoute() {
   }
   if (showAtexProcedure) {
     renderAtexProcedurePage(commessaRoute.atex);
+  }
+  if (showImpiantoSafety) {
+    renderImpiantoSafetyPage(commessaRoute.safety);
   }
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
@@ -11387,10 +11401,11 @@ function renderImpianti() {
     weatherColumn.className = "impianto-weather-column weather-compact";
     weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
     weatherColumn.addEventListener("click", (event) => {
-      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure]")) return;
+      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
       openDettaglioMeteoImpianto(impianto);
     });
     weatherColumn.addEventListener("keydown", (event) => {
+      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       openDettaglioMeteoImpianto(impianto);
@@ -11979,6 +11994,311 @@ function normalizeAtexSearchValue(value) {
   return String(value || "").trim().toLocaleUpperCase("it-IT");
 }
 
+
+const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [
+  { id: "default-112", name: "Emergenze", role: "Numero unico emergenze", phone: "112", type: "emergenza", whatsappEnabled: true, isDefault: true },
+  { id: "default-115", name: "Vigili del Fuoco", role: "Soccorso tecnico urgente", phone: "115", type: "emergenza", whatsappEnabled: true, isDefault: true },
+  { id: "default-118", name: "Ambulanza", role: "Emergenza sanitaria", phone: "118", type: "emergenza", whatsappEnabled: true, isDefault: true },
+  { id: "default-hera-bo-acqua", name: "Pronto Intervento Hera Bologna", role: "Acqua, fognature e depurazione • 24h", phone: "800713900", type: "pronto intervento", whatsappEnabled: true, isDefault: true },
+  { id: "default-varga-ionel", name: "Varga Ionel", role: "Capo squadra", phone: "3892352575", type: "capo squadra", whatsappEnabled: true, isDefault: true },
+  { id: "default-alessandro-minarini", name: "Alessandro Minarini", role: "Responsabile commessa", phone: "+393356815371", type: "responsabile", whatsappEnabled: true, isDefault: true }
+];
+
+const IMPIANTO_SAFETY_SECTIONS = [
+  { cls: "forbidden", title: "⛔ DIVIETI", items: ["Vietato entrare in vasche o strutture tecniche", "Vietato aprire tombini o pozzetti", "Vietato accedere ai locali impianto", "Vietato intervenire su apparecchiature", "Vietato abbandonare i percorsi autorizzati", "Vietato lavorare senza DPI"] },
+  { cls: "required", title: "✅ OBBLIGHI", items: ["Restare nelle aree assegnate", "Usare sempre i DPI obbligatori", "Segnalare anomalie, odori strani o situazioni di pericolo", "Prestare attenzione ai mezzi operativi in movimento", "Mantenere ordine e pulizia nell’area di lavoro", "Fare briefing con la squadra prima di iniziare"] },
+  { cls: "dpi", title: "🦺 DPI OBBLIGATORI", items: ["Casco obbligatorio", "Scarpe antinfortunistiche S3", "Guanti da lavoro", "Occhiali o visiera", "Cuffie antirumore", "Gilet alta visibilità"] },
+  { cls: "risk", title: "⚠️ RISCHI PRINCIPALI", items: ["Terreno scivoloso", "Erba bagnata", "Mezzi in movimento", "Decespugliatore e proiezioni", "Contatto accidentale con reflui", "Insetti e punture", "Caldo e sole", "Caduta rami", "Rumore", "Tagli e abrasioni"] },
+  { cls: "start", title: "🧭 PRIMA DI INIZIARE IL LAVORO", items: ["Controlla i DPI", "Verifica meteo", "Verifica area di lavoro e percorsi autorizzati", "Controlla presenza mezzi operativi", "Segnala eventuali anomalie", "Briefing con la squadra"] },
+  { cls: "emergency", title: "🚨 IN CASO DI EMERGENZA", items: ["Allontanarsi dalla zona", "Avvisare il capo squadra", "Avvisare il responsabile commessa", "Chiamare i soccorsi se necessario", "Non intervenire su impianti o strutture tecniche"] }
+];
+
+function getCurrentCommessaSafetyKind() {
+  return getCommessaSafetyKind(selectedCommessaId);
+}
+
+function getCommessaSafetyKind(commessaId) {
+  const commessa = commesseById.get(commessaId) || {};
+  const values = [];
+  let cursorId = commessaId;
+  const visited = new Set();
+  while (cursorId && !visited.has(cursorId)) {
+    visited.add(cursorId);
+    const item = commesseById.get(cursorId) || {};
+    values.push(item.nome, item.name, item.codice, item.code, item.cliente, item.customer, item.category, item.categoria, item.tipologia, item.tipo);
+    cursorId = String(item.parentCommessaId || "").trim();
+  }
+  values.push(commessaId, selectedCommessaName);
+  const normalized = normalizeCommessaNameForRules(values.filter(Boolean).join(" "));
+  if (normalized.includes("DISCARIC")) return "discariche";
+  if (normalized.includes("DEPUR")) return "depurazione";
+  return "";
+}
+
+function isCurrentCommessaDepurazioneOrDiscariche() {
+  return Boolean(getCurrentCommessaSafetyKind());
+}
+
+function shouldShowImpiantoSafetyButtonForImpianto() {
+  return isCurrentCommessaDepurazioneOrDiscariche();
+}
+
+function getImpiantoSafetyImpiantoByKey(key) {
+  return getDettaglioMeteoImpiantoByKey(key);
+}
+
+function openImpiantoSafetyPage(impianto) {
+  if (!selectedCommessaId || !impianto || !isCurrentCommessaDepurazioneOrDiscariche()) return;
+  const key = buildImpiantoKey(impianto);
+  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&safety=${encodeURIComponent(key)}`;
+  applyRoute();
+}
+
+function closeImpiantoSafetyPage() {
+  openImpiantiPage();
+}
+
+function handleImpiantoSafetyButtonClick(event) {
+  const button = event.target?.closest?.("[data-impianto-safety]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const key = button.getAttribute("data-impianto-safety") || button.closest("[data-weather-card]")?.getAttribute("data-weather-card") || "";
+  const impianto = findImpiantoByWeatherKey(key) || getImpiantoSafetyImpiantoByKey(key);
+  if (!impianto) return;
+  openImpiantoSafetyPage(impianto);
+}
+
+function getCurrentImpiantoSafetyContext() {
+  const route = parseCommessaHash();
+  const impiantoKey = route.safety || "";
+  const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
+  return { impiantoKey, impianto };
+}
+
+function getImpiantoDisplayName(impianto = {}) {
+  return String(impianto.denominazione || impianto.nome || impianto.impianto || impianto.descrizione || impianto.codice || "").trim();
+}
+
+function getImpiantoComune(impianto = {}) {
+  return String(impianto.comune || impianto.localita || impianto.citta || impianto.city || "").trim();
+}
+
+function buildImpiantoSafetyWhatsappText(impianto = {}) {
+  const operator = currentUser?.displayName || currentUser?.email || "Operatore";
+  return [
+    "⚠️ SEGNALAZIONE SICUREZZA IMPIANTO",
+    `Commessa: ${selectedCommessaName || "Commessa"}`,
+    `Impianto: ${getImpiantoDisplayName(impianto) || "non disponibile"}`,
+    `Comune: ${getImpiantoComune(impianto) || "non disponibile"}`,
+    `Operatore: ${operator}`,
+    "Problema rilevato:",
+    "Richiedo supporto urgente."
+  ].join("\n");
+}
+
+function formatPhoneHref(phone = "") {
+  return String(phone || "").replace(/[^+\d]/g, "");
+}
+
+function formatWhatsappPhone(phone = "") {
+  const cleaned = formatPhoneHref(phone);
+  if (cleaned.startsWith("+")) return cleaned.slice(1);
+  if (/^3\d{8,}$/.test(cleaned)) return `39${cleaned}`;
+  return cleaned;
+}
+
+function buildImpiantoSafetyList(items = []) {
+  return `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
+}
+
+function buildImpiantoSafetySection(section) {
+  return `<article class="impianto-safety-section is-${escapeHTML(section.cls)}"><h3>${escapeHTML(section.title)}</h3>${buildImpiantoSafetyList(section.items)}</article>`;
+}
+
+function isSafetyContactVisibleForCommessa(contact = {}, kind = getCurrentCommessaSafetyKind()) {
+  const scope = String(contact.scope || "depurazione_discariche").trim();
+  if (scope === "commessa") return String(contact.commessaId || "") === String(selectedCommessaId || "");
+  if (scope === "depurazione") return kind === "depurazione";
+  if (scope === "discariche") return kind === "discariche";
+  return scope === "depurazione_discariche" || !scope;
+}
+
+async function loadImpiantoSafetyContacts() {
+  let customContacts = [];
+  try {
+    const snapshot = await db.collection("safetyContacts").get();
+    customContacts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data(), isDefault: false }));
+  } catch (error) {
+    console.warn("Contatti sicurezza impianto non caricati:", error);
+  }
+  const kind = getCurrentCommessaSafetyKind();
+  return [
+    ...DEFAULT_IMPIANTO_SAFETY_CONTACTS,
+    ...customContacts.filter((contact) => isSafetyContactVisibleForCommessa(contact, kind))
+  ];
+}
+
+function buildImpiantoSafetyContactCard(contact, whatsappText) {
+  const phoneHref = formatPhoneHref(contact.phone);
+  const whatsappPhone = formatWhatsappPhone(contact.phone);
+  const whatsappUrl = whatsappPhone ? `https://wa.me/${encodeURIComponent(whatsappPhone)}?text=${encodeURIComponent(whatsappText)}` : "";
+  const canEdit = canManageData() && !contact.isDefault;
+  const whatsappMarkup = contact.whatsappEnabled === false || !whatsappUrl
+    ? `<button class="btn impianto-safety-whatsapp" type="button" disabled>💬 WHAZZUP</button>`
+    : `<a class="btn impianto-safety-whatsapp" href="${whatsappUrl}" target="_blank" rel="noopener">💬 WHAZZUP</a>`;
+  const adminActions = canEdit ? `<div class="impianto-safety-contact-admin"><button class="btn" type="button" data-safety-edit-contact="${escapeHTML(contact.id)}">Modifica</button><button class="btn btn-danger" type="button" data-safety-delete-contact="${escapeHTML(contact.id)}">Elimina</button></div>` : "";
+  return `
+    <article class="impianto-safety-contact" data-safety-contact-id="${escapeHTML(contact.id || "")}">
+      <div><strong>${escapeHTML(contact.name || "Contatto")}</strong><small>${escapeHTML(contact.role || contact.type || "")}</small><small>${escapeHTML(contact.phone || "")}</small></div>
+      <div class="impianto-safety-contact-actions">
+        <a class="btn btn-primary" href="tel:${escapeHTML(phoneHref)}">📞 CHIAMA</a>
+        ${whatsappMarkup}
+      </div>
+      ${adminActions}
+    </article>`;
+}
+
+function buildImpiantoSafetyContactsSection(contacts = [], impianto = {}) {
+  const whatsappText = buildImpiantoSafetyWhatsappText(impianto);
+  return `
+    <article class="impianto-safety-section is-contacts">
+      <div class="impianto-safety-section-head">
+        <h3>📞 NUMERI DI EMERGENZA E SUPPORTO</h3>
+        ${canManageData() ? `<button class="btn btn-primary" type="button" data-safety-add-contact>➕ AGGIUNGI NUMERO</button>` : ""}
+      </div>
+      <p class="muted">Per Hera Bologna il numero 800713900 è indicato come pronto intervento acqua, fognature e depurazione, attivo 24 ore su 24.</p>
+      <div class="impianto-safety-contacts-grid">${contacts.map((contact) => buildImpiantoSafetyContactCard(contact, whatsappText)).join("")}</div>
+      <div id="impianto-safety-contact-form-wrap" class="impianto-safety-contact-form-wrap hidden"></div>
+    </article>`;
+}
+
+function buildImpiantoSafetyContactForm(contact = {}) {
+  const isEdit = Boolean(contact.id);
+  const scope = String(contact.scope || "commessa");
+  const type = String(contact.type || "altro");
+  const whatsappEnabled = contact.whatsappEnabled !== false;
+  const option = (value, label, current) => `<option value="${escapeHTML(value)}"${current === value ? " selected" : ""}>${escapeHTML(label)}</option>`;
+  return `
+    <form id="impianto-safety-contact-form" class="impianto-safety-contact-form" data-contact-id="${escapeHTML(contact.id || "")}">
+      <h4>${isEdit ? "Modifica numero" : "Aggiungi numero"}</h4>
+      <label>Nome contatto<input name="name" type="text" value="${escapeHTML(contact.name || "")}" required></label>
+      <label>Ruolo<input name="role" type="text" value="${escapeHTML(contact.role || "")}" required></label>
+      <label>Numero telefono<input name="phone" type="tel" value="${escapeHTML(contact.phone || "")}" required></label>
+      <label>Tipo numero<select name="type">${["emergenza", "pronto intervento", "capo squadra", "responsabile", "cliente", "sicurezza", "altro"].map((item) => option(item, item, type)).join("")}</select></label>
+      <label>Visibilità<select name="scope">
+        ${option("commessa", "solo questa commessa", scope)}
+        ${option("depurazione", "tutte le commesse depurazione", scope)}
+        ${option("discariche", "tutte le commesse discariche", scope)}
+        ${option("depurazione_discariche", "tutte le commesse depurazione e discariche", scope)}
+      </select></label>
+      <label>Attiva WhatsApp<select name="whatsappEnabled">${option("true", "sì", String(whatsappEnabled))}${option("false", "no", String(whatsappEnabled))}</select></label>
+      <div class="impianto-safety-form-actions"><button class="btn btn-primary" type="submit">Salva numero</button><button class="btn" type="button" data-safety-cancel-form>Annulla</button></div>
+      <p class="muted" data-safety-form-feedback role="status" aria-live="polite"></p>
+    </form>`;
+}
+
+async function renderImpiantoSafetyPage(impiantoKey) {
+  if (!ui.impiantoSafetyContent) return;
+  const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
+  const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
+  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
+  const contacts = await loadImpiantoSafetyContacts();
+  ui.impiantoSafetyContent.innerHTML = `
+    <article class="impianto-safety-hero">
+      <h3>🦺 SICUREZZA LAVORO<br>GIARDINIERE AREA DEPURAZIONE / DISCARICA</h3>
+      <p>Le squadre manutenzione verde <strong>NON sono autorizzate</strong> ad entrare nelle aree tecniche, vasche, locali impianto, pozzetti o strutture operative.</p>
+      <p>Le attività devono essere svolte esclusivamente nelle aree verdi, nei cortili e nei percorsi autorizzati.</p>
+    </article>
+    <div class="impianto-safety-grid">${IMPIANTO_SAFETY_SECTIONS.map(buildImpiantoSafetySection).join("")}</div>
+    <article class="impianto-safety-section is-biological">
+      <h3>☣️ RISCHIO BIOLOGICO</h3>
+      <p>Nelle aree di depurazione e discarica può essere presente rischio biologico dovuto a reflui, fanghi, aerosol, rifiuti organici o superfici contaminate.</p>
+      <h4>Indicazioni operative</h4>
+      ${buildImpiantoSafetyList(["Evitare il contatto diretto con reflui, fanghi o materiali sospetti", "Non toccare viso, bocca e occhi durante il lavoro", "Usare sempre guanti e DPI", "Lavare e disinfettare le mani dopo il lavoro", "Coprire eventuali ferite prima di iniziare", "Disinfettare subito tagli o graffi", "Non mangiare, bere o fumare nell’area di lavoro", "Segnalare subito odori forti, liquidi sospetti o materiali contaminati"])}
+    </article>
+    ${buildImpiantoSafetyContactsSection(contacts, impianto)}
+  `;
+}
+
+async function getSafetyContactById(contactId) {
+  if (!contactId) return null;
+  const doc = await db.collection("safetyContacts").doc(contactId).get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+}
+
+async function handleImpiantoSafetyContentClick(event) {
+  const addBtn = event.target?.closest?.("[data-safety-add-contact]");
+  const editBtn = event.target?.closest?.("[data-safety-edit-contact]");
+  const deleteBtn = event.target?.closest?.("[data-safety-delete-contact]");
+  const cancelBtn = event.target?.closest?.("[data-safety-cancel-form]");
+  if (addBtn || editBtn) {
+    if (!canManageData()) return;
+    const wrap = ui.impiantoSafetyContent?.querySelector("#impianto-safety-contact-form-wrap");
+    if (!wrap) return;
+    let contact = {};
+    if (editBtn) contact = await getSafetyContactById(editBtn.getAttribute("data-safety-edit-contact"));
+    wrap.innerHTML = buildImpiantoSafetyContactForm(contact || {});
+    wrap.classList.remove("hidden");
+    wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (deleteBtn) {
+    if (!canManageData()) return;
+    const contactId = deleteBtn.getAttribute("data-safety-delete-contact") || "";
+    if (!contactId || !window.confirm("Eliminare questo numero di sicurezza?")) return;
+    await db.collection("safetyContacts").doc(contactId).delete();
+    const { impiantoKey } = getCurrentImpiantoSafetyContext();
+    renderImpiantoSafetyPage(impiantoKey);
+    return;
+  }
+  if (cancelBtn) {
+    const wrap = ui.impiantoSafetyContent?.querySelector("#impianto-safety-contact-form-wrap");
+    if (wrap) wrap.classList.add("hidden");
+  }
+}
+
+async function saveImpiantoSafetyContactForm(event) {
+  if (event.target?.id !== "impianto-safety-contact-form") return;
+  event.preventDefault();
+  if (!canManageData()) return;
+  const form = event.target;
+  const feedback = form.querySelector("[data-safety-form-feedback]");
+  const contactId = form.getAttribute("data-contact-id") || "";
+  const data = Object.fromEntries(new FormData(form).entries());
+  const payload = {
+    name: String(data.name || "").trim(),
+    role: String(data.role || "").trim(),
+    phone: String(data.phone || "").trim(),
+    type: String(data.type || "altro").trim(),
+    whatsappEnabled: String(data.whatsappEnabled) === "true",
+    scope: String(data.scope || "commessa").trim(),
+    commessaId: String(data.scope || "") === "commessa" ? selectedCommessaId : null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (!payload.name || !payload.role || !payload.phone) {
+    if (feedback) feedback.textContent = "Compila nome, ruolo e telefono.";
+    return;
+  }
+  try {
+    if (feedback) feedback.textContent = "Salvataggio in corso…";
+    if (contactId) {
+      await db.collection("safetyContacts").doc(contactId).set(payload, { merge: true });
+    } else {
+      await db.collection("safetyContacts").add({
+        ...payload,
+        createdBy: currentUser?.uid || "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    const { impiantoKey } = getCurrentImpiantoSafetyContext();
+    renderImpiantoSafetyPage(impiantoKey);
+  } catch (error) {
+    console.error("Numero sicurezza impianto non salvato:", error);
+    if (feedback) feedback.textContent = "Errore durante il salvataggio. Riprova.";
+  }
+}
+
 function valueContainsAtex(value) {
   return /\bATEX\b/.test(normalizeAtexSearchValue(value));
 }
@@ -12042,6 +12362,7 @@ function hasImpiantoAtexFlag(impianto = {}) {
 }
 
 function shouldShowAtexButtonForImpianto(impianto = {}) {
+  if (isCurrentCommessaDepurazioneOrDiscariche()) return false;
   return Boolean(isCurrentCommessaInrete() || hasImpiantoAtexFlag(impianto));
 }
 
@@ -12457,7 +12778,8 @@ function getImpiantoWeatherBadgeState(impianto) {
       compact: true,
       canRetry: false,
       retryKey: key,
-      showAtex: shouldShowAtexButtonForImpianto(impianto)
+      showAtex: shouldShowAtexButtonForImpianto(impianto),
+      showSafety: shouldShowImpiantoSafetyButtonForImpianto(impianto)
     };
   }
   if (!entry) {
@@ -12473,7 +12795,8 @@ function getImpiantoWeatherBadgeState(impianto) {
       compact: true,
       canRetry: !updating,
       retryKey: key,
-      showAtex: shouldShowAtexButtonForImpianto(impianto)
+      showAtex: shouldShowAtexButtonForImpianto(impianto),
+      showSafety: shouldShowImpiantoSafetyButtonForImpianto(impianto)
     };
   }
   const level = entry.riskLevel || "unavailable";
@@ -12494,7 +12817,8 @@ function getImpiantoWeatherBadgeState(impianto) {
     compact: lines.length <= 1,
     canRetry: level === "unavailable" && !updating && entry.canRetry !== false,
     retryKey: key,
-    showAtex: shouldShowAtexButtonForImpianto(impianto)
+    showAtex: shouldShowAtexButtonForImpianto(impianto),
+      showSafety: shouldShowImpiantoSafetyButtonForImpianto(impianto)
   };
 }
 
@@ -12673,8 +12997,11 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
   const atexMarkup = state.showAtex && state.retryKey
     ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
     : "";
+  const safetyMarkup = state.showSafety && state.retryKey
+    ? `<button type="button" class="impianto-weather-safety-btn" data-impianto-safety="${escapeHTML(state.retryKey)}" aria-label="Apri sicurezza impianto"><span aria-hidden="true">🦺</span><span>SICUREZZA IMPIANTO</span></button>`
+    : "";
   const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">›</span></span>`;
-  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${retryMarkup}</span></span>`;
+  return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${safetyMarkup}${retryMarkup}</span></span>`;
 }
 
 function buildImpiantoWeatherBadgeMarkup(impianto) {
@@ -12938,10 +13265,16 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const indicationItems = indications.map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
   const radarUrl = buildWeatherRadarUrl(impianto, coordinates);
   const atexButtonKey = buildImpiantoKey(impianto) || impiantoKey;
-  const atexActionMarkup = isCurrentCommessaInrete() ? `
+  const atexActionMarkup = isCurrentCommessaInrete() && !isCurrentCommessaDepurazioneOrDiscariche() ? `
     <button type="button" class="weather-detail-atex-action" data-atex-procedure="${escapeHTML(atexButtonKey)}" aria-label="Apri istruzioni ATEX per questo impianto">
       <span class="weather-detail-atex-icon" aria-hidden="true">⚠️</span>
       <span><strong>ATTENZIONE ATEX</strong><small>Premi per istruzioni</small></span>
+    </button>
+  ` : "";
+  const safetyActionMarkup = isCurrentCommessaDepurazioneOrDiscariche() ? `
+    <button type="button" class="weather-detail-safety-action" data-impianto-safety="${escapeHTML(atexButtonKey)}" aria-label="Apri sicurezza impianto per questo impianto">
+      <span class="weather-detail-atex-icon" aria-hidden="true">🦺</span>
+      <span><strong>SICUREZZA IMPIANTO</strong><small>Premi per istruzioni</small></span>
     </button>
   ` : "";
   ui.impiantoWeatherDetailContent.innerHTML = `
@@ -12954,7 +13287,7 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
         ${gustValue ? `<span class="risk-row">Raffiche ${escapeHTML(gustValue)}</span>` : ""}
       </div>
     </article>
-    ${atexActionMarkup}
+    ${atexActionMarkup}${safetyActionMarkup}
     <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid current-weather-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
     <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline hourly-forecast-list" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
     <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">

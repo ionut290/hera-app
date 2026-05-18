@@ -12078,12 +12078,108 @@ const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [
 ];
 
 const IMPIANTO_SAFETY_SECTIONS = [
-  { cls: "forbidden", title: "⛔ DIVIETI", items: ["Vietato entrare in vasche o strutture tecniche", "Vietato aprire tombini o pozzetti", "Vietato accedere ai locali impianto", "Vietato intervenire su apparecchiature", "Vietato abbandonare i percorsi autorizzati", "Vietato lavorare senza DPI"] },
-  { cls: "required", title: "✅ OBBLIGHI", items: ["Restare nelle aree assegnate", "Usare sempre i DPI obbligatori", "Segnalare anomalie, odori strani o situazioni di pericolo", "Prestare attenzione ai mezzi operativi in movimento", "Mantenere ordine e pulizia nell’area di lavoro", "Fare briefing con la squadra prima di iniziare"] },
-  { cls: "dpi", title: "🦺 DPI OBBLIGATORI", items: ["Casco obbligatorio", "Scarpe antinfortunistiche S3", "Guanti da lavoro", "Occhiali o visiera", "Cuffie antirumore", "Gilet alta visibilità"] },
-  { cls: "risk", title: "⚠️ RISCHI PRINCIPALI", items: ["Terreno scivoloso", "Erba bagnata", "Mezzi in movimento", "Decespugliatore e proiezioni", "Contatto accidentale con reflui", "Insetti e punture", "Caldo e sole", "Caduta rami", "Rumore", "Tagli e abrasioni"] },
-  { cls: "start", title: "🧭 PRIMA DI INIZIARE IL LAVORO", items: ["Controlla i DPI", "Verifica meteo", "Verifica area di lavoro e percorsi autorizzati", "Controlla presenza mezzi operativi", "Segnala eventuali anomalie", "Briefing con la squadra"] },
-  { cls: "emergency", title: "🚨 IN CASO DI EMERGENZA", items: ["Allontanarsi dalla zona", "Avvisare il capo squadra", "Avvisare il responsabile commessa", "Chiamare i soccorsi se necessario", "Non intervenire su impianti o strutture tecniche"] }
+  {
+    cls: "access",
+    title: "🚧 ACCESSO SEDI TECNICHE",
+    eyebrow: "⚠️ ACCESSO REGOLAMENTATO",
+    intro: "Le squadre manutenzione verde operano solo dove autorizzate dal referente Hera.",
+    icons: ["🚪 Cancello", "⛔ Divieto accesso", "🛣️ Percorso autorizzato"],
+    groups: [
+      { title: "Operare esclusivamente", items: ["nelle aree verdi autorizzate", "nei percorsi consentiti", "nelle aree assegnate dal referente Hera"] },
+      { title: "NON devono", danger: true, items: ["entrare in vasche", "accedere ai locali impianto", "aprire tombini o pozzetti", "ostacolare accessi tecnici", "lasciare materiali davanti a cancelli o quadri"] }
+    ]
+  },
+  {
+    cls: "info",
+    title: "🚛 CONTINUITÀ OPERATIVA IMPIANTO",
+    intro: "Le attività di sfalcio e manutenzione verde devono garantire continuità, accessibilità e sicurezza operativa dell’impianto.",
+    groups: [
+      { title: "Garantire sempre", items: ["accessibilità impianto", "sicurezza operativa", "passaggio mezzi Hera", "accesso squadre emergenza", "visibilità della segnaletica"] },
+      { title: "Controllare sempre", items: ["cancelli liberi", "strade interne sgombre", "assenza rami sui passaggi", "assenza materiali vicino impianti"] }
+    ]
+  },
+  {
+    cls: "equipment",
+    title: "🚜 CONTROLLO ATTREZZATURE",
+    intro: "Checklist obbligatoria prima dell’avvio di decespugliatori, soffiatori, rasaerba e attrezzature a motore.",
+    checklist: ["protezione decespugliatore", "stato lama/testina", "perdite carburante", "acceleratore funzionante", "dispositivi sicurezza presenti", "rumorosità anomala", "fissaggio imbragature", "livello carburante"],
+    footer: "❌ Se l’attrezzatura non è sicura: NON UTILIZZARE"
+  },
+  {
+    cls: "fire",
+    title: "🔥 RISCHIO INCENDIO",
+    eyebrow: "⚠️ ATTENZIONE RISCHIO INCENDIO",
+    groups: [
+      { title: "In presenza di", items: ["erba secca", "caldo intenso", "vento forte"] },
+      { title: "Prestare attenzione a", items: ["scarichi motori caldi", "scintille", "attriti metallici", "carburante", "mozziconi"] },
+      { title: "Vietato", danger: true, items: ["fumare vicino vegetazione secca", "lasciare motori accesi inutilmente"] }
+    ]
+  },
+  {
+    cls: "plant",
+    title: "⚡ SICUREZZA IMPIANTI",
+    eyebrow: "⚡ ATTENZIONE IMPIANTI TECNICI",
+    intro: "Mantenere distanza di sicurezza da quadri, tubazioni, sensori e apparecchiature.",
+    groups: [
+      { title: "Vietato", danger: true, items: ["appoggiare attrezzature agli impianti", "lavorare vicino a quadri elettrici", "dirigere getti o materiali verso apparecchiature", "urtare tubazioni o sensori"] }
+    ]
+  },
+  {
+    cls: "traffic",
+    title: "🚚 TRAFFICO INTERNO IMPIANTO",
+    eyebrow: "⚠️ ATTENZIONE MEZZI OPERATIVI",
+    groups: [
+      { title: "Possibile presenza di", items: ["autospurghi", "camion", "pale meccaniche", "mezzi Hera", "manutentori"] },
+      { title: "Obblighi", items: ["usare gilet alta visibilità", "mantenere contatto visivo coi conducenti", "non lavorare dietro ai mezzi", "attenzione nelle curve e strade strette"] }
+    ]
+  },
+  {
+    cls: "biological",
+    title: "☣️ RISCHIO BIOLOGICO",
+    intro: "Nelle aree di depurazione e discarica può essere presente rischio biologico da reflui, fanghi, aerosol contaminati e superfici contaminate.",
+    groups: [
+      { title: "Fonti di esposizione", items: ["reflui", "fanghi", "aerosol contaminati", "superfici contaminate", "rifiuti organici o materiali sospetti"] },
+      { title: "Norme operative", items: ["non mangiare durante il lavoro", "lavare mani obbligatoriamente", "disinfettare ferite", "cambiare guanti sporchi", "evitare contatto viso/bocca", "segnalare liquidi, odori forti o materiali contaminati"] }
+    ]
+  },
+  {
+    cls: "hygiene",
+    title: "🧴 IGIENE OPERATIVA",
+    intro: "A fine lavoro ripristinare l’area e ridurre il rischio di contaminazione della squadra e dei mezzi.",
+    items: ["lavare mani", "pulire attrezzi", "disinfettare parti contaminate", "cambiare DPI sporchi", "non lasciare rifiuti nell’impianto"]
+  },
+  {
+    cls: "dpi",
+    title: "🦺 DPI OBBLIGATORI",
+    items: ["Casco ove richiesto dal sito", "Scarpe antinfortunistiche S3", "Guanti da lavoro", "Occhiali o visiera", "Cuffie antirumore", "Gilet alta visibilità"]
+  },
+  {
+    cls: "emergency",
+    title: "🚨 IN CASO DI EMERGENZA",
+    items: ["Allontanarsi dalla zona", "Avvisare il capo squadra", "Avvisare il responsabile commessa", "Chiamare i soccorsi se necessario", "Non intervenire su impianti o strutture tecniche"]
+  }
+];
+
+const IMPIANTO_SAFETY_MANDATORY_CHECKLIST = [
+  "DPI indossati",
+  "Area controllata",
+  "Meteo verificato",
+  "Mezzi controllati",
+  "Attrezzature controllate",
+  "Accessi liberi",
+  "Nessuna anomalia visibile",
+  "Squadra pronta"
+];
+
+const IMPIANTO_SAFETY_ANOMALY_CATEGORIES = ["sicurezza", "impianto", "biologico", "incendio", "mezzi", "ostacoli", "altro"];
+
+const IMPIANTO_SAFETY_WEATHER_ALERTS = [
+  { key: "wet-grass", icon: "🌧", label: "Erba bagnata", risk: "medio", when: (analysis) => analysis.wetGround, explanation: "Erba, rampe e camminamenti bagnati aumentano scivolamenti e perdita di controllo delle attrezzature.", advice: "Ridurre velocità, evitare pendenze critiche, aumentare distanza tra operatori e usare calzature S3 in buono stato." },
+  { key: "strong-wind", icon: "💨", label: "Vento forte", risk: "medio/alto", when: (analysis) => analysis.maxWind >= 25 || analysis.maxGust >= 35, explanation: "Il vento può deviare materiale proiettato dal decespugliatore e rendere instabili rami o vegetazione.", advice: "Orientare il lavoro lontano da persone, mezzi e vetrate; sospendere se le raffiche rendono insicura l’attività." },
+  { key: "thunder", icon: "⚡", label: "Temporali", risk: "alto", when: (analysis) => analysis.thunderWithinWindow, explanation: "Temporali e fulmini espongono la squadra a rischio elettrico, scarsa visibilità e terreno rapidamente scivoloso.", advice: "Sospendere attività, allontanarsi da alberi/strutture metalliche e attendere indicazioni del responsabile." },
+  { key: "heat", icon: "🌡", label: "Caldo intenso", risk: "medio/alto", when: (analysis) => analysis.hotModerate || analysis.intenseHeat, explanation: "Temperature elevate aumentano affaticamento, disidratazione e rischio di colpi di calore.", advice: "Aumentare pause, bere acqua, alternare gli operatori e preferire zone d’ombra nelle ore più calde." },
+  { key: "fire", icon: "🔥", label: "Rischio incendi alto", risk: "alto", when: (analysis) => analysis.fireRiskHigh || analysis.intenseHeat, explanation: "Erba secca, caldo e motori caldi possono innescare principi di incendio durante sfalcio o decespugliamento.", advice: "Controllare marmitte e carburante, evitare scintille, non fumare e segnalare subito fumo o odore di bruciato." },
+  { key: "mud", icon: "🚜", label: "Terreno fangoso", risk: "medio", when: (analysis) => analysis.wetGround && Number(analysis.rainProbability) >= 35, explanation: "Il terreno fangoso riduce aderenza di mezzi e operatori e può bloccare passaggi tecnici.", advice: "Valutare portanza, evitare manovre vicino a fossi/pendenze e mantenere liberi accessi per mezzi Hera." }
 ];
 
 function getCurrentCommessaSafetyKind() {
@@ -12181,12 +12277,124 @@ function formatWhatsappPhone(phone = "") {
   return cleaned;
 }
 
-function buildImpiantoSafetyList(items = []) {
-  return `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
+function buildImpiantoSafetyList(items = [], className = "") {
+  return `<ul${className ? ` class="${escapeHTML(className)}"` : ""}>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`;
 }
 
 function buildImpiantoSafetySection(section) {
-  return `<article class="impianto-safety-section is-${escapeHTML(section.cls)}"><h3>${escapeHTML(section.title)}</h3>${buildImpiantoSafetyList(section.items)}</article>`;
+  const iconsMarkup = Array.isArray(section.icons) && section.icons.length
+    ? `<div class="impianto-safety-icons">${section.icons.map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>`
+    : "";
+  const checklistMarkup = Array.isArray(section.checklist)
+    ? `<div class="impianto-safety-mini-checklist">${section.checklist.map((item) => `<span>☑ ${escapeHTML(item)}</span>`).join("")}</div>`
+    : "";
+  const groupsMarkup = Array.isArray(section.groups)
+    ? `<div class="impianto-safety-groups">${section.groups.map((group) => `
+      <div class="impianto-safety-group${group.danger ? " is-danger" : ""}">
+        <h4>${escapeHTML(group.title)}</h4>
+        ${buildImpiantoSafetyList(group.items || [])}
+      </div>`).join("")}</div>`
+    : "";
+  const itemsMarkup = Array.isArray(section.items) ? buildImpiantoSafetyList(section.items) : "";
+  return `<article class="impianto-safety-section is-${escapeHTML(section.cls)}">
+    <h3>${escapeHTML(section.title)}</h3>
+    ${section.eyebrow ? `<p class="impianto-safety-eyebrow">${escapeHTML(section.eyebrow)}</p>` : ""}
+    ${section.intro ? `<p>${escapeHTML(section.intro)}</p>` : ""}
+    ${iconsMarkup}${groupsMarkup}${checklistMarkup}${itemsMarkup}
+    ${section.footer ? `<p class="impianto-safety-stop">${escapeHTML(section.footer)}</p>` : ""}
+  </article>`;
+}
+
+function getImpiantoSafetyOperatorName() {
+  return currentUser?.displayName || currentUser?.email || "Operatore";
+}
+
+function buildImpiantoSafetyChecklistSection() {
+  return `
+    <article class="impianto-safety-section is-checklist">
+      <h3>📋 CHECKLIST OBBLIGATORIA</h3>
+      <p>Conferma operativa prima di iniziare. La registrazione viene salvata su Firebase con data, ora, operatore, commessa e impianto.</p>
+      <form id="impianto-safety-checklist-form" class="impianto-safety-checklist-form">
+        <div class="impianto-safety-checklist-grid">
+          ${IMPIANTO_SAFETY_MANDATORY_CHECKLIST.map((item, index) => `
+            <label class="impianto-safety-check-row">
+              <input type="checkbox" name="checklist" value="${escapeHTML(item)}" data-safety-check-index="${index}" required>
+              <span>☑ ${escapeHTML(item)}</span>
+            </label>`).join("")}
+        </div>
+        <button class="btn btn-primary impianto-safety-confirm-btn" type="submit">✅ CONFERMA CONTROLLO SICUREZZA</button>
+        <p class="muted" data-safety-checklist-feedback role="status" aria-live="polite"></p>
+      </form>
+    </article>`;
+}
+
+function buildImpiantoSafetyAnomalySection(impianto = {}) {
+  const whatsappText = buildImpiantoSafetyWhatsappText(impianto);
+  return `
+    <article class="impianto-safety-section is-anomaly">
+      <h3>📸 SEGNALAZIONE ANOMALIA</h3>
+      <p>Usa il pulsante rosso per segnalare subito criticità sicurezza, impianto, biologiche, incendio, mezzi o ostacoli.</p>
+      <button class="btn btn-danger impianto-safety-anomaly-toggle" type="button" data-safety-toggle-anomaly>⚠️ SEGNALA ANOMALIA</button>
+      <form id="impianto-safety-anomaly-form" class="impianto-safety-anomaly-form hidden">
+        <label>Categoria<select name="category" required>${IMPIANTO_SAFETY_ANOMALY_CATEGORIES.map((item) => `<option value="${escapeHTML(item)}">${escapeHTML(item)}</option>`).join("")}</select></label>
+        <label>Foto<input name="photo" type="file" accept="image/*" capture="environment"></label>
+        <label>Nota<textarea name="note" rows="4" placeholder="Descrivi anomalia, punto impianto, rischio e azione richiesta" required></textarea></label>
+        <div class="impianto-safety-form-actions">
+          <button class="btn" type="button" data-safety-get-gps>📍 POSIZIONE GPS</button>
+          <a class="btn impianto-safety-whatsapp" href="https://wa.me/?text=${encodeURIComponent(whatsappText)}" target="_blank" rel="noopener" data-safety-whatsapp-anomaly>💬 WHAZZUP</a>
+        </div>
+        <input type="hidden" name="lat"><input type="hidden" name="lon">
+        <p class="muted" data-safety-gps-feedback>GPS non acquisito.</p>
+        <button class="btn btn-danger" type="submit">Invia responsabile</button>
+        <p class="muted" data-safety-anomaly-feedback role="status" aria-live="polite"></p>
+      </form>
+    </article>`;
+}
+
+function buildImpiantoSafetyWeatherSection(impianto = {}) {
+  const status = getCachedImpiantoWeatherStatus(impianto) || {};
+  const analysis = buildDettaglioMeteoRiskAnalysis(status);
+  const alerts = IMPIANTO_SAFETY_WEATHER_ALERTS.map((alert) => ({ ...alert, active: Boolean(alert.when(analysis, status)) }));
+  const hasActive = alerts.some((alert) => alert.active);
+  return `
+    <article class="impianto-safety-section is-weather-ops">
+      <h3>🌧 METEO OPERATIVO</h3>
+      <p>${hasActive ? "Avvisi automatici rilevati per la squadra." : "Nessun avviso critico automatico rilevato: mantenere comunque i controlli ordinari."}</p>
+      <div class="impianto-safety-weather-alerts">
+        ${alerts.map((alert) => `
+          <button type="button" class="impianto-safety-weather-alert${alert.active ? " is-active" : ""}" data-safety-weather-alert="${escapeHTML(alert.key)}" data-explanation="${escapeHTML(alert.explanation)}" data-advice="${escapeHTML(alert.advice)}" data-risk="${escapeHTML(alert.risk)}">
+            <span>${escapeHTML(alert.icon)}</span><strong>${escapeHTML(alert.label)}</strong><small>${alert.active ? "Avviso attivo" : "Controllo"}</small>
+          </button>`).join("")}
+      </div>
+      <div class="impianto-safety-weather-detail hidden" data-safety-weather-detail></div>
+    </article>`;
+}
+
+function buildImpiantoSafetyAdminSection(procedureConfig = {}) {
+  if (!canManageData()) return "";
+  return `
+    <article class="impianto-safety-section is-admin">
+      <h3>🔐 ADMIN SICUREZZA</h3>
+      <p>Solo admin: aggiornamento procedure, norme sicurezza e numeri di emergenza della scheda.</p>
+      <form id="impianto-safety-admin-form" class="impianto-safety-contact-form">
+        <label>Procedure operative<textarea name="procedure" rows="4" placeholder="Modifica procedure operative per depurazione/discariche">${escapeHTML(procedureConfig.procedure || "")}</textarea></label>
+        <label>Norme sicurezza<textarea name="norme" rows="4" placeholder="Aggiorna norme sicurezza da capitolato Hera / INRETE manutenzione verde">${escapeHTML(procedureConfig.norme || "")}</textarea></label>
+        <button class="btn btn-primary" type="submit">Aggiorna norme sicurezza</button>
+        <p class="muted" data-safety-admin-feedback role="status" aria-live="polite"></p>
+      </form>
+    </article>`;
+}
+
+async function loadImpiantoSafetyProcedureConfig() {
+  if (!canManageData()) return {};
+  const kind = getCurrentCommessaSafetyKind() || "depurazione_discariche";
+  try {
+    const doc = await db.collection("impiantoSafetyProcedures").doc(kind).get();
+    return doc.exists ? doc.data() || {} : {};
+  } catch (error) {
+    console.warn("Norme sicurezza impianto non caricate:", error);
+    return {};
+  }
 }
 
 function isSafetyContactVisibleForCommessa(contact = {}, kind = getCurrentCommessaSafetyKind()) {
@@ -12277,20 +12485,24 @@ async function renderImpiantoSafetyPage(impiantoKey) {
   const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
   if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   const contacts = await loadImpiantoSafetyContacts();
+  const procedureConfig = await loadImpiantoSafetyProcedureConfig();
   ui.impiantoSafetyContent.innerHTML = `
     <article class="impianto-safety-hero">
-      <h3>🦺 SICUREZZA LAVORO<br>GIARDINIERE AREA DEPURAZIONE / DISCARICA</h3>
-      <p>Le squadre manutenzione verde <strong>NON sono autorizzate</strong> ad entrare nelle aree tecniche, vasche, locali impianto, pozzetti o strutture operative.</p>
-      <p>Le attività devono essere svolte esclusivamente nelle aree verdi, nei cortili e nei percorsi autorizzati.</p>
+      <div class="impianto-safety-hero-badge">Sicurezza industriale Hera • manutenzione verde</div>
+      <h3>🦺 SICUREZZA IMPIANTO<br>DEPURAZIONE / DISCARICHE</h3>
+      <p>Schermata operativa per squadre manutenzione verde: accessi regolamentati, continuità impianto, attrezzature, meteo operativo, anomalie ed emergenze.</p>
+      <div class="impianto-safety-hero-meta">
+        <span>👷 ${escapeHTML(getImpiantoSafetyOperatorName())}</span>
+        <span>🏭 ${escapeHTML(impiantoName)}</span>
+        <span>📍 ${escapeHTML(getImpiantoComune(impianto) || "Comune non indicato")}</span>
+      </div>
     </article>
     <div class="impianto-safety-grid">${IMPIANTO_SAFETY_SECTIONS.map(buildImpiantoSafetySection).join("")}</div>
-    <article class="impianto-safety-section is-biological">
-      <h3>☣️ RISCHIO BIOLOGICO</h3>
-      <p>Nelle aree di depurazione e discarica può essere presente rischio biologico dovuto a reflui, fanghi, aerosol, rifiuti organici o superfici contaminate.</p>
-      <h4>Indicazioni operative</h4>
-      ${buildImpiantoSafetyList(["Evitare il contatto diretto con reflui, fanghi o materiali sospetti", "Non toccare viso, bocca e occhi durante il lavoro", "Usare sempre guanti e DPI", "Lavare e disinfettare le mani dopo il lavoro", "Coprire eventuali ferite prima di iniziare", "Disinfettare subito tagli o graffi", "Non mangiare, bere o fumare nell’area di lavoro", "Segnalare subito odori forti, liquidi sospetti o materiali contaminati"])}
-    </article>
+    ${buildImpiantoSafetyChecklistSection()}
+    ${buildImpiantoSafetyAnomalySection(impianto)}
+    ${buildImpiantoSafetyWeatherSection(impianto)}
     ${buildImpiantoSafetyContactsSection(contacts, impianto)}
+    ${buildImpiantoSafetyAdminSection(procedureConfig)}
   `;
 }
 
@@ -12305,6 +12517,34 @@ async function handleImpiantoSafetyContentClick(event) {
   const editBtn = event.target?.closest?.("[data-safety-edit-contact]");
   const deleteBtn = event.target?.closest?.("[data-safety-delete-contact]");
   const cancelBtn = event.target?.closest?.("[data-safety-cancel-form]");
+  const anomalyToggle = event.target?.closest?.("[data-safety-toggle-anomaly]");
+  const gpsBtn = event.target?.closest?.("[data-safety-get-gps]");
+  const weatherBtn = event.target?.closest?.("[data-safety-weather-alert]");
+  if (anomalyToggle) {
+    event.preventDefault();
+    const form = ui.impiantoSafetyContent?.querySelector("#impianto-safety-anomaly-form");
+    form?.classList.toggle("hidden");
+    form?.querySelector("select, textarea, input")?.focus?.();
+    return;
+  }
+  if (gpsBtn) {
+    event.preventDefault();
+    acquireImpiantoSafetyGps(gpsBtn.closest("form"));
+    return;
+  }
+  if (weatherBtn) {
+    event.preventDefault();
+    const detail = ui.impiantoSafetyContent?.querySelector("[data-safety-weather-detail]");
+    if (!detail) return;
+    detail.innerHTML = `
+      <h4>${escapeHTML(weatherBtn.textContent.trim())}</h4>
+      <p><strong>Spiegazione:</strong> ${escapeHTML(weatherBtn.dataset.explanation || "")}</p>
+      <p><strong>Comportamento consigliato:</strong> ${escapeHTML(weatherBtn.dataset.advice || "")}</p>
+      <p><strong>Livello rischio:</strong> ${escapeHTML(weatherBtn.dataset.risk || "")}</p>`;
+    detail.classList.remove("hidden");
+    detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
   if (addBtn || editBtn) {
     if (!canManageData()) return;
     const wrap = ui.impiantoSafetyContent?.querySelector("#impianto-safety-contact-form-wrap");
@@ -12331,7 +12571,152 @@ async function handleImpiantoSafetyContentClick(event) {
   }
 }
 
+function acquireImpiantoSafetyGps(form) {
+  const feedback = form?.querySelector("[data-safety-gps-feedback]");
+  if (!form || !navigator.geolocation) {
+    if (feedback) feedback.textContent = "GPS non disponibile su questo dispositivo.";
+    return;
+  }
+  if (feedback) feedback.textContent = "Acquisizione GPS…";
+  navigator.geolocation.getCurrentPosition((position) => {
+    form.elements.lat.value = String(position.coords.latitude || "");
+    form.elements.lon.value = String(position.coords.longitude || "");
+    if (feedback) feedback.textContent = `GPS acquisito: ${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
+  }, () => {
+    if (feedback) feedback.textContent = "Impossibile acquisire GPS. Verifica autorizzazioni posizione.";
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+}
+
+function readSafetyPhotoAsDataUrl(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+}
+
+function getImpiantoSafetyPayloadBase(impiantoKey, impianto) {
+  const now = new Date();
+  return {
+    commessaId: selectedCommessaId || "",
+    commessaName: selectedCommessaName || "",
+    impiantoKey: impiantoKey || "",
+    impiantoName: getImpiantoDisplayName(impianto) || "",
+    impiantoComune: getImpiantoComune(impianto) || "",
+    operatore: getImpiantoSafetyOperatorName(),
+    date: formatAtexDateValue(now),
+    time: formatAtexTimeValue(now),
+    createdByUid: auth.currentUser?.uid || "",
+    createdByEmail: auth.currentUser?.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+}
+
+async function saveImpiantoSafetyChecklistForm(event) {
+  if (event.target?.id !== "impianto-safety-checklist-form") return false;
+  event.preventDefault();
+  const form = event.target;
+  const feedback = form.querySelector("[data-safety-checklist-feedback]");
+  const checked = Array.from(form.querySelectorAll("input[name='checklist']:checked")).map((input) => input.value);
+  if (checked.length !== IMPIANTO_SAFETY_MANDATORY_CHECKLIST.length) {
+    if (feedback) feedback.textContent = "Conferma tutti i controlli obbligatori prima di procedere.";
+    return true;
+  }
+  const { impiantoKey, impianto } = getCurrentImpiantoSafetyContext();
+  const payload = {
+    ...getImpiantoSafetyPayloadBase(impiantoKey, impianto),
+    checklist: checked,
+    checklistComplete: true,
+    safetyKind: getCurrentCommessaSafetyKind()
+  };
+  try {
+    if (feedback) feedback.textContent = "Salvataggio controllo sicurezza…";
+    await db.collection("impiantoSafetyChecks").add(payload);
+    if (feedback) feedback.textContent = "✅ Controllo sicurezza salvato su Firebase.";
+    form.querySelector("button[type='submit']").disabled = true;
+  } catch (error) {
+    console.error("Controllo sicurezza non salvato:", error);
+    if (feedback) feedback.textContent = "Errore salvataggio controllo sicurezza. Riprova.";
+  }
+  return true;
+}
+
+async function saveImpiantoSafetyAnomalyForm(event) {
+  if (event.target?.id !== "impianto-safety-anomaly-form") return false;
+  event.preventDefault();
+  const form = event.target;
+  const feedback = form.querySelector("[data-safety-anomaly-feedback]");
+  const data = Object.fromEntries(new FormData(form).entries());
+  const photoFile = form.elements.photo?.files?.[0] || null;
+  const { impiantoKey, impianto } = getCurrentImpiantoSafetyContext();
+  if (!String(data.note || "").trim()) {
+    if (feedback) feedback.textContent = "Inserisci una nota per inviare la segnalazione.";
+    return true;
+  }
+  try {
+    if (feedback) feedback.textContent = "Invio segnalazione anomalia…";
+    const photoDataUrl = await readSafetyPhotoAsDataUrl(photoFile);
+    const payload = {
+      ...getImpiantoSafetyPayloadBase(impiantoKey, impianto),
+      category: String(data.category || "altro"),
+      note: String(data.note || "").trim(),
+      lat: String(data.lat || ""),
+      lon: String(data.lon || ""),
+      photoName: photoFile?.name || "",
+      photoType: photoFile?.type || "",
+      photoDataUrl: photoDataUrl.slice(0, 900000),
+      hasPhoto: Boolean(photoDataUrl),
+      status: "inviata"
+    };
+    await db.collection("impiantoSafetyAnomalies").add(payload);
+    const whatsapp = form.querySelector("[data-safety-whatsapp-anomaly]");
+    if (whatsapp) {
+      const text = [buildImpiantoSafetyWhatsappText(impianto), `Categoria: ${payload.category}`, `Nota: ${payload.note}`, payload.lat && payload.lon ? `GPS: ${payload.lat}, ${payload.lon}` : "GPS: non acquisito"].join("\n");
+      whatsapp.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    }
+    if (feedback) feedback.textContent = "✅ Segnalazione inviata e pronta per condivisione WhatsApp.";
+    form.reset();
+  } catch (error) {
+    console.error("Segnalazione anomalia non salvata:", error);
+    if (feedback) feedback.textContent = "Errore invio segnalazione. Riprova.";
+  }
+  return true;
+}
+
+async function saveImpiantoSafetyAdminForm(event) {
+  if (event.target?.id !== "impianto-safety-admin-form") return false;
+  event.preventDefault();
+  if (!canManageData()) return true;
+  const form = event.target;
+  const feedback = form.querySelector("[data-safety-admin-feedback]");
+  const data = Object.fromEntries(new FormData(form).entries());
+  try {
+    if (feedback) feedback.textContent = "Aggiornamento norme…";
+    await db.collection("impiantoSafetyProcedures").doc(getCurrentCommessaSafetyKind() || "depurazione_discariche").set({
+      procedure: String(data.procedure || "").trim(),
+      norme: String(data.norme || "").trim(),
+      updatedByUid: auth.currentUser?.uid || "",
+      updatedByEmail: auth.currentUser?.email || "",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    if (feedback) feedback.textContent = "✅ Procedure e norme sicurezza aggiornate.";
+  } catch (error) {
+    console.error("Norme sicurezza non aggiornate:", error);
+    if (feedback) feedback.textContent = "Errore aggiornamento norme sicurezza.";
+  }
+  return true;
+}
+
 async function saveImpiantoSafetyContactForm(event) {
+  if (await saveImpiantoSafetyChecklistForm(event)) return;
+  if (await saveImpiantoSafetyAnomalyForm(event)) return;
+  if (await saveImpiantoSafetyAdminForm(event)) return;
   if (event.target?.id !== "impianto-safety-contact-form") return;
   event.preventDefault();
   if (!canManageData()) return;

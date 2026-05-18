@@ -7572,6 +7572,202 @@ textarea:focus-visible {
   padding: 8px 10px;
 }
 
+
+.impianto-safety-hero-badge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #115e59;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  margin-bottom: 10px;
+}
+
+.impianto-safety-hero-meta,
+.impianto-safety-icons,
+.impianto-safety-weather-alerts,
+.impianto-safety-checklist-grid,
+.impianto-safety-mini-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.impianto-safety-hero-meta {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 12px;
+}
+
+.impianto-safety-hero-meta span,
+.impianto-safety-icons span,
+.impianto-safety-mini-checklist span,
+.impianto-safety-check-row {
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  font-weight: 800;
+}
+
+.impianto-safety-eyebrow {
+  display: inline-flex;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(250, 204, 21, 0.28);
+  color: #713f12;
+  font-weight: 900;
+}
+
+.impianto-safety-groups {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.impianto-safety-group {
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.impianto-safety-group.is-danger {
+  border-color: rgba(220, 38, 38, 0.22);
+  background: rgba(254, 226, 226, 0.86);
+}
+
+.impianto-safety-stop {
+  padding: 10px;
+  border-radius: 14px;
+  background: #7f1d1d;
+  color: #fff;
+  font-weight: 900;
+  text-align: center;
+}
+
+.impianto-safety-section.is-access,
+.impianto-safety-section.is-traffic {
+  border-color: rgba(202, 138, 4, 0.35);
+  background: #fefce8;
+}
+
+.impianto-safety-section.is-info,
+.impianto-safety-section.is-contacts,
+.impianto-safety-section.is-weather-ops {
+  border-color: rgba(37, 99, 235, 0.2);
+  background: #eff6ff;
+}
+
+.impianto-safety-section.is-equipment,
+.impianto-safety-section.is-hygiene,
+.impianto-safety-section.is-dpi,
+.impianto-safety-section.is-checklist {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: #f0fdf4;
+}
+
+.impianto-safety-section.is-fire,
+.impianto-safety-section.is-plant,
+.impianto-safety-section.is-emergency,
+.impianto-safety-section.is-anomaly {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: #fef2f2;
+}
+
+.impianto-safety-section.is-admin {
+  border-color: rgba(15, 23, 42, 0.22);
+  background: #f8fafc;
+}
+
+.impianto-safety-checklist-form,
+.impianto-safety-anomaly-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.impianto-safety-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.impianto-safety-check-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: #16a34a;
+}
+
+.impianto-safety-confirm-btn,
+.impianto-safety-anomaly-toggle {
+  min-height: 52px;
+  font-weight: 900;
+  font-size: 0.98rem;
+}
+
+.impianto-safety-anomaly-form label,
+.impianto-safety-contact-form textarea,
+.impianto-safety-anomaly-form textarea,
+.impianto-safety-anomaly-form select,
+.impianto-safety-anomaly-form input {
+  width: 100%;
+}
+
+.impianto-safety-anomaly-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.impianto-safety-anomaly-form textarea,
+.impianto-safety-contact-form textarea,
+.impianto-safety-anomaly-form select,
+.impianto-safety-anomaly-form input {
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.impianto-safety-weather-alerts {
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  margin-top: 12px;
+}
+
+.impianto-safety-weather-alert {
+  display: grid;
+  gap: 4px;
+  min-height: 112px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  background: #fff;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.impianto-safety-weather-alert span {
+  font-size: 1.7rem;
+}
+
+.impianto-safety-weather-alert.is-active {
+  border-color: rgba(220, 38, 38, 0.36);
+  background: #fff7ed;
+  box-shadow: 0 12px 24px rgba(220, 38, 38, 0.12);
+}
+
+.impianto-safety-weather-detail {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
 @media (max-width: 640px) {
   .impianto-safety-view {
     border-radius: 0;

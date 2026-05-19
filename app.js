@@ -11576,28 +11576,11 @@ function renderImpianti() {
       "✉️",
       "Invia messaggio",
       async () => {
-        if (isNetworkOffline()) {
-          if (!impianto.done) await markImpiantoDone(impianto);
-          else alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
+        if (isNetworkOffline() && impianto.done) {
+          alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
           return;
         }
-        const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
-        if (!whatsappOpened) return;
-        if (!impianto.done) markImpiantoDoneVisualFallback(impianto);
-        if (impianto.done) return;
-        try {
-          const doneMarked = await markImpiantoDone(impianto);
-          if (!doneMarked) {
-            alert("Messaggio WhatsApp aperto: impianto segnato FATTO in app (verde), ma il salvataggio remoto non è riuscito.");
-            notifyAdminsForImpiantoDoneRecovery(impianto, "Lo stato non è stato aggiornato automaticamente dopo Invia messaggio.")
-              .catch((error) => console.error("Errore invio richiesta recupero stato impianto:", error));
-          }
-        } catch (error) {
-          console.error("Errore nel passaggio automatico a FATTO dopo apertura WhatsApp:", error);
-          alert("WhatsApp aperto: impianto segnato FATTO in app (verde), ma si è verificato un errore nel salvataggio remoto.");
-          notifyAdminsForImpiantoDoneRecovery(impianto, "Errore tecnico durante il passaggio automatico ai FATTI.")
-            .catch((notifyError) => console.error("Errore invio richiesta recupero stato impianto:", notifyError));
-        }
+        await handleImpiantoWhatsAppClick(impianto);
       },
       false,
       false,
@@ -15798,7 +15781,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       payload.navigateAt = null;
       payload.navigatedBy = "";
     }
-    return ref.doc(impiantoId).update(payload);
+    return ref.doc(impiantoId).set(payload, { merge: true });
   }));
 }
 
@@ -15819,6 +15802,22 @@ function canTriggerImpiantoWhatsApp(impianto, notify = true) {
 function triggerImpiantoWhatsAppAction(impianto) {
   if (!canTriggerImpiantoWhatsApp(impianto, true)) return false;
   return openWhatsApp(impianto);
+}
+
+async function handleImpiantoWhatsAppClick(impianto) {
+  if (!impianto) return;
+  if (!impianto.done) {
+    let doneMarked = false;
+    try {
+      doneMarked = await markImpiantoDone(impianto);
+    } catch (error) {
+      console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
+      alert("Errore: impianto non salvato come FATTO. Riprova.");
+      return;
+    }
+    if (!doneMarked) return;
+  }
+  triggerImpiantoWhatsAppAction(impianto);
 }
 
 function buildImpiantoWhatsAppPayload(impianto, options = {}) {
@@ -16610,11 +16609,11 @@ function bindPersistentImpiantoDetailActions() {
       });
     });
     panel.querySelectorAll("[data-map-popup-action='whatsapp']").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
         const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
         if (!impianto) return;
-        triggerImpiantoWhatsAppAction(impianto);
+        await handleImpiantoWhatsAppClick(impianto);
       });
     });
     panel.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
@@ -16683,11 +16682,11 @@ function bindImpiantoMapPopupActions(event, popupMap) {
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='whatsapp']").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const key = button.getAttribute("data-impianto-key") || popupKey;
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
-      triggerImpiantoWhatsAppAction(impianto);
+      await handleImpiantoWhatsAppClick(impianto);
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {

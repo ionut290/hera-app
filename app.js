@@ -14559,9 +14559,10 @@ async function navigateToImpianto(impianto) {
   }
 }
 
-async function markImpiantoDone(impianto) {
+async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
+  const source = String(options?.source || "").trim().toLowerCase();
   if (!canManageData() && !isNetworkOffline()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
@@ -14619,7 +14620,7 @@ async function markImpiantoDone(impianto) {
     }
     await publishGlobalNotificationEvent("impianto-done", {
       title: "Impianto completato",
-      body: `${doneByLocal} ha premuto FATTO su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+      body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : "FATTO"} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
       commessaId: selectedCommessaId,
       commessaName: selectedCommessaName || "Commessa",
       impiantoName: impianto.denominazione || "Impianto",
@@ -14631,7 +14632,7 @@ async function markImpiantoDone(impianto) {
   scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
   await publishGlobalNotificationEvent("impianto-done", {
     title: "Impianto completato",
-    body: `${doneByLocal} ha premuto FATTO su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+    body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : "FATTO"} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
     commessaId: selectedCommessaId,
     commessaName: selectedCommessaName || "Commessa",
     impiantoName: impianto.denominazione || "Impianto",
@@ -15806,17 +15807,15 @@ function triggerImpiantoWhatsAppAction(impianto) {
 
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
-  if (!impianto.done) {
-    let doneMarked = false;
-    try {
-      doneMarked = await markImpiantoDone(impianto);
-    } catch (error) {
-      console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
-      alert("Errore: impianto non salvato come FATTO. Riprova.");
-      return;
-    }
-    if (!doneMarked) return;
+  let doneMarked = false;
+  try {
+    doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
+  } catch (error) {
+    console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
+    alert("Errore: impianto non salvato come FATTO. Riprova.");
+    return;
   }
+  if (!doneMarked) return;
   triggerImpiantoWhatsAppAction(impianto);
 }
 

@@ -15221,9 +15221,17 @@ function openPersonaleDetail(card, person, editMode = false) {
   const details = card.querySelector(".personale-details");
   const commesseOptions = [...new Set([...DEFAULT_COMMESSE_ABILITAZIONI, ...Array.from(commesseById.values()).map((c) => c.nome).filter(Boolean)])];
   const selectedCommesse = new Set(Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate : []);
-  const corsi = Array.isArray(person.corsi) && person.corsi.length ? person.corsi : DEFAULT_CORSI.map((nome) => ({ nome }));
-  const primary = PRIMARY_CORSI.map((nome) => corsi.find((c) => String(c.nome || "").toLowerCase().includes(nome.toLowerCase())) || { nome });
-  const extra = corsi.filter((c) => !PRIMARY_CORSI.some((nome) => String(c.nome || "").toLowerCase().includes(nome.toLowerCase())));
+  const allCommesseEnabled = Boolean(person.abilitatoTutteCommesse);
+  const primary = PRIMARY_CORSI.map((nome) => {
+    const existing = (Array.isArray(person.corsi) ? person.corsi : []).find((c) => String(c?.nome || "").toLowerCase() === nome.toLowerCase());
+    return {
+      nome,
+      possiede: Boolean(existing),
+      dataRilascio: String(existing?.dataRilascio || "").trim(),
+      dataScadenza: String(existing?.dataScadenza || "").trim(),
+      documento: String(existing?.documento || existing?.link || "").trim()
+    };
+  });
   details.classList.remove("hidden");
   details.innerHTML = `
     <div class="personale-fields-grid">
@@ -15234,27 +15242,29 @@ function openPersonaleDetail(card, person, editMode = false) {
       <textarea class="personale-edit-note" ${editMode ? "" : "disabled"} placeholder="Note">${escapeHTML(person.note || "")}</textarea>
     </div>
     <h5>Abilitazione commesse</h5>
-    <label class="personale-commessa-check"><input class="personale-all-commesse-toggle" type="checkbox" ${editMode ? "" : "disabled"} ${selectedCommesse.length === 0 ? "checked" : ""}> Abilitato a tutte le commesse</label>
-    <div class="personale-commesse-panel ${selectedCommesse.length === 0 ? "hidden" : ""}">
+    <label class="personale-commessa-check"><input class="personale-all-commesse-toggle" type="checkbox" ${editMode ? "" : "disabled"} ${allCommesseEnabled ? "checked" : ""}> Abilitato a tutte le commesse</label>
+    <div class="personale-commesse-panel ${allCommesseEnabled ? "hidden" : ""}">
       <button type="button" class="btn btn-small personale-toggle-commesse-btn">Seleziona commesse</button>
       <div class="personale-badges hidden personale-commesse-list">${commesseOptions.map((nome) => `<label class="personale-commessa-check"><input type="checkbox" ${editMode ? "" : "disabled"} value="${escapeHTML(nome)}" ${selectedCommesse.has(nome) ? "checked" : ""}> ${escapeHTML(nome)}</label>`).join("")}</div>
     </div>
     <h5>Corsi principali</h5>
     <div class="personale-corsi-list">${primary.map((corso, idx) => {
       const state = getCourseState(corso);
-      return `<div class="personale-corso-row personale-corso-main">
-        <label><input class="personale-course-has" type="checkbox" ${editMode ? "" : "disabled"} ${corso.nome ? "checked" : ""}> ${escapeHTML(corso.nome || PRIMARY_CORSI[idx])}</label>
-        <div class="${corso.nome ? "" : "hidden"} personale-course-extra-fields">
-        <input ${editMode ? "" : "disabled"} data-course-release="${idx}" type="date" value="${escapeHTML(corso.dataRilascio || "")}">
-        <input ${editMode ? "" : "disabled"} data-course-expiry="${idx}" type="date" value="${escapeHTML(corso.dataScadenza || "")}">
-        <span class="personale-badge ${state.status === "expired" ? "no" : state.status === "warning" ? "warn" : "ok"}">${state.label}</span>
-        <input ${editMode ? "" : "disabled"} data-course-doc="${idx}" value="${escapeHTML(corso.documento || corso.link || "")}" placeholder="Documento/link">
+      return `<div class="personale-corso-row personale-corso-main" data-course-key="${idx}">
+        <label class="personale-course-toggle-label"><input class="personale-course-has" type="checkbox" ${editMode ? "" : "disabled"} ${corso.possiede ? "checked" : ""}> ${escapeHTML(corso.nome)} — Possiede corso</label>
+        <div class="${corso.possiede ? "" : "hidden"} personale-course-extra-fields">
+          <input ${editMode ? "" : "disabled"} data-course-release="${idx}" type="date" value="${escapeHTML(corso.dataRilascio)}" aria-label="Data rilascio ${escapeHTML(corso.nome)}">
+          <input ${editMode ? "" : "disabled"} data-course-expiry="${idx}" type="date" value="${escapeHTML(corso.dataScadenza)}" aria-label="Data scadenza ${escapeHTML(corso.nome)}">
+          <input ${editMode ? "" : "disabled"} data-course-doc="${idx}" value="${escapeHTML(corso.documento)}" placeholder="Documento/link">
+          <span class="personale-badge ${state.status === "expired" ? "no" : state.status === "warning" ? "warn" : "ok"}">${state.label}</span>
         </div></div>`;
     }).join("")}</div>
-    <details><summary>Mostra tutti i corsi</summary><div class="personale-corsi-list">${extra.map((corso, idx) => `<div class="personale-corso-row"><input ${editMode ? "" : "disabled"} data-course-name-extra="${idx}" value="${escapeHTML(corso.nome || "")}"></div>`).join("")}</div></details>
     ${editMode ? '<button type="button" class="btn btn-primary personale-save-btn">Salva scheda</button>' : ""}
   `;
   details.querySelector(".personale-toggle-commesse-btn")?.addEventListener("click", () => details.querySelector(".personale-commesse-list")?.classList.toggle("hidden"));
+  details.querySelector(".personale-all-commesse-toggle")?.addEventListener("change", (event) => {
+    details.querySelector(".personale-commesse-panel")?.classList.toggle("hidden", event.target.checked);
+  });
   details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", () => cb.closest(".personale-corso-main")?.querySelector(".personale-course-extra-fields")?.classList.toggle("hidden", !cb.checked)));
   if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
 }
@@ -15275,20 +15285,25 @@ async function savePersonaleDetail(personId, root) {
   const fullName = String(root.querySelector(".personale-edit-cognome-nome")?.value || "").trim().replace(/\s+/g, " ");
   const [cognome, ...nomeParts] = fullName.split(" ");
   const nome = nomeParts.join(" ").trim();
-  const commesseAbilitate = Array.from(root.querySelectorAll(".personale-commessa-check input:checked")).map((el) => el.value);
-  const corsiRows = Array.from(root.querySelectorAll(".personale-corso-row"));
-  const corsi = corsiRows.map((_, idx) => ({
-    nome: String(root.querySelector(`[data-course-name="${idx}"]`)?.value || "").trim(),
-    dataRilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
-    dataScadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
-    documento: String(root.querySelector(`[data-course-doc="${idx}"]`)?.value || "").trim()
-  })).filter((c) => c.nome);
+  const allCommesseEnabled = Boolean(root.querySelector(".personale-all-commesse-toggle")?.checked);
+  const commesseAbilitate = allCommesseEnabled ? [] : Array.from(root.querySelectorAll(".personale-commesse-list input[type='checkbox']:checked")).map((el) => el.value);
+  const corsi = PRIMARY_CORSI.map((nomeCorso, idx) => {
+    const hasCourse = Boolean(root.querySelector(`.personale-corso-main[data-course-key="${idx}"] .personale-course-has`)?.checked);
+    if (!hasCourse) return null;
+    return {
+      nome: nomeCorso,
+      dataRilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
+      dataScadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
+      documento: String(root.querySelector(`[data-course-doc="${idx}"]`)?.value || "").trim()
+    };
+  }).filter(Boolean);
   await db.collection("personale").doc(personId).set({
     nome, cognome, fullName: `${cognome} ${nome}`.trim(),
     telefono: String(root.querySelector(".personale-edit-tel")?.value || "").trim(),
     email: String(root.querySelector(".personale-edit-email")?.value || "").trim(),
     mansione: String(root.querySelector(".personale-edit-ruolo")?.value || "").trim(),
     note: String(root.querySelector(".personale-edit-note")?.value || "").trim(),
+    abilitatoTutteCommesse: allCommesseEnabled,
     commesseAbilitate,
     corsi
   }, { merge: true });

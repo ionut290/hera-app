@@ -15092,8 +15092,7 @@ function extractPersonnelFromRawRows(rawRows) {
 
 function buildCoursesFromExcelEntry(entry) {
   const names = parseMultiEntryValue(entry?.corsi || "");
-  const dates = parseMultiEntryValue(entry?.scadenzaCorsi || "");
-  return names.map((nome, idx) => ({ nome, dataScadenza: dates[idx] || "" })).filter((c) => c.nome);
+  return names.map((nome) => ({ nome })).filter((c) => c.nome);
 }
 
 async function parseSimpleExcelRows(file, rawRows = false) {
@@ -15170,10 +15169,9 @@ function renderPersonaleSuggestions() {
   }
   ui.personaleSearchSuggestions.innerHTML = source.map((item) => {
     const commesse = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
-    const corsi = Array.isArray(item.corsi) ? item.corsi : [];
-    const valid = corsi.filter((corso) => getCourseState(corso).status === "valid").length;
-    const expired = corsi.filter((corso) => getCourseState(corso).status === "expired").length;
-    return `<button type="button" class="personale-suggestion-item" data-person-id="${escapeHTML(item.id)}"><strong>${escapeHTML(getPersonaleDisplayName(item) || "Senza nome")}</strong><small>${escapeHTML(item.telefono || "-")} • ${commesse.length ? "✅ Tutte/Parz." : "❌ Nessuna"} • Corsi ${valid}/${expired}</small></button>`;
+    const isAllCommesse = Boolean(item.abilitatoTutteCommesse);
+    const corsiCount = toCourseList(normalizePersonCourses(item)).length;
+    return `<button type="button" class="personale-suggestion-item" data-person-id="${escapeHTML(item.id)}"><strong>${escapeHTML(getPersonaleDisplayName(item) || "Senza nome")}</strong><small>${escapeHTML(item.telefono || "-")} • ${isAllCommesse ? "✅ Tutte le commesse" : (commesse.length ? "✅ Abilitato parziale" : "❌ Non abilitato")} • Corsi ${corsiCount}/${PRIMARY_CORSI.length}</small></button>`;
   }).join("") || (query ? "<p class='muted'>Nessun risultato.</p>" : "<p class='muted'>Cerca personale per aprire una scheda.</p>");
   Array.from(ui.personaleSearchSuggestions.querySelectorAll("[data-person-id]")).forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -15186,7 +15184,7 @@ function renderPersonaleSuggestions() {
 }
 
 function createEmptyCorsoState() {
-  return { possiede: false, rilascio: "", scadenza: "", documento: "" };
+  return { possiede: false };
 }
 
 function normalizePersonCourses(person = {}) {
@@ -15197,10 +15195,7 @@ function normalizePersonCourses(person = {}) {
       const key = String(corso?.nome || "").toLowerCase();
       if (!base[key]) return;
       base[key] = {
-        possiede: true,
-        rilascio: String(corso?.dataRilascio || corso?.rilascio || "").trim(),
-        scadenza: String(corso?.dataScadenza || corso?.scadenza || "").trim(),
-        documento: String(corso?.documento || corso?.link || "").trim()
+        possiede: true
       };
     });
     return base;
@@ -15209,10 +15204,7 @@ function normalizePersonCourses(person = {}) {
     Object.keys(base).forEach((key) => {
       const source = raw[key] || {};
       base[key] = {
-        possiede: Boolean(source?.possiede),
-        rilascio: String(source?.rilascio || source?.dataRilascio || "").trim(),
-        scadenza: String(source?.scadenza || source?.dataScadenza || "").trim(),
-        documento: String(source?.documento || source?.link || "").trim()
+        possiede: Boolean(source?.possiede)
       };
     });
   }
@@ -15224,7 +15216,7 @@ function toCourseList(corsiObj = {}) {
     const key = nome.toLowerCase();
     const corso = corsiObj[key] || createEmptyCorsoState();
     if (!corso.possiede) return null;
-    return { nome, dataRilascio: corso.rilascio || "", dataScadenza: corso.scadenza || "", documento: corso.documento || "" };
+    return { nome, possiede: true };
   }).filter(Boolean);
 }
 
@@ -15241,15 +15233,17 @@ function renderPersonaleList(container, items, onDelete) {
     const fullName = getPersonaleDisplayName(item) || "";
     const commesseAbilitate = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
     const corsi = toCourseList(normalizePersonCourses(item));
-    const validCourses = corsi.filter((corso) => getCourseState(corso).status === "valid").length;
-    const expiredCourses = corsi.filter((corso) => getCourseState(corso).status === "expired").length;
+    const coursesOwned = corsi.length;
+    const commesseBadge = item.abilitatoTutteCommesse
+      ? "✅ Abilitato a tutte le commesse"
+      : (commesseAbilitate.length ? "✅ Abilitato parziale" : "❌ Non abilitato");
     card.innerHTML = `
       <div class="personale-card-main">
         <h4>${escapeHTML(fullName || "Senza nome")}</h4>
         <p class="muted">${escapeHTML(item.telefono || "-")} • ${escapeHTML(item.email || "-")}</p>
         <div class="personale-badges">
-          <span class="personale-badge ${item.abilitatoTutteCommesse || commesseAbilitate.length ? "ok" : "no"}">${item.abilitatoTutteCommesse ? "✅ Tutte/Pers." : (commesseAbilitate.length ? "✅ Abilitato" : "❌ Non abilitato")}</span>
-          <span class="personale-badge ${expiredCourses ? "no" : "ok"}">Corsi ✅ ${validCourses} • ❌ ${expiredCourses}</span>
+          <span class="personale-badge ${item.abilitatoTutteCommesse || commesseAbilitate.length ? "ok" : "no"}">${commesseBadge}</span>
+          <span class="personale-badge ok">Corsi: ${coursesOwned}/${PRIMARY_CORSI.length}</span>
         </div>
       </div>
       <div class="item-actions">
@@ -15277,10 +15271,7 @@ function openPersonaleDetail(card, person, editMode = false) {
     const existing = normalizedCourses[nome.toLowerCase()] || createEmptyCorsoState();
     return {
       nome,
-      possiede: Boolean(existing?.possiede),
-      dataRilascio: String(existing?.rilascio || "").trim(),
-      dataScadenza: String(existing?.scadenza || "").trim(),
-      documento: String(existing?.documento || "").trim()
+      possiede: Boolean(existing?.possiede)
     };
   });
   details.classList.remove("hidden");
@@ -15300,15 +15291,9 @@ function openPersonaleDetail(card, person, editMode = false) {
     </div>
     <h5>Corsi principali</h5>
     <div class="personale-corsi-list">${primary.map((corso, idx) => {
-      const state = getCourseState(corso);
       return `<div class="personale-corso-row personale-corso-main" data-course-key="${idx}">
-        <label class="personale-course-toggle-label"><input class="personale-course-has" type="checkbox" ${editMode ? "" : "disabled"} ${corso.possiede ? "checked" : ""}> ${escapeHTML(corso.nome)} — Possiede corso</label>
-        <div class="${corso.possiede ? "" : "hidden"} personale-course-extra-fields">
-          <input ${editMode ? "" : "disabled"} data-course-release="${idx}" type="date" value="${escapeHTML(corso.dataRilascio)}" aria-label="Data rilascio ${escapeHTML(corso.nome)}">
-          <input ${editMode ? "" : "disabled"} data-course-expiry="${idx}" type="date" value="${escapeHTML(corso.dataScadenza)}" aria-label="Data scadenza ${escapeHTML(corso.nome)}">
-          <input ${editMode ? "" : "disabled"} data-course-doc="${idx}" value="${escapeHTML(corso.documento)}" placeholder="Documento/link">
-          <span class="personale-badge ${state.status === "expired" ? "no" : state.status === "warning" ? "warn" : "ok"}">${state.label}</span>
-        </div></div>`;
+        <label class="personale-course-toggle-label"><input class="personale-course-has" type="checkbox" ${editMode ? "" : "disabled"} ${corso.possiede ? "checked" : ""}> ${escapeHTML(corso.nome)}</label>
+      </div>`;
     }).join("")}</div>
     ${editMode ? '<button type="button" class="btn btn-primary personale-save-btn">Salva scheda</button>' : ""}
   `;
@@ -15318,26 +15303,12 @@ function openPersonaleDetail(card, person, editMode = false) {
     details.querySelector(".personale-commesse-panel")?.classList.toggle("hidden", event.target.checked);
     autosave();
   });
-  details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", () => {
-    cb.closest(".personale-corso-main")?.querySelector(".personale-course-extra-fields")?.classList.toggle("hidden", !cb.checked);
-    autosave();
-  }));
-  details.querySelectorAll(".personale-edit-cognome-nome, .personale-edit-tel, .personale-edit-email, .personale-edit-ruolo, .personale-edit-note, .personale-commesse-list input[type='checkbox'], [data-course-release], [data-course-expiry], [data-course-doc]").forEach((el) => {
+  details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", autosave));
+  details.querySelectorAll(".personale-edit-cognome-nome, .personale-edit-tel, .personale-edit-email, .personale-edit-ruolo, .personale-edit-note, .personale-commesse-list input[type='checkbox']").forEach((el) => {
     el.addEventListener("change", autosave);
     el.addEventListener("input", autosave);
   });
   if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
-}
-
-function getCourseState(corso) {
-  const expiry = String(corso?.dataScadenza || "").trim();
-  if (!expiry) return { status: "warning", label: "⚠️ In scadenza" };
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const exp = new Date(`${expiry}T00:00:00`);
-  const diff = Math.round((exp - today) / 86400000);
-  if (diff < 0) return { status: "expired", label: "❌ Scaduto" };
-  if (diff <= 30) return { status: "warning", label: "⚠️ In scadenza" };
-  return { status: "valid", label: "✅ Valido" };
 }
 
 async function savePersonaleDetail(personId, root) {
@@ -15350,10 +15321,7 @@ async function savePersonaleDetail(personId, root) {
   const corsi = PRIMARY_CORSI.reduce((acc, nomeCorso, idx) => {
     const hasCourse = Boolean(root.querySelector(`.personale-corso-main[data-course-key="${idx}"] .personale-course-has`)?.checked);
     acc[nomeCorso.toLowerCase()] = {
-      possiede: hasCourse,
-      rilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
-      scadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
-      documento: String(root.querySelector(`[data-course-doc="${idx}"]`)?.value || "").trim()
+      possiede: hasCourse
     };
     return acc;
   }, {});

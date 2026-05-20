@@ -11558,6 +11558,10 @@ function renderImpianti() {
 
     const actions = document.createElement("div");
     actions.className = "item-actions impianto-actions";
+    const primaryActionsRow = document.createElement("div");
+    primaryActionsRow.className = "impianto-primary-actions";
+    const secondaryActionsRow = document.createElement("div");
+    secondaryActionsRow.className = "impianto-secondary-actions";
     const managementStack = document.createElement("div");
     managementStack.className = "impianto-management-stack";
     const managementActions = document.createElement("div");
@@ -11571,7 +11575,7 @@ function renderImpianti() {
       callback,
       forceDisabled = false,
       trackAsUsed = true,
-      targetContainer = actions
+      targetContainer = primaryActionsRow
     ) => {
       if (isImpiantoActionDenied(actionKey)) return;
       const actionId = `${selectedCommessaId}:${impiantoKey}:${actionKey}`;
@@ -11588,7 +11592,7 @@ function renderImpianti() {
       targetContainer.appendChild(btn);
     };
 
-    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, actions);
+    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
     addAction(
       "whatsapp",
       "✉️",
@@ -11602,7 +11606,7 @@ function renderImpianti() {
       },
       false,
       false,
-      actions
+      primaryActionsRow
     );
     addAction(
       "done",
@@ -11640,9 +11644,11 @@ function renderImpianti() {
       managementStack.appendChild(manageBtn);
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
-    if (managementStack.childElementCount > 0) actions.appendChild(managementStack);
+    if (managementStack.childElementCount > 0) secondaryActionsRow.appendChild(managementStack);
     const mqBox = createPlantMqBox(impianto);
-    if (mqBox) actions.appendChild(mqBox);
+    if (mqBox) secondaryActionsRow.appendChild(mqBox);
+    if (primaryActionsRow.childElementCount > 0) actions.appendChild(primaryActionsRow);
+    if (secondaryActionsRow.childElementCount > 0) actions.appendChild(secondaryActionsRow);
     const richiestaPdfUrl = String(
       impianto.linkRichiestaDrive
       || impianto.linkDocumentoRichiesta

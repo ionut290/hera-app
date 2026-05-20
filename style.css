@@ -5578,6 +5578,62 @@ textarea:focus-visible {
   flex-wrap: nowrap;
   white-space: nowrap;
 }
+.impianto-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.impianto-primary-actions,
+.impianto-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  min-height: 44px !important;
+  border-radius: 12px;
+  padding: 0 10px 0 36px;
+  background-position: 10px center;
+  background-size: 20px 20px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  justify-content: flex-start;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"]::after {
+  content: "NAVIGA";
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]::after {
+  content: "FATTO";
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"] {
+  border: 1px solid #2563eb;
+  background-color: #2563eb;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  border: 1px solid #16a34a;
+  background-color: #16a34a;
+  border-radius: 12px;
+}
+
+.impianto-secondary-actions .impianto-management-stack,
+.impianto-secondary-actions .area-mq-box {
+  flex: 0 0 auto;
+}
 
 .action-icon-btn[data-action-key="navigate"],
 .action-icon-btn[data-action-key="whatsapp"] {

@@ -282,6 +282,7 @@ const ui = {
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPanelNotifiche: document.getElementById("open-panel-notifiche"),
+  openPanelProgrammazione: document.getElementById("open-panel-programmazione"),
   openPanelBannerGestione: document.getElementById("open-panel-banner-gestione"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPrivateDocsUploadBtn: document.getElementById("open-private-docs-upload-btn"),
@@ -303,6 +304,18 @@ const ui = {
   panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
   panelNotifiche: document.getElementById("panel-notifiche"),
+  panelProgrammazione: document.getElementById("panel-programmazione"),
+  programmazioneAddBtn: document.getElementById("programmazione-add-btn"),
+  programmazioneFilter: document.getElementById("programmazione-filter"),
+  programmazioneList: document.getElementById("programmazione-list"),
+  programmazioneDialog: document.getElementById("programmazione-dialog"),
+  programmazioneForm: document.getElementById("programmazione-form"),
+  programmazioneCancelBtn: document.getElementById("programmazione-cancel-btn"),
+  programmaCommessa: document.getElementById("programma-commessa"),
+  programmaOperatori: document.getElementById("programma-operatori"),
+  programmaMezzi: document.getElementById("programma-mezzi"),
+  programmazioniHomeCard: document.getElementById("programmazioni-home-card"),
+  programmazioniHomeList: document.getElementById("programmazioni-home-list"),
   panelBanner: document.getElementById("panel-banner"),
   commesseManageList: document.getElementById("commesse-manage-list"),
   adminUserForm: document.getElementById("admin-user-form"),
@@ -584,6 +597,8 @@ let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let chatNotificationsInitialized = false;
 let platformUsers = [];
+let programmazioni = [];
+let unsubscribeProgrammazioni = null;
 let operatorPositions = [];
 let operatorPositionsVisible = true;
 let deniedImpiantoActions = new Set();
@@ -1308,6 +1323,15 @@ ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global")
 ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
+ui.openPanelProgrammazione?.addEventListener("click", () => openManagementPanel("programmazione"));
+ui.programmazioneAddBtn?.addEventListener("click", () => {
+  if (!canManageData()) return;
+  populateProgrammazioneFormOptions();
+  ui.programmazioneDialog?.showModal();
+});
+ui.programmazioneCancelBtn?.addEventListener("click", () => ui.programmazioneDialog?.close());
+ui.programmazioneFilter?.addEventListener("change", () => renderProgrammazioni());
+ui.programmazioneForm?.addEventListener("submit", saveProgrammazione);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
@@ -2177,8 +2201,9 @@ function updateAdminControls() {
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche, ui.openPanelProgrammazione]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
+  ui.programmazioneAddBtn?.classList.toggle("hidden", !canManage);
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
   ui.openPanelBannerGestione?.classList.toggle("hidden", !auth.currentUser);
   ui.commessaName.disabled = !canManage;
@@ -2308,11 +2333,12 @@ function openManagementPanel(panel) {
     global: { el: ui.panelGlobal, title: "Global" },
     banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
-    notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" }
+    notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" },
+    programmazione: { el: ui.panelProgrammazione, title: "📅 Programmazione" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche].forEach((el) => el.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -18714,6 +18740,7 @@ function subscribeAdminUsers() {
     if (currentUser) {
       subscribeUsers();
       subscribeOperatorPositions();
+      subscribeProgrammazioni();
     }
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
@@ -18725,6 +18752,7 @@ function subscribeAdminUsers() {
     if (currentUser) {
       subscribeUsers();
       subscribeOperatorPositions();
+      subscribeProgrammazioni();
     }
   });
 }
@@ -18763,6 +18791,62 @@ function subscribeUsers() {
     renderChatRecipients();
     renderHeaderActivitySummary();
   });
+}
+
+function subscribeProgrammazioni() {
+  if (unsubscribeProgrammazioni) unsubscribeProgrammazioni();
+  unsubscribeProgrammazioni = db.collection("programmazioni").onSnapshot((snapshot) => {
+    programmazioni = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderProgrammazioni();
+  }, () => {
+    programmazioni = [];
+    renderProgrammazioni();
+  });
+}
+
+function populateProgrammazioneFormOptions() {
+  if (ui.programmaCommessa) {
+    const previous = String(ui.programmaCommessa.value || "");
+    const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+    ui.programmaCommessa.innerHTML = "<option value=''>Commessa</option>";
+    commesse.forEach((commessa) => {
+      const option = document.createElement("option");
+      option.value = String(commessa.nome || "").trim();
+      option.textContent = String(commessa.nome || "Commessa");
+      ui.programmaCommessa.appendChild(option);
+    });
+    if (previous) ui.programmaCommessa.value = previous;
+  }
+  if (ui.programmaOperatori) {
+    const selected = new Set(Array.from(ui.programmaOperatori.selectedOptions || []).map((opt) => String(opt.value || "").trim()));
+    ui.programmaOperatori.innerHTML = "";
+    personaleRecords
+      .map((person) => getPersonaleDisplayName(person))
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), "it"))
+      .forEach((operatorName) => {
+        const value = String(operatorName || "").trim();
+        if (!value) return;
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        if (selected.has(value)) option.selected = true;
+        ui.programmaOperatori.appendChild(option);
+      });
+  }
+  if (ui.programmaMezzi) {
+    const selected = new Set(Array.from(ui.programmaMezzi.selectedOptions || []).map((opt) => String(opt.value || "")));
+    ui.programmaMezzi.innerHTML = "";
+    mezziRecords.forEach((mezzo) => {
+      const label = String(mezzo.nId || mezzo.nome || mezzo.modello || "").trim();
+      if (!label) return;
+      const option = document.createElement("option");
+      option.value = label;
+      option.textContent = label;
+      if (selected.has(label)) option.selected = true;
+      ui.programmaMezzi.appendChild(option);
+    });
+  }
 }
 
 function subscribeOperatorPositions() {
@@ -21341,4 +21425,78 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
       attempt += 1;
     }
   }
+}
+
+function isProgrammazioneVisibleToCurrentUser(item) {
+  if (canManageData()) return true;
+  const email = normalizeEmail(currentUser?.email || "");
+  const displayName = String(currentUser?.displayName || "").trim().toLowerCase();
+  const operators = Array.isArray(item?.operatoriCoinvolti) ? item.operatoriCoinvolti : [];
+  return operators.some((entry) => {
+    const raw = String(entry || "").trim();
+    if (!raw) return false;
+    const normalizedEmail = normalizeEmail(raw);
+    const normalizedName = raw.toLowerCase();
+    return (email && normalizedEmail === email) || (displayName && normalizedName === displayName);
+  });
+}
+
+function programmazioneReminderBadge(dateKey) {
+  const today = new Date();
+  const target = new Date(`${dateKey}T00:00:00`);
+  const diff = Math.floor((target - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+  if (diff === 0) return "📅 Oggi";
+  if (diff === 1) return "📌 Domani";
+  const day = target.getDay();
+  if (day === 1 && diff >= 3 && diff <= 5) return "📌 Programmazione lunedì";
+  return "";
+}
+
+function renderProgrammazioni() {
+  const visible = programmazioni.filter(isProgrammazioneVisibleToCurrentUser);
+  const filter = String(ui.programmazioneFilter?.value || "all");
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const filtered = visible.filter((item) => {
+    if (filter === "oggi") return item.data === today;
+    if (filter === "domani") return item.data === tomorrow;
+    if (filter === "programmato") return String(item.stato || "") === "Programmato";
+    if (filter === "urgente") return String(item.priorita || "") === "Urgente" || String(item.tipo || "") === "urgente";
+    if (filter === "fatto") return String(item.stato || "") === "Fatto";
+    if (filter === "annullato") return String(item.stato || "") === "Annullato";
+    return true;
+  });
+  if (ui.programmazioneList) {
+    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data)||"")}</p></article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+  }
+  if (ui.programmazioniHomeCard && ui.programmazioniHomeList) {
+    const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data)));
+    ui.programmazioniHomeCard.classList.toggle("hidden", !homeItems.length);
+    ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
+    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
+  }
+}
+
+async function saveProgrammazione(event) {
+  event.preventDefault();
+  if (!canManageData()) return;
+  const payload = {
+    data: document.getElementById("programma-data")?.value || "",
+    ora: document.getElementById("programma-ora")?.value || "",
+    tipo: document.getElementById("programma-tipo")?.value || "",
+    tipoLabel: document.getElementById("programma-tipo")?.selectedOptions?.[0]?.textContent || "",
+    commessa: document.getElementById("programma-commessa")?.value || "",
+    zona: document.getElementById("programma-zona")?.value || "",
+    squadraAssegnata: document.getElementById("programma-squadra")?.value || "",
+    operatoriCoinvolti: Array.from(document.getElementById("programma-operatori")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
+    priorita: document.getElementById("programma-priorita")?.value || "Normale",
+    note: document.getElementById("programma-note")?.value || "",
+    stato: document.getElementById("programma-stato")?.value || "Programmato",
+    mezziAssegnati: Array.from(document.getElementById("programma-mezzi")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
+    ripetiSettimanale: Boolean(document.getElementById("programma-ripeti")?.checked),
+    createdBy: currentUser?.email || ""
+  };
+  await db.collection("programmazioni").add(payload);
+  ui.programmazioneDialog?.close();
+  ui.programmazioneForm?.reset();
 }

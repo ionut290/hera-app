@@ -7915,3 +7915,6 @@ textarea:focus-visible {
   margin: 0;
   padding-left: 16px;
 }
+
+.programmazione-done { background: #dcfce7; border-left: 4px solid #22c55e; }
+

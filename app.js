@@ -14841,6 +14841,13 @@ async function addPersonale(event) {
     nome,
     cognome,
     fullName: `${cognome} ${nome}`.trim(),
+    telefono: "",
+    email: "",
+    mansione: "",
+    note: "",
+    abilitatoTutteCommesse: false,
+    commesseAbilitate: [],
+    corsi: normalizePersonCourses({}),
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   ui.personaleForm.reset();
@@ -15178,6 +15185,49 @@ function renderPersonaleSuggestions() {
   });
 }
 
+function createEmptyCorsoState() {
+  return { possiede: false, rilascio: "", scadenza: "", documento: "" };
+}
+
+function normalizePersonCourses(person = {}) {
+  const base = Object.fromEntries(PRIMARY_CORSI.map((nome) => [nome.toLowerCase(), createEmptyCorsoState()]));
+  const raw = person?.corsi;
+  if (Array.isArray(raw)) {
+    raw.forEach((corso) => {
+      const key = String(corso?.nome || "").toLowerCase();
+      if (!base[key]) return;
+      base[key] = {
+        possiede: true,
+        rilascio: String(corso?.dataRilascio || corso?.rilascio || "").trim(),
+        scadenza: String(corso?.dataScadenza || corso?.scadenza || "").trim(),
+        documento: String(corso?.documento || corso?.link || "").trim()
+      };
+    });
+    return base;
+  }
+  if (raw && typeof raw === "object") {
+    Object.keys(base).forEach((key) => {
+      const source = raw[key] || {};
+      base[key] = {
+        possiede: Boolean(source?.possiede),
+        rilascio: String(source?.rilascio || source?.dataRilascio || "").trim(),
+        scadenza: String(source?.scadenza || source?.dataScadenza || "").trim(),
+        documento: String(source?.documento || source?.link || "").trim()
+      };
+    });
+  }
+  return base;
+}
+
+function toCourseList(corsiObj = {}) {
+  return PRIMARY_CORSI.map((nome) => {
+    const key = nome.toLowerCase();
+    const corso = corsiObj[key] || createEmptyCorsoState();
+    if (!corso.possiede) return null;
+    return { nome, dataRilascio: corso.rilascio || "", dataScadenza: corso.scadenza || "", documento: corso.documento || "" };
+  }).filter(Boolean);
+}
+
 function renderPersonaleList(container, items, onDelete) {
   container.innerHTML = "";
   renderPersonaleSuggestions();
@@ -15190,7 +15240,7 @@ function renderPersonaleList(container, items, onDelete) {
     card.className = "personale-card";
     const fullName = getPersonaleDisplayName(item) || "";
     const commesseAbilitate = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
-    const corsi = Array.isArray(item.corsi) ? item.corsi : [];
+    const corsi = toCourseList(normalizePersonCourses(item));
     const validCourses = corsi.filter((corso) => getCourseState(corso).status === "valid").length;
     const expiredCourses = corsi.filter((corso) => getCourseState(corso).status === "expired").length;
     card.innerHTML = `
@@ -15198,7 +15248,7 @@ function renderPersonaleList(container, items, onDelete) {
         <h4>${escapeHTML(fullName || "Senza nome")}</h4>
         <p class="muted">${escapeHTML(item.telefono || "-")} • ${escapeHTML(item.email || "-")}</p>
         <div class="personale-badges">
-          <span class="personale-badge ${commesseAbilitate.length ? "ok" : "no"}">${commesseAbilitate.length ? "✅ Abilitato" : "❌ Non abilitato"}</span>
+          <span class="personale-badge ${item.abilitatoTutteCommesse || commesseAbilitate.length ? "ok" : "no"}">${item.abilitatoTutteCommesse ? "✅ Tutte/Pers." : (commesseAbilitate.length ? "✅ Abilitato" : "❌ Non abilitato")}</span>
           <span class="personale-badge ${expiredCourses ? "no" : "ok"}">Corsi ✅ ${validCourses} • ❌ ${expiredCourses}</span>
         </div>
       </div>
@@ -15222,14 +15272,15 @@ function openPersonaleDetail(card, person, editMode = false) {
   const commesseOptions = [...new Set([...DEFAULT_COMMESSE_ABILITAZIONI, ...Array.from(commesseById.values()).map((c) => c.nome).filter(Boolean)])];
   const selectedCommesse = new Set(Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate : []);
   const allCommesseEnabled = Boolean(person.abilitatoTutteCommesse);
+  const normalizedCourses = normalizePersonCourses(person);
   const primary = PRIMARY_CORSI.map((nome) => {
-    const existing = (Array.isArray(person.corsi) ? person.corsi : []).find((c) => String(c?.nome || "").toLowerCase() === nome.toLowerCase());
+    const existing = normalizedCourses[nome.toLowerCase()] || createEmptyCorsoState();
     return {
       nome,
-      possiede: Boolean(existing),
-      dataRilascio: String(existing?.dataRilascio || "").trim(),
-      dataScadenza: String(existing?.dataScadenza || "").trim(),
-      documento: String(existing?.documento || existing?.link || "").trim()
+      possiede: Boolean(existing?.possiede),
+      dataRilascio: String(existing?.rilascio || "").trim(),
+      dataScadenza: String(existing?.scadenza || "").trim(),
+      documento: String(existing?.documento || "").trim()
     };
   });
   details.classList.remove("hidden");
@@ -15262,10 +15313,19 @@ function openPersonaleDetail(card, person, editMode = false) {
     ${editMode ? '<button type="button" class="btn btn-primary personale-save-btn">Salva scheda</button>' : ""}
   `;
   details.querySelector(".personale-toggle-commesse-btn")?.addEventListener("click", () => details.querySelector(".personale-commesse-list")?.classList.toggle("hidden"));
+  const autosave = () => (editMode ? savePersonaleDetail(person.id, details) : Promise.resolve());
   details.querySelector(".personale-all-commesse-toggle")?.addEventListener("change", (event) => {
     details.querySelector(".personale-commesse-panel")?.classList.toggle("hidden", event.target.checked);
+    autosave();
   });
-  details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", () => cb.closest(".personale-corso-main")?.querySelector(".personale-course-extra-fields")?.classList.toggle("hidden", !cb.checked)));
+  details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", () => {
+    cb.closest(".personale-corso-main")?.querySelector(".personale-course-extra-fields")?.classList.toggle("hidden", !cb.checked);
+    autosave();
+  }));
+  details.querySelectorAll(".personale-edit-cognome-nome, .personale-edit-tel, .personale-edit-email, .personale-edit-ruolo, .personale-edit-note, .personale-commesse-list input[type='checkbox'], [data-course-release], [data-course-expiry], [data-course-doc]").forEach((el) => {
+    el.addEventListener("change", autosave);
+    el.addEventListener("input", autosave);
+  });
   if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
 }
 
@@ -15286,17 +15346,17 @@ async function savePersonaleDetail(personId, root) {
   const [cognome, ...nomeParts] = fullName.split(" ");
   const nome = nomeParts.join(" ").trim();
   const allCommesseEnabled = Boolean(root.querySelector(".personale-all-commesse-toggle")?.checked);
-  const commesseAbilitate = allCommesseEnabled ? [] : Array.from(root.querySelectorAll(".personale-commesse-list input[type='checkbox']:checked")).map((el) => el.value);
-  const corsi = PRIMARY_CORSI.map((nomeCorso, idx) => {
+  const commesseAbilitate = Array.from(root.querySelectorAll(".personale-commesse-list input[type='checkbox']:checked")).map((el) => el.value);
+  const corsi = PRIMARY_CORSI.reduce((acc, nomeCorso, idx) => {
     const hasCourse = Boolean(root.querySelector(`.personale-corso-main[data-course-key="${idx}"] .personale-course-has`)?.checked);
-    if (!hasCourse) return null;
-    return {
-      nome: nomeCorso,
-      dataRilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
-      dataScadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
+    acc[nomeCorso.toLowerCase()] = {
+      possiede: hasCourse,
+      rilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
+      scadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
       documento: String(root.querySelector(`[data-course-doc="${idx}"]`)?.value || "").trim()
     };
-  }).filter(Boolean);
+    return acc;
+  }, {});
   await db.collection("personale").doc(personId).set({
     nome, cognome, fullName: `${cognome} ${nome}`.trim(),
     telefono: String(root.querySelector(".personale-edit-tel")?.value || "").trim(),

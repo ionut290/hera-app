@@ -311,6 +311,9 @@ const ui = {
   programmazioneDialog: document.getElementById("programmazione-dialog"),
   programmazioneForm: document.getElementById("programmazione-form"),
   programmazioneCancelBtn: document.getElementById("programmazione-cancel-btn"),
+  programmaCommessa: document.getElementById("programma-commessa"),
+  programmaOperatori: document.getElementById("programma-operatori"),
+  programmaMezzi: document.getElementById("programma-mezzi"),
   programmazioniHomeCard: document.getElementById("programmazioni-home-card"),
   programmazioniHomeList: document.getElementById("programmazioni-home-list"),
   panelBanner: document.getElementById("panel-banner"),
@@ -1323,6 +1326,7 @@ ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("noti
 ui.openPanelProgrammazione?.addEventListener("click", () => openManagementPanel("programmazione"));
 ui.programmazioneAddBtn?.addEventListener("click", () => {
   if (!canManageData()) return;
+  populateProgrammazioneFormOptions();
   ui.programmazioneDialog?.showModal();
 });
 ui.programmazioneCancelBtn?.addEventListener("click", () => ui.programmazioneDialog?.close());
@@ -18800,6 +18804,51 @@ function subscribeProgrammazioni() {
   });
 }
 
+function populateProgrammazioneFormOptions() {
+  if (ui.programmaCommessa) {
+    const previous = String(ui.programmaCommessa.value || "");
+    const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+    ui.programmaCommessa.innerHTML = "<option value=''>Commessa</option>";
+    commesse.forEach((commessa) => {
+      const option = document.createElement("option");
+      option.value = String(commessa.nome || "").trim();
+      option.textContent = String(commessa.nome || "Commessa");
+      ui.programmaCommessa.appendChild(option);
+    });
+    if (previous) ui.programmaCommessa.value = previous;
+  }
+  if (ui.programmaOperatori) {
+    const selected = new Set(Array.from(ui.programmaOperatori.selectedOptions || []).map((opt) => String(opt.value || "").trim()));
+    ui.programmaOperatori.innerHTML = "";
+    personaleRecords
+      .map((person) => getPersonaleDisplayName(person))
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), "it"))
+      .forEach((operatorName) => {
+        const value = String(operatorName || "").trim();
+        if (!value) return;
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        if (selected.has(value)) option.selected = true;
+        ui.programmaOperatori.appendChild(option);
+      });
+  }
+  if (ui.programmaMezzi) {
+    const selected = new Set(Array.from(ui.programmaMezzi.selectedOptions || []).map((opt) => String(opt.value || "")));
+    ui.programmaMezzi.innerHTML = "";
+    mezziRecords.forEach((mezzo) => {
+      const label = String(mezzo.nId || mezzo.nome || mezzo.modello || "").trim();
+      if (!label) return;
+      const option = document.createElement("option");
+      option.value = label;
+      option.textContent = label;
+      if (selected.has(label)) option.selected = true;
+      ui.programmaMezzi.appendChild(option);
+    });
+  }
+}
+
 function subscribeOperatorPositions() {
   stopOperatorPositionsSubscription();
   if (!currentUser || !canManageData()) {
@@ -21381,9 +21430,15 @@ async function fetchWithTimeoutAndRetry(url, options = {}, config = {}) {
 function isProgrammazioneVisibleToCurrentUser(item) {
   if (canManageData()) return true;
   const email = normalizeEmail(currentUser?.email || "");
-  if (!email) return false;
-  const operators = Array.isArray(item?.operatoriCoinvolti) ? item.operatoriCoinvolti.map((x) => normalizeEmail(String(x || ""))) : [];
-  return operators.includes(email);
+  const displayName = String(currentUser?.displayName || "").trim().toLowerCase();
+  const operators = Array.isArray(item?.operatoriCoinvolti) ? item.operatoriCoinvolti : [];
+  return operators.some((entry) => {
+    const raw = String(entry || "").trim();
+    if (!raw) return false;
+    const normalizedEmail = normalizeEmail(raw);
+    const normalizedName = raw.toLowerCase();
+    return (email && normalizedEmail === email) || (displayName && normalizedName === displayName);
+  });
 }
 
 function programmazioneReminderBadge(dateKey) {
@@ -21433,11 +21488,11 @@ async function saveProgrammazione(event) {
     commessa: document.getElementById("programma-commessa")?.value || "",
     zona: document.getElementById("programma-zona")?.value || "",
     squadraAssegnata: document.getElementById("programma-squadra")?.value || "",
-    operatoriCoinvolti: String(document.getElementById("programma-operatori")?.value || "").split(",").map((x) => normalizeEmail(x)).filter(Boolean),
+    operatoriCoinvolti: Array.from(document.getElementById("programma-operatori")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
     priorita: document.getElementById("programma-priorita")?.value || "Normale",
     note: document.getElementById("programma-note")?.value || "",
     stato: document.getElementById("programma-stato")?.value || "Programmato",
-    mezziAssegnati: document.getElementById("programma-mezzi")?.value || "",
+    mezziAssegnati: Array.from(document.getElementById("programma-mezzi")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
     ripetiSettimanale: Boolean(document.getElementById("programma-ripeti")?.checked),
     createdBy: currentUser?.email || ""
   };

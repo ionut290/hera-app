@@ -671,13 +671,15 @@
           <input id="programma-data" type="date" required>
           <input id="programma-ora" type="time" required>
           <select id="programma-tipo" required><option value="sfalcio">🌿 Sfalcio</option><option value="appuntamento">📅 Appuntamento</option><option value="sopralluogo">👀 Sopralluogo</option><option value="urgente">⚠️ Urgente</option><option value="altro">🔧 Altro</option></select>
-          <input id="programma-commessa" type="text" placeholder="Commessa" required>
+          <select id="programma-commessa" required>
+            <option value="">Commessa</option>
+          </select>
           <input id="programma-zona" type="text" placeholder="Impianto / zona" required>
           <input id="programma-squadra" type="text" placeholder="Squadra assegnata">
-          <input id="programma-operatori" type="text" placeholder="Operatori coinvolti (email separate da virgola)">
+          <select id="programma-operatori" multiple size="6" aria-label="Operatori coinvolti"></select>
           <select id="programma-priorita" required><option>Normale</option><option>Alta</option><option>Urgente</option></select>
           <select id="programma-stato" required><option>Programmato</option><option>Fatto</option><option>Annullato</option></select>
-          <input id="programma-mezzi" type="text" placeholder="Mezzi assegnati (opzionale)">
+          <select id="programma-mezzi" multiple size="4" aria-label="Mezzi assegnati (opzionale)"></select>
           <label><input id="programma-ripeti" type="checkbox"> Ripeti ogni settimana</label>
           <textarea id="programma-note" rows="3" placeholder="Note"></textarea>
           <div class="item-actions"><button class="btn btn-primary" type="submit">Salva</button><button id="programmazione-cancel-btn" class="btn" type="button">Annulla</button></div>

@@ -56,7 +56,10 @@ service cloud.firestore {
     match /programmazioni/{programmazioneId} {
       allow read: if isAdmin() || (
         signedIn()
-        && request.auth.token.email in resource.data.operatoriCoinvolti
+        && (
+          request.auth.token.email in resource.data.operatoriCoinvolti
+          || request.auth.token.name in resource.data.operatoriCoinvolti
+        )
       );
       allow create, update, delete: if isAdmin();
     }

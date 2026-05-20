@@ -53,6 +53,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /programmazioni/{programmazioneId} {
+      allow read: if isAdmin() || (
+        signedIn()
+        && request.auth.token.email in resource.data.operatoriCoinvolti
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
     match /posDocuments/{docId} {
       allow read: if resource.data.active == true || request.auth != null;
       allow create, update, delete: if request.auth != null

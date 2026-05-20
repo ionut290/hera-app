@@ -27,6 +27,7 @@
       <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-panel-notifiche" class="btn menu-title-btn" type="button">Gestione notifiche</button>
+      <button id="open-panel-programmazione" class="btn menu-title-btn" type="button">📅 Programmazione</button>
       <button id="open-panel-banner-gestione" class="btn menu-title-btn" type="button">Gestione banner</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-private-docs-upload-btn" class="btn menu-title-btn" type="button">Carica documenti personali</button>
@@ -121,6 +122,13 @@
           <button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
         </div>
         <div id="squadre-lista" class="squadre-lista"></div>
+      </section>
+      <section id="programmazioni-home-card" class="card hidden" aria-hidden="true">
+        <div class="section-head">
+          <h2>📅 Le tue programmazioni</h2>
+          <span class="pill">Promemoria</span>
+        </div>
+        <div id="programmazioni-home-list" class="simple-list"></div>
       </section>
     </section>
 
@@ -643,6 +651,38 @@
         <button type="button" class="btn resource-filter-btn" data-resource-filter="note" aria-label="Categoria note">📝</button>
       </div>
       <div id="resources-list" class="simple-list"></div>
+    </div>
+    <div id="panel-programmazione" class="management-panel hidden">
+      <div class="item-actions">
+        <button id="programmazione-add-btn" class="btn btn-primary" type="button">+ PROGRAMMA</button>
+        <select id="programmazione-filter">
+          <option value="all">Tutti</option>
+          <option value="oggi">Oggi</option>
+          <option value="domani">Domani</option>
+          <option value="programmato">Programmati</option>
+          <option value="urgente">Urgenti</option>
+          <option value="fatto">Fatti</option>
+          <option value="annullato">Annullati</option>
+        </select>
+      </div>
+      <div id="programmazione-list" class="simple-list"></div>
+      <dialog id="programmazione-dialog">
+        <form id="programmazione-form" class="resource-form" method="dialog">
+          <input id="programma-data" type="date" required>
+          <input id="programma-ora" type="time" required>
+          <select id="programma-tipo" required><option value="sfalcio">🌿 Sfalcio</option><option value="appuntamento">📅 Appuntamento</option><option value="sopralluogo">👀 Sopralluogo</option><option value="urgente">⚠️ Urgente</option><option value="altro">🔧 Altro</option></select>
+          <input id="programma-commessa" type="text" placeholder="Commessa" required>
+          <input id="programma-zona" type="text" placeholder="Impianto / zona" required>
+          <input id="programma-squadra" type="text" placeholder="Squadra assegnata">
+          <input id="programma-operatori" type="text" placeholder="Operatori coinvolti (email separate da virgola)">
+          <select id="programma-priorita" required><option>Normale</option><option>Alta</option><option>Urgente</option></select>
+          <select id="programma-stato" required><option>Programmato</option><option>Fatto</option><option>Annullato</option></select>
+          <input id="programma-mezzi" type="text" placeholder="Mezzi assegnati (opzionale)">
+          <label><input id="programma-ripeti" type="checkbox"> Ripeti ogni settimana</label>
+          <textarea id="programma-note" rows="3" placeholder="Note"></textarea>
+          <div class="item-actions"><button class="btn btn-primary" type="submit">Salva</button><button id="programmazione-cancel-btn" class="btn" type="button">Annulla</button></div>
+        </form>
+      </dialog>
     </div>
   </section>
 

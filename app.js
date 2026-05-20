@@ -12161,6 +12161,86 @@ const IMPIANTO_SAFETY_SECTIONS = [
   }
 ];
 
+const DISCARICHE_SPECIFIC_RISK_SECTIONS = [
+  {
+    cls: "discariche-risk",
+    title: "⚠️ RISCHI SPECIFICI DISCARICHE",
+    intro: "Avvisi operativi dedicati alle commesse discariche. Non bloccano l’inserimento lavoro/squadra ma richiedono attenzione costante.",
+    groups: [
+      {
+        title: "⚠️ LAVORO IN PENDENZA",
+        danger: true,
+        items: [
+          "rischio ribaltamento trattore/trincia",
+          "rischio scivolamento operatore",
+          "caduta su scarpate",
+          "perdita controllo decespugliatore",
+          "terreno instabile, fango, ghiaia, erba bagnata",
+          "obbligo valutazione pendenza prima di iniziare",
+          "vietato lavorare con mezzi su pendenze pericolose",
+          "procedere lentamente",
+          "usare DPI: casco, scarpe antiscivolo, guanti, occhiali, cuffie, alta visibilità",
+          "sospendere lavoro con pioggia o terreno instabile"
+        ]
+      },
+      {
+        title: "⛽ TUBAZIONI GAS A TERRA NASCOSTE DALL’ERBA",
+        danger: true,
+        items: [
+          "rischio urto/taglio tubo con trattore, trincia o decespugliatore",
+          "rischio tritatura tubo gas",
+          "rischio fuga gas",
+          "rischio incendio/esplosione",
+          "rischio ustioni e danni ai mezzi",
+          "obbligo sopralluogo visivo prima di lavorare",
+          "vietato passare sopra tubi con mezzi",
+          "lavorare manualmente nelle zone critiche",
+          "mantenere distanza di sicurezza",
+          "in caso di odore gas o tubo danneggiato: fermare tutto, spegnere motori, allontanarsi, chiamare emergenza"
+        ]
+      },
+      {
+        title: "🕳️ POZZETTI, TOMBINI E CANALETTE NASCOSTE",
+        items: [
+          "rischio caduta operatore",
+          "rischio ribaltamento mezzo",
+          "rischio danneggiamento trattore/trincia",
+          "rischio inciampo, distorsioni, fratture",
+          "rischio caduta in pozzetti aperti o danneggiati",
+          "obbligo controllo area prima del taglio",
+          "procedere lentamente con erba alta",
+          "segnalare subito tombini aperti o danneggiati",
+          "delimitare area pericolosa",
+          "usare decespugliatore manuale nelle zone non sicure"
+        ]
+      },
+      {
+        title: "Rischi collegati",
+        items: [
+          "🔥 rischio incendio con erba secca, scintille, pietre/metallo",
+          "🧫 rischio biologico da rifiuti, insetti, animali, materiali contaminati",
+          "🌫️ rischio polveri e scarsa visibilità",
+          "🔊 rischio rumore e vibrazioni",
+          "🚜 rischio investimento tra mezzi e operatori"
+        ]
+      }
+    ]
+  },
+  {
+    cls: "gas-emergency",
+    title: "🚨 EMERGENZA GAS",
+    eyebrow: "RIQUADRO ROSSO",
+    items: [
+      "NON accendere motori",
+      "NON fumare",
+      "NON usare fiamme libere",
+      "spegnere mezzi",
+      "allontanare operatori",
+      "chiamare 112 / 115 / responsabile"
+    ]
+  }
+];
+
 const IMPIANTO_SAFETY_MANDATORY_CHECKLIST = [
   "DPI indossati",
   "Area controllata",
@@ -12323,6 +12403,11 @@ function buildImpiantoSafetyChecklistSection() {
               <span>☑ ${escapeHTML(item)}</span>
             </label>`).join("")}
         </div>
+        ${getCurrentCommessaSafetyKind() === "discariche" ? `
+          <label class="impianto-safety-check-row impianto-safety-check-row-wide">
+            <input type="checkbox" name="discaricheReadConfirm" value="true" required>
+            <span>☑️ Confermo di aver letto le norme di sicurezza discariche</span>
+          </label>` : ""}
         <button class="btn btn-primary impianto-safety-confirm-btn" type="submit">✅ CONFERMA CONTROLLO SICUREZZA</button>
         <p class="muted" data-safety-checklist-feedback role="status" aria-live="polite"></p>
       </form>
@@ -12487,6 +12572,10 @@ async function renderImpiantoSafetyPage(impiantoKey) {
   if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   const contacts = await loadImpiantoSafetyContacts();
   const procedureConfig = await loadImpiantoSafetyProcedureConfig();
+  const commessaSafetyKind = getCurrentCommessaSafetyKind();
+  const extraDiscaricheSections = commessaSafetyKind === "discariche"
+    ? DISCARICHE_SPECIFIC_RISK_SECTIONS.map(buildImpiantoSafetySection).join("")
+    : "";
   ui.impiantoSafetyContent.innerHTML = `
     <article class="impianto-safety-hero">
       <div class="impianto-safety-hero-badge">Sicurezza industriale Hera • manutenzione verde</div>
@@ -12498,7 +12587,7 @@ async function renderImpiantoSafetyPage(impiantoKey) {
         <span>📍 ${escapeHTML(getImpiantoComune(impianto) || "Comune non indicato")}</span>
       </div>
     </article>
-    <div class="impianto-safety-grid">${IMPIANTO_SAFETY_SECTIONS.map(buildImpiantoSafetySection).join("")}</div>
+    <div class="impianto-safety-grid">${IMPIANTO_SAFETY_SECTIONS.map(buildImpiantoSafetySection).join("")}${extraDiscaricheSections}</div>
     ${buildImpiantoSafetyChecklistSection()}
     ${buildImpiantoSafetyAnomalySection(impianto)}
     ${buildImpiantoSafetyWeatherSection(impianto)}
@@ -12634,7 +12723,9 @@ async function saveImpiantoSafetyChecklistForm(event) {
     ...getImpiantoSafetyPayloadBase(impiantoKey, impianto),
     checklist: checked,
     checklistComplete: true,
-    safetyKind: getCurrentCommessaSafetyKind()
+    safetyKind: getCurrentCommessaSafetyKind(),
+    safetyType: getCurrentCommessaSafetyKind() === "discariche" ? "DISCARICHE" : "",
+    discaricheReadConfirm: getCurrentCommessaSafetyKind() === "discariche"
   };
   try {
     if (feedback) feedback.textContent = "Salvataggio controllo sicurezza…";

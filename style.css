@@ -7782,3 +7782,18 @@ textarea:focus-visible {
     padding: 14px;
   }
 }
+
+/* Personale archivio completo */
+.personale-card{border:1px solid var(--border,#ddd);border-radius:12px;padding:10px;margin-bottom:10px;background:#fff}
+.personale-card-main h4{margin:0 0 4px;font-size:1.1rem}
+.personale-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.personale-badge{padding:3px 8px;border-radius:999px;font-size:.78rem;background:#eceff3}
+.personale-badge.ok{background:#e8f7ed}
+.personale-badge.no{background:#fdecec}
+.personale-badge.warn{background:#fff4db}
+.personale-details{margin-top:10px;padding-top:10px;border-top:1px dashed #ccc}
+.personale-fields-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.personale-fields-grid textarea{grid-column:1/-1}
+.personale-commessa-check{font-size:.85rem;padding:4px 8px;border:1px solid #ddd;border-radius:8px}
+.personale-corso-row{display:grid;grid-template-columns:1.2fr .9fr .9fr auto 1.2fr;gap:6px;align-items:center;margin-bottom:6px}
+@media (max-width:720px){.personale-corso-row{grid-template-columns:1fr 1fr}.personale-card-main h4{font-size:1.2rem}}

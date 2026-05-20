@@ -14981,25 +14981,33 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   }
 
   const rows = collectionName === "personale"
-    ? extractPersonnelNamesFromRawRows(await parseSimpleExcelRows(file, true))
+    ? extractPersonnelFromRawRows(await parseSimpleExcelRows(file, true))
     : await parseSimpleExcelRows(file);
-  const uniqueNames = [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))]
-    .filter((name) => (collectionName === "personale" ? name.split(/\s+/).length >= 2 : true));
+  const uniqueNames = collectionName === "personale"
+    ? rows
+    : [...new Set(rows.filter(Boolean).map((v) => v.trim()).filter(Boolean))]
+      .filter((name) => name.split(/\s+/).length >= 2);
   if (!uniqueNames.length) {
     alert("Il file Excel non contiene nomi validi.");
     return;
   }
 
   const batch = db.batch();
-  uniqueNames.forEach((nomeCompleto) => {
+  uniqueNames.forEach((entry) => {
     const ref = db.collection(collectionName).doc();
-    const normalized = String(nomeCompleto || "").trim().replace(/\s+/g, " ");
+    const normalized = String(collectionName === "personale" ? entry.fullName : entry || "").trim().replace(/\s+/g, " ");
     const [cognome, ...nomeParts] = normalized.split(" ");
     const nome = nomeParts.join(" ").trim();
     batch.set(ref, {
       nome: collectionName === "personale" ? nome : normalized,
       cognome: collectionName === "personale" ? cognome : "",
       fullName: collectionName === "personale" ? `${cognome} ${nome}`.trim() : "",
+      telefono: collectionName === "personale" ? String(entry.telefono || "").trim() : "",
+      email: collectionName === "personale" ? String(entry.email || "").trim() : "",
+      mansione: collectionName === "personale" ? String(entry.mansione || "").trim() : "",
+      note: collectionName === "personale" ? String(entry.note || "").trim() : "",
+      commesseAbilitate: collectionName === "personale" ? parseMultiEntryValue(entry.commesseAbilitate || "") : [],
+      corsi: collectionName === "personale" ? buildCoursesFromExcelEntry(entry) : [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   });
@@ -15008,7 +15016,7 @@ async function importSimpleRegistryFromExcel(inputEl, collectionName) {
   alert(`Import completato (${uniqueNames.length} elementi).`);
 }
 
-function extractPersonnelNamesFromRawRows(rawRows) {
+function extractPersonnelFromRawRows(rawRows) {
   if (!Array.isArray(rawRows) || !rawRows.length) return [];
 
   const firstNonEmptyRow = rawRows.find((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim()));
@@ -15037,9 +15045,30 @@ function extractPersonnelNamesFromRawRows(rawRows) {
       value = String(row[0] || "").trim();
     }
 
-    if (value) names.push(value.replace(/\s+/g, " "));
+    const normalized = value ? value.replace(/\s+/g, " ") : "";
+    if (!normalized) continue;
+    const getByHeader = (aliases) => {
+      const idx = headerKeys.findIndex((h) => aliases.includes(h));
+      return idx >= 0 ? String(row[idx] || "").trim() : "";
+    };
+    names.push({
+      fullName: normalized,
+      telefono: getByHeader(["telefono", "cellulare"]),
+      email: getByHeader(["email", "mail"]),
+      mansione: getByHeader(["mansione", "ruolo"]),
+      commesseAbilitate: getByHeader(["commesseabilitate", "commesse"]),
+      corsi: getByHeader(["corsi"]),
+      scadenzaCorsi: getByHeader(["scadenzacorsi", "scadenze"]),
+      note: getByHeader(["note"])
+    });
   }
   return names;
+}
+
+function buildCoursesFromExcelEntry(entry) {
+  const names = parseMultiEntryValue(entry?.corsi || "");
+  const dates = parseMultiEntryValue(entry?.scadenzaCorsi || "");
+  return names.map((nome, idx) => ({ nome, dataScadenza: dates[idx] || "" })).filter((c) => c.nome);
 }
 
 async function parseSimpleExcelRows(file, rawRows = false) {
@@ -15075,7 +15104,7 @@ async function parseSimpleExcelRows(file, rawRows = false) {
 function subscribePersonale() {
   unsubscribePersonale = db.collection("personale").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
     personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    renderSimpleList(ui.personaleLista, personaleRecords, deletePersonale);
+    renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
     updateSquadraHintFromSources();
     updateSuggestionLists();
     renderHoursOperatoriOptions();
@@ -15083,6 +15112,118 @@ function subscribePersonale() {
     console.error(error);
     ui.personaleLista.innerHTML = "<p class='muted'>Errore caricamento personale.</p>";
   });
+}
+
+const DEFAULT_COMMESSE_ABILITAZIONI = [
+  "HERA Depurazione", "HERA Discariche", "INRETE Gas Bologna", "INRETE Gas Modena", "INRETE Gas Ferrara", "WTE", "Altro"
+];
+const DEFAULT_CORSI = [
+  "Sicurezza generale", "Sicurezza specifica", "Primo soccorso", "Antincendio", "Preposto", "DPI 3ª categoria", "Lavori in quota", "PLE", "Carrello elevatore", "Decespugliatore / attrezzature verde", "ATEX", "Rischio biologico", "Spazi confinati"
+];
+
+function renderPersonaleList(container, items, onDelete) {
+  container.innerHTML = "";
+  if (!items.length) {
+    container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
+    return;
+  }
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "personale-card";
+    const fullName = getPersonaleDisplayName(item) || "";
+    const commesseAbilitate = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
+    const corsi = Array.isArray(item.corsi) ? item.corsi : [];
+    const validCourses = corsi.filter((corso) => getCourseState(corso).status === "valid").length;
+    const expiredCourses = corsi.filter((corso) => getCourseState(corso).status === "expired").length;
+    card.innerHTML = `
+      <div class="personale-card-main">
+        <h4>${escapeHTML(fullName || "Senza nome")}</h4>
+        <p class="muted">${escapeHTML(item.telefono || "-")} • ${escapeHTML(item.email || "-")}</p>
+        <div class="personale-badges">
+          <span class="personale-badge ${commesseAbilitate.length ? "ok" : "no"}">${commesseAbilitate.length ? "✅ Abilitato" : "❌ Non abilitato"}</span>
+          <span class="personale-badge ${expiredCourses ? "no" : "ok"}">Corsi ✅ ${validCourses} • ❌ ${expiredCourses}</span>
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-small personale-edit-btn" type="button">Modifica</button>
+        <button class="btn btn-small personale-sheet-btn" type="button">Scheda</button>
+        <button class="btn btn-small personale-delete-btn" type="button">Elimina</button>
+      </div>
+      <div class="personale-details hidden"></div>
+    `;
+    card.querySelector(".personale-delete-btn").addEventListener("click", () => onDelete(item.id, fullName || "elemento"));
+    card.querySelector(".personale-delete-btn").disabled = !canManageData();
+    card.querySelector(".personale-edit-btn").addEventListener("click", () => openPersonaleDetail(card, item, true));
+    card.querySelector(".personale-sheet-btn").addEventListener("click", () => openPersonaleDetail(card, item, false));
+    container.appendChild(card);
+  });
+}
+
+function openPersonaleDetail(card, person, editMode = false) {
+  const details = card.querySelector(".personale-details");
+  const commesseOptions = [...new Set([...DEFAULT_COMMESSE_ABILITAZIONI, ...Array.from(commesseById.values()).map((c) => c.nome).filter(Boolean)])];
+  const selectedCommesse = new Set(Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate : []);
+  const corsi = Array.isArray(person.corsi) && person.corsi.length ? person.corsi : DEFAULT_CORSI.map((nome) => ({ nome }));
+  details.classList.remove("hidden");
+  details.innerHTML = `
+    <div class="personale-fields-grid">
+      <input class="personale-edit-cognome-nome" ${editMode ? "" : "disabled"} value="${escapeHTML(getPersonaleDisplayName(person) || "")}" placeholder="Cognome e nome">
+      <input class="personale-edit-tel" ${editMode ? "" : "disabled"} value="${escapeHTML(person.telefono || "")}" placeholder="Telefono">
+      <input class="personale-edit-email" ${editMode ? "" : "disabled"} value="${escapeHTML(person.email || "")}" placeholder="Email">
+      <input class="personale-edit-ruolo" ${editMode ? "" : "disabled"} value="${escapeHTML(person.mansione || person.ruolo || "")}" placeholder="Mansione / ruolo">
+      <textarea class="personale-edit-note" ${editMode ? "" : "disabled"} placeholder="Note">${escapeHTML(person.note || "")}</textarea>
+    </div>
+    <h5>Abilitato a lavorare nelle commesse</h5>
+    <div class="personale-badges">${commesseOptions.map((nome) => `<label class="personale-commessa-check"><input type="checkbox" ${editMode ? "" : "disabled"} value="${escapeHTML(nome)}" ${selectedCommesse.has(nome) ? "checked" : ""}> ${escapeHTML(nome)}</label>`).join("")}</div>
+    <h5>Corsi</h5>
+    <div class="personale-corsi-list">${corsi.map((corso, idx) => {
+      const state = getCourseState(corso);
+      return `<div class="personale-corso-row">
+        <input ${editMode ? "" : "disabled"} data-course-name="${idx}" value="${escapeHTML(corso.nome || "")}" placeholder="Nome corso">
+        <input ${editMode ? "" : "disabled"} data-course-release="${idx}" type="date" value="${escapeHTML(corso.dataRilascio || "")}">
+        <input ${editMode ? "" : "disabled"} data-course-expiry="${idx}" type="date" value="${escapeHTML(corso.dataScadenza || "")}">
+        <span class="personale-badge ${state.status === "expired" ? "no" : state.status === "warning" ? "warn" : "ok"}">${state.label}</span>
+        <input ${editMode ? "" : "disabled"} data-course-doc="${idx}" value="${escapeHTML(corso.documento || corso.link || "")}" placeholder="Documento/link">
+      </div>`;
+    }).join("")}</div>
+    ${editMode ? '<button type="button" class="btn btn-primary personale-save-btn">Salva scheda</button>' : ""}
+  `;
+  if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
+}
+
+function getCourseState(corso) {
+  const expiry = String(corso?.dataScadenza || "").trim();
+  if (!expiry) return { status: "warning", label: "⚠️ In scadenza" };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const exp = new Date(`${expiry}T00:00:00`);
+  const diff = Math.round((exp - today) / 86400000);
+  if (diff < 0) return { status: "expired", label: "❌ Scaduto" };
+  if (diff <= 30) return { status: "warning", label: "⚠️ In scadenza" };
+  return { status: "valid", label: "✅ Valido" };
+}
+
+async function savePersonaleDetail(personId, root) {
+  if (!canManageData()) return;
+  const fullName = String(root.querySelector(".personale-edit-cognome-nome")?.value || "").trim().replace(/\s+/g, " ");
+  const [cognome, ...nomeParts] = fullName.split(" ");
+  const nome = nomeParts.join(" ").trim();
+  const commesseAbilitate = Array.from(root.querySelectorAll(".personale-commessa-check input:checked")).map((el) => el.value);
+  const corsiRows = Array.from(root.querySelectorAll(".personale-corso-row"));
+  const corsi = corsiRows.map((_, idx) => ({
+    nome: String(root.querySelector(`[data-course-name="${idx}"]`)?.value || "").trim(),
+    dataRilascio: String(root.querySelector(`[data-course-release="${idx}"]`)?.value || "").trim(),
+    dataScadenza: String(root.querySelector(`[data-course-expiry="${idx}"]`)?.value || "").trim(),
+    documento: String(root.querySelector(`[data-course-doc="${idx}"]`)?.value || "").trim()
+  })).filter((c) => c.nome);
+  await db.collection("personale").doc(personId).set({
+    nome, cognome, fullName: `${cognome} ${nome}`.trim(),
+    telefono: String(root.querySelector(".personale-edit-tel")?.value || "").trim(),
+    email: String(root.querySelector(".personale-edit-email")?.value || "").trim(),
+    mansione: String(root.querySelector(".personale-edit-ruolo")?.value || "").trim(),
+    note: String(root.querySelector(".personale-edit-note")?.value || "").trim(),
+    commesseAbilitate,
+    corsi
+  }, { merge: true });
 }
 
 function subscribeMezzi() {

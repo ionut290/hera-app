@@ -7676,6 +7676,22 @@ textarea:focus-visible {
   background: #fef2f2;
 }
 
+.impianto-safety-section.is-discariche-risk {
+  border-color: rgba(245, 158, 11, 0.36);
+  background: #fffbeb;
+}
+
+.impianto-safety-section.is-gas-emergency {
+  border: 2px solid #b91c1c;
+  background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+  color: #fff;
+}
+
+.impianto-safety-section.is-gas-emergency .impianto-safety-eyebrow {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
 .impianto-safety-section.is-admin {
   border-color: rgba(15, 23, 42, 0.22);
   background: #f8fafc;
@@ -7693,6 +7709,10 @@ textarea:focus-visible {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+}
+
+.impianto-safety-check-row-wide {
+  grid-column: 1 / -1;
 }
 
 .impianto-safety-check-row input {

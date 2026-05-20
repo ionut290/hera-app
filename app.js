@@ -244,6 +244,9 @@ const ui = {
   personaleForm: document.getElementById("personale-form"),
   personaleNome: document.getElementById("personale-nome"),
   personaleLista: document.getElementById("personale-lista"),
+  personaleSearchInput: document.getElementById("personale-search-input"),
+  personaleSearchSuggestions: document.getElementById("personale-search-suggestions"),
+  personaleShowAllBtn: document.getElementById("personale-show-all-btn"),
   mezziForm: document.getElementById("mezzi-form"),
   mezzoNId: document.getElementById("mezzo-n-id"),
   mezzoMarca: document.getElementById("mezzo-marca"),
@@ -608,6 +611,10 @@ let allHoursApprovalRequests = [];
 let hoursReportsLoaded = false;
 let hoursApprovalsLoaded = false;
 let personaleRecords = [];
+let personaleSearchQuery = "";
+let personaleExpandedId = "";
+let personaleShowAll = false;
+const PERSONALE_RECENT_KEY = "hera_personale_recent_ids";
 let mezziRecords = [];
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
@@ -1234,6 +1241,17 @@ document.querySelectorAll(".commessa-stat-item[data-stat-action]").forEach((item
   });
 });
 ui.personaleForm.addEventListener("submit", addPersonale);
+ui.personaleSearchInput?.addEventListener("input", (event) => {
+  personaleSearchQuery = String(event.target.value || "");
+  personaleShowAll = false;
+  renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+});
+ui.personaleShowAllBtn?.addEventListener("click", () => {
+  personaleShowAll = !personaleShowAll;
+  personaleExpandedId = personaleShowAll ? "" : personaleExpandedId;
+  ui.personaleShowAllBtn.textContent = personaleShowAll ? "Nascondi elenco" : "Mostra tutto personale";
+  renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+});
 ui.mezziForm.addEventListener("submit", addMezzo);
 ui.squadraForm.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
@@ -15121,13 +15139,53 @@ const DEFAULT_CORSI = [
   "Sicurezza generale", "Sicurezza specifica", "Primo soccorso", "Antincendio", "Preposto", "DPI 3ª categoria", "Lavori in quota", "PLE", "Carrello elevatore", "Decespugliatore / attrezzature verde", "ATEX", "Rischio biologico", "Spazi confinati"
 ];
 
+const PRIMARY_CORSI = ["Primo soccorso", "Antincendio", "Preposto", "ATEX"];
+
+function getRecentPersonaleIds() {
+  try { return JSON.parse(localStorage.getItem(PERSONALE_RECENT_KEY) || "[]"); } catch { return []; }
+}
+function setRecentPersonaleId(id) {
+  if (!id) return;
+  const next = [id, ...getRecentPersonaleIds().filter((item) => item !== id)].slice(0, 3);
+  localStorage.setItem(PERSONALE_RECENT_KEY, JSON.stringify(next));
+}
+function findPersonaleById(id) {
+  return personaleRecords.find((item) => item.id === id) || null;
+}
+function renderPersonaleSuggestions() {
+  if (!ui.personaleSearchSuggestions) return;
+  const query = personaleSearchQuery.trim().toLowerCase();
+  let source = [];
+  if (query) {
+    source = personaleRecords.filter((item) => getPersonaleDisplayName(item).toLowerCase().includes(query)).slice(0, 5);
+  } else if (!personaleShowAll) {
+    source = getRecentPersonaleIds().map(findPersonaleById).filter(Boolean);
+  }
+  ui.personaleSearchSuggestions.innerHTML = source.map((item) => {
+    const commesse = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
+    const corsi = Array.isArray(item.corsi) ? item.corsi : [];
+    const valid = corsi.filter((corso) => getCourseState(corso).status === "valid").length;
+    const expired = corsi.filter((corso) => getCourseState(corso).status === "expired").length;
+    return `<button type="button" class="personale-suggestion-item" data-person-id="${escapeHTML(item.id)}"><strong>${escapeHTML(getPersonaleDisplayName(item) || "Senza nome")}</strong><small>${escapeHTML(item.telefono || "-")} • ${commesse.length ? "✅ Tutte/Parz." : "❌ Nessuna"} • Corsi ${valid}/${expired}</small></button>`;
+  }).join("") || (query ? "<p class='muted'>Nessun risultato.</p>" : "<p class='muted'>Cerca personale per aprire una scheda.</p>");
+  Array.from(ui.personaleSearchSuggestions.querySelectorAll("[data-person-id]")).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      personaleExpandedId = btn.dataset.personId || "";
+      setRecentPersonaleId(personaleExpandedId);
+      renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+      renderPersonaleSuggestions();
+    });
+  });
+}
+
 function renderPersonaleList(container, items, onDelete) {
   container.innerHTML = "";
-  if (!items.length) {
-    container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
+  renderPersonaleSuggestions();
+  if (!items.length || !personaleExpandedId) {
+    container.innerHTML = "<p class='muted'>Apri una scheda dal campo ricerca.</p>";
     return;
   }
-  items.forEach((item) => {
+  items.filter((it) => it.id === personaleExpandedId || personaleShowAll).forEach((item) => {
     const card = document.createElement("div");
     card.className = "personale-card";
     const fullName = getPersonaleDisplayName(item) || "";
@@ -15164,6 +15222,8 @@ function openPersonaleDetail(card, person, editMode = false) {
   const commesseOptions = [...new Set([...DEFAULT_COMMESSE_ABILITAZIONI, ...Array.from(commesseById.values()).map((c) => c.nome).filter(Boolean)])];
   const selectedCommesse = new Set(Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate : []);
   const corsi = Array.isArray(person.corsi) && person.corsi.length ? person.corsi : DEFAULT_CORSI.map((nome) => ({ nome }));
+  const primary = PRIMARY_CORSI.map((nome) => corsi.find((c) => String(c.nome || "").toLowerCase().includes(nome.toLowerCase())) || { nome });
+  const extra = corsi.filter((c) => !PRIMARY_CORSI.some((nome) => String(c.nome || "").toLowerCase().includes(nome.toLowerCase())));
   details.classList.remove("hidden");
   details.innerHTML = `
     <div class="personale-fields-grid">
@@ -15173,21 +15233,29 @@ function openPersonaleDetail(card, person, editMode = false) {
       <input class="personale-edit-ruolo" ${editMode ? "" : "disabled"} value="${escapeHTML(person.mansione || person.ruolo || "")}" placeholder="Mansione / ruolo">
       <textarea class="personale-edit-note" ${editMode ? "" : "disabled"} placeholder="Note">${escapeHTML(person.note || "")}</textarea>
     </div>
-    <h5>Abilitato a lavorare nelle commesse</h5>
-    <div class="personale-badges">${commesseOptions.map((nome) => `<label class="personale-commessa-check"><input type="checkbox" ${editMode ? "" : "disabled"} value="${escapeHTML(nome)}" ${selectedCommesse.has(nome) ? "checked" : ""}> ${escapeHTML(nome)}</label>`).join("")}</div>
-    <h5>Corsi</h5>
-    <div class="personale-corsi-list">${corsi.map((corso, idx) => {
+    <h5>Abilitazione commesse</h5>
+    <label class="personale-commessa-check"><input class="personale-all-commesse-toggle" type="checkbox" ${editMode ? "" : "disabled"} ${selectedCommesse.length === 0 ? "checked" : ""}> Abilitato a tutte le commesse</label>
+    <div class="personale-commesse-panel ${selectedCommesse.length === 0 ? "hidden" : ""}">
+      <button type="button" class="btn btn-small personale-toggle-commesse-btn">Seleziona commesse</button>
+      <div class="personale-badges hidden personale-commesse-list">${commesseOptions.map((nome) => `<label class="personale-commessa-check"><input type="checkbox" ${editMode ? "" : "disabled"} value="${escapeHTML(nome)}" ${selectedCommesse.has(nome) ? "checked" : ""}> ${escapeHTML(nome)}</label>`).join("")}</div>
+    </div>
+    <h5>Corsi principali</h5>
+    <div class="personale-corsi-list">${primary.map((corso, idx) => {
       const state = getCourseState(corso);
-      return `<div class="personale-corso-row">
-        <input ${editMode ? "" : "disabled"} data-course-name="${idx}" value="${escapeHTML(corso.nome || "")}" placeholder="Nome corso">
+      return `<div class="personale-corso-row personale-corso-main">
+        <label><input class="personale-course-has" type="checkbox" ${editMode ? "" : "disabled"} ${corso.nome ? "checked" : ""}> ${escapeHTML(corso.nome || PRIMARY_CORSI[idx])}</label>
+        <div class="${corso.nome ? "" : "hidden"} personale-course-extra-fields">
         <input ${editMode ? "" : "disabled"} data-course-release="${idx}" type="date" value="${escapeHTML(corso.dataRilascio || "")}">
         <input ${editMode ? "" : "disabled"} data-course-expiry="${idx}" type="date" value="${escapeHTML(corso.dataScadenza || "")}">
         <span class="personale-badge ${state.status === "expired" ? "no" : state.status === "warning" ? "warn" : "ok"}">${state.label}</span>
         <input ${editMode ? "" : "disabled"} data-course-doc="${idx}" value="${escapeHTML(corso.documento || corso.link || "")}" placeholder="Documento/link">
-      </div>`;
+        </div></div>`;
     }).join("")}</div>
+    <details><summary>Mostra tutti i corsi</summary><div class="personale-corsi-list">${extra.map((corso, idx) => `<div class="personale-corso-row"><input ${editMode ? "" : "disabled"} data-course-name-extra="${idx}" value="${escapeHTML(corso.nome || "")}"></div>`).join("")}</div></details>
     ${editMode ? '<button type="button" class="btn btn-primary personale-save-btn">Salva scheda</button>' : ""}
   `;
+  details.querySelector(".personale-toggle-commesse-btn")?.addEventListener("click", () => details.querySelector(".personale-commesse-list")?.classList.toggle("hidden"));
+  details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", () => cb.closest(".personale-corso-main")?.querySelector(".personale-course-extra-fields")?.classList.toggle("hidden", !cb.checked)));
   if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
 }
 

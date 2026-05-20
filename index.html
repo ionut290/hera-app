@@ -501,6 +501,14 @@
       <datalist id="mezzi-options"></datalist>
     </div>
     <div id="panel-personale" class="management-panel hidden">
+      <div class="personale-search-toolbar">
+        <label class="personale-search-input-wrap" for="personale-search-input">
+          <span aria-hidden="true">🔍</span>
+          <input id="personale-search-input" type="search" placeholder="Cerca personale">
+        </label>
+        <button id="personale-show-all-btn" class="btn btn-small" type="button">Mostra tutto personale</button>
+      </div>
+      <div id="personale-search-suggestions" class="simple-list personale-search-suggestions"></div>
       <form id="personale-form" class="inline-form">
         <input type="text" id="personale-nome" placeholder="Cognome Nome (obbligatori)">
         <button class="btn btn-primary" type="submit">Aggiungi personale</button>

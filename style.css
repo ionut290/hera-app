@@ -7797,3 +7797,10 @@ textarea:focus-visible {
 .personale-commessa-check{font-size:.85rem;padding:4px 8px;border:1px solid #ddd;border-radius:8px}
 .personale-corso-row{display:grid;grid-template-columns:1.2fr .9fr .9fr auto 1.2fr;gap:6px;align-items:center;margin-bottom:6px}
 @media (max-width:720px){.personale-corso-row{grid-template-columns:1fr 1fr}.personale-card-main h4{font-size:1.2rem}}
+.personale-search-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.personale-search-input-wrap{display:flex;align-items:center;gap:6px;border:1px solid #d7deea;border-radius:10px;padding:6px 10px;flex:1;min-width:220px}
+.personale-search-input-wrap input{border:0;outline:none;flex:1;background:transparent}
+.personale-search-suggestions{margin-bottom:10px}
+.personale-suggestion-item{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;border:1px solid #e3e8f2;background:#fff;border-radius:10px;padding:8px;margin-bottom:6px}
+.personale-suggestion-item small{color:#5f6b7d}
+.personale-course-extra-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px}

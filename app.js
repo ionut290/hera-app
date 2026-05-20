@@ -15907,6 +15907,79 @@ function clearManualSquadreFilterDate() {
   initializeAutomaticSquadreDate();
 }
 
+
+const INRETE_COMMESSE_REQUIRED = new Set([
+  "inrete gas bologna",
+  "inrete gas modena",
+  "inrete gas ferrara",
+  "inrete ferrara",
+  "inrete bologna",
+  "inrete modena"
+]);
+
+function normalizeSafetyKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getPersonByDisplayName(name) {
+  const target = normalizeSafetyKey(name);
+  if (!target) return null;
+  return personaleRecords.find((person) => normalizeSafetyKey(getPersonaleDisplayName(person)) === target) || null;
+}
+
+function isPersonAbilitataForCommessa(person, commessaName) {
+  if (!person) return false;
+  if (Boolean(person.abilitatoTutteCommesse)) return true;
+  const target = normalizeSafetyKey(commessaName);
+  const enabled = Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate : [];
+  return enabled.some((item) => normalizeSafetyKey(item) === target);
+}
+
+function hasRequiredCourse(person, courseKey) {
+  const corsi = normalizePersonCourses(person);
+  return Boolean(corsi?.[courseKey]?.possiede);
+}
+
+function buildSquadraWarningDetails(commessa, squadRows) {
+  const commessaName = String(commessa?.nome || "").trim();
+  const isInrete = INRETE_COMMESSE_REQUIRED.has(normalizeSafetyKey(commessaName));
+  const requiredCourses = isInrete
+    ? ["primo soccorso", "antincendio", "preposto", "atex"]
+    : ["primo soccorso", "antincendio", "preposto"];
+  const missingLabelPrefix = isInrete ? "Requisiti INRETE mancanti" : "Requisiti sicurezza mancanti";
+
+  const issues = [];
+  const abilitati = [];
+  squadRows.forEach((row) => {
+    parseMultiEntryValue(row?.personale || "").forEach((name) => {
+      const person = getPersonByDisplayName(name);
+      if (!person) {
+        issues.push(`⚠️ ${name} non è presente in anagrafica personale`);
+        return;
+      }
+      const isAbilitata = isPersonAbilitataForCommessa(person, commessaName);
+      if (!isAbilitata) {
+        issues.push(`⚠️ ${getPersonaleDisplayName(person) || name} non è abilitato per questa commessa`);
+        return;
+      }
+      abilitati.push(person);
+    });
+  });
+
+  const missing = requiredCourses.filter((course) => !abilitati.some((person) => hasRequiredCourse(person, course)));
+  if (missing.length) {
+    issues.push(`⚠️ ${missingLabelPrefix}:`);
+    missing.forEach((course) => issues.push(`- manca ${course.toUpperCase() === "ATEX" ? "ATEX" : course.replace(/\b\w/g, (ch) => ch.toUpperCase())}`));
+  }
+
+  return issues;
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
@@ -15950,9 +16023,14 @@ function renderSquadre() {
       ].join("");
       return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
+    const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
+    const warningMarkup = warningIssues.length
+      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
+      : "";
     item.innerHTML = `
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+        ${warningMarkup}
       </div>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
@@ -15971,6 +16049,14 @@ function renderSquadre() {
     });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    const warningToggle = item.querySelector(".squadra-warning-toggle");
+    warningToggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const details = item.querySelector(".squadra-warning-details");
+      const isHidden = details?.classList.contains("hidden");
+      details?.classList.toggle("hidden", !isHidden);
+      warningToggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
     });
     ui.squadreLista.appendChild(item);
   });

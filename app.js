@@ -16278,16 +16278,104 @@ function triggerImpiantoWhatsAppAction(impianto) {
 
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
-  let doneMarked = false;
+  const opened = triggerImpiantoWhatsAppAction(impianto);
+  if (!opened) return;
+
+  const doneAt = new Date();
+  const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const doneIds = getImpiantoDocIds(impianto);
+  updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
+  setImpiantiViewMode("done");
+
+  const runBackgroundDoneFlow = async () => {
+    let doneMarked = false;
+    try {
+      doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
+    } catch (error) {
+      console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
+    }
+    if (!doneMarked) {
+      await handleImpiantoDoneSaveFailure(impianto, "markImpiantoDone non completato.");
+      return;
+    }
+    await verifyImpiantoDoneBackground(impianto);
+  };
+
+  Promise.resolve().then(runBackgroundDoneFlow).catch((error) => {
+    console.error("Errore processo background FATTO:", error);
+  });
+}
+
+async function verifyImpiantoDoneBackground(impianto) {
+  await new Promise((resolve) => setTimeout(resolve, 3200));
+  const persisted = await isImpiantoPersistedAsDone(impianto);
+  if (persisted) return;
+  await handleImpiantoDoneSaveFailure(impianto, "Verifica post-salvataggio negativa: impianto non presente nei FATTI.");
+}
+
+async function isImpiantoPersistedAsDone(impianto) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoIds = getImpiantoDocIds(impianto).filter(Boolean);
+  if (!commessaId || !impiantoIds.length) return false;
   try {
-    doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
+    const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+    const snapshots = await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).get()));
+    return snapshots.some((snap) => snap.exists && Boolean(snap.data()?.done));
   } catch (error) {
-    console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
-    alert("Errore: impianto non salvato come FATTO. Riprova.");
-    return;
+    console.error("Errore verifica persistenza FATTO:", error);
+    return false;
   }
-  if (!doneMarked) return;
-  triggerImpiantoWhatsAppAction(impianto);
+}
+
+async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
+  alert("Attenzione: l’impianto potrebbe non essere stato salvato come FATTO.");
+  try {
+    await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
+  } catch (error) {
+    console.error("Errore notifica admin salvataggio FATTO:", error);
+  }
+}
+
+async function notifyAdminsForImpiantoDoneSaveError(impianto, reason = "") {
+  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
+  if (!adminUsers.length) return;
+  const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const now = new Date();
+  const text = [
+    "⚠️ ERRORE SALVATAGGIO FATTO",
+    "L’impianto è stato inviato su Whazzup, ma potrebbe non essere passato nella lista FATTI.",
+    "Verificare manualmente.",
+    "",
+    `Impianto: ${impianto?.denominazione || "Impianto"}`,
+    `ID SAP: ${impianto?.idSap || "-"}`,
+    `Comune: ${impianto?.comune || "-"}`,
+    `Operatore: ${operatorName}`,
+    `Data e ora: ${now.toLocaleString("it-IT")}`,
+    reason ? `Errore rilevato: ${reason}` : "Errore rilevato: verifica FATTI non confermata."
+  ].join("\n");
+
+  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
+    type: "text",
+    text,
+    recipientId: adminUser.id,
+    senderId: currentUser?.uid || "",
+    senderName: operatorName,
+    senderEmail: currentUser?.email || "",
+    kind: "system",
+    metadata: {
+      type: "impianto_done_save_error",
+      commessaId: selectedCommessaId || "",
+      commessaName: selectedCommessaName || "Commessa",
+      impiantoName: impianto?.denominazione || "Impianto",
+      impiantoKey: buildImpiantoKey(impianto),
+      impiantoIdSap: impianto?.idSap || "-",
+      impiantoComune: impianto?.comune || "-",
+      operatorName,
+      detectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reason: reason || "not_confirmed_in_done_list"
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  })));
 }
 
 function buildImpiantoWhatsAppPayload(impianto, options = {}) {

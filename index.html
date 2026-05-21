@@ -654,7 +654,7 @@
     </div>
     <div id="panel-programmazione" class="management-panel hidden">
       <div class="item-actions">
-        <button id="programmazione-add-btn" class="btn btn-primary" type="button">+ PROGRAMMA</button>
+        <button id="programmazione-add-btn" class="btn btn-primary hidden" type="button">+ Nuova programmazione</button>
         <select id="programmazione-filter">
           <option value="all">Tutti</option>
           <option value="oggi">Oggi</option>
@@ -667,22 +667,23 @@
       </div>
       <div id="programmazione-list" class="simple-list"></div>
       <dialog id="programmazione-dialog">
-        <form id="programmazione-form" class="resource-form" method="dialog">
-          <input id="programma-data" type="date" required>
-          <input id="programma-ora" type="time" required>
-          <select id="programma-tipo" required><option value="sfalcio">🌿 Sfalcio</option><option value="appuntamento">📅 Appuntamento</option><option value="sopralluogo">👀 Sopralluogo</option><option value="urgente">⚠️ Urgente</option><option value="altro">🔧 Altro</option></select>
-          <select id="programma-commessa" required>
-            <option value="">Commessa</option>
-          </select>
-          <input id="programma-zona" type="text" placeholder="Impianto / zona" required>
-          <input id="programma-squadra" type="text" placeholder="Squadra assegnata">
-          <select id="programma-operatori" multiple size="6" aria-label="Operatori coinvolti"></select>
-          <select id="programma-priorita" required><option>Normale</option><option>Alta</option><option>Urgente</option></select>
-          <select id="programma-stato" required><option>Programmato</option><option>Fatto</option><option>Annullato</option></select>
-          <select id="programma-mezzi" multiple size="4" aria-label="Mezzi assegnati (opzionale)"></select>
-          <label><input id="programma-ripeti" type="checkbox"> Ripeti ogni settimana</label>
-          <textarea id="programma-note" rows="3" placeholder="Note"></textarea>
-          <div class="item-actions"><button class="btn btn-primary" type="submit">Salva</button><button id="programmazione-cancel-btn" class="btn" type="button">Annulla</button></div>
+        <form id="programmazione-form" class="squadra-form programmazione-form" method="dialog">
+          <input id="programma-id" type="hidden">
+          <div class="squadra-rows">
+            <div class="squadra-row">
+              <select id="programma-commessa" required><option value="">Commessa</option></select>
+              <input id="programma-zona" type="text" placeholder="Impianto / Cantiere" required>
+              <input id="programma-data" type="date" required>
+              <input id="programma-ora" type="time" required>
+              <input id="programma-ora-fine" type="time" required>
+              <select id="programma-tipo" required><option value="sfalcio">sfalcio</option><option value="potatura">potatura</option><option value="pulizia">pulizia</option><option value="sopralluogo">sopralluogo</option><option value="emergenza">emergenza</option><option value="altro">altro</option></select>
+              <select id="programma-priorita" required><option value="normale">normale</option><option value="importante">importante</option><option value="urgente">urgente</option></select>
+              <div id="programma-operatori-autocomplete" class="autocomplete-multi"></div>
+              <div id="programma-mezzi-autocomplete" class="autocomplete-multi"></div>
+              <textarea id="programma-note" rows="3" placeholder="Note"></textarea>
+            </div>
+          </div>
+          <div class="item-actions"><button class="btn btn-primary" type="submit">Salva</button><button id="programmazione-delete-btn" class="btn btn-danger hidden" type="button">Elimina programmazione</button><button id="programmazione-cancel-btn" class="btn" type="button">Annulla</button></div>
         </form>
       </dialog>
     </div>

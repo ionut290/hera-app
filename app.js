@@ -648,6 +648,7 @@ let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
 let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
+const whazzupSafetyByImpianto = new Map();
 let pendingSheetExports = [];
 let pendingImpiantoActions = [];
 let pendingWhatsappAlertShownForSyncIds = new Set();
@@ -11509,6 +11510,8 @@ function renderImpianti() {
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+    const whazzupSafetyState = getWhazzupSafetyState(impianto);
+    const showWhazzupRecovery = !impianto.done && Boolean(whazzupSafetyState?.needsManualMove);
     const waitingForSync = isActionWaitingForSync(pendingAction);
     article.dataset.impiantoKey = impiantoKey;
     article.classList.toggle("is-expanded", detailsVisible);
@@ -11516,6 +11519,7 @@ function renderImpianti() {
 
     const linkedNotes = getCommessaNoteLinkedNotes(impianto);
     article.classList.toggle("has-segnalazione", linkedNotes.length > 0);
+    article.classList.toggle("whazzup-recovery-warning", showWhazzupRecovery);
     const distanceKm = distanceFromUser(impianto);
     const distance = formatDistance(distanceKm);
     const travelMeta = estimateTravelMeta(distanceKm);
@@ -11583,6 +11587,20 @@ function renderImpianti() {
         notesBox.appendChild(noteBtn);
       });
       details.appendChild(notesBox);
+    }
+    if (showWhazzupRecovery) {
+      const warningBox = document.createElement("div");
+      warningBox.className = "impianto-whazzup-recovery";
+      warningBox.innerHTML = `
+        <p><b>⚠️ Whazzup premuto ma impianto non spostato</b></p>
+        <button type="button" class="btn btn-small">Sposta nei FATTI</button>
+      `;
+      const moveBtn = warningBox.querySelector("button");
+      moveBtn?.addEventListener("click", async () => {
+        moveBtn.disabled = true;
+        await forceMoveImpiantoToFatti(impianto);
+      });
+      details.appendChild(warningBox);
     }
     mainColumn.appendChild(details);
 
@@ -16280,6 +16298,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
 
   const doneAt = new Date();
+  markWhazzupSafetyPressed(impianto, doneAt);
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
@@ -16316,8 +16335,47 @@ function notifyImpiantoBackgroundSyncPending() {
 async function verifyImpiantoDoneBackground(impianto) {
   await new Promise((resolve) => setTimeout(resolve, 3200));
   const persisted = await isImpiantoPersistedAsDone(impianto);
+  updateWhazzupSafetyAfterBackgroundCheck(impianto, persisted);
   if (persisted) return;
   await handleImpiantoDoneSaveFailure(impianto, "Verifica post-salvataggio negativa: impianto non presente nei FATTI.");
+}
+
+function getWhazzupSafetyState(impianto) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!commessaId || !impiantoKey) return null;
+  return whazzupSafetyByImpianto.get(`${commessaId}:${impiantoKey}`) || null;
+}
+
+function markWhazzupSafetyPressed(impianto, pressedAt = new Date()) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!commessaId || !impiantoKey) return;
+  whazzupSafetyByImpianto.set(`${commessaId}:${impiantoKey}`, {
+    whazzupPremuto: true,
+    whazzupPremutoAlle: pressedAt.toISOString(),
+    needsManualMove: false
+  });
+}
+
+function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
+  const state = getWhazzupSafetyState(impianto);
+  if (!state) return;
+  state.needsManualMove = !isDonePersisted;
+  if (isDonePersisted) state.whazzupPremuto = false;
+  renderImpianti();
+}
+
+async function forceMoveImpiantoToFatti(impianto) {
+  const moved = await markImpiantoDone(impianto, { source: "whatsapp" });
+  if (!moved) return;
+  const state = getWhazzupSafetyState(impianto);
+  if (state) {
+    state.needsManualMove = false;
+    state.whazzupPremuto = false;
+  }
+  setImpiantiViewMode("done");
+  renderImpianti();
 }
 
 async function isImpiantoPersistedAsDone(impianto) {

@@ -2050,6 +2050,19 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
+.impianto-item.whazzup-recovery-warning {
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+}
+
+.impianto-whazzup-recovery {
+  margin-top: 8px;
+  border: 1px solid #ef4444;
+  border-radius: 10px;
+  background: #fff7ed;
+  padding: 8px;
+}
+
 .page-head {
   display: flex;
   flex-wrap: wrap;

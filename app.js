@@ -16278,14 +16278,14 @@ function triggerImpiantoWhatsAppAction(impianto) {
 
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
-  const opened = triggerImpiantoWhatsAppAction(impianto);
-  if (!opened) return;
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
   setImpiantiViewMode("done");
+
+  triggerImpiantoWhatsAppAction(impianto);
 
   const runBackgroundDoneFlow = async () => {
     let doneMarked = false;
@@ -16295,7 +16295,8 @@ async function handleImpiantoWhatsAppClick(impianto) {
       console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
     }
     if (!doneMarked) {
-      await handleImpiantoDoneSaveFailure(impianto, "markImpiantoDone non completato.");
+      notifyImpiantoBackgroundSyncPending();
+      retrySetImpiantoDone(selectedCommessaId, doneIds, true);
       return;
     }
     await verifyImpiantoDoneBackground(impianto);
@@ -16303,7 +16304,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   Promise.resolve().then(runBackgroundDoneFlow).catch((error) => {
     console.error("Errore processo background FATTO:", error);
+    notifyImpiantoBackgroundSyncPending();
   });
+}
+
+function notifyImpiantoBackgroundSyncPending() {
+  if (!ui.gpsStatus) return;
+  ui.gpsStatus.textContent = "Sincronizzazione in corso…";
 }
 
 async function verifyImpiantoDoneBackground(impianto) {

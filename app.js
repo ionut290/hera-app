@@ -311,9 +311,11 @@ const ui = {
   programmazioneDialog: document.getElementById("programmazione-dialog"),
   programmazioneForm: document.getElementById("programmazione-form"),
   programmazioneCancelBtn: document.getElementById("programmazione-cancel-btn"),
+  programmazioneDeleteBtn: document.getElementById("programmazione-delete-btn"),
+  programmaId: document.getElementById("programma-id"),
   programmaCommessa: document.getElementById("programma-commessa"),
-  programmaOperatori: document.getElementById("programma-operatori"),
-  programmaMezzi: document.getElementById("programma-mezzi"),
+  programmaOperatoriAutocomplete: document.getElementById("programma-operatori-autocomplete"),
+  programmaMezziAutocomplete: document.getElementById("programma-mezzi-autocomplete"),
   programmazioniHomeCard: document.getElementById("programmazioni-home-card"),
   programmazioniHomeList: document.getElementById("programmazioni-home-list"),
   panelBanner: document.getElementById("panel-banner"),
@@ -598,6 +600,8 @@ let chatMessages = [];
 let chatNotificationsInitialized = false;
 let platformUsers = [];
 let programmazioni = [];
+let programmazioneOperatorAutocomplete = null;
+let programmazioneMezziAutocomplete = null;
 let unsubscribeProgrammazioni = null;
 let operatorPositions = [];
 let operatorPositionsVisible = true;
@@ -1326,10 +1330,16 @@ ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("noti
 ui.openPanelProgrammazione?.addEventListener("click", () => openManagementPanel("programmazione"));
 ui.programmazioneAddBtn?.addEventListener("click", () => {
   if (!canManageData()) return;
+  ui.programmaId.value = "";
+  ui.programmazioneDeleteBtn?.classList.add("hidden");
+  ui.programmazioneForm?.reset();
   populateProgrammazioneFormOptions();
+  programmazioneOperatorAutocomplete = buildProgrammazioneAutocomplete(ui.programmaOperatoriAutocomplete, "Operatori coinvolti", getProgrammazioneOperatorOptions(), []);
+  programmazioneMezziAutocomplete = buildProgrammazioneAutocomplete(ui.programmaMezziAutocomplete, "Mezzi / attrezzature", getProgrammazioneMezziOptions(), []);
   ui.programmazioneDialog?.showModal();
 });
 ui.programmazioneCancelBtn?.addEventListener("click", () => ui.programmazioneDialog?.close());
+ui.programmazioneDeleteBtn?.addEventListener("click", deleteProgrammazioneFromForm);
 ui.programmazioneFilter?.addEventListener("change", () => renderProgrammazioni());
 ui.programmazioneForm?.addEventListener("submit", saveProgrammazione);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
@@ -18849,6 +18859,61 @@ function populateProgrammazioneFormOptions() {
   }
 }
 
+function getProgrammazioneOperatorOptions() {
+  return personaleRecords
+    .map((person) => ({ value: getPersonaleDisplayName(person), avatar: String(person.avatarUrl || "").trim() }))
+    .filter((item) => item.value)
+    .sort((a, b) => String(a.value).localeCompare(String(b.value), "it"));
+}
+
+function getProgrammazioneMezziOptions() {
+  return mezziRecords
+    .map((mezzo) => String(mezzo.nId || mezzo.nome || mezzo.modello || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "it"))
+    .map((value) => ({ value, avatar: "" }));
+}
+
+function buildProgrammazioneAutocomplete(root, label, options, selectedValues = []) {
+  if (!root) return { getValues: () => [] };
+  const selected = new Map();
+  selectedValues.forEach((v) => selected.set(String(v).toLowerCase(), { value: v, avatar: "" }));
+  root.innerHTML = `<label>${label}</label><input type="text" placeholder="Cerca..." autocomplete="off"><div class="autocomplete-list hidden"></div><div class="autocomplete-chips"></div>`;
+  const input = root.querySelector("input");
+  const list = root.querySelector(".autocomplete-list");
+  const chips = root.querySelector(".autocomplete-chips");
+  function renderChips() {
+    chips.innerHTML = Array.from(selected.values()).map((item) => `<span class="autocomplete-chip">${item.avatar ? `<img src="${escapeHTML(item.avatar)}" alt="" width="18" height="18">` : ""}${escapeHTML(item.value)}<button type="button" data-remove="${escapeHTML(item.value)}">✕</button></span>`).join("");
+  }
+  function renderList() {
+    const q = String(input.value || "").trim().toLowerCase();
+    const filtered = options.filter((item) => item.value.toLowerCase().includes(q) && !selected.has(item.value.toLowerCase())).slice(0, 8);
+    list.innerHTML = filtered.map((item) => `<div class="autocomplete-item" data-value="${escapeHTML(item.value)}">${escapeHTML(item.value)}</div>`).join("") || "<div class='autocomplete-item muted'>Nessun risultato</div>";
+    list.classList.remove("hidden");
+  }
+  input.addEventListener("input", renderList);
+  input.addEventListener("focus", renderList);
+  document.addEventListener("click", (event) => { if (!root.contains(event.target)) list.classList.add("hidden"); });
+  list.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-value]");
+    if (!row) return;
+    const value = String(row.getAttribute("data-value") || "");
+    const found = options.find((item) => item.value === value) || { value, avatar: "" };
+    selected.set(value.toLowerCase(), found);
+    input.value = "";
+    renderChips();
+    renderList();
+  });
+  chips.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-remove]");
+    if (!btn) return;
+    selected.delete(String(btn.getAttribute("data-remove") || "").toLowerCase());
+    renderChips();
+  });
+  renderChips();
+  return { getValues: () => Array.from(selected.values()).map((item) => item.value) };
+}
+
 function subscribeOperatorPositions() {
   stopOperatorPositionsSubscription();
   if (!currentUser || !canManageData()) {
@@ -21432,13 +21497,22 @@ function isProgrammazioneVisibleToCurrentUser(item) {
   const email = normalizeEmail(currentUser?.email || "");
   const displayName = String(currentUser?.displayName || "").trim().toLowerCase();
   const operators = Array.isArray(item?.operatoriCoinvolti) ? item.operatoriCoinvolti : [];
-  return operators.some((entry) => {
+  const involved = operators.some((entry) => {
     const raw = String(entry || "").trim();
     if (!raw) return false;
     const normalizedEmail = normalizeEmail(raw);
     const normalizedName = raw.toLowerCase();
     return (email && normalizedEmail === email) || (displayName && normalizedName === displayName);
   });
+  if (!involved) return false;
+  const dateKey = String(item?.data || "");
+  if (!dateKey) return false;
+  const now = new Date();
+  const target = new Date(`${dateKey}T00:00:00`);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.floor((target - today) / 86400000);
+  if (target.getDay() === 1) return diff <= 3 && diff >= 0;
+  return diff <= 1 && diff >= 0;
 }
 
 function programmazioneReminderBadge(dateKey) {
@@ -21467,7 +21541,9 @@ function renderProgrammazioni() {
     return true;
   });
   if (ui.programmazioneList) {
-    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data)||"")}</p></article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+    ui.programmazioneList.querySelectorAll("[data-edit-programmazione]").forEach((btn) => btn.addEventListener("click", () => openEditProgrammazione(btn.getAttribute("data-edit-programmazione"))));
+    ui.programmazioneList.querySelectorAll("[data-delete-programmazione]").forEach((btn) => btn.addEventListener("click", () => deleteProgrammazioneById(btn.getAttribute("data-delete-programmazione"))));
   }
   if (ui.programmazioniHomeCard && ui.programmazioniHomeList) {
     const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data)));
@@ -21477,26 +21553,84 @@ function renderProgrammazioni() {
   }
 }
 
+function openEditProgrammazione(id) {
+  if (!canManageData()) return;
+  const item = programmazioni.find((row) => row.id === id);
+  if (!item) return;
+  populateProgrammazioneFormOptions();
+  ui.programmaId.value = item.id || "";
+  document.getElementById("programma-data").value = item.data || "";
+  document.getElementById("programma-ora").value = item.ora || "";
+  document.getElementById("programma-ora-fine").value = item.oraFine || "";
+  document.getElementById("programma-zona").value = item.zona || "";
+  document.getElementById("programma-tipo").value = item.tipo || "sfalcio";
+  document.getElementById("programma-priorita").value = item.priorita || "normale";
+  document.getElementById("programma-note").value = item.note || "";
+  document.getElementById("programma-commessa").value = item.commessa || "";
+  programmazioneOperatorAutocomplete = buildProgrammazioneAutocomplete(ui.programmaOperatoriAutocomplete, "Operatori coinvolti", getProgrammazioneOperatorOptions(), item.operatoriCoinvolti || []);
+  programmazioneMezziAutocomplete = buildProgrammazioneAutocomplete(ui.programmaMezziAutocomplete, "Mezzi / attrezzature", getProgrammazioneMezziOptions(), item.mezziAssegnati || []);
+  ui.programmazioneDeleteBtn?.classList.remove("hidden");
+  ui.programmazioneDialog?.showModal();
+}
+
 async function saveProgrammazione(event) {
   event.preventDefault();
   if (!canManageData()) return;
   const payload = {
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     data: document.getElementById("programma-data")?.value || "",
     ora: document.getElementById("programma-ora")?.value || "",
+    oraFine: document.getElementById("programma-ora-fine")?.value || "",
     tipo: document.getElementById("programma-tipo")?.value || "",
     tipoLabel: document.getElementById("programma-tipo")?.selectedOptions?.[0]?.textContent || "",
     commessa: document.getElementById("programma-commessa")?.value || "",
     zona: document.getElementById("programma-zona")?.value || "",
-    squadraAssegnata: document.getElementById("programma-squadra")?.value || "",
-    operatoriCoinvolti: Array.from(document.getElementById("programma-operatori")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
-    priorita: document.getElementById("programma-priorita")?.value || "Normale",
+    operatoriCoinvolti: programmazioneOperatorAutocomplete?.getValues?.() || [],
+    priorita: document.getElementById("programma-priorita")?.value || "normale",
     note: document.getElementById("programma-note")?.value || "",
-    stato: document.getElementById("programma-stato")?.value || "Programmato",
-    mezziAssegnati: Array.from(document.getElementById("programma-mezzi")?.selectedOptions || []).map((opt) => String(opt.value || "").trim()).filter(Boolean),
-    ripetiSettimanale: Boolean(document.getElementById("programma-ripeti")?.checked),
+    stato: "Programmato",
+    mezziAssegnati: programmazioneMezziAutocomplete?.getValues?.() || [],
     createdBy: currentUser?.email || ""
   };
-  await db.collection("programmazioni").add(payload);
+  const id = String(ui.programmaId?.value || "").trim();
+  if (id) {
+    await db.collection("programmazioni").doc(id).set(payload, { merge: true });
+    alert("Programmazione aggiornata correttamente");
+    await syncProgrammazioneToSquadra(id, payload, { remove: false });
+  } else {
+    payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    const docRef = await db.collection("programmazioni").add(payload);
+    await syncProgrammazioneToSquadra(docRef.id, payload, { remove: false });
+  }
   ui.programmazioneDialog?.close();
   ui.programmazioneForm?.reset();
 }
+
+async function syncProgrammazioneToSquadra(programmazioneId, payload, { remove = false } = {}) {
+  const commessa = Array.from(commesseById.values()).find((row) => String(row.nome || "").trim() === String(payload.commessa || "").trim());
+  if (!commessa?.id || !payload?.data) return;
+  const historyRef = db.collection("squadreStorico").doc(`${payload.data}__${commessa.id}`);
+  if (remove) {
+    await historyRef.set({ autogeneratedFromProgrammazione: firebase.firestore.FieldValue.delete(), autoProgrammazioneId: firebase.firestore.FieldValue.delete() }, { merge: true });
+    return;
+  }
+  await historyRef.set({
+    commessaId: commessa.id,
+    commessaNome: commessa.nome || "Commessa",
+    riferimentoData: payload.data,
+    dateKey: payload.data,
+    autoProgrammazioneId: programmazioneId,
+    autogeneratedFromProgrammazione: true,
+    squadre: [{ personale: (payload.operatoriCoinvolti || []).join(", "), mezzi: (payload.mezziAssegnati || []).join(", "), impianti: payload.zona || "", note: payload.note || "", orario: `${payload.ora || ""}-${payload.oraFine || ""}` }]
+  }, { merge: true });
+}
+
+async function deleteProgrammazioneById(id) {
+  if (!canManageData() || !id) return;
+  const item = programmazioni.find((row) => row.id === id);
+  if (!item) return;
+  if (!window.confirm("Sei sicuro di voler eliminare questa programmazione?")) return;
+  await syncProgrammazioneToSquadra(id, item, { remove: true });
+  await db.collection("programmazioni").doc(id).delete();
+}
+async function deleteProgrammazioneFromForm() { return deleteProgrammazioneById(ui.programmaId?.value || ""); }

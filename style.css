@@ -7917,4 +7917,12 @@ textarea:focus-visible {
 }
 
 .programmazione-done { background: #dcfce7; border-left: 4px solid #22c55e; }
-
+.programmazione-form .squadra-row { align-items: stretch; }
+.autocomplete-multi { position: relative; }
+.autocomplete-multi input { width: 100%; }
+.autocomplete-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.autocomplete-chip { background:#eef2ff; border:1px solid #c7d2fe; border-radius:999px; padding:4px 8px; display:inline-flex; gap:6px; align-items:center; font-size:.86rem; }
+.autocomplete-chip button { border:none; background:transparent; cursor:pointer; font-weight:700; }
+.autocomplete-list { position:absolute; left:0; right:0; top:100%; z-index:50; max-height:180px; overflow:auto; background:#fff; border:1px solid #d1d5db; border-radius:10px; box-shadow:0 10px 20px rgba(0,0,0,.08); }
+.autocomplete-item { padding:8px 10px; cursor:pointer; }
+.autocomplete-item:hover { background:#f3f4f6; }

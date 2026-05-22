@@ -196,6 +196,13 @@
         </section>
         <div class="commessa-map-shell">
           <div id="map"></div>
+          <button id="map-inline-fullscreen-btn" class="map-inline-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero" title="Schermo intero">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+          <form id="map-number-search-form" class="map-number-search" autocomplete="off">
+            <input id="map-number-search-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Cerca numero" aria-label="Cerca numero impianto">
+            <button type="submit" class="btn btn-small">Vai</button>
+          </form>
           <aside id="main-map-impianto-detail-panel" class="main-map-impianto-detail-panel hidden" aria-live="polite" aria-label="Dettaglio impianto selezionato">
             <div id="main-map-impianto-detail-body"></div>
           </aside>
@@ -302,6 +309,11 @@
           <button id="map-draw-redo-btn" class="btn" type="button" disabled>🔁 Rifai</button>
           <button id="map-draw-clear-btn" class="btn" type="button" disabled>🧹 Cancella</button>
           <button id="map-share-area-whatsapp-btn" class="btn" type="button" disabled>📤 WhatsApp</button>
+          <form id="map-fullscreen-number-search-form" class="map-number-search map-number-search--fullscreen" autocomplete="off">
+            <input id="map-fullscreen-number-search-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Cerca numero" aria-label="Cerca numero impianto">
+            <button type="submit" class="btn btn-small">Vai</button>
+          </form>
+
         </div>
         <div class="map-fullscreen-map-wrap">
           <div id="map-fullscreen-view"></div>

@@ -649,6 +649,7 @@ const expandedImpiantoManagementKeys = new Set();
 let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 const whazzupSafetyByImpianto = new Map();
+const WHAZZUP_PENDING_DONE_KEY = "heraWhazzupPendingDone";
 let pendingSheetExports = [];
 let pendingImpiantoActions = [];
 let pendingWhatsappAlertShownForSyncIds = new Set();
@@ -2055,9 +2056,13 @@ renderPendingWhatsappList();
 
 window.addEventListener("online", () => {
   syncPendingImpiantoActions();
+  runWhazzupPendingDoneSafetyCheck();
 });
 window.addEventListener("offline", () => {
   renderPendingWhatsappList();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) runWhazzupPendingDoneSafetyCheck();
 });
 
 auth.onAuthStateChanged((user) => {
@@ -9911,6 +9916,56 @@ function savePendingImpiantoActions() {
   }
 }
 
+function loadWhazzupPendingDoneEntries() {
+  try {
+    const raw = localStorage.getItem(WHAZZUP_PENDING_DONE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((entry) => entry?.commessaId && entry?.impiantoKey) : [];
+  } catch (error) {
+    console.warn("Flag Whazzup pending non leggibili:", error);
+    return [];
+  }
+}
+
+function saveWhazzupPendingDoneEntries(entries) {
+  try {
+    localStorage.setItem(WHAZZUP_PENDING_DONE_KEY, JSON.stringify(Array.isArray(entries) ? entries : []));
+  } catch (error) {
+    console.warn("Flag Whazzup pending non salvati:", error);
+  }
+}
+
+function upsertWhazzupPendingDoneEntry(impianto, pressedAt = new Date()) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!commessaId || !impiantoKey) return;
+  const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const entries = loadWhazzupPendingDoneEntries();
+  const existingIndex = entries.findIndex((entry) => entry.commessaId === commessaId && entry.impiantoKey === impiantoKey);
+  const payload = {
+    commessaId,
+    commessaName: selectedCommessaName || "Commessa",
+    impiantoKey,
+    impiantoIds: getImpiantoDocIds(impianto).filter(Boolean),
+    impiantoName: impianto?.denominazione || "Impianto",
+    userId: currentUser?.uid || "",
+    userEmail: currentUser?.email || "",
+    doneBy,
+    pendingAt: pressedAt.toISOString()
+  };
+  if (existingIndex >= 0) entries.splice(existingIndex, 1, { ...entries[existingIndex], ...payload });
+  else entries.push(payload);
+  saveWhazzupPendingDoneEntries(entries);
+}
+
+function clearWhazzupPendingDoneEntry(impianto) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!commessaId || !impiantoKey) return;
+  const nextEntries = loadWhazzupPendingDoneEntries().filter((entry) => !(entry.commessaId === commessaId && entry.impiantoKey === impiantoKey));
+  saveWhazzupPendingDoneEntries(nextEntries);
+}
+
 function getCurrentUserPendingActions() {
   const uid = currentUser?.uid || "";
   if (!uid) return [];
@@ -10195,6 +10250,7 @@ function subscribeImpianti() {
       updateCommessaDashboard();
       renderImpianti();
       renderMap();
+      runWhazzupPendingDoneSafetyCheck();
       preloadCommessaWeatherForVisibleImpianti();
       evaluateImpiantoProximityAlerts();
       if (!currentUserPos) fetchWeather();
@@ -11592,8 +11648,8 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>⚠️ Whazzup premuto ma impianto non spostato</b></p>
-        <button type="button" class="btn btn-small">Sposta nei FATTI</button>
+        <p><b>⚠️ Impianto non spostato nei fatti</b></p>
+        <button type="button" class="btn btn-small">Sposta ora nei fatti</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       moveBtn?.addEventListener("click", async () => {
@@ -16299,6 +16355,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   markWhazzupSafetyPressed(impianto, doneAt);
+  upsertWhazzupPendingDoneEntry(impianto, doneAt);
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
@@ -16362,7 +16419,10 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
   const state = getWhazzupSafetyState(impianto);
   if (!state) return;
   state.needsManualMove = !isDonePersisted;
-  if (isDonePersisted) state.whazzupPremuto = false;
+  if (isDonePersisted) {
+    state.whazzupPremuto = false;
+    clearWhazzupPendingDoneEntry(impianto);
+  }
   renderImpianti();
 }
 
@@ -16374,7 +16434,38 @@ async function forceMoveImpiantoToFatti(impianto) {
     state.needsManualMove = false;
     state.whazzupPremuto = false;
   }
+  clearWhazzupPendingDoneEntry(impianto);
   setImpiantiViewMode("done");
+  renderImpianti();
+}
+
+async function runWhazzupPendingDoneSafetyCheck() {
+  const commessaId = String(selectedCommessaId || "").trim();
+  const uid = currentUser?.uid || "";
+  if (!commessaId || !uid) return;
+  const allEntries = loadWhazzupPendingDoneEntries();
+  const pendingEntries = allEntries.filter((entry) => entry.commessaId === commessaId && (!entry.userId || entry.userId === uid));
+  if (!pendingEntries.length) return;
+  const remaining = [];
+  for (const entry of pendingEntries) {
+    const impianto = currentImpianti.find((item) => buildImpiantoKey(item) === entry.impiantoKey)
+      || { denominazione: entry.impiantoName, sourceIds: entry.impiantoIds || [], id: entry.impiantoIds?.[0] || "" };
+    const persisted = await isImpiantoPersistedAsDone(impianto);
+    if (persisted) {
+      const state = getWhazzupSafetyState(impianto);
+      if (state) {
+        state.whazzupPremuto = false;
+        state.needsManualMove = false;
+      }
+      continue;
+    }
+    markWhazzupSafetyPressed(impianto, entry.pendingAt ? new Date(entry.pendingAt) : new Date());
+    const state = getWhazzupSafetyState(impianto);
+    if (state) state.needsManualMove = true;
+    remaining.push(entry);
+  }
+  const untouched = allEntries.filter((entry) => !(entry.commessaId === commessaId && (!entry.userId || entry.userId === uid)));
+  saveWhazzupPendingDoneEntries([...untouched, ...remaining]);
   renderImpianti();
 }
 

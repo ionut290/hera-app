@@ -8054,3 +8054,49 @@ textarea:focus-visible {
     left: 10px;
   }
 }
+
+.map-number-search {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 500;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(148,163,184,.35);
+}
+.map-number-search input {
+  width: 92px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 5px 7px;
+  font: inherit;
+}
+.map-number-search--fullscreen {
+  position: static;
+  margin-left: auto;
+}
+.marker-pin-badge {
+  display: inline-flex;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.marker-pin-badge .marker-pin {
+  width: 16px;
+  height: 16px;
+}
+.marker-pin-badge .marker-pin-number {
+  font-size: 9px;
+}
+@media (max-width: 480px) {
+  .map-number-search {
+    top: 10px;
+    right: 10px;
+    padding: 5px;
+    gap: 5px;
+  }
+  .map-number-search input { width: 76px; }
+}

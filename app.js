@@ -225,6 +225,10 @@ const ui = {
   mapDrawUndoBtn: document.getElementById("map-draw-undo-btn"),
   mapDrawRedoBtn: document.getElementById("map-draw-redo-btn"),
   mapDrawClearBtn: document.getElementById("map-draw-clear-btn"),
+  mapNumberSearchForm: document.getElementById("map-number-search-form"),
+  mapNumberSearchInput: document.getElementById("map-number-search-input"),
+  mapFullscreenNumberSearchForm: document.getElementById("map-fullscreen-number-search-form"),
+  mapFullscreenNumberSearchInput: document.getElementById("map-fullscreen-number-search-input"),
   mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
   mapFullscreenFeedbackBanner: document.getElementById("map-fullscreen-feedback-banner"),
   mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
@@ -747,6 +751,7 @@ let notificationUploadInProgress = false;
 let notificationCalendarCursor = new Date();
 let selectedNotificationCalendarDateKey = "";
 const impiantoMarkerByKey = new Map();
+const fullscreenImpiantoMarkerByKey = new Map();
 let mapMarkerSequenceByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1223,6 +1228,8 @@ ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighligh
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
 ui.mapInlineFullscreenBtn?.addEventListener("click", openMapFullscreenPage);
+ui.mapNumberSearchForm?.addEventListener("submit", (event) => { event.preventDefault(); focusImpiantoByMapNumber(ui.mapNumberSearchInput?.value, map); });
+ui.mapFullscreenNumberSearchForm?.addEventListener("submit", (event) => { event.preventDefault(); focusImpiantoByMapNumber(ui.mapFullscreenNumberSearchInput?.value, fullscreenMap); });
 ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaWeatherRefreshBtn?.addEventListener("click", refreshSelectedCommessaWeather);
@@ -17068,6 +17075,37 @@ function buildMapMarkerSequence(impianti = []) {
     .reduce((acc, row, index) => acc.set(row.key, index + 1), new Map());
 }
 
+function getMapMarkerNumberForImpianto(impianto) {
+  if (!impianto) return null;
+  return mapMarkerSequenceByKey.get(buildImpiantoKey(impianto)) || null;
+}
+
+function buildImpiantoMarkerBadge(impianto) {
+  const markerClass = getMarkerClass(impianto);
+  const markerNumber = getMapMarkerNumberForImpianto(impianto);
+  if (!Number.isFinite(markerNumber)) return "";
+  return `<span class="marker-pin-badge" aria-hidden="true"><span class="marker-pin ${markerClass}"><span class="marker-pin-number">${markerNumber}</span></span></span>`;
+}
+
+function focusImpiantoByMapNumber(rawNumber, targetMap = map) {
+  const markerNumber = Number.parseInt(String(rawNumber || "").trim(), 10);
+  if (!Number.isFinite(markerNumber) || markerNumber < 1) {
+    alert("Numero impianto non trovato");
+    return;
+  }
+  const match = currentImpianti.find((impianto) => getMapMarkerNumberForImpianto(impianto) === markerNumber);
+  if (!match || match.gpsY == null || match.gpsX == null) {
+    alert("Numero impianto non trovato");
+    return;
+  }
+  const key = buildImpiantoKey(match);
+  const markerMap = targetMap === fullscreenMap ? fullscreenImpiantoMarkerByKey : impiantoMarkerByKey;
+  const marker = markerMap.get(key);
+  targetMap.setView([match.gpsY, match.gpsX], Math.max(targetMap.getZoom(), 15), { animate: true });
+  if (marker?.openPopup) marker.openPopup();
+  selectImpiantoForMapDetail(match);
+}
+
 function renderMap() {
   clearMap();
 
@@ -17081,6 +17119,7 @@ function renderMap() {
     if (marker) impiantoMarkerByKey.set(impiantoKey, marker);
     const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer, fullscreenMap);
     if (fullscreenMarker) {
+      if (impiantoKey) fullscreenImpiantoMarkerByKey.set(impiantoKey, fullscreenMarker);
       bounds.push([impianto.gpsY, impianto.gpsX]);
       if (impiantoKey && impiantoKey === selectedFullscreenImpiantoId) markerForActiveFullscreenPopup = fullscreenMarker;
     }
@@ -17256,7 +17295,7 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
     <div class="map-popup-card" data-impianto-key="${escapeHTML(impiantoKey)}">
       <div class="map-popup-header">
         <div class="map-popup-title">
-          <h3>${escapeHTML(impianto.denominazione || "Impianto")}</h3>
+          <h3>${buildImpiantoMarkerBadge(impianto)}${escapeHTML(impianto.denominazione || "Impianto")}</h3>
           ${buildImpiantoWeatherBadgeMarkup(impianto)}
           ${headerSubtitle}
         </div>
@@ -17515,6 +17554,7 @@ function normalizeEmail(email) {
 
 function clearMap() {
   impiantoMarkerByKey.clear();
+  fullscreenImpiantoMarkerByKey.clear();
   markerLayer.clearLayers();
   fullscreenMarkerLayer.clearLayers();
 }

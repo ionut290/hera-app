@@ -11607,6 +11607,19 @@ function renderImpianti() {
     const weatherIcon = weatherIconMap[weatherState.iconType] || "🌤️";
     const mainColumn = document.createElement("div");
     mainColumn.className = "impianto-main-column impianto-left";
+    const weatherColumn = document.createElement("div");
+    weatherColumn.className = "impianto-weather-column weather-compact";
+    weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
+    weatherColumn.addEventListener("click", (event) => {
+      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
+      openDettaglioMeteoImpianto(impianto);
+    });
+    weatherColumn.addEventListener("keydown", (event) => {
+      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openDettaglioMeteoImpianto(impianto);
+    });
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
@@ -11746,7 +11759,7 @@ function renderImpianti() {
     safetyQuickBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openImpiantoSafetyProcedureModal(impianto);
+      openImpiantoSafetyPage(impianto);
     });
     quickRightStack.appendChild(safetyQuickBtn);
     const markerNumber = getMapMarkerNumberForImpianto(impianto);

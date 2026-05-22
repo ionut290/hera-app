@@ -5958,6 +5958,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+  margin-bottom: 0;
 }
 .impianto-summary-meta .badge { flex: 0 0 auto; }
 .impianto-weather-column {
@@ -5980,7 +5981,22 @@ textarea:focus-visible {
 .impianto-weather-copy { min-height: 0; }
 .impianto-weather-temp { font-size: 1.05rem; line-height: 1; }
 .impianto-weather-wind { font-size: 0.62rem; }
-.impianto-primary-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.impianto-primary-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  width: 100%;
+  margin-top: 0;
+}
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  min-height: 36px !important;
+  padding-top: 0;
+  padding-bottom: 0;
+}
 .impianto-primary-actions .impianto-quick-right-stack {
   grid-column: 1 / -1;
   display: flex;
@@ -5988,8 +6004,35 @@ textarea:focus-visible {
   justify-content: space-between;
 }
 .impianto-secondary-actions {
-  justify-content: space-between;
-  align-items: flex-end;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  line-height: 1;
+  margin-top: 0;
+}
+
+
+.impianto-actions {
+  gap: 2px;
+  margin-top: 0;
+}
+
+.impianto-summary-row {
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+.impianto-item,
+.card-impianto {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  gap: 4px;
+}
+
+#impianti-lista .impianto-item + .impianto-item,
+#impianti-lista .card-impianto + .card-impianto {
+  margin-top: 4px;
 }
 
 .impianto-weather-detail-hint,
@@ -8280,4 +8323,45 @@ textarea:focus-visible {
   .impianto-weather-column, .weather-compact, .weather-widget, .impianto-weather { min-height: 86px; }
   .impianto-weather-temp { font-size: 1.5rem; }
   .impianto-weather-wind { font-size: 0.66rem; }
+}
+
+/* Impianto card vertical compact fix: meta -> actions -> compact row */
+.impianto-main-column > .item-actions.impianto-actions {
+  margin-top: 6px;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 3px;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+  margin: 0;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-secondary-actions {
+  margin-top: 0;
+  min-height: 0;
+  gap: 4px;
+  line-height: 1;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-secondary-actions > * + * {
+  padding-left: 6px;
+}
+
+.impianto-item,
+.card-impianto {
+  padding-top: 5px;
+  padding-bottom: 5px;
 }

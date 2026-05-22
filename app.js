@@ -11716,7 +11716,7 @@ function renderImpianti() {
     addAction(
       "whatsapp",
       "✉️",
-      "Invia messaggio",
+      "Whazzup / Fatto",
       async () => {
         if (isNetworkOffline() && impianto.done) {
           alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
@@ -11727,19 +11727,6 @@ function renderImpianti() {
       false,
       false,
       primaryActionsRow
-    );
-    addAction(
-      "done",
-      "✅",
-      "Fatto",
-      async () => {
-        const wasOffline = isNetworkOffline();
-        const doneMarked = await markImpiantoDone(impianto);
-        if (doneMarked && !wasOffline) triggerImpiantoWhatsAppAction(impianto);
-      },
-      Boolean(impianto.done),
-      true,
-      managementActions
     );
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);

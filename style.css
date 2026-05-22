@@ -7939,3 +7939,118 @@ textarea:focus-visible {
 .autocomplete-list { position:absolute; left:0; right:0; top:100%; z-index:50; max-height:180px; overflow:auto; background:#fff; border:1px solid #d1d5db; border-radius:10px; box-shadow:0 10px 20px rgba(0,0,0,.08); }
 .autocomplete-item { padding:8px 10px; cursor:pointer; }
 .autocomplete-item:hover { background:#f3f4f6; }
+
+/* Commessa compact KPI + map refinements */
+.commessa-stat-strip {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  margin: 8px 0 10px;
+}
+.commessa-stat-strip::before { display: none; }
+.commessa-stat-item {
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+}
+.commessa-stat-item strong { font-size: clamp(1.05rem, 1.9vw, 1.45rem); line-height: 1.1; }
+.commessa-stat-item .commessa-stat-label,
+.commessa-stat-item > span:not(.commessa-stat-icon) { font-size: .78rem; }
+.commessa-stat-detail {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 160px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .16);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.commessa-stat-item:hover .commessa-stat-detail,
+.commessa-stat-item:focus-within .commessa-stat-detail,
+.commessa-stat-item:focus-visible .commessa-stat-detail {
+  opacity: 1;
+}
+.commessa-map-card { margin-top: 8px; }
+.commessa-map-shell { min-height: clamp(320px, 48dvh, 500px); }
+#map { height: clamp(320px, 48dvh, 500px); }
+
+.map-inline-fullscreen-btn {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  z-index: 500;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, .45);
+  border-radius: 10px;
+  background: rgba(255,255,255,.92);
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .12);
+}
+.map-inline-fullscreen-btn svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; fill: none; }
+.map-inline-fullscreen-btn:hover { background: #fff; }
+
+.marker-pin {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.marker-pin-number {
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0,0,0,.45);
+  pointer-events: none;
+}
+
+#map .leaflet-top.leaflet-left .leaflet-control-zoom { margin-top: 54px; }
+
+
+/* Fine tuning: marker readability + phone fit */
+.marker-pin {
+  width: 18px;
+  height: 18px;
+}
+.marker-pin-number {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+@media (max-width: 480px) {
+  .commessa-dashboard-card {
+    padding: 8px 10px;
+  }
+  .commessa-dashboard-head {
+    gap: 6px;
+  }
+  .commessa-stat-strip {
+    gap: 6px;
+    padding: 6px;
+  }
+  .commessa-stat-item {
+    min-height: 58px;
+    padding: 7px 5px;
+  }
+  .commessa-map-shell,
+  #map {
+    min-height: 280px;
+    height: min(44dvh, 340px);
+  }
+  .map-inline-fullscreen-btn {
+    width: 30px;
+    height: 30px;
+    top: 10px;
+    left: 10px;
+  }
+}

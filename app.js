@@ -11729,6 +11729,27 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    const quickRightStack = document.createElement("div");
+    quickRightStack.className = "impianto-quick-right-stack";
+    const safetyQuickBtn = document.createElement("button");
+    safetyQuickBtn.type = "button";
+    safetyQuickBtn.className = "impianto-safety-quick-btn";
+    safetyQuickBtn.setAttribute("aria-label", "Apri sicurezza impianto");
+    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>🦺</span>";
+    safetyQuickBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openImpiantoSafetyProcedureModal(impianto);
+    });
+    quickRightStack.appendChild(safetyQuickBtn);
+    const markerNumber = getMapMarkerNumberForImpianto(impianto);
+    if (Number.isFinite(markerNumber)) {
+      const markerChip = document.createElement("span");
+      markerChip.className = `impianto-marker-chip ${getMarkerClass(impianto)}`;
+      markerChip.setAttribute("aria-label", `Impianto numero ${markerNumber}`);
+      markerChip.textContent = String(markerNumber);
+      quickRightStack.appendChild(markerChip);
+    }
     addAction(
       "whatsapp",
       "✉️",
@@ -11742,8 +11763,9 @@ function renderImpianti() {
       },
       false,
       false,
-      primaryActionsRow
+      quickRightStack
     );
+    primaryActionsRow.appendChild(quickRightStack);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);

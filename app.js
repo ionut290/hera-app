@@ -11658,8 +11658,8 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>⚠️ Impianto non spostato nei fatti</b></p>
-        <button type="button" class="btn btn-small">Sposta ora nei fatti</button>
+        <p><b>⚠️ WhatsApp inviato, ma l’impianto potrebbe non essere stato registrato come FATTO.</b></p>
+        <button type="button" class="btn btn-small">Salva come FATTO</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       moveBtn?.addEventListener("click", async () => {
@@ -14844,7 +14844,11 @@ async function markImpiantoDone(impianto, options = {}) {
       updateImpiantoLocalState(ids, { pendingActionId: pendingAction.id, pendingActionStatus: "pending", pendingWhatsappStatus: "pending" });
       return true;
     }
-    retrySetImpiantoDone(selectedCommessaId, ids, true);
+    const retrySucceeded = await retrySetImpiantoDone(selectedCommessaId, ids, true);
+    if (!retrySucceeded) {
+      console.error("Aggiornamento stato FATTO fallito anche dopo i tentativi di retry.", { commessaId: selectedCommessaId, impiantoIds: ids });
+      return false;
+    }
   }
 
   if (!canManageData()) {
@@ -16371,10 +16375,12 @@ async function handleImpiantoWhatsAppClick(impianto) {
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
   setImpiantiViewMode("done");
 
-  triggerImpiantoWhatsAppAction(impianto);
+  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
+  console.debug("[WHAZZUP->FATTO] Click pulsante", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
 
   const runBackgroundDoneFlow = async () => {
     let doneMarked = false;
+    console.debug("[WHAZZUP->FATTO] Avvio salvataggio background", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
     try {
       doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
     } catch (error) {
@@ -16386,6 +16392,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       return;
     }
     await verifyImpiantoDoneBackground(impianto);
+    console.debug("[WHAZZUP->FATTO] Verifica completata", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
   };
 
   Promise.resolve().then(runBackgroundDoneFlow).catch((error) => {
@@ -16402,6 +16409,7 @@ function notifyImpiantoBackgroundSyncPending() {
 async function verifyImpiantoDoneBackground(impianto) {
   await new Promise((resolve) => setTimeout(resolve, 3200));
   const persisted = await isImpiantoPersistedAsDone(impianto);
+  console.debug("[WHAZZUP->FATTO] Esito verifica persistenza", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
   updateWhazzupSafetyAfterBackgroundCheck(impianto, persisted);
   if (persisted) return;
   await handleImpiantoDoneSaveFailure(impianto, "Verifica post-salvataggio negativa: impianto non presente nei FATTI.");
@@ -16494,7 +16502,7 @@ async function isImpiantoPersistedAsDone(impianto) {
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Attenzione: l’impianto potrebbe non essere stato salvato come FATTO.");
+  alert("WhatsApp inviato, ma l’impianto potrebbe non essere stato registrato come FATTO.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

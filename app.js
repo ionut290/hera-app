@@ -11542,7 +11542,8 @@ function matchesImpiantoSearch(impianto) {
 }
 
 function renderImpianti() {
-  ui.impiantiLista.innerHTML = "";
+  try {
+    ui.impiantiLista.innerHTML = "";
 
   if (!currentImpianti.length) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
@@ -11571,6 +11572,7 @@ function renderImpianti() {
   }
 
   sorted.forEach((impianto) => {
+    try {
     const article = document.createElement("article");
     article.className = `impianto-item card-impianto ${impianto.done ? "done" : "todo"}`;
     const impiantoKey = buildImpiantoKey(impianto);
@@ -11593,7 +11595,7 @@ function renderImpianti() {
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
     const weatherState = getImpiantoWeatherBadgeState(impianto);
-    const weatherDisplay = weatherState.display || { temperature: "--°", wind: "" };
+    const weatherDisplay = weatherState.display || { temperature: "Meteo non disponibile", wind: "" };
     const weatherIconMap = { sun: "☀️", partly: "⛅", overcast: "☁️", cloud: "☁️", "rain-light": "🌦️", rain: "🌧️", storm: "⛈️", temporale: "⛈️", fog: "🌫️", wind: "💨" };
     const markerNumber = getMapMarkerNumberForImpianto(impianto);
     const markerLabel = Number.isFinite(markerNumber) ? String(markerNumber) : "•";
@@ -11628,7 +11630,7 @@ function renderImpianti() {
     safetyQuickBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openImpiantoSafetyProcedureModal(impianto);
+      openImpiantoSafetyPage(impianto);
     });
     safetyRow.appendChild(safetyQuickBtn);
     if (Number.isFinite(markerNumber)) {
@@ -11818,8 +11820,17 @@ function renderImpianti() {
 
     article.appendChild(mainColumn);
     ui.impiantiLista.appendChild(article);
+    } catch (itemError) {
+      console.error("Errore render card impianto:", itemError, { impianto: buildImpiantoKey(impianto) });
+    }
   });
   renderNextActionCard();
+  } catch (error) {
+    console.error("Errore renderImpianti:", error);
+    if (ui?.impiantiLista) {
+      ui.impiantiLista.innerHTML = "<p class='muted'>Errore nel caricamento impianti. Riprova tra poco.</p>";
+    }
+  }
 }
 
 function openImpiantoEditor(impianto) {

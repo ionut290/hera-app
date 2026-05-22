@@ -8324,3 +8324,44 @@ textarea:focus-visible {
   .impianto-weather-temp { font-size: 1.5rem; }
   .impianto-weather-wind { font-size: 0.66rem; }
 }
+
+/* Impianto card vertical compact fix: meta -> actions -> compact row */
+.impianto-main-column > .item-actions.impianto-actions {
+  margin-top: 6px;
+  padding-top: 0;
+  padding-bottom: 0;
+  gap: 3px;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+  margin: 0;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
+.impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-secondary-actions {
+  margin-top: 0;
+  min-height: 0;
+  gap: 4px;
+  line-height: 1;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-secondary-actions > * + * {
+  padding-left: 6px;
+}
+
+.impianto-item,
+.card-impianto {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}

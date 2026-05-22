@@ -5891,6 +5891,71 @@ textarea:focus-visible {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
+/* Single-column compact card layout */
+.impianto-item,
+.card-impianto {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-height: 0;
+  padding: 8px;
+}
+.impianto-summary-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.impianto-summary-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+.impianto-summary-topline,
+.impianto-summary-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.impianto-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.impianto-summary-meta .badge { flex: 0 0 auto; }
+.impianto-weather-column {
+  width: 124px;
+  min-width: 124px;
+  border-left: 0;
+  padding-left: 0;
+}
+.impianto-weather-badge.impianto-weather-card,
+.impianto-weather-column .impianto-weather-card,
+.weather-compact .impianto-weather-card,
+.impianto-weather-card.is-compact {
+  grid-template-columns: 1fr;
+  min-height: 0;
+  padding: 4px;
+}
+.impianto-weather-icon-shell,
+.impianto-weather-description,
+.impianto-weather-rain { display: none; }
+.impianto-weather-copy { min-height: 0; }
+.impianto-weather-temp { font-size: 1.05rem; line-height: 1; }
+.impianto-weather-wind { font-size: 0.62rem; }
+.impianto-primary-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.impianto-primary-actions .impianto-quick-right-stack {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.impianto-secondary-actions {
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
 .impianto-weather-detail-hint,
 .impianto-weather-sfalcio-alert {
   display: block;

@@ -8103,6 +8103,57 @@ textarea:focus-visible {
 
 
 /* Impianti list compact card layout */
+.impianto-item,
+.card-impianto {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 6px !important;
+  padding: 8px !important;
+}
+
+.impianto-weather-column { display: none !important; }
+
+.impianto-summary-btn {
+  display: grid;
+  gap: 4px;
+}
+
+.impianto-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.impianto-num-chip {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #0b63ce;
+  color: #fff;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.impianto-weather-inline { font-weight: 900; color: #0f172a; font-size: 1rem; }
+.impianto-safety-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+.impianto-wind-inline {
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .impianto-primary-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -8111,15 +8162,8 @@ textarea:focus-visible {
 }
 
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
-.impianto-primary-actions .impianto-quick-right-stack .action-icon-btn[data-action-key="whatsapp"] {
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
   min-height: 46px !important;
-}
-
-.impianto-quick-right-stack {
-  display: grid;
-  grid-template-rows: 28px 34px minmax(44px, auto);
-  gap: 4px;
-  align-items: end;
 }
 
 .impianto-safety-quick-btn {
@@ -8176,10 +8220,8 @@ textarea:focus-visible {
 
 @media (max-width: 760px) {
   .impianto-primary-actions { gap: 6px; }
-  .impianto-quick-right-stack { grid-template-rows: 24px 30px minmax(42px, auto); }
   .impianto-safety-quick-btn { width: 30px; height: 24px; }
   .impianto-marker-chip { width: 30px; height: 30px; font-size: 0.92rem; }
-  .impianto-weather-column, .weather-compact, .weather-widget, .impianto-weather { min-height: 86px; }
-  .impianto-weather-temp { font-size: 1.5rem; }
-  .impianto-weather-wind { font-size: 0.66rem; }
+  .impianto-summary-btn strong { font-size: 0.95rem; }
+  .impianto-weather-inline { font-size: 0.92rem; }
 }

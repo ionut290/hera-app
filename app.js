@@ -8251,35 +8251,30 @@ function renderCommessaHomeButton(commessa, index) {
 }
 
 function renderCommesseHomeList() {
-  try {
-    if (!ui.commesseLista) return;
-    ui.commesseLista.innerHTML = "";
-    if (!auth.currentUser) {
-      ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
-      return;
-    }
-    if (commesseLoadState.status === "loading") {
-      ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
-      return;
-    }
-    const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
-    if (!commesse.length) {
-      ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
-      return;
-    }
-    if (commesseLoadState.status === "error" && commesseLoadState.message) {
-      const warning = document.createElement("p");
-      warning.className = "muted";
-      warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
-      ui.commesseLista.appendChild(warning);
-    }
-    commesse.forEach((commessa, idx) => {
-      ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
-    });
-  } catch (error) {
-    console.error("Errore renderCommesseHomeList:", error);
-    if (ui?.commesseLista) ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse. Riprova.</p>";
+  if (!ui.commesseLista) return;
+  ui.commesseLista.innerHTML = "";
+  if (!auth.currentUser) {
+    ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
+    return;
   }
+  if (commesseLoadState.status === "loading") {
+    ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
+    return;
+  }
+  const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
+  if (!commesse.length) {
+    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
+    return;
+  }
+  if (commesseLoadState.status === "error" && commesseLoadState.message) {
+    const warning = document.createElement("p");
+    warning.className = "muted";
+    warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
+    ui.commesseLista.appendChild(warning);
+  }
+  commesse.forEach((commessa, idx) => {
+    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
+  });
 }
 
 function renderParentCommessaOverview() {
@@ -11547,8 +11542,7 @@ function matchesImpiantoSearch(impianto) {
 }
 
 function renderImpianti() {
-  try {
-    ui.impiantiLista.innerHTML = "";
+  ui.impiantiLista.innerHTML = "";
 
   if (!currentImpianti.length) {
     ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
@@ -11577,7 +11571,6 @@ function renderImpianti() {
   }
 
   sorted.forEach((impianto) => {
-    try {
     const article = document.createElement("article");
     article.className = `impianto-item card-impianto ${impianto.done ? "done" : "todo"}`;
     const impiantoKey = buildImpiantoKey(impianto);
@@ -11599,12 +11592,6 @@ function renderImpianti() {
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
-    const weatherState = getImpiantoWeatherBadgeState(impianto);
-    const weatherDisplay = weatherState.display || { temperature: "Meteo non disponibile", wind: "" };
-    const weatherIconMap = { sun: "☀️", partly: "⛅", overcast: "☁️", cloud: "☁️", "rain-light": "🌦️", rain: "🌧️", storm: "⛈️", temporale: "⛈️", fog: "🌫️", wind: "💨" };
-    const markerNumber = getMapMarkerNumberForImpianto(impianto);
-    const markerLabel = Number.isFinite(markerNumber) ? String(markerNumber) : "•";
-    const weatherIcon = weatherIconMap[weatherState.iconType] || "🌤️";
     const mainColumn = document.createElement("div");
     mainColumn.className = "impianto-main-column impianto-left";
     const weatherColumn = document.createElement("div");
@@ -11620,11 +11607,12 @@ function renderImpianti() {
       event.preventDefault();
       openDettaglioMeteoImpianto(impianto);
     });
+
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
     header.innerHTML = `
-      <span class="impianto-title-row"><span class="impianto-num-chip">${escapeHTML(markerLabel)}</span><strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong><span class="impianto-weather-inline" data-weather-inline="${escapeHTML(impiantoKey)}">${weatherIcon} ${escapeHTML(weatherDisplay.temperature || "--°")}</span></span>
+      <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
@@ -11638,30 +11626,6 @@ function renderImpianti() {
       renderImpianti();
     });
     mainColumn.appendChild(header);
-    const safetyRow = document.createElement("div");
-    safetyRow.className = "impianto-safety-row";
-    const safetyQuickBtn = document.createElement("button");
-    safetyQuickBtn.type = "button";
-    safetyQuickBtn.className = "impianto-safety-quick-btn";
-    safetyQuickBtn.setAttribute("aria-label", "Apri sicurezza impianto");
-    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>🦺</span>";
-    safetyQuickBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openImpiantoSafetyPage(impianto);
-    });
-    safetyRow.appendChild(safetyQuickBtn);
-    if (Number.isFinite(markerNumber)) {
-      const markerChip = document.createElement("span");
-      markerChip.className = `impianto-marker-chip ${getMarkerClass(impianto)}`;
-      markerChip.textContent = String(markerNumber);
-      safetyRow.appendChild(markerChip);
-    }
-    const windEl = document.createElement("span");
-    windEl.className = "impianto-wind-inline";
-    windEl.textContent = weatherDisplay.wind || "-";
-    safetyRow.appendChild(windEl);
-    mainColumn.appendChild(safetyRow);
 
     const details = document.createElement("div");
     details.className = "impianto-details";
@@ -11759,7 +11723,7 @@ function renderImpianti() {
     safetyQuickBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openImpiantoSafetyPage(impianto);
+      openImpiantoSafetyProcedureModal(impianto);
     });
     quickRightStack.appendChild(safetyQuickBtn);
     const markerNumber = getMapMarkerNumberForImpianto(impianto);
@@ -11837,18 +11801,10 @@ function renderImpianti() {
     if (managementActions.childElementCount > 0) mainColumn.appendChild(managementActions);
 
     article.appendChild(mainColumn);
+    article.appendChild(weatherColumn);
     ui.impiantiLista.appendChild(article);
-    } catch (itemError) {
-      console.error("Errore render card impianto:", itemError, { impianto: buildImpiantoKey(impianto) });
-    }
   });
   renderNextActionCard();
-  } catch (error) {
-    console.error("Errore renderImpianti:", error);
-    if (ui?.impiantiLista) {
-      ui.impiantiLista.innerHTML = "<p class='muted'>Errore nel caricamento impianti. Riprova tra poco.</p>";
-    }
-  }
 }
 
 function openImpiantoEditor(impianto) {
@@ -16253,7 +16209,6 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 }
 
 function renderSquadre() {
-  try {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
   const selectedDateKey = getActiveSquadreDateKey();
@@ -16333,10 +16288,6 @@ function renderSquadre() {
     });
     ui.squadreLista.appendChild(item);
   });
-  } catch (error) {
-    console.error("Errore renderSquadre:", error);
-    if (ui?.squadreLista) ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
-  }
 }
 
 function renderMezziButtonsMarkup(rawValue) {

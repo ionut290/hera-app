@@ -8251,30 +8251,35 @@ function renderCommessaHomeButton(commessa, index) {
 }
 
 function renderCommesseHomeList() {
-  if (!ui.commesseLista) return;
-  ui.commesseLista.innerHTML = "";
-  if (!auth.currentUser) {
-    ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
-    return;
+  try {
+    if (!ui.commesseLista) return;
+    ui.commesseLista.innerHTML = "";
+    if (!auth.currentUser) {
+      ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
+      return;
+    }
+    if (commesseLoadState.status === "loading") {
+      ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
+      return;
+    }
+    const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
+    if (!commesse.length) {
+      ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
+      return;
+    }
+    if (commesseLoadState.status === "error" && commesseLoadState.message) {
+      const warning = document.createElement("p");
+      warning.className = "muted";
+      warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
+      ui.commesseLista.appendChild(warning);
+    }
+    commesse.forEach((commessa, idx) => {
+      ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
+    });
+  } catch (error) {
+    console.error("Errore renderCommesseHomeList:", error);
+    if (ui?.commesseLista) ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse. Riprova.</p>";
   }
-  if (commesseLoadState.status === "loading") {
-    ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
-    return;
-  }
-  const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
-  if (!commesse.length) {
-    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
-    return;
-  }
-  if (commesseLoadState.status === "error" && commesseLoadState.message) {
-    const warning = document.createElement("p");
-    warning.className = "muted";
-    warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
-    ui.commesseLista.appendChild(warning);
-  }
-  commesse.forEach((commessa, idx) => {
-    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
-  });
 }
 
 function renderParentCommessaOverview() {
@@ -11607,7 +11612,6 @@ function renderImpianti() {
       event.preventDefault();
       openDettaglioMeteoImpianto(impianto);
     });
-
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
@@ -11713,6 +11717,27 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    const quickRightStack = document.createElement("div");
+    quickRightStack.className = "impianto-quick-right-stack";
+    const safetyQuickBtn = document.createElement("button");
+    safetyQuickBtn.type = "button";
+    safetyQuickBtn.className = "impianto-safety-quick-btn";
+    safetyQuickBtn.setAttribute("aria-label", "Apri sicurezza impianto");
+    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>🦺</span>";
+    safetyQuickBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openImpiantoSafetyPage(impianto);
+    });
+    quickRightStack.appendChild(safetyQuickBtn);
+    const markerNumber = getMapMarkerNumberForImpianto(impianto);
+    if (Number.isFinite(markerNumber)) {
+      const markerChip = document.createElement("span");
+      markerChip.className = `impianto-marker-chip ${getMarkerClass(impianto)}`;
+      markerChip.setAttribute("aria-label", `Impianto numero ${markerNumber}`);
+      markerChip.textContent = String(markerNumber);
+      quickRightStack.appendChild(markerChip);
+    }
     addAction(
       "whatsapp",
       "✉️",
@@ -11726,8 +11751,9 @@ function renderImpianti() {
       },
       false,
       false,
-      primaryActionsRow
+      quickRightStack
     );
+    primaryActionsRow.appendChild(quickRightStack);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -13660,9 +13686,7 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
   const atexMarkup = state.showAtex && state.retryKey
     ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
     : "";
-  const safetyMarkup = state.showSafety && state.retryKey
-    ? `<button type="button" class="impianto-weather-safety-btn" data-impianto-safety="${escapeHTML(state.retryKey)}" aria-label="Apri sicurezza impianto"><span aria-hidden="true">🦺</span><span>SICUREZZA IMPIANTO</span></button>`
-    : "";
+  const safetyMarkup = "";
   const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">›</span></span>`;
   return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${safetyMarkup}${retryMarkup}</span></span>`;
 }
@@ -16189,6 +16213,7 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 }
 
 function renderSquadre() {
+  try {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
   const selectedDateKey = getActiveSquadreDateKey();
@@ -16268,6 +16293,10 @@ function renderSquadre() {
     });
     ui.squadreLista.appendChild(item);
   });
+  } catch (error) {
+    console.error("Errore renderSquadre:", error);
+    if (ui?.squadreLista) ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
+  }
 }
 
 function renderMezziButtonsMarkup(rawValue) {

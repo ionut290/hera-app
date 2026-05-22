@@ -5489,16 +5489,16 @@ textarea:focus-visible {
 
 /* Premium impianto cards: two fixed columns with compact operational + weather layout. */
 .impianti-lista {
-  gap: 10px;
+  gap: 6px;
 }
 
 .impianto-item,
 .card-impianto {
   grid-template-columns: minmax(0, 1fr) clamp(150px, 34vw, 190px);
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
-  min-height: 132px;
-  padding: 10px;
+  min-height: 0;
+  padding: 8px;
   border: 1px solid #d9e8f7;
   border-radius: 18px;
   background: #ffffff;
@@ -5521,7 +5521,7 @@ textarea:focus-visible {
 .impianto-left {
   align-content: start;
   min-height: 0;
-  gap: 4px;
+  gap: 3px;
 }
 
 .impianto-summary-btn {
@@ -5584,9 +5584,9 @@ textarea:focus-visible {
 }
 
 .impianto-actions {
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 1px;
   padding-bottom: 0;
   flex-wrap: nowrap;
   white-space: nowrap;
@@ -5595,29 +5595,29 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
 }
 
 .impianto-primary-actions,
 .impianto-secondary-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
 .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
-  flex: 1 1 0;
-  width: auto;
+  flex: 1 1 50%;
+  width: 50%;
   min-width: 0;
-  min-height: 44px !important;
+  min-height: 38px !important;
   border-radius: 12px;
-  padding: 0 10px 0 36px;
+  padding: 0 8px 0 30px;
   background-position: 10px center;
-  background-size: 20px 20px;
+  background-size: 16px 16px;
   color: #fff;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -5643,9 +5643,45 @@ textarea:focus-visible {
   border-radius: 12px;
 }
 
+.impianto-secondary-actions {
+  min-height: 22px;
+  gap: 6px;
+}
+
+.impianto-secondary-actions > * + * {
+  position: relative;
+  padding-left: 8px;
+}
+
+.impianto-secondary-actions > * + *::before {
+  content: "|";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .impianto-secondary-actions .impianto-management-stack,
-.impianto-secondary-actions .area-mq-box {
+.impianto-secondary-actions .area-mq-box,
+.impianto-secondary-actions .impianto-safety-quick-btn {
   flex: 0 0 auto;
+}
+
+.impianto-secondary-actions .area-mq-box {
+  margin-left: 0;
+  min-width: 70px;
+  height: 24px;
+  border-radius: 8px;
+  padding: 0 6px;
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.impianto-secondary-actions .area-mq-value {
+  font-size: 0.72rem;
 }
 
 .action-icon-btn[data-action-key="navigate"],
@@ -8176,24 +8212,21 @@ textarea:focus-visible {
 }
 
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
-.impianto-primary-actions .impianto-quick-right-stack .action-icon-btn[data-action-key="whatsapp"] {
-  min-height: 46px !important;
-}
-
-.impianto-quick-right-stack {
-  display: grid;
-  grid-template-rows: 28px 34px minmax(44px, auto);
-  gap: 4px;
-  align-items: end;
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  min-height: 38px !important;
 }
 
 .impianto-safety-quick-btn {
-  justify-self: end;
-  width: 34px;
-  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  padding: 0;
   border: 1px solid #f59e0b;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff7ed;
+  font-size: 0.86rem;
 }
 
 .impianto-marker-chip {

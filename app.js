@@ -11723,8 +11723,6 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
-    const quickRightStack = document.createElement("div");
-    quickRightStack.className = "impianto-quick-right-stack";
     const safetyQuickBtn = document.createElement("button");
     safetyQuickBtn.type = "button";
     safetyQuickBtn.className = "impianto-safety-quick-btn";
@@ -11735,7 +11733,7 @@ function renderImpianti() {
       event.stopPropagation();
       openImpiantoSafetyProcedureModal(impianto);
     });
-    quickRightStack.appendChild(safetyQuickBtn);
+    secondaryActionsRow.appendChild(safetyQuickBtn);
     addAction(
       "whatsapp",
       "✉️",
@@ -11749,9 +11747,8 @@ function renderImpianti() {
       },
       false,
       false,
-      quickRightStack
+      primaryActionsRow
     );
-    primaryActionsRow.appendChild(quickRightStack);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);

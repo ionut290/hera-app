@@ -11592,27 +11592,19 @@ function renderImpianti() {
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
+    const weatherState = getImpiantoWeatherBadgeState(impianto);
+    const weatherDisplay = weatherState.display || { temperature: "--°", wind: "" };
+    const weatherIconMap = { sun: "☀️", partly: "⛅", overcast: "☁️", cloud: "☁️", "rain-light": "🌦️", rain: "🌧️", storm: "⛈️", temporale: "⛈️", fog: "🌫️", wind: "💨" };
+    const markerNumber = getMapMarkerNumberForImpianto(impianto);
+    const markerLabel = Number.isFinite(markerNumber) ? String(markerNumber) : "•";
+    const weatherIcon = weatherIconMap[weatherState.iconType] || "🌤️";
     const mainColumn = document.createElement("div");
     mainColumn.className = "impianto-main-column impianto-left";
-    const weatherColumn = document.createElement("div");
-    weatherColumn.className = "impianto-weather-column weather-compact";
-    weatherColumn.innerHTML = buildImpiantoWeatherBadgeMarkup(impianto);
-    weatherColumn.addEventListener("click", (event) => {
-      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
-      openDettaglioMeteoImpianto(impianto);
-    });
-    weatherColumn.addEventListener("keydown", (event) => {
-      if (event.target?.closest?.("[data-weather-retry], [data-atex-procedure], [data-impianto-safety]")) return;
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      openDettaglioMeteoImpianto(impianto);
-    });
-
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
     header.innerHTML = `
-      <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
+      <span class="impianto-title-row"><span class="impianto-num-chip">${escapeHTML(markerLabel)}</span><strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong><span class="impianto-weather-inline" data-weather-inline="${escapeHTML(impiantoKey)}">${weatherIcon} ${escapeHTML(weatherDisplay.temperature || "--°")}</span></span>
       <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
       ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
       ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
@@ -11626,6 +11618,30 @@ function renderImpianti() {
       renderImpianti();
     });
     mainColumn.appendChild(header);
+    const safetyRow = document.createElement("div");
+    safetyRow.className = "impianto-safety-row";
+    const safetyQuickBtn = document.createElement("button");
+    safetyQuickBtn.type = "button";
+    safetyQuickBtn.className = "impianto-safety-quick-btn";
+    safetyQuickBtn.setAttribute("aria-label", "Apri sicurezza impianto");
+    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>🦺</span>";
+    safetyQuickBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openImpiantoSafetyProcedureModal(impianto);
+    });
+    safetyRow.appendChild(safetyQuickBtn);
+    if (Number.isFinite(markerNumber)) {
+      const markerChip = document.createElement("span");
+      markerChip.className = `impianto-marker-chip ${getMarkerClass(impianto)}`;
+      markerChip.textContent = String(markerNumber);
+      safetyRow.appendChild(markerChip);
+    }
+    const windEl = document.createElement("span");
+    windEl.className = "impianto-wind-inline";
+    windEl.textContent = weatherDisplay.wind || "-";
+    safetyRow.appendChild(windEl);
+    mainColumn.appendChild(safetyRow);
 
     const details = document.createElement("div");
     details.className = "impianto-details";
@@ -11779,7 +11795,6 @@ function renderImpianti() {
     if (managementActions.childElementCount > 0) mainColumn.appendChild(managementActions);
 
     article.appendChild(mainColumn);
-    article.appendChild(weatherColumn);
     ui.impiantiLista.appendChild(article);
   });
   renderNextActionCard();
@@ -13660,9 +13675,7 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
   const atexMarkup = state.showAtex && state.retryKey
     ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
     : "";
-  const safetyMarkup = state.showSafety && state.retryKey
-    ? `<button type="button" class="impianto-weather-safety-btn" data-impianto-safety="${escapeHTML(state.retryKey)}" aria-label="Apri sicurezza impianto"><span aria-hidden="true">🦺</span><span>SICUREZZA IMPIANTO</span></button>`
-    : "";
+  const safetyMarkup = "";
   const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">›</span></span>`;
   return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${safetyMarkup}${retryMarkup}</span></span>`;
 }

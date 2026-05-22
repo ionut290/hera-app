@@ -8100,3 +8100,128 @@ textarea:focus-visible {
   }
   .map-number-search input { width: 76px; }
 }
+
+
+/* Impianti list compact card layout */
+.impianto-item,
+.card-impianto {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 6px !important;
+  padding: 8px !important;
+}
+
+.impianto-weather-column { display: none !important; }
+
+.impianto-summary-btn {
+  display: grid;
+  gap: 4px;
+}
+
+.impianto-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.impianto-num-chip {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #0b63ce;
+  color: #fff;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.impianto-weather-inline { font-weight: 900; color: #0f172a; font-size: 1rem; }
+.impianto-safety-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+.impianto-wind-inline {
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impianto-primary-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  min-height: 46px !important;
+}
+
+.impianto-safety-quick-btn {
+  justify-self: end;
+  width: 34px;
+  height: 28px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: #fff7ed;
+}
+
+.impianto-marker-chip {
+  justify-self: end;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 2px solid #cbd5e1;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 900;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.impianto-marker-chip.done { background: #16a34a; }
+.impianto-marker-chip.todo { background: #16a34a; }
+.impianto-marker-chip.straordinario { background: #16a34a; }
+
+.impianto-weather-badge.impianto-weather-card,
+.impianto-weather-column .impianto-weather-card,
+.weather-compact .impianto-weather-card,
+.impianto-weather-column .impianto-weather-card.is-compact,
+.weather-compact .impianto-weather-card.is-compact,
+.impianto-weather-card.is-compact {
+  grid-template-columns: 1fr;
+  min-height: 96px;
+}
+
+.impianto-weather-icon-shell,
+.impianto-weather-description,
+.impianto-weather-rain,
+.impianto-weather-detail-hint,
+.impianto-weather-sfalcio-alert,
+.impianto-weather-safety-btn {
+  display: none;
+}
+
+.impianto-weather-copy { min-height: 0; align-content: start; }
+.impianto-weather-temp { font-size: 1.9rem; }
+.impianto-weather-wind { font-size: 0.75rem; }
+
+@media (max-width: 760px) {
+  .impianto-primary-actions { gap: 6px; }
+  .impianto-safety-quick-btn { width: 30px; height: 24px; }
+  .impianto-marker-chip { width: 30px; height: 30px; font-size: 0.92rem; }
+  .impianto-summary-btn strong { font-size: 0.95rem; }
+  .impianto-weather-inline { font-size: 0.92rem; }
+}

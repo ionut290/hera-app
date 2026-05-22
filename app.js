@@ -189,6 +189,7 @@ const ui = {
   commessaOperationalCard: document.getElementById("commessa-operational-card"),
   impiantiCard: document.getElementById("impianti-card"),
   mapFullscreenBtn: document.getElementById("map-fullscreen-btn"),
+  mapInlineFullscreenBtn: document.getElementById("map-inline-fullscreen-btn"),
   operatorPositionsToggleBtn: document.getElementById("operator-positions-toggle-btn"),
   commessaNotesToggleBtn: document.getElementById("commessa-notes-toggle-btn"),
   commessaWeatherRefreshBtn: document.getElementById("commessa-weather-refresh-btn"),
@@ -746,6 +747,7 @@ let notificationUploadInProgress = false;
 let notificationCalendarCursor = new Date();
 let selectedNotificationCalendarDateKey = "";
 const impiantoMarkerByKey = new Map();
+let mapMarkerSequenceByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_HOUR = 19;
@@ -1220,6 +1222,7 @@ ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.mapInlineFullscreenBtn?.addEventListener("click", openMapFullscreenPage);
 ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
 ui.commessaNotesToggleBtn?.addEventListener("click", openCommessaNotesPage);
 ui.commessaWeatherRefreshBtn?.addEventListener("click", refreshSelectedCommessaWeather);
@@ -17052,10 +17055,24 @@ function toggleOperatorPositionsVisibility() {
   renderMap();
 }
 
+
+function buildMapMarkerSequence(impianti = []) {
+  return impianti
+    .map((impianto) => ({ impianto, key: buildImpiantoKey(impianto), lat: Number(impianto.gpsY), lng: Number(impianto.gpsX) }))
+    .filter((row) => row.key && Number.isFinite(row.lat) && Number.isFinite(row.lng))
+    .sort((a, b) => {
+      if (Math.abs(a.lat - b.lat) > 0.000001) return b.lat - a.lat;
+      if (Math.abs(a.lng - b.lng) > 0.000001) return a.lng - b.lng;
+      return String(a.key).localeCompare(String(b.key), "it");
+    })
+    .reduce((acc, row, index) => acc.set(row.key, index + 1), new Map());
+}
+
 function renderMap() {
   clearMap();
 
   const bounds = [];
+  mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
   let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
@@ -17112,10 +17129,11 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
   if (impianto.gpsY == null || impianto.gpsX == null) return null;
 
   const markerClass = getMarkerClass(impianto);
+  const markerSequence = mapMarkerSequenceByKey.get(buildImpiantoKey(impianto));
   const marker = L.marker([impianto.gpsY, impianto.gpsX], {
     icon: L.divIcon({
       className: "",
-      html: `<div class="marker-pin ${markerClass}"></div>`,
+      html: `<div class="marker-pin ${markerClass}">${Number.isFinite(markerSequence) ? `<span class="marker-pin-number">${markerSequence}</span>` : ""}</div>`,
       iconSize: [14, 14],
       iconAnchor: [7, 7]
     })

@@ -8251,30 +8251,35 @@ function renderCommessaHomeButton(commessa, index) {
 }
 
 function renderCommesseHomeList() {
-  if (!ui.commesseLista) return;
-  ui.commesseLista.innerHTML = "";
-  if (!auth.currentUser) {
-    ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
-    return;
+  try {
+    if (!ui.commesseLista) return;
+    ui.commesseLista.innerHTML = "";
+    if (!auth.currentUser) {
+      ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
+      return;
+    }
+    if (commesseLoadState.status === "loading") {
+      ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
+      return;
+    }
+    const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
+    if (!commesse.length) {
+      ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
+      return;
+    }
+    if (commesseLoadState.status === "error" && commesseLoadState.message) {
+      const warning = document.createElement("p");
+      warning.className = "muted";
+      warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
+      ui.commesseLista.appendChild(warning);
+    }
+    commesse.forEach((commessa, idx) => {
+      ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
+    });
+  } catch (error) {
+    console.error("Errore renderCommesseHomeList:", error);
+    if (ui?.commesseLista) ui.commesseLista.innerHTML = "<p class='muted'>Errore caricamento commesse. Riprova.</p>";
   }
-  if (commesseLoadState.status === "loading") {
-    ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
-    return;
-  }
-  const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
-  if (!commesse.length) {
-    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
-    return;
-  }
-  if (commesseLoadState.status === "error" && commesseLoadState.message) {
-    const warning = document.createElement("p");
-    warning.className = "muted";
-    warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
-    ui.commesseLista.appendChild(warning);
-  }
-  commesse.forEach((commessa, idx) => {
-    ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
-  });
 }
 
 function renderParentCommessaOverview() {
@@ -16235,6 +16240,7 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 }
 
 function renderSquadre() {
+  try {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
   const selectedDateKey = getActiveSquadreDateKey();
@@ -16314,6 +16320,10 @@ function renderSquadre() {
     });
     ui.squadreLista.appendChild(item);
   });
+  } catch (error) {
+    console.error("Errore renderSquadre:", error);
+    if (ui?.squadreLista) ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre.</p>";
+  }
 }
 
 function renderMezziButtonsMarkup(rawValue) {

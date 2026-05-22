@@ -11608,15 +11608,21 @@ function renderImpianti() {
       openDettaglioMeteoImpianto(impianto);
     });
 
+    const markerNumber = getMapMarkerNumberForImpianto(impianto);
+    const markerChipMarkup = Number.isFinite(markerNumber)
+      ? `<span class="impianto-marker-chip ${escapeHTML(getMarkerClass(impianto))}" aria-label="Impianto numero ${escapeHTML(String(markerNumber))}">${escapeHTML(String(markerNumber))}</span>`
+      : "";
     const header = document.createElement("button");
     header.type = "button";
     header.className = "impianto-summary-btn";
     header.innerHTML = `
-      <strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong>
-      <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
-      ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
-      ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
-      <small class="impianto-travel-meta">
+      <span class="impianto-summary-topline">
+        <span class="impianto-summary-title-wrap">${markerChipMarkup}<strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong></span>
+      </span>
+      <small class="impianto-summary-meta">
+        <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
+        ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
+        ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
         <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
       </small>
     `;
@@ -11625,7 +11631,11 @@ function renderImpianti() {
       expandedImpiantoKey = expandedImpiantoKey === impiantoKey ? "" : impiantoKey;
       renderImpianti();
     });
-    mainColumn.appendChild(header);
+    const summaryRow = document.createElement("div");
+    summaryRow.className = "impianto-summary-row";
+    summaryRow.appendChild(header);
+    summaryRow.appendChild(weatherColumn);
+    mainColumn.appendChild(summaryRow);
 
     const details = document.createElement("div");
     details.className = "impianto-details";
@@ -11726,14 +11736,6 @@ function renderImpianti() {
       openImpiantoSafetyProcedureModal(impianto);
     });
     quickRightStack.appendChild(safetyQuickBtn);
-    const markerNumber = getMapMarkerNumberForImpianto(impianto);
-    if (Number.isFinite(markerNumber)) {
-      const markerChip = document.createElement("span");
-      markerChip.className = `impianto-marker-chip ${getMarkerClass(impianto)}`;
-      markerChip.setAttribute("aria-label", `Impianto numero ${markerNumber}`);
-      markerChip.textContent = String(markerNumber);
-      quickRightStack.appendChild(markerChip);
-    }
     addAction(
       "whatsapp",
       "✉️",
@@ -11801,7 +11803,6 @@ function renderImpianti() {
     if (managementActions.childElementCount > 0) mainColumn.appendChild(managementActions);
 
     article.appendChild(mainColumn);
-    article.appendChild(weatherColumn);
     ui.impiantiLista.appendChild(article);
   });
   renderNextActionCard();

@@ -16357,6 +16357,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneAt = new Date();
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
+  const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false });
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
@@ -16372,20 +16373,76 @@ async function handleImpiantoWhatsAppClick(impianto) {
       doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
     } catch (error) {
       console.error("Errore salvataggio impianto FATTO da WhatsApp:", error);
+      await updateAuditLogWhazzupClick(auditLogId, {
+        fattoEsito: "save_exception",
+        fattoConfermato: false,
+        errorMessage: String(error?.message || error || "Errore sconosciuto")
+      });
     }
     if (!doneMarked) {
+      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
       notifyImpiantoBackgroundSyncPending();
       retrySetImpiantoDone(selectedCommessaId, doneIds, true);
       return;
     }
-    await verifyImpiantoDoneBackground(impianto);
-    console.debug("[WHAZZUP->FATTO] Verifica completata", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
+    const persisted = await verifyImpiantoDoneBackground(impianto);
+    await updateAuditLogWhazzupClick(auditLogId, {
+      fattoEsito: persisted ? "persisted" : "verify_failed",
+      fattoConfermato: Boolean(persisted)
+    });
+    console.debug("[WHAZZUP->FATTO] Verifica completata", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
   };
 
   Promise.resolve().then(runBackgroundDoneFlow).catch((error) => {
     console.error("Errore processo background FATTO:", error);
     notifyImpiantoBackgroundSyncPending();
   });
+}
+
+
+async function auditLogWhazzupClick(impianto, options = {}) {
+  if (!db) return null;
+  const now = options.clickedAt instanceof Date ? options.clickedAt : new Date();
+  const commessaId = String(options.commessaId || selectedCommessaId || "").trim();
+  const commessaName = String(options.commessaName || selectedCommessaName || "").trim() || "Commessa";
+  const user = auth.currentUser || currentUser || null;
+  const payload = {
+    eventType: "whazzup_click",
+    createdAt: firebase.firestore.Timestamp.fromDate(now),
+    clickedAtIso: now.toISOString(),
+    commessaId,
+    commessaName,
+    impiantoKey: buildImpiantoKey(impianto),
+    impiantoIdSap: String(impianto?.idSap || "").trim(),
+    impiantoNome: String(impianto?.denominazione || "").trim() || "Impianto",
+    impiantoComune: String(impianto?.comune || "").trim(),
+    impiantoDocIds: getImpiantoDocIds(impianto).filter(Boolean),
+    userUid: String(user?.uid || "").trim(),
+    userEmail: String(user?.email || "").trim(),
+    userName: String(user?.displayName || "").trim() || String(user?.email || "").trim() || "Operatore",
+    fattoEsito: String(options.fattoEsito || "pending"),
+    fattoConfermato: Boolean(options.fattoConfermato)
+  };
+  if (options.errorMessage) payload.errorMessage = String(options.errorMessage).slice(0, 500);
+  try {
+    const ref = await db.collection("auditLogsWhazzup").add(payload);
+    return ref.id;
+  } catch (error) {
+    console.error("Errore salvataggio audit log Whazzup:", error);
+    return null;
+  }
+}
+
+async function updateAuditLogWhazzupClick(logId, patch = {}) {
+  if (!logId || !db) return;
+  try {
+    await db.collection("auditLogsWhazzup").doc(logId).set({
+      ...patch,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error("Errore aggiornamento audit log Whazzup:", error);
+  }
 }
 
 function notifyImpiantoBackgroundSyncPending() {
@@ -16398,8 +16455,9 @@ async function verifyImpiantoDoneBackground(impianto) {
   const persisted = await isImpiantoPersistedAsDone(impianto);
   console.debug("[WHAZZUP->FATTO] Esito verifica persistenza", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
   updateWhazzupSafetyAfterBackgroundCheck(impianto, persisted);
-  if (persisted) return;
+  if (persisted) return true;
   await handleImpiantoDoneSaveFailure(impianto, "Verifica post-salvataggio negativa: impianto non presente nei FATTI.");
+  return false;
 }
 
 function getWhazzupSafetyState(impianto) {

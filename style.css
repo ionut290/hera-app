@@ -8015,3 +8015,42 @@ textarea:focus-visible {
 }
 
 #map .leaflet-top.leaflet-left .leaflet-control-zoom { margin-top: 54px; }
+
+
+/* Fine tuning: marker readability + phone fit */
+.marker-pin {
+  width: 18px;
+  height: 18px;
+}
+.marker-pin-number {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+@media (max-width: 480px) {
+  .commessa-dashboard-card {
+    padding: 8px 10px;
+  }
+  .commessa-dashboard-head {
+    gap: 6px;
+  }
+  .commessa-stat-strip {
+    gap: 6px;
+    padding: 6px;
+  }
+  .commessa-stat-item {
+    min-height: 58px;
+    padding: 7px 5px;
+  }
+  .commessa-map-shell,
+  #map {
+    min-height: 280px;
+    height: min(44dvh, 340px);
+  }
+  .map-inline-fullscreen-btn {
+    width: 30px;
+    height: 30px;
+    top: 10px;
+    left: 10px;
+  }
+}

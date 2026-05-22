@@ -17134,8 +17134,8 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
     icon: L.divIcon({
       className: "",
       html: `<div class="marker-pin ${markerClass}">${Number.isFinite(markerSequence) ? `<span class="marker-pin-number">${markerSequence}</span>` : ""}</div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
     })
   });
   if (targetMap !== fullscreenMap) {

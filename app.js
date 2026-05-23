@@ -9758,14 +9758,14 @@ function safeOpenWhatsAppMessage(message, options = {}) {
       return false;
     }
   }
-  return openExternalUrl(appUrl, {
-    target,
-    features: "noopener",
-    allowSameWindowFallback: false
-  }) || openExternalUrl(webUrl, {
+  return openExternalUrl(webUrl, {
     target,
     features: "noopener",
     allowSameWindowFallback: true
+  }) || openExternalUrl(appUrl, {
+    target,
+    features: "noopener",
+    allowSameWindowFallback: false
   });
 }
 

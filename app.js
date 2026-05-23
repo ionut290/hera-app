@@ -14877,7 +14877,12 @@ async function markImpiantoDone(impianto, options = {}) {
 
   try {
     updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
-    await setImpiantoDone(selectedCommessaId, ids, true, { doneAt: doneAtLocal, doneBy: doneByLocal });
+    await setImpiantoDone(selectedCommessaId, ids, true, {
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      doneByUid: auth.currentUser?.uid || "",
+      doneByEmail: auth.currentUser?.email || ""
+    });
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
     if (isNetworkOffline()) {
@@ -16393,8 +16398,14 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
     const payload = {
       done,
       doneAt,
-      doneBy: done ? (options.doneBy || user.displayName || user.email || "Operatore") : ""
+      doneBy: done ? (options.doneBy || user.displayName || user.email || "Operatore") : "",
+      doneByUid: done ? String(options.doneByUid || user.uid || "") : "",
+      doneByEmail: done ? String(options.doneByEmail || user.email || "") : ""
     };
+    if (done) {
+      payload.resetAt = null;
+      payload.resetBy = "";
+    }
     if (!done) {
       const resetAtDate = options.resetAt instanceof Date ? options.resetAt : new Date();
       payload.resetAt = firebase.firestore.Timestamp.fromDate(resetAtDate);
@@ -16429,12 +16440,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const doneByEmail = auth.currentUser?.email || "";
+  const doneByUid = auth.currentUser?.uid || "";
   const doneIds = getImpiantoDocIds(impianto);
 
-  openWhatsApp(impianto);
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
-  updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
+  updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy, doneByEmail, doneByUid });
   setImpiantiViewMode("done");
   updateConnectivityStatus();
   renderImpianti();
@@ -16463,6 +16475,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Errore salvataggio. Riprova.");
       return;
     }
+    openWhatsApp(impianto, { doneAt, operatorName: doneBy });
     const persisted = await verifyImpiantoDoneBackground(impianto);
     await updateAuditLogWhazzupClick(auditLogId, {
       fattoEsito: persisted ? "persisted" : "verify_failed",

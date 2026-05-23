@@ -14839,7 +14839,7 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!canManageData() && !isNetworkOffline()) {
+  if (!isNetworkOffline()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;
@@ -15028,8 +15028,25 @@ async function resetImpianto(impianto) {
   const resetAtLocal = new Date();
   const resetByLocal = currentUser?.displayName || currentUser?.email || "Operatore";
   clearImpiantoWhazzupProcessing(impianto, selectedCommessaId);
+  const safetyState = getWhazzupSafetyState(impianto);
+  if (safetyState) {
+    safetyState.whazzupPremuto = false;
+    safetyState.needsManualMove = false;
+  }
+  clearWhazzupPendingDoneEntry(impianto);
   trackLocalSheetMutation(selectedCommessaId);
-  updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "", resetAt: resetAtLocal, resetBy: resetByLocal, navigateAt: null, navigatedBy: "" });
+  updateImpiantoLocalState(ids, {
+    done: false,
+    doneAt: null,
+    doneBy: "",
+    resetAt: resetAtLocal,
+    resetBy: resetByLocal,
+    navigateAt: null,
+    navigatedBy: "",
+    pendingActionId: "",
+    pendingActionStatus: "",
+    pendingWhatsappStatus: ""
+  });
   await setImpiantoDone(selectedCommessaId, ids, false, { resetAt: resetAtLocal, resetBy: resetByLocal });
   const impiantoKey = buildImpiantoKey(impianto);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
@@ -16390,7 +16407,6 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {
-  if (canManageData()) return true;
   if (!currentUserPos) {
     if (notify) alert("Per inviare WhatsApp devi attivare la posizione GPS.");
     return false;

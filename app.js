@@ -11042,11 +11042,13 @@ function combineImpiantiForView(impianti) {
     const key = buildImpiantoKey(item);
     const existing = grouped.get(key);
     if (!existing) {
+      const doneAtMs = firestoreDateToMillis(item.doneAt);
+      const resetAtMs = firestoreDateToMillis(item.resetAt);
       grouped.set(key, {
         ...item,
-        done: isImpiantoDoneState(item),
+        done: doneAtMs >= resetAtMs && isImpiantoDoneState(item),
         doneAt: item.doneAt || null,
-        doneBy: item.doneBy || "",
+        doneBy: doneAtMs >= resetAtMs ? (item.doneBy || "") : "",
         resetAt: item.resetAt || null,
         resetBy: item.resetBy || "",
         sourceIds: [item.id]
@@ -11073,7 +11075,6 @@ function combineImpiantiForView(impianti) {
     const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
     const existingResetAtMs = firestoreDateToMillis(existing.resetAt);
     const itemResetAtMs = firestoreDateToMillis(item.resetAt);
-    existing.done = Boolean(existing.done || itemDone);
 
     if (itemDone && (!existing.doneBy || itemDoneAtMs >= existingDoneAtMs)) {
       existing.doneBy = item.doneBy || existing.doneBy || "";
@@ -11084,6 +11085,12 @@ function combineImpiantiForView(impianti) {
     if (itemResetAtMs >= existingResetAtMs) {
       existing.resetAt = item.resetAt || existing.resetAt || null;
       existing.resetBy = item.resetBy || existing.resetBy || "";
+    }
+    const latestDoneMs = firestoreDateToMillis(existing.doneAt);
+    const latestResetMs = firestoreDateToMillis(existing.resetAt);
+    existing.done = latestDoneMs >= latestResetMs;
+    if (!existing.done) {
+      existing.doneBy = "";
     }
     if (!existing.idSap && item.idSap) existing.idSap = item.idSap;
     if (!existing.comune && item.comune) existing.comune = item.comune;

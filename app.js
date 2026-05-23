@@ -11668,8 +11668,8 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>⚠️ WhatsApp inviato, ma l’impianto potrebbe non essere stato registrato come FATTO.</b></p>
-        <button type="button" class="btn btn-small">Salva come FATTO</button>
+        <p><b>⚠️ Messaggio WhatsApp aperto, ma impianto non salvato come fatto. Premi qui per correggere.</b></p>
+        <button type="button" class="btn btn-small">Segna come FATTO ora</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       moveBtn?.addEventListener("click", async () => {
@@ -16364,8 +16364,8 @@ function canTriggerImpiantoWhatsApp(impianto, notify = true) {
   return true;
 }
 
-function triggerImpiantoWhatsAppAction(impianto) {
-  if (!canTriggerImpiantoWhatsApp(impianto, true)) return false;
+function triggerImpiantoWhatsAppAction(impianto, options = {}) {
+  if (!options.force && !canTriggerImpiantoWhatsApp(impianto, true)) return false;
   return openWhatsApp(impianto);
 }
 
@@ -16381,7 +16381,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
   setImpiantiViewMode("done");
 
-  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
+  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
   console.debug("[WHAZZUP->FATTO] Click pulsante", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
 
   const runBackgroundDoneFlow = async () => {
@@ -16565,7 +16565,7 @@ async function isImpiantoPersistedAsDone(impianto) {
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("WhatsApp inviato, ma l’impianto potrebbe non essere stato registrato come FATTO.");
+  alert("Messaggio WhatsApp aperto, ma impianto non salvato come fatto. Premi qui per correggere.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

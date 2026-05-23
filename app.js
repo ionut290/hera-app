@@ -11024,6 +11024,16 @@ function mergeRowsByImpianto(rows) {
   return Array.from(grouped.values());
 }
 
+
+function isImpiantoDoneState(impianto) {
+  if (!impianto || typeof impianto !== "object") return false;
+  if (Boolean(impianto.done) || Boolean(impianto.fatto) || Boolean(impianto.completed)) return true;
+  const stato = String(impianto.stato || impianto.status || "").trim().toLowerCase();
+  if (["fatto", "done", "completed", "completato"].includes(stato)) return true;
+  const doneValue = String(impianto.done || "").trim().toLowerCase();
+  return ["true", "1", "fatto", "done", "completed"].includes(doneValue);
+}
+
 function combineImpiantiForView(impianti) {
   const grouped = new Map();
 
@@ -11033,7 +11043,7 @@ function combineImpiantiForView(impianti) {
     if (!existing) {
       grouped.set(key, {
         ...item,
-        done: Boolean(item.done),
+        done: isImpiantoDoneState(item),
         doneAt: item.doneAt || null,
         doneBy: item.doneBy || "",
         resetAt: item.resetAt || null,
@@ -11057,7 +11067,7 @@ function combineImpiantiForView(impianti) {
     existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
     existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
     existing.tipoManutenzione = classifyTipoManutenzione(existing.codicePrezzo);
-    const itemDone = Boolean(item.done);
+    const itemDone = isImpiantoDoneState(item);
     const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
     const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
     const existingResetAtMs = firestoreDateToMillis(existing.resetAt);
@@ -11662,8 +11672,8 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>⚠️ Messaggio WhatsApp aperto, ma impianto non salvato come fatto. Premi qui per correggere.</b></p>
-        <button type="button" class="btn btn-small">Segna come FATTO ora</button>
+        <p><b>⚠️ Da confermare</b> — WhatsApp aperto, ma il salvataggio FATTO non è stato confermato.</p>
+        <button type="button" class="btn btn-small">Conferma FATTO</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       moveBtn?.addEventListener("click", async () => {
@@ -16386,16 +16396,19 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneAt = new Date();
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
-  const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false });
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
   setImpiantiViewMode("done");
 
-  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
-  console.debug("[WHAZZUP->FATTO] Click pulsante", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
+  const auditLogPromise = auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
+    .catch((error) => {
+      console.error("Errore avvio audit log Whazzup:", error);
+      return null;
+    });
 
   const runBackgroundDoneFlow = async () => {
+    const auditLogId = await auditLogPromise;
     let doneMarked = false;
     console.debug("[WHAZZUP->FATTO] Avvio salvataggio background", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
     try {
@@ -16422,10 +16435,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
     console.debug("[WHAZZUP->FATTO] Verifica completata", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
   };
 
-  Promise.resolve().then(runBackgroundDoneFlow).catch((error) => {
+  runBackgroundDoneFlow().catch((error) => {
     console.error("Errore processo background FATTO:", error);
     notifyImpiantoBackgroundSyncPending();
   });
+
+  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
+  console.debug("[WHAZZUP->FATTO] Click pulsante", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
 }
 
 
@@ -16568,7 +16584,7 @@ async function isImpiantoPersistedAsDone(impianto) {
   try {
     const ref = db.collection("commesse").doc(commessaId).collection("impianti");
     const snapshots = await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).get()));
-    return snapshots.some((snap) => snap.exists && Boolean(snap.data()?.done));
+    return snapshots.some((snap) => snap.exists && isImpiantoDoneState(snap.data() || {}));
   } catch (error) {
     console.error("Errore verifica persistenza FATTO:", error);
     return false;

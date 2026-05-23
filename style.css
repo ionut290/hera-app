@@ -5652,6 +5652,7 @@ textarea:focus-visible {
 .impianto-secondary-actions {
   min-height: 22px;
   gap: 6px;
+  align-items: center;
 }
 
 .impianto-secondary-actions > * + * {
@@ -5672,8 +5673,45 @@ textarea:focus-visible {
 
 .impianto-secondary-actions .impianto-management-stack,
 .impianto-secondary-actions .area-mq-box,
-.impianto-secondary-actions .impianto-safety-quick-btn {
+.impianto-secondary-actions .impianto-safety-quick-btn,
+.impianto-secondary-actions .impianto-weather-alert-chip {
   flex: 0 0 auto;
+}
+
+.impianto-weather-alert-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.impianto-weather-alert-chip[data-severity="warning"] {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.impianto-weather-alert-chip[data-severity="danger"] {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.impianto-weather-alert-chip[data-severity="info"] {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .impianto-secondary-actions .area-mq-box {
@@ -8360,10 +8398,15 @@ textarea:focus-visible {
   min-height: 0;
   gap: 4px;
   line-height: 1;
+  flex-wrap: wrap;
 }
 
 .impianto-main-column > .item-actions.impianto-actions .impianto-secondary-actions > * + * {
   padding-left: 6px;
+}
+
+.impianto-main-column > .item-actions.impianto-actions .impianto-weather-alert-chip {
+  max-width: 96px;
 }
 
 .impianto-item,

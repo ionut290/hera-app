@@ -6532,6 +6532,47 @@ async function createApprovedHoursReportWithLocks(request, reportPayload) {
   return reportRef;
 }
 
+async function createDirectHoursReportWithLocks(reportPayload) {
+  const reportRef = db.collection("oreReports").doc();
+  reportPayload.entries = addHoursUniqueKeysToEntries(reportPayload.date, reportPayload.entries);
+  const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
+  await db.runTransaction(async (transaction) => {
+    const lockRefs = locks.map((lock) => ({ lock, ref: db.collection("oreLocks").doc(lock.id) }));
+    const lockSnapshots = await Promise.all(lockRefs.map(({ ref }) => transaction.get(ref)));
+    const conflicts = [];
+    lockSnapshots.forEach((snap, index) => {
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      if (!isActiveHoursLock(data)) return;
+      const fallback = lockRefs[index].lock;
+      conflicts.push({
+        commessaName: data.commessaName || fallback.commessaName || "Commessa",
+        operatore: data.operatore || fallback.operatore || "Operatore"
+      });
+    });
+    if (conflicts.length) {
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
+      error.code = "hours-duplicate-lock";
+      error.conflicts = conflicts;
+      throw error;
+    }
+    transaction.set(reportRef, reportPayload);
+    lockRefs.forEach(({ lock, ref }) => {
+      transaction.set(ref, {
+        ...lock,
+        approvalRequestId: "",
+        reportId: reportRef.id,
+        status: "approved",
+        createdByUid: reportPayload.createdByUid || "",
+        createdByEmail: reportPayload.createdByEmail || "",
+        createdByName: reportPayload.createdByName || "Operatore",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  });
+  return reportRef;
+}
+
 
 function buildHoursEntriesFromApprovalSources(request, sources = []) {
   const targetsByEntry = new Map();
@@ -6820,6 +6861,26 @@ async function notifyHoursInsertedToChat(requestId, payload) {
   });
 }
 
+async function notifyAdminsHoursInsertedNoApproval(reportId, payload) {
+  const adminUsers = getKnownAdminChatRecipients();
+  if (!adminUsers.length) return;
+  const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
+  const dateLabel = payload?.date
+    ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
+    : "-";
+  const text = `ℹ️ Ore salvate direttamente (report ${reportId}) da ${author} per il ${dateLabel}. Nessuna approvazione richiesta.`;
+  await sendHoursApprovalChatNotification({
+    recipients: adminUsers,
+    text,
+    senderName: "Sistema ore",
+    metadata: {
+      type: "hours_inserted_notice",
+      reportId: reportId || "",
+      date: payload?.date || ""
+    }
+  });
+}
+
 function setHoursFinalizeButtonText(state = "idle") {
   const button = ui.hoursFinalizeBtn;
   if (!button) return;
@@ -6912,7 +6973,7 @@ async function finalizeHoursReport(event) {
   hoursSubmitInFlight = true;
   ui.hoursFinalizeBtn.disabled = true;
   setHoursFinalizeButtonText("loading");
-  ui.hoursFeedback.textContent = "Invio richiesta approvazione in corso...";
+  ui.hoursFeedback.textContent = "Salvataggio ore in corso...";
   try {
     const duplicateDraft = findDuplicateHoursInDraft(payload.entries);
     if (duplicateDraft.length) {
@@ -6928,12 +6989,12 @@ async function finalizeHoursReport(event) {
       return;
     }
 
-    const approvalRef = await reserveHoursApprovalRequestWithLocks(payload);
-    await notifyHoursInsertedToChat(approvalRef.id, payload);
-    await notifyLevel1ForHoursApproval(approvalRef.id, payload);
+    const reportRef = await createDirectHoursReportWithLocks(payload);
+    await notifyHoursInsertedToChat(reportRef.id, payload);
+    await notifyAdminsHoursInsertedNoApproval(reportRef.id, payload);
 
     setHoursFinalizeButtonText("saved");
-    ui.hoursFeedback.textContent = `Richiesta inviata (ID ${approvalRef.id}). In attesa primo OK, poi conferma admin finale.`;
+    ui.hoursFeedback.textContent = `Ore salvate con successo (report ${reportRef.id}). Avviso inviato in chat agli amministratori.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     setHoursFinalizeLocked(true);

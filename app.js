@@ -11588,7 +11588,6 @@ function renderImpianti() {
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
-    const whazzupProcessing = isImpiantoWhazzupProcessing(impianto);
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
     const showWhazzupRecovery = !impianto.done && Boolean(whazzupSafetyState?.needsManualMove);
     const waitingForSync = isActionWaitingForSync(pendingAction);
@@ -11636,7 +11635,6 @@ function renderImpianti() {
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
         ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
         ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
-        ${whazzupProcessing ? `<span class="badge badge-whatsapp-pending">Salvataggio in corso…</span>` : ""}
         <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
       </small>
     `;
@@ -11757,17 +11755,20 @@ function renderImpianti() {
           alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
           return;
         }
-        await handleImpiantoWhatsAppClick(impianto);
+        const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
+        if (!whatsappOpened) return;
+        if (!impianto.done) markImpiantoDoneVisualFallback(impianto);
+        try {
+          const doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
+          if (!doneMarked) markImpiantoDoneVisualFallback(impianto);
+        } catch (error) {
+          console.warn("Salvataggio FATTO da WHAZZUP non riuscito:", error);
+        }
       },
       false,
       false,
       primaryActionsRow
     );
-    const whatsappBtn = primaryActionsRow.querySelector("[data-action-key='whatsapp']");
-    if (whatsappBtn && whazzupProcessing) {
-      setUsedActionButtonState(whatsappBtn, true);
-      whatsappBtn.title = "Salvataggio in corso, attendi…";
-    }
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -17517,7 +17518,7 @@ function bindPersistentImpiantoDetailActions() {
         const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
         const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
         if (!impianto) return;
-        await handleImpiantoWhatsAppClick(impianto);
+        triggerImpiantoWhatsAppAction(impianto);
       });
     });
     panel.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
@@ -17590,7 +17591,7 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       const key = button.getAttribute("data-impianto-key") || popupKey;
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
-      await handleImpiantoWhatsAppClick(impianto);
+      triggerImpiantoWhatsAppAction(impianto);
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {

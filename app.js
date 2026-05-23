@@ -14840,7 +14840,7 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!isNetworkOffline()) {
+  if (!isNetworkOffline() && !canManageData()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;
@@ -14884,6 +14884,8 @@ async function markImpiantoDone(impianto, options = {}) {
       doneByUid: auth.currentUser?.uid || "",
       doneByEmail: auth.currentUser?.email || ""
     });
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    setImpiantiViewMode("done");
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
     if (isNetworkOffline()) {

@@ -11638,6 +11638,7 @@ function renderImpianti() {
         <span class="impianto-summary-title-wrap">${markerChipMarkup}<strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong></span>
       </span>
       <small class="impianto-summary-meta">
+        ${impianto.done ? `<span class="badge badge-done-list">✅ Nei FATTI</span>` : ""}
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
         ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
         ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
@@ -11752,17 +11753,19 @@ function renderImpianti() {
       openImpiantoSafetyProcedureModal(impianto);
     });
     secondaryActionsRow.appendChild(safetyQuickBtn);
-    addAction(
-      "whatsapp",
-      "✉️",
-      "Whazzup / Fatto",
-      async () => {
-        await handleImpiantoWhatsAppClick(impianto);
-      },
-      false,
-      false,
-      primaryActionsRow
-    );
+    if (!impianto.done) {
+      addAction(
+        "whatsapp",
+        "✉️",
+        "Whazzup / Fatto",
+        async () => {
+          await handleImpiantoWhatsAppClick(impianto);
+        },
+        false,
+        false,
+        primaryActionsRow
+      );
+    }
     const hiddenMoveDoneBtn = document.createElement("button");
     hiddenMoveDoneBtn.type = "button";
     hiddenMoveDoneBtn.hidden = true;

@@ -11772,6 +11772,21 @@ function renderImpianti() {
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
+    if (canManageData() && !impianto.done) {
+      const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
+        const doneAt = new Date();
+        const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Admin";
+        const doneByEmail = auth.currentUser?.email || "";
+        const doneByUid = auth.currentUser?.uid || "";
+        const doneIds = getImpiantoDocIds(impianto);
+        updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy, doneByEmail, doneByUid });
+        setImpiantiViewMode("done");
+        renderImpianti();
+        await markImpiantoDone(impianto, { source: "admin_force_done" });
+      });
+      forceMoveDoneBtn.classList.add("btn-primary");
+      managementActions.appendChild(forceMoveDoneBtn);
+    }
     if (canManageData()) {
       const uploadPdfBtn = createButton("Inserisci PDF richiesta", () => setImpiantoRequestDriveLink(impianto));
       uploadPdfBtn.classList.add("pdf-request-btn");

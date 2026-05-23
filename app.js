@@ -14840,7 +14840,7 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!isNetworkOffline() && !canManageData()) {
+  if (!canManageData()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;

@@ -16403,39 +16403,26 @@ function triggerImpiantoWhatsAppAction(impianto, options = {}) {
 
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
-  if (isImpiantoWhazzupProcessing(impianto)) {
-    alert("Operazione già avviata: l’app sta salvando l’impianto. Attendi qualche secondo.");
-    return;
-  }
-
-  let reservedWhatsAppWindow = null;
-  let whatsappOpened = false;
-  try {
-    reservedWhatsAppWindow = window.open("about:blank", "_blank", "noopener");
-  } catch (error) {
-    console.error("Impossibile preaprire finestra WhatsApp:", error);
-  }
-  const processingKey = getWhazzupProcessingKey(impianto);
-  if (processingKey) whazzupProcessingByImpianto.add(processingKey);
-  notifyImpiantoBackgroundSyncPending();
-  renderImpianti();
 
   const doneAt = new Date();
-  markWhazzupSafetyPressed(impianto, doneAt);
-  upsertWhazzupPendingDoneEntry(impianto, doneAt);
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const doneIds = getImpiantoDocIds(impianto);
+
+  openWhatsApp(impianto);
+  markWhazzupSafetyPressed(impianto, doneAt);
+  upsertWhazzupPendingDoneEntry(impianto, doneAt);
   updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy });
   setImpiantiViewMode("done");
+  updateConnectivityStatus();
+  renderImpianti();
 
-  const auditLogPromise = auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
+  const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
     .catch((error) => {
       console.error("Errore avvio audit log Whazzup:", error);
       return null;
     });
 
   try {
-    const auditLogId = await auditLogPromise;
     let doneMarked = false;
     console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
     try {
@@ -16463,22 +16450,10 @@ async function handleImpiantoWhatsAppClick(impianto) {
       return;
     }
     updateConnectivityStatus();
-    whatsappOpened = openWhatsApp(impianto, { targetWindow: reservedWhatsAppWindow });
-    console.debug("[WHAZZUP->FATTO] WhatsApp aperto dopo salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
+    renderImpianti();
   } catch (error) {
     console.error("Errore processo FATTO:", error);
     alert("Errore salvataggio. Riprova.");
-  } finally {
-    if (!whatsappOpened && reservedWhatsAppWindow && !reservedWhatsAppWindow.closed) {
-      try {
-        reservedWhatsAppWindow.close();
-      } catch (error) {
-        console.error("Errore chiusura finestra WhatsApp riservata:", error);
-      }
-    }
-    if (processingKey) whazzupProcessingByImpianto.delete(processingKey);
-    updateConnectivityStatus();
-    renderImpianti();
   }
 }
 

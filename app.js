@@ -752,6 +752,7 @@ let notificationCalendarCursor = new Date();
 let selectedNotificationCalendarDateKey = "";
 const impiantoMarkerByKey = new Map();
 const fullscreenImpiantoMarkerByKey = new Map();
+const whazzupProcessingByImpianto = new Set();
 let mapMarkerSequenceByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -11580,6 +11581,7 @@ function renderImpianti() {
     const impiantoKey = buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+    const whazzupProcessing = isImpiantoWhazzupProcessing(impianto);
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
     const showWhazzupRecovery = !impianto.done && Boolean(whazzupSafetyState?.needsManualMove);
     const waitingForSync = isActionWaitingForSync(pendingAction);
@@ -11627,6 +11629,7 @@ function renderImpianti() {
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
         ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
         ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
+        ${whazzupProcessing ? `<span class="badge badge-whatsapp-pending">Salvataggio in corso…</span>` : ""}
         <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
       </small>
     `;
@@ -11753,6 +11756,11 @@ function renderImpianti() {
       false,
       primaryActionsRow
     );
+    const whatsappBtn = primaryActionsRow.querySelector("[data-action-key='whatsapp']");
+    if (whatsappBtn && whazzupProcessing) {
+      setUsedActionButtonState(whatsappBtn, true);
+      whatsappBtn.title = "Salvataggio in corso, attendi…";
+    }
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -16392,6 +16400,14 @@ function triggerImpiantoWhatsAppAction(impianto, options = {}) {
 
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
+  if (isImpiantoWhazzupProcessing(impianto)) {
+    alert("Operazione già avviata: l’app sta salvando l’impianto. Attendi qualche secondo.");
+    return;
+  }
+  const processingKey = getWhazzupProcessingKey(impianto);
+  if (processingKey) whazzupProcessingByImpianto.add(processingKey);
+  notifyImpiantoBackgroundSyncPending();
+  renderImpianti();
 
   const doneAt = new Date();
   markWhazzupSafetyPressed(impianto, doneAt);
@@ -16438,6 +16454,9 @@ async function handleImpiantoWhatsAppClick(impianto) {
   runBackgroundDoneFlow().catch((error) => {
     console.error("Errore processo background FATTO:", error);
     notifyImpiantoBackgroundSyncPending();
+  }).finally(() => {
+    if (processingKey) whazzupProcessingByImpianto.delete(processingKey);
+    renderImpianti();
   });
 
   const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
@@ -16492,7 +16511,19 @@ async function updateAuditLogWhazzupClick(logId, patch = {}) {
 
 function notifyImpiantoBackgroundSyncPending() {
   if (!ui.gpsStatus) return;
-  ui.gpsStatus.textContent = "Sincronizzazione in corso…";
+  ui.gpsStatus.textContent = "Ricevuto ✅ Sto salvando l’impianto e aprendo WhatsApp. Attendi qualche secondo…";
+}
+
+function getWhazzupProcessingKey(impianto, commessaId = selectedCommessaId) {
+  const commessaKey = String(commessaId || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!commessaKey || !impiantoKey) return "";
+  return `${commessaKey}:${impiantoKey}`;
+}
+
+function isImpiantoWhazzupProcessing(impianto, commessaId = selectedCommessaId) {
+  const key = getWhazzupProcessingKey(impianto, commessaId);
+  return key ? whazzupProcessingByImpianto.has(key) : false;
 }
 
 async function verifyImpiantoDoneBackground(impianto) {

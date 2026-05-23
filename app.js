@@ -16407,6 +16407,14 @@ async function handleImpiantoWhatsAppClick(impianto) {
     alert("Operazione già avviata: l’app sta salvando l’impianto. Attendi qualche secondo.");
     return;
   }
+
+  let reservedWhatsAppWindow = null;
+  let whatsappOpened = false;
+  try {
+    reservedWhatsAppWindow = window.open("about:blank", "_blank", "noopener");
+  } catch (error) {
+    console.error("Impossibile preaprire finestra WhatsApp:", error);
+  }
   const processingKey = getWhazzupProcessingKey(impianto);
   if (processingKey) whazzupProcessingByImpianto.add(processingKey);
   notifyImpiantoBackgroundSyncPending();
@@ -16455,12 +16463,19 @@ async function handleImpiantoWhatsAppClick(impianto) {
       return;
     }
     updateConnectivityStatus();
-    const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
+    whatsappOpened = openWhatsApp(impianto, { targetWindow: reservedWhatsAppWindow });
     console.debug("[WHAZZUP->FATTO] WhatsApp aperto dopo salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
   } catch (error) {
     console.error("Errore processo FATTO:", error);
     alert("Errore salvataggio. Riprova.");
   } finally {
+    if (!whatsappOpened && reservedWhatsAppWindow && !reservedWhatsAppWindow.closed) {
+      try {
+        reservedWhatsAppWindow.close();
+      } catch (error) {
+        console.error("Errore chiusura finestra WhatsApp riservata:", error);
+      }
+    }
     if (processingKey) whazzupProcessingByImpianto.delete(processingKey);
     updateConnectivityStatus();
     renderImpianti();

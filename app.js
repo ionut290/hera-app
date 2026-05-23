@@ -14884,6 +14884,8 @@ async function markImpiantoDone(impianto, options = {}) {
       doneByUid: auth.currentUser?.uid || "",
       doneByEmail: auth.currentUser?.email || ""
     });
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    setImpiantiViewMode("done");
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
     if (isNetworkOffline()) {

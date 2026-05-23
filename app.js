@@ -11757,6 +11757,16 @@ function renderImpianti() {
       false,
       primaryActionsRow
     );
+    const hiddenMoveDoneBtn = document.createElement("button");
+    hiddenMoveDoneBtn.type = "button";
+    hiddenMoveDoneBtn.hidden = true;
+    hiddenMoveDoneBtn.setAttribute("aria-hidden", "true");
+    hiddenMoveDoneBtn.dataset.hiddenMoveDoneBtn = "1";
+    hiddenMoveDoneBtn.dataset.impiantoKey = impiantoKey;
+    hiddenMoveDoneBtn.addEventListener("click", async () => {
+      await markImpiantoDone(impianto, { source: "whatsapp" });
+    });
+    actions.appendChild(hiddenMoveDoneBtn);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
@@ -16426,6 +16436,14 @@ function triggerImpiantoWhatsAppAction(impianto, options = {}) {
   return openWhatsApp(impianto);
 }
 
+function triggerHiddenMoveDoneButton(impianto) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!impiantoKey || !ui.impiantiLista) return;
+  const selector = `[data-hidden-move-done-btn="1"][data-impianto-key="${cssEscapeValue(impiantoKey)}"]`;
+  const hiddenBtn = ui.impiantiLista.querySelector(selector);
+  if (hiddenBtn instanceof HTMLButtonElement) hiddenBtn.click();
+}
+
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
 
@@ -16441,6 +16459,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   setImpiantiViewMode("done");
   updateConnectivityStatus();
   renderImpianti();
+  triggerHiddenMoveDoneButton(impianto);
   openWhatsApp(impianto, { doneAt, operatorName: doneBy });
 
   const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })

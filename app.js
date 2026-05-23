@@ -15020,6 +15020,7 @@ async function resetImpianto(impianto) {
   }
   const resetAtLocal = new Date();
   const resetByLocal = currentUser?.displayName || currentUser?.email || "Operatore";
+  clearImpiantoWhazzupProcessing(impianto, selectedCommessaId);
   trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, { done: false, doneAt: null, doneBy: "", resetAt: resetAtLocal, resetBy: resetByLocal, navigateAt: null, navigatedBy: "" });
   await setImpiantoDone(selectedCommessaId, ids, false, { resetAt: resetAtLocal, resetBy: resetByLocal });
@@ -15028,6 +15029,8 @@ async function resetImpianto(impianto) {
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:whatsapp`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:reset`);
+  updateConnectivityStatus();
+  renderImpianti();
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
 }
 
@@ -16423,10 +16426,10 @@ async function handleImpiantoWhatsAppClick(impianto) {
       return null;
     });
 
-  const runBackgroundDoneFlow = async () => {
+  try {
     const auditLogId = await auditLogPromise;
     let doneMarked = false;
-    console.debug("[WHAZZUP->FATTO] Avvio salvataggio background", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
+    console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
     try {
       doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
     } catch (error) {
@@ -16439,8 +16442,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
     }
     if (!doneMarked) {
       await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
-      notifyImpiantoBackgroundSyncPending();
-      retrySetImpiantoDone(selectedCommessaId, doneIds, true);
+      alert("Errore salvataggio. Riprova.");
       return;
     }
     const persisted = await verifyImpiantoDoneBackground(impianto);
@@ -16448,19 +16450,21 @@ async function handleImpiantoWhatsAppClick(impianto) {
       fattoEsito: persisted ? "persisted" : "verify_failed",
       fattoConfermato: Boolean(persisted)
     });
-    console.debug("[WHAZZUP->FATTO] Verifica completata", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
-  };
-
-  runBackgroundDoneFlow().catch((error) => {
-    console.error("Errore processo background FATTO:", error);
-    notifyImpiantoBackgroundSyncPending();
-  }).finally(() => {
+    if (!persisted) {
+      alert("Errore salvataggio. Riprova.");
+      return;
+    }
+    updateConnectivityStatus();
+    const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
+    console.debug("[WHAZZUP->FATTO] WhatsApp aperto dopo salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
+  } catch (error) {
+    console.error("Errore processo FATTO:", error);
+    alert("Errore salvataggio. Riprova.");
+  } finally {
     if (processingKey) whazzupProcessingByImpianto.delete(processingKey);
+    updateConnectivityStatus();
     renderImpianti();
-  });
-
-  const whatsappOpened = triggerImpiantoWhatsAppAction(impianto, { force: true });
-  console.debug("[WHAZZUP->FATTO] Click pulsante", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), whatsappOpened });
+  }
 }
 
 
@@ -16511,7 +16515,7 @@ async function updateAuditLogWhazzupClick(logId, patch = {}) {
 
 function notifyImpiantoBackgroundSyncPending() {
   if (!ui.gpsStatus) return;
-  ui.gpsStatus.textContent = "Ricevuto ✅ Sto salvando l’impianto e aprendo WhatsApp. Attendi qualche secondo…";
+  ui.gpsStatus.textContent = "Attendere, salvataggio in corso…";
 }
 
 function getWhazzupProcessingKey(impianto, commessaId = selectedCommessaId) {
@@ -16524,6 +16528,12 @@ function getWhazzupProcessingKey(impianto, commessaId = selectedCommessaId) {
 function isImpiantoWhazzupProcessing(impianto, commessaId = selectedCommessaId) {
   const key = getWhazzupProcessingKey(impianto, commessaId);
   return key ? whazzupProcessingByImpianto.has(key) : false;
+}
+
+function clearImpiantoWhazzupProcessing(impianto, commessaId = selectedCommessaId) {
+  const key = getWhazzupProcessingKey(impianto, commessaId);
+  if (!key) return;
+  whazzupProcessingByImpianto.delete(key);
 }
 
 async function verifyImpiantoDoneBackground(impianto) {
@@ -16623,7 +16633,7 @@ async function isImpiantoPersistedAsDone(impianto) {
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Messaggio WhatsApp aperto, ma impianto non salvato come fatto. Premi qui per correggere.");
+  alert("Errore salvataggio. Riprova.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

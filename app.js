@@ -11507,10 +11507,16 @@ function getPlantMq(plant = {}) {
 }
 
 function calculateImpiantiMqProgress(impianti = []) {
-  const totaleMqPrevisti = impianti.reduce((sum, impianto) => sum + Number(getPlantSfalciMq(impianto) || 0), 0);
+  const totaleMqPrevisti = impianti.reduce((sum, impianto) => {
+    const sfalciMq = getPlantSfalciMq(impianto);
+    const fallbackMq = sfalciMq == null ? getPlantMq(impianto) : sfalciMq;
+    return sum + Number(fallbackMq || 0);
+  }, 0);
   const totaleMqEseguiti = impianti.reduce((sum, impianto) => {
     if (!impianto.done) return sum;
-    return sum + Number(getPlantSfalciMq(impianto) || 0);
+    const sfalciMq = getPlantSfalciMq(impianto);
+    const fallbackMq = sfalciMq == null ? getPlantMq(impianto) : sfalciMq;
+    return sum + Number(fallbackMq || 0);
   }, 0);
   const avanzamentoMq = totaleMqPrevisti > 0
     ? Math.round((totaleMqEseguiti / totaleMqPrevisti) * 100)

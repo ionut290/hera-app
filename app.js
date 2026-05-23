@@ -16450,6 +16450,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   setImpiantiViewMode("done");
   updateConnectivityStatus();
   renderImpianti();
+  openWhatsApp(impianto, { doneAt, operatorName: doneBy });
 
   const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
     .catch((error) => {
@@ -16475,7 +16476,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Errore salvataggio. Riprova.");
       return;
     }
-    openWhatsApp(impianto, { doneAt, operatorName: doneBy });
     const persisted = await verifyImpiantoDoneBackground(impianto);
     await updateAuditLogWhazzupClick(auditLogId, {
       fattoEsito: persisted ? "persisted" : "verify_failed",
@@ -19754,6 +19754,7 @@ function getDeniedActionsForCurrentUser() {
 }
 
 function isImpiantoActionDenied(action) {
+  if (action === "done" || action === "whatsapp") return false;
   return deniedImpiantoActions.has(action);
 }
 

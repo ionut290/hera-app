@@ -8414,3 +8414,24 @@ textarea:focus-visible {
   padding-top: 5px;
   padding-bottom: 5px;
 }
+
+/* Commesse > card impianti: riduce spazi vuoti verticali per recuperare area schermo */
+.impianto-item,
+.card-impianto {
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.impianto-main-column,
+.impianto-left {
+  gap: 1px;
+}
+
+.impianto-item p {
+  margin: 1px 0;
+}
+
+.impianto-main-column > .item-actions.impianto-actions {
+  margin-top: 2px;
+  gap: 2px;
+}

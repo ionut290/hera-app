@@ -12491,6 +12491,52 @@ const IMPIANTO_SAFETY_MANDATORY_CHECKLIST = [
   "Squadra pronta"
 ];
 
+
+const DISCARICA_CAPITOLATO_DATA = {
+  BARICELLA: {
+    datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Baricella (BO)", "Via Bocche 20", "Superficie: circa 14,6 ettari", "Durata indicativa intervento: 10 giorni lavorativi continuativi"],
+    aree: ["Corpo discarica interno", "Fascia esterna recinzione (1-2 metri)", "Aree verdi esterne", "Fossi perimetrali viabilità accesso", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Scarpate", "Fossi", "Tombini nascosti dalla vegetazione", "Pozzetti non visibili", "Tubazioni affioranti", "Impianti biogas", "Terreno sconnesso", "Vegetazione alta"],
+    modalita: ["Scarpate: decespugliatore o robot radiocomandato", "Zone biogas: sfalcio manuale", "Zone con impianti irrigazione: sfalcio manuale", "Zone con piantumazioni: sfalcio manuale"],
+    sicurezza: ["Controllare sempre il terreno prima dello sfalcio", "Verificare presenza pozzetti", "Verificare presenza tubazioni biogas", "Mantenere distanza di sicurezza tra operatori"]
+  },
+  GALLIERA: {
+    datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Galliera (BO)", "Via San Francesco 1", "Superficie: circa 15,8 ettari", "Durata indicativa: 10 giorni lavorativi continuativi"],
+    aree: ["Corpo discarica interno", "Fascia esterna recinzione (1-2 metri)", "Aree verdi esterne", "Fossi lungo Via San Francesco", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Fossi di scolo", "Scarpate", "Tombini nascosti", "Pozzetti", "Tubazioni", "Vegetazione alta"],
+    modalita: ["Scarpate: decespugliatore o robot", "Zone difficili: sfalcio manuale"],
+    sicurezza: ["Attenzione ai fossi di scolo", "Verificare sempre i punti campionamento", "Controllare il terreno prima del lavoro"]
+  },
+  BENTIVOGLIO: {
+    datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Bentivoglio (BO)", "Via Vietta", "Superficie: circa 9 ettari", "Durata indicativa: 5 giorni lavorativi continuativi"],
+    aree: ["Corpo discarica", "Fascia esterna recinzione (2-4 metri)", "Aree verdi esterne", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Scarpate", "Canalette", "Tombini", "Pozzetti", "Terreno sconnesso"],
+    modalita: ["Scarpate: decespugliatore o robot", "Zone critiche: sfalcio manuale"],
+    sicurezza: ["Attenzione ai dislivelli", "Controllo preventivo del terreno"]
+  },
+  "FERRARA 1C": {
+    datiGenerali: ["Discarica Ca' Leona 1C", "Comune: Ferrara (FE)", "Via Eridano", "Superficie: circa 8 ettari", "Durata indicativa: 4 giorni lavorativi continuativi"],
+    aree: ["Corpo discarica", "Aree verdi esterne", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Scarpate", "Canalette", "Tombini", "Pozzetti"],
+    modalita: ["Scarpate: decespugliatore o robot"],
+    sicurezza: ["Verificare canalette", "Verificare punti campionamento"]
+  },
+  "FERRARA 2B": {
+    datiGenerali: ["Discarica Ca' Leona 2B", "Comune: Ferrara (FE)", "Via Eridano", "Superficie: circa 1,6 ettari", "Durata indicativa: 1 giorno lavorativo"],
+    aree: ["Corpo discarica", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Canalette", "Tombini", "Pozzetti"],
+    modalita: [],
+    sicurezza: ["Prestare attenzione alle canalette", "Prestare attenzione ai punti campionamento"]
+  },
+  "SANT'AGATA BOLOGNESE": {
+    datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Sant'Agata Bolognese (BO)", "Via Romita 1", "Superficie: circa 13 ettari", "Durata indicativa: 15 giorni lavorativi continuativi"],
+    aree: ["Corpo discarica", "Aree verdi esterne", "Canalette", "Punti campionamento", "Recinzioni"],
+    rischi: ["Numerose scarpate con forte pendenza", "Rete biogas fitta", "Dislivelli importanti", "Tombini nascosti", "Pozzetti", "Tubazioni", "Vegetazione alta"],
+    modalita: ["Preferire robot radiocomandato", "Preferire sfalcio manuale nelle aree sensibili", "Limitare l'uso dei mezzi nelle zone più critiche"],
+    sicurezza: ["Massima attenzione alle scarpate", "Verificare sempre presenza rete biogas", "Controllare il terreno prima di iniziare", "Prestare attenzione ai cedimenti del terreno"]
+  }
+};
+const DISCARICA_COMMON_WEATHER_LINES = ["☀️ Sole → OK", "☁️ Nuvoloso → Favorevole", "🌧️ Pioggia → Attenzione", "⛈️ Temporale → Sospendere attività", "🌫️ Nebbia → Attenzione", "❄️ Neve → Sospendere attività", "💨 Vento forte → Attenzione", "🟫 Fango → Verificare accessibilità", "💧 Acqua stagnante → Attenzione"];
 const IMPIANTO_SAFETY_ANOMALY_CATEGORIES = ["sicurezza", "impianto", "biologico", "incendio", "mezzi", "ostacoli", "altro"];
 
 const IMPIANTO_SAFETY_WEATHER_ALERTS = [
@@ -12548,6 +12594,20 @@ function closeImpiantoSafetyPage() {
 }
 
 function handleImpiantoSafetyButtonClick(event) {
+  const capitolatoQuickBtn = event.target?.closest?.("[data-capitolato-open]");
+  if (capitolatoQuickBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    const key = capitolatoQuickBtn.closest("[data-weather-card]")?.getAttribute("data-weather-card") || parseCommessaHash().meteo || "";
+    const impiantoQuick = findImpiantoByWeatherKey(key) || getImpiantoSafetyImpiantoByKey(key);
+    if (!impiantoQuick) return;
+    openImpiantoSafetyPage(impiantoQuick);
+    setTimeout(() => {
+      const panel = ui.impiantoSafetyContent?.querySelector("[data-capitolato-panel]");
+      if (panel) panel.classList.remove("hidden");
+    }, 0);
+    return;
+  }
   const button = event.target?.closest?.("[data-impianto-safety]");
   if (!button) return;
   event.preventDefault();
@@ -12804,6 +12864,38 @@ function buildImpiantoSafetyContactForm(contact = {}) {
     </form>`;
 }
 
+
+function resolveDiscaricaCapitolatoKey() {
+  const normalized = normalizeCommessaNameForRules(selectedCommessaName || "");
+  if (normalized.includes("BARICELLA")) return "BARICELLA";
+  if (normalized.includes("GALLIERA")) return "GALLIERA";
+  if (normalized.includes("BENTIVOGLIO")) return "BENTIVOGLIO";
+  if (normalized.includes("FERRARA") && normalized.includes("1C")) return "FERRARA 1C";
+  if (normalized.includes("FERRARA") && normalized.includes("2B")) return "FERRARA 2B";
+  if (normalized.includes("SANT") && normalized.includes("AGATA")) return "SANT'AGATA BOLOGNESE";
+  return "";
+}
+
+function buildDiscaricaCapitolatoPanelMarkup() {
+  const key = resolveDiscaricaCapitolatoKey();
+  const capitolato = DISCARICA_CAPITOLATO_DATA[key];
+  if (!capitolato) return "";
+  const block = (title, items) => items?.length ? `<div class="impianto-safety-group"><h4>${escapeHTML(title)}</h4>${buildImpiantoSafetyList(items)}</div>` : "";
+  return `<article class="impianto-safety-section is-discariche-risk hidden" data-capitolato-panel><h3>📘 CAPITOLATO — ${escapeHTML(key)}</h3><div class="impianto-safety-groups">${block("📍 DATI GENERALI", capitolato.datiGenerali)}${block("🌱 AREE DA MANUTENERE", capitolato.aree)}${block("⚠️ RISCHI PRINCIPALI", capitolato.rischi)}${block("🚜 MODALITÀ OPERATIVE", capitolato.modalita)}${block("🦺 SICUREZZA", capitolato.sicurezza)}${block("🌦️ CONDIZIONI METEO", DISCARICA_COMMON_WEATHER_LINES)}</div><p class="impianto-safety-stop">Importante: pioggia, neve, vento forte, fango o acqua possono rendere non eseguibile l'intervento.</p></article>`;
+}
+
+function buildDiscaricaSafetyCompactFlagsMarkup() {
+  const key = resolveDiscaricaCapitolatoKey();
+  const capitolato = DISCARICA_CAPITOLATO_DATA[key];
+  if (!capitolato) return "";
+  const riskText = (capitolato.rischi || []).join(" ").toUpperCase();
+  const has = (token) => riskText.includes(token);
+  const flags = [
+    ["⚠️ Presenza biogas", has("BIOGAS")], ["⚠️ Presenza fossi", has("FOSS")], ["⚠️ Presenza canalette", has("CANALETT")], ["⚠️ Presenza scarpate", has("SCARPAT")], ["⚠️ Presenza punti campionamento", (capitolato.aree || []).join(" ").toUpperCase().includes("PUNTI CAMPIONAMENTO")], ["⚠️ Presenza pozzetti", has("POZZETT")], ["⚠️ Presenza tombini nascosti", has("TOMBIN")], ["⚠️ Presenza tubazioni", has("TUBAZION")]
+  ];
+  return `<article class="impianto-safety-section is-risk"><h3>🧩 RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>🔴 Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>🟡 Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>🟢 Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
+}
+
 async function renderImpiantoSafetyPage(impiantoKey) {
   if (!ui.impiantoSafetyContent) return;
   const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
@@ -12830,6 +12922,8 @@ async function renderImpiantoSafetyPage(impiantoKey) {
     ${buildImpiantoSafetyChecklistSection()}
     ${buildImpiantoSafetyAnomalySection(impianto)}
     ${buildImpiantoSafetyWeatherSection(impianto)}
+    ${buildDiscaricaSafetyCompactFlagsMarkup()}
+    ${buildDiscaricaCapitolatoPanelMarkup()}
     ${buildImpiantoSafetyContactsSection(contacts, impianto)}
     ${buildImpiantoSafetyAdminSection(procedureConfig)}
   `;
@@ -12849,6 +12943,13 @@ async function handleImpiantoSafetyContentClick(event) {
   const anomalyToggle = event.target?.closest?.("[data-safety-toggle-anomaly]");
   const gpsBtn = event.target?.closest?.("[data-safety-get-gps]");
   const weatherBtn = event.target?.closest?.("[data-safety-weather-alert]");
+  const capitolatoBtn = event.target?.closest?.("[data-capitolato-open]");
+  if (capitolatoBtn) {
+    event.preventDefault();
+    const panel = ui.impiantoSafetyContent?.querySelector("[data-capitolato-panel]");
+    if (panel) { panel.classList.toggle("hidden"); panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    return;
+  }
   if (anomalyToggle) {
     event.preventDefault();
     const form = ui.impiantoSafetyContent?.querySelector("#impianto-safety-anomaly-form");
@@ -14091,7 +14192,7 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
         ${gustValue ? `<span class="risk-row">Raffiche ${escapeHTML(gustValue)}</span>` : ""}
       </div>
     </article>
-    ${atexActionMarkup}${safetyActionMarkup}
+    ${atexActionMarkup}${safetyActionMarkup}${isCurrentCommessaDepurazioneOrDiscariche() ? `<button type="button" class="weather-detail-safety-action" data-capitolato-open="true" aria-label="Apri capitolato operativo"><span class="weather-detail-atex-icon" aria-hidden="true">📘</span><span><strong>CAPITOLATO</strong><small>Info operative commessa</small></span></button>` : ""}
     <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid current-weather-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
     <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline hourly-forecast-list" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
     <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">

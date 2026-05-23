@@ -11877,6 +11877,8 @@ function renderImpianti() {
       managementActions.classList.toggle("hidden", !isManagementExpanded);
     }
     if (managementStack.childElementCount > 0) secondaryActionsRow.appendChild(managementStack);
+    const weatherAlertChip = createImpiantoWeatherAlertChip(impianto);
+    if (weatherAlertChip) secondaryActionsRow.appendChild(weatherAlertChip);
     const mqBox = createPlantMqBox(impianto);
     if (mqBox) secondaryActionsRow.appendChild(mqBox);
     if (primaryActionsRow.childElementCount > 0) actions.appendChild(primaryActionsRow);
@@ -14412,6 +14414,39 @@ function getSyntheticImpiantoWeatherState({ riskLevel, hasCivilProtectionAlert, 
   if (currentWind >= NAVIGATION_WEATHER_STRONG_WIND_KMH || currentGust >= NAVIGATION_WEATHER_STRONG_GUST_KMH) return "vento";
   if (hasCurrentRain || hasNextHourRain) return "pioggia";
   return "ok";
+}
+
+function getImpiantoWeatherAlertChipMeta(status) {
+  if (!status || status.riskLevel === "unavailable") return null;
+  const messageText = [status.alertText, ...(Array.isArray(status.messages) ? status.messages : [])]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("it-IT");
+  const hasCivilOrThunder = status.riskLevel === "red"
+    || status.syntheticState === "allerta"
+    || status.syntheticState === "temporale"
+    || NAVIGATION_WEATHER_THUNDER_CODES.has(Number(status.currentWeather?.weather_code))
+    || /protezione civile|temporale/.test(messageText);
+  if (hasCivilOrThunder) return { text: "⚠️ Temporale", severity: "danger" };
+  if (status.syntheticState === "vento" || Number(status.importantWindKmh) >= NAVIGATION_WEATHER_STRONG_WIND_KMH || /vento forte/.test(messageText)) {
+    return { text: "💨 Vento forte", severity: "warning" };
+  }
+  if (status.syntheticState === "pioggia" || status.hasCurrentRain || status.hasNextHourRain || /pioggia/.test(messageText)) {
+    return { text: "🌧️ Pioggia", severity: "info" };
+  }
+  return null;
+}
+
+function createImpiantoWeatherAlertChip(impianto) {
+  const status = getCachedImpiantoWeatherStatus(impianto);
+  const meta = getImpiantoWeatherAlertChipMeta(status);
+  if (!meta) return null;
+  const chip = document.createElement("span");
+  chip.className = "impianto-weather-alert-chip";
+  chip.dataset.severity = meta.severity;
+  chip.title = status?.alertText || meta.text;
+  chip.textContent = meta.text;
+  return chip;
 }
 
 

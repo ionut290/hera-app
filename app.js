@@ -11772,10 +11772,11 @@ function renderImpianti() {
     if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
     if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
     if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
-    if (canManageData() && !impianto.done) {
+    if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
+        if (!canManageData() && !canTriggerImpiantoWhatsApp(impianto, true)) return;
         const doneAt = new Date();
-        const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Admin";
+        const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
         const doneByEmail = auth.currentUser?.email || "";
         const doneByUid = auth.currentUser?.uid || "";
         const doneIds = getImpiantoDocIds(impianto);

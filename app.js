@@ -2214,14 +2214,8 @@ function updateAdminControls() {
   updateDriveConnectVisibility();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
-  ui.operatorPositionsToggleBtn?.classList.toggle("hidden", !canManage);
-  if (ui.operatorPositionsToggleBtn) {
-    ui.operatorPositionsToggleBtn.disabled = !canManage;
-    ui.operatorPositionsToggleBtn.setAttribute("aria-pressed", String(canManage && operatorPositionsVisible));
-    ui.operatorPositionsToggleBtn.innerHTML = operatorPositionsVisible
-      ? '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Pos.</span>'
-      : '<span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Off</span>';
-  }
+  ui.operatorPositionsToggleBtn?.classList.add("hidden");
+  if (ui.operatorPositionsToggleBtn) ui.operatorPositionsToggleBtn.disabled = true;
   ui.chatClearBtn?.classList.toggle("hidden", !canManage);
   if (ui.chatClearBtn) ui.chatClearBtn.disabled = !canManage;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
@@ -17048,49 +17042,20 @@ function getTimestampDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function buildOperatorPositionPopup(position) {
-  const label = position.operatorName || position.displayName || position.email || "Operatore";
-  const updatedAt = getTimestampDate(position.updatedAt);
-  const updatedLabel = updatedAt ? updatedAt.toLocaleString("it-IT") : "aggiornamento recente";
-  const accuracyLabel = position.accuracy ? `<br><small>Precisione: circa ${Math.round(position.accuracy)} m</small>` : "";
-  const squadraLabel = [position.squadraLabel, position.squadraName].filter(Boolean).join(" • ") || "Squadra non associata";
-  const commessaLabel = position.commessaName || "Commessa non associata";
-  return [
-    `<b>👷 ${escapeHTML(label)}</b>`,
-    `<small>Squadra: ${escapeHTML(squadraLabel)}</small>`,
-    `<small>Commessa: ${escapeHTML(commessaLabel)}</small>`,
-    `<small>Posizione operatore: ${escapeHTML(updatedLabel)}</small>${accuracyLabel}`
-  ].join("<br>");
-}
-
-function getOperatorPositionMarkerLabel(position) {
-  const label = String(position.operatorName || position.displayName || position.email || "Operatore").trim();
-  const initials = label
-    .split(/[\s._@-]+/)
-    .map((part) => part.trim()[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-  return initials || "👷";
-}
-
 function addOperatorPositionMarkerToLayer(position, layer) {
-  const markerLabel = getOperatorPositionMarkerLabel(position);
-  const title = position.operatorName || position.displayName || position.email || "Operatore";
   return L.marker([position.lat, position.lng], {
     icon: L.divIcon({
       className: "",
-      html: `<div class='marker-operator' title='${escapeHTML(title)}'>${escapeHTML(markerLabel)}</div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14]
+      html: "<div class='marker-operator' aria-hidden='true'>🦺</div>",
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
     })
-  }).addTo(layer).bindPopup(buildOperatorPositionPopup(position));
+  }).addTo(layer);
 }
 
 function getOperatorPositionsForMap() {
-  if (!canManageData() || !operatorPositionsVisible) return [];
-  const byId = new Map(operatorPositions.map((position) => [position.id || position.uid, position]));
+  if (!currentUserPos || !currentUser) return [];
+  const byId = new Map();
   if (currentUser && currentUserPos) {
     const currentAssignment = getCurrentOperatorPositionAssignment();
     byId.set(currentUser.uid, {
@@ -17107,7 +17072,7 @@ function getOperatorPositionsForMap() {
       updatedAt: new Date()
     });
   }
-  return Array.from(byId.values()).filter((position) => {
+  return Array.from(byId.values()).slice(0, 1).filter((position) => {
     const lat = Number(position.lat);
     const lng = Number(position.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
@@ -17127,10 +17092,7 @@ function renderOperatorPositionMarkers(bounds) {
 }
 
 function toggleOperatorPositionsVisibility() {
-  if (!canManageData()) return;
-  operatorPositionsVisible = !operatorPositionsVisible;
-  updateAdminControls();
-  renderMap();
+  return;
 }
 
 
@@ -18298,9 +18260,7 @@ function initGeolocation(options = {}) {
     publishCurrentOperatorPosition(pos.coords, { force: Boolean(options.forcePublishCurrent) });
     options.forcePublishCurrent = false;
     evaluateTimbraturaReminders();
-    ui.gpsStatus.textContent = canManageData()
-      ? "Posizione attiva: impianti ordinati per distanza e squadre visibili sulla mappa."
-      : "Posizione attiva: impianti ordinati per distanza.";
+    ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza.";
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();

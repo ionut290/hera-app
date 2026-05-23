@@ -13586,8 +13586,25 @@ function buildCompactSfalcioWarnings(entry = {}) {
   return warnings.slice(0, 2);
 }
 
+
+function getImpiantoCompactCondition(entry = {}) {
+  const weatherCode = Number(entry.currentWeather?.weather_code ?? entry.weatherCode);
+  const weatherText = String(entry.weatherState || entry.description || "").toLowerCase();
+  const temp = Number(entry.temperature ?? entry.apparentTemperature);
+  const wind = Number(entry.windSpeed ?? entry.windSpeedKmh ?? entry.importantWindKmh);
+
+  if (Number.isFinite(temp) && temp >= 35) return "🔥 Caldo intenso";
+  if (Number.isFinite(wind) && wind >= NAVIGATION_WEATHER_STRONG_WIND_KMH) return "💨 Vento forte";
+  if (isThunderWeatherCode(weatherCode) || /tempor|thunder|fulmin/.test(weatherText)) return "⛈️ Temporale";
+  if ((weatherCode >= 71 && weatherCode <= 77) || weatherCode === 85 || weatherCode === 86 || /neve|snow/.test(weatherText)) return "❄️ Neve";
+  if (weatherCode === 45 || weatherCode === 48 || /nebb|fog|foschia/.test(weatherText)) return "🌫️ Nebbia";
+  if (NAVIGATION_WEATHER_RAIN_CODES.has(weatherCode) || /pioggi|rovesc|rain/.test(weatherText)) return "🌧️ Pioggia";
+  if (weatherCode === 0 || /seren|sole|clear/.test(weatherText)) return "☀️ Sole";
+  return "☁️ Nuvoloso";
+}
+
 function buildImpiantoWeatherDisplay(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry)) {
-  const description = String(entry.weatherState || entry.description || label || "Meteo").replace(/^[^A-Za-zÀ-ÿ]+\s*/u, "").trim();
+  const description = getImpiantoCompactCondition(entry);
   const temperature = isPresentFiniteNumber(entry.temperature) ? `${Math.round(Number(entry.temperature))}°` : "--°";
   const windSpeed = Number(entry.windSpeed ?? entry.windSpeedKmh);
   const windDirection = entry.windDirection || entry.windDirectionLabel || "";

@@ -11751,19 +11751,7 @@ function renderImpianti() {
       "✉️",
       "Whazzup / Fatto",
       async () => {
-        if (isNetworkOffline() && impianto.done) {
-          alert("Sei offline: WhatsApp non può essere aperto. Il messaggio resta in attesa finché torna internet.");
-          return;
-        }
-        const whatsappOpened = triggerImpiantoWhatsAppAction(impianto);
-        if (!whatsappOpened) return;
-        if (!impianto.done) markImpiantoDoneVisualFallback(impianto);
-        try {
-          const doneMarked = await markImpiantoDone(impianto, { source: "whatsapp" });
-          if (!doneMarked) markImpiantoDoneVisualFallback(impianto);
-        } catch (error) {
-          console.warn("Salvataggio FATTO da WHAZZUP non riuscito:", error);
-        }
+        await handleImpiantoWhatsAppClick(impianto);
       },
       false,
       false,

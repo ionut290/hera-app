@@ -14839,7 +14839,8 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!isNetworkOffline()) {
+  const skipGpsDistanceChecks = source === "whatsapp";
+  if (!isNetworkOffline() && !skipGpsDistanceChecks) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;
@@ -16440,17 +16441,8 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-  const doneByEmail = auth.currentUser?.email || "";
-  const doneByUid = auth.currentUser?.uid || "";
-  const doneIds = getImpiantoDocIds(impianto);
 
-  markWhazzupSafetyPressed(impianto, doneAt);
-  upsertWhazzupPendingDoneEntry(impianto, doneAt);
-  updateImpiantoLocalState(doneIds, { done: true, doneAt, doneBy, doneByEmail, doneByUid });
-  setImpiantiViewMode("done");
-  updateConnectivityStatus();
-  renderImpianti();
-
+  notifyImpiantoBackgroundSyncPending();
   const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
     .catch((error) => {
       console.error("Errore avvio audit log Whazzup:", error);
@@ -16473,9 +16465,17 @@ async function handleImpiantoWhatsAppClick(impianto) {
     if (!doneMarked) {
       await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
       alert("Errore salvataggio. Riprova.");
+      updateConnectivityStatus();
+      renderImpianti();
       return;
     }
-    openWhatsApp(impianto, { doneAt, operatorName: doneBy });
+
+    markWhazzupSafetyPressed(impianto, doneAt);
+    upsertWhazzupPendingDoneEntry(impianto, doneAt);
+    setImpiantiViewMode("done");
+    updateConnectivityStatus();
+    renderImpianti();
+
     const persisted = await verifyImpiantoDoneBackground(impianto);
     await updateAuditLogWhazzupClick(auditLogId, {
       fattoEsito: persisted ? "persisted" : "verify_failed",
@@ -16483,13 +16483,19 @@ async function handleImpiantoWhatsAppClick(impianto) {
     });
     if (!persisted) {
       alert("Errore salvataggio. Riprova.");
+      updateConnectivityStatus();
+      renderImpianti();
       return;
     }
+
+    openWhatsApp(impianto, { doneAt, operatorName: doneBy });
     updateConnectivityStatus();
     renderImpianti();
   } catch (error) {
     console.error("Errore processo FATTO:", error);
     alert("Errore salvataggio. Riprova.");
+    updateConnectivityStatus();
+    renderImpianti();
   }
 }
 

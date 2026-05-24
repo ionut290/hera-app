@@ -8457,16 +8457,6 @@ textarea:focus-visible {
   margin-bottom: 0;
 }
 
-/* DEBUG TEMP: evidenzia i contenitori sopra NAVIGA/FATTO per trovare spazio residuo */
-.card-impianto .impianto-summary-row,
-.card-impianto .impianto-weather-column,
-.card-impianto .impianto-details,
-.card-impianto .item-actions.impianto-actions,
-.card-impianto .impianto-secondary-actions,
-.card-impianto .impianto-weather-wrap {
-  border: 1px solid red !important;
-}
-
 /* Correzione spazio cliccabile vuoto sopra NAVIGA/FATTO */
 .card-impianto .impianto-summary-row,
 .card-impianto .impianto-summary-btn,

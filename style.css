@@ -1,6 +1,6 @@
 :root {
   --bg: #eef3fa;
-  --card: rgba(255, 255, 255, 0.62);
+  --card: #ffffff;
   --text: #172033;
   --muted: #60708a;
   --border: #d6dfec;
@@ -24,33 +24,11 @@ body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: var(--text);
-  min-height: 100dvh;
   background:
-    radial-gradient(110% 70% at 86% 16%, rgba(141, 188, 211, 0.28) 0%, rgba(141, 188, 211, 0) 62%),
-    radial-gradient(80% 60% at 10% 78%, rgba(168, 208, 154, 0.24) 0%, rgba(168, 208, 154, 0) 64%),
-    linear-gradient(135deg, rgba(214, 255, 220, 0.92) 0%, rgba(210, 235, 255, 0.9) 100%);
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(48% 22% at 78% 16%, rgba(127, 162, 118, 0.16), transparent 70%),
-    radial-gradient(35% 18% at 22% 20%, rgba(124, 174, 110, 0.14), transparent 72%),
-    radial-gradient(44% 26% at 14% 64%, rgba(93, 153, 74, 0.12), transparent 74%),
-    linear-gradient(162deg, rgba(84, 138, 66, 0.08) 6%, rgba(84, 138, 66, 0) 24%),
-    linear-gradient(38deg, rgba(52, 120, 165, 0.08) 58%, rgba(52, 120, 165, 0) 84%),
-    repeating-linear-gradient(125deg, rgba(126, 161, 186, 0.08) 0 2px, transparent 2px 28px),
-    radial-gradient(24% 24% at 8% 44%, rgba(80, 130, 64, 0.13), transparent 76%),
-    radial-gradient(16% 20% at 88% 86%, rgba(113, 149, 105, 0.12), transparent 80%);
-  filter: blur(1px) saturate(0.95);
-  opacity: 0.86;
+    radial-gradient(circle at 12% 10%, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0) 42%),
+    radial-gradient(circle at 85% 12%, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0) 38%),
+    radial-gradient(circle at 80% 88%, rgba(59, 130, 246, 0.14) 0%, rgba(59, 130, 246, 0) 44%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
 }
 
 h1, h2, h3 { margin: 0 0 10px; }
@@ -471,48 +449,6 @@ h2 { font-size: 1.05rem; }
   grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
   gap: 12px;
   align-items: start;
-}
-
-
-#home-page .card,
-#home-page .panel,
-#home-page .commessa-card,
-#home-page .meteo-card,
-#home-page .programmazione-card,
-#home-page #commesse-home-card,
-#home-page #programmazioni-home-card,
-#home-page .weather-card,
-#home-page .squadre-card,
-#home-page .logo-card {
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.56);
-  border-radius: 22px;
-  box-shadow: 0 10px 30px rgba(15, 40, 60, 0.08);
-}
-
-#home-page .weather-card {
-  background:
-    radial-gradient(circle at 90% 12%, rgba(255, 255, 255, 0.28), transparent 50%),
-    rgba(255, 255, 255, 0.56);
-}
-
-#home-page .btn,
-#home-page .squadre-commesse-toggle,
-#home-page .pill,
-#home-page .commessa-active-chip,
-#home-page .status-chip,
-#home-page .weather-risk-chip {
-  background: rgba(255, 255, 255, 0.6);
-  border-color: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(9px);
-  -webkit-backdrop-filter: blur(9px);
-}
-
-#home-page .pill,
-#home-page .weather-risk-chip {
-  color: #1b4d79;
 }
 
 .hero-top {

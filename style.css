@@ -8610,3 +8610,142 @@ textarea:focus-visible {
 @media (max-width: 980px){
   .capitolato-main-grid > :first-child,.capitolato-main-grid > :last-child,.capitolato-secondary-grid > * { grid-column:1/-1; }
 }
+
+/* Mobile overflow fix: vista commessa sempre dentro viewport */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+main.container,
+#impianti-page,
+#impianti-page > .card,
+#commessa-operational-card,
+.commessa-map-card,
+.commessa-map-shell,
+.commessa-dashboard-card,
+.commessa-stat-strip,
+.commessa-squadre-footer,
+#impianti-list,
+#impianti-actions,
+#map,
+.leaflet-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+#impianti-page {
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 12px;
+  padding-right: 12px;
+  overflow-x: hidden;
+}
+
+.commessa-dashboard-head {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: 32px 42px minmax(0, 1fr);
+  grid-template-areas:
+    "back home title"
+    "actions actions actions";
+  align-items: center;
+  row-gap: 8px;
+}
+
+.commessa-back-btn { grid-area: back; }
+.commessa-home-btn { grid-area: home; }
+.commessa-title-wrap {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  flex-wrap: wrap;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  grid-area: actions;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover,
+.commessa-header-actions .commessa-action-btn:focus-visible {
+  width: 100%;
+  min-width: 0;
+}
+
+.commessa-stat-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  overflow: hidden;
+}
+
+.commessa-stat-item {
+  min-width: 0;
+}
+
+.commessa-squadre-footer {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+
+.commessa-squadre-footer .map-number-search--inline,
+.commessa-squadre-footer #map-number-search,
+.commessa-squadre-footer #commessa-squadre-details-btn,
+#commessa-squadre-details-btn {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#map,
+.leaflet-container,
+.leaflet-pane,
+.leaflet-map-pane {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+@media (max-width: 520px) {
+  #impianti-page {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .commessa-header-actions .commessa-action-label {
+    display: inline;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .commessa-stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .commessa-squadre-details-btn {
+    margin-left: 0;
+  }
+}

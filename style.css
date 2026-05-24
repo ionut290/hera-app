@@ -8435,3 +8435,24 @@ textarea:focus-visible {
   margin-top: 2px;
   gap: 2px;
 }
+
+/* Card impianto: elimina spazio bianco sopra NAVIGA/FATTO e usa altezza contenuto */
+.card-impianto {
+  height: auto;
+  min-height: unset;
+}
+
+.impianto-body {
+  padding-bottom: 6px;
+}
+
+.impianto-actions,
+.impianto-main-column > .item-actions.impianto-actions {
+  margin-top: 6px;
+  padding-top: 0;
+}
+
+.weather-box,
+.info-meteo {
+  margin-bottom: 0;
+}

@@ -696,6 +696,9 @@ let chatRetentionTimer = null;
 let hoursDeadlineAlertTimer = null;
 let quickSquadraWindowTimer = null;
 let geolocationWatchId = null;
+let mapAutoFitSignature = "";
+let userLocationMapMarker = null;
+let userLocationFullscreenMarker = null;
 let lastPositionPublishAt = 0;
 let lastPublishedUserPos = null;
 let latestGeolocationCoords = null;
@@ -1140,6 +1143,26 @@ const globalMap = L.map("global-map", MAP_INTERACTION_OPTIONS);
 L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" }).addTo(globalMap);
 globalMap.setView(globalMapViewState.center, globalMapViewState.zoom);
 const globalMarkerLayer = L.layerGroup().addTo(globalMap);
+
+const UserLocationControl = L.Control.extend({
+  options: { position: "topright" },
+  onAdd(targetMap) {
+    const button = L.DomUtil.create("button", "map-geolocate-btn");
+    button.type = "button";
+    button.title = "Vai alla mia posizione";
+    button.setAttribute("aria-label", "Centra sulla mia posizione");
+    button.innerHTML = "📍";
+    L.DomEvent.disableClickPropagation(button);
+    L.DomEvent.on(button, "click", (event) => {
+      L.DomEvent.stop(event);
+      centerMapOnUserLocation(targetMap);
+    });
+    return button;
+  }
+});
+map.addControl(new UserLocationControl());
+fullscreenMap.addControl(new UserLocationControl());
+
 map.on("moveend zoomend", () => {
   const center = map.getCenter();
   mainMapViewState = {
@@ -11615,13 +11638,15 @@ function createPlantMqBox(plant) {
 
 function matchesImpiantoSearch(impianto) {
   if (!impiantiSearchTerm) return true;
+  const markerNumber = getMapMarkerNumberForImpianto(impianto);
   const haystack = [
     impianto.denominazione,
     impianto.comune,
     impianto.indirizzo,
     impianto.codicePrezzo,
     impianto.voceRiferimento,
-    impianto.idSap
+    impianto.idSap,
+    Number.isFinite(markerNumber) ? String(markerNumber) : ""
   ].map((value) => String(value || "").toLowerCase()).join(" ");
   return haystack.includes(impiantiSearchTerm);
 }
@@ -17588,6 +17613,10 @@ function renderMap() {
 
   const bounds = [];
   mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
+  const mapDataSignature = currentImpianti
+    .map((impianto) => `${buildImpiantoKey(impianto)}|${Number(impianto.gpsY) || ""}|${Number(impianto.gpsX) || ""}`)
+    .sort()
+    .join(";");
   let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
@@ -17604,12 +17633,14 @@ function renderMap() {
 
   renderOperatorPositionMarkers(bounds);
 
-  if (bounds.length > 0 && !mainMapViewState.hasUserMoved) {
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+  const shouldAutoFitToBounds = bounds.length > 0 && (!mainMapViewState.hasUserMoved || mapAutoFitSignature !== mapDataSignature);
+  if (shouldAutoFitToBounds) {
+    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
     const center = map.getCenter();
     mainMapViewState.center = [center.lat, center.lng];
     mainMapViewState.zoom = map.getZoom();
     mainMapViewState.hasUserMoved = true;
+    mapAutoFitSignature = mapDataSignature;
   } else {
     map.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
   }
@@ -17674,6 +17705,49 @@ function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
   });
   marker.addTo(targetLayer);
   return marker;
+}
+
+function ensureUserLocationMarker(targetMap, coords) {
+  const markerRef = targetMap === fullscreenMap ? "fullscreen" : "main";
+  const existing = markerRef === "fullscreen" ? userLocationFullscreenMarker : userLocationMapMarker;
+  if (existing) existing.setLatLng(coords);
+  else {
+    const marker = L.marker(coords, {
+      icon: L.divIcon({
+        className: "user-location-marker-wrap",
+        html: "<span class='user-location-marker-dot' aria-hidden='true'></span>",
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+      })
+    }).addTo(targetMap);
+    if (markerRef === "fullscreen") userLocationFullscreenMarker = marker;
+    else userLocationMapMarker = marker;
+  }
+}
+
+function centerMapOnUserLocation(targetMap = map) {
+  if (!navigator.geolocation) {
+    alert("Posizione non disponibile o permesso negato");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (success) => {
+      const lat = success.coords.latitude;
+      const lng = success.coords.longitude;
+      targetMap.setView([lat, lng], 16);
+      ensureUserLocationMarker(targetMap, [lat, lng]);
+      if (targetMap === map) ensureUserLocationMarker(fullscreenMap, [lat, lng]);
+      if (targetMap === fullscreenMap) ensureUserLocationMarker(map, [lat, lng]);
+    },
+    () => {
+      alert("Posizione non disponibile o permesso negato");
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 30000
+    }
+  );
 }
 
 function getImpiantoPopupData(impianto, tipo = "") {

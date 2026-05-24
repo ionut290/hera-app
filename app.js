@@ -12905,31 +12905,106 @@ function buildDiscaricaSafetyCompactFlagsMarkup() {
   return `<article class="impianto-safety-section is-risk"><h3>🧩 RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>🔴 Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>🟡 Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>🟢 Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
 }
 
-function buildCapitolatoOperativoSection(title, items = [], options = {}) {
-  const className = options.danger ? "impianto-safety-group is-danger" : "impianto-safety-group";
-  return `
-    <article class="impianto-safety-section ${options.stop ? "is-danger" : ""}">
-      <h3>${escapeHTML(title)}</h3>
-      <div class="${className}">${buildImpiantoSafetyList(items)}</div>
-    </article>`;
-}
-
 function renderCapitolatoOperativoPage(impiantoKey) {
   const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
   const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
+  const comune = getImpiantoComune(impianto) || "Non indicato";
   const discaricaKey = resolveDiscaricaCapitolatoKey();
   const specific = DISCARICA_CAPITOLATO_DATA[discaricaKey] || {};
+  const datiGenerali = specific.datiGenerali || [];
+  const superficie = datiGenerali.find((item) => /SUPERFICIE/i.test(item)) || "Superficie totale: da definire";
+  const durata = datiGenerali.find((item) => /DURATA/i.test(item)) || "Durata intervento: da definire";
+  const particolarita = specific.rischi?.slice(0, 4) || ["Particolarità operative non specificate."];
+  const mezziConsigliati = specific.modalita?.slice(0, 4) || ["Definire i mezzi in base all'area operativa."];
+  const note = specific.sicurezza?.slice(0, 2) || ["Seguire le prescrizioni del referente Hera."];
+
   if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "📘 CAPITOLATO OPERATIVO";
   if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
+
+  const mezzi = [
+    ["🚜", "Trattore con trincia"], ["🦾", "Trincia robotizzata"], ["🌿", "Decespugliatore"], ["🚜", "Rasaerba semovente"],
+    ["🚚", "Autocarro ribaltabile"], ["⛏️", "Miniescavatore"], ["🚜", "Bobcat"], ["💧", "Autobotte irrigazione"],
+    ["⬆️", "Piattaforma aerea 21 m"], ["🍃", "Motosoffiante"], ["🧹", "Rastrelli e raccoglifoglie"], ["🧪", "Mezzi per diserbo"]
+  ];
+
   ui.impiantoSafetyContent.innerHTML = `
-    ${buildCapitolatoOperativoSection("1. PANORAMICA COMMESSA", [(selectedCommessaName || "Commessa"), `Impianto: ${impiantoName}`, `Comune: ${getImpiantoComune(impianto) || "Non indicato"}`])}
-    ${buildCapitolatoOperativoSection("2. ISTRUZIONI OPERATIVE", ["Sfalcio corpo discarica", "Sfalcio aree interne alla recinzione", "Sfalcio aree esterne di pertinenza", "Pulizia completa delle recinzioni", "Pulizia canalette dai residui di sfalcio", "Pulizia fossi e canali ove previsti", "Pulizia punti di campionamento", "Garantire accessibilità ai punti di campionamento", "Taglio vegetazione infestante", "Potature richieste dalla Committente", "Abbattimento alberi richiesto dalla Committente", "Irrigazione di soccorso", "Diserbo autorizzato", "Raccolta e smaltimento materiale di risulta", "Segnalazione anomalie riscontrate", "Segnalazione situazioni di pericolo", "Consuntivazione giornaliera attività", "Concordare sempre data intervento", "Concordare fascia oraria", "Concordare area di lavoro", "Compilare consuntivo a fine lavoro", "Indicare ore lavorate", "Indicare mq lavorati", "Indicare data intervento", "Segnalare anomalie", "Segnalare problemi sicurezza", "Utilizzare solo mezzi autorizzati", "Mezzi privati fuori dall'impianto", "Mezzi d'opera solo nelle aree autorizzate"])}
-    ${buildCapitolatoOperativoSection("3. MEZZI E ATTREZZATURE", ["Decespugliatori", "Motosoffianti", "Rastrelli", "Raccoglifoglie", "Rasaerba rotanti", "Rasaerba semoventi", "Trattore ≥ 80 HP con trincia posteriore", "Trattore ≥ 80 HP con barra laterale idraulica", "Trattore ≥ 80 HP con trincia forestale", "Bobcat", "Miniescavatore", "Escavatore con benna falciante", "Autocarro con cassone ribaltabile", "Automezzi trasporto attrezzature", "Mezzi per diserbo", "Autobotte con 4x4 per irrigazione", "Trinciatrici telecomandate tipo Roboevo Energreen", "Piattaforma aerea minima 21 metri"])}
-    ${buildCapitolatoOperativoSection("4. SICUREZZA", ["Verificare accessi", "Verificare condizioni del terreno", "Verificare presenza fango", "Verificare presenza acqua", "Verificare pendenze", "Verificare scarpate", "Verificare presenza tubazioni biogas", "Verificare impianti irrigazione", "Verificare piantumazioni", "Utilizzare DPI", "Mantenere distanza di sicurezza", "Evitare passaggi su gradoni bagnati", "Utilizzare mezzi robotizzati nelle zone pericolose", "Utilizzare decespugliatore vicino a biogas, irrigazione e piantumazioni"])}
-    ${buildCapitolatoOperativoSection("5. CONDIZIONI DI SOSPENSIONE", ["⛔ Pioggia intensa", "⛔ Neve", "⛔ Vento forte", "⛔ Presenza fango", "⛔ Presenza acqua sulle superfici", "⛔ Terreno non sicuro", "⛔ Condizioni non autorizzate dal referente Hera"], { danger: true, stop: true })}
-    ${buildCapitolatoOperativoSection("6. DATI SPECIFICI DELLA DISCARICA", specific.datiGenerali || ["Scheda discarica non disponibile per questa commessa."])}
-    ${buildCapitolatoOperativoSection("7. AZIONI RAPIDE", ["📷 Aggiungi foto", "⚠️ Invia segnalazione", "📝 Registra consuntivo", "🗺️ Apri impianto sulla mappa", "📤 Invia report WhatsApp"])}
-  `;
+    <section class="capitolato-dashboard">
+      <article class="capitolato-hero-card">
+        <div class="capitolato-hero-overlay">
+          <div class="capitolato-hero-title-wrap">
+            <span class="capitolato-book">📘</span>
+            <div>
+              <h3>Capitolato operativo</h3>
+              <p>${escapeHTML(selectedCommessaName || "Commessa")}</p>
+            </div>
+          </div>
+          <div class="capitolato-hero-meta">
+            <span><strong>Impianto</strong>${escapeHTML(impiantoName)}</span>
+            <span><strong>Comune</strong>${escapeHTML(comune)}</span>
+            <span><strong>Tipologia</strong>Discarica</span>
+          </div>
+        </div>
+      </article>
+
+      <div class="capitolato-main-grid">
+        <article class="capitolato-card">
+          <h4>1. Istruzioni operative</h4>
+          <div class="capitolato-mini-cards">
+            <div class="capitolato-mini is-green"><h5>🌿 Sfalcio</h5>${buildImpiantoSafetyList(["Sfalcio corpo discarica", "Aree interne recinzione", "Aree esterne di pertinenza", "Fossi e canali ove previsti"])}</div>
+            <div class="capitolato-mini is-blue"><h5>🧹 Pulizia</h5>${buildImpiantoSafetyList(["Pulizia recinzioni", "Pulizia canalette", "Punti di campionamento", "Residui di sfalcio"])}</div>
+            <div class="capitolato-mini is-amber"><h5>📝 Gestione lavoro</h5>${buildImpiantoSafetyList(["Concordare data intervento", "Concordare fascia oraria", "Compilare consuntivo", "Indicare ore, mq e data"])}</div>
+            <div class="capitolato-mini is-red"><h5>⚠️ Segnalazioni</h5>${buildImpiantoSafetyList(["Segnalare anomalie", "Segnalare situazioni di pericolo", "Segnalare problemi sicurezza"])}</div>
+          </div>
+        </article>
+
+        <article class="capitolato-card">
+          <h4>2. Mezzi e attrezzature</h4>
+          <div class="capitolato-mezzi-grid">
+            ${mezzi.map(([icon, label]) => `<div class="capitolato-mezzo"><span>${icon}</span><small>${escapeHTML(label)}</small></div>`).join("")}
+          </div>
+        </article>
+      </div>
+
+      <div class="capitolato-secondary-grid">
+        <article class="capitolato-card is-sicurezza">
+          <h4>3. Sicurezza</h4>
+          <p class="capitolato-sub">Verifiche prima di iniziare</p>
+          ${buildImpiantoSafetyList(["✅ Verificare accessi", "✅ Verificare terreno", "✅ Verificare fango/acqua", "✅ Verificare pendenze e scarpate", "✅ Verificare tubazioni biogas", "✅ Verificare impianti irrigazione", "✅ Verificare piantumazioni"]) }
+          <div class="capitolato-worker">👷‍♂️🌿</div>
+        </article>
+
+        <article class="capitolato-card is-stop">
+          <h4>4. Sospensione lavori</h4>
+          <p class="capitolato-sub">Non operare in queste condizioni</p>
+          <div class="capitolato-chip-grid">
+            ${["Pioggia intensa", "Neve", "Vento forte", "Fango", "Acqua sulle superfici", "Terreno non sicuro", "Condizioni non autorizzate dal referente Hera"].map((item) => `<span>${escapeHTML(item)}</span>`).join("")}
+          </div>
+        </article>
+
+        <article class="capitolato-card is-scheda">
+          <h4>5. Scheda impianto</h4>
+          <div class="capitolato-scheda-photo">🛰️ Discarica vista dall'alto</div>
+          <ul>
+            <li><strong>${escapeHTML(superficie)}</strong></li>
+            <li><strong>${escapeHTML(durata)}</strong></li>
+            <li>Particolarità operative: ${escapeHTML(particolarita.join(" • "))}</li>
+            <li>Mezzi consigliati: ${escapeHTML(mezziConsigliati.join(" • "))}</li>
+            <li>Note: ${escapeHTML(note.join(" • "))}</li>
+          </ul>
+        </article>
+      </div>
+
+      <article class="capitolato-card capitolato-actions">
+        <h4>6. Azioni rapide</h4>
+        <div class="capitolato-actions-grid">
+          <button type="button">📷 Aggiungi foto</button>
+          <button type="button">⚠️ Invia segnalazione</button>
+          <button type="button">📝 Registra consuntivo</button>
+          <button type="button">🗺️ Apri mappa impianto</button>
+          <button type="button">📤 Invia report WhatsApp</button>
+        </div>
+      </article>
+    </section>`;
 }
 
 async function renderImpiantoSafetyPage(impiantoKey) {

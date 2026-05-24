@@ -3595,6 +3595,43 @@ textarea:focus-visible {
 }
 
 @media (max-width: 760px) {
+  #home-page {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .commesse-lista {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .commessa-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .commessa-btn,
+  .commessa-sub-toggle,
+  .commessa-sub-badge {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .commessa-btn {
+    overflow: hidden;
+  }
+
+  .commessa-btn small {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .commessa-tools-bar {
     flex-wrap: wrap;
     overflow-x: visible;

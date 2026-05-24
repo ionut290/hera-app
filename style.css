@@ -1961,8 +1961,8 @@ textarea:focus-visible {
   width: 160px;
   max-width: 160px;
   min-width: 160px;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   height: auto;
   align-self: start;
   justify-self: end;
@@ -2306,8 +2306,8 @@ textarea:focus-visible {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   height: auto;
   overflow: hidden;
 }
@@ -2315,8 +2315,8 @@ textarea:focus-visible {
 .impianto-weather-column .impianto-weather-wrap,
 .weather-compact .impianto-weather-wrap {
   width: 100%;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   height: auto;
   overflow: hidden;
 }
@@ -2349,8 +2349,8 @@ textarea:focus-visible {
   min-width: 0;
   max-width: 160px;
   height: auto;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   padding: 6px;
   border-radius: 9px;
   text-align: left;
@@ -2364,8 +2364,8 @@ textarea:focus-visible {
   width: 100%;
   max-width: 160px;
   height: auto;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   overflow: hidden;
 }
 
@@ -2377,8 +2377,8 @@ textarea:focus-visible {
   min-width: 0;
   max-width: 160px;
   height: auto;
-  min-height: 90px;
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 90px;
   border-radius: 9px;
   padding: 6px;
   white-space: normal;

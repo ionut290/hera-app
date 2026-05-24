@@ -8456,3 +8456,38 @@ textarea:focus-visible {
 .info-meteo {
   margin-bottom: 0;
 }
+
+/* DEBUG TEMP: evidenzia i contenitori sopra NAVIGA/FATTO per trovare spazio residuo */
+.card-impianto .impianto-summary-row,
+.card-impianto .impianto-weather-column,
+.card-impianto .impianto-details,
+.card-impianto .item-actions.impianto-actions,
+.card-impianto .impianto-secondary-actions,
+.card-impianto .impianto-weather-wrap {
+  border: 1px solid red !important;
+}
+
+/* Correzione spazio cliccabile vuoto sopra NAVIGA/FATTO */
+.card-impianto .impianto-summary-row,
+.card-impianto .impianto-summary-btn,
+.card-impianto .impianto-weather-column,
+.card-impianto .weather-compact,
+.card-impianto .impianto-weather-wrap,
+.card-impianto .impianto-weather-badge.impianto-weather-card,
+.card-impianto .impianto-weather-card.is-compact,
+.card-impianto .impianto-weather-copy {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-self: start !important;
+}
+
+.card-impianto .impianto-weather-updating {
+  display: none !important;
+}
+
+.card-impianto .impianto-secondary-actions:empty,
+.card-impianto .impianto-details:empty,
+.card-impianto .item-actions.impianto-actions:empty {
+  display: none !important;
+}

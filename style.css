@@ -3595,6 +3595,43 @@ textarea:focus-visible {
 }
 
 @media (max-width: 760px) {
+  #home-page {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .commesse-lista {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .commessa-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .commessa-btn,
+  .commessa-sub-toggle,
+  .commessa-sub-badge {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .commessa-btn {
+    overflow: hidden;
+  }
+
+  .commessa-btn small {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .commessa-tools-bar {
     flex-wrap: wrap;
     overflow-x: visible;
@@ -4704,12 +4741,21 @@ textarea:focus-visible {
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
 }
 
+.commessa-squadre-footer #commessa-active-squadre-count {
+  flex: 1 1 0;
+}
+
+.commessa-squadre-footer .map-number-search--inline {
+  flex: 0 0 auto;
+}
+
 .commessa-squadre-details-btn {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   color: #08a942;
   font-size: 0.95rem;
+  margin-left: auto;
 }
 
 @media (max-width: 760px) {
@@ -8263,6 +8309,10 @@ textarea:focus-visible {
   padding: 5px 7px;
   font: inherit;
 }
+.map-number-search--inline {
+  position: static;
+  margin: 0 auto;
+}
 .map-number-search--fullscreen {
   position: static;
   margin-left: auto;
@@ -8286,7 +8336,42 @@ textarea:focus-visible {
     padding: 5px;
     gap: 5px;
   }
-  .map-number-search input { width: 76px; }
+.map-number-search input { width: 76px; }
+}
+
+.map-geolocate-btn {
+  width: 34px;
+  height: 34px;
+  margin-top: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-geolocate-btn:hover {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.map-geolocate-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.user-location-marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  display: block;
 }
 
 

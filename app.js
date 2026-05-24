@@ -165,6 +165,7 @@ const ui = {
   atexProcedureContent: document.getElementById("atex-procedure-content"),
   impiantoSafetyPage: document.getElementById("impianto-safety-page"),
   impiantoSafetyBackBtn: document.getElementById("impianto-safety-back-btn"),
+  impiantoSafetyTitle: document.getElementById("impianto-safety-title"),
   impiantoSafetySubtitle: document.getElementById("impianto-safety-subtitle"),
   impiantoSafetyContent: document.getElementById("impianto-safety-content"),
   commessaFocusLabel: document.getElementById("commessa-focus-label"),
@@ -3165,7 +3166,7 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "", safety: "" };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "", safety: "", capitolato: "" };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
@@ -3174,7 +3175,8 @@ function parseCommessaHash(hash = window.location.hash || "") {
     impianto: params.get("impianto") || "",
     meteo: params.get("meteo") || "",
     atex: params.get("atex") || "",
-    safety: params.get("safety") || ""
+    safety: params.get("safety") || "",
+    capitolato: params.get("capitolato") || ""
   };
 }
 
@@ -3209,14 +3211,15 @@ function applyRoute() {
   const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showWeatherDetail = Boolean(commessaRoute.meteo && selectedCommessaId === commessaIdFromHash && !showNotesPage);
   const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
-  const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
-  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showImpiantoSafety);
+  const showCapitolatoOperativo = Boolean(commessaRoute.capitolato && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
+  const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showCapitolatoOperativo);
+  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showImpiantoSafety || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
   ui.atexProcedurePage?.classList.toggle("hidden", !showAtexProcedure);
-  ui.impiantoSafetyPage?.classList.toggle("hidden", !showImpiantoSafety);
+  ui.impiantoSafetyPage?.classList.toggle("hidden", !(showImpiantoSafety || showCapitolatoOperativo));
   ui.commessaNotesPage?.classList.toggle("hidden", !showNotesPage);
   ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
   ui.fuelPage.classList.toggle("hidden", !showFuel);
@@ -3248,6 +3251,9 @@ function applyRoute() {
   }
   if (showImpiantoSafety) {
     renderImpiantoSafetyPage(commessaRoute.safety);
+  }
+  if (showCapitolatoOperativo) {
+    renderCapitolatoOperativoPage(commessaRoute.capitolato);
   }
   if (showImpianti) {
     ui.impiantiPageTitle.textContent = `Impianti commessa: ${selectedCommessaName || "Commessa"}`;
@@ -12589,6 +12595,13 @@ function openImpiantoSafetyPage(impianto) {
   applyRoute();
 }
 
+function openCapitolatoOperativoPage(impianto) {
+  if (!selectedCommessaId || !impianto || !isCurrentCommessaDepurazioneOrDiscariche()) return;
+  const key = buildImpiantoKey(impianto);
+  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&capitolato=${encodeURIComponent(key)}`;
+  applyRoute();
+}
+
 function closeImpiantoSafetyPage() {
   openImpiantiPage();
 }
@@ -12601,11 +12614,7 @@ function handleImpiantoSafetyButtonClick(event) {
     const key = capitolatoQuickBtn.closest("[data-weather-card]")?.getAttribute("data-weather-card") || parseCommessaHash().meteo || "";
     const impiantoQuick = findImpiantoByWeatherKey(key) || getImpiantoSafetyImpiantoByKey(key);
     if (!impiantoQuick) return;
-    openImpiantoSafetyPage(impiantoQuick);
-    setTimeout(() => {
-      const panel = ui.impiantoSafetyContent?.querySelector("[data-capitolato-panel]");
-      if (panel) panel.classList.remove("hidden");
-    }, 0);
+    openCapitolatoOperativoPage(impiantoQuick);
     return;
   }
   const button = event.target?.closest?.("[data-impianto-safety]");
@@ -12896,10 +12905,38 @@ function buildDiscaricaSafetyCompactFlagsMarkup() {
   return `<article class="impianto-safety-section is-risk"><h3>🧩 RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>🔴 Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>🟡 Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>🟢 Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
 }
 
+function buildCapitolatoOperativoSection(title, items = [], options = {}) {
+  const className = options.danger ? "impianto-safety-group is-danger" : "impianto-safety-group";
+  return `
+    <article class="impianto-safety-section ${options.stop ? "is-danger" : ""}">
+      <h3>${escapeHTML(title)}</h3>
+      <div class="${className}">${buildImpiantoSafetyList(items)}</div>
+    </article>`;
+}
+
+function renderCapitolatoOperativoPage(impiantoKey) {
+  const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
+  const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
+  const discaricaKey = resolveDiscaricaCapitolatoKey();
+  const specific = DISCARICA_CAPITOLATO_DATA[discaricaKey] || {};
+  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "📘 CAPITOLATO OPERATIVO";
+  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
+  ui.impiantoSafetyContent.innerHTML = `
+    ${buildCapitolatoOperativoSection("1. PANORAMICA COMMESSA", [(selectedCommessaName || "Commessa"), `Impianto: ${impiantoName}`, `Comune: ${getImpiantoComune(impianto) || "Non indicato"}`])}
+    ${buildCapitolatoOperativoSection("2. ISTRUZIONI OPERATIVE", ["Sfalcio corpo discarica", "Sfalcio aree interne alla recinzione", "Sfalcio aree esterne di pertinenza", "Pulizia completa delle recinzioni", "Pulizia canalette dai residui di sfalcio", "Pulizia fossi e canali ove previsti", "Pulizia punti di campionamento", "Garantire accessibilità ai punti di campionamento", "Taglio vegetazione infestante", "Potature richieste dalla Committente", "Abbattimento alberi richiesto dalla Committente", "Irrigazione di soccorso", "Diserbo autorizzato", "Raccolta e smaltimento materiale di risulta", "Segnalazione anomalie riscontrate", "Segnalazione situazioni di pericolo", "Consuntivazione giornaliera attività", "Concordare sempre data intervento", "Concordare fascia oraria", "Concordare area di lavoro", "Compilare consuntivo a fine lavoro", "Indicare ore lavorate", "Indicare mq lavorati", "Indicare data intervento", "Segnalare anomalie", "Segnalare problemi sicurezza", "Utilizzare solo mezzi autorizzati", "Mezzi privati fuori dall'impianto", "Mezzi d'opera solo nelle aree autorizzate"])}
+    ${buildCapitolatoOperativoSection("3. MEZZI E ATTREZZATURE", ["Decespugliatori", "Motosoffianti", "Rastrelli", "Raccoglifoglie", "Rasaerba rotanti", "Rasaerba semoventi", "Trattore ≥ 80 HP con trincia posteriore", "Trattore ≥ 80 HP con barra laterale idraulica", "Trattore ≥ 80 HP con trincia forestale", "Bobcat", "Miniescavatore", "Escavatore con benna falciante", "Autocarro con cassone ribaltabile", "Automezzi trasporto attrezzature", "Mezzi per diserbo", "Autobotte con 4x4 per irrigazione", "Trinciatrici telecomandate tipo Roboevo Energreen", "Piattaforma aerea minima 21 metri"])}
+    ${buildCapitolatoOperativoSection("4. SICUREZZA", ["Verificare accessi", "Verificare condizioni del terreno", "Verificare presenza fango", "Verificare presenza acqua", "Verificare pendenze", "Verificare scarpate", "Verificare presenza tubazioni biogas", "Verificare impianti irrigazione", "Verificare piantumazioni", "Utilizzare DPI", "Mantenere distanza di sicurezza", "Evitare passaggi su gradoni bagnati", "Utilizzare mezzi robotizzati nelle zone pericolose", "Utilizzare decespugliatore vicino a biogas, irrigazione e piantumazioni"])}
+    ${buildCapitolatoOperativoSection("5. CONDIZIONI DI SOSPENSIONE", ["⛔ Pioggia intensa", "⛔ Neve", "⛔ Vento forte", "⛔ Presenza fango", "⛔ Presenza acqua sulle superfici", "⛔ Terreno non sicuro", "⛔ Condizioni non autorizzate dal referente Hera"], { danger: true, stop: true })}
+    ${buildCapitolatoOperativoSection("6. DATI SPECIFICI DELLA DISCARICA", specific.datiGenerali || ["Scheda discarica non disponibile per questa commessa."])}
+    ${buildCapitolatoOperativoSection("7. AZIONI RAPIDE", ["📷 Aggiungi foto", "⚠️ Invia segnalazione", "📝 Registra consuntivo", "🗺️ Apri impianto sulla mappa", "📤 Invia report WhatsApp"])}
+  `;
+}
+
 async function renderImpiantoSafetyPage(impiantoKey) {
   if (!ui.impiantoSafetyContent) return;
   const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
   const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
+  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "🦺 Sicurezza Impianto";
   if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   const contacts = await loadImpiantoSafetyContacts();
   const procedureConfig = await loadImpiantoSafetyProcedureConfig();

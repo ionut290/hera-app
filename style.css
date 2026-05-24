@@ -4704,12 +4704,21 @@ textarea:focus-visible {
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
 }
 
+.commessa-squadre-footer #commessa-active-squadre-count {
+  flex: 1 1 0;
+}
+
+.commessa-squadre-footer .map-number-search--inline {
+  flex: 0 0 auto;
+}
+
 .commessa-squadre-details-btn {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   color: #08a942;
   font-size: 0.95rem;
+  margin-left: auto;
 }
 
 @media (max-width: 760px) {
@@ -8262,6 +8271,10 @@ textarea:focus-visible {
   border-radius: 8px;
   padding: 5px 7px;
   font: inherit;
+}
+.map-number-search--inline {
+  position: static;
+  margin: 0 auto;
 }
 .map-number-search--fullscreen {
   position: static;

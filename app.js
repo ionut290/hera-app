@@ -12945,6 +12945,14 @@ function inferCapitolatoDataFromText(text = "") {
   };
 }
 
+function setCapitolatoFileFeedback(message = "", state = "") {
+  const el = ui.impiantoSafetyContent?.querySelector("[data-capitolato-file-feedback]");
+  if (!el) return;
+  el.textContent = String(message || "");
+  if (state) el.setAttribute("data-state", state);
+  else el.removeAttribute("data-state");
+}
+
 async function loadCommessaCapitolatoRecord() {
   if (!selectedCommessaId) return null;
   const doc = await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").get();
@@ -13062,6 +13070,7 @@ function renderCapitolatoOperativoPage(impiantoKey) {
         <p><strong>Data caricamento:</strong> ${escapeHTML(uploadedAt)}</p>
         ${extractedSummary ? `<label>Riepilogo compilabile admin<textarea data-capitolato-manual-summary rows="6" ${canManageData() ? "" : "readonly"}>${escapeHTML(extractedSummary)}</textarea></label>` : ""}
         ${extractionFailed ? `<p class="capitolato-file-error">Capitolato allegato, ma dati non estratti automaticamente. Compilare manualmente.</p>` : ""}
+        <p class="muted" data-capitolato-file-feedback role="status" aria-live="polite"></p>
         <div class="capitolato-actions-grid">
           ${canManageData() ? `<button type="button" data-capitolato-upload>📎 Allega capitolato</button><button type="button" data-capitolato-replace>Sostituisci capitolato</button><button type="button" data-capitolato-delete>Elimina capitolato</button><button type="button" data-capitolato-save-manual>Salva modifica manuale</button>` : ""}
           ${capitolatoRecord?.driveWebViewLink ? `<button type="button" data-capitolato-open-originale>📄 Apri capitolato originale</button>` : ""}
@@ -13140,7 +13149,10 @@ async function handleImpiantoSafetyContentClick(event) {
   }
   if (capitolatoUploadBtn) {
     if (!canManageData()) return;
-    ui.impiantoSafetyContent?.querySelector("[data-capitolato-file-input]")?.click();
+    const input = ui.impiantoSafetyContent?.querySelector("[data-capitolato-file-input]");
+    if (!input) return;
+    input.value = "";
+    input.click();
     return;
   }
   if (capitolatoDeleteBtn) {
@@ -13213,13 +13225,15 @@ async function handleImpiantoSafetyContentClick(event) {
 }
 
 ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
-  const fileInput = event.target?.closest?.("[data-capitolato-file-input]");
+  const fileInput = event.target;
+  if (!(fileInput instanceof HTMLInputElement) || !fileInput.matches("[data-capitolato-file-input]")) return;
   if (!fileInput || !canManageData() || !selectedCommessaId) return;
   const file = fileInput.files?.[0];
   if (!file) return;
   let autoExtractionSuccess = false;
   let manualSummary = "";
   try {
+    setCapitolatoFileFeedback("Caricamento capitolato in corso...", "loading");
     const upload = await uploadBlobToDrive(file, file.name || "capitolato", file.type || "application/octet-stream", driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: selectedCommessaName || "Commessa" });
     if (/^text\/|csv|plain|rtf/i.test(file.type || "") || /\.(txt|csv|rtf)$/i.test(file.name || "")) {
       const parsed = inferCapitolatoDataFromText(await file.text());
@@ -13238,11 +13252,14 @@ ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
       autoExtractionSuccess,
       manualSummary
     }, { merge: true });
+    setCapitolatoFileFeedback("Capitolato caricato correttamente.", "success");
   } catch (error) {
     console.error("Upload capitolato fallito:", error);
+    setCapitolatoFileFeedback(error?.message || "Errore caricamento capitolato.", "error");
+    alert(error?.message || "Errore caricamento capitolato.");
   } finally {
     fileInput.value = "";
-    renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey);
+    setTimeout(() => renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey), 250);
   }
 });
 

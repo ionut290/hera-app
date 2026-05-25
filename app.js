@@ -12930,6 +12930,44 @@ function buildDiscaricaSafetyCompactFlagsMarkup() {
   return `<article class="impianto-safety-section is-risk"><h3>🧩 RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>🔴 Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>🟡 Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>🟢 Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
 }
 
+function getCapitolatoAcceptedTypes() {
+  return ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,application/rtf,image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif";
+}
+
+function inferCapitolatoDataFromText(text = "") {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const summary = lines.slice(0, 8);
+  return {
+    manualSummary: summary.join("\n"),
+    extractedAt: new Date().toISOString(),
+    extracted: true
+  };
+}
+
+function setCapitolatoFileFeedback(message = "", state = "") {
+  const el = ui.impiantoSafetyContent?.querySelector("[data-capitolato-file-feedback]");
+  if (!el) return;
+  el.textContent = String(message || "");
+  if (state) el.setAttribute("data-state", state);
+  else el.removeAttribute("data-state");
+}
+
+function normalizeCapitolatoUploadError(error) {
+  const raw = String(error?.message || error || "").trim();
+  if (!raw) return "Errore caricamento capitolato.";
+  if (/internal/i.test(raw)) {
+    return "Errore interno upload cloud. Riprova; se persiste, verifica configurazione Drive/Firebase admin.";
+  }
+  return raw;
+}
+
+async function loadCommessaCapitolatoRecord() {
+  if (!selectedCommessaId) return null;
+  const doc = await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+}
+
 function renderCapitolatoOperativoPage(impiantoKey) {
   const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
   const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
@@ -12952,7 +12990,12 @@ function renderCapitolatoOperativoPage(impiantoKey) {
     ["⬆️", "Piattaforma aerea 21 m"], ["🍃", "Motosoffiante"], ["🧹", "Rastrelli e raccoglifoglie"], ["🧪", "Mezzi per diserbo"]
   ];
 
-  ui.impiantoSafetyContent.innerHTML = `
+  loadCommessaCapitolatoRecord().then((capitolatoRecord) => {
+    const fileStatus = capitolatoRecord?.fileName ? "Allegato" : "Nessun file";
+    const uploadedAt = capitolatoRecord?.uploadedAt?.toDate ? capitolatoRecord.uploadedAt.toDate().toLocaleString("it-IT") : "-";
+    const extractionFailed = Boolean(capitolatoRecord?.fileName && capitolatoRecord?.autoExtractionAttempted && !capitolatoRecord?.autoExtractionSuccess);
+    const extractedSummary = String(capitolatoRecord?.manualSummary || "").trim();
+    ui.impiantoSafetyContent.innerHTML = `
     <section class="capitolato-dashboard">
       <article class="capitolato-hero-card">
         <div class="capitolato-hero-overlay">
@@ -13029,7 +13072,24 @@ function renderCapitolatoOperativoPage(impiantoKey) {
           <button type="button">📤 Invia report WhatsApp</button>
         </div>
       </article>
+      <article class="capitolato-card capitolato-file-card">
+        <h4>7. File capitolato</h4>
+        <p><strong>Stato file allegato:</strong> ${escapeHTML(fileStatus)}</p>
+        <p><strong>Nome file:</strong> ${escapeHTML(capitolatoRecord?.fileName || "-")}</p>
+        <p><strong>Data caricamento:</strong> ${escapeHTML(uploadedAt)}</p>
+        ${extractedSummary ? `<label>Riepilogo compilabile admin<textarea data-capitolato-manual-summary rows="6" ${canManageData() ? "" : "readonly"}>${escapeHTML(extractedSummary)}</textarea></label>` : ""}
+        ${extractionFailed ? `<p class="capitolato-file-error">Capitolato allegato, ma dati non estratti automaticamente. Compilare manualmente.</p>` : ""}
+        <p class="muted" data-capitolato-file-feedback role="status" aria-live="polite"></p>
+        <div class="capitolato-actions-grid">
+          ${canManageData() ? `<button type="button" data-capitolato-upload>📎 Allega capitolato</button><button type="button" data-capitolato-replace>Sostituisci capitolato</button><button type="button" data-capitolato-delete>Elimina capitolato</button><button type="button" data-capitolato-save-manual>Salva modifica manuale</button>` : ""}
+          ${capitolatoRecord?.driveWebViewLink ? `<button type="button" data-capitolato-open-originale>📄 Apri capitolato originale</button>` : ""}
+        </div>
+        <input type="file" data-capitolato-file-input hidden accept="${getCapitolatoAcceptedTypes()}">
+      </article>
     </section>`;
+  }).catch((error) => {
+    console.error("Errore caricamento capitolato:", error);
+  });
 }
 
 async function renderImpiantoSafetyPage(impiantoKey) {
@@ -13081,10 +13141,46 @@ async function handleImpiantoSafetyContentClick(event) {
   const gpsBtn = event.target?.closest?.("[data-safety-get-gps]");
   const weatherBtn = event.target?.closest?.("[data-safety-weather-alert]");
   const capitolatoBtn = event.target?.closest?.("[data-capitolato-open]");
+  const capitolatoUploadBtn = event.target?.closest?.("[data-capitolato-upload],[data-capitolato-replace]");
+  const capitolatoDeleteBtn = event.target?.closest?.("[data-capitolato-delete]");
+  const capitolatoOpenOriginaleBtn = event.target?.closest?.("[data-capitolato-open-originale]");
+  const capitolatoSaveManualBtn = event.target?.closest?.("[data-capitolato-save-manual]");
   if (capitolatoBtn) {
     event.preventDefault();
     const panel = ui.impiantoSafetyContent?.querySelector("[data-capitolato-panel]");
     if (panel) { panel.classList.toggle("hidden"); panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    return;
+  }
+  if (capitolatoOpenOriginaleBtn) {
+    const record = await loadCommessaCapitolatoRecord();
+    if (record?.driveWebViewLink) window.open(record.driveWebViewLink, "_blank");
+    else if (record?.fileDataUrl) window.open(record.fileDataUrl, "_blank");
+    return;
+  }
+  if (capitolatoUploadBtn) {
+    if (!canManageData()) return;
+    const input = ui.impiantoSafetyContent?.querySelector("[data-capitolato-file-input]");
+    if (!input) return;
+    input.value = "";
+    input.click();
+    return;
+  }
+  if (capitolatoDeleteBtn) {
+    if (!canManageData() || !selectedCommessaId) return;
+    if (!window.confirm("Eliminare il capitolato allegato per questa commessa?")) return;
+    await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").delete();
+    renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey);
+    return;
+  }
+  if (capitolatoSaveManualBtn) {
+    if (!canManageData() || !selectedCommessaId) return;
+    const manualSummary = String(ui.impiantoSafetyContent?.querySelector("[data-capitolato-manual-summary]")?.value || "").trim();
+    await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").set({
+      manualSummary,
+      manualEditedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      manualEditedBy: currentUser?.email || ""
+    }, { merge: true });
+    renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey);
     return;
   }
   if (anomalyToggle) {
@@ -13137,6 +13233,58 @@ async function handleImpiantoSafetyContentClick(event) {
     if (wrap) wrap.classList.add("hidden");
   }
 }
+
+ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
+  const fileInput = event.target;
+  if (!(fileInput instanceof HTMLInputElement) || !fileInput.matches("[data-capitolato-file-input]")) return;
+  if (!fileInput || !canManageData() || !selectedCommessaId) return;
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  let autoExtractionSuccess = false;
+  let manualSummary = "";
+  let uploadedFile = { fileId: "", webViewLink: "" };
+  let storageMode = "drive";
+  let fileDataUrl = "";
+  try {
+    setCapitolatoFileFeedback("Caricamento capitolato in corso...", "loading");
+    uploadedFile = await uploadBlobToDrive(file, file.name || "capitolato", file.type || "application/octet-stream", driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: selectedCommessaName || "Commessa" });
+  } catch (error) {
+    console.error("Upload capitolato su Drive fallito, provo fallback Firestore:", error);
+    storageMode = "firestore";
+    fileDataUrl = await readFileAsDataUrl(file);
+    setCapitolatoFileFeedback("Upload cloud non disponibile: file salvato in archivio locale.", "warning");
+  }
+  try {
+    if (/^text\/|csv|plain|rtf/i.test(file.type || "") || /\.(txt|csv|rtf)$/i.test(file.name || "")) {
+      const parsed = inferCapitolatoDataFromText(await file.text());
+      manualSummary = parsed?.manualSummary || "";
+      autoExtractionSuccess = Boolean(parsed?.extracted);
+    }
+    await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").set({
+      fileName: file.name || "capitolato",
+      fileType: file.type || "application/octet-stream",
+      fileSize: Number(file.size || 0),
+      driveFileId: uploadedFile.fileId || "",
+      driveWebViewLink: uploadedFile.webViewLink || "",
+      fileDataUrl: fileDataUrl || "",
+      storageMode,
+      uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      uploadedBy: currentUser?.email || "",
+      autoExtractionAttempted: true,
+      autoExtractionSuccess,
+      manualSummary
+    }, { merge: true });
+    setCapitolatoFileFeedback("Capitolato caricato correttamente.", "success");
+  } catch (error) {
+    console.error("Upload capitolato fallito:", error);
+    const normalizedError = normalizeCapitolatoUploadError(error);
+    setCapitolatoFileFeedback(normalizedError, "error");
+    alert(normalizedError);
+  } finally {
+    fileInput.value = "";
+    setTimeout(() => renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey), 250);
+  }
+});
 
 function acquireImpiantoSafetyGps(form) {
   const feedback = form?.querySelector("[data-safety-gps-feedback]");

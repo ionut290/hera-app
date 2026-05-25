@@ -12953,6 +12953,15 @@ function setCapitolatoFileFeedback(message = "", state = "") {
   else el.removeAttribute("data-state");
 }
 
+function normalizeCapitolatoUploadError(error) {
+  const raw = String(error?.message || error || "").trim();
+  if (!raw) return "Errore caricamento capitolato.";
+  if (/internal/i.test(raw)) {
+    return "Errore interno upload cloud. Riprova; se persiste, verifica configurazione Drive/Firebase admin.";
+  }
+  return raw;
+}
+
 async function loadCommessaCapitolatoRecord() {
   if (!selectedCommessaId) return null;
   const doc = await db.collection("commesse").doc(selectedCommessaId).collection("capitolato").doc("originale").get();
@@ -13145,6 +13154,7 @@ async function handleImpiantoSafetyContentClick(event) {
   if (capitolatoOpenOriginaleBtn) {
     const record = await loadCommessaCapitolatoRecord();
     if (record?.driveWebViewLink) window.open(record.driveWebViewLink, "_blank");
+    else if (record?.fileDataUrl) window.open(record.fileDataUrl, "_blank");
     return;
   }
   if (capitolatoUploadBtn) {
@@ -13232,9 +13242,19 @@ ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
   if (!file) return;
   let autoExtractionSuccess = false;
   let manualSummary = "";
+  let uploadedFile = { fileId: "", webViewLink: "" };
+  let storageMode = "drive";
+  let fileDataUrl = "";
   try {
     setCapitolatoFileFeedback("Caricamento capitolato in corso...", "loading");
-    const upload = await uploadBlobToDrive(file, file.name || "capitolato", file.type || "application/octet-stream", driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: selectedCommessaName || "Commessa" });
+    uploadedFile = await uploadBlobToDrive(file, file.name || "capitolato", file.type || "application/octet-stream", driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: selectedCommessaName || "Commessa" });
+  } catch (error) {
+    console.error("Upload capitolato su Drive fallito, provo fallback Firestore:", error);
+    storageMode = "firestore";
+    fileDataUrl = await readFileAsDataUrl(file);
+    setCapitolatoFileFeedback("Upload cloud non disponibile: file salvato in archivio locale.", "warning");
+  }
+  try {
     if (/^text\/|csv|plain|rtf/i.test(file.type || "") || /\.(txt|csv|rtf)$/i.test(file.name || "")) {
       const parsed = inferCapitolatoDataFromText(await file.text());
       manualSummary = parsed?.manualSummary || "";
@@ -13244,8 +13264,10 @@ ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
       fileName: file.name || "capitolato",
       fileType: file.type || "application/octet-stream",
       fileSize: Number(file.size || 0),
-      driveFileId: upload.fileId || "",
-      driveWebViewLink: upload.webViewLink || "",
+      driveFileId: uploadedFile.fileId || "",
+      driveWebViewLink: uploadedFile.webViewLink || "",
+      fileDataUrl: fileDataUrl || "",
+      storageMode,
       uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
       uploadedBy: currentUser?.email || "",
       autoExtractionAttempted: true,
@@ -13255,8 +13277,9 @@ ui.impiantoSafetyContent?.addEventListener("change", async (event) => {
     setCapitolatoFileFeedback("Capitolato caricato correttamente.", "success");
   } catch (error) {
     console.error("Upload capitolato fallito:", error);
-    setCapitolatoFileFeedback(error?.message || "Errore caricamento capitolato.", "error");
-    alert(error?.message || "Errore caricamento capitolato.");
+    const normalizedError = normalizeCapitolatoUploadError(error);
+    setCapitolatoFileFeedback(normalizedError, "error");
+    alert(normalizedError);
   } finally {
     fileInput.value = "";
     setTimeout(() => renderCapitolatoOperativoPage(getCurrentImpiantoSafetyContext().impiantoKey), 250);

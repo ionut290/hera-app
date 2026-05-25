@@ -8561,6 +8561,7 @@ textarea:focus-visible {
 .capitolato-file-error { margin-top:8px; color:#b91c1c; font-weight:700; }
 .capitolato-file-card [data-capitolato-file-feedback][data-state="loading"] { color:#1d4ed8; font-weight:700; }
 .capitolato-file-card [data-capitolato-file-feedback][data-state="success"] { color:#047857; font-weight:700; }
+.capitolato-file-card [data-capitolato-file-feedback][data-state="warning"] { color:#92400e; font-weight:700; }
 .capitolato-file-card [data-capitolato-file-feedback][data-state="error"] { color:#b91c1c; font-weight:700; }
 @media (max-width: 980px){
   .capitolato-main-grid > :first-child,.capitolato-main-grid > :last-child,.capitolato-secondary-grid > * { grid-column:1/-1; }

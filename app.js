@@ -22579,12 +22579,16 @@ function renderProgrammazioni() {
 
 
 function getFerieEligibleOperators() {
+  const commesseNames = Array.from(commesseById.values()).map((c) => String(c?.nome || "").trim()).filter(Boolean);
   return personaleRecords.filter((person) => {
-    if (person.allCommesseEnabled) return true;
-    const enabled = Array.isArray(person.commesseAbilitate)
+    const allEnabled = Boolean(person?.abilitatoTutteCommesse || person?.allCommesseEnabled);
+    if (allEnabled) return true;
+    const enabled = Array.isArray(person?.commesseAbilitate)
       ? person.commesseAbilitate.map((v) => String(v || "").trim()).filter(Boolean)
       : [];
-    return enabled.length > 0;
+    if (!enabled.length) return false;
+    if (!commesseNames.length) return true;
+    return commesseNames.some((commessaName) => isPersonAbilitataForCommessa(person, commessaName));
   });
 }
 

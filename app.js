@@ -244,6 +244,7 @@ const ui = {
   mapImpiantoDetailBody: document.getElementById("map-impianto-detail-body"),
   biogasMapPage: document.getElementById("biogas-map-page"),
   biogasMapBackBtn: document.getElementById("biogas-map-back-btn"),
+  biogasDistanceIndicator: document.getElementById("biogas-distance-indicator"),
   biogasMapToggleBtn: document.getElementById("biogas-map-toggle-btn"),
   biogasMapRefreshBtn: document.getElementById("biogas-map-refresh-btn"),
   biogasMapDeleteBtn: document.getElementById("biogas-map-delete-btn"),
@@ -12886,6 +12887,7 @@ function renderBiogasMap() {
   if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
   else biogasMapInstance.setView([44.4949, 11.3426], 12);
   ui.biogasMapStatus.textContent = biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile.";
+  updateBiogasDistanceIndicator(Infinity);
   if (biogasWatchId == null && navigator.geolocation) {
     biogasWatchId = navigator.geolocation.watchPosition((pos) => {
       const latlng = [pos.coords.latitude, pos.coords.longitude];
@@ -12893,6 +12895,7 @@ function renderBiogasMap() {
       biogasUserMarker.setLatLng(latlng);
       evaluateBiogasDistanceAlerts(latlng);
     }, () => {
+      updateBiogasDistanceIndicator(Infinity);
       ui.biogasMapStatus.textContent = `${biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile."} Posizione non disponibile: abilita GPS e permessi posizione.`;
     }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
   }
@@ -12945,6 +12948,20 @@ function teardownBiogasMapPage() {
   biogasFeatures = [];
 }
 
+
+function updateBiogasDistanceIndicator(distanceMeters = Infinity) {
+  if (!ui.biogasDistanceIndicator) return;
+  const el = ui.biogasDistanceIndicator;
+  el.classList.remove("warning", "danger", "danger-blink");
+  if (!Number.isFinite(distanceMeters)) {
+    el.textContent = "-- m";
+    return;
+  }
+  el.textContent = `${distanceMeters.toFixed(1)} m`;
+  if (distanceMeters < 4) el.classList.add("danger", "danger-blink");
+  else if (distanceMeters <= 10) el.classList.add("warning");
+}
+
 function pointToSegmentDistanceMeters(point, a, b) {
   const toRad = (v) => (v * Math.PI) / 180;
   const R = 6371000;
@@ -12971,10 +12988,12 @@ function evaluateBiogasDistanceAlerts(userLatLng) {
       if (dist < best.dist) best = { dist, name: feature.name || `tubo ${i}` };
     }
   });
+  updateBiogasDistanceIndicator(best.dist);
   if (!Number.isFinite(best.dist)) return;
-  const level = best.dist <= 3 ? "red" : (best.dist <= 10 ? "yellow" : "");
-  if (!level || level === biogasDistanceAlertLevel) return;
+  const level = best.dist < 4 ? "red" : (best.dist <= 10 ? "yellow" : "white");
+  if (level === biogasDistanceAlertLevel) return;
   biogasDistanceAlertLevel = level;
+  if (level === "white") return;
   const prefix = "⚠️ ATTENZIONE\nSei vicino a una tubazione biogas.";
   const message = `${prefix}\nTubo: ${best.name}\nDistanza: ${best.dist.toFixed(1)} m`;
   ui.biogasMapStatus.textContent = message;

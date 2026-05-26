@@ -22666,6 +22666,42 @@ async function renderFerieList() {
   }));
 }
 
+
+function buildTeamCombinations(availablePeople, maxTeams) {
+  const remaining = [...availablePeople];
+  const combos = [];
+  const hasReq = (person, key) => hasRequiredPersonaleCourse(person, key);
+  for (let idx = 0; idx < maxTeams; idx += 1) {
+    if (remaining.length < 2) break;
+    let leadIndex = -1;
+    let leadScore = -1;
+    remaining.forEach((person, i) => {
+      const score = Number(hasReq(person, "primo soccorso")) + Number(hasReq(person, "antincendio")) + Number(hasReq(person, "preposto"));
+      if (score > leadScore) { leadScore = score; leadIndex = i; }
+    });
+    if (leadIndex < 0) break;
+    const lead = remaining.splice(leadIndex, 1)[0];
+    let mateIndex = remaining.findIndex((person) => {
+      const primoOk = hasReq(lead, "primo soccorso") || hasReq(person, "primo soccorso");
+      const antiOk = hasReq(lead, "antincendio") || hasReq(person, "antincendio");
+      const prepOk = hasReq(lead, "preposto") || hasReq(person, "preposto");
+      return primoOk && antiOk && prepOk;
+    });
+    if (mateIndex < 0) mateIndex = 0;
+    const mate = remaining.splice(mateIndex, 1)[0];
+    combos.push([lead, mate].filter(Boolean));
+  }
+  return combos;
+}
+
+function formatPersonReqBadges(person) {
+  const parts = [];
+  if (hasRequiredPersonaleCourse(person, "primo soccorso")) parts.push("PS");
+  if (hasRequiredPersonaleCourse(person, "antincendio")) parts.push("AI");
+  if (hasRequiredPersonaleCourse(person, "preposto")) parts.push("PR");
+  return parts.length ? ` [${parts.join("/")}]` : "";
+}
+
 async function renderFerieDisponibilitaCalendar() {
   if (!ui.ferieCalendarResult) return;
   if (!canManageData()) return;
@@ -22677,14 +22713,30 @@ async function renderFerieDisponibilitaCalendar() {
   const ferieItems = ferieSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const days = [];
   for (let d = new Date(start + 'T00:00:00'); d <= new Date(end + 'T00:00:00'); d.setDate(d.getDate()+1)) days.push(new Date(d));
-  ui.ferieCalendarResult.innerHTML = days.map((dateObj) => {
+
+  const cards = days.map((dateObj) => {
     const dateKey = dateObj.toISOString().slice(0,10);
     const stats = computeDayStats(dateKey, ferieItems);
     const missingReq = stats.available.length > 0 && stats.validTeams === 0;
     const uncovered = stats.available.length === 0 || stats.validTeams === 0;
-    return `<article class="simple-list-item"><strong>${escapeHTML(dateKey)}</strong><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${stats.validTeams}</p><p>${missingReq ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${uncovered ? '❌ Giorno scoperto' : ''}</p></article>`;
+    const combos = buildTeamCombinations(stats.available, stats.validTeams);
+    const detailId = `ferie-day-detail-${dateKey}`;
+    const comboRows = combos.map((team, idx) => `<li><b>Squadra ${idx + 1}</b>: ${team.map((p) => `${escapeHTML(getPersonaleDisplayName(p) || '-')}${escapeHTML(formatPersonReqBadges(p))}`).join(' + ')}</li>`).join('');
+    const inFerieNames = stats.enabledPeople.filter((p) => stats.inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p)))).map((p) => getPersonaleDisplayName(p)).filter(Boolean);
+    return `<article class="simple-list-item ferie-calendar-day-card"><button type="button" class="ferie-calendar-day-head" data-ferie-toggle="${escapeHTML(detailId)}"><strong>${escapeHTML(dateKey)}</strong><span>Squadre: <b>${stats.validTeams}</b></span></button><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${stats.validTeams}</p><p>${missingReq ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${uncovered ? '❌ Giorno scoperto' : ''}</p><div id="${escapeHTML(detailId)}" class="hidden"><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p><p><b>Combinazioni squadre:</b></p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div></article>`;
   }).join('');
+
+  ui.ferieCalendarResult.innerHTML = `<div class="ferie-calendar-grid">${cards}</div>`;
+  ui.ferieCalendarResult.querySelectorAll('[data-ferie-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-ferie-toggle') || '';
+      const el = ui.ferieCalendarResult.querySelector(`#${cssEscapeValue(id)}`);
+      if (!el) return;
+      el.classList.toggle('hidden');
+    });
+  });
 }
+
 
 function openEditProgrammazione(id) {
   if (!canManageData()) return;

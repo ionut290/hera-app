@@ -8566,3 +8566,56 @@ textarea:focus-visible {
 @media (max-width: 980px){
   .capitolato-main-grid > :first-child,.capitolato-main-grid > :last-child,.capitolato-secondary-grid > * { grid-column:1/-1; }
 }
+
+
+#panel-programmazione {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 760px) {
+  #panel-programmazione {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+
+.ferie-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+.ferie-calendar-day-card { margin: 0; }
+.ferie-calendar-day-head {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  background: #eef4ff; border: 1px solid #c7d7ff; border-radius: 10px; padding: 8px 10px; cursor: pointer;
+}
+
+
+.ferie-month-wrap {
+  width: min(50vw, 900px);
+  min-width: 320px;
+  max-width: 100%;
+}
+.ferie-month { margin: 0 auto 12px; }
+.ferie-month h5 { margin: 0 0 8px; text-transform: capitalize; }
+.ferie-month-weekdays, .ferie-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.ferie-month-weekdays span { font-size: 12px; color: #64748b; text-align: center; }
+.ferie-month-cell {
+  border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; min-height: 62px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 6px;
+}
+.ferie-month-cell--ok { background: #dcfce7; border-color: #22c55e; }
+.ferie-month-cell--ko { background: #fee2e2; border-color: #ef4444; }
+.ferie-month-cell--out, .ferie-month-cell--empty { background: #f8fafc; border-color: #e2e8f0; }
+.ferie-month-cell small { font-size: 11px; }
+.ferie-day-detail { grid-column: 1 / -1; background: #fff; border: 1px dashed #94a3b8; border-radius: 10px; padding: 8px; margin-top: 4px; }
+@media (max-width: 760px) {
+  .ferie-month-wrap { width: 100%; }
+}

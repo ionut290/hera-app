@@ -1370,6 +1370,12 @@ textarea:focus-visible {
   background: #dbeafe;
 }
 
+#biogas-map-view {
+  width: 100%;
+  height: calc(100dvh - 180px);
+  min-height: 420px;
+}
+
 #map-fullscreen-view {
   position: absolute;
   inset: 0;

@@ -328,6 +328,22 @@
         </div>
       </section>
     </section>
+    <section id="biogas-map-page" class="hidden">
+      <section class="map-fullscreen-page-card">
+        <div class="section-head map-fullscreen-toolbar" aria-label="Azioni mappa rete biogas">
+          <button id="biogas-map-back-btn" class="btn" type="button">← Indietro</button>
+          <button id="biogas-map-toggle-btn" class="btn" type="button">Mostra/Nascondi Rete Biogas</button>
+          <button id="biogas-map-refresh-btn" class="btn hidden" type="button">Aggiorna rete biogas</button>
+          <button id="biogas-map-delete-btn" class="btn hidden" type="button">Elimina rete biogas</button>
+          <input id="biogas-map-search" type="search" placeholder="Cerca tubo..." aria-label="Cerca tubo">
+        </div>
+        <p id="biogas-map-status" class="muted">Caricamento rete biogas…</p>
+        <p id="biogas-map-last-update" class="muted"></p>
+        <div class="map-fullscreen-map-wrap">
+          <div id="biogas-map-view"></div>
+        </div>
+      </section>
+    </section>
   </main>
 
   <button id="chat-open-btn" class="chat-fab" type="button" title="Apri chat operatori" aria-label="Apri chat operatori">

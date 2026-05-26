@@ -678,6 +678,26 @@
         </select>
       </div>
       <div id="programmazione-list" class="simple-list"></div>
+      <section id="ferie-colleghi-card" class="card">
+        <h4>🏖️ Ferie colleghi</h4>
+        <form id="ferie-form" class="inline-form">
+          <select id="ferie-operatore" required><option value="">Operatore</option></select>
+          <input id="ferie-inizio" type="date" required>
+          <input id="ferie-fine" type="date" required>
+          <textarea id="ferie-note" rows="2" placeholder="Note (opzionale)"></textarea>
+          <button id="ferie-save-btn" class="btn btn-primary" type="submit">Salva ferie</button>
+        </form>
+        <div id="ferie-list" class="simple-list"></div>
+      </section>
+      <section id="ferie-disponibilita-card" class="card">
+        <h4>📆 Calendario disponibilità squadre</h4>
+        <div class="inline-form">
+          <input id="ferie-check-start" type="date">
+          <input id="ferie-check-end" type="date">
+          <button id="ferie-check-btn" class="btn" type="button">Controlla disponibilità</button>
+        </div>
+        <div id="ferie-calendar-result" class="simple-list"></div>
+      </section>
       <dialog id="programmazione-dialog">
         <form id="programmazione-form" class="squadra-form programmazione-form" method="dialog">
           <input id="programma-id" type="hidden">
@@ -688,7 +708,7 @@
               <input id="programma-data" type="date" required>
               <input id="programma-ora" type="time" required>
               <input id="programma-ora-fine" type="time" required>
-              <select id="programma-tipo" required><option value="sfalcio">sfalcio</option><option value="potatura">potatura</option><option value="pulizia">pulizia</option><option value="sopralluogo">sopralluogo</option><option value="emergenza">emergenza</option><option value="altro">altro</option></select>
+              <select id="programma-tipo" required><option value="sfalcio">sfalcio</option><option value="potatura">potatura</option><option value="pulizia">pulizia</option><option value="sopralluogo">sopralluogo</option><option value="emergenza">emergenza</option><option value="ferie">ferie collega</option><option value="altro">altro</option></select>
               <select id="programma-priorita" required><option value="normale">normale</option><option value="importante">importante</option><option value="urgente">urgente</option></select>
               <div id="programma-operatori-autocomplete" class="autocomplete-multi"></div>
               <div id="programma-mezzi-autocomplete" class="autocomplete-multi"></div>

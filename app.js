@@ -382,6 +382,7 @@ const ui = {
   userToggleBtn: document.getElementById("user-toggle-btn"),
   userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
+  weatherDiagnostics: document.getElementById("weather-diagnostics"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
   weatherDetails: document.getElementById("weather-details"),
@@ -19144,22 +19145,117 @@ async function fetchWeatherForecast(target, options = {}) {
   return { ...data, provider: "Open-Meteo" };
 }
 
+function isWeatherDiagnosticEnabled() {
+  const query = new URLSearchParams(window.location.search || "").get("weatherDiag");
+  const local = localStorage.getItem("heraWeatherDiagnostics");
+  return query === "1" || local === "1";
+}
+
+function renderWeatherDiagnostics(diag = {}) {
+  if (!ui.weatherDiagnostics) return;
+  if (!isWeatherDiagnosticEnabled()) {
+    ui.weatherDiagnostics.classList.add("hidden");
+    ui.weatherDiagnostics.textContent = "";
+    return;
+  }
+  const lines = [
+    `Provider: ${diag.provider || "-"}`,
+    `Coordinate: ${diag.coordinates || "-"}`,
+    `URL API: ${diag.url || "-"}`,
+    `HTTP: ${diag.httpStatus ?? "-"}`,
+    `Errore: ${diag.error || "-"}`,
+    `Ultimo aggiornamento: ${diag.updatedAt ? new Date(diag.updatedAt).toLocaleString("it-IT") : "-"}`
+  ];
+  ui.weatherDiagnostics.classList.remove("hidden");
+  ui.weatherDiagnostics.textContent = lines.join("\n");
+}
+
+async function fetchOpenWeatherPrimary(target, options = {}) {
+  const apiKey = getRuntimeEnvValue("VITE_OPENWEATHER_API_KEY") || getRuntimeEnvValue("OPENWEATHER_API_KEY");
+  if (!apiKey) throw new Error("OPENWEATHER_API_KEY mancante");
+  const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
+  url.searchParams.set("lat", String(target.lat));
+  url.searchParams.set("lon", String(target.lon));
+  url.searchParams.set("appid", apiKey);
+  url.searchParams.set("units", "metric");
+  url.searchParams.set("lang", "it");
+  const response = await fetch(url.toString(), { cache: options.cache || "no-store" });
+  if (!response.ok) throw new Error(`OpenWeather HTTP ${response.status}`);
+  const payload = await response.json();
+  const list = Array.isArray(payload?.list) ? payload.list : [];
+  const hourly = list.slice(0, 12);
+  const data = {
+    current: {
+      temperature_2m: hourly[0]?.main?.temp,
+      wind_speed_10m: Number(hourly[0]?.wind?.speed || 0) * 3.6,
+      weather_code: mapOpenWeatherCodeToWmo(hourly[0]?.weather?.[0]?.id)
+    },
+    hourly: {
+      time: hourly.map((it) => new Date((it.dt || 0) * 1000).toISOString()),
+      temperature_2m: hourly.map((it) => it?.main?.temp),
+      precipitation_probability: hourly.map((it) => Math.round(Number(it?.pop || 0) * 100)),
+      snowfall: hourly.map((it) => Number(it?.snow?.["3h"] || 0)),
+      visibility: hourly.map((it) => it?.visibility),
+      weather_code: hourly.map((it) => mapOpenWeatherCodeToWmo(it?.weather?.[0]?.id)),
+      wind_speed_10m: hourly.map((it) => Number(it?.wind?.speed || 0) * 3.6)
+    },
+    provider: "OpenWeather"
+  };
+  return { data, url: url.toString(), httpStatus: response.status };
+}
+
+function mapOpenWeatherCodeToWmo(code) {
+  const c = Number(code);
+  if (!Number.isFinite(c)) return 0;
+  if (c >= 200 && c < 300) return 95;
+  if (c >= 300 && c < 400) return 53;
+  if (c >= 500 && c < 600) return 63;
+  if (c >= 600 && c < 700) return 73;
+  if (c >= 700 && c < 800) return 45;
+  if (c === 800) return 0;
+  return 3;
+}
+
 async function fetchWeather() {
   const target = getWeatherTargetCoordinates();
   currentWeatherTarget = target;
   renderCivilProtectionAlert({ level: "green", label: "Verifica Protezione Civile...", url: CIVIL_PROTECTION_ALERT_PAGE, loading: true });
 
+  const diagnostics = {
+    coordinates: `${Number(target.lat).toFixed(5)}, ${Number(target.lon).toFixed(5)} (${target.source})`,
+    updatedAt: Date.now()
+  };
   try {
-    const data = await fetchWeatherForecast(target);
+    let data;
+    try {
+      const primary = await fetchOpenWeatherPrimary(target);
+      data = primary.data;
+      diagnostics.provider = "OpenWeather";
+      diagnostics.url = primary.url;
+      diagnostics.httpStatus = primary.httpStatus;
+    } catch (primaryError) {
+      diagnostics.provider = "OpenWeather → Open-Meteo fallback";
+      diagnostics.error = primaryError?.message || "errore provider primario";
+      const params = new URLSearchParams(buildWeatherForecastRequestParams(target));
+      diagnostics.url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+      const fallback = await fetchWeatherForecast(target);
+      data = fallback;
+      diagnostics.httpStatus = 200;
+    }
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     await renderWeatherDetails(data, target);
+    renderWeatherDiagnostics(diagnostics);
   } catch (error) {
     ui.weatherSummary.textContent = "Meteo non disponibile.";
     ui.weatherRisks.innerHTML = "<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>";
     renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
     ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
+    diagnostics.error = error?.message || "errore sconosciuto";
+    if (!diagnostics.httpStatus && /CORS|Failed to fetch|NetworkError|fetch/i.test(diagnostics.error)) diagnostics.httpStatus = "CORS/Network";
+    diagnostics.updatedAt = Date.now();
+    renderWeatherDiagnostics(diagnostics);
   }
 }
 

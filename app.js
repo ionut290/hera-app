@@ -22575,6 +22575,15 @@ function renderProgrammazioni() {
     ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
     ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
   }
+  return combos;
+}
+
+function formatPersonReqBadges(person) {
+  const parts = [];
+  if (hasRequiredPersonaleCourse(person, "primo soccorso")) parts.push("PS");
+  if (hasRequiredPersonaleCourse(person, "antincendio")) parts.push("AI");
+  if (hasRequiredPersonaleCourse(person, "preposto")) parts.push("PR");
+  return parts.length ? ` [${parts.join("/")}]` : "";
 }
 
 

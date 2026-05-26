@@ -1227,37 +1227,37 @@ window.addEventListener("resize", () => {
   updateWorkBannerAnimationDuration();
 });
 
-ui.loginBtn.addEventListener("click", loginWithGoogle);
-ui.switchAccountBtn.addEventListener("click", switchGoogleAccount);
+ui.loginBtn?.addEventListener("click", loginWithGoogle);
+ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
-ui.menuToggleBtn.addEventListener("click", openSideMenu);
-ui.menuCloseBtn.addEventListener("click", closeSideMenu);
-ui.menuOverlay.addEventListener("click", closeSideMenu);
-ui.logoutBtn.addEventListener("click", logout);
-ui.driveConnectBtn.addEventListener("click", connectGoogleDrive);
-ui.commessaForm.addEventListener("submit", createCommessa);
+ui.menuToggleBtn?.addEventListener("click", openSideMenu);
+ui.menuCloseBtn?.addEventListener("click", closeSideMenu);
+ui.menuOverlay?.addEventListener("click", closeSideMenu);
+ui.logoutBtn?.addEventListener("click", logout);
+ui.driveConnectBtn?.addEventListener("click", connectGoogleDrive);
+ui.commessaForm?.addEventListener("submit", createCommessa);
 ui.commessaType?.addEventListener("change", updateCommessaParentField);
 ui.openOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(true));
 ui.closeOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(false));
 ui.parentCommessaForm?.addEventListener("submit", createParentCommessa);
 ui.moveSubcommesseForm?.addEventListener("submit", moveSelectedCommesseUnderParent);
 ui.moveParentCommessaSelect?.addEventListener("change", renderMoveSubcommesseList);
-ui.excelFile.addEventListener("change", onExcelSelected);
-ui.importBtn.addEventListener("click", importPendingRows);
+ui.excelFile?.addEventListener("change", onExcelSelected);
+ui.importBtn?.addEventListener("click", importPendingRows);
 ui.sheetUrlImportBtn?.addEventListener("click", importFromGoogleSheetUrl);
-ui.commessaTargetSelect.addEventListener("change", onCommessaTargetChanged);
-ui.chatOpenBtn.addEventListener("click", openChatModal);
-ui.chatCloseBtn.addEventListener("click", closeChatModal);
+ui.commessaTargetSelect?.addEventListener("change", onCommessaTargetChanged);
+ui.chatOpenBtn?.addEventListener("click", openChatModal);
+ui.chatCloseBtn?.addEventListener("click", closeChatModal);
 ui.chatClearBtn?.addEventListener("click", openChatClearConfirmModal);
 ui.chatClearCancelBtn?.addEventListener("click", closeChatClearConfirmModal);
 ui.chatClearConfirmBtn?.addEventListener("click", clearCurrentChatMessages);
 ui.chatClearConfirmModal?.addEventListener("click", (event) => {
   if (event.target === ui.chatClearConfirmModal) closeChatClearConfirmModal();
 });
-ui.chatSendForm.addEventListener("submit", sendTextMessage);
-ui.chatMediaInput.addEventListener("change", sendMediaMessage);
-ui.chatVoiceBtn.addEventListener("click", toggleVoiceRecording);
-ui.backToHomeBtn.addEventListener("click", closeImpiantiPage);
+ui.chatSendForm?.addEventListener("submit", sendTextMessage);
+ui.chatMediaInput?.addEventListener("change", sendMediaMessage);
+ui.chatVoiceBtn?.addEventListener("click", toggleVoiceRecording);
+ui.backToHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.impiantoWeatherDetailBackBtn?.addEventListener("click", closeDettaglioMeteoImpianto);
 ui.impiantoWeatherDetailRefreshBtn?.addEventListener("click", refreshDettaglioMeteoImpianto);
 ui.atexProcedureBackBtn?.addEventListener("click", closeAtexProcedurePage);
@@ -1268,8 +1268,8 @@ ui.impiantoSafetyContent?.addEventListener("click", handleImpiantoSafetyContentC
 ui.impiantoSafetyContent?.addEventListener("submit", saveImpiantoSafetyContactForm);
 ui.commessaHomeBtn?.addEventListener("click", closeImpiantiPage);
 ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighlight);
-ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
-ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
+ui.exportCurrentCommessaBtn?.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
+ui.mapFullscreenBtn?.addEventListener("click", openMapFullscreenPage);
 ui.mapInlineFullscreenBtn?.addEventListener("click", openMapFullscreenPage);
 ui.mapBiogasToggleBtn?.addEventListener("click", () => {
   biogasOverlayVisible = !biogasOverlayVisible;
@@ -1306,9 +1306,9 @@ ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
 ui.mapFullscreenFeedbackClose?.addEventListener("click", () => ui.mapFullscreenFeedbackBanner?.classList.add("hidden"));
 ui.toggleCommesseHomeBtn?.addEventListener("click", toggleCommesseHomeCard);
-ui.impiantoSearch.addEventListener("input", onImpiantoSearchInput);
-ui.viewDoneBtn.addEventListener("click", () => setImpiantiViewMode("done"));
-ui.viewTodoBtn.addEventListener("click", () => setImpiantiViewMode("todo"));
+ui.impiantoSearch?.addEventListener("input", onImpiantoSearchInput);
+ui.viewDoneBtn?.addEventListener("click", () => setImpiantiViewMode("done"));
+ui.viewTodoBtn?.addEventListener("click", () => setImpiantiViewMode("todo"));
 ui.viewAlertsBtn?.addEventListener("click", () => setImpiantiViewMode("alerts"));
 document.querySelectorAll(".commessa-stat-item[data-stat-action]").forEach((item) => {
   item.addEventListener("click", () => handleCommessaStatAction(item.dataset.statAction || ""));
@@ -1318,7 +1318,7 @@ document.querySelectorAll(".commessa-stat-item[data-stat-action]").forEach((item
     handleCommessaStatAction(item.dataset.statAction || "");
   });
 });
-ui.personaleForm.addEventListener("submit", addPersonale);
+ui.personaleForm?.addEventListener("submit", addPersonale);
 ui.personaleSearchInput?.addEventListener("input", (event) => {
   personaleSearchQuery = String(event.target.value || "");
   personaleShowAll = false;
@@ -1330,10 +1330,10 @@ ui.personaleShowAllBtn?.addEventListener("click", () => {
   ui.personaleShowAllBtn.textContent = personaleShowAll ? "Nascondi elenco" : "Mostra tutto personale";
   renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
 });
-ui.mezziForm.addEventListener("submit", addMezzo);
-ui.squadraForm.addEventListener("submit", saveSquadraComposition);
-ui.squadraCommessa.addEventListener("change", autofillSquadraForm);
-ui.squadraCalendarDate.addEventListener("change", () => {
+ui.mezziForm?.addEventListener("submit", addMezzo);
+ui.squadraForm?.addEventListener("submit", saveSquadraComposition);
+ui.squadraCommessa?.addEventListener("change", autofillSquadraForm);
+ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
@@ -1374,17 +1374,17 @@ function toggleCommesseHomeCard() {
   isCommesseHomeCardVisible = false;
   syncCommesseHomeToggle();
 }
-ui.addSquadraRowBtn.addEventListener("click", () => addSquadraRow());
-ui.personaleImportBtn.addEventListener("click", importPersonaleFromExcel);
-ui.mezziImportBtn.addEventListener("click", importMezziFromExcel);
-ui.openPanelCommesse.addEventListener("click", () => openManagementPanel("commesse"));
-ui.openPanelSquadre.addEventListener("click", () => openManagementPanel("squadre"));
-ui.openPanelPersonale.addEventListener("click", () => openManagementPanel("personale"));
-ui.openPanelMezzi.addEventListener("click", () => openManagementPanel("mezzi"));
-ui.openPanelUtenti.addEventListener("click", () => openManagementPanel("utenti"));
-ui.openPanelGlobal.addEventListener("click", () => openManagementPanel("global"));
-ui.openPanelBanner.addEventListener("click", () => openManagementPanel("banner"));
-ui.openPanelInfoUtili.addEventListener("click", () => openManagementPanel("infoUtili"));
+ui.addSquadraRowBtn?.addEventListener("click", () => addSquadraRow());
+ui.personaleImportBtn?.addEventListener("click", importPersonaleFromExcel);
+ui.mezziImportBtn?.addEventListener("click", importMezziFromExcel);
+ui.openPanelCommesse?.addEventListener("click", () => openManagementPanel("commesse"));
+ui.openPanelSquadre?.addEventListener("click", () => openManagementPanel("squadre"));
+ui.openPanelPersonale?.addEventListener("click", () => openManagementPanel("personale"));
+ui.openPanelMezzi?.addEventListener("click", () => openManagementPanel("mezzi"));
+ui.openPanelUtenti?.addEventListener("click", () => openManagementPanel("utenti"));
+ui.openPanelGlobal?.addEventListener("click", () => openManagementPanel("global"));
+ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
+ui.openPanelInfoUtili?.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
 ui.openPanelProgrammazione?.addEventListener("click", () => openManagementPanel("programmazione"));
 ui.programmazioneAddBtn?.addEventListener("click", () => {
@@ -1404,17 +1404,17 @@ ui.programmazioneForm?.addEventListener("submit", saveProgrammazione);
 ui.ferieForm?.addEventListener("submit", saveFerieCollega);
 ui.ferieCheckBtn?.addEventListener("click", renderFerieDisponibilitaCalendar);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
-ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
+ui.openPrivateDocsBtn?.addEventListener("click", openPrivateDocsPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
-ui.openPersonalServicesBtn.addEventListener("click", openPersonalServicesPage);
-ui.openHoursBtn.addEventListener("click", openHoursPage);
+ui.openPersonalServicesBtn?.addEventListener("click", openPersonalServicesPage);
+ui.openHoursBtn?.addEventListener("click", openHoursPage);
 ui.openPosBtn?.addEventListener("click", openPosPage);
-ui.openSegnalazioniBtn.addEventListener("click", openSegnalazioniPage);
-ui.openHowtoBtn.addEventListener("click", openHowtoPage);
+ui.openSegnalazioniBtn?.addEventListener("click", openSegnalazioniPage);
+ui.openHowtoBtn?.addEventListener("click", openHowtoPage);
 ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
-ui.managementCloseBtn.addEventListener("click", closeManagementPanel);
-ui.userToggleBtn.addEventListener("click", toggleUserDetailsPanel);
-ui.weatherCloseBtn.addEventListener("click", closeWeatherModal);
+ui.managementCloseBtn?.addEventListener("click", closeManagementPanel);
+ui.userToggleBtn?.addEventListener("click", toggleUserDetailsPanel);
+ui.weatherCloseBtn?.addEventListener("click", closeWeatherModal);
 ui.weatherCard?.addEventListener("click", openWeatherExternalDetail);
 ui.weatherCard?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
@@ -1422,20 +1422,20 @@ ui.weatherCard?.addEventListener("keydown", (event) => {
     openWeatherExternalDetail();
   }
 });
-ui.backFromFuelBtn.addEventListener("click", closeFuelPage);
-ui.fuelMezzoDetailsBtn.addEventListener("click", toggleFuelMezzoDetails);
-ui.backFromPersonalServicesBtn.addEventListener("click", closePersonalServicesPage);
-ui.backFromSegnalazioniBtn.addEventListener("click", closeSegnalazioniPage);
-ui.backFromHowtoBtn.addEventListener("click", closeHowtoPage);
-ui.backFromPrivateDocsBtn.addEventListener("click", closePrivateDocsPage);
-ui.backFromHoursBtn.addEventListener("click", closeHoursPage);
+ui.backFromFuelBtn?.addEventListener("click", closeFuelPage);
+ui.fuelMezzoDetailsBtn?.addEventListener("click", toggleFuelMezzoDetails);
+ui.backFromPersonalServicesBtn?.addEventListener("click", closePersonalServicesPage);
+ui.backFromSegnalazioniBtn?.addEventListener("click", closeSegnalazioniPage);
+ui.backFromHowtoBtn?.addEventListener("click", closeHowtoPage);
+ui.backFromPrivateDocsBtn?.addEventListener("click", closePrivateDocsPage);
+ui.backFromHoursBtn?.addEventListener("click", closeHoursPage);
 ui.backFromPosBtn?.addEventListener("click", closePosPage);
 ui.posAddToggleBtn?.addEventListener("click", () => openPosDocumentForm());
 ui.posCancelBtn?.addEventListener("click", closePosDocumentForm);
 ui.posDocumentForm?.addEventListener("submit", savePosDocument);
 ui.posSearch?.addEventListener("input", renderPosDocuments);
-ui.hoursForm.addEventListener("submit", finalizeHoursReport);
-ui.addHoursCommessaBtn.addEventListener("click", () => {
+ui.hoursForm?.addEventListener("submit", finalizeHoursReport);
+ui.addHoursCommessaBtn?.addEventListener("click", () => {
   unlockHoursFinalizeButton();
   addHoursCommessaBlock();
 });
@@ -1445,7 +1445,7 @@ ui.hoursDate?.addEventListener("input", () => {
     applyHoursSuggestedOperators(card, { force: true });
   });
 });
-ui.viewHoursBtn.addEventListener("click", openHoursViewModal);
+ui.viewHoursBtn?.addEventListener("click", openHoursViewModal);
 ui.hoursViewCloseBtn?.addEventListener("click", closeHoursViewModal);
 ui.hoursViewModal?.addEventListener("click", (event) => {
   if (event.target === ui.hoursViewModal) closeHoursViewModal();
@@ -1465,18 +1465,18 @@ ui.hoursConfirmOkBtn?.addEventListener("click", () => closeHoursConfirmModal(tru
 ui.hoursConfirmModal?.addEventListener("click", (event) => {
   if (event.target === ui.hoursConfirmModal) closeHoursConfirmModal(false);
 });
-ui.privateDocsPresetPinBtn.addEventListener("click", () => applyPrivateDocPreset("pin"));
-ui.privateDocsPresetTesseraBtn.addEventListener("click", () => applyPrivateDocPreset("tessera"));
-ui.privateDocsForm.addEventListener("submit", savePrivateDocument);
+ui.privateDocsPresetPinBtn?.addEventListener("click", () => applyPrivateDocPreset("pin"));
+ui.privateDocsPresetTesseraBtn?.addEventListener("click", () => applyPrivateDocPreset("tessera"));
+ui.privateDocsForm?.addEventListener("submit", savePrivateDocument);
 ui.personalServicesCategories?.addEventListener("click", onPersonalServiceCategoryClick);
 ui.personalServicesRadius?.addEventListener("change", () => {
   if (activePersonalServiceCategory) loadPersonalServicesByCategory(activePersonalServiceCategory);
 });
-ui.segnalazioneForm.addEventListener("submit", generateSegnalazionePdf);
-ui.segnalazionePreposto.addEventListener("input", syncSegnalazioneFirmaPreposto);
-ui.segnalazioneShareWhatsappBtn.addEventListener("click", () => shareSegnalazione("whatsapp"));
-ui.segnalazioneShareEmailBtn.addEventListener("click", () => shareSegnalazione("email"));
-ui.manualImpiantoForm.addEventListener("submit", addManualImpianto);
+ui.segnalazioneForm?.addEventListener("submit", generateSegnalazionePdf);
+ui.segnalazionePreposto?.addEventListener("input", syncSegnalazioneFirmaPreposto);
+ui.segnalazioneShareWhatsappBtn?.addEventListener("click", () => shareSegnalazione("whatsapp"));
+ui.segnalazioneShareEmailBtn?.addEventListener("click", () => shareSegnalazione("email"));
+ui.manualImpiantoForm?.addEventListener("submit", addManualImpianto);
 ui.globalCommessaForm?.addEventListener("submit", createGlobalCommessa);
 ui.globalExcelFile?.addEventListener("change", onGlobalExcelSelected);
 ui.globalImportBtn?.addEventListener("click", importPendingGlobalRows);
@@ -1496,9 +1496,9 @@ ui.globalReportImpiantoSelect?.addEventListener("change", onGlobalSegnalazioneIm
 ui.globalReportModal?.addEventListener("click", (event) => {
   if (event.target === ui.globalReportModal) closeGlobalSegnalazioneModal();
 });
-ui.adminUserForm.addEventListener("submit", addAdminUserByEmail);
-ui.externalAppForm.addEventListener("submit", saveExternalAppForCurrentUser);
-ui.resourceForm.addEventListener("submit", addResourceItem);
+ui.adminUserForm?.addEventListener("submit", addAdminUserByEmail);
+ui.externalAppForm?.addEventListener("submit", saveExternalAppForCurrentUser);
+ui.resourceForm?.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
 ui.notificationCancelUploadBtn?.addEventListener("click", cancelNotificationUpload);
 ui.notificationOpenCalendarBtn?.addEventListener("click", (event) => {
@@ -1512,11 +1512,11 @@ ui.notificationSendAllToggle?.addEventListener("change", onNotificationSendAllCh
 ui.bannerConfigForm?.addEventListener("submit", saveWorkBannerConfig);
 ui.bannerDisableBtn?.addEventListener("click", disableWorkBanner);
 ui.bannerAddNoteBtn?.addEventListener("click", saveWorkBannerNoteForDate);
-ui.resourceType.addEventListener("change", updateResourceFormByType);
-ui.impiantoEditCloseBtn.addEventListener("click", closeImpiantoEditor);
-ui.impiantoEditForm.addEventListener("submit", saveImpiantoEdits);
-ui.impiantoReportCloseBtn.addEventListener("click", closeImpiantoReportModal);
-ui.impiantoReportForm.addEventListener("submit", submitImpiantoReport);
+ui.resourceType?.addEventListener("change", updateResourceFormByType);
+ui.impiantoEditCloseBtn?.addEventListener("click", closeImpiantoEditor);
+ui.impiantoEditForm?.addEventListener("submit", saveImpiantoEdits);
+ui.impiantoReportCloseBtn?.addEventListener("click", closeImpiantoReportModal);
+ui.impiantoReportForm?.addEventListener("submit", submitImpiantoReport);
 ui.enableNotificationsBtn?.addEventListener("click", async () => {
   await persistNotificationAutoPreference(true);
   await enablePushNotifications({ auto: false });
@@ -1531,7 +1531,7 @@ ui.notificationDocViewerModal?.addEventListener("click", (event) => {
 window.addEventListener("online", updateConnectivityStatus);
 window.addEventListener("offline", updateConnectivityStatus);
 window.addEventListener("pagehide", markCurrentOperatorOffline);
-ui.commessaResourceViewerCloseBtn.addEventListener("click", closeCommessaResourceViewer);
+ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     activeResourceManageFilter = btn.dataset.resourceFilter || "";

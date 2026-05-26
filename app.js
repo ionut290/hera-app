@@ -12753,6 +12753,31 @@ function parseGeoJsonPipelines(data) {
   return items;
 }
 
+
+function serializeBiogasPipelinesForFirestore(pipelines) {
+  return (Array.isArray(pipelines) ? pipelines : []).map((item) => ({
+    name: String(item?.name || "").trim() || "tubo",
+    coords: (Array.isArray(item?.coords) ? item.coords : []).map((pair) => ({
+      lat: Number(Array.isArray(pair) ? pair[0] : pair?.lat),
+      lng: Number(Array.isArray(pair) ? pair[1] : pair?.lng)
+    })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+  })).filter((item) => item.coords.length > 1);
+}
+
+function normalizeBiogasPipelinesFromStorage(pipelines) {
+  return (Array.isArray(pipelines) ? pipelines : []).map((item) => ({
+    name: String(item?.name || "").trim() || "tubo",
+    coords: (Array.isArray(item?.coords) ? item.coords : []).map((point) => {
+      if (Array.isArray(point)) {
+        const [lat, lng] = point;
+        return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? [Number(lat), Number(lng)] : null;
+      }
+      const lat = Number(point?.lat);
+      const lng = Number(point?.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+    }).filter(Boolean)
+  })).filter((item) => item.coords.length > 1);
+}
 function parseCsvPipelines(text) {
   const rows = String(text || "").split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
   const byName = new Map();
@@ -12791,10 +12816,11 @@ async function onBiogasFileSelected(event) {
       throw new Error("Formato non supportato. Usa KML (consigliato), GeoJSON o CSV.");
     }
     if (!pipelines.length) throw new Error("Nessuna tubazione trovata nel file.");
-    const payload = { pipelines, updatedAt: new Date().toISOString(), sourceFileName: file.name, sourceFileType: ext };
+    const firestorePipelines = serializeBiogasPipelinesForFirestore(pipelines);
+    const payload = { pipelines: firestorePipelines, updatedAt: new Date().toISOString(), sourceFileName: file.name, sourceFileType: ext };
     await db.collection("commesse").doc(selectedCommessaId).collection("biogasNetwork").doc("current").set(payload, { merge: true });
     localStorage.setItem(`hera_biogas_cache_${selectedCommessaId}`, JSON.stringify(payload));
-    biogasFeatures = pipelines;
+    biogasFeatures = normalizeBiogasPipelinesFromStorage(payload.pipelines);
     ui.biogasMapLastUpdate.textContent = `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
     ui.biogasMapStatus.textContent = `Rete importata da ${file.name}.`;
     renderBiogasMap();
@@ -12825,7 +12851,7 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
       const resp = await fetch(kmlUrl);
       const text = await resp.text();
       const pipelines = parseKmlPipelines(text);
-      payload = { pipelines, updatedAt: new Date().toISOString() };
+      payload = { pipelines: serializeBiogasPipelinesForFirestore(pipelines), updatedAt: new Date().toISOString() };
       await commessaRef.collection("biogasNetwork").doc("current").set(payload, { merge: true });
       localStorage.setItem(cacheKey, JSON.stringify(payload));
     } catch (error) {
@@ -12833,7 +12859,7 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
       return;
     }
   }
-  biogasFeatures = Array.isArray(payload.pipelines) ? payload.pipelines : [];
+  biogasFeatures = normalizeBiogasPipelinesFromStorage(payload.pipelines);
   ui.biogasMapLastUpdate.textContent = payload.updatedAt ? `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}` : "";
   renderBiogasMap();
 }

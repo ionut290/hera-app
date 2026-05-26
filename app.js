@@ -18083,7 +18083,7 @@ function bindPersistentImpiantoDetailActions() {
         const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
         const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
         if (!impianto) return;
-        triggerImpiantoWhatsAppAction(impianto);
+        await handleImpiantoWhatsAppClick(impianto);
       });
     });
     panel.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
@@ -18156,7 +18156,7 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       const key = button.getAttribute("data-impianto-key") || popupKey;
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
-      triggerImpiantoWhatsAppAction(impianto);
+      await handleImpiantoWhatsAppClick(impianto);
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {

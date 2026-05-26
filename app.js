@@ -245,6 +245,8 @@ const ui = {
   biogasMapPage: document.getElementById("biogas-map-page"),
   biogasMapBackBtn: document.getElementById("biogas-map-back-btn"),
   biogasDistanceIndicator: document.getElementById("biogas-distance-indicator"),
+  biogasMapSettingsBtn: document.getElementById("biogas-map-settings-btn"),
+  biogasMapControls: document.getElementById("biogas-map-controls"),
   biogasMapToggleBtn: document.getElementById("biogas-map-toggle-btn"),
   biogasMapRefreshBtn: document.getElementById("biogas-map-refresh-btn"),
   biogasMapDeleteBtn: document.getElementById("biogas-map-delete-btn"),
@@ -1298,6 +1300,7 @@ ui.commessaCallBtn?.addEventListener("click", openCommessaPhoneResources);
 ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSection);
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.biogasMapBackBtn?.addEventListener("click", closeBiogasMapPage);
+ui.biogasMapSettingsBtn?.addEventListener("click", toggleBiogasMapControls);
 ui.biogasMapToggleBtn?.addEventListener("click", toggleBiogasNetworkVisibility);
 ui.biogasMapSearch?.addEventListener("input", onBiogasSearchInput);
 ui.biogasMapRefreshBtn?.addEventListener("click", () => loadBiogasNetworkForCurrentCommessa({ forceRefresh: true }));
@@ -12901,6 +12904,15 @@ function renderBiogasMap() {
   }
 }
 
+
+function toggleBiogasMapControls(forceOpen = null) {
+  if (!ui.biogasMapControls || !ui.biogasMapSettingsBtn) return;
+  const nextOpen = forceOpen == null ? ui.biogasMapControls.classList.contains("hidden") : Boolean(forceOpen);
+  ui.biogasMapControls.classList.toggle("hidden", !nextOpen);
+  ui.biogasMapControls.setAttribute("aria-hidden", nextOpen ? "false" : "true");
+  ui.biogasMapSettingsBtn.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+}
+
 function toggleBiogasNetworkVisibility() {
   if (!biogasLayerGroup) return;
   biogasVisible = !biogasVisible;
@@ -12933,6 +12945,7 @@ async function deleteBiogasNetworkForCurrentCommessa() {
 }
 
 function teardownBiogasMapPage() {
+  toggleBiogasMapControls(false);
   if (biogasWatchId != null && navigator.geolocation) navigator.geolocation.clearWatch(biogasWatchId);
   biogasWatchId = null;
   biogasDistanceAlertLevel = "";

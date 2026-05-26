@@ -231,6 +231,7 @@ const ui = {
   mapFullscreenNumberSearchForm: document.getElementById("map-fullscreen-number-search-form"),
   mapFullscreenNumberSearchInput: document.getElementById("map-fullscreen-number-search-input"),
   mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
+  mapBiogasToggleBtn: document.getElementById("map-biogas-toggle-btn"),
   mapFullscreenFeedbackBanner: document.getElementById("map-fullscreen-feedback-banner"),
   mapFullscreenFeedback: document.getElementById("map-fullscreen-feedback"),
   mapFullscreenFeedbackClose: document.getElementById("map-fullscreen-feedback-close"),
@@ -687,6 +688,10 @@ let activePersonalServiceCategory = "";
 let lastSegnalazionePdfBlob = null;
 let lastSegnalazionePdfName = "";
 let resourceRecords = [];
+const SPECIAL_BIOGAS_KEY = "__rete_biogas_special__";
+let biogasOverlayVisible = true;
+let biogasNetworkLayer = L.layerGroup().addTo(fullscreenMap);
+let biogasSegments = [];
 let privateDocsRecords = [];
 let hoursDraftEntries = [];
 let hoursFinalizeLocked = false;
@@ -1266,6 +1271,10 @@ ui.showNextActionBtn?.addEventListener("click", toggleImpiantoNextActionHighligh
 ui.exportCurrentCommessaBtn.addEventListener("click", () => exportCommessaSummary(selectedCommessaId, selectedCommessaName));
 ui.mapFullscreenBtn.addEventListener("click", openMapFullscreenPage);
 ui.mapInlineFullscreenBtn?.addEventListener("click", openMapFullscreenPage);
+ui.mapBiogasToggleBtn?.addEventListener("click", () => {
+  biogasOverlayVisible = !biogasOverlayVisible;
+  applyBiogasOverlayVisibility();
+});
 ui.mapNumberSearchForm?.addEventListener("submit", (event) => { event.preventDefault(); focusImpiantoByMapNumber(ui.mapNumberSearchInput?.value, map); });
 ui.mapFullscreenNumberSearchForm?.addEventListener("submit", (event) => { event.preventDefault(); focusImpiantoByMapNumber(ui.mapFullscreenNumberSearchInput?.value, fullscreenMap); });
 ui.operatorPositionsToggleBtn?.addEventListener("click", toggleOperatorPositionsVisibility);
@@ -11675,7 +11684,11 @@ function renderImpianti() {
     return;
   }
 
-  const filtered = currentImpianti.filter((impianto) => {
+  const impiantiWithSpecial = [...currentImpianti];
+  if (getCurrentCommessaSafetyKind() === "discariche") {
+    impiantiWithSpecial.unshift({ denominazione: "RETE BIOGAS", isSpecialBiogasNetwork: true, done: false });
+  }
+  const filtered = impiantiWithSpecial.filter((impianto) => {
     const linkedNotes = getCommessaNoteLinkedNotes(impianto);
     const viewMatch = impiantiViewMode === "done"
       ? Boolean(impianto.done)
@@ -11698,7 +11711,7 @@ function renderImpianti() {
   sorted.forEach((impianto) => {
     const article = document.createElement("article");
     article.className = `impianto-item card-impianto ${impianto.done ? "done" : "todo"}`;
-    const impiantoKey = buildImpiantoKey(impianto);
+    const impiantoKey = impianto.isSpecialBiogasNetwork ? SPECIAL_BIOGAS_KEY : buildImpiantoKey(impianto);
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
@@ -11711,7 +11724,7 @@ function renderImpianti() {
     const linkedNotes = getCommessaNoteLinkedNotes(impianto);
     article.classList.toggle("has-segnalazione", linkedNotes.length > 0);
     article.classList.toggle("whazzup-recovery-warning", showWhazzupRecovery);
-    const distanceKm = distanceFromUser(impianto);
+    const distanceKm = impianto.isSpecialBiogasNetwork ? 0 : distanceFromUser(impianto);
     const distance = formatDistance(distanceKm);
     const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
@@ -11734,7 +11747,9 @@ function renderImpianti() {
     });
 
     const markerNumber = getMapMarkerNumberForImpianto(impianto);
-    const markerChipMarkup = Number.isFinite(markerNumber)
+    const markerChipMarkup = impianto.isSpecialBiogasNetwork
+      ? `<span class="impianto-marker-chip marker-special-biogas" aria-label="Rete biogas">🟡</span>`
+      : Number.isFinite(markerNumber)
       ? `<span class="impianto-marker-chip ${escapeHTML(getMarkerClass(impianto))}" aria-label="Impianto numero ${escapeHTML(String(markerNumber))}">${escapeHTML(String(markerNumber))}</span>`
       : "";
     const header = document.createElement("button");
@@ -11754,6 +11769,10 @@ function renderImpianti() {
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
     header.addEventListener("click", () => {
+      if (impianto.isSpecialBiogasNetwork) {
+        openBiogasNetworkMap();
+        return;
+      }
       expandedImpiantoKey = expandedImpiantoKey === impiantoKey ? "" : impiantoKey;
       renderImpianti();
     });
@@ -11773,6 +11792,7 @@ function renderImpianti() {
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
+    if (impianto.isSpecialBiogasNetwork) details.innerHTML = "<p><b>Rete:</b> Tubazioni biogas della discarica.</p><p>Clicca il titolo per aprire la mappa dedicata.</p>";
     if (linkedNotes.length) {
       const notesBox = document.createElement("div");
       notesBox.className = "impianto-linked-notes";
@@ -19032,6 +19052,57 @@ function evaluateImpiantoProximityAlerts() {
     });
   }
   activeNearbyImpiantoContext = null;
+}
+
+function applyBiogasOverlayVisibility() {
+  if (!biogasNetworkLayer) return;
+  if (biogasOverlayVisible) {
+    if (!fullscreenMap.hasLayer(biogasNetworkLayer)) biogasNetworkLayer.addTo(fullscreenMap);
+  } else if (fullscreenMap.hasLayer(biogasNetworkLayer)) {
+    fullscreenMap.removeLayer(biogasNetworkLayer);
+  }
+  if (ui.mapBiogasToggleBtn) ui.mapBiogasToggleBtn.setAttribute("aria-pressed", biogasOverlayVisible ? "true" : "false");
+}
+
+async function openBiogasNetworkMap() {
+  openMapFullscreenPage();
+  await loadBiogasNetworkForCurrentCommessa();
+  const center = getCommessaMapCenter();
+  if (center) fullscreenMap.setView([center.lat, center.lon], 18, { animate: false });
+}
+
+function getCommessaMapCenter() {
+  const gpsImpianti = currentImpianti
+    .map((impianto) => ({ lat: Number(impianto.gpsY), lon: Number(impianto.gpsX) }))
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+  if (!gpsImpianti.length) return null;
+  const sum = gpsImpianti.reduce((acc, item) => ({ lat: acc.lat + item.lat, lon: acc.lon + item.lon }), { lat: 0, lon: 0 });
+  return { lat: sum.lat / gpsImpianti.length, lon: sum.lon / gpsImpianti.length };
+}
+
+async function loadBiogasNetworkForCurrentCommessa() {
+  const resource = resourceRecords.find((item) => String(item.type || "") === "document"
+    && (item.commessaIds || []).includes(selectedCommessaId)
+    && /biogas|rete/i.test(String(item.title || ""))
+    && /\.kml($|\?)/i.test(String(item.value || "")));
+  biogasSegments = [];
+  biogasNetworkLayer.clearLayers();
+  if (!resource?.value) return;
+  const xml = await fetch(String(resource.value), { cache: "no-store" }).then((res) => res.ok ? res.text() : "");
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const lines = Array.from(doc.querySelectorAll("Placemark"));
+  let index = 0;
+  lines.forEach((placemark) => {
+    const coordText = placemark.querySelector("LineString coordinates")?.textContent || "";
+    const points = coordText.trim().split(/\s+/).map((row) => row.split(",").map(Number)).filter((row) => Number.isFinite(row[0]) && Number.isFinite(row[1])).map((row) => [row[1], row[0]]);
+    if (points.length < 2) return;
+    index += 1;
+    const name = (placemark.querySelector("name")?.textContent || "").trim() || `tubo ${index}`;
+    const line = L.polyline(points, { color: "#eab308", weight: 5, opacity: 0.95 }).addTo(biogasNetworkLayer);
+    line.bindTooltip(name, { permanent: true, direction: "center", className: "biogas-tube-label" });
+    biogasSegments.push({ name, points });
+  });
+  applyBiogasOverlayVisibility();
 }
 
 function buildTimbraturaReminderLocalKey(dateKey, fascia) {

@@ -22575,6 +22575,15 @@ function renderProgrammazioni() {
     ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
     ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
   }
+  return combos;
+}
+
+function formatPersonReqBadges(person) {
+  const parts = [];
+  if (hasRequiredPersonaleCourse(person, "primo soccorso")) parts.push("PS");
+  if (hasRequiredPersonaleCourse(person, "antincendio")) parts.push("AI");
+  if (hasRequiredPersonaleCourse(person, "preposto")) parts.push("PR");
+  return parts.length ? ` [${parts.join("/")}]` : "";
 }
 
 
@@ -22709,30 +22718,63 @@ async function renderFerieDisponibilitaCalendar() {
   const end = String(ui.ferieCheckEnd?.value || '').trim();
   if (!start || !end) return alert('Seleziona periodo.');
   if (end < start) return alert('Intervallo date non valido.');
+
   const ferieSnap = await db.collection('ferieColleghi').get();
   const ferieItems = ferieSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const days = [];
-  for (let d = new Date(start + 'T00:00:00'); d <= new Date(end + 'T00:00:00'); d.setDate(d.getDate()+1)) days.push(new Date(d));
 
-  const cards = days.map((dateObj) => {
-    const dateKey = dateObj.toISOString().slice(0,10);
-    const stats = computeDayStats(dateKey, ferieItems);
-    const missingReq = stats.available.length > 0 && stats.validTeams === 0;
-    const uncovered = stats.available.length === 0 || stats.validTeams === 0;
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  const dayStats = new Map();
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    const stats = computeDayStats(key, ferieItems);
     const combos = buildTeamCombinations(stats.available, stats.validTeams);
-    const detailId = `ferie-day-detail-${dateKey}`;
-    const comboRows = combos.map((team, idx) => `<li><b>Squadra ${idx + 1}</b>: ${team.map((p) => `${escapeHTML(getPersonaleDisplayName(p) || '-')}${escapeHTML(formatPersonReqBadges(p))}`).join(' + ')}</li>`).join('');
-    const inFerieNames = stats.enabledPeople.filter((p) => stats.inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p)))).map((p) => getPersonaleDisplayName(p)).filter(Boolean);
-    return `<article class="simple-list-item ferie-calendar-day-card"><button type="button" class="ferie-calendar-day-head" data-ferie-toggle="${escapeHTML(detailId)}"><strong>${escapeHTML(dateKey)}</strong><span>Squadre: <b>${stats.validTeams}</b></span></button><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${stats.validTeams}</p><p>${missingReq ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${uncovered ? '❌ Giorno scoperto' : ''}</p><div id="${escapeHTML(detailId)}" class="hidden"><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p><p><b>Combinazioni squadre:</b></p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div></article>`;
-  }).join('');
+    dayStats.set(key, { stats, combos });
+  }
 
-  ui.ferieCalendarResult.innerHTML = `<div class="ferie-calendar-grid">${cards}</div>`;
+  const monthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const monthEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  const monthBlocks = [];
+
+  for (let m = new Date(monthStart); m <= monthEnd; m.setMonth(m.getMonth() + 1)) {
+    const year = m.getFullYear();
+    const month = m.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const monthLabel = firstDay.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    const cells = [];
+
+    for (let i = 0; i < startOffset; i += 1) cells.push('<div class="ferie-month-cell ferie-month-cell--empty"></div>');
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const dayDate = new Date(year, month, day);
+      const key = dayDate.toISOString().slice(0, 10);
+      const inRange = dayDate >= startDate && dayDate <= endDate;
+      const payload = inRange ? dayStats.get(key) : null;
+      const validTeams = payload?.stats?.validTeams || 0;
+      const statusClass = !inRange ? 'ferie-month-cell--out' : (validTeams > 0 ? 'ferie-month-cell--ok' : 'ferie-month-cell--ko');
+      const detailId = `ferie-day-detail-${key}`;
+      const stats = payload?.stats;
+      const combos = payload?.combos || [];
+      const comboRows = combos.map((team, idx) => `<li><b>Squadra ${idx + 1}</b>: ${team.map((p) => `${escapeHTML(getPersonaleDisplayName(p) || '-')}${escapeHTML(formatPersonReqBadges(p))}`).join(' + ')}</li>`).join('');
+      const inFerieNames = stats
+        ? stats.enabledPeople.filter((p) => stats.inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p)))).map((p) => getPersonaleDisplayName(p)).filter(Boolean)
+        : [];
+      const detail = stats ? `<div id="${escapeHTML(detailId)}" class="ferie-day-detail hidden"><p><b>Data:</b> ${escapeHTML(key)}</p><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${validTeams}</p><p>${validTeams === 0 && stats.available.length > 0 ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${validTeams === 0 ? '❌ Giorno scoperto' : ''}</p><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div>` : '';
+      cells.push(`<button type="button" class="ferie-month-cell ${statusClass}" ${inRange ? `data-ferie-toggle="${escapeHTML(detailId)}"` : 'disabled'}><span class="ferie-month-daynum">${day}</span>${inRange ? `<small>Sq: ${validTeams}</small>` : ''}</button>${detail}`);
+    }
+
+    monthBlocks.push(`<section class="ferie-month"><h5>${escapeHTML(monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1))}</h5><div class="ferie-month-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div><div class="ferie-month-grid">${cells.join('')}</div></section>`);
+  }
+
+  ui.ferieCalendarResult.innerHTML = `<div class="ferie-month-wrap">${monthBlocks.join('')}</div>`;
   ui.ferieCalendarResult.querySelectorAll('[data-ferie-toggle]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-ferie-toggle') || '';
-      const el = ui.ferieCalendarResult.querySelector(`#${cssEscapeValue(id)}`);
-      if (!el) return;
-      el.classList.toggle('hidden');
+      const detail = ui.ferieCalendarResult.querySelector(`#${cssEscapeValue(id)}`);
+      if (!detail) return;
+      detail.classList.toggle('hidden');
     });
   });
 }

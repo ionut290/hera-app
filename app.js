@@ -22591,7 +22591,8 @@ function getCommessaOperatorsEnabled(commessaName) {
 
 function refreshFerieProgrammazioneUi() {
   if (!ui.ferieCommessa || !ui.ferieCheckCommessa) return;
-  const options = ['<option value="">Commessa</option>'].concat(commesse.map((c) => `<option value="${escapeHTML(String(c.nome||""))}">${escapeHTML(String(c.nome||"Commessa"))}</option>`));
+  const commesseOptions = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  const options = ['<option value="">Commessa</option>'].concat(commesseOptions.map((c) => `<option value="${escapeHTML(String(c.nome||""))}">${escapeHTML(String(c.nome||"Commessa"))}</option>`));
   const prevA = ui.ferieCommessa.value;
   const prevB = ui.ferieCheckCommessa.value;
   ui.ferieCommessa.innerHTML = options.join("");

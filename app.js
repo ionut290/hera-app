@@ -322,6 +322,18 @@ const ui = {
   programmaCommessa: document.getElementById("programma-commessa"),
   programmaOperatoriAutocomplete: document.getElementById("programma-operatori-autocomplete"),
   programmaMezziAutocomplete: document.getElementById("programma-mezzi-autocomplete"),
+  ferieForm: document.getElementById("ferie-form"),
+  ferieCommessa: document.getElementById("ferie-commessa"),
+  ferieOperatore: document.getElementById("ferie-operatore"),
+  ferieInizio: document.getElementById("ferie-inizio"),
+  ferieFine: document.getElementById("ferie-fine"),
+  ferieNote: document.getElementById("ferie-note"),
+  ferieList: document.getElementById("ferie-list"),
+  ferieCheckCommessa: document.getElementById("ferie-check-commessa"),
+  ferieCheckStart: document.getElementById("ferie-check-start"),
+  ferieCheckEnd: document.getElementById("ferie-check-end"),
+  ferieCheckBtn: document.getElementById("ferie-check-btn"),
+  ferieCalendarResult: document.getElementById("ferie-calendar-result"),
   programmazioniHomeCard: document.getElementById("programmazioni-home-card"),
   programmazioniHomeList: document.getElementById("programmazioni-home-list"),
   panelBanner: document.getElementById("panel-banner"),
@@ -1379,6 +1391,9 @@ ui.programmazioneCancelBtn?.addEventListener("click", () => ui.programmazioneDia
 ui.programmazioneDeleteBtn?.addEventListener("click", deleteProgrammazioneFromForm);
 ui.programmazioneFilter?.addEventListener("change", () => renderProgrammazioni());
 ui.programmazioneForm?.addEventListener("submit", saveProgrammazione);
+ui.ferieForm?.addEventListener("submit", saveFerieCollega);
+ui.ferieCheckBtn?.addEventListener("click", renderFerieDisponibilitaCalendar);
+ui.ferieCommessa?.addEventListener("change", refreshFerieOperatorOptions);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn.addEventListener("click", openPrivateDocsPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
@@ -18083,7 +18098,7 @@ function bindPersistentImpiantoDetailActions() {
         const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
         const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
         if (!impianto) return;
-        triggerImpiantoWhatsAppAction(impianto);
+        await handleImpiantoWhatsAppClick(impianto);
       });
     });
     panel.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
@@ -18156,7 +18171,7 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       const key = button.getAttribute("data-impianto-key") || popupKey;
       const impianto = findCurrentImpiantoByKey(key);
       if (!impianto) return;
-      triggerImpiantoWhatsAppAction(impianto);
+      await handleImpiantoWhatsAppClick(impianto);
     });
   });
   popupElement.querySelectorAll("[data-map-popup-action='fullscreen-whatsapp']").forEach((button) => {
@@ -22515,10 +22530,18 @@ function isProgrammazioneVisibleToCurrentUser(item) {
   return diff <= 1 && diff >= 0;
 }
 
-function programmazioneReminderBadge(dateKey) {
+function programmazioneReminderBadge(dateKey, tipo = "") {
   const today = new Date();
   const target = new Date(`${dateKey}T00:00:00`);
   const diff = Math.floor((target - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+  const tipoNorm = String(tipo || "").toLowerCase();
+  if (tipoNorm === "ferie") {
+    if (diff < 0) return "";
+    if (diff === 0) return "🏖️ Ferie oggi";
+    if (diff === 1) return "🏖️ Ferie domani";
+    if (diff <= 7) return `🏖️ Ferie tra ${diff} giorni`;
+    return "";
+  }
   if (diff === 0) return "📅 Oggi";
   if (diff === 1) return "📌 Domani";
   const day = target.getDay();
@@ -22527,6 +22550,8 @@ function programmazioneReminderBadge(dateKey) {
 }
 
 function renderProgrammazioni() {
+  refreshFerieProgrammazioneUi();
+  renderFerieList();
   const visible = programmazioni.filter(isProgrammazioneVisibleToCurrentUser);
   const filter = String(ui.programmazioneFilter?.value || "all");
   const today = new Date().toISOString().slice(0, 10);
@@ -22541,16 +22566,132 @@ function renderProgrammazioni() {
     return true;
   });
   if (ui.programmazioneList) {
-    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data, item.tipo)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
     ui.programmazioneList.querySelectorAll("[data-edit-programmazione]").forEach((btn) => btn.addEventListener("click", () => openEditProgrammazione(btn.getAttribute("data-edit-programmazione"))));
     ui.programmazioneList.querySelectorAll("[data-delete-programmazione]").forEach((btn) => btn.addEventListener("click", () => deleteProgrammazioneById(btn.getAttribute("data-delete-programmazione"))));
   }
   if (ui.programmazioniHomeCard && ui.programmazioniHomeList) {
-    const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data)));
+    const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data, item.tipo)));
     ui.programmazioniHomeCard.classList.toggle("hidden", !homeItems.length);
     ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
-    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
+    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
   }
+}
+
+
+function getCommessaOperatorsEnabled(commessaName) {
+  const target = String(commessaName || "").trim();
+  return personaleRecords.filter((person) => {
+    if (!target) return false;
+    if (person.allCommesseEnabled) return true;
+    const enabled = Array.isArray(person.commesseAbilitate) ? person.commesseAbilitate.map((v) => String(v || "").trim()) : [];
+    return enabled.includes(target);
+  });
+}
+
+function refreshFerieProgrammazioneUi() {
+  if (!ui.ferieCommessa || !ui.ferieCheckCommessa) return;
+  const commesseOptions = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  const options = ['<option value="">Commessa</option>'].concat(commesseOptions.map((c) => `<option value="${escapeHTML(String(c.nome||""))}">${escapeHTML(String(c.nome||"Commessa"))}</option>`));
+  const prevA = ui.ferieCommessa.value;
+  const prevB = ui.ferieCheckCommessa.value;
+  ui.ferieCommessa.innerHTML = options.join("");
+  ui.ferieCheckCommessa.innerHTML = options.join("");
+  if (prevA) ui.ferieCommessa.value = prevA;
+  if (prevB) ui.ferieCheckCommessa.value = prevB;
+  refreshFerieOperatorOptions();
+}
+
+function refreshFerieOperatorOptions() {
+  if (!ui.ferieOperatore) return;
+  const people = getCommessaOperatorsEnabled(ui.ferieCommessa?.value || "");
+  ui.ferieOperatore.innerHTML = '<option value="">Operatore</option>' + people
+    .map((p) => getPersonaleDisplayName(p)).filter(Boolean).sort((a,b)=>a.localeCompare(b,'it'))
+    .map((name)=>`<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join("");
+}
+
+async function saveFerieCollega(event) {
+  event.preventDefault();
+  if (!canManageData()) return;
+  const commessa = String(ui.ferieCommessa?.value || "").trim();
+  const operatore = String(ui.ferieOperatore?.value || "").trim();
+  const dataInizio = String(ui.ferieInizio?.value || "").trim();
+  const dataFine = String(ui.ferieFine?.value || "").trim();
+  const note = String(ui.ferieNote?.value || "").trim();
+  if (!commessa || !operatore || !dataInizio || !dataFine) return alert('Compila tutti i campi obbligatori ferie.');
+  if (dataFine < dataInizio) return alert('La data fine ferie deve essere successiva o uguale alla data inizio.');
+  await db.collection('ferieColleghi').add({ commessa, operatore, dataInizio, dataFine, note, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: currentUser?.email || '' });
+  ui.ferieForm?.reset();
+  renderFerieList();
+}
+
+function computeDayStats(commessaName, dateKey, ferieItems) {
+  const enabledPeople = getCommessaOperatorsEnabled(commessaName);
+  const inFerie = new Set(ferieItems.filter((f) => f.commessa === commessaName && f.dataInizio <= dateKey && f.dataFine >= dateKey).map((f) => normalizeSafetyKey(f.operatore)));
+  const available = enabledPeople.filter((p) => !inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p))));
+  const reqCounts = {
+    primo: available.filter((p) => hasRequiredPersonaleCourse(p, 'primo soccorso')).length,
+    antincendio: available.filter((p) => hasRequiredPersonaleCourse(p, 'antincendio')).length,
+    preposto: available.filter((p) => hasRequiredPersonaleCourse(p, 'preposto')).length
+  };
+  const byPeople = Math.floor(available.length / 2);
+  const validTeams = Math.max(0, Math.min(byPeople, reqCounts.primo, reqCounts.antincendio, reqCounts.preposto));
+  return { enabledPeople, inFerie, available, validTeams };
+}
+
+function hasRequiredPersonaleCourse(person, keyword) {
+  const courses = Array.isArray(person.corsi) ? person.corsi : [];
+  const target = String(keyword || '').toLowerCase();
+  return courses.some((c) => c && c.possiede && String(c.nome || '').toLowerCase().includes(target));
+}
+
+
+async function renderFerieList() {
+  if (!ui.ferieList) return;
+  if (!canManageData()) { ui.ferieList.innerHTML = "<p class='muted'>Solo admin può gestire ferie.</p>"; return; }
+  const snap = await db.collection('ferieColleghi').orderBy('dataInizio','asc').get().catch(()=>null);
+  if (!snap) return;
+  const rows = snap.docs.map((d)=>({id:d.id,...d.data()}));
+  ui.ferieList.innerHTML = rows.map((r)=>`<article class='simple-list-item'><strong>${escapeHTML(r.operatore||'-')}</strong><p>${escapeHTML(r.commessa||'-')} • ${escapeHTML(r.dataInizio||'-')} → ${escapeHTML(r.dataFine||'-')}</p><p>${escapeHTML(r.note||'')}</p><div class='item-actions'><button type='button' class='btn' data-edit-ferie='${escapeHTML(r.id)}'>Modifica</button><button type='button' class='btn btn-danger' data-del-ferie='${escapeHTML(r.id)}'>Elimina</button></div></article>`).join('') || "<p class='muted'>Nessuna ferie inserita.</p>";
+  ui.ferieList.querySelectorAll('[data-del-ferie]').forEach((btn)=>btn.addEventListener('click', async()=>{
+    if (!canManageData()) return;
+    if (!confirm('Eliminare ferie?')) return;
+    await db.collection('ferieColleghi').doc(btn.getAttribute('data-del-ferie')||'').delete();
+    renderFerieList();
+  }));
+  ui.ferieList.querySelectorAll('[data-edit-ferie]').forEach((btn)=>btn.addEventListener('click', async()=>{
+    if (!canManageData()) return;
+    const id = btn.getAttribute('data-edit-ferie') || '';
+    const row = rows.find((x)=>x.id===id);
+    if (!row) return;
+    const note = prompt('Modifica note ferie', row.note || '');
+    if (note === null) return;
+    await db.collection('ferieColleghi').doc(id).set({ note, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    renderFerieList();
+  }));
+}
+
+async function renderFerieDisponibilitaCalendar() {
+  if (!ui.ferieCalendarResult) return;
+  if (!canManageData()) return;
+  const commessa = String(ui.ferieCheckCommessa?.value || '').trim();
+  const start = String(ui.ferieCheckStart?.value || '').trim();
+  const end = String(ui.ferieCheckEnd?.value || '').trim();
+  if (!commessa || !start || !end) return alert('Seleziona commessa e periodo.');
+  if (end < start) return alert('Intervallo date non valido.');
+  const ferieSnap = await db.collection('ferieColleghi').get();
+  const ferieItems = ferieSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const days = [];
+  for (let d = new Date(start + 'T00:00:00'); d <= new Date(end + 'T00:00:00'); d.setDate(d.getDate()+1)) {
+    days.push(new Date(d));
+  }
+  ui.ferieCalendarResult.innerHTML = days.map((dateObj) => {
+    const dateKey = dateObj.toISOString().slice(0,10);
+    const stats = computeDayStats(commessa, dateKey, ferieItems);
+    const missingReq = stats.available.length > 0 && stats.validTeams === 0;
+    const uncovered = stats.available.length === 0 || stats.validTeams === 0;
+    return `<article class="simple-list-item"><strong>${escapeHTML(dateKey)}</strong><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${stats.validTeams}</p><p>${missingReq ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${uncovered ? '❌ Giorno scoperto' : ''}</p></article>`;
+  }).join('');
 }
 
 function openEditProgrammazione(id) {

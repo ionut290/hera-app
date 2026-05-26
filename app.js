@@ -247,6 +247,8 @@ const ui = {
   biogasMapToggleBtn: document.getElementById("biogas-map-toggle-btn"),
   biogasMapRefreshBtn: document.getElementById("biogas-map-refresh-btn"),
   biogasMapDeleteBtn: document.getElementById("biogas-map-delete-btn"),
+  biogasMapAddPipesBtn: document.getElementById("biogas-map-add-pipes-btn"),
+  biogasMapFileInput: document.getElementById("biogas-map-file-input"),
   biogasMapSearch: document.getElementById("biogas-map-search"),
   biogasMapStatus: document.getElementById("biogas-map-status"),
   biogasMapLastUpdate: document.getElementById("biogas-map-last-update"),
@@ -1297,6 +1299,8 @@ ui.biogasMapToggleBtn?.addEventListener("click", toggleBiogasNetworkVisibility);
 ui.biogasMapSearch?.addEventListener("input", onBiogasSearchInput);
 ui.biogasMapRefreshBtn?.addEventListener("click", () => loadBiogasNetworkForCurrentCommessa({ forceRefresh: true }));
 ui.biogasMapDeleteBtn?.addEventListener("click", deleteBiogasNetworkForCurrentCommessa);
+ui.biogasMapAddPipesBtn?.addEventListener("click", () => ui.biogasMapFileInput?.click());
+ui.biogasMapFileInput?.addEventListener("change", onBiogasFileSelected);
 ui.commessaNoteNewBtn?.addEventListener("click", () => openCommessaNoteForm());
 ui.commessaNoteForm?.addEventListener("submit", saveCommessaNote);
 ui.commessaNoteCancelBtn?.addEventListener("click", closeCommessaNoteForm);
@@ -11726,6 +11730,7 @@ function renderImpianti() {
     special.querySelector("button")?.addEventListener("click", openBiogasMapPage);
     ui.biogasMapRefreshBtn?.classList.toggle("hidden", !canManageData());
     ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
+    ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
     ui.impiantiLista.appendChild(special);
   }
 
@@ -12702,6 +12707,73 @@ function parseKmlPipelines(text) {
     if (coords.length > 1) items.push({ name, coords });
   });
   return items;
+}
+
+function parseGeoJsonPipelines(data) {
+  const items = [];
+  const features = Array.isArray(data?.features) ? data.features : [];
+  features.forEach((feature, idx) => {
+    const name = String(feature?.properties?.name || feature?.properties?.nome || `tubo ${idx + 1}`).trim();
+    const geometry = feature?.geometry || {};
+    if (geometry.type === "LineString" && Array.isArray(geometry.coordinates)) {
+      const coords = geometry.coordinates.map((point) => {
+        const [lng, lat] = Array.isArray(point) ? point : [];
+        return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+      }).filter(Boolean);
+      if (coords.length > 1) items.push({ name, coords });
+    }
+  });
+  return items;
+}
+
+function parseCsvPipelines(text) {
+  const rows = String(text || "").split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  const byName = new Map();
+  rows.slice(1).forEach((row) => {
+    const [name = "", latRaw = "", lngRaw = ""] = row.split(",").map((v) => v.trim());
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push([lat, lng]);
+  });
+  return Array.from(byName.entries()).map(([name, coords]) => ({ name, coords })).filter((item) => item.coords.length > 1);
+}
+
+async function onBiogasFileSelected(event) {
+  const file = event.target?.files?.[0];
+  if (!file || !selectedCommessaId) return;
+  ui.biogasMapFileInput.value = "";
+  ui.biogasMapStatus.textContent = "Caricamento rete biogas…";
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  try {
+    let pipelines = [];
+    if (ext === "kml") {
+      pipelines = parseKmlPipelines(await file.text());
+    } else if (ext === "geojson" || ext === "json") {
+      pipelines = parseGeoJsonPipelines(JSON.parse(await file.text()));
+    } else if (ext === "csv" || ext === "txt") {
+      pipelines = parseCsvPipelines(await file.text());
+    } else if (ext === "gpx") {
+      const gpxText = await file.text();
+      const kmlLike = gpxText.replace(/<trkpt lat=\"([^\"]+)\" lon=\"([^\"]+)\"[^>]*>/g, "<coordinates>$2,$1</coordinates>");
+      pipelines = parseKmlPipelines(kmlLike);
+    } else if (ext === "kmz" || ext === "zip") {
+      throw new Error("Formato compresso non supportato direttamente: carica preferibilmente KML.");
+    } else {
+      throw new Error("Formato non supportato. Usa KML (consigliato), GeoJSON o CSV.");
+    }
+    if (!pipelines.length) throw new Error("Nessuna tubazione trovata nel file.");
+    const payload = { pipelines, updatedAt: new Date().toISOString(), sourceFileName: file.name, sourceFileType: ext };
+    await db.collection("commesse").doc(selectedCommessaId).collection("biogasNetwork").doc("current").set(payload, { merge: true });
+    localStorage.setItem(`hera_biogas_cache_${selectedCommessaId}`, JSON.stringify(payload));
+    biogasFeatures = pipelines;
+    ui.biogasMapLastUpdate.textContent = `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
+    ui.biogasMapStatus.textContent = `Rete importata da ${file.name}.`;
+    renderBiogasMap();
+  } catch (error) {
+    ui.biogasMapStatus.textContent = `Errore importazione: ${error?.message || "formato non valido"}`;
+  }
 }
 
 async function loadBiogasNetworkForCurrentCommessa(options = {}) {

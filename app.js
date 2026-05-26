@@ -761,6 +761,7 @@ let biogasWatchId = null;
 let biogasFeatures = [];
 let biogasVisible = true;
 let biogasDistanceAlertLevel = "";
+let biogasHighlightedLayer = null;
 let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
 let selectedImpiantoId = "";
@@ -12697,14 +12698,40 @@ function closeBiogasMapPage() {
 
 function parseKmlPipelines(text) {
   const xml = new DOMParser().parseFromString(String(text || ""), "text/xml");
-  const items = [];
-  xml.querySelectorAll("Placemark").forEach((p, idx) => {
-    const name = (p.querySelector("name")?.textContent || `tubo ${idx + 1}`).trim();
-    const coords = (p.querySelector("LineString coordinates")?.textContent || "").trim().split(/\s+/).map((point) => {
-      const [lng, lat] = point.split(",").map(Number);
+  const parseErrors = xml.getElementsByTagName("parsererror");
+  if (parseErrors?.length) throw new Error("KML non valido o XML corrotto.");
+  const getChildTextByLocalName = (parent, localName) => {
+    if (!parent) return "";
+    const node = Array.from(parent.getElementsByTagName("*")).find((item) => item.localName === localName);
+    return String(node?.textContent || "").trim();
+  };
+  const parseCoordinatesText = (rawText = "") => String(rawText || "")
+    .trim()
+    .split(/\s+/)
+    .map((point) => {
+      const [lng, lat] = point.split(",").map((v) => Number(v));
       return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
-    }).filter(Boolean);
-    if (coords.length > 1) items.push({ name, coords });
+    })
+    .filter(Boolean);
+  const items = [];
+  const placemarks = Array.from(xml.getElementsByTagName("*")).filter((node) => node.localName === "Placemark");
+  placemarks.forEach((p, idx) => {
+    const name = getChildTextByLocalName(p, "name") || `tubo ${idx + 1}`;
+    const lineStrings = Array.from(p.getElementsByTagName("*")).filter((node) => node.localName === "LineString");
+    lineStrings.forEach((line, lineIdx) => {
+      const coordsText = getChildTextByLocalName(line, "coordinates");
+      const coords = parseCoordinatesText(coordsText);
+      if (coords.length > 1) items.push({ name: lineStrings.length > 1 ? `${name} (${lineIdx + 1})` : name, coords });
+    });
+    const tracks = Array.from(p.getElementsByTagName("*")).filter((node) => node.localName === "Track");
+    tracks.forEach((track, trackIdx) => {
+      const whens = Array.from(track.getElementsByTagName("*")).filter((node) => node.localName === "coord");
+      const coords = whens.map((coordNode) => {
+        const [lng, lat] = String(coordNode.textContent || "").trim().split(/\s+/).map(Number);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+      }).filter(Boolean);
+      if (coords.length > 1) items.push({ name: tracks.length > 1 ? `${name} (track ${trackIdx + 1})` : name, coords });
+    });
   });
   return items;
 }
@@ -12819,8 +12846,13 @@ function renderBiogasMap() {
   const bounds = [];
   biogasFeatures.forEach((p) => {
     const color = /percolato/i.test(p.name) ? "#2563eb" : (/acqua/i.test(p.name) ? "#16a34a" : "#facc15");
-    const line = L.polyline(p.coords, { color, weight: 5 }).addTo(biogasLayerGroup).bindPopup(escapeHTML(p.name));
+    const line = L.polyline(p.coords, { color, weight: 5, name: p.name }).addTo(biogasLayerGroup).bindPopup(escapeHTML(p.name));
     line.on("click", () => line.openPopup());
+    line.on("click", () => {
+      if (biogasHighlightedLayer) biogasHighlightedLayer.setStyle({ weight: 5 });
+      biogasHighlightedLayer = line;
+      biogasHighlightedLayer.setStyle({ weight: 8 });
+    });
     bounds.push(...p.coords);
   });
   if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
@@ -12830,6 +12862,7 @@ function renderBiogasMap() {
       const latlng = [pos.coords.latitude, pos.coords.longitude];
       if (!biogasUserMarker) biogasUserMarker = L.circleMarker(latlng, { radius: 7 }).addTo(biogasMapInstance);
       biogasUserMarker.setLatLng(latlng);
+      evaluateBiogasDistanceAlerts(latlng);
     });
   }
 }
@@ -12845,7 +12878,16 @@ function onBiogasSearchInput() {
   const q = String(ui.biogasMapSearch?.value || "").toLowerCase().trim();
   if (!q || !biogasMapInstance) return;
   const match = biogasFeatures.find((f) => f.name.toLowerCase().includes(q));
-  if (match?.coords?.length) biogasMapInstance.fitBounds(match.coords, { maxZoom: 19, padding: [25, 25] });
+  if (!match?.coords?.length) return;
+  biogasMapInstance.fitBounds(match.coords, { maxZoom: 19, padding: [25, 25] });
+  biogasLayerGroup?.eachLayer?.((layer) => {
+    const isMatch = String(layer?.options?.name || "").toLowerCase() === match.name.toLowerCase();
+    layer.setStyle?.({ weight: isMatch ? 8 : 5 });
+    if (isMatch) {
+      biogasHighlightedLayer = layer;
+      layer.openPopup?.();
+    }
+  });
 }
 
 async function deleteBiogasNetworkForCurrentCommessa() {
@@ -12859,6 +12901,52 @@ async function deleteBiogasNetworkForCurrentCommessa() {
 function teardownBiogasMapPage() {
   if (biogasWatchId != null && navigator.geolocation) navigator.geolocation.clearWatch(biogasWatchId);
   biogasWatchId = null;
+  biogasDistanceAlertLevel = "";
+  if (biogasMapInstance) {
+    biogasMapInstance.off();
+    biogasMapInstance.remove();
+  }
+  biogasMapInstance = null;
+  biogasLayerGroup = null;
+  biogasUserMarker = null;
+  biogasHighlightedLayer = null;
+  biogasFeatures = [];
+}
+
+function pointToSegmentDistanceMeters(point, a, b) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371000;
+  const [lat, lng] = point;
+  const [lat1, lng1] = a;
+  const [lat2, lng2] = b;
+  const x = toRad(lng - lng1) * Math.cos(toRad((lat + lat1) / 2)) * R;
+  const y = toRad(lat - lat1) * R;
+  const x2 = toRad(lng2 - lng1) * Math.cos(toRad((lat2 + lat1) / 2)) * R;
+  const y2 = toRad(lat2 - lat1) * R;
+  const len2 = x2 * x2 + y2 * y2;
+  const t = len2 <= 0 ? 0 : Math.max(0, Math.min(1, (x * x2 + y * y2) / len2));
+  const px = x2 * t;
+  const py = y2 * t;
+  return Math.hypot(x - px, y - py);
+}
+
+function evaluateBiogasDistanceAlerts(userLatLng) {
+  let best = { dist: Infinity, name: "" };
+  biogasFeatures.forEach((feature) => {
+    const coords = Array.isArray(feature.coords) ? feature.coords : [];
+    for (let i = 1; i < coords.length; i += 1) {
+      const dist = pointToSegmentDistanceMeters(userLatLng, coords[i - 1], coords[i]);
+      if (dist < best.dist) best = { dist, name: feature.name || `tubo ${i}` };
+    }
+  });
+  if (!Number.isFinite(best.dist)) return;
+  const level = best.dist <= 3 ? "red" : (best.dist <= 10 ? "yellow" : "");
+  if (!level || level === biogasDistanceAlertLevel) return;
+  biogasDistanceAlertLevel = level;
+  const prefix = "⚠️ ATTENZIONE\nSei vicino a una tubazione biogas.";
+  const message = `${prefix}\nTubo: ${best.name}\nDistanza: ${best.dist.toFixed(1)} m`;
+  ui.biogasMapStatus.textContent = message;
+  alert(message);
 }
 
 function handleImpiantoSafetyButtonClick(event) {

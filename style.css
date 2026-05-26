@@ -580,6 +580,18 @@ h2 { font-size: 1.05rem; }
   color: #123056;
 }
 
+.weather-diagnostics {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.06);
+  color: #1f2937;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .weather-risks {
   margin-top: 8px;
   display: flex;

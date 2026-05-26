@@ -8637,3 +8637,40 @@ textarea:focus-visible {
 @media (max-width: 760px) {
   .ferie-month-wrap { width: 100%; }
 }
+
+
+.biogas-distance-indicator {
+  flex: 0 0 auto;
+  min-width: 72px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.biogas-distance-indicator.warning {
+  background: #fef08a;
+  border-color: #eab308;
+}
+
+.biogas-distance-indicator.danger {
+  background: #ef4444;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
+.biogas-distance-indicator.danger-blink {
+  animation: biogasDangerBlink 0.8s step-end infinite;
+}
+
+@keyframes biogasDangerBlink {
+  50% { opacity: 0.35; }
+}

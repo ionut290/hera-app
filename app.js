@@ -247,6 +247,7 @@ const ui = {
   biogasDistanceIndicator: document.getElementById("biogas-distance-indicator"),
   biogasMapSettingsBtn: document.getElementById("biogas-map-settings-btn"),
   biogasMapControls: document.getElementById("biogas-map-controls"),
+  biogasMapLayerBtn: document.getElementById("biogas-map-layer-btn"),
   biogasMapToggleBtn: document.getElementById("biogas-map-toggle-btn"),
   biogasMapRefreshBtn: document.getElementById("biogas-map-refresh-btn"),
   biogasMapDeleteBtn: document.getElementById("biogas-map-delete-btn"),
@@ -760,11 +761,13 @@ let isMapFullscreenPageOpen = false;
 let biogasMapInstance = null;
 let biogasLayerGroup = null;
 let biogasTileLayer = null;
+let biogasLabelTileLayer = null;
 let biogasUserMarker = null;
 let biogasWatchId = null;
 let biogasFeatures = [];
 let biogasVisible = true;
 let biogasDistanceAlertLevel = "";
+let biogasBaseLayerMode = localStorage.getItem("hera_biogas_base_layer") || "standard";
 let biogasHighlightedLayer = null;
 let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
@@ -1301,6 +1304,7 @@ ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSecti
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.biogasMapBackBtn?.addEventListener("click", closeBiogasMapPage);
 ui.biogasMapSettingsBtn?.addEventListener("click", toggleBiogasMapControls);
+ui.biogasMapLayerBtn?.addEventListener("click", toggleBiogasBaseLayerMode);
 ui.biogasMapToggleBtn?.addEventListener("click", toggleBiogasNetworkVisibility);
 ui.biogasMapSearch?.addEventListener("input", onBiogasSearchInput);
 ui.biogasMapRefreshBtn?.addEventListener("click", () => loadBiogasNetworkForCurrentCommessa({ forceRefresh: true }));
@@ -12869,21 +12873,45 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
   renderBiogasMap();
 }
 
+
+function applyBiogasBaseLayerMode() {
+  if (!biogasMapInstance) return;
+  if (!biogasTileLayer) biogasTileLayer = L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" });
+  if (!biogasLabelTileLayer) biogasLabelTileLayer = L.tileLayer(HYBRID_LABEL_TILE_URL, HYBRID_LABEL_TILE_OPTIONS);
+  biogasMapInstance.removeLayer(biogasTileLayer);
+  biogasMapInstance.removeLayer(biogasLabelTileLayer);
+  if (biogasBaseLayerMode === "satellite") {
+    biogasTileLayer = L.tileLayer(SATELLITE_TILE_URL, SATELLITE_TILE_OPTIONS).addTo(biogasMapInstance);
+    biogasLabelTileLayer.addTo(biogasMapInstance);
+    if (ui.biogasMapLayerBtn) ui.biogasMapLayerBtn.textContent = "Mappa: Satellite";
+  } else {
+    biogasTileLayer = L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" }).addTo(biogasMapInstance);
+    if (ui.biogasMapLayerBtn) ui.biogasMapLayerBtn.textContent = "Mappa: Standard";
+  }
+}
+
+function toggleBiogasBaseLayerMode() {
+  biogasBaseLayerMode = biogasBaseLayerMode === "standard" ? "satellite" : "standard";
+  localStorage.setItem("hera_biogas_base_layer", biogasBaseLayerMode);
+  applyBiogasBaseLayerMode();
+}
+
 function renderBiogasMap() {
   if (!ui.biogasMapPage || ui.biogasMapPage.classList.contains("hidden")) return;
   if (!biogasMapInstance) biogasMapInstance = L.map("biogas-map-view", { zoomControl: true });
-  if (!biogasTileLayer) biogasTileLayer = L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" }).addTo(biogasMapInstance);
+  applyBiogasBaseLayerMode();
   if (!biogasLayerGroup) biogasLayerGroup = L.layerGroup().addTo(biogasMapInstance);
   biogasLayerGroup.clearLayers();
   const bounds = [];
   biogasFeatures.forEach((p) => {
-    const color = /percolato/i.test(p.name) ? "#2563eb" : (/acqua/i.test(p.name) ? "#16a34a" : "#facc15");
-    const line = L.polyline(p.coords, { color, weight: 5, name: p.name }).addTo(biogasLayerGroup).bindPopup(escapeHTML(p.name));
+    const color = /percolato/i.test(p.name) ? "#2563eb" : (/acqua/i.test(p.name) ? "#16a34a" : "#f59e0b");
+    L.polyline(p.coords, { color: "#1f2937", weight: 11, opacity: 0.45, interactive: false, lineCap: "round", lineJoin: "round" }).addTo(biogasLayerGroup);
+    const line = L.polyline(p.coords, { color, weight: 7, opacity: 0.95, name: p.name, lineCap: "round", lineJoin: "round" }).addTo(biogasLayerGroup).bindPopup(escapeHTML(p.name));
     line.on("click", () => line.openPopup());
     line.on("click", () => {
-      if (biogasHighlightedLayer) biogasHighlightedLayer.setStyle({ weight: 5 });
+      if (biogasHighlightedLayer) biogasHighlightedLayer.setStyle({ weight: 7 });
       biogasHighlightedLayer = line;
-      biogasHighlightedLayer.setStyle({ weight: 8 });
+      biogasHighlightedLayer.setStyle({ weight: 10 });
     });
     bounds.push(...p.coords);
   });
@@ -12956,6 +12984,7 @@ function teardownBiogasMapPage() {
   biogasMapInstance = null;
   biogasLayerGroup = null;
   biogasTileLayer = null;
+  biogasLabelTileLayer = null;
   biogasUserMarker = null;
   biogasHighlightedLayer = null;
   biogasFeatures = [];

@@ -22515,10 +22515,18 @@ function isProgrammazioneVisibleToCurrentUser(item) {
   return diff <= 1 && diff >= 0;
 }
 
-function programmazioneReminderBadge(dateKey) {
+function programmazioneReminderBadge(dateKey, tipo = "") {
   const today = new Date();
   const target = new Date(`${dateKey}T00:00:00`);
   const diff = Math.floor((target - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+  const tipoNorm = String(tipo || "").toLowerCase();
+  if (tipoNorm === "ferie") {
+    if (diff < 0) return "";
+    if (diff === 0) return "🏖️ Ferie oggi";
+    if (diff === 1) return "🏖️ Ferie domani";
+    if (diff <= 7) return `🏖️ Ferie tra ${diff} giorni`;
+    return "";
+  }
   if (diff === 0) return "📅 Oggi";
   if (diff === 1) return "📌 Domani";
   const day = target.getDay();
@@ -22541,15 +22549,15 @@ function renderProgrammazioni() {
     return true;
   });
   if (ui.programmazioneList) {
-    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data, item.tipo)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
     ui.programmazioneList.querySelectorAll("[data-edit-programmazione]").forEach((btn) => btn.addEventListener("click", () => openEditProgrammazione(btn.getAttribute("data-edit-programmazione"))));
     ui.programmazioneList.querySelectorAll("[data-delete-programmazione]").forEach((btn) => btn.addEventListener("click", () => deleteProgrammazioneById(btn.getAttribute("data-delete-programmazione"))));
   }
   if (ui.programmazioniHomeCard && ui.programmazioniHomeList) {
-    const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data)));
+    const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data, item.tipo)));
     ui.programmazioniHomeCard.classList.toggle("hidden", !homeItems.length);
     ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
-    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
+    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
   }
 }
 

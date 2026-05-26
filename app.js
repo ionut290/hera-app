@@ -756,6 +756,7 @@ let globalMapViewState = { center: [44.4949, 11.3426], zoom: 6, hasUserMoved: fa
 let isMapFullscreenPageOpen = false;
 let biogasMapInstance = null;
 let biogasLayerGroup = null;
+let biogasTileLayer = null;
 let biogasUserMarker = null;
 let biogasWatchId = null;
 let biogasFeatures = [];
@@ -12867,6 +12868,7 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
 function renderBiogasMap() {
   if (!ui.biogasMapPage || ui.biogasMapPage.classList.contains("hidden")) return;
   if (!biogasMapInstance) biogasMapInstance = L.map("biogas-map-view", { zoomControl: true });
+  if (!biogasTileLayer) biogasTileLayer = L.tileLayer(STANDARD_TILE_URL, { ...STANDARD_TILE_OPTIONS, attribution: "&copy; OpenStreetMap contributors" }).addTo(biogasMapInstance);
   if (!biogasLayerGroup) biogasLayerGroup = L.layerGroup().addTo(biogasMapInstance);
   biogasLayerGroup.clearLayers();
   const bounds = [];
@@ -12882,14 +12884,17 @@ function renderBiogasMap() {
     bounds.push(...p.coords);
   });
   if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
+  else biogasMapInstance.setView([44.4949, 11.3426], 12);
   ui.biogasMapStatus.textContent = biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile.";
   if (biogasWatchId == null && navigator.geolocation) {
     biogasWatchId = navigator.geolocation.watchPosition((pos) => {
       const latlng = [pos.coords.latitude, pos.coords.longitude];
-      if (!biogasUserMarker) biogasUserMarker = L.circleMarker(latlng, { radius: 7 }).addTo(biogasMapInstance);
+      if (!biogasUserMarker) biogasUserMarker = L.circleMarker(latlng, { radius: 8, color: "#1d4ed8", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 2 }).addTo(biogasMapInstance);
       biogasUserMarker.setLatLng(latlng);
       evaluateBiogasDistanceAlerts(latlng);
-    });
+    }, () => {
+      ui.biogasMapStatus.textContent = `${biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile."} Posizione non disponibile: abilita GPS e permessi posizione.`;
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
   }
 }
 
@@ -12934,6 +12939,7 @@ function teardownBiogasMapPage() {
   }
   biogasMapInstance = null;
   biogasLayerGroup = null;
+  biogasTileLayer = null;
   biogasUserMarker = null;
   biogasHighlightedLayer = null;
   biogasFeatures = [];

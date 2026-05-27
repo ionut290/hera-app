@@ -11747,7 +11747,7 @@ function renderImpianti() {
     special.className = "impianto-item card-impianto todo biogas-special-item";
     special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🟡 RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
     special.querySelector("button")?.addEventListener("click", openBiogasMapPage);
-    ui.biogasMapRefreshBtn?.classList.toggle("hidden", !canManageData());
+    ui.biogasMapRefreshBtn?.classList.remove("hidden");
     ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
     ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
     ui.impiantiLista.appendChild(special);
@@ -12813,6 +12813,11 @@ function parseCsvPipelines(text) {
 async function onBiogasFileSelected(event) {
   const file = event.target?.files?.[0];
   if (!file || !selectedCommessaId) return;
+  if (!canManageData()) {
+    ui.biogasMapFileInput.value = "";
+    ui.biogasMapStatus.textContent = "Solo l'admin può aggiungere o modificare la rete biogas.";
+    return;
+  }
   ui.biogasMapFileInput.value = "";
   ui.biogasMapStatus.textContent = "Caricamento rete biogas…";
   const ext = (file.name.split(".").pop() || "").toLowerCase();

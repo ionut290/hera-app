@@ -8656,24 +8656,9 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.biogas-distance-indicator.warning {
-  background: #fef08a;
-  border-color: #eab308;
-}
-
-.biogas-distance-indicator.danger {
-  background: #ef4444;
-  border-color: #b91c1c;
-  color: #fff;
-}
-
-.biogas-distance-indicator.danger-blink {
-  animation: biogasDangerBlink 0.8s step-end infinite;
-}
-
-@keyframes biogasDangerBlink {
-  50% { opacity: 0.35; }
-}
+.biogas-distance-indicator.is-red { background: #ef4444; border-color: #b91c1c; color: #fff; }
+.biogas-distance-indicator.is-orange { background: #f59e0b; border-color: #b45309; color: #fff; }
+.biogas-distance-indicator.is-green { background: #16a34a; border-color: #166534; color: #fff; }
 
 
 .biogas-distance-indicator {

@@ -246,6 +246,9 @@ const ui = {
   biogasMapBackBtn: document.getElementById("biogas-map-back-btn"),
   biogasDistanceIndicator: document.getElementById("biogas-distance-indicator"),
   biogasMapSettingsBtn: document.getElementById("biogas-map-settings-btn"),
+  biogasSurveyToggleBtn: document.getElementById("biogas-survey-toggle-btn"),
+  biogasSurveyPanel: document.getElementById("biogas-survey-panel"),
+  biogasSurveyCloseBtn: document.getElementById("biogas-survey-close-btn"),
   biogasMapControls: document.getElementById("biogas-map-controls"),
   biogasMapLayerBtn: document.getElementById("biogas-map-layer-btn"),
   biogasMapToggleBtn: document.getElementById("biogas-map-toggle-btn"),
@@ -771,6 +774,9 @@ let biogasBaseLayerMode = localStorage.getItem("hera_biogas_base_layer") || "sta
 let biogasHighlightedLayer = null;
 let biogasPipeRenderLayers = [];
 let biogasNearestSnapshot = null;
+let biogasSurveyModeEnabled = false;
+let biogasSurveyElements = [];
+let biogasSurveyPipeDraft = null;
 let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
 let selectedImpiantoId = "";
@@ -1306,6 +1312,9 @@ ui.commessaSquadreDetailsBtn?.addEventListener("click", scrollToHomeSquadreSecti
 ui.commessaNotesBackBtn?.addEventListener("click", openImpiantiPage);
 ui.biogasMapBackBtn?.addEventListener("click", closeBiogasMapPage);
 ui.biogasMapSettingsBtn?.addEventListener("click", toggleBiogasMapControls);
+ui.biogasSurveyToggleBtn?.addEventListener("click", () => toggleBiogasSurveyMode());
+ui.biogasSurveyCloseBtn?.addEventListener("click", () => toggleBiogasSurveyMode(false));
+ui.biogasSurveyPanel?.addEventListener("click", onBiogasSurveyPanelClick);
 ui.biogasMapLayerBtn?.addEventListener("click", toggleBiogasBaseLayerMode);
 ui.biogasMapToggleBtn?.addEventListener("click", toggleBiogasNetworkVisibility);
 ui.biogasMapSearch?.addEventListener("input", onBiogasSearchInput);
@@ -12878,10 +12887,36 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
     }
   }
   biogasFeatures = ensureBiogasPipeCodes(normalizeBiogasPipelinesFromStorage(payload.pipelines));
+  biogasSurveyElements = Array.isArray(payload.elements) ? payload.elements : [];
   ui.biogasMapLastUpdate.textContent = payload.updatedAt ? `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}` : "";
   renderBiogasMap();
 }
 
+function getBiogasMapStateKey() {
+  return selectedCommessaId ? `hera_biogas_map_state_${selectedCommessaId}` : "";
+}
+function saveBiogasMapViewState() {
+  if (!biogasMapInstance || !selectedCommessaId) return;
+  const c = biogasMapInstance.getCenter();
+  localStorage.setItem(getBiogasMapStateKey(), JSON.stringify({ lat: c.lat, lng: c.lng, zoom: biogasMapInstance.getZoom(), baseLayer: biogasBaseLayerMode, visible: biogasVisible }));
+}
+function restoreBiogasMapViewState() {
+  try { return JSON.parse(localStorage.getItem(getBiogasMapStateKey()) || "null"); } catch { return null; }
+}
+function toggleBiogasSurveyMode(force = null) {
+  biogasSurveyModeEnabled = force == null ? !biogasSurveyModeEnabled : Boolean(force);
+  if (!biogasSurveyModeEnabled) biogasSurveyPipeDraft = null;
+  ui.biogasSurveyPanel?.classList.toggle("hidden", !biogasSurveyModeEnabled);
+  ui.biogasSurveyPanel?.setAttribute("aria-hidden", biogasSurveyModeEnabled ? "false" : "true");
+  ui.biogasSurveyToggleBtn?.classList.toggle("is-active", biogasSurveyModeEnabled);
+  ui.biogasSurveyToggleBtn?.setAttribute("aria-expanded", biogasSurveyModeEnabled ? "true" : "false");
+}
+async function captureBiogasGpsSnapshot() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("GPS non disponibile"));
+    navigator.geolocation.getCurrentPosition((pos) => resolve(pos), () => reject(new Error("Impossibile leggere GPS")), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+}
 
 function applyBiogasBaseLayerMode() {
   if (!biogasMapInstance) return;
@@ -12930,6 +12965,26 @@ function renderBiogasPipeLayer(map, geoJsonData) {
   return layers;
 }
 
+function renderBiogasSurveyElements() {
+  if (!biogasLayerGroup) return;
+  (Array.isArray(biogasSurveyElements) ? biogasSurveyElements : []).forEach((item) => {
+    const coords = item?.coords;
+    if (Array.isArray(coords) && coords.length > 1) {
+      const length = L.GeometryUtil?.length ? L.GeometryUtil.length(L.polyline(coords)) : 0;
+      const label = `${item.code || "T?"} • Distanza ${Math.round(length || 0)} m`;
+      const layer = L.polyline(coords, { color: "#0f766e", weight: 9, opacity: 0.9 }).addTo(biogasLayerGroup);
+      layer.bindPopup(`${label}<br>Precisione GPS: ${Math.round(item.gpsAccuracy || 0)} metri`);
+    } else if (Array.isArray(coords) && coords.length === 2) {
+      const marker = L.circleMarker(coords, { radius: 7, color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.9 }).addTo(biogasLayerGroup);
+      marker.bindPopup(buildBiogasElementPopup(item));
+    }
+  });
+}
+function buildBiogasElementPopup(item) {
+  const lat = Number(item?.coords?.[0] || 0); const lng = Number(item?.coords?.[1] || 0);
+  return `<b>${escapeHTML(item?.name || "Elemento")}</b><br>Tipo: ${escapeHTML(item?.type || "-")}<br>Coordinate: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>Creato: ${escapeHTML(item?.createdAt || "-")}<br>Ultima modifica: ${escapeHTML(item?.updatedAt || "-")}<br>Foto: ${(item?.photos || []).length}<br>Note: ${(item?.notes || []).length}<br><button class="btn" data-biogas-update-gps="${escapeHTML(item?.id || "")}">📍 Aggiorna posizione GPS</button>`;
+}
+
 function renderBiogasMap() {
   if (!ui.biogasMapPage || ui.biogasMapPage.classList.contains("hidden")) return;
   if (!biogasMapInstance) biogasMapInstance = L.map("biogas-map-view", { zoomControl: true });
@@ -12938,6 +12993,7 @@ function renderBiogasMap() {
   biogasLayerGroup.clearLayers();
   biogasFeatures = ensureBiogasPipeCodes(biogasFeatures);
   biogasPipeRenderLayers = renderBiogasPipeLayer(biogasMapInstance, biogasFeatures);
+  renderBiogasSurveyElements();
   const bounds = [];
   biogasPipeRenderLayers.forEach((pipeLayer) => {
     pipeLayer.main.bindPopup(`Rete biogas<br>Attenzione: possibile presenza tubo biogas`);
@@ -12952,8 +13008,11 @@ function renderBiogasMap() {
     });
     bounds.push(...pipeLayer.coords);
   });
-  if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
+  const saved = restoreBiogasMapViewState();
+  if (saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lng) && Number.isFinite(saved.zoom)) biogasMapInstance.setView([saved.lat, saved.lng], saved.zoom);
+  else if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
   else biogasMapInstance.setView([44.4949, 11.3426], 12);
+  biogasMapInstance.on("moveend zoomend", saveBiogasMapViewState);
   ui.biogasMapStatus.textContent = biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile.";
   updateBiogasDistanceIndicator({ dist: Infinity, code: "" });
   if (biogasWatchId == null && navigator.geolocation) {
@@ -13074,6 +13133,30 @@ function evaluateBiogasDistanceAlerts(userLatLng) {
   });
   biogasNearestSnapshot = best;
   updateBiogasDistanceIndicator(best);
+  if (best.dist <= 20) alert(`⚠ ATTENZIONE\nElemento rete biogas nelle vicinanze.`);
+}
+
+async function saveBiogasSurveyPayload() {
+  if (!selectedCommessaId) return;
+  const payload = { elements: biogasSurveyElements, updatedAt: new Date().toISOString() };
+  await db.collection("commesse").doc(selectedCommessaId).collection("biogasNetwork").doc("current").set(payload, { merge: true });
+}
+async function onBiogasSurveyPanelClick(event) {
+  const addType = event.target?.getAttribute?.("data-biogas-add-type");
+  if (!addType || !biogasSurveyModeEnabled) return;
+  const pos = await captureBiogasGpsSnapshot();
+  const acc = Number(pos.coords.accuracy || 0);
+  ui.biogasMapStatus.textContent = `Precisione GPS: ${Math.round(acc)} metri${acc > 10 ? " ⚠ Precisione GPS bassa" : ""}`;
+  const now = new Date().toISOString();
+  if (addType === "pipe") {
+    if (!biogasSurveyPipeDraft) biogasSurveyPipeDraft = { id: `pipe_${Date.now()}`, type: "pipe", code: `T${biogasFeatures.length + biogasSurveyElements.filter((e) => e.type === "pipe").length + 1}`, name: "Tubo biogas", coords: [], notes: [], photos: [], createdBy: currentUser?.displayName || currentUser?.email || "Operatore", createdAt: now, updatedAt: now };
+    biogasSurveyPipeDraft.coords.push([pos.coords.latitude, pos.coords.longitude]);
+    if (biogasSurveyPipeDraft.coords.length >= 2 && confirm("Fine Tubo?")) { biogasSurveyElements.push(biogasSurveyPipeDraft); biogasSurveyPipeDraft = null; await saveBiogasSurveyPayload(); }
+  } else {
+    biogasSurveyElements.push({ id: `${addType}_${Date.now()}`, type: addType, name: addType, coords: [pos.coords.latitude, pos.coords.longitude], gpsAccuracy: acc, notes: [], photos: [], createdBy: currentUser?.displayName || currentUser?.email || "Operatore", createdAt: now, updatedAt: now });
+    await saveBiogasSurveyPayload();
+  }
+  renderBiogasMap();
 }
 
 function handleImpiantoSafetyButtonClick(event) {

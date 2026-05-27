@@ -8671,17 +8671,6 @@ textarea:focus-visible {
   padding: 6px !important;
   font-size: 1rem !important;
 }
-.biogas-survey-toggle-btn {
-  min-width: 34px !important;
-  width: 34px;
-  padding: 6px !important;
-  font-size: 1rem !important;
-}
-.biogas-survey-toggle-btn.is-active {
-  background: #2563eb;
-  color: #fff;
-  border-color: #1d4ed8;
-}
 
 .biogas-map-controls {
   display: inline-flex;
@@ -8699,19 +8688,3 @@ textarea:focus-visible {
   min-width: 170px;
   flex: 1 1 200px;
 }
-.biogas-survey-panel {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 500;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: min(340px, calc(100% - 24px));
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.2);
-}
-.biogas-survey-panel.hidden { display: none; }

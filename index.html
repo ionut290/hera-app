@@ -334,7 +334,6 @@
           <button id="biogas-map-back-btn" class="btn" type="button">← Indietro</button>
           <div id="biogas-distance-indicator" class="biogas-distance-indicator" aria-live="polite" aria-label="Distanza dal tubo biogas">-- m</div>
           <button id="biogas-map-settings-btn" class="btn biogas-settings-btn" type="button" aria-label="Apri impostazioni rete biogas" aria-expanded="false" aria-controls="biogas-map-controls">⚙️</button>
-          <button id="biogas-survey-toggle-btn" class="btn biogas-survey-toggle-btn" type="button" aria-label="Attiva modalità rilievo campo" aria-expanded="false" aria-controls="biogas-survey-panel">+</button>
           <div id="biogas-map-controls" class="biogas-map-controls hidden" aria-hidden="true">
             <button id="biogas-map-layer-btn" class="btn" type="button">Mappa: Standard</button>
             <button id="biogas-map-toggle-btn" class="btn" type="button">Mostra/Nascondi Rete Biogas</button>
@@ -349,16 +348,6 @@
         <p id="biogas-map-last-update" class="muted"></p>
         <div class="map-fullscreen-map-wrap">
           <div id="biogas-map-view"></div>
-          <aside id="biogas-survey-panel" class="biogas-survey-panel hidden" aria-hidden="true">
-            <button type="button" class="btn" data-biogas-add-type="pipe">➕ Aggiungi Tubo Biogas</button>
-            <button type="button" class="btn" data-biogas-add-type="wellhead">➕ Aggiungi Testa di Pozzo</button>
-            <button type="button" class="btn" data-biogas-add-type="water-channel">➕ Aggiungi Canaletta Acqua</button>
-            <button type="button" class="btn" data-biogas-add-type="manhole">➕ Aggiungi Pozzetto</button>
-            <button type="button" class="btn" data-biogas-add-type="valve">➕ Aggiungi Valvola</button>
-            <button type="button" class="btn" data-biogas-add-type="danger-point">➕ Aggiungi Punto Pericoloso</button>
-            <button type="button" class="btn" data-biogas-add-type="other">➕ Aggiungi Altro Elemento</button>
-            <button id="biogas-survey-close-btn" type="button" class="btn">❌ Chiudi Modifica</button>
-          </aside>
         </div>
       </section>
     </section>

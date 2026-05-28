@@ -230,7 +230,12 @@ const ui = {
   mapNumberSearchInput: document.getElementById("map-number-search-input"),
   mapLocationWarning: document.getElementById("map-location-warning"),
   mapEnableLocationBtn: document.getElementById("map-enable-location-btn"),
-  mapLocationFallback: document.getElementById("map-location-fallback"),
+  mapRetryLocationBtn: document.getElementById("map-retry-location-btn"),
+  mapLocationHelpBtn: document.getElementById("map-location-help-btn"),
+  mapLocationHelpPanel: document.getElementById("map-location-help-panel"),
+  mapLocationWarningTitle: document.getElementById("map-location-warning-title"),
+  mapLocationWarningText: document.getElementById("map-location-warning-text"),
+  mapLocationWarningPlatform: document.getElementById("map-location-warning-platform"),
   mapFullscreenNumberSearchForm: document.getElementById("map-fullscreen-number-search-form"),
   mapFullscreenNumberSearchInput: document.getElementById("map-fullscreen-number-search-input"),
   mapShareAreaWhatsappBtn: document.getElementById("map-share-area-whatsapp-btn"),
@@ -735,6 +740,8 @@ let latestGeolocationCoords = null;
 let locationPermission = "prompt";
 let isLocationEnabled = false;
 let showLocationWarning = false;
+let locationWarningMode = "prompt";
+let locationClientInfo = { browser: "Altro browser", os: "Altro sistema" };
 let radarPaneInitialized = false;
 let radarActive = false;
 let radarFrames = [];
@@ -1346,6 +1353,8 @@ ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
 ui.mapFullscreenFeedbackClose?.addEventListener("click", () => ui.mapFullscreenFeedbackBanner?.classList.add("hidden"));
 ui.mapEnableLocationBtn?.addEventListener("click", () => { void requestLocationEnableFlow(); });
+ui.mapRetryLocationBtn?.addEventListener("click", () => { void requestLocationEnableFlow({ forceRetry: true }); });
+ui.mapLocationHelpBtn?.addEventListener("click", () => toggleLocationHelpPanel());
 ui.toggleCommesseHomeBtn?.addEventListener("click", toggleCommesseHomeCard);
 ui.impiantoSearch?.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn?.addEventListener("click", () => setImpiantiViewMode("done"));
@@ -18358,43 +18367,101 @@ function centerMapOnUserLocation(targetMap = map) {
 function renderLocationWarning() {
   showLocationWarning = !isLocationEnabled || locationPermission !== "granted";
   ui.mapLocationWarning?.classList.toggle("hidden", !showLocationWarning);
+  if (!showLocationWarning) return;
+  const blocked = locationWarningMode === "blocked";
+  if (ui.mapLocationWarningTitle) ui.mapLocationWarningTitle.textContent = blocked ? "📍 Posizione bloccata" : "Posizione non attiva";
+  if (ui.mapLocationWarningText) {
+    ui.mapLocationWarningText.textContent = blocked
+      ? "La posizione è bloccata per questo browser. Per usare la posizione, devi abilitarla manualmente."
+      : "Per usare questa funzione abilita la posizione dal telefono.";
+  }
+  ui.mapEnableLocationBtn?.classList.toggle("hidden", blocked);
+  ui.mapRetryLocationBtn?.classList.toggle("hidden", !blocked);
+  ui.mapLocationHelpBtn?.classList.toggle("hidden", !blocked);
+  if (ui.mapLocationWarningPlatform) {
+    ui.mapLocationWarningPlatform.classList.toggle("hidden", !blocked);
+    ui.mapLocationWarningPlatform.textContent = `Browser rilevato: ${locationClientInfo.browser} • Sistema rilevato: ${locationClientInfo.os}`;
+  }
 }
 
-function updateLocationWarningState({ permission, enabled, fallbackMessage } = {}) {
+function updateLocationWarningState({ permission, enabled, mode } = {}) {
   if (permission) locationPermission = permission;
   if (typeof enabled === "boolean") isLocationEnabled = enabled;
-  if (ui.mapLocationFallback) {
-    const showFallback = fallbackMessage === "manual_settings" || fallbackMessage === "not_supported";
-    ui.mapLocationFallback.classList.toggle("hidden", !showFallback);
-  }
+  if (mode) locationWarningMode = mode;
+  if (locationWarningMode !== "blocked") ui.mapLocationHelpPanel?.classList.add("hidden");
   renderLocationWarning();
+}
+
+function detectLocationClientInfo() {
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  const uaBrands = Array.isArray(navigator.userAgentData?.brands) ? navigator.userAgentData.brands.map((b) => String(b.brand || "").toLowerCase()) : [];
+  const hasBrand = (name) => uaBrands.some((brand) => brand.includes(name));
+  const browser = ua.includes("samsungbrowser") || hasBrand("samsung") ? "Samsung Internet"
+    : (ua.includes("edg/") || hasBrand("edge")) ? "Edge"
+      : (ua.includes("firefox") || hasBrand("firefox")) ? "Firefox"
+        : (ua.includes("chrome") || hasBrand("chrome")) ? "Chrome"
+          : (ua.includes("safari") || hasBrand("safari")) ? "Safari"
+            : "Altro browser";
+  const os = ua.includes("android") ? "Android"
+    : (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) ? "iPhone/iOS"
+      : ua.includes("windows") ? "Windows"
+        : "Altro sistema";
+  locationClientInfo = { browser, os };
+}
+
+function getLocationHelpSteps() {
+  const key = `${locationClientInfo.os}|${locationClientInfo.browser}`;
+  const maps = {
+    "Android|Chrome": ["Tocca il lucchetto vicino all’indirizzo del sito", "Tocca Permessi", "Apri Posizione", "Seleziona Consenti", "Ricarica la pagina", "Torna nell’app e premi “Riprova posizione”"],
+    "Android|Samsung Internet": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Samsung Internet", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nell’app e premi “Riprova posizione”"],
+    "Android|Edge": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Microsoft Edge", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nell’app e premi “Riprova posizione”"],
+    "iPhone/iOS|Safari": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Assicurati che Localizzazione sia attiva", "Cerca Safari", "Imposta la posizione su “Mentre usi l’app”", "Torna nell’app e premi “Riprova posizione”"],
+    "iPhone/iOS|Chrome": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Cerca Chrome", "Imposta la posizione su “Mentre usi l’app”", "Torna nell’app e premi “Riprova posizione”"]
+  };
+  return maps[key] || ["Apri le impostazioni del telefono", "Vai su App", "Cerca il browser che stai usando", "Entra in Permessi", "Attiva Posizione", "Torna nell’app", "Premi “Riprova posizione”"];
+}
+
+function toggleLocationHelpPanel() {
+  if (!ui.mapLocationHelpPanel) return;
+  const nowHidden = ui.mapLocationHelpPanel.classList.toggle("hidden");
+  if (!nowHidden) {
+    const items = getLocationHelpSteps().map((step) => `<li>${escapeHTML(step)}</li>`).join("");
+    ui.mapLocationHelpPanel.innerHTML = `<ol>${items}</ol>`;
+  }
 }
 
 async function syncLocationAvailability() {
   try {
+    detectLocationClientInfo();
     if (!navigator.geolocation) {
-      updateLocationWarningState({ permission: "unavailable", enabled: false, fallbackMessage: "not_supported" });
+      updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
       return;
     }
     if (navigator.permissions?.query) {
       const status = await navigator.permissions.query({ name: "geolocation" });
-      updateLocationWarningState({ permission: status.state || "prompt" });
+      if (status.state === "denied") updateLocationWarningState({ permission: "denied", enabled: false, mode: "blocked" });
+      else if (status.state === "prompt") updateLocationWarningState({ permission: "prompt", enabled: false, mode: "prompt" });
+      else updateLocationWarningState({ permission: "granted", mode: "prompt" });
+      status.onchange = () => { void syncLocationAvailability(); };
     }
-    navigator.geolocation.getCurrentPosition(() => {
-      updateLocationWarningState({ permission: "granted", enabled: true });
-    }, () => {
-      updateLocationWarningState({ enabled: false });
-    }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 });
+    if (!navigator.permissions?.query) {
+      navigator.geolocation.getCurrentPosition(() => {
+        updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
+      }, (error) => {
+        const denied = error?.code === 1;
+        updateLocationWarningState({ permission: denied ? "denied" : "prompt", enabled: false, mode: denied ? "blocked" : "prompt" });
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    }
   } catch (error) {
     console.warn("Verifica disponibilità posizione non riuscita:", error);
-    updateLocationWarningState({ permission: "unavailable", enabled: false });
+    updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
   }
 }
 
-async function requestLocationEnableFlow() {
+async function requestLocationEnableFlow(options = {}) {
   try {
     if (!navigator.geolocation) {
-      updateLocationWarningState({ permission: "unavailable", enabled: false, fallbackMessage: "not_supported" });
+      updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
       return;
     }
     const isCapacitor = Boolean(window.Capacitor?.isNativePlatform?.());
@@ -18405,26 +18472,26 @@ async function requestLocationEnableFlow() {
       currentUserPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy || 0 };
       ensureUserLocationMarker(map, [pos.coords.latitude, pos.coords.longitude]);
       ensureUserLocationMarker(fullscreenMap, [pos.coords.latitude, pos.coords.longitude]);
-      updateLocationWarningState({ permission: "granted", enabled: true });
+      updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
       fullscreenMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
     }, async (error) => {
-      updateLocationWarningState({ enabled: false, permission: error?.code === 1 ? "denied" : locationPermission });
+      const denied = error?.code === 1;
+      const blockedLike = denied || error?.code === 2 || error?.code === 3 || options.forceRetry;
+      updateLocationWarningState({ enabled: false, permission: denied ? "denied" : locationPermission, mode: blockedLike ? "blocked" : "prompt" });
       if (error?.code === 1) {
         if (isCapacitor && window.Capacitor?.Plugins?.App?.openSettings) {
           try {
             await window.Capacitor.Plugins.App.openSettings();
           } catch {
-            updateLocationWarningState({ fallbackMessage: "manual_settings" });
+            updateLocationWarningState({ mode: "blocked" });
           }
-        } else {
-          updateLocationWarningState({ fallbackMessage: "manual_settings" });
         }
       }
-    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   } catch (error) {
     console.warn("Richiesta permesso posizione non riuscita:", error);
-    updateLocationWarningState({ fallbackMessage: "manual_settings" });
+    updateLocationWarningState({ mode: "blocked" });
   }
 }
 
@@ -19438,7 +19505,7 @@ function markCurrentOperatorOffline() {
 function initGeolocation(options = {}) {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
-    updateLocationWarningState({ permission: "unavailable", enabled: false, fallbackMessage: "not_supported" });
+    updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
     return;
   }
   void syncLocationAvailability();
@@ -19459,7 +19526,7 @@ function initGeolocation(options = {}) {
     options.forcePublishCurrent = false;
     evaluateTimbraturaReminders();
     ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza.";
-    updateLocationWarningState({ permission: "granted", enabled: true });
+    updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
@@ -19470,7 +19537,7 @@ function initGeolocation(options = {}) {
     fetchWeather();
   }, () => {
     ui.gpsStatus.textContent = "Posizione non disponibile";
-    updateLocationWarningState({ enabled: false });
+    updateLocationWarningState({ enabled: false, mode: locationPermission === "denied" ? "blocked" : "prompt" });
     fetchWeather();
   }, {
     enableHighAccuracy: true,
@@ -19479,7 +19546,7 @@ function initGeolocation(options = {}) {
 
   geolocationWatchId = navigator.geolocation.watchPosition(onPosition, () => {
     ui.gpsStatus.textContent = "Posizione non disponibile";
-    updateLocationWarningState({ enabled: false });
+    updateLocationWarningState({ enabled: false, mode: locationPermission === "denied" ? "blocked" : "prompt" });
   }, {
     enableHighAccuracy: true,
     maximumAge: 10000,

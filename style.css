@@ -8342,6 +8342,36 @@ textarea:focus-visible {
   display: block;
 }
 
+.map-location-warning {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  width: min(92%, 420px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 12px;
+  text-align: center;
+}
+.map-location-warning.hidden { display: none; }
+.map-location-warning__icon { font-size: 20px; margin-bottom: 6px; }
+.map-location-warning p { margin: 0 0 10px; color: #0f172a; font-weight: 600; line-height: 1.35; }
+.map-location-warning__btn {
+  width: 100%;
+  min-height: 42px;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.map-location-warning__fallback {
+  margin-top: 10px !important;
+  font-size: 0.9rem;
+  color: #334155 !important;
+  font-weight: 500 !important;
+}
+
 
 /* Impianti list compact card layout */
 .impianto-primary-actions {

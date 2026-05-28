@@ -8828,3 +8828,133 @@ textarea:focus-visible {
     padding: 6px;
   }
 }
+
+/* Compattazione header commessa/impianto (2026-05) */
+.commessa-dashboard-card {
+  padding: 10px 12px;
+}
+
+.commessa-dashboard-head {
+  grid-template-columns: 28px 34px minmax(0, 1fr);
+  grid-template-areas:
+    "back home title"
+    "actions actions actions"
+    "weather weather weather";
+  align-items: start;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.commessa-back-btn {
+  font-size: 1.3rem;
+  min-height: 28px;
+}
+
+.commessa-home-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  box-shadow: 0 4px 10px rgba(8, 169, 66, 0.2);
+}
+
+.commessa-home-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.commessa-title-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+}
+
+.commessa-focus-label,
+.commessa-focus-code {
+  margin: 0;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commessa-focus-label {
+  font-size: clamp(0.88rem, 1.4vw, 1rem);
+}
+
+.commessa-focus-code {
+  font-size: clamp(0.72rem, 1.1vw, 0.84rem);
+  opacity: 0.9;
+}
+
+.commessa-header-actions.commessa-tools-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 4px;
+  justify-content: flex-start;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover,
+.commessa-header-actions .commessa-action-btn:focus-visible {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 4px 7px;
+  border-radius: 9px;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.12);
+  flex: 0 0 auto;
+}
+
+.commessa-header-actions .commessa-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.commessa-header-actions .commessa-action-label {
+  font-size: 0.66rem;
+}
+
+.commessa-weather-refresh-status {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.commessa-map-card {
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .commessa-dashboard-card {
+    padding: 8px 10px;
+  }
+
+  .commessa-dashboard-head {
+    gap: 4px 6px;
+  }
+
+  .commessa-header-actions .commessa-action-label {
+    display: none;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    min-height: 28px;
+    min-width: 28px;
+    padding: 4px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .commessa-dashboard-head {
+    max-height: 130px;
+    overflow: hidden;
+  }
+}

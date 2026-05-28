@@ -8726,3 +8726,105 @@ textarea:focus-visible {
   min-width: 170px;
   flex: 1 1 200px;
 }
+
+/* Responsive header fix: commessa page */
+.commessa-dashboard-head {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "back home title actions"
+    ". . . weather";
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#back-to-home-btn { grid-area: back; }
+#commessa-home-btn { grid-area: home; }
+.commessa-title-wrap {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+}
+.commessa-header-actions.commessa-tools-bar {
+  grid-area: actions;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.commessa-focus-label,
+.commessa-focus-code {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commessa-focus-label {
+  font-size: clamp(0.9rem, 1.6vw, 1.08rem);
+}
+.commessa-focus-code {
+  font-size: clamp(0.73rem, 1.25vw, 0.92rem);
+}
+
+.commessa-header-actions .commessa-action-btn,
+.commessa-header-actions .commessa-action-btn:hover,
+.commessa-header-actions .commessa-action-btn:focus-visible {
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .12);
+}
+
+.commessa-header-actions .commessa-action-label {
+  font-size: 0.72rem;
+}
+
+.commessa-weather-refresh-status {
+  grid-area: weather;
+  justify-self: end;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-align: right;
+  max-width: min(100%, 320px);
+}
+
+@media (max-width: 900px) {
+  .commessa-dashboard-head {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "back home title"
+      "actions actions actions"
+      "weather weather weather";
+    align-items: start;
+  }
+
+  .commessa-header-actions.commessa-tools-bar {
+    justify-self: stretch;
+    justify-content: flex-start;
+  }
+
+  .commessa-weather-refresh-status {
+    justify-self: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .commessa-header-actions .commessa-action-label {
+    display: none;
+  }
+
+  .commessa-header-actions .commessa-action-btn,
+  .commessa-header-actions .commessa-action-btn:hover,
+  .commessa-header-actions .commessa-action-btn:focus-visible {
+    min-width: 34px;
+    padding: 6px;
+  }
+}

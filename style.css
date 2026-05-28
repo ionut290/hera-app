@@ -8342,6 +8342,44 @@ textarea:focus-visible {
   display: block;
 }
 
+.map-location-warning {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  width: min(92%, 420px);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 12px;
+  text-align: center;
+}
+.map-location-warning.hidden { display: none; }
+.map-location-warning__icon { font-size: 20px; margin-bottom: 6px; }
+.map-location-warning h4 { margin: 0 0 6px; color: #0f172a; font-size: 1rem; }
+.map-location-warning p { margin: 0 0 10px; color: #0f172a; font-weight: 600; line-height: 1.35; }
+.map-location-warning__platform { font-size: 0.86rem; color: #334155; font-weight: 500; }
+.map-location-warning__actions { display: grid; gap: 8px; }
+.map-location-warning__btn {
+  width: 100%;
+  min-height: 42px;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.map-location-help-panel {
+  margin-top: 10px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+.map-location-help-panel ol { margin: 0; padding-left: 18px; }
+
 
 /* Impianti list compact card layout */
 .impianto-primary-actions {

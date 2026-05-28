@@ -197,6 +197,12 @@
         </section>
         <div class="commessa-map-shell">
           <div id="map"></div>
+          <aside id="map-location-warning" class="map-location-warning hidden" aria-live="polite">
+            <div class="map-location-warning__icon" aria-hidden="true">📍</div>
+            <p>Posizione non attiva.<br>Per usare questa funzione abilita la posizione dal telefono.</p>
+            <button id="map-enable-location-btn" class="btn map-location-warning__btn" type="button">ABILITA POSIZIONE</button>
+            <p id="map-location-fallback" class="map-location-warning__fallback hidden">Apri manualmente le impostazioni del telefono, cerca questa app e abilita la posizione.</p>
+          </aside>
           <button id="map-inline-fullscreen-btn" class="map-inline-fullscreen-btn" type="button" aria-label="Apri mappa a schermo intero" title="Schermo intero">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
           </button>

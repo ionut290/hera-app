@@ -17288,9 +17288,13 @@ function renderSquadre() {
     const warningMarkup = warningIssues.length
       ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
       : "";
+    const codiceCommessa = String(commessa.codice || "").trim();
     item.innerHTML = `
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
-        <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+        <div class="squadra-commessa-title-wrap">
+          <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+          ${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}
+        </div>
         ${warningMarkup}
       </div>
       <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>

@@ -1166,12 +1166,12 @@ textarea:focus-visible {
 .squadra-item {
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 12px;
+  padding: 10px 11px;
   background: #fbfdff;
   border-left: 5px solid #6366f1;
 }
 
-.squadra-item p { margin: 7px 0; }
+.squadra-item p { margin: 5px 0; }
 
 
 .commessa-btn {
@@ -4039,15 +4039,23 @@ textarea:focus-visible {
 
 .squadra-item-head {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 6px;
   min-width: 0;
 }
 
+.squadra-commessa-title-wrap {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .squadra-commessa-link {
-  margin: -4px -4px 8px;
-  padding: 8px;
+  margin: -3px -3px 6px;
+  padding: 7px;
   border-radius: 12px;
   cursor: pointer;
   touch-action: manipulation;
@@ -4069,7 +4077,33 @@ textarea:focus-visible {
 
 .squadra-item-head strong {
   min-width: 0;
+  font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.squadra-commessa-code-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .squadra-commessa-title-wrap {
+    align-items: flex-start;
+  }
+
+  .squadra-item-head strong {
+    width: 100%;
+  }
 }
 
 .hours-locked-commessa-label,

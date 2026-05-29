@@ -4951,37 +4951,42 @@ async function exportHoursGlobalMonthlyTable() {
     const reports = await fetchHoursReportsForMonth(monthValue, monthMeta, { includePendingApprovals: true });
     logHoursDebug("record trovati", Array.isArray(reports) ? reports.length : 0);
     const commessaMap = new Map();
+    const globalOperatorDayMap = new Map();
     let totalValidGlobalRows = 0;
-  reports.forEach((report) => {
-    const day = Number(String(report.date || "").split("-")[2] || 0);
-    if (!day || day < 1 || day > monthMeta.daysInMonth) return;
-    const entries = Array.isArray(report.entries) ? report.entries : [];
-    entries.forEach((entry) => {
-      const entryCommessaInfo = resolveHoursEntryCommessa(entry);
-      const commessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
-      if (!commessaId) return;
-      const commessaName = String(entryCommessaInfo.nome || entry.commessaName || commesseById.get(entryCommessaInfo.id)?.nome || "Commessa").trim() || "Commessa";
-      const commessaCode = String(entryCommessaInfo.codice || commesseById.get(entryCommessaInfo.id)?.codice || "").trim();
-      if (!commessaMap.has(commessaId)) {
-        commessaMap.set(commessaId, { commessaName, commessaCode, operatorsMap: new Map() });
-      }
-      const commessaBucket = commessaMap.get(commessaId);
-      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
-        const operatore = String(row.operatore || "").trim();
-        const ore = Number(row.ore || 0);
-        if (!operatore || ore <= 0) return;
-        totalValidGlobalRows += 1;
-        const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
-        if (!commessaBucket.operatorsMap.has(operatorNorm)) {
-          commessaBucket.operatorsMap.set(operatorNorm, {
-            displayName: operatore,
-            days: Array.from({ length: monthMeta.daysInMonth }, () => 0)
-          });
+    reports.forEach((report) => {
+      const day = Number(String(report.date || "").split("-")[2] || 0);
+      if (!day || day < 1 || day > monthMeta.daysInMonth) return;
+      const entries = Array.isArray(report.entries) ? report.entries : [];
+      entries.forEach((entry) => {
+        const entryCommessaInfo = resolveHoursEntryCommessa(entry);
+        const commessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
+        if (!commessaId) return;
+        const commessaName = String(entryCommessaInfo.nome || entry.commessaName || commesseById.get(entryCommessaInfo.id)?.nome || "Commessa").trim() || "Commessa";
+        const commessaCode = String(entryCommessaInfo.codice || commesseById.get(entryCommessaInfo.id)?.codice || "").trim();
+        if (!commessaMap.has(commessaId)) {
+          commessaMap.set(commessaId, { commessaName, commessaCode, operatorsMap: new Map() });
         }
-        commessaBucket.operatorsMap.get(operatorNorm).days[day - 1] += ore;
+        const commessaBucket = commessaMap.get(commessaId);
+        (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+          const operatore = String(row.operatore || "").trim();
+          const ore = Number(row.ore || 0);
+          if (!operatore || ore <= 0) return;
+          totalValidGlobalRows += 1;
+          const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+          if (!commessaBucket.operatorsMap.has(operatorNorm)) {
+            commessaBucket.operatorsMap.set(operatorNorm, {
+              displayName: operatore,
+              days: Array.from({ length: monthMeta.daysInMonth }, () => 0)
+            });
+          }
+          if (!globalOperatorDayMap.has(operatorNorm)) {
+            globalOperatorDayMap.set(operatorNorm, Array.from({ length: monthMeta.daysInMonth }, () => 0));
+          }
+          commessaBucket.operatorsMap.get(operatorNorm).days[day - 1] += ore;
+          globalOperatorDayMap.get(operatorNorm)[day - 1] += ore;
+        });
       });
     });
-  });
 
   logHoursDebug("dati usati per export", { mode: "global", monthValue, commesse: Array.from(commessaMap.values()).map((item) => ({
     commessaName: item.commessaName,
@@ -5077,14 +5082,25 @@ async function exportHoursGlobalMonthlyTable() {
     .sort((a, b) => a.commessaName.localeCompare(b.commessaName, "it"));
 
   const totalCommesse = commesseSorted.length;
-  const totalOperatorsMonth = commesseSorted.reduce((acc, commessaBlock) => (
-    acc + commessaBlock.operatorsMap.size
+  const totalOperatorsUnique = globalOperatorDayMap.size;
+  const totalOperatorsActive = commesseSorted.reduce((acc, commessaBlock) => (
+    acc + Array.from(commessaBlock.operatorsMap.values()).filter((operator) => (
+      operator.days.some((value) => Number(value || 0) > 0)
+    )).length
   ), 0);
-  const totalHoursMonth = commesseSorted.reduce((acc, commessaBlock) => (
-    acc + Array.from(commessaBlock.operatorsMap.values()).reduce((hoursAcc, operator) => (
-      hoursAcc + operator.days.reduce((dayAcc, value) => dayAcc + Number(value || 0), 0)
-    ), 0)
-  ), 0);
+  const monthlyHourTotals = Array.from(globalOperatorDayMap.values()).reduce((acc, days) => {
+    days.forEach((value, dayIndex) => {
+      const dailyHours = Number(value || 0);
+      if (dailyHours <= 0) return;
+      const weekday = new Date(monthMeta.year, monthMeta.month - 1, dayIndex + 1).getDay();
+      const ordinaryLimit = weekday === 5 ? 7 : (weekday === 0 || weekday === 6 ? 0 : 8);
+      const ordinaryHours = Math.min(dailyHours, ordinaryLimit);
+      acc.ordinary += ordinaryHours;
+      acc.overtime += Math.max(dailyHours - ordinaryLimit, 0);
+      acc.total += dailyHours;
+    });
+    return acc;
+  }, { ordinary: 0, overtime: 0, total: 0 });
 
   const summaryStartRow = rowPointer;
   worksheet.mergeCells(summaryStartRow, 1, summaryStartRow, lastColumn);
@@ -5095,25 +5111,63 @@ async function exportHoursGlobalMonthlyTable() {
   summaryTitleCell.fill = whiteFill;
   rowPointer += 1;
 
-  const summaryRows = [
-    ["MESE DI RIFERIMENTO", monthNameIt],
-    ["ANNO", String(monthMeta.year)],
-    ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")],
-    ["TOTALE ORE MESE", totalHoursMonth > 0 ? totalHoursMonth : ""],
-    ["TOTALE OPERATORI", totalOperatorsMonth],
-    ["TOTALE COMMESSE", totalCommesse]
+  const formatSummaryValue = (value) => {
+    if (typeof value !== "number") return value;
+    return Number.isInteger(value) ? value : Number(value.toFixed(2));
+  };
+  const summaryCardRows = [
+    [
+      ["MESE DI RIFERIMENTO", monthNameIt],
+      ["ANNO", String(monthMeta.year)],
+      ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")]
+    ],
+    [
+      ["ORE ORDINARIE", formatSummaryValue(monthlyHourTotals.ordinary)],
+      ["ORE STRAORDINARIE", formatSummaryValue(monthlyHourTotals.overtime)],
+      ["TOTALE ORE MESE", formatSummaryValue(monthlyHourTotals.total)]
+    ],
+    [
+      ["OPERATORI ATTIVI", totalOperatorsActive],
+      ["OPERATORI UNICI", totalOperatorsUnique],
+      ["TOTALE COMMESSE", totalCommesse]
+    ]
   ];
-  summaryRows.forEach(([label, value]) => {
-    const row = worksheet.getRow(rowPointer);
-    row.getCell(1).value = label;
-    row.getCell(2).value = value;
-    if (typeof value === "number" && value > 0) {
-      row.getCell(2).numFmt = getExcelNumberFormat(value) || "0";
-    }
-    worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
-    rowPointer += 1;
+  const summaryColumnGroups = [
+    [1, Math.floor(lastColumn / 3)],
+    [Math.floor(lastColumn / 3) + 1, Math.floor((lastColumn * 2) / 3)],
+    [Math.floor((lastColumn * 2) / 3) + 1, lastColumn]
+  ];
+  summaryCardRows.forEach((cards) => {
+    const labelRowIndex = rowPointer;
+    const valueRowIndex = rowPointer + 1;
+    cards.forEach(([label, value], cardIndex) => {
+      const [startCol, endCol] = summaryColumnGroups[cardIndex];
+      worksheet.mergeCells(labelRowIndex, startCol, labelRowIndex, endCol);
+      worksheet.mergeCells(valueRowIndex, startCol, valueRowIndex, endCol);
+      const labelCell = worksheet.getCell(labelRowIndex, startCol);
+      const valueCell = worksheet.getCell(valueRowIndex, startCol);
+      labelCell.value = label;
+      valueCell.value = value;
+      labelCell.font = { bold: true, size: 8, color: { argb: "FF4B5563" } };
+      valueCell.font = { bold: true, size: 13, color: { argb: "FF000000" } };
+      labelCell.alignment = { horizontal: "center", vertical: "bottom" };
+      valueCell.alignment = { horizontal: "center", vertical: "top" };
+      if (typeof value === "number") valueCell.numFmt = getExcelNumberFormat(value) || "0";
+      for (let row = labelRowIndex; row <= valueRowIndex; row += 1) {
+        for (let col = startCol; col <= endCol; col += 1) {
+          const cell = worksheet.getCell(row, col);
+          cell.fill = whiteFill;
+          setThinBorder(cell);
+        }
+      }
+    });
+    worksheet.getRow(labelRowIndex).height = 13;
+    worksheet.getRow(valueRowIndex).height = 19;
+    rowPointer += 2;
   });
+  const summaryEndRow = rowPointer - 1;
   rowPointer += 1;
+  const firstCommessaStartRow = rowPointer;
 
   commesseSorted.forEach((commessaBlock, idx) => {
     const operatorRows = Array.from(commessaBlock.operatorsMap.values())
@@ -5251,22 +5305,13 @@ async function exportHoursGlobalMonthlyTable() {
     }
   });
 
-  for (let row = summaryStartRow; row <= summaryStartRow + summaryRows.length; row += 1) {
-    for (let col = 1; col <= lastColumn; col += 1) {
-      const cell = worksheet.getCell(row, col);
-      setThinBorder(cell);
-      if (!cell.fill) cell.fill = whiteFill;
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: col === 1 ? "left" : "center"
-      };
-      if (col === 1 || row === summaryStartRow) {
-        cell.font = { ...(cell.font || {}), bold: true, color: { argb: "FF000000" } };
-      }
-    }
-    worksheet.getRow(row).height = row === summaryStartRow ? 28 : 21;
+  for (let col = 1; col <= lastColumn; col += 1) {
+    const cell = worksheet.getCell(summaryStartRow, col);
+    cell.fill = whiteFill;
+    setThinBorder(cell);
   }
-  setOuterBlockBorder(summaryStartRow, summaryStartRow + summaryRows.length);
+  worksheet.getRow(summaryStartRow).height = 24;
+  setOuterBlockBorder(summaryStartRow, summaryEndRow);
 
   for (let col = 1; col <= lastColumn; col += 1) {
     if (col === 1) {
@@ -5289,55 +5334,8 @@ async function exportHoursGlobalMonthlyTable() {
   }
 
   worksheet.autoFilter = {
-    from: { row: summaryStartRow + 7, column: 1 },
-    to: { row: summaryStartRow + 7, column: 1 }
-  };
-
-  for (let row = 1; row <= worksheet.rowCount; row += 1) {
-    const currentRow = worksheet.getRow(row);
-    if (!currentRow.height) currentRow.height = 21;
-  }
-
-  for (let row = summaryStartRow; row <= summaryStartRow + 6; row += 1) {
-    for (let col = 1; col <= lastColumn; col += 1) {
-      const cell = worksheet.getCell(row, col);
-      setThinBorder(cell);
-      if (!cell.fill) cell.fill = whiteFill;
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: col === 1 ? "left" : "center"
-      };
-      if (col === 1 || row === summaryStartRow) {
-        cell.font = { ...(cell.font || {}), bold: true, color: { argb: "FF000000" } };
-      }
-    }
-    worksheet.getRow(row).height = row === summaryStartRow ? 28 : 21;
-  }
-  setOuterBlockBorder(summaryStartRow, summaryStartRow + 6);
-
-  for (let col = 1; col <= lastColumn; col += 1) {
-    if (col === 1) {
-      worksheet.getColumn(col).width = 28;
-      continue;
-    }
-    if (col >= dayStartColumn && col <= totalColumn - 1) {
-      worksheet.getColumn(col).width = 4.2;
-      continue;
-    }
-    if (col === totalColumn) {
-      worksheet.getColumn(col).width = 11;
-      continue;
-    }
-    if (col === workedDaysColumn) {
-      worksheet.getColumn(col).width = 16;
-      continue;
-    }
-    worksheet.getColumn(col).width = 18;
-  }
-
-  worksheet.autoFilter = {
-    from: { row: summaryStartRow + 7, column: 1 },
-    to: { row: summaryStartRow + 7, column: 1 }
+    from: { row: firstCommessaStartRow + 3, column: 1 },
+    to: { row: firstCommessaStartRow + 3, column: 1 }
   };
 
   for (let row = 1; row <= worksheet.rowCount; row += 1) {

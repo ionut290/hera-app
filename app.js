@@ -8965,6 +8965,8 @@ async function importPendingGlobalRows() {
       continue;
     }
     const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    const mergedCodicePrezzoMq = mergePriceCodeMqMap(getPlantPriceCodeMqMap(existing), row.codicePrezzoMq);
+    const codicePrezzoMqChanged = !arePriceCodeMqMapsEqual(mergedCodicePrezzoMq, existing.codicePrezzoMq);
     const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
     const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
     const basePatch = {};
@@ -8986,6 +8988,7 @@ async function importPendingGlobalRows() {
         lavorazioniRichieste: mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste),
         frequenzaAnnua: mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua),
         areaMq: row.areaMq ?? existing.areaMq ?? null,
+        codicePrezzoMq: mergedCodicePrezzoMq,
         extraFields: mergedExtraFields,
         hasOrdinario: hasOrdinario(mergedCodicePrezzo),
         hasStraordinario: hasStraordinario(mergedCodicePrezzo),
@@ -8993,8 +8996,8 @@ async function importPendingGlobalRows() {
         ...basePatch
       }, { merge: true });
       updated += 1;
-    } else if (extraFieldsChanged) {
-      await ref.doc(existing.id).set({ extraFields: mergedExtraFields, ...basePatch }, { merge: true });
+    } else if (extraFieldsChanged || codicePrezzoMqChanged) {
+      await ref.doc(existing.id).set({ codicePrezzoMq: mergedCodicePrezzoMq, extraFields: mergedExtraFields, ...basePatch }, { merge: true });
       updated += 1;
     } else if (Object.keys(basePatch).length) {
       await ref.doc(existing.id).set(basePatch, { merge: true });
@@ -9046,6 +9049,8 @@ async function updateExistingGlobalRowsOnly() {
     if (row.tipologiaImpianto && !match.record.tipologiaImpianto) patch.tipologiaImpianto = row.tipologiaImpianto;
     if (row.dittaEsecutrice && !match.record.dittaEsecutrice) patch.dittaEsecutrice = row.dittaEsecutrice;
     if (row.areaMq != null && match.record.areaMq == null) patch.areaMq = row.areaMq;
+    const mergedCodicePrezzoMq = mergePriceCodeMqMap(getPlantPriceCodeMqMap(match.record), row.codicePrezzoMq);
+    if (!arePriceCodeMqMapsEqual(mergedCodicePrezzoMq, match.record.codicePrezzoMq)) patch.codicePrezzoMq = mergedCodicePrezzoMq;
     if (row.idSap && !match.record.idSap) patch.idSap = row.idSap;
     if (!Object.keys(patch).length) continue;
     await ref.doc(match.record.id).set(patch, { merge: true });
@@ -10924,7 +10929,9 @@ async function importPendingRows() {
       return;
     }
     const merged = existingByKey.get(key);
+    const mergedExistingCodicePrezzoMq = getPlantPriceCodeMqMap(merged);
     merged.codicePrezzo = mergeMultiValue(merged.codicePrezzo, data.codicePrezzo);
+    merged.codicePrezzoMq = mergePriceCodeMqMap(mergedExistingCodicePrezzoMq, getPlantPriceCodeMqMap(data));
     merged.voceRiferimento = mergeMultiValue(merged.voceRiferimento, data.voceRiferimento);
     merged.tipologiaIntervento = mergeMultiValue(merged.tipologiaIntervento, data.tipologiaIntervento);
     merged.lavorazioniRichieste = mergeMultiValue(merged.lavorazioniRichieste, data.lavorazioniRichieste);
@@ -10950,6 +10957,7 @@ async function importPendingRows() {
     const mergedLavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
     const mergedFrequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, row.frequenzaAnnua);
     const mergedAreaMq = row.areaMq != null ? row.areaMq : (existing.areaMq ?? null);
+    const mergedCodicePrezzoMq = mergePriceCodeMqMap(getPlantPriceCodeMqMap(existing), row.codicePrezzoMq);
     const mergedSfalciMq = row.sfalciMq != null ? row.sfalciMq : (existing.sfalciMq ?? null);
     const mergedSfalciVerdiMq = row.sfalciVerdiMq != null ? row.sfalciVerdiMq : (existing.sfalciVerdiMq ?? null);
     const mergedPotaturaSiepiM = row.potaturaSiepiM != null ? row.potaturaSiepiM : (existing.potaturaSiepiM ?? null);
@@ -10961,6 +10969,7 @@ async function importPendingRows() {
       || mergedLavorazioniRichieste !== String(existing.lavorazioniRichieste || "")
       || mergedFrequenzaAnnua !== String(existing.frequenzaAnnua || "")
       || mergedAreaMq !== (existing.areaMq ?? null)
+      || !arePriceCodeMqMapsEqual(mergedCodicePrezzoMq, existing.codicePrezzoMq)
       || mergedSfalciMq !== (existing.sfalciMq ?? null)
       || mergedSfalciVerdiMq !== (existing.sfalciVerdiMq ?? null)
       || mergedPotaturaSiepiM !== (existing.potaturaSiepiM ?? null)
@@ -10974,6 +10983,7 @@ async function importPendingRows() {
       lavorazioniRichieste: mergedLavorazioniRichieste,
       frequenzaAnnua: mergedFrequenzaAnnua,
       areaMq: mergedAreaMq,
+      codicePrezzoMq: mergedCodicePrezzoMq,
       sfalciMq: mergedSfalciMq,
       sfalciVerdiMq: mergedSfalciVerdiMq,
       potaturaSiepiM: mergedPotaturaSiepiM,
@@ -10985,6 +10995,7 @@ async function importPendingRows() {
     existing.lavorazioniRichieste = mergedLavorazioniRichieste;
     existing.frequenzaAnnua = mergedFrequenzaAnnua;
     existing.areaMq = mergedAreaMq;
+    existing.codicePrezzoMq = mergedCodicePrezzoMq;
     existing.sfalciMq = mergedSfalciMq;
     existing.sfalciVerdiMq = mergedSfalciVerdiMq;
     existing.potaturaSiepiM = mergedPotaturaSiepiM;
@@ -11020,6 +11031,7 @@ async function importPendingRows() {
           lavorazioniRichieste: row.lavorazioniRichieste,
           frequenzaAnnua: row.frequenzaAnnua,
           areaMq: row.areaMq ?? null,
+          codicePrezzoMq: row.codicePrezzoMq || {},
           sfalciMq: row.sfalciMq ?? null,
           sfalciVerdiMq: row.sfalciVerdiMq ?? null,
           potaturaSiepiM: row.potaturaSiepiM ?? null,
@@ -11169,6 +11181,7 @@ function normalizeRow(row) {
     if (!value || consumedKeys.has(key)) return;
     extraFields[key] = value;
   });
+  const codicePrezzoMqValue = parsedSfalciMq ?? parsedPotaturaSiepiM ?? parsedAreaMq;
 
   return {
     distretto: getValue(keys, ["distretto"]),
@@ -11187,6 +11200,7 @@ function normalizeRow(row) {
     dittaEsecutrice: dittaEsecutriceEntry.value,
     voceRiferimento: voceEntry.value,
     codicePrezzo: codicePrezzoEntry.value,
+    codicePrezzoMq: buildPriceCodeMqMap(codicePrezzoEntry.value, codicePrezzoMqValue),
     sfalci: parsedSfalciMq == null ? "" : sfalciEntry.value,
     potaturaSiepi: parsedPotaturaSiepiM == null ? "" : potaturaSiepiEntry.value,
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
@@ -11224,6 +11238,7 @@ function mergeRowsByImpianto(rows) {
     }
 
     existing.codicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
+    existing.codicePrezzoMq = mergePriceCodeMqMap(existing.codicePrezzoMq, row.codicePrezzoMq);
     existing.voceRiferimento = mergeMultiValue(existing.voceRiferimento, row.voceRiferimento);
     existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, row.tipologiaIntervento);
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, row.lavorazioniRichieste);
@@ -11279,7 +11294,9 @@ function combineImpiantiForView(impianti) {
     }
 
     existing.sourceIds.push(item.id);
+    const existingCodicePrezzoMq = getPlantPriceCodeMqMap(existing);
     existing.codicePrezzo = mergeMultiValue(existing.codicePrezzo, item.codicePrezzo);
+    existing.codicePrezzoMq = mergePriceCodeMqMap(existingCodicePrezzoMq, getPlantPriceCodeMqMap(item));
     existing.voceRiferimento = mergeMultiValue(existing.voceRiferimento, item.voceRiferimento);
     existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, item.tipologiaIntervento);
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, item.lavorazioniRichieste);
@@ -11382,6 +11399,37 @@ function getExactValueWithMatchedKey(obj, aliases) {
     if (obj[alias]) return { value: obj[alias], key: alias };
   }
   return { value: "", key: "" };
+}
+
+function normalizePriceCodeMqMap(map = {}) {
+  if (!map || typeof map !== "object" || Array.isArray(map)) return {};
+  return Object.entries(map).reduce((acc, [code, mq]) => {
+    const normalizedCode = String(code || "").trim().toUpperCase();
+    const parsedMq = parseAreaMqValue(mq);
+    if (!normalizedCode || parsedMq == null) return acc;
+    acc[normalizedCode] = parsedMq;
+    return acc;
+  }, {});
+}
+
+function buildPriceCodeMqMap(codicePrezzo, mqValue) {
+  const parsedMq = parseAreaMqValue(mqValue);
+  if (parsedMq == null) return {};
+  return splitCodes(codicePrezzo).reduce((acc, code) => {
+    if (!acc[code]) acc[code] = parsedMq;
+    return acc;
+  }, {});
+}
+
+function mergePriceCodeMqMap(oldMap, newMap) {
+  return {
+    ...normalizePriceCodeMqMap(oldMap),
+    ...normalizePriceCodeMqMap(newMap)
+  };
+}
+
+function arePriceCodeMqMapsEqual(firstMap, secondMap) {
+  return JSON.stringify(normalizePriceCodeMqMap(firstMap)) === JSON.stringify(normalizePriceCodeMqMap(secondMap));
 }
 
 function mergeExtraFields(oldFields, newFields) {
@@ -11653,11 +11701,12 @@ async function exportCommessaSummary(commessaId, commessaName) {
 }
 
 function splitCodes(codicePrezzo) {
-  return String(codicePrezzo || "")
+  const codes = String(codicePrezzo || "")
     .toUpperCase()
     .split(/[^A-Z0-9]+/)
     .map((c) => c.trim())
     .filter(Boolean);
+  return Array.from(new Set(codes));
 }
 
 function buildRowsForEachCodicePrezzo(impianto) {
@@ -11712,7 +11761,7 @@ function getPlantSfalciMq(plant = {}) {
   return hasPotaturaValue ? null : getFirstParsedAreaValue([plant.areaMq]);
 }
 
-function getPlantMq(plant = {}) {
+function getPlantBaseMq(plant = {}) {
   return getFirstParsedAreaValue([
     plant.sfalciMq,
     plant.sfalciVerdiMq,
@@ -11726,6 +11775,28 @@ function getPlantMq(plant = {}) {
     plant.superficie_mq,
     plant.area_mq
   ]);
+}
+
+function getPlantPriceCodeMqMap(plant = {}) {
+  const storedMap = normalizePriceCodeMqMap(plant.codicePrezzoMq);
+  if (Object.keys(storedMap).length) return storedMap;
+
+  const codes = splitCodes(plant.codicePrezzo || plant.voceRiferimento);
+  if (codes.length !== 1) return {};
+  return buildPriceCodeMqMap(codes[0], getPlantBaseMq(plant));
+}
+
+function getPlantMq(plant = {}) {
+  const codes = splitCodes(plant.codicePrezzo || plant.voceRiferimento);
+  const priceCodeMq = getPlantPriceCodeMqMap(plant);
+  if (codes.length > 1 && Object.keys(priceCodeMq).length) {
+    const totalMq = codes.reduce((sum, code) => {
+      const parsedMq = parseAreaMqValue(priceCodeMq[code]);
+      return parsedMq == null ? sum : sum + parsedMq;
+    }, 0);
+    if (totalMq > 0) return totalMq;
+  }
+  return getPlantBaseMq(plant);
 }
 
 function calculateImpiantiMqProgress(impianti = []) {

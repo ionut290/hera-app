@@ -5014,9 +5014,9 @@ async function exportHoursGlobalMonthlyTable() {
 
   const dayStartColumn = 2;
   const totalColumn = monthMeta.daysInMonth + 2;
-  const workedDaysColumn = monthMeta.daysInMonth + 3;
-  const avgHoursColumn = monthMeta.daysInMonth + 4;
-  const lastColumn = avgHoursColumn;
+  const ordinaryHoursColumn = monthMeta.daysInMonth + 3;
+  const overtimeHoursColumn = monthMeta.daysInMonth + 4;
+  const lastColumn = overtimeHoursColumn;
   const dayHeaderFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
   const totalColumnFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAF7" } };
   const hoursFilledCell = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDE9DD" } };
@@ -5031,10 +5031,64 @@ async function exportHoursGlobalMonthlyTable() {
   };
   const mediumSide = { style: "medium", color: { argb: "FF000000" } };
   const thickSide = { style: "thick", color: { argb: "FF000000" } };
+  const getEasterSunday = (year) => {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+  };
+  const easterMonday = getEasterSunday(monthMeta.year);
+  easterMonday.setDate(easterMonday.getDate() + 1);
+  const easterMondayKey = `${String(easterMonday.getMonth() + 1).padStart(2, "0")}-${String(easterMonday.getDate()).padStart(2, "0")}`;
+  const italianHolidayKeys = new Set([
+    "01-01",
+    "01-06",
+    easterMondayKey,
+    "04-25",
+    "05-01",
+    "06-02",
+    "08-15",
+    "11-01",
+    "12-08",
+    "12-25",
+    "12-26"
+  ]);
+  const isHolidayDay = (dayNumber) => {
+    const holidayKey = `${String(monthMeta.month).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}`;
+    return italianHolidayKeys.has(holidayKey);
+  };
   const isWeekendDay = (dayNumber) => {
     const dayDate = new Date(monthMeta.year, monthMeta.month - 1, dayNumber);
     const weekday = dayDate.getDay();
     return weekday === 0 || weekday === 6;
+  };
+  const getOrdinaryHoursLimit = (dayNumber) => {
+    if (isWeekendDay(dayNumber) || isHolidayDay(dayNumber)) return 0;
+    const weekday = new Date(monthMeta.year, monthMeta.month - 1, dayNumber).getDay();
+    if (weekday >= 1 && weekday <= 4) return 8;
+    if (weekday === 5) return 7;
+    return 0;
+  };
+  const splitOrdinaryAndOvertimeHours = (hours, dayNumber) => {
+    const dailyHours = Number(hours || 0);
+    if (!Number.isFinite(dailyHours) || dailyHours <= 0) return { ordinary: 0, overtime: 0 };
+    const ordinaryLimit = getOrdinaryHoursLimit(dayNumber);
+    const ordinary = Math.min(dailyHours, ordinaryLimit);
+    return {
+      ordinary,
+      overtime: Math.max(dailyHours - ordinaryLimit, 0)
+    };
   };
   const getExcelNumberFormat = (value) => {
     const num = Number(value || 0);
@@ -5092,11 +5146,9 @@ async function exportHoursGlobalMonthlyTable() {
     days.forEach((value, dayIndex) => {
       const dailyHours = Number(value || 0);
       if (dailyHours <= 0) return;
-      const weekday = new Date(monthMeta.year, monthMeta.month - 1, dayIndex + 1).getDay();
-      const ordinaryLimit = weekday === 5 ? 7 : (weekday === 0 || weekday === 6 ? 0 : 8);
-      const ordinaryHours = Math.min(dailyHours, ordinaryLimit);
-      acc.ordinary += ordinaryHours;
-      acc.overtime += Math.max(dailyHours - ordinaryLimit, 0);
+      const dailyBreakdown = splitOrdinaryAndOvertimeHours(dailyHours, dayIndex + 1);
+      acc.ordinary += dailyBreakdown.ordinary;
+      acc.overtime += dailyBreakdown.overtime;
       acc.total += dailyHours;
     });
     return acc;
@@ -5105,7 +5157,7 @@ async function exportHoursGlobalMonthlyTable() {
   const summaryStartRow = rowPointer;
   worksheet.mergeCells(summaryStartRow, 1, summaryStartRow, lastColumn);
   const summaryTitleCell = worksheet.getCell(summaryStartRow, 1);
-  summaryTitleCell.value = "RIEPILOGO GESTIONE ORE GLOBAL";
+  summaryTitleCell.value = " VARGA CANTIERI   RIEPILOGO GESTIONE ORE GLOBAL";
   summaryTitleCell.font = { bold: true, size: 14, color: { argb: "FF000000" } };
   summaryTitleCell.alignment = { horizontal: "center", vertical: "middle" };
   summaryTitleCell.fill = whiteFill;
@@ -5122,13 +5174,13 @@ async function exportHoursGlobalMonthlyTable() {
       ["DATA ESPORTAZIONE", new Date().toLocaleDateString("it-IT")]
     ],
     [
+      ["TOTALE ORE", formatSummaryValue(monthlyHourTotals.total)],
       ["ORE ORDINARIE", formatSummaryValue(monthlyHourTotals.ordinary)],
-      ["ORE STRAORDINARIE", formatSummaryValue(monthlyHourTotals.overtime)],
-      ["TOTALE ORE MESE", formatSummaryValue(monthlyHourTotals.total)]
+      ["ORE STRAORDINARIE", formatSummaryValue(monthlyHourTotals.overtime)]
     ],
     [
-      ["OPERATORI ATTIVI", totalOperatorsActive],
-      ["OPERATORI UNICI", totalOperatorsUnique],
+      ["TOTALE OPERATORI", totalOperatorsActive],
+      ["TOTALE OPERATORI UNICI", totalOperatorsUnique],
       ["TOTALE COMMESSE", totalCommesse]
     ]
   ];
@@ -5207,12 +5259,12 @@ async function exportHoursGlobalMonthlyTable() {
     headerRow.getCell(totalColumn).value = "TOTALE";
     headerRow.getCell(totalColumn).fill = totalColumnFill;
     headerRow.getCell(totalColumn).font = { bold: true, color: { argb: "FF000000" } };
-    headerRow.getCell(workedDaysColumn).value = "GIORNI LAVORATI";
-    headerRow.getCell(workedDaysColumn).fill = dayHeaderFill;
-    headerRow.getCell(workedDaysColumn).font = { bold: true, color: { argb: "FF000000" } };
-    headerRow.getCell(avgHoursColumn).value = "MEDIA ORE/GIORNO";
-    headerRow.getCell(avgHoursColumn).fill = dayHeaderFill;
-    headerRow.getCell(avgHoursColumn).font = { bold: true, color: { argb: "FF000000" } };
+    headerRow.getCell(ordinaryHoursColumn).value = "ORE ORDINARIE";
+    headerRow.getCell(ordinaryHoursColumn).fill = dayHeaderFill;
+    headerRow.getCell(ordinaryHoursColumn).font = { bold: true, color: { argb: "FF000000" } };
+    headerRow.getCell(overtimeHoursColumn).value = "ORE STRAORDINARIE";
+    headerRow.getCell(overtimeHoursColumn).fill = dayHeaderFill;
+    headerRow.getCell(overtimeHoursColumn).font = { bold: true, color: { argb: "FF000000" } };
     headerRow.height = 24;
 
     rowPointer += 1;
@@ -5222,11 +5274,12 @@ async function exportHoursGlobalMonthlyTable() {
       const row = worksheet.getRow(rowPointer + operatorIdx);
       row.getCell(1).value = operatorData.displayName || "";
       let total = 0;
-      let workedDays = 0;
+      let ordinaryHours = 0;
+      let overtimeHours = 0;
       for (let dayIdx = 0; dayIdx < monthMeta.daysInMonth; dayIdx += 1) {
         const value = Number(operatorData.days[dayIdx] || 0);
         const cell = row.getCell(dayIdx + 2);
-        if (isWeekendDay(dayIdx + 1)) {
+        if (isWeekendDay(dayIdx + 1) || isHolidayDay(dayIdx + 1)) {
           cell.fill = weekendFill;
         } else {
           cell.fill = whiteFill;
@@ -5236,8 +5289,10 @@ async function exportHoursGlobalMonthlyTable() {
           cell.fill = value > 12 ? errorFill : hoursFilledCell;
           const numFmt = getExcelNumberFormat(value);
           if (numFmt) cell.numFmt = numFmt;
+          const dailyBreakdown = splitOrdinaryAndOvertimeHours(value, dayIdx + 1);
+          ordinaryHours += dailyBreakdown.ordinary;
+          overtimeHours += dailyBreakdown.overtime;
           total += value;
-          workedDays += 1;
         } else {
           cell.value = null;
         }
@@ -5245,10 +5300,10 @@ async function exportHoursGlobalMonthlyTable() {
       row.getCell(totalColumn).value = total > 0 ? total : null;
       row.getCell(totalColumn).fill = totalColumnFill;
       if (total > 0) row.getCell(totalColumn).numFmt = getExcelNumberFormat(total);
-      row.getCell(workedDaysColumn).value = workedDays > 0 ? workedDays : null;
-      row.getCell(workedDaysColumn).numFmt = "0";
-      row.getCell(avgHoursColumn).value = workedDays > 0 ? total / workedDays : null;
-      if (workedDays > 0) row.getCell(avgHoursColumn).numFmt = "0.##";
+      row.getCell(ordinaryHoursColumn).value = ordinaryHours > 0 ? ordinaryHours : null;
+      if (ordinaryHours > 0) row.getCell(ordinaryHoursColumn).numFmt = getExcelNumberFormat(ordinaryHours);
+      row.getCell(overtimeHoursColumn).value = overtimeHours > 0 ? overtimeHours : null;
+      if (overtimeHours > 0) row.getCell(overtimeHoursColumn).numFmt = getExcelNumberFormat(overtimeHours);
       commessaTotal += total;
       row.height = 21;
     });
@@ -5326,7 +5381,7 @@ async function exportHoursGlobalMonthlyTable() {
       worksheet.getColumn(col).width = 11;
       continue;
     }
-    if (col === workedDaysColumn) {
+    if (col === ordinaryHoursColumn) {
       worksheet.getColumn(col).width = 16;
       continue;
     }

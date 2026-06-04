@@ -600,6 +600,11 @@
       <div id="admin-users-list" class="simple-list"></div>
       <h3>Associazioni email → nominativo</h3>
       <p class="muted">Correggi il nome associato a ogni email di login: l'app userà questo nominativo per trovare automaticamente le commesse assegnate nelle squadre.</p>
+      <form id="user-association-quick-form" class="inline-form">
+        <input type="email" id="user-association-email" placeholder="Email login da correggere" autocomplete="email">
+        <input type="text" id="user-association-name" placeholder="Nominativo corretto (Cognome Nome)">
+        <button class="btn btn-primary" type="submit">Correggi nome</button>
+      </form>
       <div id="user-associations-list" class="simple-list"></div>
       <h3>Permessi azioni impianti</h3>
       <p class="muted">Per ogni utente puoi nascondere pulsanti: ✅, 🧭, ♻️, 💬, 📍, ✏️, 🗑️.</p>

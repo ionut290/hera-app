@@ -363,6 +363,9 @@ const ui = {
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
+  userAssociationQuickForm: document.getElementById("user-association-quick-form"),
+  userAssociationEmail: document.getElementById("user-association-email"),
+  userAssociationName: document.getElementById("user-association-name"),
   userAssociationsList: document.getElementById("user-associations-list"),
   userPermissionsList: document.getElementById("user-permissions-list"),
   externalAppForm: document.getElementById("external-app-form"),
@@ -1548,6 +1551,7 @@ ui.globalReportModal?.addEventListener("click", (event) => {
   if (event.target === ui.globalReportModal) closeGlobalSegnalazioneModal();
 });
 ui.adminUserForm?.addEventListener("submit", addAdminUserByEmail);
+ui.userAssociationQuickForm?.addEventListener("submit", saveUserAssociationFromQuickForm);
 ui.externalAppForm?.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm?.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
@@ -21169,6 +21173,53 @@ function isImpiantoActionDenied(action) {
   return deniedImpiantoActions.has(action);
 }
 
+function findPlatformUserByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  return platformUsers.find((user) => normalizeEmail(user.email || user.loginEmail || "") === normalized) || null;
+}
+
+function fillUserAssociationQuickForm(user) {
+  if (!user) return;
+  const email = normalizeEmail(user.email || user.loginEmail || "");
+  if (ui.userAssociationEmail) ui.userAssociationEmail.value = email;
+  if (ui.userAssociationName) {
+    ui.userAssociationName.value = getAssociatedNameForUser(user) || user.displayName || "";
+    ui.userAssociationName.focus();
+    ui.userAssociationName.select?.();
+  }
+  ui.userAssociationQuickForm?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function saveUserAssociationFromQuickForm(event) {
+  event?.preventDefault?.();
+  if (!canManageData()) {
+    alert("Solo gli admin possono correggere i nominativi utente.");
+    return;
+  }
+  const email = normalizeEmail(ui.userAssociationEmail?.value || "");
+  const associatedName = String(ui.userAssociationName?.value || "").trim().replace(/\s+/g, " ");
+  if (!email) {
+    alert("Inserisci l'email di login da correggere.");
+    ui.userAssociationEmail?.focus();
+    return;
+  }
+  if (!associatedName) {
+    alert("Inserisci il nominativo corretto.");
+    ui.userAssociationName?.focus();
+    return;
+  }
+  const user = findPlatformUserByEmail(email);
+  if (!user?.id) {
+    alert("Utente non trovato tra gli accessi dell'app. Fai aprire l'app almeno una volta a quell'email, poi riprova.");
+    ui.userAssociationEmail?.focus();
+    return;
+  }
+  await saveUserAssociation(user.id || user.uid, associatedName);
+  if (ui.userAssociationEmail) ui.userAssociationEmail.value = "";
+  if (ui.userAssociationName) ui.userAssociationName.value = "";
+}
+
 function renderUserAssociationsList() {
   if (!ui.userAssociationsList) return;
   if (!currentUser) {
@@ -21265,9 +21316,22 @@ function renderUserPermissionList() {
   users.forEach((user) => {
     const row = document.createElement("div");
     row.className = "simple-list-item stacked";
+    const titleBox = document.createElement("div");
+    titleBox.className = "user-permission-title-row";
     const title = document.createElement("strong");
-    title.textContent = user.displayName || user.email || user.id;
-    row.appendChild(title);
+    title.textContent = getAssociatedNameForUser(user) || user.displayName || user.email || user.id;
+    titleBox.appendChild(title);
+    const correctNameBtn = createButton("✏️ Correggi nome", () => fillUserAssociationQuickForm(user));
+    correctNameBtn.classList.add("btn-small");
+    titleBox.appendChild(correctNameBtn);
+    row.appendChild(titleBox);
+    const email = normalizeEmail(user.email || user.loginEmail || "");
+    if (email) {
+      const emailHint = document.createElement("p");
+      emailHint.className = "muted compact-text";
+      emailHint.textContent = email;
+      row.appendChild(emailHint);
+    }
     const actionBox = document.createElement("div");
     actionBox.className = "actions-row";
     const denied = new Set(Array.isArray(user.deniedImpiantoActions) ? user.deniedImpiantoActions : []);

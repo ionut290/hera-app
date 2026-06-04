@@ -9025,3 +9025,15 @@ textarea:focus-visible {
   color: #92400e;
   background: #fef3c7;
 }
+
+.user-permission-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.compact-text {
+  margin: 0;
+}

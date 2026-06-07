@@ -4,10 +4,43 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const functions = firebase.functions ? firebase.functions() : null;
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
+const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
 
+function isFirestoreInternalAssertionError(error) {
+  const message = String(error?.message || error || "");
+  return /FIRESTORE/i.test(message) && /INTERNAL ASSERTION FAILED|Unexpected state/i.test(message);
+}
+
+function formatLoginError(error) {
+  if (isFirestoreInternalAssertionError(error)) {
+    return "Errore cache dati Firestore. Chiudi altre schede dell'app e premi Aggiorna; se continua, svuota i dati del sito e riprova il login.";
+  }
+  return error?.message || String(error || "Errore sconosciuto");
+}
+
+function recoverFirestorePersistence(error) {
+  if (!isFirestoreInternalAssertionError(error)) return;
+  if (sessionStorage.getItem(FIRESTORE_PERSISTENCE_RECOVERY_KEY) === "true") return;
+  sessionStorage.setItem(FIRESTORE_PERSISTENCE_RECOVERY_KEY, "true");
+  console.warn("Tentativo di ripristino cache locale Firestore dopo assertion interna.", error);
+  const terminatePromise = typeof db.terminate === "function" ? db.terminate() : Promise.resolve();
+  terminatePromise
+    .then(() => (typeof db.clearPersistence === "function" ? db.clearPersistence() : null))
+    .then(() => {
+      const recoveryUrl = new URL(window.location.href);
+      recoveryUrl.searchParams.set("firestoreRecoveryTs", String(Date.now()));
+      window.location.replace(recoveryUrl.toString());
+    })
+    .catch((recoveryError) => {
+      console.warn("Ripristino cache locale Firestore non riuscito:", recoveryError);
+    });
+}
+
 db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
-  console.warn("Persistenza offline Firestore non disponibile:", error && error.code ? error.code : error);
+  const code = error && error.code ? error.code : "unknown";
+  console.warn("Persistenza offline Firestore non disponibile:", code, error);
+  recoverFirestorePersistence(error);
 });
 
 if (firebase.messaging && typeof firebase.messaging === "function") {
@@ -7613,7 +7646,8 @@ function loginWithGoogle(forceAccountSelection = false) {
       void result;
     }).catch((error) => {
       console.error("Login Google Android/WebView fallito:", error);
-      alert("Errore login Android/WebView: " + error.message);
+      recoverFirestorePersistence(error);
+      alert("Errore login Android/WebView: " + formatLoginError(error));
     });
     return;
   }
@@ -7625,7 +7659,9 @@ function loginWithGoogle(forceAccountSelection = false) {
     if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
       return auth.signInWithRedirect(provider);
     }
-    alert("Errore login: " + error.message);
+    console.error("Errore login:", error);
+    recoverFirestorePersistence(error);
+    alert("Errore login: " + formatLoginError(error));
   });
 }
 

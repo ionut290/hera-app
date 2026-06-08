@@ -759,6 +759,7 @@ let unsubscribeProgrammazioni = null;
 let operatorPositions = [];
 let operatorPositionsVisible = true;
 let deniedImpiantoActions = new Set();
+let bypassImpiantoDistanceLimit = false;
 const usedActionKeys = new Set();
 let mediaRecorder = null;
 let mediaChunks = [];
@@ -1202,6 +1203,7 @@ const LEGACY_DRIVE_MIGRATION_KEY = "heraLegacyDriveMigrationDone";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 const POS_DEFAULT_CATEGORIES = ["POS", "PMS", "Schede lavorazioni", "Schede macchine e attrezzature", "Sicurezza", "Modulistica", "Altro"];
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
+const ADMIN_ONLY_IMPIANTO_ACTIONS = ["reset", "edit", "delete"];
 let adminEmails = new Set([ADMIN_EMAIL]);
 let posDocuments = [];
 let unsubscribePosDocuments = null;
@@ -12223,9 +12225,9 @@ function renderImpianti() {
     actions.appendChild(hiddenMoveDoneBtn);
     addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
     addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
-    if (canManageData()) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
-    if (canManageData()) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
-    if (canManageData()) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
+    if (canUseImpiantoAction("reset")) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
+    if (canUseImpiantoAction("edit")) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
+    if (canUseImpiantoAction("delete")) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
     if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
         if (!canManageData() && !canTriggerImpiantoWhatsApp(impianto, true)) return;
@@ -12296,7 +12298,7 @@ function renderImpianti() {
 }
 
 function openImpiantoEditor(impianto) {
-  if (!canManageData()) return;
+  if (!canUseImpiantoAction("edit")) return;
   editingImpiantoIds = getImpiantoDocIds(impianto);
   ui.editDistretto.value = impianto.distretto || "";
   ui.editIdSap.value = impianto.idSap || "";
@@ -12324,7 +12326,7 @@ function closeImpiantoEditor() {
 
 async function saveImpiantoEdits(event) {
   event.preventDefault();
-  if (!selectedCommessaId || !editingImpiantoIds.length || !canManageData()) return;
+  if (!selectedCommessaId || !editingImpiantoIds.length || !canUseImpiantoAction("edit")) return;
   const gpsYValue = String(ui.editGpsY.value || "").trim();
   const gpsXValue = String(ui.editGpsX.value || "").trim();
   const gpsY = gpsYValue ? parseCoordinate(gpsYValue) : null;
@@ -16075,7 +16077,7 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!canManageData()) {
+  if (!currentUserCanBypassImpiantoDistanceLimit()) {
     if (!currentUserPos) {
       alert("Per segnare FATTO devi attivare la posizione GPS.");
       return false;
@@ -16264,8 +16266,8 @@ async function processAdminSheetExportQueue() {
 async function resetImpianto(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
-  if (!canManageData()) {
-    alert("Solo un admin può usare reset.");
+  if (!canUseImpiantoAction("reset")) {
+    alert("Non hai il permesso per usare reset.");
     return;
   }
   const resetAtLocal = new Date();
@@ -16304,8 +16306,8 @@ async function resetImpianto(impianto) {
 async function deleteImpianto(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return;
-  if (!canManageData()) {
-    alert("Solo un admin può eliminare impianti.");
+  if (!canUseImpiantoAction("delete")) {
+    alert("Non hai il permesso per eliminare impianti.");
     return;
   }
 
@@ -17680,6 +17682,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {
+  if (currentUserCanBypassImpiantoDistanceLimit()) return true;
   if (!currentUserPos) {
     if (notify) alert("Per inviare WhatsApp devi attivare la posizione GPS.");
     return false;
@@ -20772,11 +20775,13 @@ function subscribeUsers() {
     syncNotificationAutoPreferenceFromProfile();
     maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
+    bypassImpiantoDistanceLimit = Boolean(getCurrentPlatformUserRow()?.bypassImpiantoDistanceLimit);
     renderChatRecipients();
     renderUserPermissionList();
     renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
+    renderImpianti();
     renderMap();
     checkAndSendHoursDeadlineAlerts();
   }, (error) => {
@@ -20930,6 +20935,7 @@ function stopUsersSubscription() {
   }
   platformUsers = [];
   deniedImpiantoActions = new Set();
+  bypassImpiantoDistanceLimit = false;
   renderChatRecipients();
   renderUserPermissionList();
   renderNotificationTargetUsers();
@@ -21297,16 +21303,37 @@ async function updateImpiantoCoordinates(commessaId, impiantoIds, lat, lng) {
   })));
 }
 
+function getCurrentPlatformUserRow() {
+  if (!currentUser) return null;
+  return platformUsers.find((user) => user.id === currentUser.uid) || null;
+}
+
 function getDeniedActionsForCurrentUser() {
-  if (!currentUser) return new Set();
-  const row = platformUsers.find((user) => user.id === currentUser.uid);
+  const row = getCurrentPlatformUserRow();
   const denied = Array.isArray(row?.deniedImpiantoActions) ? row.deniedImpiantoActions : [];
   return new Set(denied.filter((action) => IMPIANTO_ACTIONS.includes(action)));
 }
 
+function getAllowedActionsForCurrentUser() {
+  const row = getCurrentPlatformUserRow();
+  const allowed = Array.isArray(row?.allowedImpiantoActions) ? row.allowedImpiantoActions : [];
+  return new Set(allowed.filter((action) => IMPIANTO_ACTIONS.includes(action)));
+}
+
+function currentUserCanBypassImpiantoDistanceLimit() {
+  return canManageData() || bypassImpiantoDistanceLimit;
+}
+
+function canUseImpiantoAction(action) {
+  if (!IMPIANTO_ACTIONS.includes(action)) return false;
+  if (canManageData()) return true;
+  if (ADMIN_ONLY_IMPIANTO_ACTIONS.includes(action)) return getAllowedActionsForCurrentUser().has(action);
+  if (action === "done" || action === "whatsapp") return true;
+  return !deniedImpiantoActions.has(action);
+}
+
 function isImpiantoActionDenied(action) {
-  if (action === "done" || action === "whatsapp") return false;
-  return deniedImpiantoActions.has(action);
+  return !canUseImpiantoAction(action);
 }
 
 function actionLabel(action) {
@@ -21345,22 +21372,52 @@ function renderUserPermissionList() {
     const title = document.createElement("strong");
     title.textContent = user.displayName || user.email || user.id;
     row.appendChild(title);
+    const hint = document.createElement("small");
+    hint.className = "muted";
+    hint.textContent = "Verde = azione concessa/visibile. Blu = azione nascosta o non concessa.";
+    row.appendChild(hint);
     const actionBox = document.createElement("div");
     actionBox.className = "actions-row";
+    const bypassDistance = Boolean(user.bypassImpiantoDistanceLimit);
+    const distanceBtn = createButton(`${bypassDistance ? "✅" : "🚫"} 🌍 No limite distanza`, async () => {
+      await db.collection("platformUsers").doc(user.id).set({
+        bypassImpiantoDistanceLimit: !bypassDistance,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: currentUser?.email || ""
+      }, { merge: true });
+    });
+    distanceBtn.classList.add("btn-small", bypassDistance ? "btn-permission-on" : "btn-permission-off");
+    distanceBtn.title = bypassDistance
+      ? "Vincolo distanza disattivato: clicca per ripristinarlo"
+      : "Vincolo distanza attivo: clicca per disattivarlo per questo utente";
+    actionBox.appendChild(distanceBtn);
     const denied = new Set(Array.isArray(user.deniedImpiantoActions) ? user.deniedImpiantoActions : []);
+    const allowed = new Set(Array.isArray(user.allowedImpiantoActions) ? user.allowedImpiantoActions : []);
     IMPIANTO_ACTIONS.forEach((action) => {
-      const btn = createButton(actionLabel(action), async () => {
-        const next = new Set(denied);
-        if (next.has(action)) next.delete(action);
-        else next.add(action);
+      const adminOnly = ADMIN_ONLY_IMPIANTO_ACTIONS.includes(action);
+      const enabled = adminOnly ? allowed.has(action) : !denied.has(action);
+      const btn = createButton(`${enabled ? "✅" : "🚫"} ${actionLabel(action)}`, async () => {
+        const nextDenied = new Set(denied);
+        const nextAllowed = new Set(allowed);
+        if (adminOnly) {
+          if (nextAllowed.has(action)) nextAllowed.delete(action);
+          else nextAllowed.add(action);
+        } else if (nextDenied.has(action)) {
+          nextDenied.delete(action);
+        } else {
+          nextDenied.add(action);
+        }
         await db.collection("platformUsers").doc(user.id).set({
-          deniedImpiantoActions: Array.from(next),
+          deniedImpiantoActions: Array.from(nextDenied),
+          allowedImpiantoActions: Array.from(nextAllowed),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedBy: currentUser?.email || ""
         }, { merge: true });
       });
-      btn.classList.add("btn-small");
-      if (denied.has(action)) btn.classList.add("btn-primary");
+      btn.classList.add("btn-small", enabled ? "btn-permission-on" : "btn-permission-off");
+      btn.title = adminOnly
+        ? (enabled ? "Permesso admin concesso: clicca per revocare" : "Permesso admin non concesso: clicca per concedere")
+        : (enabled ? "Pulsante visibile: clicca per nasconderlo" : "Pulsante nascosto: clicca per mostrarlo");
       actionBox.appendChild(btn);
     });
     row.appendChild(actionBox);

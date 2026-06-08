@@ -22925,7 +22925,8 @@ async function connectGoogleDrive() {
     alert("Google Drive collegato correttamente");
   } catch (error) {
     console.error("Errore collegamento Google Drive:", error);
-    alert("Errore collegamento Google Drive: " + (error.message || error));
+    recoverFirestorePersistence(error);
+    alert("Errore collegamento Google Drive: " + formatLoginError(error));
   }
 }
 

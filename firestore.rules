@@ -21,27 +21,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
-    function currentAssociatedName() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.associatedName
-        : null;
-    }
-
     function createsNoInlinePosition() {
       return !("lastPosition" in request.resource.data);
     }
 
-    function createsNoManagedUserFields() {
-      return !request.resource.data.keys().hasAny(["associatedName", "nomeAssociato", "associationStatus", "isAdmin"]);
-    }
-
     function updatesNoInlinePosition() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["lastPosition"]);
-    }
-
-    function updatesNoManagedUserFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["associatedName", "nomeAssociato", "associationStatus", "isAdmin"]);
     }
 
     match /commesse/{commessaId} {
@@ -74,7 +59,6 @@ service cloud.firestore {
         && (
           request.auth.token.email in resource.data.operatoriCoinvolti
           || request.auth.token.name in resource.data.operatoriCoinvolti
-          || currentAssociatedName() in resource.data.operatoriCoinvolti
         )
       );
       allow create, update, delete: if isAdmin();
@@ -122,9 +106,9 @@ service cloud.firestore {
 
     match /platformUsers/{userId} {
       allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition() && createsNoManagedUserFields());
-      allow update: if isAdmin() || (isSelf(userId) && updatesNoInlinePosition() && updatesNoManagedUserFields());
-      allow delete: if isAdmin();
+      allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition());
+      allow update: if isAdmin() || (isSelf(userId) && updatesNoInlinePosition());
+      allow delete: if isAdmin() || isSelf(userId);
     }
 
     match /chatMessages/{messageId} {

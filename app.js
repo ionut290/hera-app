@@ -475,10 +475,6 @@ const ui = {
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
-  userAssociationQuickForm: document.getElementById("user-association-quick-form"),
-  userAssociationEmail: document.getElementById("user-association-email"),
-  userAssociationName: document.getElementById("user-association-name"),
-  userAssociationsList: document.getElementById("user-associations-list"),
   userPermissionsList: document.getElementById("user-permissions-list"),
   externalAppForm: document.getElementById("external-app-form"),
   externalAppName: document.getElementById("external-app-name"),
@@ -1663,7 +1659,6 @@ ui.globalReportModal?.addEventListener("click", (event) => {
   if (event.target === ui.globalReportModal) closeGlobalSegnalazioneModal();
 });
 ui.adminUserForm?.addEventListener("submit", addAdminUserByEmail);
-ui.userAssociationQuickForm?.addEventListener("submit", saveUserAssociationFromQuickForm);
 ui.externalAppForm?.addEventListener("submit", saveExternalAppForCurrentUser);
 ui.resourceForm?.addEventListener("submit", addResourceItem);
 ui.notificationForm?.addEventListener("submit", createUserNotification);
@@ -2522,7 +2517,6 @@ function updateAdminControls() {
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
     : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
   updateResourceFormByType();
-  renderUserAssociationsList();
   renderUserPermissionList();
   renderNotificationTargetUsers();
   renderNotificationsList();
@@ -2566,7 +2560,7 @@ function openManagementPanel(panel) {
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
-    utenti: { el: ui.panelUtenti, title: "Gestione Utenti" },
+    utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
     global: { el: ui.panelGlobal, title: "Global" },
     banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
@@ -5723,23 +5717,11 @@ function normalizeSquadraMemberIdentity(value) {
     .trim();
 }
 
-function getCurrentPlatformUserProfile() {
-  if (!currentUser) return null;
-  const uid = String(currentUser.uid || "");
-  const email = normalizeEmail(currentUser.email || "");
-  return platformUsers.find((user) => String(user.id || user.uid || "") === uid)
-    || platformUsers.find((user) => normalizeEmail(user.email || user.loginEmail || "") === email)
-    || null;
-}
-
-function getAssociatedNameForUser(user = getCurrentPlatformUserProfile()) {
-  return String(user?.associatedName || user?.nomeAssociato || "").trim();
-}
-
 function getCurrentUserIdentityParts() {
   if (!currentUser) return [];
-  const associatedName = getAssociatedNameForUser();
-  const parts = associatedName ? [associatedName] : [];
+  const parts = [currentUser.displayName, currentUser.email];
+  const emailLocal = String(currentUser.email || "").split("@")[0] || "";
+  if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
   return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
 }
 
@@ -5828,7 +5810,6 @@ function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey
 
 function tryAutoOpenAssignedCommessaAtStartup() {
   if (startupAssignedCommessaAutoOpenDone || !currentUser) return;
-  if (!getCurrentPlatformUserProfile()) return;
   if (parseCommessaHash().id) {
     startupAssignedCommessaAutoOpenDone = true;
     return;
@@ -20687,7 +20668,7 @@ async function upsertCurrentPlatformUser() {
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
-    loginEmail: normalizeEmail(currentUser.email || ""),
+    isAdmin: canManageData(),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -20747,20 +20728,16 @@ function subscribeUsers() {
     maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
-    renderUserAssociationsList();
     renderUserPermissionList();
     renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
     renderMap();
-    tryAutoOpenAssignedCommessaAtStartup();
     checkAndSendHoursDeadlineAlerts();
   }, (error) => {
     console.error("Errore caricamento utenti:", error);
     platformUsers = [];
     renderChatRecipients();
-    renderUserAssociationsList();
-    renderUserPermissionList();
     renderHeaderActivitySummary();
   });
 }
@@ -20909,7 +20886,6 @@ function stopUsersSubscription() {
   platformUsers = [];
   deniedImpiantoActions = new Set();
   renderChatRecipients();
-  renderUserAssociationsList();
   renderUserPermissionList();
   renderNotificationTargetUsers();
   renderHeaderActivitySummary();
@@ -21288,116 +21264,6 @@ function isImpiantoActionDenied(action) {
   return deniedImpiantoActions.has(action);
 }
 
-function findPlatformUserByEmail(email) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return null;
-  return platformUsers.find((user) => normalizeEmail(user.email || user.loginEmail || "") === normalized) || null;
-}
-
-function fillUserAssociationQuickForm(user) {
-  if (!user) return;
-  const email = normalizeEmail(user.email || user.loginEmail || "");
-  if (ui.userAssociationEmail) ui.userAssociationEmail.value = email;
-  if (ui.userAssociationName) {
-    ui.userAssociationName.value = getAssociatedNameForUser(user) || user.displayName || "";
-    ui.userAssociationName.focus();
-    ui.userAssociationName.select?.();
-  }
-  ui.userAssociationQuickForm?.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-async function saveUserAssociationFromQuickForm(event) {
-  event?.preventDefault?.();
-  if (!canManageData()) {
-    alert("Solo gli admin possono correggere i nominativi utente.");
-    return;
-  }
-  const email = normalizeEmail(ui.userAssociationEmail?.value || "");
-  const associatedName = String(ui.userAssociationName?.value || "").trim().replace(/\s+/g, " ");
-  if (!email) {
-    alert("Inserisci l'email di login da correggere.");
-    ui.userAssociationEmail?.focus();
-    return;
-  }
-  if (!associatedName) {
-    alert("Inserisci il nominativo corretto.");
-    ui.userAssociationName?.focus();
-    return;
-  }
-  const user = findPlatformUserByEmail(email);
-  if (!user?.id) {
-    alert("Utente non trovato tra gli accessi dell'app. Fai aprire l'app almeno una volta a quell'email, poi riprova.");
-    ui.userAssociationEmail?.focus();
-    return;
-  }
-  await saveUserAssociation(user.id || user.uid, associatedName);
-  if (ui.userAssociationEmail) ui.userAssociationEmail.value = "";
-  if (ui.userAssociationName) ui.userAssociationName.value = "";
-}
-
-function renderUserAssociationsList() {
-  if (!ui.userAssociationsList) return;
-  if (!currentUser) {
-    ui.userAssociationsList.innerHTML = "<p class='muted'>Fai login per vedere le associazioni utente.</p>";
-    return;
-  }
-  if (!canManageData()) {
-    ui.userAssociationsList.innerHTML = "<p class='muted'>Solo gli admin possono gestire le associazioni email → nominativo.</p>";
-    return;
-  }
-  if (!platformUsers.length) {
-    ui.userAssociationsList.innerHTML = "<p class='muted'>Nessun utente collegato all'app.</p>";
-    return;
-  }
-
-  ui.userAssociationsList.innerHTML = "";
-  platformUsers.forEach((user) => {
-    const email = normalizeEmail(user.email || user.loginEmail || "");
-    const associatedName = getAssociatedNameForUser(user);
-    const isAdminUser = adminEmails.has(email);
-    const row = document.createElement("form");
-    row.className = "simple-list-item stacked user-association-row";
-    row.innerHTML = `
-      <div class="user-association-row__head">
-        <strong>${escapeHTML(associatedName || "Da associare")}</strong>
-        <span class="status-badge ${associatedName ? "status-badge--ok" : "status-badge--pending"}">${associatedName ? "Associato" : "Da associare"}</span>
-      </div>
-      <p class="muted">Email accesso: ${escapeHTML(email || "Email non disponibile")}</p>
-      <p class="muted">Ruolo: ${isAdminUser ? "Amministratore" : "Utente"}</p>
-      <label>Nome associato
-        <input type="text" name="associatedName" value="${escapeHTML(associatedName)}" placeholder="Cognome Nome da usare nelle commesse" ${email ? "" : "disabled"}>
-      </label>
-      <div class="item-actions">
-        <button class="btn btn-primary btn-small" type="submit" ${email ? "" : "disabled"}>Salva associazione</button>
-      </div>
-    `;
-    row.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      await saveUserAssociation(user.id || user.uid, row.elements.associatedName?.value || "");
-    });
-    ui.userAssociationsList.appendChild(row);
-  });
-}
-
-async function saveUserAssociation(userId, rawName) {
-  if (!canManageData()) {
-    alert("Solo gli admin possono aggiornare le associazioni utente.");
-    return;
-  }
-  const id = String(userId || "").trim();
-  if (!id) {
-    alert("Profilo utente non valido.");
-    return;
-  }
-  const associatedName = String(rawName || "").trim().replace(/\s+/g, " ");
-  await db.collection("platformUsers").doc(id).set({
-    associatedName,
-    associationStatus: associatedName ? "associated" : "pending",
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy: currentUser?.email || ""
-  }, { merge: true });
-}
-
 function actionLabel(action) {
   const map = {
     done: "✅ Fatto",
@@ -21431,22 +21297,9 @@ function renderUserPermissionList() {
   users.forEach((user) => {
     const row = document.createElement("div");
     row.className = "simple-list-item stacked";
-    const titleBox = document.createElement("div");
-    titleBox.className = "user-permission-title-row";
     const title = document.createElement("strong");
-    title.textContent = getAssociatedNameForUser(user) || user.displayName || user.email || user.id;
-    titleBox.appendChild(title);
-    const correctNameBtn = createButton("✏️ Correggi nome", () => fillUserAssociationQuickForm(user));
-    correctNameBtn.classList.add("btn-small");
-    titleBox.appendChild(correctNameBtn);
-    row.appendChild(titleBox);
-    const email = normalizeEmail(user.email || user.loginEmail || "");
-    if (email) {
-      const emailHint = document.createElement("p");
-      emailHint.className = "muted compact-text";
-      emailHint.textContent = email;
-      row.appendChild(emailHint);
-    }
+    title.textContent = user.displayName || user.email || user.id;
+    row.appendChild(title);
     const actionBox = document.createElement("div");
     actionBox.className = "actions-row";
     const denied = new Set(Array.isArray(user.deniedImpiantoActions) ? user.deniedImpiantoActions : []);

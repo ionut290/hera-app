@@ -7,41 +7,120 @@ const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
 
+function getSessionStorageValue(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch (error) {
+    console.warn("SessionStorage non disponibile per la recovery Firestore:", error);
+    return null;
+  }
+}
+
+function setSessionStorageValue(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn("SessionStorage non disponibile per la recovery Firestore:", error);
+    return false;
+  }
+}
+
+function getFirebaseErrorMessage(error) {
+  return String(error?.message || error || "");
+}
+
+function getFirebaseErrorCode(error) {
+  return String(error?.code || "").toLowerCase();
+}
+
 function isFirestoreInternalAssertionError(error) {
-  const message = String(error?.message || error || "");
+  const message = getFirebaseErrorMessage(error);
   return /FIRESTORE/i.test(message) && /INTERNAL ASSERTION FAILED|Unexpected state/i.test(message);
 }
 
+function isFirestoreInternalError(error) {
+  const code = getFirebaseErrorCode(error);
+  const message = getFirebaseErrorMessage(error);
+  return code === "internal"
+    || code === "firestore/internal"
+    || /INTERNAL ASSERTION FAILED|Unexpected state/i.test(message)
+    || isFirestoreInternalAssertionError(error);
+}
+
 function formatLoginError(error) {
-  if (isFirestoreInternalAssertionError(error)) {
-    return "Errore cache dati Firestore. Chiudi altre schede dell'app e premi Aggiorna; se continua, svuota i dati del sito e riprova il login.";
+  const message = getFirebaseErrorMessage(error);
+  if (isFirestoreInternalAssertionError(error) || isFirestoreInternalError(error)) {
+    return "Abbiamo rilevato un problema temporaneo con la cache locale dei dati. Chiudi eventuali altre schede dell'app e riapri l'app; se il problema continua, svuota i dati del sito e riprova il login.";
   }
-  return error?.message || String(error || "Errore sconosciuto");
+  if (/FIRESTORE/i.test(message)) {
+    return "Non riesco a collegarmi ai dati dell'app in questo momento. Controlla la connessione, chiudi eventuali altre schede aperte e riprova il login.";
+  }
+  return message || "Errore sconosciuto durante il login. Riprova tra qualche istante.";
+}
+
+function markFirestorePersistenceRecovery(reason) {
+  const currentValue = getSessionStorageValue(FIRESTORE_PERSISTENCE_RECOVERY_KEY) || "";
+  const attempts = new Set(currentValue.split(",").filter(Boolean));
+  if (attempts.has(reason)) return false;
+  attempts.add(reason);
+  setSessionStorageValue(FIRESTORE_PERSISTENCE_RECOVERY_KEY, Array.from(attempts).join(","));
+  return true;
+}
+
+function reloadAfterFirestorePersistenceRecovery(reason) {
+  const recoveryUrl = new URL(window.location.href);
+  recoveryUrl.searchParams.set("firestoreRecovery", reason);
+  recoveryUrl.searchParams.set("firestoreRecoveryTs", String(Date.now()));
+  window.location.replace(recoveryUrl.toString());
 }
 
 function recoverFirestorePersistence(error) {
-  if (!isFirestoreInternalAssertionError(error)) return;
-  if (sessionStorage.getItem(FIRESTORE_PERSISTENCE_RECOVERY_KEY) === "true") return;
-  sessionStorage.setItem(FIRESTORE_PERSISTENCE_RECOVERY_KEY, "true");
-  console.warn("Tentativo di ripristino cache locale Firestore dopo assertion interna.", error);
+  const code = getFirebaseErrorCode(error);
+
+  if (code === "failed-precondition") {
+    if (markFirestorePersistenceRecovery("failed-precondition")) {
+      console.warn("Persistenza Firestore disattivata: l'app sembra aperta in più schede.", error);
+    }
+    return;
+  }
+
+  if (code === "unimplemented") {
+    if (markFirestorePersistenceRecovery("unimplemented")) {
+      console.warn("Persistenza Firestore non supportata da questo browser/dispositivo.", error);
+    }
+    return;
+  }
+
+  if (!isFirestoreInternalError(error)) return;
+
+  if (!markFirestorePersistenceRecovery("internal")) {
+    console.warn("Recovery Firestore interna già tentata in questa sessione, evito un nuovo reload.", error);
+    return;
+  }
+
+  console.warn("Tentativo di ripristino cache locale Firestore dopo errore interno.", error);
   const terminatePromise = typeof db.terminate === "function" ? db.terminate() : Promise.resolve();
   terminatePromise
     .then(() => (typeof db.clearPersistence === "function" ? db.clearPersistence() : null))
     .then(() => {
-      const recoveryUrl = new URL(window.location.href);
-      recoveryUrl.searchParams.set("firestoreRecoveryTs", String(Date.now()));
-      window.location.replace(recoveryUrl.toString());
+      reloadAfterFirestorePersistenceRecovery("internal");
     })
     .catch((recoveryError) => {
       console.warn("Ripristino cache locale Firestore non riuscito:", recoveryError);
     });
 }
 
-db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
-  const code = error && error.code ? error.code : "unknown";
-  console.warn("Persistenza offline Firestore non disponibile:", code, error);
-  recoverFirestorePersistence(error);
-});
+function enableFirestorePersistence() {
+  if (!db || typeof db.enablePersistence !== "function") return;
+  db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
+    const code = getFirebaseErrorCode(error) || "unknown";
+    console.warn("Persistenza offline Firestore non disponibile:", code, error);
+    recoverFirestorePersistence(error);
+  });
+}
+
+enableFirestorePersistence();
 
 if (firebase.messaging && typeof firebase.messaging === "function") {
   try {
@@ -22846,7 +22925,8 @@ async function connectGoogleDrive() {
     alert("Google Drive collegato correttamente");
   } catch (error) {
     console.error("Errore collegamento Google Drive:", error);
-    alert("Errore collegamento Google Drive: " + (error.message || error));
+    recoverFirestorePersistence(error);
+    alert("Errore collegamento Google Drive: " + formatLoginError(error));
   }
 }
 

@@ -774,6 +774,7 @@ let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
 let commesseLoadState = { status: "idle", message: "" };
+let commesseLoadTimeout = null;
 let isCommesseHomeCardVisible = false;
 let commessaStatsById = new Map();
 let commessaHoursById = new Map();
@@ -791,6 +792,7 @@ let mezziRecords = [];
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
 let squadreLoadState = { status: "idle", message: "" };
+let squadreLoadTimeout = null;
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
@@ -7813,6 +7815,24 @@ function getCommesseErrorMessage() {
   return "Impossibile caricare le commesse online. Mostro dati salvati localmente.";
 }
 
+function clearCommesseLoadTimeout() {
+  if (!commesseLoadTimeout) return;
+  clearTimeout(commesseLoadTimeout);
+  commesseLoadTimeout = null;
+}
+
+function startCommesseLoadTimeout() {
+  clearCommesseLoadTimeout();
+  commesseLoadTimeout = setTimeout(() => {
+    if (commesseLoadState.status !== "loading") return;
+    const cachedCommesse = loadCommesseFromLocalCache();
+    commesseLoadState = cachedCommesse.length
+      ? { status: "error", message: "La connessione alle commesse è lenta" }
+      : { status: "error", message: "La connessione alle commesse è lenta e non ci sono dati salvati sul dispositivo. Controlla di essere loggato e premi Aggiorna." };
+    refreshCommesseDependentUI(false);
+  }, 10000);
+}
+
 function parseCachedCommesse() {
   try {
     const parsed = JSON.parse(localStorage.getItem(COMMESSE_LOCAL_CACHE_KEY) || "[]");
@@ -8778,8 +8798,10 @@ function stopDriveBridgeSubscription() {
 function subscribeCommesse() {
   commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
   renderCommesseHomeList();
+  startCommesseLoadTimeout();
 
   if (!validateFirebaseConfigForCommesse()) {
+    clearCommesseLoadTimeout();
     commesseLoadState = { status: "error", message: "Impossibile connettersi al database" };
     loadCommesseFromLocalCache();
     refreshCommesseDependentUI(false);
@@ -8790,6 +8812,7 @@ function subscribeCommesse() {
     .collection("commesse")
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot) => {
+      clearCommesseLoadTimeout();
       const receivedCommesse = [];
       commesseById = new Map();
 
@@ -8816,6 +8839,7 @@ function subscribeCommesse() {
       tryAutoOpenAssignedCommessaAtStartup();
       renderNextActionCard();
     }, (error) => {
+      clearCommesseLoadTimeout();
       console.error("Errore caricamento commesse:", error);
       loadCommesseFromLocalCache();
       commesseLoadState = {
@@ -8827,6 +8851,7 @@ function subscribeCommesse() {
 }
 
 function stopCommesseSubscription() {
+  clearCommesseLoadTimeout();
   if (unsubscribeCommesse) {
     unsubscribeCommesse();
     unsubscribeCommesse = null;
@@ -16849,9 +16874,26 @@ function subscribeMezzi() {
   });
 }
 
+function clearSquadreLoadTimeout() {
+  if (!squadreLoadTimeout) return;
+  clearTimeout(squadreLoadTimeout);
+  squadreLoadTimeout = null;
+}
+
+function startSquadreLoadTimeout() {
+  clearSquadreLoadTimeout();
+  squadreLoadTimeout = setTimeout(() => {
+    if (squadreLoadState.status !== "loading") return;
+    squadreLoadState = { status: "error", message: "La connessione alle squadre è lenta. Controlla di essere loggato e premi Aggiorna." };
+    renderSquadre();
+    renderCommesseHomeList();
+  }, 10000);
+}
+
 function subscribeSquadre() {
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
+  startSquadreLoadTimeout();
 
   unsubscribeSquadre = db.collection("squadreCommesse").onSnapshot((snapshot) => {
     squadreByCommessa = new Map();
@@ -16871,6 +16913,7 @@ function subscribeSquadre() {
   });
 
   unsubscribeSquadreHistory = db.collection("squadreStorico").onSnapshot((snapshot) => {
+    clearSquadreLoadTimeout();
     squadreHistoryByDate = new Map();
     snapshot.forEach((doc) => {
       const data = doc.data() || {};
@@ -16889,6 +16932,7 @@ function subscribeSquadre() {
       applyHoursSuggestedOperators(card, { force: true });
     });
   }, (error) => {
+    clearSquadreLoadTimeout();
     console.error("Errore caricamento squadre:", error);
     squadreLoadState = { status: "error", message: "Errore caricamento squadre da Firebase." };
     renderSquadre();
@@ -16925,6 +16969,7 @@ function stopMezziSubscription() {
 }
 
 function stopSquadreSubscription() {
+  clearSquadreLoadTimeout();
   if (unsubscribeSquadre) {
     unsubscribeSquadre();
     unsubscribeSquadre = null;
@@ -17491,7 +17536,7 @@ function renderSquadre() {
     return;
   }
   if (squadreLoadState.status === "error") {
-    ui.squadreLista.innerHTML = "<p class='muted'>Errore caricamento squadre da Firebase.</p>";
+    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Errore caricamento squadre da Firebase.")}</p>`;
     return;
   }
 

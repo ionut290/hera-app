@@ -1198,6 +1198,18 @@ textarea:focus-visible {
   font-size: 0.82rem;
 }
 
+.btn-permission-on {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #064e3b;
+}
+
+.btn-permission-off {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
 #map {
   height: min(36dvh, 360px);
   min-height: 180px;

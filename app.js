@@ -793,6 +793,9 @@ let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
 let squadreLoadState = { status: "idle", message: "" };
 let squadreLoadTimeout = null;
+const commessaAlertStateById = new Map();
+const commessaAlertLoadPromises = new Map();
+let activeCommessaAlertDetailId = "";
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
@@ -15571,7 +15574,22 @@ async function getWeatherForPlantFromMainSource(plant) {
   const coordinates = getImpiantoNavigationCoordinates(plant);
   if (!coordinates) throw new Error("Coordinate impianto non disponibili");
   const payload = await fetchWeatherForecast(coordinates, { operational: true, cache: "no-store" });
-  return buildImpiantoWeatherStatus(plant, payload, null);
+  const civilProtectionAlert = await getCivilProtectionAlert(coordinates, buildForecastArraysFromWeatherPayload(payload)).catch((error) => {
+    console.warn("Allerta Protezione Civile impianto non disponibile:", error);
+    return null;
+  });
+  return buildImpiantoWeatherStatus(plant, payload, civilProtectionAlert);
+}
+
+function buildForecastArraysFromWeatherPayload(payload = {}) {
+  const hourly = payload.hourly || {};
+  return {
+    temps: Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [],
+    winds: Array.isArray(hourly.wind_speed_10m) ? hourly.wind_speed_10m : [],
+    snows: Array.isArray(hourly.snowfall) ? hourly.snowfall : [],
+    visibilities: Array.isArray(hourly.visibility) ? hourly.visibility : [],
+    codes: Array.isArray(hourly.weather_code) ? hourly.weather_code : []
+  };
 }
 
 async function getPlantWeather(plant) {
@@ -17526,6 +17544,237 @@ function buildSquadraWarningDetails(commessa, squadRows) {
   return issues;
 }
 
+
+function getAlertLevelRank(level) {
+  return ALERT_LEVEL_META[level || "green"]?.rank ?? 0;
+}
+
+function formatAlertLevelColor(level) {
+  return { red: "rosso", orange: "arancione", yellow: "giallo", green: "verde" }[level] || "non disponibile";
+}
+
+function getCommessaAlertState(commessaId) {
+  return commessaAlertStateById.get(commessaId) || { status: "idle", alerts: [], unavailable: [], updatedAt: 0 };
+}
+
+function isCommessaAlertStateFresh(state) {
+  return Boolean(state?.updatedAt && Date.now() - Number(state.updatedAt) < COMMESSA_ALERT_CACHE_TTL_MS);
+}
+
+function getCommessaAlertBadgeMarkup(commessaId) {
+  const state = getCommessaAlertState(commessaId);
+  if (state.status === "loading") return `<button type="button" class="commessa-alert-badge is-loading" data-commessa-alert-id="${escapeHTML(commessaId)}">⏳ Allerte</button>`;
+  if (state.status === "error") return `<button type="button" class="commessa-alert-badge is-unavailable" data-commessa-alert-id="${escapeHTML(commessaId)}">⚠️ Dati non disponibili</button>`;
+  const alerts = Array.isArray(state.alerts) ? state.alerts : [];
+  if (!alerts.length) return "";
+  const highestRank = Math.max(...alerts.map((alert) => getAlertLevelRank(alert.level)), 0);
+  if (highestRank <= 0) return "";
+  const highestAlerts = alerts.filter((alert) => getAlertLevelRank(alert.level) === highestRank);
+  const primary = highestAlerts[0] || alerts[0];
+  const meta = ALERT_LEVEL_META[primary.level] || ALERT_LEVEL_META.green;
+  const label = highestAlerts.length > 1
+    ? `${meta.emoji} ${highestAlerts.length} allerte`
+    : `${meta.emoji} ${primary.level === "red" && /allerta/i.test(primary.type || "") ? "Allerta rossa" : (primary.type || meta.label)}`;
+  return `<button type="button" class="commessa-alert-badge ${escapeHTML(meta.className)}" data-commessa-alert-id="${escapeHTML(commessaId)}" title="Dettaglio allerte Protezione Civile">${escapeHTML(label)}</button>`;
+}
+
+async function loadCommessaImpiantiForAlerts(commessaId) {
+  if (commessaId === selectedCommessaId && currentImpianti.length) return combineImpiantiForView(currentImpianti);
+  const snapshot = await db.collection("commesse").doc(commessaId).collection("impianti").get();
+  const rows = [];
+  snapshot.forEach((doc) => rows.push({ id: doc.id, ...doc.data() }));
+  return combineImpiantiForView(rows);
+}
+
+function getAlertTypeFromStatus(status = {}) {
+  const civilPhenomenon = String(status.civilProtectionAlert?.phenomenon || "").trim();
+  if (civilPhenomenon && civilPhenomenon !== "Protezione Civile") return civilPhenomenon;
+  const text = [status.alertText, status.badgeLabel, status.description, ...(Array.isArray(status.messages) ? status.messages : [])].filter(Boolean).join(" ");
+  const phenomenon = phenomenonFromText(text);
+  if (phenomenon && phenomenon !== "Protezione Civile") return phenomenon;
+  if (status.syntheticState === "vento") return "Vento";
+  if (status.syntheticState === "pioggia") return "Pioggia";
+  if (status.syntheticState === "temporale") return "Temporali";
+  if (status.syntheticState === "allerta") return "Allerta Protezione Civile";
+  return status.badgeLabel || "Allerta";
+}
+
+function getCommessaAlertLevelFromStatus(status = {}) {
+  const civilLevel = status.civilProtectionAlert?.level || "green";
+  if (getAlertLevelRank(civilLevel) > 0) return civilLevel;
+  if (status.riskLevel === "red") return "red";
+  if (status.riskLevel === "yellow") return "yellow";
+  return "green";
+}
+
+function formatAlertValidity(status = {}) {
+  const updatedAt = Number(status.updatedAt || status.weatherDataUpdatedAt || 0);
+  const from = updatedAt ? new Date(updatedAt).toLocaleString("it-IT") : "ora";
+  const slots = Array.isArray(status.forecastSlots) ? status.forecastSlots : [];
+  const lastSlot = slots.filter((slot) => Number.isFinite(Number(slot.timestamp))).at(-1);
+  const to = lastSlot ? new Date(Number(lastSlot.timestamp)).toLocaleString("it-IT") : "prossime ore";
+  return `${from} → ${to}`;
+}
+
+function buildCommessaCantiereAlert(impianto, status) {
+  const level = getCommessaAlertLevelFromStatus(status);
+  if (getAlertLevelRank(level) <= 0) return null;
+  const coordinates = getImpiantoNavigationCoordinates(impianto);
+  return {
+    impiantoKey: buildImpiantoKey(impianto),
+    name: impianto.denominazione || impianto.nome || "Cantiere",
+    comune: impianto.comune || "Comune non indicato",
+    lat: coordinates?.lat ?? null,
+    lon: coordinates?.lon ?? null,
+    type: getAlertTypeFromStatus(status),
+    level,
+    source: status.civilProtectionAlert ? "Dipartimento Protezione Civile + Open-Meteo" : "Open-Meteo",
+    validity: formatAlertValidity(status),
+    description: status.alertText || status.description || status.operationMessage || "Avviso meteo operativo",
+    updatedAt: status.updatedAt || Date.now()
+  };
+}
+
+async function refreshCommessaAlerts(commessaId, { force = false } = {}) {
+  const cached = getCommessaAlertState(commessaId);
+  if (!force && isCommessaAlertStateFresh(cached) && cached.status !== "loading") return cached;
+  if (commessaAlertLoadPromises.has(commessaId)) return commessaAlertLoadPromises.get(commessaId);
+
+  const promise = (async () => {
+    commessaAlertStateById.set(commessaId, { ...cached, status: "loading" });
+    try {
+      const impianti = await loadCommessaImpiantiForAlerts(commessaId);
+      const withGps = impianti.filter((impianto) => getImpiantoNavigationCoordinates(impianto)).slice(0, COMMESSA_ALERT_REFRESH_LIMIT);
+      const results = await Promise.allSettled(withGps.map((impianto) => refreshImpiantoWeatherStatus(impianto, { force })));
+      const alerts = [];
+      const unavailable = [];
+      results.forEach((result, index) => {
+        const impianto = withGps[index];
+        const status = result.status === "fulfilled" ? result.value : null;
+        if (!status || status.riskLevel === "unavailable") {
+          unavailable.push({
+            name: impianto.denominazione || "Cantiere",
+            comune: impianto.comune || "Comune non indicato",
+            coordinates: getImpiantoNavigationCoordinates(impianto),
+            reason: status?.alertText || status?.description || "Dati allerta non disponibili"
+          });
+          return;
+        }
+        const alert = buildCommessaCantiereAlert(impianto, status);
+        if (alert) alerts.push(alert);
+      });
+      alerts.sort((a, b) => getAlertLevelRank(b.level) - getAlertLevelRank(a.level));
+      const nextState = {
+        status: alerts.length || !unavailable.length ? "ready" : "error",
+        alerts,
+        unavailable,
+        totalGps: withGps.length,
+        totalImpianti: impianti.length,
+        updatedAt: Date.now()
+      };
+      commessaAlertStateById.set(commessaId, nextState);
+      return nextState;
+    } catch (error) {
+      const nextState = { status: "error", alerts: [], unavailable: [], message: error?.message || "Dati allerta non disponibili", updatedAt: Date.now() };
+      commessaAlertStateById.set(commessaId, nextState);
+      return nextState;
+    } finally {
+      commessaAlertLoadPromises.delete(commessaId);
+      renderSquadre();
+      if (activeCommessaAlertDetailId === commessaId) renderCommessaAlertDetail(commessaId);
+    }
+  })();
+  commessaAlertLoadPromises.set(commessaId, promise);
+  return promise;
+}
+
+function ensureSquadreCommessaAlerts(commesse = []) {
+  commesse.forEach((commessa) => {
+    const state = getCommessaAlertState(commessa.id);
+    if (state.status === "loading" || commessaAlertLoadPromises.has(commessa.id)) return;
+    if (!isCommessaAlertStateFresh(state)) void refreshCommessaAlerts(commessa.id);
+  });
+}
+
+function ensureCommessaAlertModal() {
+  let modal = document.getElementById("commessa-alert-modal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "commessa-alert-modal";
+  modal.className = "commessa-alert-modal hidden";
+  modal.setAttribute("aria-hidden", "true");
+  modal.innerHTML = `
+    <div class="commessa-alert-modal__backdrop" data-close-commessa-alert></div>
+    <section class="commessa-alert-modal__panel" role="dialog" aria-modal="true" aria-labelledby="commessa-alert-title">
+      <div class="commessa-alert-modal__head">
+        <div><p class="muted">Protezione Civile</p><h2 id="commessa-alert-title">Allerte commessa</h2></div>
+        <button type="button" class="btn btn-small" data-close-commessa-alert>Chiudi</button>
+      </div>
+      <div id="commessa-alert-content" class="commessa-alert-content"></div>
+    </section>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll("[data-close-commessa-alert]").forEach((btn) => btn.addEventListener("click", closeCommessaAlertDetail));
+  return modal;
+}
+
+function openCommessaAlertDetail(commessaId) {
+  activeCommessaAlertDetailId = commessaId;
+  const modal = ensureCommessaAlertModal();
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  renderCommessaAlertDetail(commessaId);
+}
+
+function closeCommessaAlertDetail() {
+  activeCommessaAlertDetailId = "";
+  const modal = document.getElementById("commessa-alert-modal");
+  modal?.classList.add("hidden");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function renderCommessaAlertDetail(commessaId) {
+  const modal = ensureCommessaAlertModal();
+  const content = modal.querySelector("#commessa-alert-content");
+  const title = modal.querySelector("#commessa-alert-title");
+  const commessa = commesseById.get(commessaId) || {};
+  const state = getCommessaAlertState(commessaId);
+  if (title) title.textContent = `Allerte • ${commessa.nome || "Commessa"}`;
+  if (!content) return;
+  const updated = state.updatedAt ? new Date(state.updatedAt).toLocaleString("it-IT") : "mai";
+  const alerts = Array.isArray(state.alerts) ? state.alerts : [];
+  const unavailable = Array.isArray(state.unavailable) ? state.unavailable : [];
+  const sourceLine = "Fonti: Dipartimento Protezione Civile, Open-Meteo; il controllo usa le coordinate GPS dei cantieri/impianti.";
+  const refreshButton = `<button type="button" class="btn btn-primary" data-refresh-commessa-alert="${escapeHTML(commessaId)}">Aggiorna allerte</button>`;
+  if (state.status === "loading") {
+    content.innerHTML = `<p class="muted">Aggiornamento allerte in corso…</p><p class="muted">${escapeHTML(sourceLine)}</p>${refreshButton}`;
+  } else if (!alerts.length && state.status === "error") {
+    content.innerHTML = `<p class="commessa-alert-unavailable">Dati allerta non disponibili.</p><p class="muted">Ultimo tentativo: ${escapeHTML(updated)}</p><p class="muted">${escapeHTML(sourceLine)}</p>${refreshButton}`;
+  } else {
+    const alertCards = alerts.length ? alerts.map((alert) => {
+      const meta = ALERT_LEVEL_META[alert.level] || ALERT_LEVEL_META.green;
+      const coord = alert.lat != null && alert.lon != null ? `${Number(alert.lat).toFixed(6)}, ${Number(alert.lon).toFixed(6)}` : "Coordinate mancanti";
+      return `<article class="commessa-alert-detail-card ${escapeHTML(meta.className)}">
+        <h3>${escapeHTML(meta.emoji)} ${escapeHTML(alert.name)}</h3>
+        <dl>
+          <div><dt>Comune</dt><dd>${escapeHTML(alert.comune)}</dd></div>
+          <div><dt>Coordinate GPS</dt><dd>${escapeHTML(coord)}</dd></div>
+          <div><dt>Tipo allerta</dt><dd>${escapeHTML(alert.type)}</dd></div>
+          <div><dt>Livello</dt><dd>${escapeHTML(formatAlertLevelColor(alert.level))}</dd></div>
+          <div><dt>Fonte dati</dt><dd>${escapeHTML(alert.source)}</dd></div>
+          <div><dt>Validità</dt><dd>${escapeHTML(alert.validity)}</dd></div>
+        </dl>
+        <p>${escapeHTML(alert.description || "Avviso senza descrizione aggiuntiva.")}</p>
+      </article>`;
+    }).join("") : "<p class='muted'>Nessuna allerta attiva sui cantieri con coordinate GPS.</p>";
+    const unavailableMarkup = unavailable.length ? `<details class="commessa-alert-unavailable-list"><summary>Dati non disponibili per ${unavailable.length} cantiere/i</summary>${unavailable.map((item) => {
+      const coord = item.coordinates ? `${Number(item.coordinates.lat).toFixed(6)}, ${Number(item.coordinates.lon).toFixed(6)}` : "Coordinate mancanti";
+      return `<p><b>${escapeHTML(item.name)}</b> • ${escapeHTML(item.comune)} • ${escapeHTML(coord)}<br>${escapeHTML(item.reason || "Dati allerta non disponibili")}</p>`;
+    }).join("")}</details>` : "";
+    content.innerHTML = `<div class="commessa-alert-actions">${refreshButton}<span class="muted">Aggiornato: ${escapeHTML(updated)}</span></div><p class="muted">${escapeHTML(sourceLine)}</p>${alertCards}${unavailableMarkup}`;
+  }
+  content.querySelector("[data-refresh-commessa-alert]")?.addEventListener("click", () => refreshCommessaAlerts(commessaId, { force: true }));
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
@@ -17551,6 +17800,7 @@ function renderSquadre() {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra inserita per questo giorno.</p>";
     return;
   }
+  ensureSquadreCommessaAlerts(commesseConSquadre);
 
   commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
@@ -17574,11 +17824,12 @@ function renderSquadre() {
       ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
       : "";
     const codiceCommessa = String(commessa.codice || "").trim();
+    const alertBadgeMarkup = getCommessaAlertBadgeMarkup(commessa.id);
     item.innerHTML = `
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
           <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-          ${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}
+          <span class="squadra-commessa-code-row">${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}${alertBadgeMarkup}</span>
         </div>
         ${warningMarkup}
       </div>
@@ -17599,6 +17850,12 @@ function renderSquadre() {
     });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    item.querySelectorAll("[data-commessa-alert-id]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openCommessaAlertDetail(btn.getAttribute("data-commessa-alert-id") || commessa.id);
+      });
     });
     const warningToggle = item.querySelector(".squadra-warning-toggle");
     warningToggle?.addEventListener("click", (event) => {
@@ -19971,9 +20228,13 @@ const ALERT_KEYWORDS = [
   { key: "vento", label: "vento", patterns: ["vento", "venti", "burrasca"] },
   { key: "neve", label: "neve", patterns: ["neve", "nevicate"] },
   { key: "ghiaccio", label: "ghiaccio", patterns: ["ghiaccio", "gelate"] },
-  { key: "alluvione", label: "alluvione", patterns: ["idraulico", "idrogeologico", "alluvione", "allagamenti"] },
-  { key: "nebbia", label: "nebbia", patterns: ["nebbia", "nebbie"] },
-  { key: "caldo", label: "caldo estremo", patterns: ["caldo", "ondate di calore", "temperature elevate"] }
+  { key: "pioggia", label: "Pioggia", patterns: ["pioggia", "precipitazioni", "rovesci"] },
+  { key: "idrogeologico", label: "Rischio idrogeologico", patterns: ["idrogeologico", "criticita idrogeologica", "rischio idrogeologico"] },
+  { key: "idraulico", label: "Rischio idraulico", patterns: ["idraulico", "criticita idraulica", "rischio idraulico", "alluvione", "allagamenti"] },
+  { key: "frane", label: "Frane", patterns: ["frane", "frana", "dissesti"] },
+  { key: "incendi", label: "Incendi", patterns: ["incendi", "incendio", "boschivi"] },
+  { key: "nebbia", label: "Nebbia", patterns: ["nebbia", "nebbie"] },
+  { key: "caldo", label: "Caldo", patterns: ["caldo", "ondate di calore", "temperature elevate"] }
 ];
 const NAVIGATION_WEATHER_STRONG_WIND_KMH = 50;
 const NAVIGATION_WEATHER_STRONG_GUST_KMH = 70;
@@ -19983,6 +20244,8 @@ const NAVIGATION_WEATHER_NEXT_HOUR_PROBABILITY = 40;
 const NAVIGATION_WEATHER_THUNDER_CODES = new Set([95, 96, 99]);
 const NAVIGATION_WEATHER_RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]);
 const IMPIANTO_WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
+const COMMESSA_ALERT_CACHE_TTL_MS = 10 * 60 * 1000;
+const COMMESSA_ALERT_REFRESH_LIMIT = 30;
 const IMPIANTO_WEATHER_REFRESH_LIMIT = 40;
 const IMPIANTO_WEATHER_BATCH_SIZE = 2;
 const IMPIANTO_WEATHER_COORDINATE_PRECISION = 5;

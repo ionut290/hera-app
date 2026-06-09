@@ -15571,22 +15571,7 @@ async function getWeatherForPlantFromMainSource(plant) {
   const coordinates = getImpiantoNavigationCoordinates(plant);
   if (!coordinates) throw new Error("Coordinate impianto non disponibili");
   const payload = await fetchWeatherForecast(coordinates, { operational: true, cache: "no-store" });
-  const civilProtectionAlert = await getCivilProtectionAlert(coordinates, buildForecastArraysFromWeatherPayload(payload)).catch((error) => {
-    console.warn("Allerta Protezione Civile impianto non disponibile:", error);
-    return null;
-  });
-  return buildImpiantoWeatherStatus(plant, payload, civilProtectionAlert);
-}
-
-function buildForecastArraysFromWeatherPayload(payload = {}) {
-  const hourly = payload.hourly || {};
-  return {
-    temps: Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [],
-    winds: Array.isArray(hourly.wind_speed_10m) ? hourly.wind_speed_10m : [],
-    snows: Array.isArray(hourly.snowfall) ? hourly.snowfall : [],
-    visibilities: Array.isArray(hourly.visibility) ? hourly.visibility : [],
-    codes: Array.isArray(hourly.weather_code) ? hourly.weather_code : []
-  };
+  return buildImpiantoWeatherStatus(plant, payload, null);
 }
 
 async function getPlantWeather(plant) {
@@ -17541,7 +17526,6 @@ function buildSquadraWarningDetails(commessa, squadRows) {
   return issues;
 }
 
-
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
@@ -17567,6 +17551,7 @@ function renderSquadre() {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra inserita per questo giorno.</p>";
     return;
   }
+
   commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
@@ -17593,7 +17578,7 @@ function renderSquadre() {
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
           <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-          <span class="squadra-commessa-code-row">${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}</span>
+          ${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}
         </div>
         ${warningMarkup}
       </div>
@@ -19986,13 +19971,9 @@ const ALERT_KEYWORDS = [
   { key: "vento", label: "vento", patterns: ["vento", "venti", "burrasca"] },
   { key: "neve", label: "neve", patterns: ["neve", "nevicate"] },
   { key: "ghiaccio", label: "ghiaccio", patterns: ["ghiaccio", "gelate"] },
-  { key: "pioggia", label: "Pioggia", patterns: ["pioggia", "precipitazioni", "rovesci"] },
-  { key: "idrogeologico", label: "Rischio idrogeologico", patterns: ["idrogeologico", "criticita idrogeologica", "rischio idrogeologico"] },
-  { key: "idraulico", label: "Rischio idraulico", patterns: ["idraulico", "criticita idraulica", "rischio idraulico", "alluvione", "allagamenti"] },
-  { key: "frane", label: "Frane", patterns: ["frane", "frana", "dissesti"] },
-  { key: "incendi", label: "Incendi", patterns: ["incendi", "incendio", "boschivi"] },
-  { key: "nebbia", label: "Nebbia", patterns: ["nebbia", "nebbie"] },
-  { key: "caldo", label: "Caldo", patterns: ["caldo", "ondate di calore", "temperature elevate"] }
+  { key: "alluvione", label: "alluvione", patterns: ["idraulico", "idrogeologico", "alluvione", "allagamenti"] },
+  { key: "nebbia", label: "nebbia", patterns: ["nebbia", "nebbie"] },
+  { key: "caldo", label: "caldo estremo", patterns: ["caldo", "ondate di calore", "temperature elevate"] }
 ];
 const NAVIGATION_WEATHER_STRONG_WIND_KMH = 50;
 const NAVIGATION_WEATHER_STRONG_GUST_KMH = 70;

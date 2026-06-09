@@ -9004,3 +9004,170 @@ textarea:focus-visible {
     overflow: hidden;
   }
 }
+
+.squadra-commessa-code-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.commessa-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.commessa-alert-badge.alert-yellow {
+  border-color: #facc15;
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.commessa-alert-badge.alert-orange {
+  border-color: #fb923c;
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
+.commessa-alert-badge.alert-red {
+  border-color: #f87171;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.commessa-alert-badge.is-unavailable,
+.commessa-alert-badge.is-loading {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.commessa-alert-modal.hidden {
+  display: none;
+}
+
+.commessa-alert-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.commessa-alert-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.commessa-alert-modal__panel {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  border-radius: 22px 22px 0 0;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 -18px 45px rgba(15, 23, 42, 0.25);
+}
+
+.commessa-alert-modal__head,
+.commessa-alert-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.commessa-alert-modal__head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.commessa-alert-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.commessa-alert-detail-card {
+  border: 1px solid #e2e8f0;
+  border-left-width: 6px;
+  border-radius: 16px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.commessa-alert-detail-card.alert-yellow { border-left-color: #eab308; }
+.commessa-alert-detail-card.alert-orange { border-left-color: #f97316; }
+.commessa-alert-detail-card.alert-red { border-left-color: #dc2626; }
+
+.commessa-alert-detail-card h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.commessa-alert-detail-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.commessa-alert-detail-card dl div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.42fr) 1fr;
+  gap: 8px;
+}
+
+.commessa-alert-detail-card dt {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.commessa-alert-detail-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.commessa-alert-unavailable,
+.commessa-alert-unavailable-list {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 10px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+@media (max-width: 640px) {
+  .commessa-alert-modal__panel {
+    max-height: 92vh;
+    padding: 14px;
+  }
+
+  .commessa-alert-modal__head,
+  .commessa-alert-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .commessa-alert-detail-card dl div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

@@ -844,11 +844,14 @@ let allHoursApprovalRequests = [];
 let hoursReportsLoaded = false;
 let hoursApprovalsLoaded = false;
 let personaleRecords = [];
+let personaleLoadState = { status: "idle", message: "" };
 let personaleSearchQuery = "";
 let personaleExpandedId = "";
 let personaleShowAll = false;
 const PERSONALE_RECENT_KEY = "hera_personale_recent_ids";
 let mezziRecords = [];
+let mezziLoadState = { status: "idle", message: "" };
+let startupCoreCollectionsLoadState = { status: "idle", message: "" };
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
 let squadreLoadState = { status: "idle", message: "" };
@@ -2544,7 +2547,7 @@ if (!auth || firebaseInitError) {
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
   ensureAuthLocalPersistence().finally(() => {
-    auth.onAuthStateChanged((user) => {
+    auth.onAuthStateChanged(async (user) => {
   console.log("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
@@ -2606,6 +2609,9 @@ if (!auth || firebaseInitError) {
   ui.squadraCommessa.innerHTML = "<option value=''>Seleziona commessa</option>";
   ui.squadreLista.innerHTML = "";
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
+  personaleLoadState = { status: "idle", message: "" };
+  mezziLoadState = { status: "idle", message: "" };
+  startupCoreCollectionsLoadState = { status: "idle", message: "" };
   manualSquadreFilterDateKey = "";
   sharedSquadreDateKey = "";
   startupAssignedCommessaAutoOpenDone = false;
@@ -2613,6 +2619,8 @@ if (!auth || firebaseInitError) {
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
+  personaleRecords = [];
+  mezziRecords = [];
   initializeAutomaticSquadreDate();
   globalCommesseById = new Map();
   globalImpianti = [];
@@ -2641,16 +2649,17 @@ if (!auth || firebaseInitError) {
   applyRoute();
 
   if (loggedIn) {
-    subscribeCommesse();
-    subscribeSquadre();
+    try {
+      await loadStartupCoreCollections();
+    } catch (error) {
+      console.error("Caricamento iniziale collezioni principali non completato:", error);
+    }
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
       () => upsertCurrentPlatformUser(),
       () => initGeolocation({ forcePublishCurrent: true }),
       () => subscribeUsers(),
       () => subscribeAdminUsers(),
-      () => subscribePersonale(),
-      () => subscribeMezzi(),
       () => subscribeChat(),
       () => subscribeOperatorPositions(),
       () => subscribeDriveBridge(),
@@ -2697,6 +2706,45 @@ if (!auth || firebaseInitError) {
   hideStartupLoading();
 });
   });
+}
+
+
+async function loadStartupCoreCollections() {
+  if (!currentUser) return;
+  startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
+  commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
+  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
+  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
+  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
+  renderCommesseHomeList();
+  renderSquadre();
+
+  try {
+    const personalePromise = subscribePersonale();
+    await Promise.all([
+      personalePromise, // anagrafiche personale
+      personalePromise, // qualifiche/corsi salvati sulle anagrafiche
+      personalePromise, // sicurezza salvata sulle anagrafiche
+      subscribeSquadre(),
+      subscribeCommesse(),
+      subscribeMezzi()
+    ]);
+    startupCoreCollectionsLoadState = { status: "loaded", message: "" };
+  } catch (error) {
+    startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
+    throw error;
+  } finally {
+    renderCommesseHomeList();
+    renderSquadre();
+  }
+}
+
+function areStartupCoreCollectionsLoading() {
+  return startupCoreCollectionsLoadState.status === "loading";
+}
+
+function isPersonaleReadyForSquadraValidation() {
+  return personaleLoadState.status === "loaded" && personaleRecords.length > 0;
 }
 
 function updateAdminControls() {
@@ -8891,6 +8939,10 @@ function renderCommesseHomeList() {
     ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
     return;
   }
+  if (areStartupCoreCollectionsLoading()) {
+    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati iniziali...")}</p>`;
+    return;
+  }
   if (commesseLoadState.status === "loading") {
     ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Caricamento commesse...")}</p>`;
     return;
@@ -9089,7 +9141,7 @@ function subscribeCommesse() {
   if (!currentUser) {
     commesseLoadState = { status: "auth-required", message: "Fai login per vedere le commesse." };
     renderCommesseHomeList();
-    return;
+    return Promise.resolve(false);
   }
 
   commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
@@ -9101,7 +9153,7 @@ function subscribeCommesse() {
     commesseLoadState = { status: "error", message: "Errore caricamento dati" };
     loadCommesseFromLocalCache();
     refreshCommesseDependentUI(false);
-    return;
+    return Promise.resolve(false);
   }
 
   const query = db.collection("commesse").orderBy("createdAt", "desc");
@@ -9135,7 +9187,7 @@ function subscribeCommesse() {
   };
 
   console.log("Query commesse avviata", { collection: "commesse", orderBy: "createdAt desc", mode: "getDocs initial" });
-  runFirestoreGetWithRetry(query, {
+  return runFirestoreGetWithRetry(query, {
     label: "LOAD COMMESSE",
     timeoutMs: 9000,
     retries: 2,
@@ -16990,23 +17042,31 @@ async function parseSimpleExcelRows(file, rawRows = false) {
 }
 
 function subscribePersonale() {
-  if (!currentUser) return;
+  if (!currentUser) {
+    personaleLoadState = { status: "auth-required", message: "Fai login per caricare l'anagrafica personale." };
+    return Promise.resolve(false);
+  }
+  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
   console.log("Query personale avviata", { collection: "personale", orderBy: "createdAt asc" });
   const query = db.collection("personale").orderBy("createdAt", "asc");
   const applySnapshot = (snapshot) => {
     personaleRecords = snapshot.docs.map(normalizePersonaleDocument);
+    personaleLoadState = { status: "loaded", message: "" };
     console.log("Numero persone trovate", snapshot.size);
     renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
     updateSquadraHintFromSources();
     updateSuggestionLists();
     renderHoursOperatoriOptions();
+    renderSquadre();
   };
-  runFirestoreGetWithRetry(query, { label: "LOAD PERSONALE", timeoutMs: 9000, retries: 2 })
+  return runFirestoreGetWithRetry(query, { label: "LOAD PERSONALE", timeoutMs: 9000, retries: 2 })
     .then((snapshot) => {
       applySnapshot(snapshot);
       try {
         unsubscribePersonale = query.onSnapshot(applySnapshot, (error) => {
           logFirestoreError("LOAD PERSONALE LISTENER", error);
+          personaleLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento personale") };
+          renderSquadre();
           ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
           ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
         });
@@ -17016,6 +17076,8 @@ function subscribePersonale() {
     })
     .catch((error) => {
       logFirestoreError("LOAD PERSONALE", error);
+      personaleLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento personale") };
+      renderSquadre();
       ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
       ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
     });
@@ -17221,22 +17283,28 @@ async function savePersonaleDetail(personId, root) {
 }
 
 function subscribeMezzi() {
-  if (!currentUser) return;
+  if (!currentUser) {
+    mezziLoadState = { status: "auth-required", message: "Fai login per caricare i mezzi." };
+    return Promise.resolve(false);
+  }
+  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
   console.log("Query mezzi avviata", { collection: "mezzi", orderBy: "createdAt asc" });
   const query = db.collection("mezzi").orderBy("createdAt", "asc");
   const applySnapshot = (snapshot) => {
     mezziRecords = snapshot.docs.map(normalizeMezzoDocument);
+    mezziLoadState = { status: "loaded", message: "" };
     console.log("Numero mezzi trovati", snapshot.size);
     renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
     updateSquadraHintFromSources();
     updateSuggestionLists();
   };
-  runFirestoreGetWithRetry(query, { label: "LOAD MEZZI", timeoutMs: 9000, retries: 2 })
+  return runFirestoreGetWithRetry(query, { label: "LOAD MEZZI", timeoutMs: 9000, retries: 2 })
     .then((snapshot) => {
       applySnapshot(snapshot);
       try {
         unsubscribeMezzi = query.onSnapshot(applySnapshot, (error) => {
           logFirestoreError("LOAD MEZZI LISTENER", error);
+          mezziLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento mezzi") };
           ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
           ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
         });
@@ -17246,6 +17314,7 @@ function subscribeMezzi() {
     })
     .catch((error) => {
       logFirestoreError("LOAD MEZZI", error);
+      mezziLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento mezzi") };
       ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
       ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
     });
@@ -17272,13 +17341,13 @@ function subscribeSquadre() {
     console.log("Query squadre non avviata: utente non loggato");
     squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
     renderSquadre();
-    return;
+    return Promise.resolve(false);
   }
 
   if (!validateFirebaseConfigForCommesse()) {
     squadreLoadState = { status: "error", message: "Errore caricamento dati. Impossibile connettersi a Firebase: configurazione incompleta." };
     renderSquadre();
-    return;
+    return Promise.resolve(false);
   }
 
   const selectedDateKey = getActiveSquadreDateKey();
@@ -17314,7 +17383,7 @@ function subscribeSquadre() {
 
   const squadreQuery = db.collection("squadreStorico").where("dateKey", "==", selectedDateKey);
   console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico where dateKey == data selezionata. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
-  runFirestoreGetWithRetry(squadreQuery, {
+  const squadreDataPromise = runFirestoreGetWithRetry(squadreQuery, {
     label: "LOAD SQUADRE",
     timeoutMs: 9000,
     retries: 2,
@@ -17336,7 +17405,7 @@ function subscribeSquadre() {
       renderCommesseHomeList();
     });
 
-  runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", "squadreView"), {
+  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", "squadreView"), {
     label: "LOAD SQUADRE VIEW CONFIG",
     timeoutMs: 9000,
     retries: 1
@@ -17356,6 +17425,8 @@ function subscribeSquadre() {
       logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
       sharedSquadreViewConfigLoaded = true;
     });
+
+  return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
 }
 
 function stopPersonaleSubscription() {
@@ -17897,6 +17968,7 @@ function hasRequiredCourse(person, courseKey) {
 }
 
 function buildSquadraWarningDetails(commessa, squadRows) {
+  if (!isPersonaleReadyForSquadraValidation()) return [];
   const commessaName = String(commessa?.nome || "").trim();
   const isInrete = INRETE_COMMESSE_REQUIRED.has(normalizeSafetyKey(commessaName));
   const requiredCourses = isInrete
@@ -17934,6 +18006,10 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
+  if (areStartupCoreCollectionsLoading()) {
+    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;
+    return;
+  }
   if (squadreLoadState.status === "loading") {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre...")}</p>`;
     return;

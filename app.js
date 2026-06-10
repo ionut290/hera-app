@@ -41,6 +41,39 @@ try {
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
+let authLocalPersistencePromise = null;
+let authStateResolved = false;
+
+function getFirebaseLocalAuthPersistence() {
+  return firebase
+    && firebase.auth
+    && firebase.auth.Auth
+    && firebase.auth.Auth.Persistence
+    && firebase.auth.Auth.Persistence.LOCAL;
+}
+
+function ensureAuthLocalPersistence() {
+  if (!auth || typeof auth.setPersistence !== "function") return Promise.resolve(false);
+  if (authLocalPersistencePromise) return authLocalPersistencePromise;
+
+  const localPersistence = getFirebaseLocalAuthPersistence();
+  if (!localPersistence) {
+    console.warn("Persistenza Firebase Auth LOCAL non disponibile nel SDK caricato.");
+    return Promise.resolve(false);
+  }
+
+  authLocalPersistencePromise = auth.setPersistence(localPersistence)
+    .then(() => {
+      console.log("AUTH PERSISTENCE LOCAL READY");
+      return true;
+    })
+    .catch((error) => {
+      console.error("Errore impostazione persistenza Firebase Auth LOCAL:", error);
+      return false;
+    });
+
+  return authLocalPersistencePromise;
+}
 
 function getSessionStorageValue(key) {
   try {
@@ -134,16 +167,8 @@ function recoverFirestorePersistence(error) {
     return;
   }
 
-  console.warn("Tentativo di ripristino cache locale Firestore dopo errore interno.", error);
-  const terminatePromise = typeof db.terminate === "function" ? db.terminate() : Promise.resolve();
-  terminatePromise
-    .then(() => (typeof db.clearPersistence === "function" ? db.clearPersistence() : null))
-    .then(() => {
-      reloadAfterFirestorePersistenceRecovery("internal");
-    })
-    .catch((recoveryError) => {
-      console.warn("Ripristino cache locale Firestore non riuscito:", recoveryError);
-    });
+  console.warn("Errore interno Firestore rilevato: non cancello automaticamente IndexedDB/cache locale all'avvio. Ricarico una sola volta senza clearPersistence.", error);
+  reloadAfterFirestorePersistenceRecovery("internal");
 }
 
 function enableFirestorePersistence() {
@@ -2510,13 +2535,18 @@ console.log("AUTH CHECK START");
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
+  authStateResolved = true;
   currentUser = null;
   squadreLoadState = { status: "error", message: "Errore caricamento dati" };
   if (typeof renderSquadre === "function") renderSquadre();
   hideStartupLoading();
 } else {
-  auth.onAuthStateChanged((user) => {
+  if (ui.loginBtn) ui.loginBtn.disabled = true;
+  if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
+  ensureAuthLocalPersistence().finally(() => {
+    auth.onAuthStateChanged((user) => {
   console.log("AUTH READY");
+  authStateResolved = true;
   currentUser = user || null;
   const loggedIn = Boolean(user);
   console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
@@ -2568,7 +2598,7 @@ if (!auth || firebaseInitError) {
   selectedCommessaId = "";
   selectedCommessaName = "";
   updateCommessaContextUI();
-  window.location.hash = "";
+  if (!loggedIn) window.location.hash = "";
   commesseLoadState = { status: "idle", message: "" };
   isCommesseHomeCardVisible = false;
   syncCommesseHomeToggle();
@@ -2660,11 +2690,13 @@ if (!auth || firebaseInitError) {
   hideStartupLoading();
 }, (error) => {
   console.error("Errore verifica login Firebase:", error);
+  authStateResolved = true;
   currentUser = null;
   squadreLoadState = { status: "error", message: "Errore caricamento dati" };
   renderSquadre();
   hideStartupLoading();
 });
+  });
 }
 
 function updateAdminControls() {
@@ -7947,28 +7979,33 @@ function loginWithGoogle(forceAccountSelection = false) {
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
   if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
 
-  // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
-  if (isAndroidWebViewRuntime()) {
-    auth.signInWithPopup(provider).then((result) => {
+  ensureAuthLocalPersistence().then(() => {
+    // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
+    if (isAndroidWebViewRuntime()) {
+      return auth.signInWithPopup(provider).then((result) => {
+        void result;
+      }).catch((error) => {
+        console.error("Login Google Android/WebView fallito:", error);
+        recoverFirestorePersistence(error);
+        alert("Errore login Android/WebView: " + formatLoginError(error));
+      });
+    }
+
+    // Flusso web desktop/browser standard: manteniamo comportamento esistente.
+    return auth.signInWithPopup(provider).then((result) => {
       void result;
     }).catch((error) => {
-      console.error("Login Google Android/WebView fallito:", error);
+      if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
+        return auth.signInWithRedirect(provider);
+      }
+      console.error("Errore login:", error);
       recoverFirestorePersistence(error);
-      alert("Errore login Android/WebView: " + formatLoginError(error));
+      alert("Errore login: " + formatLoginError(error));
+      return null;
     });
-    return;
-  }
-
-  // Flusso web desktop/browser standard: manteniamo comportamento esistente.
-  auth.signInWithPopup(provider).then((result) => {
-    void result;
   }).catch((error) => {
-    if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
-      return auth.signInWithRedirect(provider);
-    }
-    console.error("Errore login:", error);
-    recoverFirestorePersistence(error);
-    alert("Errore login: " + formatLoginError(error));
+    console.error("Errore preparazione persistenza login:", error);
+    alert("Errore preparazione login: " + formatLoginError(error));
   });
 }
 

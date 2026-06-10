@@ -33,10 +33,10 @@ try {
     projectId: firebaseConfig?.projectId || "non impostato",
     sdkVersion: firebase.SDK_VERSION || "non disponibile"
   });
-  console.log("Firebase OK");
+  console.log("FIREBASE READY");
 } catch (error) {
   firebaseInitError = error;
-  console.error("Firebase init error:", error);
+  console.error("FIREBASE INIT ERROR", error);
 }
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
@@ -1728,8 +1728,8 @@ ui.notificationDocViewerCloseBtn?.addEventListener("click", closeNotificationDoc
 ui.notificationDocViewerModal?.addEventListener("click", (event) => {
   if (event.target === ui.notificationDocViewerModal) closeNotificationDocumentViewer();
 });
-window.addEventListener("online", updateConnectivityStatus);
-window.addEventListener("offline", updateConnectivityStatus);
+window.addEventListener("online", () => { setFirestoreConnectionState("Online", ""); });
+window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -1751,10 +1751,9 @@ window.addEventListener("hashchange", applyRoute);
 window.addEventListener("popstate", applyRoute);
 loadPendingSheetExports();
 startSheetRetryLoop();
-initHelpCenterFaq();
+renderFaqHelpCenter(HELP_CENTER_FAQ_FALLBACK);
 renderResourceManageFilters();
 updateResourceFormByType();
-updateConnectivityStatus();
 initPwaCapabilities();
 initNativeGeofenceBridge();
 initWorkBannerObservers();
@@ -1794,6 +1793,152 @@ function withTimeout(promise, ms, timeoutMessage) {
     timeoutId = setTimeout(() => reject(new Error(timeoutMessage || "Timeout caricamento dati")), ms);
   });
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
+const FIRESTORE_QUERY_TIMEOUT_MS = 9000;
+const FIRESTORE_RETRY_DELAYS_MS = [700, 1600];
+let firestoreNetworkState = navigator.onLine ? "Online" : "Offline";
+let firestoreCacheState = "";
+let firestoreSlowTimer = null;
+updateConnectivityStatus();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function setFirestoreConnectionState(state, detail = "") {
+  firestoreNetworkState = state || firestoreNetworkState;
+  firestoreCacheState = detail || firestoreCacheState;
+  console.log(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
+  updateConnectivityStatus();
+}
+
+function startFirestoreSlowWatch(label) {
+  clearFirestoreSlowWatch();
+  firestoreSlowTimer = setTimeout(() => {
+    setFirestoreConnectionState("Connessione lenta", label || "Firestore non risponde rapidamente");
+  }, 4000);
+}
+
+function clearFirestoreSlowWatch() {
+  if (!firestoreSlowTimer) return;
+  clearTimeout(firestoreSlowTimer);
+  firestoreSlowTimer = null;
+}
+
+function getReadableFirestoreError(error, fallback = "Errore caricamento dati") {
+  const code = getFirebaseErrorCode(error);
+  if (code.includes("permission-denied")) {
+    return "Permesso negato: il tuo utente non è autorizzato a leggere questi dati. Contatta un amministratore.";
+  }
+  if (code.includes("unavailable")) {
+    return "Firestore non raggiungibile. Controlla la connessione e riprova.";
+  }
+  if (/timeout/i.test(getFirebaseErrorMessage(error))) {
+    return "Connessione lenta: Firestore non ha risposto entro pochi secondi. Puoi riprovare.";
+  }
+  return fallback;
+}
+
+function logFirestoreError(label, error, extra = {}) {
+  console.error(`${label} ERROR`, {
+    code: error?.code || "",
+    message: getFirebaseErrorMessage(error),
+    stack: error?.stack || "",
+    ...extra
+  }, error);
+  if (getFirebaseErrorCode(error).includes("permission-denied")) {
+    console.error("Verifica regole Firestore: l'utente autenticato deve poter leggere squadre, commesse, impianti, mezzi e utenti/platformUsers.");
+  }
+}
+
+async function runFirestoreGetWithRetry(query, options = {}) {
+  const {
+    label = "FIRESTORE QUERY",
+    timeoutMs = FIRESTORE_QUERY_TIMEOUT_MS,
+    retries = 2,
+    retryDelaysMs = FIRESTORE_RETRY_DELAYS_MS,
+    onRetry = null
+  } = options;
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      startFirestoreSlowWatch(label);
+      const snapshot = await withTimeout(query.get(), timeoutMs, `Timeout ${label}`);
+      clearFirestoreSlowWatch();
+      if (snapshot?.metadata?.fromCache) {
+        setFirestoreConnectionState(navigator.onLine ? "Online" : "Offline", "Dati caricati da cache");
+      } else {
+        setFirestoreConnectionState(navigator.onLine ? "Online" : "Offline", "");
+      }
+      return snapshot;
+    } catch (error) {
+      clearFirestoreSlowWatch();
+      lastError = error;
+      logFirestoreError(label, error, { attempt: attempt + 1, maxAttempts: retries + 1 });
+      if (attempt >= retries) break;
+      if (typeof onRetry === "function") onRetry(attempt + 1, error);
+      await sleep(retryDelaysMs[attempt] || 1200);
+    }
+  }
+  throw lastError;
+}
+
+function normalizeCommessaDocument(doc) {
+  const data = doc.data() || {};
+  return {
+    id: doc.id,
+    nome: String(data.nome || data.name || "Commessa senza nome"),
+    codice: String(data.codice || data.code || ""),
+    parentCommessaId: String(data.parentCommessaId || ""),
+    createdAt: data.createdAt || null,
+    ...data
+  };
+}
+
+function normalizeSquadraStoricoDocument(doc, fallbackDateKey = "") {
+  const data = doc.data() || {};
+  const squadre = Array.isArray(data.squadre) ? data.squadre : [];
+  return {
+    id: doc.id,
+    commessaId: String(data.commessaId || "").trim(),
+    dateKey: String(data.dateKey || fallbackDateKey || "").trim(),
+    squadre,
+    personale: String(data.personale || ""),
+    mezzi: String(data.mezzi || ""),
+    impianti: String(data.impianti || ""),
+    note: String(data.note || ""),
+    ...data
+  };
+}
+
+function normalizePersonaleDocument(doc) {
+  const data = doc.data() || {};
+  const fullName = String(data.fullName || `${data.cognome || ""} ${data.nome || ""}`.trim() || "Senza nome");
+  return {
+    id: doc.id,
+    nome: String(data.nome || ""),
+    cognome: String(data.cognome || ""),
+    fullName,
+    telefono: String(data.telefono || ""),
+    email: String(data.email || ""),
+    mansione: String(data.mansione || data.ruolo || ""),
+    commesseAbilitate: Array.isArray(data.commesseAbilitate) ? data.commesseAbilitate : [],
+    corsi: data.corsi && typeof data.corsi === "object" ? data.corsi : {},
+    ...data
+  };
+}
+
+function normalizeMezzoDocument(doc) {
+  const data = doc.data() || {};
+  return {
+    id: doc.id,
+    nId: String(data.nId || data.numero || ""),
+    marca: String(data.marca || ""),
+    modello: String(data.modello || ""),
+    targa: String(data.targa || ""),
+    ...data
+  };
 }
 
 
@@ -2371,13 +2516,14 @@ if (!auth || firebaseInitError) {
   hideStartupLoading();
 } else {
   auth.onAuthStateChanged((user) => {
+  console.log("AUTH READY");
   currentUser = user || null;
   const loggedIn = Boolean(user);
   console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
-  if (loggedIn) console.log("UID utente", user.uid);
+  if (loggedIn) console.log("USER UID", user.uid);
 
   ui.loginBtn.disabled = loggedIn;
   ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
@@ -2486,6 +2632,7 @@ if (!auth || firebaseInitError) {
       () => subscribeGlobalNotifications(),
       () => subscribeWorkBanner(),
       () => subscribeUserAlerts(),
+      () => initHelpCenterFaq(),
       () => processPendingSheetExports(),
       () => startChatRetentionLoop(),
       () => startHoursDeadlineAlertLoop(),
@@ -8708,12 +8855,17 @@ function renderCommesseHomeList() {
     return;
   }
   if (commesseLoadState.status === "loading") {
-    ui.commesseLista.innerHTML = "<p class='muted'>Caricamento commesse...</p>";
+    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Caricamento commesse...")}</p>`;
     return;
   }
   const commesse = sortCommesseByCreatedAtDesc(getMainCommesse());
   if (!commesse.length) {
     ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Nessuna commessa disponibile")}</p>`;
+    if (commesseLoadState.status === "error") {
+      const retry = createButton("Riprova", subscribeCommesse);
+      retry.classList.add("btn-primary");
+      ui.commesseLista.appendChild(retry);
+    }
     return;
   }
   if (commesseLoadState.status === "error" && commesseLoadState.message) {
@@ -8721,6 +8873,9 @@ function renderCommesseHomeList() {
     warning.className = "muted";
     warning.textContent = `${commesseLoadState.message}. Mostro le commesse salvate localmente.`;
     ui.commesseLista.appendChild(warning);
+    const retry = createButton("Riprova", subscribeCommesse);
+    retry.classList.add("btn-primary");
+    ui.commesseLista.appendChild(retry);
   }
   commesse.forEach((commessa, idx) => {
     ui.commesseLista.appendChild(renderCommessaHomeButton(commessa, idx));
@@ -8919,7 +9074,7 @@ function subscribeCommesse() {
     commesseById = new Map();
 
     snapshot.forEach((doc) => {
-      const commessa = { id: doc.id, ...(doc.data() || {}) };
+      const commessa = normalizeCommessaDocument(doc);
       receivedCommesse.push(commessa);
       commesseById.set(doc.id, commessa);
     });
@@ -8943,7 +9098,15 @@ function subscribeCommesse() {
   };
 
   console.log("Query commesse avviata", { collection: "commesse", orderBy: "createdAt desc", mode: "getDocs initial" });
-  withTimeout(query.get(), 8000, "Timeout caricamento commesse")
+  runFirestoreGetWithRetry(query, {
+    label: "LOAD COMMESSE",
+    timeoutMs: 9000,
+    retries: 2,
+    onRetry: (attempt) => {
+      commesseLoadState = { status: "loading", message: `Connessione lenta: ritento caricamento commesse (${attempt}/2)...` };
+      renderCommesseHomeList();
+    }
+  })
     .then((snapshot) => {
       applyCommesseSnapshot(snapshot);
       runAfterFirstRender(() => {
@@ -8952,9 +9115,9 @@ function subscribeCommesse() {
           unsubscribeCommesse = query.onSnapshot((liveSnapshot) => {
             applyCommesseSnapshot(liveSnapshot, { fromListener: true });
           }, (error) => {
-            console.error("Errore caricamento commesse:", error);
+            logFirestoreError("LOAD COMMESSE LISTENER", error);
             loadCommesseFromLocalCache();
-            commesseLoadState = { status: "error", message: "Errore caricamento dati" };
+            commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
             refreshCommesseDependentUI(false);
           });
         } catch (error) {
@@ -8964,9 +9127,9 @@ function subscribeCommesse() {
     })
     .catch((error) => {
       clearCommesseLoadTimeout();
-      console.error("Errore caricamento commesse:", error);
+      logFirestoreError("LOAD COMMESSE", error);
       loadCommesseFromLocalCache();
-      commesseLoadState = { status: "error", message: "Errore caricamento dati" };
+      commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
       refreshCommesseDependentUI(false);
     });
 }
@@ -12522,11 +12685,19 @@ async function setImpiantoRequestDriveLink(impianto) {
 }
 
 function updateConnectivityStatus() {
+  const browserOnline = navigator.onLine;
+  const baseState = firestoreNetworkState === "Connessione lenta"
+    ? "Connessione lenta"
+    : (browserOnline ? "Online" : "Offline");
+  firestoreNetworkState = baseState;
   if (!ui.gpsStatus) return;
-  if (navigator.onLine) {
-    ui.gpsStatus.textContent = "Online: modifiche sincronizzate con il cloud (cache offline attiva).";
+  const cacheSuffix = firestoreCacheState ? ` • ${firestoreCacheState}` : "";
+  if (baseState === "Connessione lenta") {
+    ui.gpsStatus.textContent = `Connessione lenta: sblocco la schermata e uso gli ultimi dati disponibili.${cacheSuffix}`;
+  } else if (browserOnline) {
+    ui.gpsStatus.textContent = `Online: modifiche sincronizzate con il cloud (cache offline attiva).${cacheSuffix}`;
   } else {
-    ui.gpsStatus.textContent = "Offline: l'app continua in locale, i dati verranno sincronizzati appena torna la rete.";
+    ui.gpsStatus.textContent = `Offline: l'app continua con gli ultimi dati disponibili e sincronizza appena torna la rete.${cacheSuffix}`;
   }
 }
 
@@ -16782,23 +16953,35 @@ async function parseSimpleExcelRows(file, rawRows = false) {
 }
 
 function subscribePersonale() {
+  if (!currentUser) return;
   console.log("Query personale avviata", { collection: "personale", orderBy: "createdAt asc" });
-  try {
-    unsubscribePersonale = db.collection("personale").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
-      personaleRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      console.log("Numero persone trovate", snapshot.size);
-      renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
-      updateSquadraHintFromSources();
-      updateSuggestionLists();
-      renderHoursOperatoriOptions();
-    }, (error) => {
-      console.error("Errore Firestore caricamento personale:", error);
-      ui.personaleLista.innerHTML = `<p class='muted'>Errore caricamento personale: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
+  const query = db.collection("personale").orderBy("createdAt", "asc");
+  const applySnapshot = (snapshot) => {
+    personaleRecords = snapshot.docs.map(normalizePersonaleDocument);
+    console.log("Numero persone trovate", snapshot.size);
+    renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+    updateSquadraHintFromSources();
+    updateSuggestionLists();
+    renderHoursOperatoriOptions();
+  };
+  runFirestoreGetWithRetry(query, { label: "LOAD PERSONALE", timeoutMs: 9000, retries: 2 })
+    .then((snapshot) => {
+      applySnapshot(snapshot);
+      try {
+        unsubscribePersonale = query.onSnapshot(applySnapshot, (error) => {
+          logFirestoreError("LOAD PERSONALE LISTENER", error);
+          ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+          ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
+        });
+      } catch (error) {
+        logFirestoreError("LOAD PERSONALE LISTENER INIT", error);
+      }
+    })
+    .catch((error) => {
+      logFirestoreError("LOAD PERSONALE", error);
+      ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+      ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
     });
-  } catch (error) {
-    console.error("Errore inizializzazione query personale:", error);
-    ui.personaleLista.innerHTML = `<p class='muted'>Errore inizializzazione personale: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
-  }
 }
 
 const DEFAULT_COMMESSE_ABILITAZIONI = [
@@ -17001,22 +17184,34 @@ async function savePersonaleDetail(personId, root) {
 }
 
 function subscribeMezzi() {
+  if (!currentUser) return;
   console.log("Query mezzi avviata", { collection: "mezzi", orderBy: "createdAt asc" });
-  try {
-    unsubscribeMezzi = db.collection("mezzi").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
-      mezziRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      console.log("Numero mezzi trovati", snapshot.size);
-      renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
-      updateSquadraHintFromSources();
-      updateSuggestionLists();
-    }, (error) => {
-      console.error("Errore Firestore caricamento mezzi:", error);
-      ui.mezziLista.innerHTML = `<p class='muted'>Errore caricamento mezzi: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
+  const query = db.collection("mezzi").orderBy("createdAt", "asc");
+  const applySnapshot = (snapshot) => {
+    mezziRecords = snapshot.docs.map(normalizeMezzoDocument);
+    console.log("Numero mezzi trovati", snapshot.size);
+    renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
+    updateSquadraHintFromSources();
+    updateSuggestionLists();
+  };
+  runFirestoreGetWithRetry(query, { label: "LOAD MEZZI", timeoutMs: 9000, retries: 2 })
+    .then((snapshot) => {
+      applySnapshot(snapshot);
+      try {
+        unsubscribeMezzi = query.onSnapshot(applySnapshot, (error) => {
+          logFirestoreError("LOAD MEZZI LISTENER", error);
+          ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+          ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
+        });
+      } catch (error) {
+        logFirestoreError("LOAD MEZZI LISTENER INIT", error);
+      }
+    })
+    .catch((error) => {
+      logFirestoreError("LOAD MEZZI", error);
+      ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+      ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
     });
-  } catch (error) {
-    console.error("Errore inizializzazione query mezzi:", error);
-    ui.mezziLista.innerHTML = `<p class='muted'>Errore inizializzazione mezzi: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
-  }
 }
 
 function clearSquadreLoadTimeout() {
@@ -17062,10 +17257,9 @@ function subscribeSquadre() {
   const applySquadreSnapshot = (snapshot) => {
     const historyForDate = new Map();
     snapshot.forEach((doc) => {
-      const data = doc.data() || {};
-      const commessaId = String(data.commessaId || "").trim();
-      if (!commessaId) return;
-      historyForDate.set(commessaId, { id: doc.id, ...data, dateKey: data.dateKey || selectedDateKey });
+      const row = normalizeSquadraStoricoDocument(doc, selectedDateKey);
+      if (!row.commessaId) return;
+      historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
     squadreLoadState = { status: "loaded", message: "" };
@@ -17081,25 +17275,37 @@ function subscribeSquadre() {
     checkAndSendHoursDeadlineAlerts();
   };
 
-  withTimeout(
-    db.collection("squadreStorico").where("dateKey", "==", selectedDateKey).get(),
-    8000,
-    "Timeout caricamento squadre"
-  )
+  const squadreQuery = db.collection("squadreStorico").where("dateKey", "==", selectedDateKey);
+  console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico where dateKey == data selezionata. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
+  runFirestoreGetWithRetry(squadreQuery, {
+    label: "LOAD SQUADRE",
+    timeoutMs: 9000,
+    retries: 2,
+    onRetry: (attempt) => {
+      squadreLoadState = { status: "loading", message: `Connessione lenta: ritento caricamento squadre (${attempt}/2)...` };
+      renderSquadre();
+      renderCommesseHomeList();
+    }
+  })
     .then((snapshot) => {
       clearSquadreLoadTimeout();
       applySquadreSnapshot(snapshot);
     })
     .catch((error) => {
       clearSquadreLoadTimeout();
-      console.error("LOAD SQUADRE ERROR:", error);
-      squadreLoadState = { status: "error", message: "Errore caricamento dati" };
+      logFirestoreError("LOAD SQUADRE", error, { dateKey: selectedDateKey });
+      squadreLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento squadre") };
       renderSquadre();
       renderCommesseHomeList();
     });
 
-  db.collection("appConfig").doc("squadreView").get()
-    .then((doc) => {
+  runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", "squadreView"), {
+    label: "LOAD SQUADRE VIEW CONFIG",
+    timeoutMs: 9000,
+    retries: 1
+  })
+    .then((snapshot) => {
+      const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
       const data = doc.exists ? doc.data() || {} : {};
       const sharedDate = String(data.selectedDateKey || "").trim();
       sharedSquadreViewConfigLoaded = true;
@@ -17110,7 +17316,7 @@ function subscribeSquadre() {
       }
     })
     .catch((error) => {
-      console.error("Errore Firestore caricamento giorno squadre condiviso:", error);
+      logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
       sharedSquadreViewConfigLoaded = true;
     });
 }
@@ -17692,7 +17898,7 @@ function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
   if (squadreLoadState.status === "loading") {
-    ui.squadreLista.innerHTML = "<p class='muted'>Caricamento squadre...</p>";
+    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre...")}</p>`;
     return;
   }
   if (squadreLoadState.status === "auth-required") {
@@ -20934,9 +21140,17 @@ function subscribeUsers() {
   const source = canManageData()
     ? db.collection("platformUsers")
     : db.collection("platformUsers").where(firebase.firestore.FieldPath.documentId(), "==", currentUser.uid);
-  unsubscribeUsers = source.onSnapshot((snapshot) => {
-    platformUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+  const applySnapshot = (snapshot) => {
+    platformUsers = snapshot.docs.map((doc) => {
+      const data = doc.data() || {};
+      return {
+        id: doc.id,
+        displayName: String(data.displayName || data.email || "Utente"),
+        email: String(data.email || ""),
+        role: String(data.role || ""),
+        ...data
+      };
+    }).sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
     syncNotificationAutoPreferenceFromProfile();
     maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
@@ -20948,12 +21162,27 @@ function subscribeUsers() {
     renderImpianti();
     renderMap();
     checkAndSendHoursDeadlineAlerts();
-  }, (error) => {
-    console.error("Errore caricamento utenti:", error);
-    platformUsers = [];
-    renderChatRecipients();
-    renderHeaderActivitySummary();
-  });
+  };
+  runFirestoreGetWithRetry(source, { label: "LOAD UTENTI", timeoutMs: 9000, retries: 2 })
+    .then((snapshot) => {
+      applySnapshot(snapshot);
+      try {
+        unsubscribeUsers = source.onSnapshot(applySnapshot, (error) => {
+          logFirestoreError("LOAD UTENTI LISTENER", error);
+          platformUsers = [];
+          renderChatRecipients();
+          renderHeaderActivitySummary();
+        });
+      } catch (error) {
+        logFirestoreError("LOAD UTENTI LISTENER INIT", error);
+      }
+    })
+    .catch((error) => {
+      logFirestoreError("LOAD UTENTI", error);
+      platformUsers = [];
+      renderChatRecipients();
+      renderHeaderActivitySummary();
+    });
 }
 
 function subscribeProgrammazioni() {
@@ -23149,8 +23378,13 @@ function toIsoDate(value) {
 }
 
 async function loadFaqFromFirestore() {
+  if (!currentUser) return null;
   try {
-    const doc = await db.collection(HELP_CENTER_CONFIG_PATH.collection).doc(HELP_CENTER_CONFIG_PATH.doc).get();
+    const snapshot = await runFirestoreGetWithRetry(
+      db.collection(HELP_CENTER_CONFIG_PATH.collection).where(firebase.firestore.FieldPath.documentId(), "==", HELP_CENTER_CONFIG_PATH.doc),
+      { label: "LOAD HELP CENTER", timeoutMs: 9000, retries: 1 }
+    );
+    const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
     if (!doc.exists) return null;
     const data = normalizeFaqData(doc.data());
     faqDataset = data;

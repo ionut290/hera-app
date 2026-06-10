@@ -9004,3 +9004,35 @@ textarea:focus-visible {
     overflow: hidden;
   }
 }
+
+.startup-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef3fa 100%);
+  color: var(--text);
+}
+
+.startup-loading.hidden {
+  display: none !important;
+}
+
+.startup-loading-card {
+  display: grid;
+  gap: 8px;
+  min-width: min(280px, 100%);
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.startup-loading-card span {
+  color: var(--muted);
+  font-size: 0.95rem;
+}

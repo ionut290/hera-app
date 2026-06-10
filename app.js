@@ -1,22 +1,43 @@
+console.log("APP START");
+
+const firebaseConfig = window.firebaseConfig || {};
 const requiredFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "appId"];
-const missingFirebaseConfigKeys = requiredFirebaseConfigKeys.filter((key) => !String(window.firebaseConfig?.[key] || "").trim());
-if (missingFirebaseConfigKeys.length) {
-  console.error("Configurazione Firebase incompleta. Campi mancanti:", missingFirebaseConfigKeys);
+const missingFirebaseConfigKeys = requiredFirebaseConfigKeys.filter((key) => !String(firebaseConfig?.[key] || "").trim());
+let firebaseApp = null;
+let auth = null;
+let db = null;
+let functions = null;
+let firebaseInitError = null;
+
+try {
+  if (!window.firebase || typeof firebase.initializeApp !== "function") {
+    throw new Error("Firebase SDK non caricato o versione non compatibile.");
+  }
+  if (missingFirebaseConfigKeys.length) {
+    throw new Error(`Configurazione Firebase incompleta. Campi mancanti: ${missingFirebaseConfigKeys.join(", ")}`);
+  }
+
+  firebaseApp = firebase.apps && firebase.apps.length
+    ? firebase.app()
+    : firebase.initializeApp(firebaseConfig);
+  auth = typeof firebase.auth === "function" ? firebase.auth() : null;
+  db = typeof firebase.firestore === "function" ? firebase.firestore() : null;
+  functions = typeof firebase.functions === "function" ? firebase.functions() : null;
+
+  if (!auth || !db) {
+    throw new Error("Firebase Auth o Firestore non disponibili nel SDK caricato.");
+  }
+
+  console.log("FIREBASE INIT OK", {
+    appName: firebaseApp.name,
+    projectId: firebaseConfig?.projectId || "non impostato",
+    sdkVersion: firebase.SDK_VERSION || "non disponibile"
+  });
+  console.log("Firebase OK");
+} catch (error) {
+  firebaseInitError = error;
+  console.error("Firebase init error:", error);
 }
-
-const firebaseApp = firebase.apps && firebase.apps.length
-  ? firebase.app()
-  : firebase.initializeApp(firebaseConfig);
-
-console.log("Firebase inizializzato", {
-  appName: firebaseApp.name,
-  projectId: firebaseConfig?.projectId || "non impostato",
-  sdkVersion: firebase.SDK_VERSION || "non disponibile"
-});
-
-const auth = firebase.auth();
-const db = firebase.firestore();
-const functions = firebase.functions ? firebase.functions() : null;
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
@@ -136,7 +157,7 @@ function enableFirestorePersistence() {
 
 enableFirestorePersistence();
 
-if (firebase.messaging && typeof firebase.messaging === "function") {
+if (!firebaseInitError && window.firebase && firebase.messaging && typeof firebase.messaging === "function") {
   try {
     firebaseMessaging = firebase.messaging();
   } catch (error) {
@@ -1738,6 +1759,43 @@ initPwaCapabilities();
 initNativeGeofenceBridge();
 initWorkBannerObservers();
 
+function hideStartupLoading() {
+  document.getElementById("app-startup-loading")?.classList.add("hidden");
+}
+
+function runAfterFirstRender(callback) {
+  const runner = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(callback, { timeout: 2500 });
+    } else {
+      setTimeout(callback, 0);
+    }
+  };
+  window.requestAnimationFrame(() => setTimeout(runner, 0));
+}
+
+function runDeferredStartupTasks(tasks = []) {
+  runAfterFirstRender(() => {
+    tasks.forEach((task, index) => {
+      setTimeout(() => {
+        try {
+          task();
+        } catch (error) {
+          console.error("Errore task avvio differito:", error);
+        }
+      }, index * 75);
+    });
+  });
+}
+
+function withTimeout(promise, ms, timeoutMessage) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage || "Timeout caricamento dati")), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
 
 function getNativeHeraGeofencePlugin() {
   const plugins = window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins : null;
@@ -2303,10 +2361,19 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) runWhazzupPendingDoneSafetyCheck();
 });
 
-auth.onAuthStateChanged((user) => {
+console.log("AUTH CHECK START");
+
+if (!auth || firebaseInitError) {
+  console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
+  currentUser = null;
+  squadreLoadState = { status: "error", message: "Errore caricamento dati" };
+  if (typeof renderSquadre === "function") renderSquadre();
+  hideStartupLoading();
+} else {
+  auth.onAuthStateChanged((user) => {
   currentUser = user || null;
   const loggedIn = Boolean(user);
-  console.log(loggedIn ? "Utente loggato" : "Utente non loggato", {
+  console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
@@ -2396,42 +2463,42 @@ auth.onAuthStateChanged((user) => {
   resetDriveState();
   renderChat([]);
   applyRoute();
-  subscribeWorkBanner();
 
   if (loggedIn) {
-    startPresenceHeartbeat();
-    upsertCurrentPlatformUser();
-    initGeolocation({ forcePublishCurrent: true });
     subscribeCommesse();
-    subscribeChat();
-    subscribeAdminUsers();
-    subscribeUsers();
-    subscribeOperatorPositions();
-    subscribeDriveBridge();
-    subscribePersonale();
-    subscribeMezzi();
     subscribeSquadre();
-    subscribeResources();
-    subscribeGlobalCommesse();
-    subscribePrivateDocs();
-    subscribePosDocuments();
-    subscribeGpsRequests();
-    subscribeGlobalNotifications();
-    subscribeWorkBanner();
-    subscribeUserAlerts();
-    processPendingSheetExports();
-    startChatRetentionLoop();
-    startHoursDeadlineAlertLoop();
-    repairDuplicateHours().catch((error) => {
-      console.error("Riparazione automatica duplicati ore all'avvio non riuscita:", error);
-    });
+    runDeferredStartupTasks([
+      () => startPresenceHeartbeat(),
+      () => upsertCurrentPlatformUser(),
+      () => initGeolocation({ forcePublishCurrent: true }),
+      () => subscribeUsers(),
+      () => subscribeAdminUsers(),
+      () => subscribePersonale(),
+      () => subscribeMezzi(),
+      () => subscribeChat(),
+      () => subscribeOperatorPositions(),
+      () => subscribeDriveBridge(),
+      () => subscribeResources(),
+      () => subscribeGlobalCommesse(),
+      () => subscribePrivateDocs(),
+      () => subscribePosDocuments(),
+      () => subscribeGpsRequests(),
+      () => subscribeGlobalNotifications(),
+      () => subscribeWorkBanner(),
+      () => subscribeUserAlerts(),
+      () => processPendingSheetExports(),
+      () => startChatRetentionLoop(),
+      () => startHoursDeadlineAlertLoop(),
+      () => repairDuplicateHours().catch((error) => {
+        console.error("Riparazione automatica duplicati ore all'avvio non riuscita:", error);
+      })
+    ]);
   } else {
     markCurrentOperatorOffline();
     squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
     renderSquadre();
     if (ui.commesseLista) ui.commesseLista.innerHTML = "<p class='muted'>Fai login per vedere le commesse.</p>";
     if (ui.squadraCommessa) ui.squadraCommessa.innerHTML = "<option value=''>Login richiesto</option>";
-    subscribePosDocuments();
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
     closeUserAlertModal();
@@ -2442,12 +2509,16 @@ auth.onAuthStateChanged((user) => {
   syncPendingImpiantoActions();
   fetchWeather();
   renderNextActionCard();
+  console.log("APP READY");
+  hideStartupLoading();
 }, (error) => {
   console.error("Errore verifica login Firebase:", error);
   currentUser = null;
-  squadreLoadState = { status: "error", message: `Errore verifica login: ${getFirebaseErrorMessage(error) || "controlla la connessione e riprova."}` };
+  squadreLoadState = { status: "error", message: "Errore caricamento dati" };
   renderSquadre();
+  hideStartupLoading();
 });
+}
 
 function updateAdminControls() {
   const canManage = canManageData();
@@ -8823,71 +8894,81 @@ function stopDriveBridgeSubscription() {
 }
 
 function subscribeCommesse() {
+  if (!currentUser) {
+    commesseLoadState = { status: "auth-required", message: "Fai login per vedere le commesse." };
+    renderCommesseHomeList();
+    return;
+  }
+
   commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
   renderCommesseHomeList();
   startCommesseLoadTimeout();
 
   if (!validateFirebaseConfigForCommesse()) {
     clearCommesseLoadTimeout();
-    commesseLoadState = { status: "error", message: "Impossibile connettersi al database" };
+    commesseLoadState = { status: "error", message: "Errore caricamento dati" };
     loadCommesseFromLocalCache();
     refreshCommesseDependentUI(false);
     return;
   }
 
-  console.log("Query commesse avviata", { collection: "commesse", orderBy: "createdAt desc" });
-  try {
-    unsubscribeCommesse = db
-    .collection("commesse")
-    .orderBy("createdAt", "desc")
-    .onSnapshot((snapshot) => {
-      clearCommesseLoadTimeout();
-      const receivedCommesse = [];
-      commesseById = new Map();
+  const query = db.collection("commesse").orderBy("createdAt", "desc");
+  const applyCommesseSnapshot = (snapshot, { fromListener = false } = {}) => {
+    clearCommesseLoadTimeout();
+    const receivedCommesse = [];
+    commesseById = new Map();
 
-      snapshot.forEach((doc) => {
-        const commessa = { id: doc.id, ...(doc.data() || {}) };
-        receivedCommesse.push(commessa);
-        commesseById.set(doc.id, commessa);
+    snapshot.forEach((doc) => {
+      const commessa = { id: doc.id, ...(doc.data() || {}) };
+      receivedCommesse.push(commessa);
+      commesseById.set(doc.id, commessa);
+    });
+
+    if (!fromListener) console.log("Numero commesse trovate", snapshot.size);
+    saveCommesseLocalCache(receivedCommesse);
+    commesseLoadState = receivedCommesse.length
+      ? { status: "loaded", message: "" }
+      : { status: "empty", message: "Nessuna commessa disponibile" };
+
+    const routeCommessaId = parseCommessaHash().id;
+    const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
+    const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
+    refreshCommesseDependentUI(Boolean(currentUser));
+    if (!selectedCommessaId && shouldRestoreOpenCommessa) {
+      const restored = commesseById.get(activeStoredId);
+      if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
+    }
+    tryAutoOpenAssignedCommessaAtStartup();
+    renderNextActionCard();
+  };
+
+  console.log("Query commesse avviata", { collection: "commesse", orderBy: "createdAt desc", mode: "getDocs initial" });
+  withTimeout(query.get(), 8000, "Timeout caricamento commesse")
+    .then((snapshot) => {
+      applyCommesseSnapshot(snapshot);
+      runAfterFirstRender(() => {
+        if (!currentUser || unsubscribeCommesse) return;
+        try {
+          unsubscribeCommesse = query.onSnapshot((liveSnapshot) => {
+            applyCommesseSnapshot(liveSnapshot, { fromListener: true });
+          }, (error) => {
+            console.error("Errore caricamento commesse:", error);
+            loadCommesseFromLocalCache();
+            commesseLoadState = { status: "error", message: "Errore caricamento dati" };
+            refreshCommesseDependentUI(false);
+          });
+        } catch (error) {
+          console.error("Errore inizializzazione listener commesse:", error);
+        }
       });
-
-      console.log("Numero commesse trovate", snapshot.size);
-      console.log("Commesse ricevute:", receivedCommesse);
-      saveCommesseLocalCache(receivedCommesse);
-      commesseLoadState = receivedCommesse.length
-        ? { status: "loaded", message: "" }
-        : { status: "empty", message: "Nessuna commessa disponibile" };
-
-      const routeCommessaId = parseCommessaHash().id;
-      const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
-      const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
-      refreshCommesseDependentUI(Boolean(currentUser));
-      if (!selectedCommessaId && shouldRestoreOpenCommessa) {
-        const restored = commesseById.get(activeStoredId);
-        if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
-      }
-      tryAutoOpenAssignedCommessaAtStartup();
-      renderNextActionCard();
-    }, (error) => {
+    })
+    .catch((error) => {
       clearCommesseLoadTimeout();
       console.error("Errore caricamento commesse:", error);
       loadCommesseFromLocalCache();
-      commesseLoadState = {
-        status: "error",
-        message: getCommesseErrorMessage(error)
-      };
+      commesseLoadState = { status: "error", message: "Errore caricamento dati" };
       refreshCommesseDependentUI(false);
     });
-  } catch (error) {
-    clearCommesseLoadTimeout();
-    console.error("Errore inizializzazione query commesse:", error);
-    loadCommesseFromLocalCache();
-    commesseLoadState = {
-      status: "error",
-      message: `Errore inizializzazione commesse: ${getFirebaseErrorMessage(error) || "Firestore non disponibile."}`
-    };
-    refreshCommesseDependentUI(false);
-  }
 }
 
 function stopCommesseSubscription() {
@@ -16963,96 +17044,75 @@ function subscribeSquadre() {
   }
 
   if (!validateFirebaseConfigForCommesse()) {
-    squadreLoadState = { status: "error", message: "Impossibile connettersi a Firebase: configurazione incompleta." };
+    squadreLoadState = { status: "error", message: "Errore caricamento dati. Impossibile connettersi a Firebase: configurazione incompleta." };
     renderSquadre();
     return;
   }
 
+  const selectedDateKey = getActiveSquadreDateKey();
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
-  console.log("Query squadre avviata", {
-    collections: ["squadreCommesse", "squadreStorico", "appConfig/squadreView"],
+  console.log("LOAD SQUADRE START", {
+    collections: ["squadreStorico", "appConfig/squadreView"],
+    dateKey: selectedDateKey,
     uid: currentUser.uid
   });
 
-  try {
-    unsubscribeSquadre = db.collection("squadreCommesse").onSnapshot((snapshot) => {
-      squadreByCommessa = new Map();
-      snapshot.forEach((doc) => {
-        squadreByCommessa.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-      console.log("Numero squadre correnti trovate", snapshot.size);
-      renderSquadre();
-      updateCommessaDashboard();
-      renderCommesseHomeList();
-      autofillSquadraForm();
-      Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
-        applyHoursSuggestedOperators(card, { force: true });
-      });
-      checkAndSendHoursDeadlineAlerts();
-    }, (error) => {
+  const applySquadreSnapshot = (snapshot) => {
+    const historyForDate = new Map();
+    snapshot.forEach((doc) => {
+      const data = doc.data() || {};
+      const commessaId = String(data.commessaId || "").trim();
+      if (!commessaId) return;
+      historyForDate.set(commessaId, { id: doc.id, ...data, dateKey: data.dateKey || selectedDateKey });
+    });
+    squadreHistoryByDate.set(selectedDateKey, historyForDate);
+    squadreLoadState = { status: "loaded", message: "" };
+    console.log("LOAD SQUADRE OK numero:", historyForDate.size);
+    renderSquadre();
+    updateCommessaDashboard();
+    renderCommesseHomeList();
+    autofillSquadraForm();
+    tryAutoOpenAssignedCommessaAtStartup();
+    Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
+      applyHoursSuggestedOperators(card, { force: true });
+    });
+    checkAndSendHoursDeadlineAlerts();
+  };
+
+  withTimeout(
+    db.collection("squadreStorico").where("dateKey", "==", selectedDateKey).get(),
+    8000,
+    "Timeout caricamento squadre"
+  )
+    .then((snapshot) => {
       clearSquadreLoadTimeout();
-      console.error("Errore Firestore caricamento squadre correnti:", error);
-      squadreLoadState = { status: "error", message: `Errore caricamento squadre: ${getFirebaseErrorMessage(error) || "Firestore non disponibile."}` };
+      applySquadreSnapshot(snapshot);
+    })
+    .catch((error) => {
+      clearSquadreLoadTimeout();
+      console.error("LOAD SQUADRE ERROR:", error);
+      squadreLoadState = { status: "error", message: "Errore caricamento dati" };
       renderSquadre();
       renderCommesseHomeList();
     });
 
-    unsubscribeSquadreHistory = db.collection("squadreStorico").onSnapshot((snapshot) => {
-      clearSquadreLoadTimeout();
-      squadreHistoryByDate = new Map();
-      snapshot.forEach((doc) => {
-        const data = doc.data() || {};
-        if (!data.dateKey) return;
-        if (!squadreHistoryByDate.has(data.dateKey)) {
-          squadreHistoryByDate.set(data.dateKey, new Map());
-        }
-        squadreHistoryByDate.get(data.dateKey).set(data.commessaId, { id: doc.id, ...data });
-      });
-      const selectedDateKey = getActiveSquadreDateKey();
-      const foundForSelectedDate = selectedDateKey ? (squadreHistoryByDate.get(selectedDateKey)?.size || 0) : snapshot.size;
-      console.log("Numero squadre trovate", {
-        totaleStorico: snapshot.size,
-        giorno: selectedDateKey || "non selezionato",
-        nelGiorno: foundForSelectedDate
-      });
-      squadreLoadState = { status: "loaded", message: "" };
-      renderSquadre();
-      updateCommessaDashboard();
-      renderCommesseHomeList();
-      tryAutoOpenAssignedCommessaAtStartup();
-      Array.from(ui.hoursCommesseList?.querySelectorAll(".hours-commessa-card") || []).forEach((card) => {
-        applyHoursSuggestedOperators(card, { force: true });
-      });
-    }, (error) => {
-      clearSquadreLoadTimeout();
-      console.error("Errore Firestore caricamento squadre storico:", error);
-      squadreLoadState = { status: "error", message: `Errore caricamento squadre: ${getFirebaseErrorMessage(error) || "Firestore non disponibile."}` };
-      renderSquadre();
-      renderCommesseHomeList();
-    });
-
-    unsubscribeSquadreViewConfig = db.collection("appConfig").doc("squadreView").onSnapshot((doc) => {
+  db.collection("appConfig").doc("squadreView").get()
+    .then((doc) => {
       const data = doc.exists ? doc.data() || {} : {};
-      sharedSquadreDateKey = String(data.selectedDateKey || "").trim();
-      manualSquadreFilterDateKey = sharedSquadreDateKey;
+      const sharedDate = String(data.selectedDateKey || "").trim();
       sharedSquadreViewConfigLoaded = true;
-      syncSquadreDateInputs();
-      renderSquadre();
-      updateCommessaDashboard();
-      tryAutoOpenAssignedCommessaAtStartup();
-    }, (error) => {
+      if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
+        sharedSquadreDateKey = sharedDate;
+        syncSquadreDateInputs();
+        subscribeSquadre();
+      }
+    })
+    .catch((error) => {
       console.error("Errore Firestore caricamento giorno squadre condiviso:", error);
       sharedSquadreViewConfigLoaded = true;
-      tryAutoOpenAssignedCommessaAtStartup();
     });
-  } catch (error) {
-    clearSquadreLoadTimeout();
-    console.error("Errore Firestore inizializzazione query squadre:", error);
-    squadreLoadState = { status: "error", message: `Errore inizializzazione query squadre: ${getFirebaseErrorMessage(error) || "Firestore non disponibile."}` };
-    renderSquadre();
-  }
 }
 
 function stopPersonaleSubscription() {
@@ -17535,6 +17595,7 @@ function setSquadreDateOverride(dateKey) {
   sharedSquadreDateKey = selectedDateKey;
   syncSquadreDateInputs();
   renderSquadre();
+  if (currentUser) subscribeSquadre();
   persistSharedSquadreDate(manualSquadreFilterDateKey).catch((error) => {
     console.error("Errore salvataggio giorno squadre condiviso:", error);
   });
@@ -17551,6 +17612,7 @@ function clearManualSquadreFilterDate() {
     console.error("Errore reset giorno squadre condiviso:", error);
   });
   initializeAutomaticSquadreDate();
+  if (currentUser) subscribeSquadre();
 }
 
 
@@ -17638,7 +17700,8 @@ function renderSquadre() {
     return;
   }
   if (squadreLoadState.status === "error") {
-    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Errore caricamento squadre da Firebase.")}</p>`;
+    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Errore caricamento dati")}</p><button id='squadre-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+    ui.squadreLista.querySelector("#squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
   const selectedDateKey = getActiveSquadreDateKey();

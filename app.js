@@ -4986,10 +4986,10 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     const hasPendingApprovals = (Array.isArray(reports) ? reports : [])
       .some((report) => String(report.sourceCollection || "oreReports") === "oreApprovalRequests");
     ui.hoursTableFeedback.textContent = hasPendingApprovals
-      ? "Mostro anche le ore da confermare: sono evidenziate in giallo finché l'admin non le approva."
+      ? "Mostro anche vecchie richieste da confermare: sono evidenziate in giallo finché l'admin non le approva. Le nuove ore vengono salvate subito."
       : canManageData()
         ? "Clicca un valore per modificare o eliminare la registrazione ore."
-        : "Vista sola lettura: solo l'amministratore può modificare o eliminare le ore.";
+        : "Ore salvate automaticamente: solo l'amministratore può modificare o eliminare le ore.";
   }
 
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn").forEach((btn) => {
@@ -6164,9 +6164,7 @@ function tryAutoOpenAssignedCommessaAtStartup() {
 }
 
 function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
-  if (!currentUser) return false;
-  if (canManageData()) return true;
-  return Boolean(getCurrentUserSquadraAssignment(commessaId, dateValue));
+  return Boolean(currentUser && String(commessaId || "").trim());
 }
 
 function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
@@ -6360,8 +6358,11 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   if (!dateKey || !hasAssignedSquadra) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   const squadraIndex = assignment?.squadraIndex || "";
-  if (!canManageData() && !assignment) return null;
-  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
+  if (assignment) {
+    if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
+  } else if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) {
+    return null;
+  }
   return { dateKey, assignment, squadData, squadRows, squadraIndex };
 }
 
@@ -6440,13 +6441,9 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     return;
   }
   const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
-  if (!canCurrentUserInsertHoursForCommessa(id, targetDateValue)) {
-    alert("Permesso negato: puoi inserire ore solo per le commesse dove sei assegnato in squadra.");
-    return;
-  }
   const assignment = getCurrentUserSquadraAssignment(id, targetDateValue);
   const squadraIndex = assignment?.squadraIndex || "";
-  if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue, squadraIndex)) {
+  if (assignment && hasHoursRecordForCommessaDateSquadra(id, targetDateValue, squadraIndex)) {
     alert("Le ore per oggi sono già state inserite e sono visibili in Visualizza ore.");
     renderSquadre();
     return;
@@ -7563,14 +7560,14 @@ async function finalizeHoursReport(event) {
     createdByUid: currentUser.uid,
     createdByName: currentUser.displayName || currentUser.email || "Operatore",
     createdByEmail: currentUser.email || "",
+    approvalStatus: "approved",
+    savedWithoutAdminApproval: true,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  if (!canManageData()) {
-    const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
-    if (unauthorizedEntry) {
-      ui.hoursFeedback.textContent = `Permesso negato: puoi inserire ore solo per le commesse dove sei assegnato in squadra (${unauthorizedEntry.commessaName || "Commessa"}).`;
-      return;
-    }
+  const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
+  if (unauthorizedEntry) {
+    ui.hoursFeedback.textContent = `Permesso negato: commessa non valida (${unauthorizedEntry.commessaName || "Commessa"}).`;
+    return;
   }
   hoursSubmitInFlight = true;
   ui.hoursFinalizeBtn.disabled = true;
@@ -7596,7 +7593,7 @@ async function finalizeHoursReport(event) {
     await notifyAdminsHoursInsertedNoApproval(reportRef.id, payload);
 
     setHoursFinalizeButtonText("saved");
-    ui.hoursFeedback.textContent = `Ore salvate con successo (report ${reportRef.id}). Avviso inviato in chat agli amministratori.`;
+    ui.hoursFeedback.textContent = `Ore salvate automaticamente con successo (report ${reportRef.id}). Non serve conferma dell'amministratore.`;
     ui.hoursCommesseList.innerHTML = "";
     addHoursCommessaBlock();
     setHoursFinalizeLocked(true);

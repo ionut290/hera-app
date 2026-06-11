@@ -854,6 +854,7 @@ let mezziLoadState = { status: "idle", message: "" };
 let startupCoreCollectionsLoadState = { status: "idle", message: "" };
 let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
+let latestSquadraAutofillRequestId = 0;
 let squadreLoadState = { status: "idle", message: "" };
 let squadreLoadTimeout = null;
 let manualSquadreFilterDateKey = "";
@@ -1561,6 +1562,7 @@ ui.personaleShowAllBtn?.addEventListener("click", () => {
 ui.mezziForm?.addEventListener("submit", addMezzo);
 ui.squadraForm?.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa?.addEventListener("change", autofillSquadraForm);
+ui.squadraRiferimento?.addEventListener("change", autofillSquadraForm);
 ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
@@ -17520,18 +17522,59 @@ async function deleteMezzo(id, nome) {
   await db.collection("mezzi").doc(id).delete();
 }
 
-function autofillSquadraForm() {
+async function autofillSquadraForm() {
+  const requestId = ++latestSquadraAutofillRequestId;
   const commessaId = ui.squadraCommessa.value;
+  setDefaultSquadraCompositionDate();
   if (!commessaId) {
     ui.squadraRows.innerHTML = "";
-    setDefaultSquadraCompositionDate();
     addSquadraRow();
+    updateSquadraAutofillHint("");
     return;
   }
 
-  const data = squadreByCommessa.get(commessaId) || {};
-  setDefaultSquadraCompositionDate();
-  setSquadraRowsFromData(data);
+  const dateKey = ui.squadraRiferimento?.value || getNextDayDateKey();
+  const previousData = await findLatestPreviousSquadraComposition(commessaId, dateKey);
+  if (requestId !== latestSquadraAutofillRequestId || ui.squadraCommessa.value !== commessaId || ui.squadraRiferimento?.value !== dateKey) return;
+
+  setSquadraRowsFromData(previousData || {});
+  updateSquadraAutofillHint(previousData
+    ? `Modulo precompilato dall'ultima composizione salvata per questa commessa (${formatDateKeyForDisplay(previousData.dateKey || previousData.riferimentoData)}). La data resta ${formatDateKeyForDisplay(dateKey)}: salva solo quando hai finito le correzioni.`
+    : "Nessuna composizione precedente trovata per questa commessa: campi vuoti.");
+}
+
+async function findLatestPreviousSquadraComposition(commessaId, dateKey) {
+  if (!currentUser || !commessaId || !dateKey || !db) return null;
+  try {
+    const snapshot = await runFirestoreGetWithRetry(db.collection("squadreStorico").where("commessaId", "==", commessaId), {
+      label: "LOAD PREVIOUS SQUADRA",
+      timeoutMs: 9000,
+      retries: 1
+    });
+    let latest = null;
+    snapshot.forEach((doc) => {
+      const row = normalizeSquadraStoricoDocument(doc);
+      if (!row.dateKey || row.dateKey >= dateKey) return;
+      const rows = Array.isArray(row.squadre) ? row.squadre : getLegacySquadreRows(row);
+      if (!rows.some(isSquadraRowFilled)) return;
+      if (!latest || row.dateKey > latest.dateKey) latest = row;
+    });
+    return latest;
+  } catch (error) {
+    logFirestoreError("LOAD PREVIOUS SQUADRA", error, { commessaId, dateKey });
+    updateSquadraAutofillHint("Non riesco a caricare l'ultima composizione precedente: puoi compilare manualmente o riprovare cambiando commessa.");
+    return null;
+  }
+}
+
+function formatDateKeyForDisplay(dateKey) {
+  if (!dateKey) return "data non indicata";
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+}
+
+function updateSquadraAutofillHint(message) {
+  if (!ui.squadraHint || !canManageData()) return;
+  ui.squadraHint.textContent = message || "Usa “+ Persona” e “+ Mezzo”: il nuovo campo resta sulla stessa riga del precedente finché c'è spazio.";
 }
 
 function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", impianti: "" }) {

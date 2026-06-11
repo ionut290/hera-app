@@ -6356,13 +6356,9 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
   const hasAssignedSquadra = squadRows.some(isSquadraRowFilled);
   if (!dateKey || !hasAssignedSquadra) return null;
+  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey)) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   const squadraIndex = assignment?.squadraIndex || "";
-  if (assignment) {
-    if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey, squadraIndex)) return null;
-  } else if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) {
-    return null;
-  }
   return { dateKey, assignment, squadData, squadRows, squadraIndex };
 }
 
@@ -6441,10 +6437,8 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     return;
   }
   const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
-  const assignment = getCurrentUserSquadraAssignment(id, targetDateValue);
-  const squadraIndex = assignment?.squadraIndex || "";
-  if (assignment && hasHoursRecordForCommessaDateSquadra(id, targetDateValue, squadraIndex)) {
-    alert("Le ore per oggi sono già state inserite e sono visibili in Visualizza ore.");
+  if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue)) {
+    alert("Le ore per questa commessa sono già state inserite e sono visibili in Visualizza ore.");
     renderSquadre();
     return;
   }

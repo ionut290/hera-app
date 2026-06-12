@@ -1133,7 +1133,8 @@ textarea:focus-visible {
 }
 
 .squadra-personale-list,
-.squadra-mezzi-list {
+.squadra-mezzi-list,
+.squadra-impianti-list {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -9035,4 +9036,42 @@ textarea:focus-visible {
 .startup-loading-card span {
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.squadra-edit-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.squadra-edit-link:hover,
+.squadra-edit-link:focus-visible {
+  color: var(--primary);
+  outline: none;
+}
+
+.squadra-feedback {
+  min-height: 1.3em;
+  font-weight: 700;
+}
+
+.squadra-feedback[data-type="success"] {
+  color: #15803d;
+}
+
+.squadra-feedback[data-type="error"] {
+  color: #b91c1c;
+}
+
+.squadra-row-focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }

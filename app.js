@@ -462,6 +462,7 @@ const ui = {
   squadraRiferimento: document.getElementById("squadra-riferimento"),
   squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
+  squadraFeedback: document.getElementById("squadra-feedback"),
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
   toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
@@ -17595,6 +17596,33 @@ function updateSquadraAutofillHint(message) {
   ui.squadraHint.textContent = message || "Usa “+ Persona” e “+ Mezzo”: il nuovo campo resta sulla stessa riga del precedente finché c'è spazio.";
 }
 
+function setSquadraFeedback(message, type = "info") {
+  if (!ui.squadraFeedback) return;
+  ui.squadraFeedback.textContent = message || "";
+  ui.squadraFeedback.dataset.type = type;
+}
+
+function openSquadraCompositionEditor(commessaId, dateKey, focusIndex = 0) {
+  if (!canManageData()) {
+    alert("Solo l'admin può modificare la composizione squadre.");
+    return;
+  }
+  if (!commessaId) return;
+  openManagementPanel("squadre");
+  if (ui.squadraCommessa) ui.squadraCommessa.value = commessaId;
+  if (ui.squadraRiferimento) ui.squadraRiferimento.value = dateKey || getActiveSquadreDateKey() || getNextDayDateKey();
+  const storicoDelGiorno = squadreHistoryByDate.get(ui.squadraRiferimento?.value || dateKey) || new Map();
+  setSquadraRowsFromData(storicoDelGiorno.get(commessaId) || {});
+  setSquadraFeedback("Composizione aperta: modifica operatori o mezzi e premi “Fine” per salvare.", "info");
+  setTimeout(() => {
+    const rows = Array.from(ui.squadraRows?.querySelectorAll(".squadra-row") || []);
+    const targetRow = rows[Math.max(0, Math.min(Number(focusIndex) || 0, rows.length - 1))];
+    (targetRow || ui.squadraForm)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    targetRow?.classList.add("squadra-row-focus");
+    setTimeout(() => targetRow?.classList.remove("squadra-row-focus"), 1800);
+  }, 80);
+}
+
 function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
   const personaleValues = parseMultiEntryValue(rowData.personale);
@@ -17605,6 +17633,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   row.innerHTML = `
     <div class="squadra-row-head">
       <strong>Squadra ${index}</strong>
+      <button type="button" class="btn btn-small btn-danger remove-squadra-row-btn">Elimina squadra</button>
     </div>
     <label class="squadra-simple-field">Caposquadra
       <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
@@ -17637,6 +17666,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   const addPersonaleBtn = row.querySelector(".add-personale-input-btn");
   const addMezzoBtn = row.querySelector(".add-mezzo-input-btn");
   const addImpiantoBtn = row.querySelector(".add-impianto-input-btn");
+  const removeRowBtn = row.querySelector(".remove-squadra-row-btn");
 
   const addPersonaleInput = (value = "") => addMultiEntryInput({
     container: personaleList,
@@ -17667,6 +17697,12 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   addPersonaleBtn.addEventListener("click", () => addPersonaleInput(""));
   addMezzoBtn.addEventListener("click", () => addMezzoInput(""));
   addImpiantoBtn.addEventListener("click", () => addImpiantoInput(""));
+  removeRowBtn?.addEventListener("click", () => {
+    row.remove();
+    renumberSquadraRows();
+    updateEmptySquadraRowsHint();
+    setSquadraFeedback("Squadra rimossa dal modulo: premi “Fine” per salvare la modifica.", "info");
+  });
   ui.squadraRows.appendChild(row);
   updateAdminControls();
 }
@@ -17805,17 +17841,21 @@ function findDuplicateSquadraRows(rows) {
 
 async function saveSquadraComposition(event) {
   event.preventDefault();
+  setSquadraFeedback("Salvataggio composizione in corso...", "info");
   if (!canManageData()) {
+    setSquadraFeedback("Solo l'admin può salvare la composizione squadre.", "error");
     alert("Solo ionut29019@gmail.com può compilare la composizione squadre.");
     return;
   }
   const commessaId = ui.squadraCommessa.value;
   if (!commessaId) {
+    setSquadraFeedback("Seleziona una commessa prima di premere Fine.", "error");
     alert("Seleziona una commessa.");
     return;
   }
   const dateKey = ui.squadraRiferimento.value || new Date().toISOString().slice(0, 10);
   if (!dateKey) {
+    setSquadraFeedback("Seleziona una data per la composizione squadre.", "error");
     alert("Seleziona una data per la composizione squadre.");
     return;
   }
@@ -17827,6 +17867,7 @@ async function saveSquadraComposition(event) {
   const duplicateRows = findDuplicateSquadraRows(squadreRows);
   if (duplicateRows.length) {
     const dup = duplicateRows[0];
+    setSquadraFeedback("Duplicato bloccato: controlla le squadre indicate.", "error");
     alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
     return;
   }
@@ -17864,6 +17905,7 @@ async function saveSquadraComposition(event) {
     });
   } catch (error) {
     if (error?.message === "DUPLICATE_SQUADRA") {
+      setSquadraFeedback("Duplicato bloccato: esiste già una squadra identica.", "error");
       alert("Duplicato bloccato: esiste già una squadra con stessa commessa, stessa data, stesso caposquadra e stessi operatori.");
       return;
     }
@@ -17871,6 +17913,7 @@ async function saveSquadraComposition(event) {
   }
   renderCommesseHomeList();
   renderSquadre();
+  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).`, "success");
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -17906,6 +17949,7 @@ async function deleteSquadraCompositionForDate(commessaId, dateKey) {
   ui.squadraCalendarDate.value = dateKey;
   renderCommesseHomeList();
   renderSquadre();
+  setSquadraFeedback(`✅ Composizione eliminata per ${commessaNome} (${dateLabel}).`, "success");
 }
 
 function getDateKeyFromLocalDate(date) {
@@ -18114,7 +18158,7 @@ function renderSquadre() {
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
+      return `<div class="squadra-saved-row" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
     const warningMarkup = warningIssues.length
@@ -18143,6 +18187,13 @@ function renderSquadre() {
       if (event.target.closest("button, a, input, select, textarea")) return;
       event.preventDefault();
       openCommessaFromSquadre(commessa);
+    });
+    item.querySelectorAll(".squadra-edit-link").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openSquadraCompositionEditor(btn.dataset.commessaId || commessa.id, btn.dataset.dateKey || selectedDateKey, Number(btn.dataset.squadraIndex) || 0);
+      });
     });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));

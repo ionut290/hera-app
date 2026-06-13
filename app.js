@@ -691,6 +691,10 @@ const ui = {
   impiantoEditCloseBtn: document.getElementById("impianto-edit-close-btn"),
   impiantoEditForm: document.getElementById("impianto-edit-form"),
   impiantoEditFeedback: document.getElementById("impianto-edit-feedback"),
+  impiantoAlertModal: document.getElementById("impianto-alert-modal"),
+  impiantoAlertTitle: document.getElementById("impianto-alert-title"),
+  impiantoAlertBody: document.getElementById("impianto-alert-body"),
+  impiantoAlertContinueBtn: document.getElementById("impianto-alert-continue-btn"),
   impiantoReportModal: document.getElementById("impianto-report-modal"),
   impiantoReportCloseBtn: document.getElementById("impianto-report-close-btn"),
   impiantoReportForm: document.getElementById("impianto-report-form"),
@@ -707,6 +711,7 @@ const ui = {
   editFrequenzaAnnua: document.getElementById("edit-frequenza-annua"),
   editTipologiaIntervento: document.getElementById("edit-tipologia-intervento"),
   editLavorazioniRichieste: document.getElementById("edit-lavorazioni-richieste"),
+  editNoteImpianto: document.getElementById("edit-note-impianto"),
   editSfalci: document.getElementById("edit-sfalci"),
   editGpsY: document.getElementById("edit-gps-y"),
   editGpsX: document.getElementById("edit-gps-x"),
@@ -11805,6 +11810,8 @@ function combineImpiantiForView(impianti) {
         doneBy: doneAtMs >= resetAtMs ? (item.doneBy || "") : "",
         resetAt: item.resetAt || null,
         resetBy: item.resetBy || "",
+        hasNote: Boolean(item.hasNote) && Boolean(String(item.noteImpianto || "").trim()),
+        hasExtraWork: Boolean(item.hasExtraWork) || hasStraordinario(item.codicePrezzo),
         sourceIds: [item.id]
       });
       return;
@@ -11817,6 +11824,7 @@ function combineImpiantiForView(impianti) {
     existing.voceRiferimento = mergeMultiValue(existing.voceRiferimento, item.voceRiferimento);
     existing.tipologiaIntervento = mergeMultiValue(existing.tipologiaIntervento, item.tipologiaIntervento);
     existing.lavorazioniRichieste = mergeMultiValue(existing.lavorazioniRichieste, item.lavorazioniRichieste);
+    existing.noteImpianto = mergeMultiValue(existing.noteImpianto, item.noteImpianto);
     existing.frequenzaAnnua = mergeMultiValue(existing.frequenzaAnnua, item.frequenzaAnnua);
     if (existing.areaMq == null && item.areaMq != null) existing.areaMq = item.areaMq;
     if (existing.sfalciMq == null && item.sfalciMq != null) existing.sfalciMq = item.sfalciMq;
@@ -11825,6 +11833,8 @@ function combineImpiantiForView(impianti) {
 
     existing.hasOrdinario = hasOrdinario(existing.codicePrezzo);
     existing.hasStraordinario = hasStraordinario(existing.codicePrezzo);
+    existing.hasNote = Boolean(existing.hasNote || item.hasNote) && Boolean(String(existing.noteImpianto || "").trim());
+    existing.hasExtraWork = Boolean(existing.hasExtraWork || item.hasExtraWork) || existing.hasStraordinario;
     existing.tipoManutenzione = classifyTipoManutenzione(existing.codicePrezzo);
     const itemDone = isImpiantoDoneState(item);
     const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
@@ -12431,6 +12441,8 @@ function renderImpianti() {
     const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
+    const hasNoteFlag = Boolean(impianto.hasNote);
+    const hasExtraWorkFlag = Boolean(impianto.hasExtraWork);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
     const mainColumn = document.createElement("div");
     mainColumn.className = "impianto-main-column impianto-left";
@@ -12462,6 +12474,8 @@ function renderImpianti() {
       <small class="impianto-summary-meta">
         ${impianto.done ? `<span class="badge badge-done-list">✅ Nei FATTI</span>` : ""}
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
+        ${hasNoteFlag ? `<span class="badge badge-impianto-note">📝 Nota</span>` : ""}
+        ${hasExtraWorkFlag ? `<span class="badge badge-extra-work">🛠️ Lavori straordinari</span>` : ""}
         ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
         ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
         <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
@@ -12487,6 +12501,8 @@ function renderImpianti() {
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
+      ${hasNoteFlag ? `<p><b>Nota impianto:</b> ${escapeHTML(impianto.noteImpianto || "-")}</p>` : ""}
+      ${hasExtraWorkFlag ? `<p><b>Lavori straordinari aperti:</b> ${escapeHTML(getImpiantoExtraWorkText(impianto) || "-")}</p>` : ""}
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       ${impianto.done ? `<p><b>Data e ora fatto:</b> ${escapeHTML(doneDateTimeLabel)}</p>` : ""}
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
@@ -12685,6 +12701,7 @@ function openImpiantoEditor(impianto) {
   ui.editFrequenzaAnnua.value = impianto.frequenzaAnnua || "";
   ui.editTipologiaIntervento.value = impianto.tipologiaIntervento || "";
   ui.editLavorazioniRichieste.value = impianto.lavorazioniRichieste || "";
+  if (ui.editNoteImpianto) ui.editNoteImpianto.value = impianto.noteImpianto || "";
   ui.editSfalci.value = impianto.sfalci || (impianto.areaMq == null ? "" : formatAreaMqValue(impianto.areaMq));
   ui.editGpsY.value = impianto.gpsY == null ? "" : String(impianto.gpsY);
   ui.editGpsX.value = impianto.gpsX == null ? "" : String(impianto.gpsX);
@@ -12711,6 +12728,9 @@ async function saveImpiantoEdits(event) {
     return;
   }
 
+  const noteImpianto = String(ui.editNoteImpianto?.value || "").trim();
+  const lavoriStraordinari = String(ui.editLavorazioniRichieste.value || "").trim();
+  const codicePrezzo = String(ui.editCodicePrezzo.value || "").trim();
   const patch = {
     distretto: String(ui.editDistretto.value || "").trim(),
     idSap: String(ui.editIdSap.value || "").trim(),
@@ -12718,17 +12738,20 @@ async function saveImpiantoEdits(event) {
     comune: String(ui.editComune.value || "").trim(),
     indirizzo: String(ui.editIndirizzo.value || "").trim(),
     voceRiferimento: String(ui.editVoceRiferimento.value || "").trim(),
-    codicePrezzo: String(ui.editCodicePrezzo.value || "").trim(),
+    codicePrezzo,
     frequenzaAnnua: String(ui.editFrequenzaAnnua.value || "").trim(),
     tipologiaIntervento: String(ui.editTipologiaIntervento.value || "").trim(),
-    lavorazioniRichieste: String(ui.editLavorazioniRichieste.value || "").trim(),
+    lavorazioniRichieste: lavoriStraordinari,
+    noteImpianto,
+    hasNote: Boolean(noteImpianto),
+    hasExtraWork: hasStraordinario(codicePrezzo),
     sfalci: String(ui.editSfalci.value || "").trim(),
     areaMq: parseAreaMqValue(ui.editSfalci.value),
     gpsY,
     gpsX,
-    hasOrdinario: hasOrdinario(ui.editCodicePrezzo.value || ""),
-    hasStraordinario: hasStraordinario(ui.editCodicePrezzo.value || ""),
-    tipoManutenzione: classifyTipoManutenzione(ui.editCodicePrezzo.value || "")
+    hasOrdinario: hasOrdinario(codicePrezzo),
+    hasStraordinario: hasStraordinario(codicePrezzo),
+    tipoManutenzione: classifyTipoManutenzione(codicePrezzo)
   };
 
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
@@ -16393,6 +16416,55 @@ Vuoi continuare la navigazione?`));
   });
 }
 
+function getImpiantoExtraWorkText(impianto) {
+  return String(impianto?.extraWorkText || impianto?.lavorazioniRichieste || impianto?.tipologiaIntervento || "").trim();
+}
+
+function getImpiantoNavigationAlerts(impianto) {
+  const alerts = [];
+  const noteText = String(impianto?.noteImpianto || "").trim();
+  if (impianto?.hasNote && noteText) alerts.push({ type: "note", title: "Attenzione", text: noteText });
+  const extraText = getImpiantoExtraWorkText(impianto);
+  if (impianto?.hasExtraWork && extraText) alerts.push({ type: "extra", title: "Attenzione lavori straordinari", text: extraText });
+  return alerts;
+}
+
+function confirmImpiantoNavigationAlerts(impianto) {
+  const alerts = getImpiantoNavigationAlerts(impianto);
+  if (!alerts.length) return Promise.resolve(true);
+
+  if (!ui.impiantoAlertModal || !ui.impiantoAlertBody || !ui.impiantoAlertContinueBtn) {
+    return Promise.resolve(window.confirm(alerts.map((alertItem) => `${alertItem.title}\n${alertItem.text}`).join("\n\n")));
+  }
+
+  ui.impiantoAlertTitle.textContent = alerts.length === 1 ? alerts[0].title : "Attenzione";
+  ui.impiantoAlertBody.innerHTML = alerts.map((alertItem) => {
+    const heading = alerts.length > 1 && alertItem.type === "extra"
+      ? `<h3>${escapeHTML(alertItem.title)}</h3>`
+      : "";
+    return `
+      <section class="impianto-alert-section">
+        ${heading}
+        <p>${escapeHTML(alertItem.text)}</p>
+      </section>
+    `;
+  }).join("");
+  ui.impiantoAlertModal.classList.remove("hidden");
+  ui.impiantoAlertModal.setAttribute("aria-hidden", "false");
+  ui.impiantoAlertContinueBtn.focus();
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      ui.impiantoAlertModal.classList.add("hidden");
+      ui.impiantoAlertModal.setAttribute("aria-hidden", "true");
+      ui.impiantoAlertContinueBtn.removeEventListener("click", onContinue);
+      resolve(true);
+    };
+    const onContinue = () => cleanup();
+    ui.impiantoAlertContinueBtn.addEventListener("click", onContinue, { once: true });
+  });
+}
+
 async function navigateToImpianto(impianto) {
   if (!selectedCommessaId || !impianto.id) return;
 
@@ -16402,6 +16474,9 @@ async function navigateToImpianto(impianto) {
     alert("Coordinate mancanti per questo impianto.");
     return;
   }
+
+  const canContinueImpiantoAlerts = await confirmImpiantoNavigationAlerts(impianto);
+  if (!canContinueImpiantoAlerts) return;
 
   const canContinueNavigation = await confirmNavigationWeatherIfNeeded(impianto);
   if (!canContinueNavigation) return;

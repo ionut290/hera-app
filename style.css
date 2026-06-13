@@ -9075,3 +9075,32 @@ textarea:focus-visible {
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
+
+.impianto-alert-body {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.impianto-alert-section {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 251, 235, 0.95);
+  padding: 12px;
+}
+
+.impianto-alert-section h3 {
+  margin: 0 0 6px;
+  color: #92400e;
+}
+
+.impianto-alert-section p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.badge-impianto-note,
+.badge-extra-work {
+  background: #fef3c7;
+  color: #92400e;
+}

@@ -802,6 +802,18 @@
     </div>
   </section>
 
+  <section id="impianto-alert-modal" class="chat-modal impianto-alert-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="impianto-alert-title">
+    <div class="chat-modal-content impianto-alert-content">
+      <div class="chat-modal-header">
+        <h2 id="impianto-alert-title">Attenzione</h2>
+      </div>
+      <div id="impianto-alert-body" class="impianto-alert-body"></div>
+      <div class="navigation-weather-warning-actions">
+        <button id="impianto-alert-continue-btn" class="btn btn-primary" type="button">Confermo, continuo a navigare</button>
+      </div>
+    </div>
+  </section>
+
   <section id="navigation-weather-warning-modal" class="chat-modal navigation-weather-warning-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="navigation-weather-warning-title">
     <div class="chat-modal-content navigation-weather-warning-content">
       <div class="chat-modal-header navigation-weather-warning-header">
@@ -1117,6 +1129,7 @@
         <input id="edit-frequenza-annua" type="text" placeholder="Frequenza annua">
         <input id="edit-tipologia-intervento" type="text" placeholder="Tipologia intervento">
         <input id="edit-lavorazioni-richieste" type="text" placeholder="Lavorazioni richieste">
+        <textarea id="edit-note-impianto" placeholder="Nota impianto"></textarea>
         <input id="edit-sfalci" type="text" placeholder="Sfalci">
         <input id="edit-gps-y" type="text" inputmode="decimal" placeholder="GPS Y (lat)">
         <input id="edit-gps-x" type="text" inputmode="decimal" placeholder="GPS X (lng)">

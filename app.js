@@ -12480,12 +12480,15 @@ function renderImpianti() {
 
     const details = document.createElement("div");
     details.className = "impianto-details";
+    const doneInfo = formatDoneDateTime(impianto.doneAt);
+    const doneDateTimeLabel = doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`;
     details.innerHTML = `
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
+      ${impianto.done ? `<p><b>Data e ora fatto:</b> ${escapeHTML(doneDateTimeLabel)}</p>` : ""}
       <p><b>Eseguito da:</b> ${escapeHTML(impianto.doneBy || "-")}</p>
     `;
     if (linkedNotes.length) {

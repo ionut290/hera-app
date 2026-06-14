@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="auth-pending">
 
   <div id="app-startup-loading" class="startup-loading" role="status" aria-live="polite">
     <div class="startup-loading-card">
@@ -48,6 +48,16 @@
   </aside>
 
   <div id="menu-overlay" class="menu-overlay hidden"></div>
+
+  <section id="auth-gate" class="auth-gate hidden" aria-live="polite">
+    <div class="auth-gate-card">
+      <div class="auth-gate-logo">👤</div>
+      <p class="auth-gate-kicker">Varga Cantieri</p>
+      <h1>Login richiesto</h1>
+      <p id="auth-gate-message" class="muted">Accedi con il tuo account Google per utilizzare l'app.</p>
+      <button id="auth-gate-login-btn" class="btn btn-primary" type="button">Login con Google</button>
+    </div>
+  </section>
 
   <main class="container">
     <section id="home-page">

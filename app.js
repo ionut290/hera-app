@@ -270,6 +270,9 @@ const ui = {
   menuCloseBtn: document.getElementById("menu-close-btn"),
   sideMenu: document.getElementById("side-menu"),
   menuOverlay: document.getElementById("menu-overlay"),
+  authGate: document.getElementById("auth-gate"),
+  authGateLoginBtn: document.getElementById("auth-gate-login-btn"),
+  authGateMessage: document.getElementById("auth-gate-message"),
   loginBtn: document.getElementById("login-btn"),
   switchAccountBtn: document.getElementById("switch-account-btn"),
   logoutBtn: document.getElementById("logout-btn"),
@@ -1457,6 +1460,7 @@ window.addEventListener("resize", () => {
 });
 
 ui.loginBtn?.addEventListener("click", loginWithGoogle);
+ui.authGateLoginBtn?.addEventListener("click", loginWithGoogle);
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
@@ -1807,6 +1811,29 @@ initWorkBannerObservers();
 
 function hideStartupLoading() {
   document.getElementById("app-startup-loading")?.classList.add("hidden");
+}
+
+function setAuthenticationGateState(state, message = "") {
+  const isChecking = state === "checking";
+  const isRequired = state === "required";
+  const isAuthenticated = state === "authenticated";
+
+  document.body.classList.toggle("auth-pending", isChecking);
+  document.body.classList.toggle("auth-required", isRequired);
+  ui.authGate?.classList.toggle("hidden", !isRequired);
+  if (ui.authGateMessage) {
+    ui.authGateMessage.textContent = message || "Accedi con il tuo account Google per utilizzare l'app.";
+  }
+  if (ui.authGateLoginBtn) ui.authGateLoginBtn.disabled = isChecking;
+
+  if (isRequired) {
+    ui.sideMenu?.classList.add("hidden");
+    ui.sideMenu?.setAttribute("aria-hidden", "true");
+    ui.menuOverlay?.classList.add("hidden");
+  }
+  if (isAuthenticated) {
+    ui.authGate?.classList.add("hidden");
+  }
 }
 
 function runAfterFirstRender(callback) {
@@ -2557,12 +2584,14 @@ console.log("AUTH CHECK START");
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
+  setAuthenticationGateState("required", "Login non disponibile: configurazione Firebase non caricata correttamente.");
   authStateResolved = true;
   currentUser = null;
   squadreLoadState = { status: "error", message: "Errore caricamento dati" };
   if (typeof renderSquadre === "function") renderSquadre();
   hideStartupLoading();
 } else {
+  setAuthenticationGateState("checking");
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
   ensureAuthLocalPersistence().finally(() => {
@@ -2576,6 +2605,7 @@ if (!auth || firebaseInitError) {
     uid: user?.uid || ""
   });
   if (loggedIn) console.log("USER UID", user.uid);
+  setAuthenticationGateState(loggedIn ? "authenticated" : "required");
 
   ui.loginBtn.disabled = loggedIn;
   ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
@@ -2721,6 +2751,7 @@ if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", error);
   authStateResolved = true;
   currentUser = null;
+  setAuthenticationGateState("required", "Non riesco a verificare la sessione. Riprova il login.");
   squadreLoadState = { status: "error", message: "Errore caricamento dati" };
   renderSquadre();
   hideStartupLoading();
@@ -3753,6 +3784,12 @@ function focusSharedImpiantoFromRoute(impiantoKey) {
 }
 
 function applyRoute() {
+  if (authStateResolved && !currentUser) {
+    if (window.location.hash) {
+      window.location.hash = "";
+      return;
+    }
+  }
   const hash = window.location.hash || "";
   const commessaRoute = parseCommessaHash(hash);
   const fuelMatch = hash.match(/^#fuel=(.+)$/);

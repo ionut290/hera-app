@@ -9006,6 +9006,68 @@ textarea:focus-visible {
   }
 }
 
+body.auth-pending .container,
+body.auth-required .container,
+body.auth-pending .side-menu,
+body.auth-required .side-menu,
+body.auth-pending .menu-overlay,
+body.auth-required .menu-overlay {
+  display: none !important;
+}
+
+.auth-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef3fa 100%);
+}
+
+.auth-gate.hidden {
+  display: none !important;
+}
+
+.auth-gate-card {
+  display: grid;
+  gap: 12px;
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.auth-gate-logo {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  border-radius: 20px;
+  background: #eff6ff;
+  font-size: 2rem;
+}
+
+.auth-gate-kicker {
+  margin: 0;
+  color: var(--primary);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-gate-card h1,
+.auth-gate-card p {
+  margin: 0;
+}
+
+.auth-gate-card .btn {
+  justify-self: center;
+  min-width: 220px;
+}
+
 .startup-loading {
   position: fixed;
   inset: 0;

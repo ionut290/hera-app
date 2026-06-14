@@ -9118,3 +9118,25 @@ textarea:focus-visible {
   font-weight: 700;
   white-space: nowrap;
 }
+
+.weather-alert-squadra-btn {
+  justify-self: end;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.weather-alert-squadra-btn.risk-rosso {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.weather-alert-squadra-btn.risk-arancione {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.weather-alert-squadra-btn.risk-giallo {
+  background: #fef9c3;
+  color: #854d0e;
+}

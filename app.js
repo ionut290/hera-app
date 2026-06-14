@@ -1288,7 +1288,6 @@ let unsubscribePosDocuments = null;
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const PENDING_IMPIANTO_ACTIONS_KEY = "heraPendingImpiantoActions";
 const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
-const CLOUD_CACHE_PREFIX = "heraCloudCache:v1";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
 const USER_WORKFLOW_STEP_KEY = "heraUserWorkflowStep";
@@ -7256,9 +7255,7 @@ async function saveApprovedHoursRequest(request, options = {}) {
     createdByUid: request.createdByUid || "",
     createdByName: request.createdByName || request.createdByEmail || "Operatore",
     createdByEmail: request.createdByEmail || "",
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy: getCurrentCloudActor()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   let docRef;
   try {
@@ -7583,9 +7580,7 @@ async function finalizeHoursReport(event) {
     createdByEmail: currentUser.email || "",
     approvalStatus: "approved",
     savedWithoutAdminApproval: true,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy: getCurrentCloudActor()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
   if (unauthorizedEntry) {
@@ -8165,49 +8160,6 @@ function validateFirebaseConfigForCommesse() {
 
 function getCommesseErrorMessage() {
   return "Impossibile caricare le commesse online. Mostro dati salvati localmente.";
-}
-
-function getCloudCacheKey(scope, id = "default") {
-  return `${CLOUD_CACHE_PREFIX}:${scope}:${String(id || "default").replace(/[^\w.-]+/g, "_")}`;
-}
-
-function readCloudCache(scope, id = "default", fallback = null) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(getCloudCacheKey(scope, id)) || "null");
-    return parsed?.value ?? fallback;
-  } catch (error) {
-    console.warn("Cache locale cloud non leggibile:", scope, id, error);
-    return fallback;
-  }
-}
-
-function writeCloudCache(scope, id = "default", value) {
-  try {
-    localStorage.setItem(getCloudCacheKey(scope, id), JSON.stringify({ savedAt: Date.now(), value }));
-    return true;
-  } catch (error) {
-    console.warn("Cache locale cloud non salvata:", scope, id, error);
-    return false;
-  }
-}
-
-function getCurrentCloudActor() {
-  return currentUser?.email || currentUser?.displayName || currentUser?.uid || "unknown";
-}
-
-function addCloudWriteMetadata(payload = {}, options = {}) {
-  const now = firebase?.firestore?.FieldValue?.serverTimestamp
-    ? firebase.firestore.FieldValue.serverTimestamp()
-    : new Date().toISOString();
-  const metadata = {
-    updatedAt: now,
-    updatedBy: getCurrentCloudActor()
-  };
-  if (options.created) {
-    metadata.createdAt = now;
-    metadata.createdBy = getCurrentCloudActor();
-  }
-  return { ...payload, ...metadata };
 }
 
 function clearCommesseLoadTimeout() {
@@ -9065,13 +9017,10 @@ async function loadWeatherAlertsForActiveDate() {
   if (!db || !currentUser) return [];
   const dateKey = getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
   if (weatherAlertsDateLoaded === dateKey && weatherAlertsByDate.has(dateKey)) return getWeatherAlertsForDate(dateKey);
-  const cachedAlerts = readCloudCache("weatherAlertsByDate", dateKey, []);
-  if (Array.isArray(cachedAlerts) && cachedAlerts.length) weatherAlertsByDate.set(dateKey, cachedAlerts);
   const snapshot = await db.collection("weatherAlerts").where("data", "==", dateKey).where("active", "==", true).get();
   const alerts = [];
   snapshot.forEach((doc) => alerts.push({ id: doc.id, ...(doc.data() || {}) }));
   weatherAlertsByDate.set(dateKey, alerts);
-  writeCloudCache("weatherAlertsByDate", dateKey, alerts);
   weatherAlertsDateLoaded = dateKey;
   renderCommesseHomeList();
   renderSquadre();
@@ -9136,7 +9085,7 @@ async function confirmWeatherAlertRead() {
   if (!currentUser || !selectedWeatherAlertContext?.alert) return;
   const { commessa, alert, impianto } = selectedWeatherAlertContext;
   ui.weatherAlertSafetyConfirmBtn.disabled = true;
-  await db.collection("alertReadConfirmations").add(addCloudWriteMetadata({
+  await db.collection("alertReadConfirmations").add({
     utente: currentUser.uid,
     dataOra: firebase.firestore.FieldValue.serverTimestamp(),
     commessa: commessa?.id || selectedCommessaId,
@@ -9145,9 +9094,8 @@ async function confirmWeatherAlertRead() {
     tipoAllerta: alert.tipoAllerta || "",
     livello: alert.livello || "",
     dataProgrammata: selectedWeatherAlertContext.dataProgrammata || alert.data || getActiveSquadreDateKey(),
-    fonteAllerta: alert.fonte || "",
-    confermaLetturaSicurezza: true
-  }, { created: true }));
+    fonteAllerta: alert.fonte || ""
+  });
   ui.weatherAlertSafetyConfirmBtn.disabled = false;
   setCommessaHash();
 }
@@ -11248,14 +11196,6 @@ function subscribeImpianti() {
   });
 
   try {
-    const cachedImpianti = readCloudCache("impiantiByCommessa", selectedCommessaId, []);
-    if (Array.isArray(cachedImpianti) && cachedImpianti.length) {
-      currentImpianti = applyPendingActionsToImpianti(cachedImpianti, selectedCommessaId);
-      impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
-      renderImpianti();
-      renderMap();
-      updateCommessaDashboard();
-    }
     unsubscribeImpianti = db
       .collection("commesse")
       .doc(selectedCommessaId)
@@ -11265,7 +11205,6 @@ function subscribeImpianti() {
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
-        writeCloudCache("impiantiByCommessa", selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
@@ -11528,7 +11467,7 @@ async function saveCommessaNote(event) {
   const noteId = String(ui.commessaNoteId.value || "").trim();
   const impiantoKey = String(ui.commessaNoteImpiantoKey?.value || "").trim();
   const impianto = impiantoKey ? currentImpianti.find((item) => buildImpiantoKey(item) === impiantoKey) : null;
-  const payload = addCloudWriteMetadata({
+  const payload = {
     commessaId: selectedCommessaId,
     commessaName: selectedCommessaName || "",
     noteDate: ui.commessaNoteDate.value || getTodayDateKey(),
@@ -11536,8 +11475,10 @@ async function saveCommessaNote(event) {
     text: String(ui.commessaNoteText.value || "").trim(),
     driveLinks: parseDriveLinks(ui.commessaNoteDriveLinks.value),
     impiantoKey,
-    impiantoLabel: impianto ? getImpiantoDisplayLabel(impianto) : ""
-  });
+    impiantoLabel: impianto ? getImpiantoDisplayLabel(impianto) : "",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  };
   if (!payload.title) {
     alert("Inserisci il titolo della nota.");
     return;
@@ -11550,16 +11491,22 @@ async function saveCommessaNote(event) {
   if (noteId) {
     await notesRef.doc(noteId).set(payload, { merge: true });
   } else {
-    await notesRef.add(addCloudWriteMetadata(payload, { created: true }));
+    await notesRef.add({
+      ...payload,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser?.email || ""
+    });
   }
   closeCommessaNoteForm();
 }
 
 async function updateCommessaNoteStatus(noteId, status) {
   if (!selectedCommessaId || !noteId) return;
-  await db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa").doc(noteId).set(addCloudWriteMetadata({
+  await db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa").doc(noteId).set({
     status,
-  }), { merge: true });
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
 }
 
 async function deleteCommessaNote(noteId) {
@@ -17713,15 +17660,6 @@ function subscribeSquadre() {
 
   const selectedDateKey = getActiveSquadreDateKey();
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
-  const cachedSquadreForDate = readCloudCache("squadreStoricoByDate", selectedDateKey, []);
-  if (Array.isArray(cachedSquadreForDate) && cachedSquadreForDate.length) {
-    const cachedMap = new Map();
-    cachedSquadreForDate.forEach((row) => {
-      if (row?.commessaId) cachedMap.set(row.commessaId, row);
-    });
-    squadreHistoryByDate.set(selectedDateKey, cachedMap);
-    squadreLoadState = { status: "loading", message: "Mostro squadre salvate, sincronizzo cloud..." };
-  }
   renderSquadre();
   startSquadreLoadTimeout();
   console.log("LOAD SQUADRE START", {
@@ -17738,7 +17676,6 @@ function subscribeSquadre() {
       historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
-    writeCloudCache("squadreStoricoByDate", selectedDateKey, Array.from(historyForDate.values()));
     squadreLoadState = { status: "loaded", message: "" };
     console.log("LOAD SQUADRE OK numero:", historyForDate.size);
     renderSquadre();
@@ -18221,19 +18158,14 @@ async function saveSquadraComposition(event) {
     alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
     return;
   }
-  const payload = addCloudWriteMetadata({
+  const payload = {
     commessaId,
     commessaNome: (commesseById.get(commessaId) || {}).nome || "Commessa",
     riferimentoData: dateKey,
-    dataProgrammata: dateKey,
-    commessa: commessaId,
-    impiantiAssegnati: squadreRows.flatMap((row) => String(row.impianti || "").split(",").map((item) => item.trim()).filter(Boolean)),
-    operatoriAssegnati: squadreRows.flatMap((row) => String(row.personale || "").split(",").map((item) => item.trim()).filter(Boolean)),
-    orari: squadreRows.map((row) => row.orario || "").filter(Boolean),
-    statoSquadra: "programmata",
-    confermeUtente: [],
-    squadre: squadreRows
-  });
+    squadre: squadreRows,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  };
   const currentRef = db.collection("squadreCommesse").doc(commessaId);
   const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
   try {

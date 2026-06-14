@@ -325,6 +325,11 @@ const ui = {
   chatFeedback: document.getElementById("chat-feedback"),
   homePage: document.getElementById("home-page"),
   impiantiPage: document.getElementById("impianti-page"),
+  weatherAlertSafetyPage: document.getElementById("weather-alert-safety-page"),
+  weatherAlertSafetyBackBtn: document.getElementById("weather-alert-safety-back-btn"),
+  weatherAlertSafetySubtitle: document.getElementById("weather-alert-safety-subtitle"),
+  weatherAlertSafetyContent: document.getElementById("weather-alert-safety-content"),
+  weatherAlertSafetyConfirmBtn: document.getElementById("weather-alert-safety-confirm-btn"),
   impiantoWeatherDetailPage: document.getElementById("impianto-weather-detail-page"),
   impiantoWeatherDetailSubtitle: document.getElementById("impianto-weather-detail-subtitle"),
   impiantoWeatherDetailBackBtn: document.getElementById("impianto-weather-detail-back-btn"),
@@ -863,6 +868,9 @@ let squadreHistoryByDate = new Map();
 let latestSquadraAutofillRequestId = 0;
 let squadreLoadState = { status: "idle", message: "" };
 let squadreLoadTimeout = null;
+const weatherAlertsByDate = new Map();
+let weatherAlertsDateLoaded = "";
+let selectedWeatherAlertContext = null;
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
@@ -1573,6 +1581,8 @@ ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
+ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
+ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
 ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
 
 function syncCommesseHomeToggle() {
@@ -2683,6 +2693,7 @@ if (!auth || firebaseInitError) {
       () => processPendingSheetExports(),
       () => startChatRetentionLoop(),
       () => startHoursDeadlineAlertLoop(),
+      () => loadWeatherAlertsForActiveDate().catch((error) => console.error("Caricamento allerte meteo non riuscito:", error)),
       () => repairDuplicateHours().catch((error) => {
         console.error("Riparazione automatica duplicati ore all'avvio non riuscita:", error);
       })
@@ -3710,7 +3721,7 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", atex: "", safety: "", capitolato: "", biogas: false };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", alert: "", atex: "", safety: "", capitolato: "", biogas: false };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
@@ -3718,6 +3729,7 @@ function parseCommessaHash(hash = window.location.hash || "") {
     notes: params.has("notes"),
     impianto: params.get("impianto") || "",
     meteo: params.get("meteo") || "",
+    alert: params.get("alert") || "",
     atex: params.get("atex") || "",
     safety: params.get("safety") || "",
     capitolato: params.get("capitolato") || "",
@@ -3755,14 +3767,16 @@ function applyRoute() {
   const showPersonalServices = Boolean(personalServiceMatch);
   const showNotesPage = Boolean(commessaRoute.notes && selectedCommessaId === commessaIdFromHash);
   const showWeatherDetail = Boolean(commessaRoute.meteo && selectedCommessaId === commessaIdFromHash && !showNotesPage);
-  const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
+  const showWeatherAlertSafety = Boolean(commessaRoute.alert && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail);
+  const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety);
   const showCapitolatoOperativo = Boolean(commessaRoute.capitolato && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
   const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showCapitolatoOperativo);
   const showBiogasMap = Boolean(commessaRoute.biogas && selectedCommessaId === commessaIdFromHash && getCurrentCommessaSafetyKind() === "discariche");
-  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap);
+  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
+  ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
   ui.atexProcedurePage?.classList.toggle("hidden", !showAtexProcedure);
   ui.impiantoSafetyPage?.classList.toggle("hidden", !(showImpiantoSafety || showCapitolatoOperativo));
@@ -3792,6 +3806,9 @@ function applyRoute() {
   }
   if (showWeatherDetail) {
     renderDettaglioMeteoImpianto(commessaRoute.meteo);
+  }
+  if (showWeatherAlertSafety) {
+    renderWeatherAlertSafetyPage(commessaRoute.alert);
   }
   if (showAtexProcedure) {
     renderAtexProcedurePage(commessaRoute.atex);
@@ -8207,6 +8224,7 @@ function refreshCommesseDependentUI(includeRemoteStats = true) {
   updateCommessaContextUI();
   renderParentCommessaOverview();
   renderNextActionCard();
+  loadWeatherAlertsForActiveDate().catch((error) => console.error("Aggiornamento allerte meteo UI non riuscito:", error));
 }
 
 
@@ -8903,6 +8921,127 @@ function startQuickSquadraWindowTicker() {
   }, 60 * 1000);
 }
 
+
+const WEATHER_ALERT_PRIORITY = { rosso: 3, arancione: 2, giallo: 1 };
+const WEATHER_ALERT_ICON = { rosso: "🔴", arancione: "🟠", giallo: "🟡" };
+
+function normalizeWeatherAlertKey(value) {
+  return String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function getCommessaScheduledDate(commessaId) {
+  return getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+}
+
+function getWeatherAlertsForDate(dateKey = getActiveSquadreDateKey()) {
+  return weatherAlertsByDate.get(String(dateKey || "").slice(0, 10)) || [];
+}
+
+function getCommessaAlertComuni(commessa) {
+  const configured = Array.isArray(commessa?.weatherAlertComuni) ? commessa.weatherAlertComuni : [];
+  if (commessa?.id === selectedCommessaId && currentImpianti.length) {
+    return Array.from(new Set(currentImpianti.map((impianto) => impianto.comune).filter(Boolean)));
+  }
+  return configured;
+}
+
+function getAlertsForCommessa(commessa) {
+  const dateKey = getCommessaScheduledDate(commessa?.id);
+  const comuni = new Set(getCommessaAlertComuni(commessa).map(normalizeWeatherAlertKey));
+  if (!comuni.size) return [];
+  return getWeatherAlertsForDate(dateKey).filter((alert) => comuni.has(normalizeWeatherAlertKey(alert.comune)) && alert.active !== false);
+}
+
+function getMostSevereWeatherAlert(alerts = []) {
+  return [...alerts].sort((a, b) => (WEATHER_ALERT_PRIORITY[b.livello] || 0) - (WEATHER_ALERT_PRIORITY[a.livello] || 0))[0] || null;
+}
+
+function buildCommessaWeatherAlertBadgeMarkup(commessa) {
+  const alert = getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
+  if (!alert) return "";
+  const icon = WEATHER_ALERT_ICON[alert.livello] || "🟡";
+  return `<span class="weather-alert-commessa-badge" data-weather-alert-commessa="${escapeHTML(commessa.id)}" title="Apri indicazioni sicurezza allerta">${icon} ${escapeHTML(alert.tipoAllerta || "Allerta")}</span>`;
+}
+
+async function loadWeatherAlertsForActiveDate() {
+  if (!db || !currentUser) return [];
+  const dateKey = getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+  if (weatherAlertsDateLoaded === dateKey && weatherAlertsByDate.has(dateKey)) return getWeatherAlertsForDate(dateKey);
+  const snapshot = await db.collection("weatherAlerts").where("data", "==", dateKey).where("active", "==", true).get();
+  const alerts = [];
+  snapshot.forEach((doc) => alerts.push({ id: doc.id, ...(doc.data() || {}) }));
+  weatherAlertsByDate.set(dateKey, alerts);
+  weatherAlertsDateLoaded = dateKey;
+  renderCommesseHomeList();
+  return alerts;
+}
+
+function openWeatherAlertSafetyForCommessa(commessaId) {
+  const commessa = commesseById.get(commessaId);
+  const alerts = getAlertsForCommessa(commessa);
+  const alert = getMostSevereWeatherAlert(alerts);
+  if (!commessa || !alert) return;
+  const impianto = currentImpianti.find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || {};
+  selectedWeatherAlertContext = { commessa, alert, impianto };
+  window.location.hash = `commessa=${encodeURIComponent(commessaId)}&alert=${encodeURIComponent(alert.id || `${alert.comune}_${alert.data}_${alert.tipoAllerta}`)}`;
+}
+
+function formatAlertTimestamp(value) {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Non disponibile";
+  return date.toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" });
+}
+
+function getWeatherAlertSafetyIndications(tipo = "") {
+  const key = normalizeWeatherAlertKey(tipo);
+  if (key.includes("caldo")) return ["Mantenere una corretta idratazione.", "Effettuare pause frequenti in zona ombreggiata.", "Utilizzare indumenti e DPI adeguati.", "Limitare o sospendere attività pesanti nelle ore più critiche.", "Avvisare il responsabile in caso di malessere."];
+  if (key.includes("tempor")) return ["Sospendere lavori in quota se necessario.", "Non sostare sotto alberi o strutture isolate.", "Interrompere attività pericolose se richiesto dalle condizioni.", "Attendere il miglioramento del meteo prima di riprendere."];
+  if (key.includes("vento")) return ["Prestare attenzione a rami e alberature.", "Sospendere l'utilizzo di piattaforme e cestelli se necessario.", "Mettere in sicurezza materiali e attrezzature."];
+  if (key.includes("piogg") || key.includes("idro")) return ["Prestare attenzione a fossi e scarpate.", "Evitare aree allagate.", "Verificare la stabilità del terreno e degli accessi."];
+  if (key.includes("neve") || key.includes("ghiaccio")) return ["Procedere con cautela.", "Utilizzare i DPI previsti.", "Prestare attenzione alle superfici scivolose."];
+  if (key.includes("incend")) return ["Evitare fonti di innesco.", "Seguire le procedure aziendali.", "Avvisare immediatamente il responsabile in presenza di fumo o fiamme."];
+  return ["Valutare le condizioni operative prima dell'avvio attività.", "Seguire le procedure aziendali e le indicazioni del preposto.", "Sospendere le attività non sicure e avvisare il responsabile."];
+}
+
+function renderWeatherAlertSafetyPage(alertId = "") {
+  const commessa = commesseById.get(selectedCommessaId);
+  let alert = getAlertsForCommessa(commessa).find((item) => String(item.id || "") === String(alertId || "")) || getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
+  if (!alert) return;
+  const impianto = currentImpianti.find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
+  selectedWeatherAlertContext = { commessa, alert, impianto };
+  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || "Comune"}`;
+  const indications = getWeatherAlertSafetyIndications(alert.tipoAllerta).map((text) => `<li>${escapeHTML(text)}</li>`).join("");
+  if (ui.weatherAlertSafetyContent) ui.weatherAlertSafetyContent.innerHTML = `
+    <article class="weather-detail-section"><h3>Riepilogo</h3>
+      <p><b>Nome cantiere:</b> ${escapeHTML(impianto.denominazione || commessa?.nome || "Cantiere")}</p>
+      <p><b>Comune:</b> ${escapeHTML(alert.comune || "-")}</p>
+      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello:</b> ${escapeHTML(alert.livello || "-")}</p>
+      <p><b>Validità:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
+      <p><b>Descrizione:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
+      <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "-")}</p>
+    </article>
+    <article class="weather-detail-section weather-detail-indications-card"><h3>Indicazioni operative</h3><ul>${indications}</ul></article>
+    <article class="weather-detail-risk-box risk-giallo"><strong>Riferimenti e misure</strong><p>D.Lgs. 81/2008, valutazione del rischio meteo nel DVR/POS, procedure aziendali, indicazioni Protezione Civile/Regione e Worklimate ove applicabili. Applicare eventuali misure straordinarie decise dal preposto o responsabile. Emergenza: 112.</p></article>`;
+}
+
+async function confirmWeatherAlertRead() {
+  if (!currentUser || !selectedWeatherAlertContext?.alert) return;
+  const { commessa, alert, impianto } = selectedWeatherAlertContext;
+  ui.weatherAlertSafetyConfirmBtn.disabled = true;
+  await db.collection("alertReadConfirmations").add({
+    utente: currentUser.uid,
+    dataOra: firebase.firestore.FieldValue.serverTimestamp(),
+    commessa: commessa?.id || selectedCommessaId,
+    impianto: impianto?.idSap || impianto?.denominazione || "",
+    comune: alert.comune || "",
+    tipoAllerta: alert.tipoAllerta || "",
+    livello: alert.livello || "",
+    dataProgrammata: alert.data || getActiveSquadreDateKey()
+  });
+  ui.weatherAlertSafetyConfirmBtn.disabled = false;
+  setCommessaHash();
+}
+
 function renderCommessaHomeButton(commessa, index) {
   const row = document.createElement("div");
   row.className = "commessa-row";
@@ -8919,10 +9058,21 @@ function renderCommessaHomeButton(commessa, index) {
     <span class="commessa-home-main">
       <span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>
       ${hasSubcommesse ? `<span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}
+      ${buildCommessaWeatherAlertBadgeMarkup(commessa)}
     </span>
     ${codiceCommessa ? `<small class="muted">Cod. ${escapeHTML(codiceCommessa)}</small>` : ""}
   `;
-  btn.addEventListener("click", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
+  btn.addEventListener("click", (event) => {
+    const alertBadge = event.target.closest?.("[data-weather-alert-commessa]");
+    if (alertBadge) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "");
+      openWeatherAlertSafetyForCommessa(commessa.id);
+      return;
+    }
+    selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "");
+  });
 
   row.appendChild(btn);
   if (canShowQuickSquadraButton(commessa)) {

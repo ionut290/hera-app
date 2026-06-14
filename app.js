@@ -848,6 +848,7 @@ let commesseLoadState = { status: "idle", message: "" };
 let commesseLoadTimeout = null;
 let isCommesseHomeCardVisible = false;
 let commessaStatsById = new Map();
+const impiantiByCommessaId = new Map();
 let commessaHoursById = new Map();
 let commessaWorkSummariesById = new Map();
 let allHoursReports = [];
@@ -8729,6 +8730,7 @@ function subscribeStatsForCommesse() {
       unsubscribeCommessaStats.get(commessaId)?.();
       unsubscribeCommessaStats.delete(commessaId);
       commessaStatsById.delete(commessaId);
+      impiantiByCommessaId.delete(commessaId);
       commessaWorkSummariesById.delete(commessaId);
       commessaHoursById.delete(commessaId);
     }
@@ -8737,6 +8739,8 @@ function subscribeStatsForCommesse() {
     if (unsubscribeCommessaStats.has(commessaId)) return;
     const unsubscribe = db.collection("commesse").doc(commessaId).collection("impianti").onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const combinedImpianti = combineImpiantiForView(rawImpianti);
+      impiantiByCommessaId.set(commessaId, combinedImpianti);
       commessaStatsById.set(commessaId, calculateImpiantiStats(rawImpianti));
       recalculateCommessaWorkSummaries();
       renderCommesseHomeList();
@@ -8924,6 +8928,7 @@ function startQuickSquadraWindowTicker() {
 
 const WEATHER_ALERT_PRIORITY = { rosso: 3, arancione: 2, giallo: 1 };
 const WEATHER_ALERT_ICON = { rosso: "🔴", arancione: "🟠", giallo: "🟡" };
+const WEATHER_ALERT_LEVEL_LABEL = { rosso: "rossa", arancione: "arancione", giallo: "gialla" };
 
 function normalizeWeatherAlertKey(value) {
   return String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
@@ -8933,16 +8938,37 @@ function getCommessaScheduledDate(commessaId) {
   return getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
 }
 
+function getCommessaCachedImpianti(commessaId) {
+  if (commessaId && commessaId === selectedCommessaId && currentImpianti.length) return currentImpianti;
+  return impiantiByCommessaId.get(commessaId) || [];
+}
+
+function getScheduledSquadraRowsForCommessa(commessaId, dateKey = getCommessaScheduledDate(commessaId)) {
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  const squad = storicoDelGiorno.get(commessaId) || squadreByCommessa.get(commessaId) || {};
+  return Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+}
+
+function getScheduledImpiantiForCommessa(commessa, dateKey = getCommessaScheduledDate(commessa?.id)) {
+  const impianti = getCommessaCachedImpianti(commessa?.id);
+  const rows = getScheduledSquadraRowsForCommessa(commessa?.id, dateKey).filter(isSquadraRowFilled);
+  const assignedTokens = new Set(rows.flatMap((row) => String(row?.impianti || "").split(/[\n,;|]+/).map(normalizeWeatherAlertKey).filter(Boolean)));
+  if (!assignedTokens.size) return impianti;
+  const matched = impianti.filter((impianto) => {
+    const fields = [impianto.idSap, impianto.denominazione, impianto.nome, impianto.codicePrezzo].map(normalizeWeatherAlertKey).filter(Boolean);
+    return fields.some((field) => assignedTokens.has(field) || Array.from(assignedTokens).some((token) => token && field.includes(token)));
+  });
+  return matched.length ? matched : impianti;
+}
+
 function getWeatherAlertsForDate(dateKey = getActiveSquadreDateKey()) {
   return weatherAlertsByDate.get(String(dateKey || "").slice(0, 10)) || [];
 }
 
 function getCommessaAlertComuni(commessa) {
   const configured = Array.isArray(commessa?.weatherAlertComuni) ? commessa.weatherAlertComuni : [];
-  if (commessa?.id === selectedCommessaId && currentImpianti.length) {
-    return Array.from(new Set(currentImpianti.map((impianto) => impianto.comune).filter(Boolean)));
-  }
-  return configured;
+  const impiantoComuni = getScheduledImpiantiForCommessa(commessa).map((impianto) => impianto.comune).filter(Boolean);
+  return Array.from(new Set([...impiantoComuni, ...configured]));
 }
 
 function getAlertsForCommessa(commessa) {
@@ -8953,14 +8979,38 @@ function getAlertsForCommessa(commessa) {
 }
 
 function getMostSevereWeatherAlert(alerts = []) {
-  return [...alerts].sort((a, b) => (WEATHER_ALERT_PRIORITY[b.livello] || 0) - (WEATHER_ALERT_PRIORITY[a.livello] || 0))[0] || null;
+  return [...alerts].sort((a, b) => (WEATHER_ALERT_PRIORITY[normalizeWeatherAlertKey(b.livello)] || 0) - (WEATHER_ALERT_PRIORITY[normalizeWeatherAlertKey(a.livello)] || 0))[0] || null;
+}
+
+function getWeatherAlertButtonLabel(alert = {}) {
+  const livello = normalizeWeatherAlertKey(alert.livello);
+  const icon = WEATHER_ALERT_ICON[livello] || "🟡";
+  const levelLabel = WEATHER_ALERT_LEVEL_LABEL[livello] || alert.livello || "attiva";
+  return `${icon} Allerta ${levelLabel} ${alert.tipoAllerta || "meteo"}`.trim();
+}
+
+function createSquadraWeatherAlertButton(commessa, dateKey = getActiveSquadreDateKey()) {
+  const alert = getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
+  if (!alert) return null;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `btn weather-alert-squadra-btn risk-${normalizeWeatherAlertKey(alert.livello) || "giallo"}`;
+  button.textContent = getWeatherAlertButtonLabel(alert);
+  button.dataset.weatherAlertCommessa = commessa.id || "";
+  button.setAttribute("aria-label", `${getWeatherAlertButtonLabel(alert)}: apri indicazioni sicurezza`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "");
+    openWeatherAlertSafetyForCommessa(commessa.id, dateKey);
+  });
+  return button;
 }
 
 function buildCommessaWeatherAlertBadgeMarkup(commessa) {
   const alert = getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
   if (!alert) return "";
-  const icon = WEATHER_ALERT_ICON[alert.livello] || "🟡";
-  return `<span class="weather-alert-commessa-badge" data-weather-alert-commessa="${escapeHTML(commessa.id)}" title="Apri indicazioni sicurezza allerta">${icon} ${escapeHTML(alert.tipoAllerta || "Allerta")}</span>`;
+  return `<span class="weather-alert-commessa-badge" data-weather-alert-commessa="${escapeHTML(commessa.id)}" title="Apri indicazioni sicurezza allerta">${escapeHTML(getWeatherAlertButtonLabel(alert))}</span>`;
 }
 
 async function loadWeatherAlertsForActiveDate() {
@@ -8973,16 +9023,17 @@ async function loadWeatherAlertsForActiveDate() {
   weatherAlertsByDate.set(dateKey, alerts);
   weatherAlertsDateLoaded = dateKey;
   renderCommesseHomeList();
+  renderSquadre();
   return alerts;
 }
 
-function openWeatherAlertSafetyForCommessa(commessaId) {
+function openWeatherAlertSafetyForCommessa(commessaId, dateKey = getCommessaScheduledDate(commessaId)) {
   const commessa = commesseById.get(commessaId);
   const alerts = getAlertsForCommessa(commessa);
   const alert = getMostSevereWeatherAlert(alerts);
   if (!commessa || !alert) return;
-  const impianto = currentImpianti.find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || {};
-  selectedWeatherAlertContext = { commessa, alert, impianto };
+  const impianto = getScheduledImpiantiForCommessa(commessa, dateKey).find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || {};
+  selectedWeatherAlertContext = { commessa, alert, impianto, dataProgrammata: dateKey };
   window.location.hash = `commessa=${encodeURIComponent(commessaId)}&alert=${encodeURIComponent(alert.id || `${alert.comune}_${alert.data}_${alert.tipoAllerta}`)}`;
 }
 
@@ -9007,18 +9058,24 @@ function renderWeatherAlertSafetyPage(alertId = "") {
   const commessa = commesseById.get(selectedCommessaId);
   let alert = getAlertsForCommessa(commessa).find((item) => String(item.id || "") === String(alertId || "")) || getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
   if (!alert) return;
-  const impianto = currentImpianti.find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
-  selectedWeatherAlertContext = { commessa, alert, impianto };
+  const dataProgrammata = getCommessaScheduledDate(commessa?.id);
+  const impianto = getScheduledImpiantiForCommessa(commessa, dataProgrammata).find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
+  selectedWeatherAlertContext = { commessa, alert, impianto, dataProgrammata };
   if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || "Comune"}`;
   const indications = getWeatherAlertSafetyIndications(alert.tipoAllerta).map((text) => `<li>${escapeHTML(text)}</li>`).join("");
+  const isWorklimateHeat = normalizeWeatherAlertKey(alert.fonte).includes("worklimate") && normalizeWeatherAlertKey(alert.tipoAllerta).includes("caldo");
+  const worklimateScenario = isWorklimateHeat ? `<p><b>Scenario Worklimate:</b> lavoratore esposto al sole, attività fisica intensa, previsione ore 12:00.</p>` : "";
   if (ui.weatherAlertSafetyContent) ui.weatherAlertSafetyContent.innerHTML = `
     <article class="weather-detail-section"><h3>Riepilogo</h3>
-      <p><b>Nome cantiere:</b> ${escapeHTML(impianto.denominazione || commessa?.nome || "Cantiere")}</p>
+      <p><b>Commessa:</b> ${escapeHTML([commessa?.codice, commessa?.nome].filter(Boolean).join(" • ") || "Commessa")}</p>
+      <p><b>Nome cantiere/impianto:</b> ${escapeHTML(impianto.denominazione || impianto.nome || commessa?.nome || "Cantiere")}</p>
       <p><b>Comune:</b> ${escapeHTML(alert.comune || "-")}</p>
-      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello:</b> ${escapeHTML(alert.livello || "-")}</p>
-      <p><b>Validità:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
-      <p><b>Descrizione:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
-      <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "-")}</p>
+      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello colore:</b> ${escapeHTML(alert.livello || "-")}</p>
+      <p><b>Data programmata squadra:</b> ${escapeHTML(dataProgrammata || alert.data || "-")}</p>
+      <p><b>Validità allerta:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
+      <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "Protezione Civile")}</p>
+      ${worklimateScenario}
+      <p><b>Descrizione allerta:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
     </article>
     <article class="weather-detail-section weather-detail-indications-card"><h3>Indicazioni operative</h3><ul>${indications}</ul></article>
     <article class="weather-detail-risk-box risk-giallo"><strong>Riferimenti e misure</strong><p>D.Lgs. 81/2008, valutazione del rischio meteo nel DVR/POS, procedure aziendali, indicazioni Protezione Civile/Regione e Worklimate ove applicabili. Applicare eventuali misure straordinarie decise dal preposto o responsabile. Emergenza: 112.</p></article>`;
@@ -9036,7 +9093,8 @@ async function confirmWeatherAlertRead() {
     comune: alert.comune || "",
     tipoAllerta: alert.tipoAllerta || "",
     livello: alert.livello || "",
-    dataProgrammata: alert.data || getActiveSquadreDateKey()
+    dataProgrammata: selectedWeatherAlertContext.dataProgrammata || alert.data || getActiveSquadreDateKey(),
+    fonteAllerta: alert.fonte || ""
   });
   ui.weatherAlertSafetyConfirmBtn.disabled = false;
   setCommessaHash();
@@ -11146,6 +11204,7 @@ function subscribeImpianti() {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
+        impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
@@ -18405,6 +18464,8 @@ function renderSquadre() {
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
+    const alertButton = createSquadraWeatherAlertButton(commessa, selectedDateKey);
+    if (alertButton) head?.appendChild(alertButton);
     appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
     head?.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;

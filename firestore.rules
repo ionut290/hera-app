@@ -61,6 +61,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /weatherAlerts/{alertId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /alertReadConfirmations/{confirmationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.utente == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.utente == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
     match /programmazioni/{programmazioneId} {
       allow read: if isAdmin() || (
         signedIn()

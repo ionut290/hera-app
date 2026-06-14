@@ -206,3 +206,136 @@ exports.configureCentralDrive = functions.https.onCall(async (data, context) => 
   }, { merge: true });
   return { ok: true };
 });
+
+const WEATHER_ALERT_TYPES = ["caldo", "temporali", "vento forte", "pioggia intensa", "neve", "ghiaccio", "rischio idraulico", "rischio idrogeologico", "incendi"];
+const ALERT_LEVELS = new Set(["giallo", "arancione", "rosso"]);
+
+function normalizeAlertText(value) {
+  return String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function weatherAlertDocId(comune, data, tipoAllerta) {
+  return `${normalizeAlertText(comune).replace(/[^a-z0-9]+/g, "_")}_${String(data || "").slice(0, 10)}_${normalizeAlertText(tipoAllerta).replace(/[^a-z0-9]+/g, "_")}`.replace(/^_+|_+$/g, "");
+}
+
+function dateKeyFromDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function mapAlertLevel(value) {
+  const normalized = normalizeAlertText(value);
+  if (normalized.includes("rosso") || normalized.includes("elevat") || normalized.includes("alto")) return "rosso";
+  if (normalized.includes("aranc") || normalized.includes("moderat")) return "arancione";
+  if (normalized.includes("giall") || normalized.includes("ordin") || normalized.includes("basso")) return "giallo";
+  return ALERT_LEVELS.has(normalized) ? normalized : "giallo";
+}
+
+function normalizeAlertType(value) {
+  const normalized = normalizeAlertText(value);
+  const match = WEATHER_ALERT_TYPES.find((type) => normalized.includes(normalizeAlertText(type)));
+  if (match) return match;
+  if (normalized.includes("idro")) return normalized.includes("geolog") ? "rischio idrogeologico" : "rischio idraulico";
+  if (normalized.includes("piogg") || normalized.includes("precipit")) return "pioggia intensa";
+  if (normalized.includes("vento")) return "vento forte";
+  if (normalized.includes("tempor")) return "temporali";
+  if (normalized.includes("incend")) return "incendi";
+  return String(value || "altro evento").trim().toLowerCase() || "altro evento";
+}
+
+async function fetchJsonIfConfigured(url, label) {
+  if (!url) return null;
+  const response = await fetch(url, { headers: { "accept": "application/json" } });
+  if (!response.ok) throw new Error(`${label} HTTP ${response.status}`);
+  return response.json();
+}
+
+function normalizeExternalAlerts(payload, comune, source) {
+  const items = Array.isArray(payload) ? payload : Array.isArray(payload?.alerts) ? payload.alerts : Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((item) => {
+    const data = String(item.data || item.date || item.validDate || item.valid_from || item.validFrom || "").slice(0, 10) || dateKeyFromDate(new Date());
+    const validFrom = item.validFrom || item.valid_from || `${data}T00:00:00.000Z`;
+    const validTo = item.validTo || item.valid_to || `${data}T23:59:59.999Z`;
+    return {
+      comune,
+      data,
+      tipoAllerta: normalizeAlertType(item.tipoAllerta || item.event || item.type || item.risk || source),
+      livello: mapAlertLevel(item.livello || item.level || item.color || item.riskLevel),
+      descrizione: String(item.descrizione || item.description || item.message || `${source}: allerta disponibile`).trim(),
+      validFrom: admin.firestore.Timestamp.fromDate(new Date(validFrom)),
+      validTo: admin.firestore.Timestamp.fromDate(new Date(validTo)),
+      fonte: source
+    };
+  }).filter((item) => item.comune && item.data && item.tipoAllerta);
+}
+
+async function collectComuniByCommessa(db) {
+  const snapshot = await db.collectionGroup("impianti").get();
+  const comuniByCommessa = new Map();
+  snapshot.forEach((doc) => {
+    const comune = String(doc.data()?.comune || doc.data()?.citta || doc.data()?.localita || "").trim();
+    const commessaId = doc.ref.parent.parent?.id || "";
+    if (!comune || !commessaId) return;
+    if (!comuniByCommessa.has(commessaId)) comuniByCommessa.set(commessaId, new Set());
+    comuniByCommessa.get(commessaId).add(comune);
+  });
+  return comuniByCommessa;
+}
+
+async function fetchAlertsForComune(comune) {
+  const cfg = functions.config().weather || {};
+  const encoded = encodeURIComponent(comune);
+  const worklimateUrl = cfg.worklimate_url ? String(cfg.worklimate_url).replace("{comune}", encoded) : "";
+  const civilUrl = cfg.civil_protection_url ? String(cfg.civil_protection_url).replace("{comune}", encoded) : "";
+  const [worklimate, civil] = await Promise.allSettled([
+    fetchJsonIfConfigured(worklimateUrl, "Worklimate"),
+    fetchJsonIfConfigured(civilUrl, "Protezione Civile")
+  ]);
+  const alerts = [];
+  if (worklimate.status === "fulfilled" && worklimate.value) {
+    alerts.push(...normalizeExternalAlerts(worklimate.value, comune, "Worklimate").map((item) => ({
+      ...item,
+      tipoAllerta: "caldo",
+      fasciaOraria: item.fasciaOraria || "12:00",
+      scenario: "lavoratore esposto al sole, attività fisica intensa, previsione ore 12:00"
+    })));
+  }
+  if (civil.status === "fulfilled" && civil.value) alerts.push(...normalizeExternalAlerts(civil.value, comune, "Protezione Civile / allerte regionali"));
+  if (worklimate.status === "rejected") console.warn("Worklimate non aggiornato", comune, worklimate.reason?.message || worklimate.reason);
+  if (civil.status === "rejected") console.warn("Allerte Protezione Civile non aggiornate", comune, civil.reason?.message || civil.reason);
+  return alerts;
+}
+
+async function commitWeatherAlertWrites(db, writes) {
+  for (let index = 0; index < writes.length; index += 450) {
+    const batch = db.batch();
+    writes.slice(index, index + 450).forEach((write) => batch.set(write.ref, write.data, { merge: true }));
+    await batch.commit();
+  }
+}
+
+exports.updateWeatherAlerts = functions.pubsub.schedule("every 2 hours").timeZone("Europe/Rome").onRun(async () => {
+  const db = admin.firestore();
+  const comuniByCommessa = await collectComuniByCommessa(db);
+  const comuni = Array.from(new Set(Array.from(comuniByCommessa.values()).flatMap((set) => Array.from(set))));
+  const now = admin.firestore.Timestamp.now();
+  const allAlerts = [];
+  for (const comune of comuni) allAlerts.push(...await fetchAlertsForComune(comune));
+
+  const writes = [];
+  allAlerts.forEach((alert) => {
+    writes.push({
+      ref: db.collection("weatherAlerts").doc(weatherAlertDocId(alert.comune, alert.data, alert.tipoAllerta)),
+      data: { ...alert, active: true, updatedAt: now }
+    });
+  });
+  Array.from(comuniByCommessa.entries()).forEach(([commessaId, comuniSet]) => {
+    writes.push({
+      ref: db.collection("commesse").doc(commessaId),
+      data: { weatherAlertComuni: Array.from(comuniSet), weatherAlertComuniUpdatedAt: now }
+    });
+  });
+  const expired = await db.collection("weatherAlerts").where("validTo", "<", now).where("active", "==", true).limit(450).get();
+  expired.forEach((doc) => writes.push({ ref: doc.ref, data: { active: false, updatedAt: now } }));
+  await commitWeatherAlertWrites(db, writes);
+  return { comuni: comuni.length, alerts: allAlerts.length, expired: expired.size };
+});

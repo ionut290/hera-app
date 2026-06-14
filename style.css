@@ -9104,3 +9104,17 @@ textarea:focus-visible {
   background: #fef3c7;
   color: #92400e;
 }
+
+.weather-alert-commessa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}

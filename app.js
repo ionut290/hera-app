@@ -908,6 +908,7 @@ let personalServicesMapInstance = null;
 let personalServicesLayer = null;
 let worklimateMapInstance = null;
 let worklimateLayer = null;
+let worklimateLoadPromise = null;
 let personalServicesResults = [];
 let expandedPersonalServiceId = "";
 let activePersonalServiceCategory = "";
@@ -4163,11 +4164,12 @@ function normalizeWorklimateRiskLevel(value) {
 }
 
 function ensureWorklimateMap() {
-  if (worklimateMapInstance || !ui.worklimateMap) return;
+  if (worklimateMapInstance || !ui.worklimateMap || typeof L === "undefined") return;
   worklimateMapInstance = L.map("worklimate-map", MAP_INTERACTION_OPTIONS);
   L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(worklimateMapInstance);
   worklimateLayer = L.layerGroup().addTo(worklimateMapInstance);
   worklimateMapInstance.setView(globalMapViewState.center, 7);
+  requestAnimationFrame(() => worklimateMapInstance?.invalidateSize());
 }
 
 function worklimateTimestampToMillis(value) {
@@ -4182,6 +4184,64 @@ function formatWorklimateTimestamp(value) {
   return millis ? new Date(millis).toLocaleString("it-IT") : "non disponibile";
 }
 
+
+function getWorklimateRiskScore(level) {
+  return { verde: 0, giallo: 1, arancione: 2, rosso: 3 }[normalizeWorklimateRiskLevel(level)] || 0;
+}
+
+function getWorklimateRiskCoordinates(item = {}) {
+  const geo = item.coordinates;
+  const lat = Number(item.lat ?? item.gpsY ?? geo?.latitude);
+  const lon = Number(item.lon ?? item.gpsX ?? geo?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function buildWorklimateAlertZones(plants = [], risks = []) {
+  const zones = new Map();
+  const addZonePoint = (item = {}) => {
+    const coords = getWorklimateRiskCoordinates(item);
+    if (!coords) return;
+    const comune = String(item.comune || item.zona || item.area || "Zona Worklimate").trim() || "Zona Worklimate";
+    const level = normalizeWorklimateRiskLevel(item.riskLevel);
+    const key = normalizeAlertText(comune) || `${coords.lat.toFixed(2)},${coords.lon.toFixed(2)}`;
+    const existing = zones.get(key) || {
+      comune,
+      latSum: 0,
+      lonSum: 0,
+      count: 0,
+      level,
+      source: item.source || "Worklimate",
+      forecastAt: item.forecastAt,
+      operationalAdvice: item.operationalAdvice
+    };
+    existing.latSum += coords.lat;
+    existing.lonSum += coords.lon;
+    existing.count += 1;
+    if (getWorklimateRiskScore(level) >= getWorklimateRiskScore(existing.level)) {
+      existing.level = level;
+      existing.source = item.source || existing.source || "Worklimate";
+      existing.forecastAt = item.forecastAt || existing.forecastAt;
+      existing.operationalAdvice = item.operationalAdvice || existing.operationalAdvice;
+    }
+    zones.set(key, existing);
+  };
+
+  risks.forEach(addZonePoint);
+  if (!zones.size) {
+    plants.forEach((plant) => addZonePoint({
+      ...plant.worklimate,
+      comune: plant.worklimate?.comune || plant.comune,
+      lat: plant.worklimate?.lat ?? plant.gpsY,
+      lon: plant.worklimate?.lon ?? plant.gpsX
+    }));
+  }
+
+  return Array.from(zones.values()).map((zone) => ({
+    ...zone,
+    lat: zone.latSum / zone.count,
+    lon: zone.lonSum / zone.count
+  })).sort((a, b) => getWorklimateRiskScore(b.level) - getWorklimateRiskScore(a.level) || a.comune.localeCompare(b.comune, "it"));
+}
 
 function getWorklimateCachedPlants() {
   const byKey = new Map();
@@ -4208,13 +4268,26 @@ function showWorklimateWarning(message) {
 }
 
 async function loadWorklimatePage() {
+  if (worklimateLoadPromise) return worklimateLoadPromise;
+  worklimateLoadPromise = loadWorklimatePageData().finally(() => {
+    worklimateLoadPromise = null;
+  });
+  return worklimateLoadPromise;
+}
+
+async function loadWorklimatePageData() {
   ensureWorklimateMap();
+  if (!ui.worklimateLastUpdate || !ui.worklimateList) return;
   ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: caricamento...";
-  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate da Firestore...</p>";
-  const [riskResult, impiantiResult] = await Promise.allSettled([
-    runFirestoreGetWithRetry(db.collection("worklimateRiskByImpianto"), { label: "LOAD WORKLIMATE", timeoutMs: 9000, retries: 1 }),
-    runFirestoreGetWithRetry(db.collectionGroup("impianti"), { label: "LOAD WORKLIMATE IMPIANTI", timeoutMs: 9000, retries: 1 })
-  ]);
+  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate salvati...</p>";
+  const plantsSource = getWorklimateCachedPlants();
+  const riskResult = await Promise.resolve(runFirestoreGetWithRetry(
+    db.collection("worklimateRiskByImpianto"),
+    { label: "LOAD WORKLIMATE", timeoutMs: 5000, retries: 0 }
+  )).then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason })
+  );
   const riskById = new Map();
   if (riskResult.status === "fulfilled") {
     riskResult.value.docs.forEach((doc) => {
@@ -4227,22 +4300,19 @@ async function loadWorklimatePage() {
     console.error("Errore caricamento rischi Worklimate:", riskResult.reason);
   }
 
-  let plants = [];
-  if (impiantiResult.status === "fulfilled") {
-    plants = impiantiResult.value.docs
-      .map((doc) => ({ id: doc.id, ...doc.data(), worklimate: riskById.get(doc.ref.path) || riskById.get(doc.id) || null }))
-      .filter((impianto) => Number.isFinite(Number(impianto.gpsY)) && Number.isFinite(Number(impianto.gpsX)));
-  } else {
-    console.error("Errore caricamento impianti Worklimate:", impiantiResult.reason);
-    plants = getWorklimateCachedPlants().map((plant) => ({ ...plant, worklimate: riskById.get(plant.id) || plant.worklimate || null }));
-  }
+  const plants = plantsSource.map((plant) => {
+    const key = buildImpiantoKey(plant);
+    return {
+      ...plant,
+      worklimate: riskById.get(plant.path) || riskById.get(plant.id) || riskById.get(key) || plant.worklimate || null
+    };
+  });
 
   renderWorklimate(plants, Array.from(riskById.values()));
 
   const warnings = [];
   if (riskResult.status === "rejected") warnings.push(`Dati rischio Worklimate non aggiornabili ora: ${getReadableFirestoreError(riskResult.reason, "Firestore non disponibile")}`);
-  if (impiantiResult.status === "rejected" && plants.length) warnings.push(`Elenco impianti letto dalla cache locale: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
-  if (impiantiResult.status === "rejected" && !plants.length) warnings.push(`Impianti non disponibili: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
+  if (!plants.length && !Array.from(riskById.values()).some(getWorklimateRiskCoordinates)) warnings.push("Apri prima una commessa o la vista Global per popolare la mappa Worklimate con le zone già caricate.");
   warnings.forEach(showWorklimateWarning);
 }
 
@@ -4250,31 +4320,39 @@ function renderWorklimate(plants, risks) {
   ensureWorklimateMap();
   worklimateLayer?.clearLayers();
   const bounds = [];
+  const alertZones = buildWorklimateAlertZones(plants, risks);
   const latest = risks.reduce((max, item) => Math.max(max, worklimateTimestampToMillis(item.updatedAt || item.forecastAt)), 0);
   ui.worklimateLastUpdate.textContent = `Ultimo aggiornamento: ${latest ? new Date(latest).toLocaleString("it-IT") : "ultimi dati salvati non disponibili"}`;
-  const hasRed = plants.some((plant) => normalizeWorklimateRiskLevel(plant.worklimate?.riskLevel) === "rosso");
+  const hasRed = alertZones.some((zone) => normalizeWorklimateRiskLevel(zone.level) === "rosso");
   ui.worklimateRedAlert?.classList.toggle("hidden", !hasRed);
   ui.worklimateList.innerHTML = "";
-  if (!plants.length) {
-    ui.worklimateList.innerHTML = "<p class='muted'>Nessun impianto con coordinate disponibile.</p>";
+  if (!alertZones.length) {
+    ui.worklimateList.innerHTML = "<p class='muted'>Nessuna zona con allerta Worklimate disponibile.</p>";
+    setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
     return;
   }
-  plants.forEach((plant) => {
-    const risk = plant.worklimate || {};
-    const level = normalizeWorklimateRiskLevel(risk.riskLevel);
+  alertZones.forEach((zone) => {
+    const level = normalizeWorklimateRiskLevel(zone.level);
     const meta = WORKLIMATE_RISK_META[level];
-    const advice = Array.isArray(risk.operationalAdvice) && risk.operationalAdvice.length ? risk.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE;
-    const lat = Number(plant.gpsY);
-    const lon = Number(plant.gpsX);
-    const popup = `<b>${escapeHTML(plant.denominazione || "Impianto")}</b><br>${escapeHTML(plant.comune || risk.comune || "Comune non indicato")}<br><b>Rischio:</b> ${escapeHTML(meta.label)}<br><b>Previsione:</b> ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}<br><b>Fonte:</b> ${escapeHTML(risk.source || "Worklimate")}`;
-    L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 2, fillColor: meta.color, fillOpacity: 0.95 }).bindPopup(popup).addTo(worklimateLayer);
-    bounds.push([lat, lon]);
+    const advice = Array.isArray(zone.operationalAdvice) && zone.operationalAdvice.length ? zone.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE;
+    const radius = Math.min(26000, Math.max(9000, 6500 + (zone.count || 1) * 2200));
+    const popup = `<b>${escapeHTML(zone.comune)}</b><br><b>Allerta:</b> ${escapeHTML(meta.label)}<br><b>Previsione:</b> ${escapeHTML(formatWorklimateTimestamp(zone.forecastAt))}<br><b>Fonte:</b> ${escapeHTML(zone.source || "Worklimate")}`;
+    L.circle([zone.lat, zone.lon], {
+      radius,
+      stroke: true,
+      color: meta.color,
+      weight: 2,
+      opacity: 0.75,
+      fillColor: meta.color,
+      fillOpacity: 0.28
+    }).bindPopup(popup).addTo(worklimateLayer);
+    bounds.push([zone.lat, zone.lon]);
     const row = document.createElement("div");
     row.className = "simple-list-item stacked";
-    row.innerHTML = `<div><strong>${escapeHTML(plant.denominazione || "Impianto")}</strong><p class="muted">${escapeHTML(plant.comune || risk.comune || "Comune non indicato")} • ${escapeHTML(meta.label)} • previsione ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}</p><ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></div>`;
+    row.innerHTML = `<div><strong>${escapeHTML(zone.comune)}</strong><p class="muted">Allerta ${escapeHTML(meta.label)} • previsione ${escapeHTML(formatWorklimateTimestamp(zone.forecastAt))} • ${escapeHTML(zone.count || 1)} rilevazioni zona</p><ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></div>`;
     ui.worklimateList.appendChild(row);
   });
-  if (bounds.length) worklimateMapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 13 });
+  if (bounds.length) worklimateMapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
   setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
 }
 

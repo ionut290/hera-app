@@ -908,6 +908,7 @@ let personalServicesMapInstance = null;
 let personalServicesLayer = null;
 let worklimateMapInstance = null;
 let worklimateLayer = null;
+let worklimateLoadPromise = null;
 let personalServicesResults = [];
 let expandedPersonalServiceId = "";
 let activePersonalServiceCategory = "";
@@ -4163,11 +4164,12 @@ function normalizeWorklimateRiskLevel(value) {
 }
 
 function ensureWorklimateMap() {
-  if (worklimateMapInstance || !ui.worklimateMap) return;
+  if (worklimateMapInstance || !ui.worklimateMap || typeof L === "undefined") return;
   worklimateMapInstance = L.map("worklimate-map", MAP_INTERACTION_OPTIONS);
   L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(worklimateMapInstance);
   worklimateLayer = L.layerGroup().addTo(worklimateMapInstance);
   worklimateMapInstance.setView(globalMapViewState.center, 7);
+  requestAnimationFrame(() => worklimateMapInstance?.invalidateSize());
 }
 
 function worklimateTimestampToMillis(value) {
@@ -4208,13 +4210,26 @@ function showWorklimateWarning(message) {
 }
 
 async function loadWorklimatePage() {
+  if (worklimateLoadPromise) return worklimateLoadPromise;
+  worklimateLoadPromise = loadWorklimatePageData().finally(() => {
+    worklimateLoadPromise = null;
+  });
+  return worklimateLoadPromise;
+}
+
+async function loadWorklimatePageData() {
   ensureWorklimateMap();
+  if (!ui.worklimateLastUpdate || !ui.worklimateList) return;
   ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: caricamento...";
-  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate da Firestore...</p>";
-  const [riskResult, impiantiResult] = await Promise.allSettled([
-    runFirestoreGetWithRetry(db.collection("worklimateRiskByImpianto"), { label: "LOAD WORKLIMATE", timeoutMs: 9000, retries: 1 }),
-    runFirestoreGetWithRetry(db.collectionGroup("impianti"), { label: "LOAD WORKLIMATE IMPIANTI", timeoutMs: 9000, retries: 1 })
-  ]);
+  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate salvati...</p>";
+  const plantsSource = getWorklimateCachedPlants();
+  const riskResult = await Promise.resolve(runFirestoreGetWithRetry(
+    db.collection("worklimateRiskByImpianto"),
+    { label: "LOAD WORKLIMATE", timeoutMs: 5000, retries: 0 }
+  )).then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason })
+  );
   const riskById = new Map();
   if (riskResult.status === "fulfilled") {
     riskResult.value.docs.forEach((doc) => {
@@ -4227,22 +4242,19 @@ async function loadWorklimatePage() {
     console.error("Errore caricamento rischi Worklimate:", riskResult.reason);
   }
 
-  let plants = [];
-  if (impiantiResult.status === "fulfilled") {
-    plants = impiantiResult.value.docs
-      .map((doc) => ({ id: doc.id, ...doc.data(), worklimate: riskById.get(doc.ref.path) || riskById.get(doc.id) || null }))
-      .filter((impianto) => Number.isFinite(Number(impianto.gpsY)) && Number.isFinite(Number(impianto.gpsX)));
-  } else {
-    console.error("Errore caricamento impianti Worklimate:", impiantiResult.reason);
-    plants = getWorklimateCachedPlants().map((plant) => ({ ...plant, worklimate: riskById.get(plant.id) || plant.worklimate || null }));
-  }
+  const plants = plantsSource.map((plant) => {
+    const key = buildImpiantoKey(plant);
+    return {
+      ...plant,
+      worklimate: riskById.get(plant.path) || riskById.get(plant.id) || riskById.get(key) || plant.worklimate || null
+    };
+  });
 
   renderWorklimate(plants, Array.from(riskById.values()));
 
   const warnings = [];
   if (riskResult.status === "rejected") warnings.push(`Dati rischio Worklimate non aggiornabili ora: ${getReadableFirestoreError(riskResult.reason, "Firestore non disponibile")}`);
-  if (impiantiResult.status === "rejected" && plants.length) warnings.push(`Elenco impianti letto dalla cache locale: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
-  if (impiantiResult.status === "rejected" && !plants.length) warnings.push(`Impianti non disponibili: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
+  if (!plants.length) warnings.push("Apri prima una commessa o la vista Global per popolare la mappa Worklimate con gli impianti già caricati.");
   warnings.forEach(showWorklimateWarning);
 }
 
@@ -4257,6 +4269,7 @@ function renderWorklimate(plants, risks) {
   ui.worklimateList.innerHTML = "";
   if (!plants.length) {
     ui.worklimateList.innerHTML = "<p class='muted'>Nessun impianto con coordinate disponibile.</p>";
+    setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
     return;
   }
   plants.forEach((plant) => {

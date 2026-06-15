@@ -41,6 +41,7 @@
       <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
       <button id="open-hours-btn" class="btn menu-title-btn" type="button">Gestione ore</button>
       <button id="open-pos-btn" class="btn menu-title-btn" type="button">📄 POS</button>
+      <button id="open-worklimate-btn" class="btn menu-title-btn" type="button">Worklimate</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
       <button id="open-book-pdf-btn" class="btn menu-title-btn" type="button">Libro PDF</button>
@@ -957,6 +958,42 @@
       <h2 id="personal-services-list-title">Più vicini a te</h2>
       <p id="personal-services-feedback" class="muted">Scegli una categoria per caricare i luoghi.</p>
       <div id="personal-services-list" class="simple-list"></div>
+    </section>
+  </section>
+
+  <section id="worklimate-page" class="hidden">
+    <section class="card worklimate-hero">
+      <div class="page-head">
+        <button id="back-from-worklimate-btn" class="btn" type="button">← Torna</button>
+        <h2>Worklimate</h2>
+      </div>
+      <p class="muted">Mappa rischio caldo/lavoro per cantieri e impianti. L’app legge solo dati già aggiornati nel cloud.</p>
+      <p id="worklimate-last-update" class="muted">Ultimo aggiornamento: caricamento...</p>
+      <div id="worklimate-red-alert" class="worklimate-red-alert hidden" role="alert">⚠️ Rischio caldo alto: valutare modifica orario, pause frequenti e misure di prevenzione.</div>
+    </section>
+    <section class="card">
+      <div class="section-head">
+        <h2>Mappa rischio caldo/lavoro</h2>
+        <span class="pill">Fonte Worklimate</span>
+      </div>
+      <div id="worklimate-map"></div>
+      <div class="worklimate-legend" aria-label="Legenda rischio Worklimate">
+        <span><i class="worklimate-dot worklimate-risk-verde"></i> nessun rischio</span>
+        <span><i class="worklimate-dot worklimate-risk-giallo"></i> attenzione</span>
+        <span><i class="worklimate-dot worklimate-risk-arancione"></i> rischio medio/alto</span>
+        <span><i class="worklimate-dot worklimate-risk-rosso"></i> rischio alto/emergenza</span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Indicazioni operative</h2>
+      <ul class="worklimate-advice-list">
+        <li>Evitare le ore più calde.</li>
+        <li>Aumentare le pause.</li>
+        <li>Bere acqua.</li>
+        <li>Lavorare all’ombra quando possibile.</li>
+        <li>Modificare orario in caso di rischio alto.</li>
+      </ul>
+      <div id="worklimate-list" class="simple-list"></div>
     </section>
   </section>
 

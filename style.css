@@ -199,7 +199,8 @@ h2 { font-size: 1.05rem; }
 #impianti-page,
 #fuel-page,
 #segnalazioni-page,
-#howto-page {
+#howto-page,
+#worklimate-page {
   display: grid;
   gap: 12px;
 }
@@ -9201,4 +9202,60 @@ body.auth-required .menu-overlay {
 .weather-alert-squadra-btn.risk-giallo {
   background: #fef9c3;
   color: #854d0e;
+}
+
+
+#worklimate-map {
+  min-height: 420px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.worklimate-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.worklimate-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+}
+
+.worklimate-risk-verde { background: #16a34a; }
+.worklimate-risk-giallo { background: #eab308; }
+.worklimate-risk-arancione { background: #f97316; }
+.worklimate-risk-rosso { background: #dc2626; }
+
+.worklimate-marker {
+  color: #fff;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.worklimate-red-alert {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-weight: 800;
+}
+
+.worklimate-advice-list {
+  margin-top: 0;
 }

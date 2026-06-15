@@ -498,6 +498,7 @@ const ui = {
   openPersonalServicesBtn: document.getElementById("open-personal-services-btn"),
   openHoursBtn: document.getElementById("open-hours-btn"),
   openPosBtn: document.getElementById("open-pos-btn"),
+  openWorklimateBtn: document.getElementById("open-worklimate-btn"),
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   openBookPdfBtn: document.getElementById("open-book-pdf-btn"),
@@ -614,6 +615,12 @@ const ui = {
   backFromSegnalazioniBtn: document.getElementById("back-from-segnalazioni-btn"),
   howtoPage: document.getElementById("howto-page"),
   backFromHowtoBtn: document.getElementById("back-from-howto-btn"),
+  worklimatePage: document.getElementById("worklimate-page"),
+  backFromWorklimateBtn: document.getElementById("back-from-worklimate-btn"),
+  worklimateMap: document.getElementById("worklimate-map"),
+  worklimateLastUpdate: document.getElementById("worklimate-last-update"),
+  worklimateRedAlert: document.getElementById("worklimate-red-alert"),
+  worklimateList: document.getElementById("worklimate-list"),
   howtoFaqList: document.getElementById("howto-faq-list"),
   privateDocsPage: document.getElementById("private-docs-page"),
   backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
@@ -899,6 +906,8 @@ let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
 let personalServicesMapInstance = null;
 let personalServicesLayer = null;
+let worklimateMapInstance = null;
+let worklimateLayer = null;
 let personalServicesResults = [];
 let expandedPersonalServiceId = "";
 let activePersonalServiceCategory = "";
@@ -1660,6 +1669,7 @@ ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage
 ui.openPersonalServicesBtn?.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn?.addEventListener("click", openHoursPage);
 ui.openPosBtn?.addEventListener("click", openPosPage);
+ui.openWorklimateBtn?.addEventListener("click", openWorklimatePage);
 ui.openSegnalazioniBtn?.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn?.addEventListener("click", openHowtoPage);
 ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
@@ -1678,6 +1688,7 @@ ui.fuelMezzoDetailsBtn?.addEventListener("click", toggleFuelMezzoDetails);
 ui.backFromPersonalServicesBtn?.addEventListener("click", closePersonalServicesPage);
 ui.backFromSegnalazioniBtn?.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn?.addEventListener("click", closeHowtoPage);
+ui.backFromWorklimateBtn?.addEventListener("click", closeWorklimatePage);
 ui.backFromPrivateDocsBtn?.addEventListener("click", closePrivateDocsPage);
 ui.backFromHoursBtn?.addEventListener("click", closeHoursPage);
 ui.backFromPosBtn?.addEventListener("click", closePosPage);
@@ -3795,6 +3806,7 @@ function applyRoute() {
   const fuelMatch = hash.match(/^#fuel=(.+)$/);
   const showSegnalazioni = hash === "#segnalazioni";
   const showHowto = hash === "#howto";
+  const showWorklimate = hash === "#worklimate";
   const showPrivateDocs = hash === "#documenti";
   const showPos = hash === "#pos" || (window.location.pathname === "/pos" && !hash);
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
@@ -3812,7 +3824,7 @@ function applyRoute() {
   const showBiogasMap = Boolean(commessaRoute.biogas && selectedCommessaId === commessaIdFromHash && getCurrentCommessaSafetyKind() === "discariche");
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showFuel || showSegnalazioni || showHowto || showWorklimate || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
@@ -3825,6 +3837,7 @@ function applyRoute() {
   ui.personalServicesPage.classList.toggle("hidden", !showPersonalServices);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
   ui.howtoPage.classList.toggle("hidden", !showHowto);
+  ui.worklimatePage?.classList.toggle("hidden", !showWorklimate);
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
   ui.posPage?.classList.toggle("hidden", !showPos);
   ui.hoursPage.classList.toggle("hidden", !showHours);
@@ -3839,6 +3852,9 @@ function applyRoute() {
   if (ui.gpsStatus) ui.gpsStatus.classList.toggle("hidden", showResourceViewer);
   const impiantiCard = ui.impiantiLista?.closest(".card");
   if (impiantiCard) impiantiCard.classList.toggle("hidden", showResourceViewer);
+  if (showWorklimate) {
+    loadWorklimatePage();
+  }
   if (showNotesPage) {
     renderCommessaNotes();
   }
@@ -4120,6 +4136,118 @@ function openHowtoPage() {
 }
 
 function closeHowtoPage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+const WORKLIMATE_RISK_META = {
+  verde: { label: "nessun rischio", color: "#16a34a" },
+  giallo: { label: "attenzione", color: "#eab308" },
+  arancione: { label: "rischio medio/alto", color: "#f97316" },
+  rosso: { label: "rischio alto/emergenza", color: "#dc2626" }
+};
+const WORKLIMATE_DEFAULT_ADVICE = [
+  "Evitare le ore più calde.",
+  "Aumentare le pause.",
+  "Bere acqua.",
+  "Lavorare all’ombra quando possibile.",
+  "Modificare orario in caso di rischio alto."
+];
+
+function normalizeWorklimateRiskLevel(value) {
+  const normalized = normalizeAlertText(value);
+  if (normalized.includes("ross") || normalized.includes("emerg") || normalized.includes("alto")) return "rosso";
+  if (normalized.includes("aranc") || normalized.includes("medio")) return "arancione";
+  if (normalized.includes("giall") || normalized.includes("atten")) return "giallo";
+  return "verde";
+}
+
+function ensureWorklimateMap() {
+  if (worklimateMapInstance || !ui.worklimateMap) return;
+  worklimateMapInstance = L.map("worklimate-map", MAP_INTERACTION_OPTIONS);
+  L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(worklimateMapInstance);
+  worklimateLayer = L.layerGroup().addTo(worklimateMapInstance);
+  worklimateMapInstance.setView(globalMapViewState.center, 7);
+}
+
+function worklimateTimestampToMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatWorklimateTimestamp(value) {
+  const millis = worklimateTimestampToMillis(value);
+  return millis ? new Date(millis).toLocaleString("it-IT") : "non disponibile";
+}
+
+async function loadWorklimatePage() {
+  ensureWorklimateMap();
+  ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: caricamento...";
+  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate da Firestore...</p>";
+  try {
+    const [riskSnapshot, impiantiSnapshot] = await Promise.all([
+      runFirestoreGetWithRetry(db.collection("worklimateRiskByImpianto"), { label: "LOAD WORKLIMATE", timeoutMs: 9000, retries: 1 }),
+      runFirestoreGetWithRetry(db.collectionGroup("impianti"), { label: "LOAD WORKLIMATE IMPIANTI", timeoutMs: 9000, retries: 1 })
+    ]);
+    const riskById = new Map();
+    riskSnapshot.docs.forEach((doc) => {
+      const data = { id: doc.id, ...doc.data() };
+      riskById.set(doc.id, data);
+      if (data.impiantoPath) riskById.set(data.impiantoPath, data);
+      if (data.impiantoId) riskById.set(data.impiantoId, data);
+    });
+    const plants = impiantiSnapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data(), worklimate: riskById.get(doc.ref.path) || riskById.get(doc.id) || null }))
+      .filter((impianto) => Number.isFinite(Number(impianto.gpsY)) && Number.isFinite(Number(impianto.gpsX)));
+    renderWorklimate(plants, Array.from(riskById.values()));
+  } catch (error) {
+    console.error("Errore caricamento Worklimate:", error);
+    ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: dati non disponibili";
+    ui.worklimateList.innerHTML = `<p class='muted'>Errore caricamento Worklimate: ${escapeHTML(getReadableFirestoreError(error, "Firestore non disponibile"))}</p>`;
+  }
+}
+
+function renderWorklimate(plants, risks) {
+  ensureWorklimateMap();
+  worklimateLayer?.clearLayers();
+  const bounds = [];
+  const latest = risks.reduce((max, item) => Math.max(max, worklimateTimestampToMillis(item.updatedAt || item.forecastAt)), 0);
+  ui.worklimateLastUpdate.textContent = `Ultimo aggiornamento: ${latest ? new Date(latest).toLocaleString("it-IT") : "ultimi dati salvati non disponibili"}`;
+  const hasRed = plants.some((plant) => normalizeWorklimateRiskLevel(plant.worklimate?.riskLevel) === "rosso");
+  ui.worklimateRedAlert?.classList.toggle("hidden", !hasRed);
+  ui.worklimateList.innerHTML = "";
+  if (!plants.length) {
+    ui.worklimateList.innerHTML = "<p class='muted'>Nessun impianto con coordinate disponibile.</p>";
+    return;
+  }
+  plants.forEach((plant) => {
+    const risk = plant.worklimate || {};
+    const level = normalizeWorklimateRiskLevel(risk.riskLevel);
+    const meta = WORKLIMATE_RISK_META[level];
+    const advice = Array.isArray(risk.operationalAdvice) && risk.operationalAdvice.length ? risk.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE;
+    const lat = Number(plant.gpsY);
+    const lon = Number(plant.gpsX);
+    const popup = `<b>${escapeHTML(plant.denominazione || "Impianto")}</b><br>${escapeHTML(plant.comune || risk.comune || "Comune non indicato")}<br><b>Rischio:</b> ${escapeHTML(meta.label)}<br><b>Previsione:</b> ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}<br><b>Fonte:</b> ${escapeHTML(risk.source || "Worklimate")}`;
+    L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 2, fillColor: meta.color, fillOpacity: 0.95 }).bindPopup(popup).addTo(worklimateLayer);
+    bounds.push([lat, lon]);
+    const row = document.createElement("div");
+    row.className = "simple-list-item stacked";
+    row.innerHTML = `<div><strong>${escapeHTML(plant.denominazione || "Impianto")}</strong><p class="muted">${escapeHTML(plant.comune || risk.comune || "Comune non indicato")} • ${escapeHTML(meta.label)} • previsione ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}</p><ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></div>`;
+    ui.worklimateList.appendChild(row);
+  });
+  if (bounds.length) worklimateMapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 13 });
+  setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
+}
+
+function openWorklimatePage() {
+  window.location.hash = "worklimate";
+  applyRoute();
+  closeSideMenu();
+}
+
+function closeWorklimatePage() {
   window.location.hash = "";
   applyRoute();
 }

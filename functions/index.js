@@ -339,3 +339,87 @@ exports.updateWeatherAlerts = functions.pubsub.schedule("every 2 hours").timeZon
   await commitWeatherAlertWrites(db, writes);
   return { comuni: comuni.length, alerts: allAlerts.length, expired: expired.size };
 });
+
+const WORKLIMATE_OPERATIONAL_ADVICE = [
+  "Evitare le ore più calde.",
+  "Aumentare le pause.",
+  "Bere acqua.",
+  "Lavorare all’ombra quando possibile.",
+  "Modificare orario in caso di rischio alto."
+];
+
+function normalizeWorklimateRiskLevel(value) {
+  const normalized = normalizeAlertText(value);
+  if (normalized.includes("ross") || normalized.includes("emerg") || normalized.includes("molto") || normalized.includes("alto")) return "rosso";
+  if (normalized.includes("aranc") || normalized.includes("medio") || normalized.includes("moderat")) return "arancione";
+  if (normalized.includes("giall") || normalized.includes("atten") || normalized.includes("basso")) return "giallo";
+  return "verde";
+}
+
+function buildWorklimateFallbackRisk(impianto) {
+  return {
+    riskLevel: "verde",
+    source: "Worklimate - ultimo dato cloud/fallback",
+    forecastAt: admin.firestore.Timestamp.fromDate(new Date()),
+    operationalAdvice: WORKLIMATE_OPERATIONAL_ADVICE,
+    raw: { fallback: true, reason: "Endpoint Worklimate non configurato" }
+  };
+}
+
+async function fetchWorklimateRiskForImpianto(impianto) {
+  const endpoint = functions.config().worklimate?.endpoint || process.env.WORKLIMATE_ENDPOINT || "";
+  if (!endpoint) return buildWorklimateFallbackRisk(impianto);
+  const url = new URL(endpoint);
+  url.searchParams.set("lat", String(impianto.gpsY));
+  url.searchParams.set("lon", String(impianto.gpsX));
+  if (impianto.comune) url.searchParams.set("comune", String(impianto.comune));
+  const payload = await fetchJsonIfConfigured(url.toString(), "WORKLIMATE");
+  const riskLevel = normalizeWorklimateRiskLevel(payload?.riskLevel || payload?.risk || payload?.level || payload?.livelloRischio);
+  const forecastRaw = payload?.forecastAt || payload?.forecast_at || payload?.validAt || payload?.dataOraPrevisione || new Date().toISOString();
+  const forecastDate = new Date(forecastRaw);
+  return {
+    riskLevel,
+    source: payload?.source || payload?.fonte || "Worklimate",
+    forecastAt: Number.isNaN(forecastDate.getTime()) ? admin.firestore.Timestamp.fromDate(new Date()) : admin.firestore.Timestamp.fromDate(forecastDate),
+    operationalAdvice: Array.isArray(payload?.operationalAdvice) && payload.operationalAdvice.length ? payload.operationalAdvice : WORKLIMATE_OPERATIONAL_ADVICE,
+    raw: payload || null
+  };
+}
+
+exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").timeZone("Europe/Rome").onRun(async () => {
+  const db = admin.firestore();
+  const snapshot = await db.collectionGroup("impianti").get();
+  let batch = db.batch();
+  let count = 0;
+  for (const doc of snapshot.docs) {
+    const impianto = { id: doc.id, ...doc.data() };
+    const lat = Number(impianto.gpsY);
+    const lon = Number(impianto.gpsX);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const risk = await fetchWorklimateRiskForImpianto({ ...impianto, gpsY: lat, gpsX: lon });
+    const worklimateDocId = crypto.createHash("sha1").update(doc.ref.path).digest("hex");
+    batch.set(db.collection("worklimateRiskByImpianto").doc(worklimateDocId), {
+      impiantoId: doc.id,
+      impiantoPath: doc.ref.path,
+      impiantoName: impianto.denominazione || "",
+      comune: impianto.comune || "",
+      coordinates: new admin.firestore.GeoPoint(lat, lon),
+      lat,
+      lon,
+      riskLevel: risk.riskLevel,
+      forecastAt: risk.forecastAt,
+      source: risk.source || "Worklimate",
+      operationalAdvice: risk.operationalAdvice || WORKLIMATE_OPERATIONAL_ADVICE,
+      raw: risk.raw || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    count += 1;
+    if (count % 450 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  if (count % 450 !== 0) await batch.commit();
+  await db.collection("appConfig").doc("worklimateUpdate").set({ lastRunAt: admin.firestore.FieldValue.serverTimestamp(), count }, { merge: true });
+  return null;
+});

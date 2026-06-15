@@ -874,6 +874,9 @@ let squadreLoadState = { status: "idle", message: "" };
 let squadreLoadTimeout = null;
 const weatherAlertsByDate = new Map();
 let weatherAlertsDateLoaded = "";
+const worklimateRiskByCommessaId = new Map();
+let worklimateRiskCacheLoaded = false;
+let worklimateRiskCacheLoading = false;
 let selectedWeatherAlertContext = null;
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
@@ -2725,6 +2728,7 @@ if (!auth || firebaseInitError) {
       () => startChatRetentionLoop(),
       () => startHoursDeadlineAlertLoop(),
       () => loadWeatherAlertsForActiveDate().catch((error) => console.error("Caricamento allerte meteo non riuscito:", error)),
+      () => loadWorklimateRiskCacheBackground(),
       () => repairDuplicateHours().catch((error) => {
         console.error("Riparazione automatica duplicati ore all'avvio non riuscita:", error);
       })
@@ -8963,9 +8967,11 @@ function startQuickSquadraWindowTicker() {
 }
 
 
-const WEATHER_ALERT_PRIORITY = { rosso: 3, arancione: 2, giallo: 1 };
-const WEATHER_ALERT_ICON = { rosso: "🔴", arancione: "🟠", giallo: "🟡" };
-const WEATHER_ALERT_LEVEL_LABEL = { rosso: "rossa", arancione: "arancione", giallo: "gialla" };
+const WEATHER_ALERT_PRIORITY = { verde: 0, rosso: 3, arancione: 2, giallo: 1 };
+const WEATHER_ALERT_ICON = { verde: "🟢", rosso: "🔴", arancione: "🟠", giallo: "🟡" };
+const WEATHER_ALERT_LEVEL_LABEL = { verde: "verde", rosso: "rossa", arancione: "arancione", giallo: "gialla" };
+const WORKLIMATE_COLOR_LABEL = { verde: "verde", giallo: "giallo", arancione: "arancione", rosso: "rosso" };
+const WORKLIMATE_DEFAULT_ADVICE = ["Pianificare pause e idratazione in base al rischio rilevato.", "Verificare DPI, condizioni meteo locali e idoneità dell’area prima dell’avvio lavori.", "Rimodulare attività e orari se il livello è arancione o rosso."];
 
 function normalizeWeatherAlertKey(value) {
   return String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
@@ -9024,6 +9030,123 @@ function getWeatherAlertButtonLabel(alert = {}) {
   const icon = WEATHER_ALERT_ICON[livello] || "🟡";
   const levelLabel = WEATHER_ALERT_LEVEL_LABEL[livello] || alert.livello || "attiva";
   return `${icon} Allerta ${levelLabel} ${alert.tipoAllerta || "meteo"}`.trim();
+}
+
+
+function normalizeWorklimateLevel(value) {
+  const key = normalizeWeatherAlertKey(value);
+  if (key.includes("ross") || key.includes("alto") || key.includes("emerg")) return "rosso";
+  if (key.includes("aranc") || key.includes("medio") || key.includes("moderat")) return "arancione";
+  if (key.includes("giall") || key.includes("atten") || key.includes("basso")) return "giallo";
+  return "verde";
+}
+
+function getRiskTimestampMs(value) {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function getMostSevereWorklimateRisk(items = []) {
+  return [...items].sort((a, b) => {
+    const severity = (WEATHER_ALERT_PRIORITY[normalizeWorklimateLevel(b.riskLevel || b.livello)] || 0) - (WEATHER_ALERT_PRIORITY[normalizeWorklimateLevel(a.riskLevel || a.livello)] || 0);
+    return severity || getRiskTimestampMs(b.updatedAt || b.forecastAt) - getRiskTimestampMs(a.updatedAt || a.forecastAt);
+  })[0] || null;
+}
+
+function normalizeWorklimateRiskDoc(doc) {
+  const data = doc.data?.() || doc || {};
+  const path = String(data.impiantoPath || "");
+  const match = path.match(/commesse\/([^/]+)\/impianti\//);
+  const commessaId = data.commessaId || match?.[1] || "";
+  return {
+    id: doc.id || data.id || "",
+    commessaId,
+    comune: data.comune || data.zona || "",
+    impiantoName: data.impiantoName || data.denominazione || "",
+    riskLevel: normalizeWorklimateLevel(data.riskLevel || data.livello || data.level),
+    tipoRischio: data.tipoRischio || data.riskType || data.tipoAllerta || data.raw?.riskType || data.raw?.tipoRischio || "caldo",
+    forecastAt: data.forecastAt || data.validAt || data.updatedAt || null,
+    updatedAt: data.updatedAt || data.forecastAt || null,
+    operationalAdvice: Array.isArray(data.operationalAdvice) && data.operationalAdvice.length ? data.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE,
+    source: data.source || data.fonte || "Worklimate"
+  };
+}
+
+function loadWorklimateRiskCacheBackground() {
+  if (!db || !currentUser || worklimateRiskCacheLoading) return Promise.resolve([]);
+  worklimateRiskCacheLoading = true;
+  return db.collection("worklimateRiskByImpianto").get()
+    .then((snapshot) => {
+      const grouped = new Map();
+      snapshot.forEach((doc) => {
+        const risk = normalizeWorklimateRiskDoc(doc);
+        if (!risk.commessaId) return;
+        if (!grouped.has(risk.commessaId)) grouped.set(risk.commessaId, []);
+        grouped.get(risk.commessaId).push(risk);
+      });
+      worklimateRiskByCommessaId.clear();
+      grouped.forEach((items, commessaId) => worklimateRiskByCommessaId.set(commessaId, items));
+      worklimateRiskCacheLoaded = true;
+      renderSquadre();
+      return snapshot.docs;
+    })
+    .catch((error) => console.error("Cache Worklimate non disponibile:", error))
+    .finally(() => { worklimateRiskCacheLoading = false; });
+}
+
+function getWorklimateContextForCommessa(commessa) {
+  if (!commessa?.id) return null;
+  const risk = getMostSevereWorklimateRisk(worklimateRiskByCommessaId.get(commessa.id) || []);
+  const alert = getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
+  if (!risk && !alert) return null;
+  const riskLevel = normalizeWorklimateLevel(risk?.riskLevel || alert?.livello || "verde");
+  return { commessa, risk, alert, riskLevel };
+}
+
+function createWorklimateButton(commessa) {
+  const context = getWorklimateContextForCommessa(commessa);
+  if (!context) return null;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `btn worklimate-squadra-btn risk-${context.riskLevel}`;
+  button.textContent = "Worklimate";
+  button.setAttribute("aria-label", `Apri dettaglio Worklimate per ${commessa.nome || "commessa"}`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openWorklimateDetails(context);
+  });
+  return button;
+}
+
+function openWorklimateDetails(context) {
+  const { commessa, risk, alert, riskLevel } = context;
+  const comune = risk?.comune || alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile";
+  const tipo = risk?.tipoRischio || alert?.tipoAllerta || "caldo, pioggia, temporali, vento, neve/nebbia";
+  const advice = risk?.operationalAdvice || WORKLIMATE_DEFAULT_ADVICE;
+  const updated = formatAlertTimestamp(risk?.updatedAt || risk?.forecastAt || alert?.updatedAt || alert?.validFrom);
+  const overlay = document.createElement("div");
+  overlay.className = "worklimate-modal-overlay";
+  overlay.innerHTML = `<div class="worklimate-modal" role="dialog" aria-modal="true" aria-label="Dettaglio Worklimate">
+    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
+    <h2>Worklimate</h2>
+    <dl>
+      <div><dt>Nome commessa</dt><dd>${escapeHTML(commessa.nome || "Commessa")}</dd></div>
+      <div><dt>Comune/zona collegata</dt><dd>${escapeHTML(comune)}</dd></div>
+      <div><dt>Livello allerta Worklimate</dt><dd>${escapeHTML(WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel)}</dd></div>
+      <div><dt>Colore allerta</dt><dd><span class="worklimate-color-dot risk-${riskLevel}"></span>${escapeHTML(WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel)}</dd></div>
+      <div><dt>Tipo rischio</dt><dd>${escapeHTML(tipo)}</dd></div>
+      <div><dt>Ultimo aggiornamento</dt><dd>${escapeHTML(updated)}</dd></div>
+    </dl>
+    <h3>Indicazioni operative</h3>
+    <ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>
+    <p class="worklimate-compliance">Conforme alle indicazioni di sicurezza e al Testo Unico Sicurezza D.Lgs. 81/08</p>
+  </div>`;
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
+  document.body.appendChild(overlay);
+  overlay.querySelector(".worklimate-modal-close")?.focus();
 }
 
 function createSquadraWeatherAlertButton(commessa, dateKey = getActiveSquadreDateKey()) {
@@ -18503,6 +18626,8 @@ function renderSquadre() {
     const head = item.querySelector(".squadra-item-head");
     const alertButton = createSquadraWeatherAlertButton(commessa, selectedDateKey);
     if (alertButton) head?.appendChild(alertButton);
+    const worklimateButton = createWorklimateButton(commessa);
+    if (worklimateButton) head?.appendChild(worklimateButton);
     appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
     head?.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;

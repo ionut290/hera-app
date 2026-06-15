@@ -961,21 +961,17 @@
     </section>
   </section>
 
-  <section id="worklimate-page" class="hidden">
-    <section class="card worklimate-hero">
-      <div class="page-head">
-        <button id="back-from-worklimate-btn" class="btn" type="button">← Torna</button>
+  <section id="worklimate-page" class="hidden worklimate-map-only-page">
+    <div class="worklimate-map-toolbar" aria-label="Azioni mappa Worklimate">
+      <button id="back-from-worklimate-btn" class="btn" type="button">← Torna</button>
+      <div>
         <h2>Worklimate</h2>
+        <p id="worklimate-last-update" class="muted">Ultimo aggiornamento: caricamento...</p>
       </div>
-      <p class="muted">Mappa rischio caldo/lavoro per cantieri e impianti. L’app legge solo dati già aggiornati nel cloud.</p>
-      <p id="worklimate-last-update" class="muted">Ultimo aggiornamento: caricamento...</p>
-      <div id="worklimate-red-alert" class="worklimate-red-alert hidden" role="alert">⚠️ Rischio caldo alto: valutare modifica orario, pause frequenti e misure di prevenzione.</div>
-    </section>
-    <section class="card">
-      <div class="section-head">
-        <h2>Mappa rischio caldo/lavoro</h2>
-        <span class="pill">Fonte Worklimate</span>
-      </div>
+      <span class="pill">Fonte Worklimate</span>
+    </div>
+    <div id="worklimate-red-alert" class="worklimate-red-alert hidden" role="alert">⚠️ Rischio caldo alto: valutare modifica orario, pause frequenti e misure di prevenzione.</div>
+    <div class="worklimate-map-shell">
       <div id="worklimate-map"></div>
       <div class="worklimate-legend" aria-label="Legenda rischio Worklimate">
         <span><i class="worklimate-dot worklimate-risk-verde"></i> nessun rischio</span>
@@ -983,18 +979,8 @@
         <span><i class="worklimate-dot worklimate-risk-arancione"></i> rischio medio/alto</span>
         <span><i class="worklimate-dot worklimate-risk-rosso"></i> rischio alto/emergenza</span>
       </div>
-    </section>
-    <section class="card">
-      <h2>Indicazioni operative</h2>
-      <ul class="worklimate-advice-list">
-        <li>Evitare le ore più calde.</li>
-        <li>Aumentare le pause.</li>
-        <li>Bere acqua.</li>
-        <li>Lavorare all’ombra quando possibile.</li>
-        <li>Modificare orario in caso di rischio alto.</li>
-      </ul>
-      <div id="worklimate-list" class="simple-list"></div>
-    </section>
+      <div id="worklimate-list" class="worklimate-map-status" aria-live="polite"></div>
+    </div>
   </section>
 
   <section id="private-docs-page" class="hidden">

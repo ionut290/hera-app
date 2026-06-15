@@ -9259,3 +9259,115 @@ body.auth-required .menu-overlay {
 .worklimate-advice-list {
   margin-top: 0;
 }
+
+/* Worklimate map-only menu view */
+#worklimate-page.worklimate-map-only-page {
+  padding: 0;
+  min-height: 100dvh;
+  background: #0f172a;
+  position: relative;
+}
+
+.worklimate-map-toolbar {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  right: 10px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.worklimate-map-toolbar h2,
+.worklimate-map-toolbar p {
+  margin: 0;
+}
+
+.worklimate-map-toolbar h2 {
+  font-size: 1rem;
+}
+
+.worklimate-map-toolbar .pill {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.worklimate-map-shell {
+  position: relative;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+#worklimate-page.worklimate-map-only-page #worklimate-map {
+  height: 100dvh;
+  min-height: 100dvh;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+#worklimate-page.worklimate-map-only-page .worklimate-legend {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 500;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.20);
+  color: #334155;
+}
+
+#worklimate-page.worklimate-map-only-page .worklimate-map-status {
+  position: fixed;
+  left: 12px;
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  z-index: 500;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.24);
+}
+
+#worklimate-page.worklimate-map-only-page .worklimate-map-status p {
+  margin: 0;
+  color: inherit;
+  font-weight: 700;
+}
+
+#worklimate-page.worklimate-map-only-page .worklimate-red-alert {
+  position: fixed;
+  top: calc(86px + env(safe-area-inset-top, 0px));
+  left: 12px;
+  right: 12px;
+  z-index: 500;
+  margin: 0;
+  box-shadow: 0 12px 28px rgba(153, 27, 27, 0.18);
+}
+
+@media (max-width: 720px) {
+  .worklimate-map-toolbar {
+    align-items: flex-start;
+  }
+
+  .worklimate-map-toolbar .pill {
+    display: none;
+  }
+
+  #worklimate-page.worklimate-map-only-page .worklimate-legend {
+    font-size: 0.78rem;
+    gap: 6px 10px;
+  }
+}

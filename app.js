@@ -4276,17 +4276,23 @@ function renderWorklimate(plants, risks) {
     const risk = plant.worklimate || {};
     const level = normalizeWorklimateRiskLevel(risk.riskLevel);
     const meta = WORKLIMATE_RISK_META[level];
-    const advice = Array.isArray(risk.operationalAdvice) && risk.operationalAdvice.length ? risk.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE;
     const lat = Number(plant.gpsY);
     const lon = Number(plant.gpsX);
     const popup = `<b>${escapeHTML(plant.denominazione || "Impianto")}</b><br>${escapeHTML(plant.comune || risk.comune || "Comune non indicato")}<br><b>Rischio:</b> ${escapeHTML(meta.label)}<br><b>Previsione:</b> ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}<br><b>Fonte:</b> ${escapeHTML(risk.source || "Worklimate")}`;
-    L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 2, fillColor: meta.color, fillOpacity: 0.95 }).bindPopup(popup).addTo(worklimateLayer);
+    L.circle([lat, lon], {
+      radius: level === "rosso" ? 1800 : level === "arancione" ? 1400 : level === "giallo" ? 1050 : 750,
+      stroke: false,
+      fillColor: meta.color,
+      fillOpacity: level === "verde" ? 0.18 : 0.32,
+      interactive: false
+    }).addTo(worklimateLayer);
+    L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 2, fillColor: meta.color, fillOpacity: 0.98 }).bindPopup(popup).addTo(worklimateLayer);
     bounds.push([lat, lon]);
-    const row = document.createElement("div");
-    row.className = "simple-list-item stacked";
-    row.innerHTML = `<div><strong>${escapeHTML(plant.denominazione || "Impianto")}</strong><p class="muted">${escapeHTML(plant.comune || risk.comune || "Comune non indicato")} • ${escapeHTML(meta.label)} • previsione ${escapeHTML(formatWorklimateTimestamp(risk.forecastAt))}</p><ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></div>`;
-    ui.worklimateList.appendChild(row);
   });
+  if (ui.worklimateList) {
+    const visibleAlerts = plants.filter((plant) => normalizeWorklimateRiskLevel(plant.worklimate?.riskLevel) !== "verde").length;
+    ui.worklimateList.innerHTML = `<p>${escapeHTML(String(plants.length))} impianti in mappa${visibleAlerts ? ` • ${escapeHTML(String(visibleAlerts))} con allerta caldo/lavoro` : ""}</p>`;
+  }
   if (bounds.length) worklimateMapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 13 });
   setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
 }

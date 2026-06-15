@@ -4200,9 +4200,17 @@ function getWorklimateCachedPlants() {
   return Array.from(byKey.values());
 }
 
+function setWorklimateStatus(message, { muted = true } = {}) {
+  if (!ui.worklimateList) return;
+  const text = String(message || "").trim();
+  ui.worklimateList.classList.toggle("hidden", !text);
+  ui.worklimateList.innerHTML = text ? `<p class="${muted ? "muted" : ""}">${escapeHTML(text)}</p>` : "";
+}
+
 function showWorklimateWarning(message) {
   const text = String(message || "").trim();
   if (!text || !ui.worklimateList) return;
+  ui.worklimateList.classList.remove("hidden");
   const warning = document.createElement("p");
   warning.className = "muted";
   warning.textContent = text;
@@ -4221,7 +4229,7 @@ async function loadWorklimatePageData() {
   ensureWorklimateMap();
   if (!ui.worklimateLastUpdate || !ui.worklimateList) return;
   ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: caricamento...";
-  ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate salvati...</p>";
+  setWorklimateStatus("");
   const plantsSource = getWorklimateCachedPlants();
   const riskResult = await Promise.resolve(runFirestoreGetWithRetry(
     db.collection("worklimateRiskByImpianto"),
@@ -4266,9 +4274,9 @@ function renderWorklimate(plants, risks) {
   ui.worklimateLastUpdate.textContent = `Ultimo aggiornamento: ${latest ? new Date(latest).toLocaleString("it-IT") : "ultimi dati salvati non disponibili"}`;
   const hasRed = plants.some((plant) => normalizeWorklimateRiskLevel(plant.worklimate?.riskLevel) === "rosso");
   ui.worklimateRedAlert?.classList.toggle("hidden", !hasRed);
-  ui.worklimateList.innerHTML = "";
+  setWorklimateStatus("");
   if (!plants.length) {
-    ui.worklimateList.innerHTML = "<p class='muted'>Nessun impianto con coordinate disponibile.</p>";
+    setWorklimateStatus("Nessun impianto con coordinate disponibile.");
     setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);
     return;
   }
@@ -4291,7 +4299,7 @@ function renderWorklimate(plants, risks) {
   });
   if (ui.worklimateList) {
     const visibleAlerts = plants.filter((plant) => normalizeWorklimateRiskLevel(plant.worklimate?.riskLevel) !== "verde").length;
-    ui.worklimateList.innerHTML = `<p>${escapeHTML(String(plants.length))} impianti in mappa${visibleAlerts ? ` • ${escapeHTML(String(visibleAlerts))} con allerta caldo/lavoro` : ""}</p>`;
+    setWorklimateStatus(`${plants.length} impianti in mappa${visibleAlerts ? ` • ${visibleAlerts} con allerta caldo/lavoro` : ""}`, { muted: false });
   }
   if (bounds.length) worklimateMapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 13 });
   setTimeout(() => worklimateMapInstance?.invalidateSize(), 80);

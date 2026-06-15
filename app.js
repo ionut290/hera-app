@@ -4182,31 +4182,68 @@ function formatWorklimateTimestamp(value) {
   return millis ? new Date(millis).toLocaleString("it-IT") : "non disponibile";
 }
 
+
+function getWorklimateCachedPlants() {
+  const byKey = new Map();
+  const addPlant = (plant) => {
+    if (!plant || !Number.isFinite(Number(plant.gpsY)) || !Number.isFinite(Number(plant.gpsX))) return;
+    const key = buildImpiantoKey(plant) || plant.id || `${plant.gpsY},${plant.gpsX}`;
+    if (!byKey.has(key)) byKey.set(key, plant);
+  };
+  globalImpianti.forEach(addPlant);
+  currentImpianti.forEach(addPlant);
+  impiantiByCommessaId.forEach((impianti) => {
+    if (Array.isArray(impianti)) impianti.forEach(addPlant);
+  });
+  return Array.from(byKey.values());
+}
+
+function showWorklimateWarning(message) {
+  const text = String(message || "").trim();
+  if (!text || !ui.worklimateList) return;
+  const warning = document.createElement("p");
+  warning.className = "muted";
+  warning.textContent = text;
+  ui.worklimateList.appendChild(warning);
+}
+
 async function loadWorklimatePage() {
   ensureWorklimateMap();
   ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: caricamento...";
   ui.worklimateList.innerHTML = "<p class='muted'>Caricamento dati Worklimate da Firestore...</p>";
-  try {
-    const [riskSnapshot, impiantiSnapshot] = await Promise.all([
-      runFirestoreGetWithRetry(db.collection("worklimateRiskByImpianto"), { label: "LOAD WORKLIMATE", timeoutMs: 9000, retries: 1 }),
-      runFirestoreGetWithRetry(db.collectionGroup("impianti"), { label: "LOAD WORKLIMATE IMPIANTI", timeoutMs: 9000, retries: 1 })
-    ]);
-    const riskById = new Map();
-    riskSnapshot.docs.forEach((doc) => {
+  const [riskResult, impiantiResult] = await Promise.allSettled([
+    runFirestoreGetWithRetry(db.collection("worklimateRiskByImpianto"), { label: "LOAD WORKLIMATE", timeoutMs: 9000, retries: 1 }),
+    runFirestoreGetWithRetry(db.collectionGroup("impianti"), { label: "LOAD WORKLIMATE IMPIANTI", timeoutMs: 9000, retries: 1 })
+  ]);
+  const riskById = new Map();
+  if (riskResult.status === "fulfilled") {
+    riskResult.value.docs.forEach((doc) => {
       const data = { id: doc.id, ...doc.data() };
       riskById.set(doc.id, data);
       if (data.impiantoPath) riskById.set(data.impiantoPath, data);
       if (data.impiantoId) riskById.set(data.impiantoId, data);
     });
-    const plants = impiantiSnapshot.docs
+  } else {
+    console.error("Errore caricamento rischi Worklimate:", riskResult.reason);
+  }
+
+  let plants = [];
+  if (impiantiResult.status === "fulfilled") {
+    plants = impiantiResult.value.docs
       .map((doc) => ({ id: doc.id, ...doc.data(), worklimate: riskById.get(doc.ref.path) || riskById.get(doc.id) || null }))
       .filter((impianto) => Number.isFinite(Number(impianto.gpsY)) && Number.isFinite(Number(impianto.gpsX)));
-    renderWorklimate(plants, Array.from(riskById.values()));
-  } catch (error) {
-    console.error("Errore caricamento Worklimate:", error);
-    ui.worklimateLastUpdate.textContent = "Ultimo aggiornamento: dati non disponibili";
-    ui.worklimateList.innerHTML = `<p class='muted'>Errore caricamento Worklimate: ${escapeHTML(getReadableFirestoreError(error, "Firestore non disponibile"))}</p>`;
+  } else {
+    console.error("Errore caricamento impianti Worklimate:", impiantiResult.reason);
+    plants = getWorklimateCachedPlants().map((plant) => ({ ...plant, worklimate: riskById.get(plant.id) || plant.worklimate || null }));
   }
+
+  renderWorklimate(plants, Array.from(riskById.values()));
+
+  const warnings = [];
+  if (riskResult.status === "rejected") warnings.push(`Dati rischio Worklimate non aggiornabili ora: ${getReadableFirestoreError(riskResult.reason, "Firestore non disponibile")}`);
+  if (impiantiResult.status === "rejected" && plants.length) warnings.push(`Elenco impianti letto dalla cache locale: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
+  if (impiantiResult.status === "rejected" && !plants.length) warnings.push(`Impianti non disponibili: ${getReadableFirestoreError(impiantiResult.reason, "Firestore non disponibile")}`);
+  warnings.forEach(showWorklimateWarning);
 }
 
 function renderWorklimate(plants, risks) {

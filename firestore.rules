@@ -66,6 +66,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /worklimateRiskByImpianto/{riskId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /alertReadConfirmations/{confirmationId} {
       allow read: if isAdmin() || (signedIn() && resource.data.utente == request.auth.uid);
       allow create: if signedIn() && request.resource.data.utente == request.auth.uid;

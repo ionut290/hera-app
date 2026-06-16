@@ -21006,6 +21006,7 @@ function evaluateTimbraturaReminders(now = new Date()) {
 const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/mappe-rischi/bollettino-di-criticita/";
 const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
 const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
+const WORKLIMATE_FORECAST_URL = "https://app.worklimate.it/ordinanza-caldo-lavoro";
 const ALERT_LEVEL_META = {
   green: { rank: 0, emoji: "🟢", className: "alert-green", label: "Nessuna allerta" },
   yellow: { rank: 1, emoji: "🟡", className: "alert-yellow", label: "Allerta Protezione Civile" },
@@ -21171,7 +21172,8 @@ async function fetchWeather() {
     renderWeatherDiagnostics(diagnostics);
   } catch (error) {
     ui.weatherSummary.textContent = "Meteo non disponibile.";
-    ui.weatherRisks.innerHTML = "<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>";
+    ui.weatherRisks.innerHTML = `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
+    bindHomeWorklimateButton();
     renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
     ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
     diagnostics.error = error?.message || "errore sconosciuto";
@@ -21215,7 +21217,8 @@ async function renderWeatherDetails(data, target) {
 
   const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
   const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
-  ui.weatherRisks.innerHTML = `${riskChips}${buildCivilProtectionAlertChip(alert)}`;
+  ui.weatherRisks.innerHTML = `${riskChips}${buildCivilProtectionAlertChip(alert)}${buildHomeWorklimateButton({ temps, target })}`;
+  bindHomeWorklimateButton();
   renderCivilProtectionAlert(alert);
 
   const rows = times.slice(0, 12).map((time, idx) => {
@@ -21381,6 +21384,36 @@ function pickHighestAlert(alerts) {
 function buildAlertLabel(level, phenomenon) {
   if (level === "green") return "Nessuna allerta";
   return phenomenon && phenomenon !== "Protezione Civile" ? `Allerta ${phenomenon}` : "Allerta Protezione Civile";
+}
+
+function getHomeWorklimateRiskLevel(temps = []) {
+  const maxTemp = Math.max(...temps.slice(0, 12).map((value) => Number(value) || -100), -100);
+  if (maxTemp >= 38) return "rosso";
+  if (maxTemp >= 35) return "arancione";
+  if (maxTemp >= 32) return "giallo";
+  return "verde";
+}
+
+function getHomeWorklimateButtonLabel(riskLevel, target) {
+  const icon = WEATHER_ALERT_ICON[riskLevel] || "🟢";
+  const levelLabel = WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel;
+  const sourceLabel = target?.source === "gps" ? "mia posizione" : target?.source === "commessa" ? "zona commessa" : "zona predefinita";
+  return `${icon} Worklimate ${levelLabel} • ${sourceLabel}`;
+}
+
+function buildHomeWorklimateButton({ temps = [], target = null } = {}) {
+  const riskLevel = getHomeWorklimateRiskLevel(temps);
+  const label = getHomeWorklimateButtonLabel(riskLevel, target);
+  return `<button type="button" class="weather-risk-chip home-worklimate-btn risk-${riskLevel}" data-home-worklimate-url="${escapeHTML(WORKLIMATE_FORECAST_URL)}" aria-label="Apri previsioni Worklimate per la mia posizione">${escapeHTML(label)}</button>`;
+}
+
+function bindHomeWorklimateButton() {
+  ui.weatherRisks?.querySelector("[data-home-worklimate-url]")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const url = event.currentTarget.getAttribute("data-home-worklimate-url") || WORKLIMATE_FORECAST_URL;
+    window.open(url, "_blank", "noopener,noreferrer");
+  });
 }
 
 function buildCivilProtectionAlertChip(alert) {

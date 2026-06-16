@@ -21394,26 +21394,71 @@ function getHomeWorklimateRiskLevel(temps = []) {
   return "verde";
 }
 
-function getHomeWorklimateButtonLabel(riskLevel, target) {
-  const icon = WEATHER_ALERT_ICON[riskLevel] || "🟢";
-  const levelLabel = WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel;
-  const sourceLabel = target?.source === "gps" ? "mia posizione" : target?.source === "commessa" ? "zona commessa" : "zona predefinita";
-  return `${icon} Worklimate ${levelLabel} • ${sourceLabel}`;
+function getHomeWorklimateButtonLabel() {
+  return "worklimate";
 }
 
 function buildHomeWorklimateButton({ temps = [], target = null } = {}) {
   const riskLevel = getHomeWorklimateRiskLevel(temps);
   const label = getHomeWorklimateButtonLabel(riskLevel, target);
-  return `<button type="button" class="weather-risk-chip home-worklimate-btn risk-${riskLevel}" data-home-worklimate-url="${escapeHTML(WORKLIMATE_FORECAST_URL)}" aria-label="Apri previsioni Worklimate per la mia posizione">${escapeHTML(label)}</button>`;
+  return `<button type="button" class="weather-risk-chip home-worklimate-btn risk-${riskLevel}" data-home-worklimate-url="${escapeHTML(WORKLIMATE_FORECAST_URL)}" data-home-worklimate-risk="${escapeHTML(riskLevel)}" aria-label="Apri bacheca Worklimate">${escapeHTML(label)}</button>`;
 }
 
 function bindHomeWorklimateButton() {
   ui.weatherRisks?.querySelector("[data-home-worklimate-url]")?.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const url = event.currentTarget.getAttribute("data-home-worklimate-url") || WORKLIMATE_FORECAST_URL;
-    window.open(url, "_blank", "noopener,noreferrer");
+    const button = event.currentTarget;
+    const url = button.getAttribute("data-home-worklimate-url") || WORKLIMATE_FORECAST_URL;
+    const riskLevel = button.getAttribute("data-home-worklimate-risk") || "verde";
+    openHomeWorklimateBoard({ riskLevel, url });
   });
+}
+
+function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
+  const level = normalizeWorklimateLevel(riskLevel);
+  const levelLabel = WORKLIMATE_COLOR_LABEL[level] || level;
+  const icon = WEATHER_ALERT_ICON[level] || "🟢";
+  const target = currentWeatherTarget || getWeatherTargetCoordinates();
+  const positionLabel = target?.source === "gps" ? "mia postazione GPS" : target?.source === "commessa" ? "zona della commessa" : "postazione predefinita";
+  const overlay = document.createElement("div");
+  overlay.className = "worklimate-modal-overlay";
+  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal" role="dialog" aria-modal="true" aria-label="Bacheca Worklimate rischio calore">
+    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
+    <div class="worklimate-board-hero risk-${level}">
+      <span class="worklimate-board-emoji" aria-hidden="true">${escapeHTML(icon)}</span>
+      <div>
+        <p class="worklimate-board-kicker">Normativa in alto • Estate 2026</p>
+        <h2>Gestione rischio calore</h2>
+        <p>Procedura operativa per consultare Worklimate e organizzare il lavoro in sicurezza.</p>
+      </div>
+    </div>
+    <section class="worklimate-law-card">
+      <strong>📌 Ordinanza Regionale n. 72 del 03/06/2026</strong>
+      <span>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</span>
+    </section>
+    <div class="worklimate-board-grid">
+      <article><span>🌡️</span><h3>Livello attuale</h3><p><b>${escapeHTML(levelLabel)}</b> per ${escapeHTML(positionLabel)}.</p></article>
+      <article><span>👷‍♂️</span><h3>Controllo giornaliero</h3><p>Il tecnico di riferimento verifica ogni giorno le previsioni sul portale Worklimate.</p></article>
+      <article><span>🚫</span><h3>Rischio ALTO</h3><p>Se previsto per il giorno successivo, sospendere le attività all'aperto dalle <b>12:30 alle 16:00</b>.</p></article>
+      <article><span>💬</span><h3>Comunicazioni</h3><p>La comunicazione arriva solo in caso di previsione di rischio alto, tramite WhatsApp dal tecnico.</p></article>
+      <article><span>🕘</span><h3>Orario anticipato</h3><p>In caso di rischio alto può essere adottata fine giornata alle 12:30 con rientro in sede.</p></article>
+      <article><span>⚠️</span><h3>Attenzione</h3><p>Le previsioni possono variare: serve massima disponibilità e flessibilità organizzativa.</p></article>
+    </div>
+    <div class="worklimate-board-actions">
+      <button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Visita il sito</button>
+      <small>Apri Worklimate e controlla le previsioni per la tua postazione.</small>
+    </div>
+  </div>`;
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
+  overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
+    const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
+    window.open(visitUrl, "_blank", "noopener,noreferrer");
+  });
+  document.body.appendChild(overlay);
+  overlay.querySelector(".worklimate-visit-btn")?.focus();
 }
 
 function buildCivilProtectionAlertChip(alert) {

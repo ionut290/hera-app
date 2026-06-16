@@ -9531,3 +9531,115 @@ body.worklimate-page-open {
   .worklimate-board-hero { align-items: flex-start; }
   .worklimate-board-grid { grid-template-columns: 1fr; }
 }
+
+.worklimate-click-card {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.worklimate-click-card:hover,
+.worklimate-click-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.14);
+  outline: none;
+}
+
+.worklimate-click-card small {
+  display: block;
+  margin-top: 10px;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.worklimate-click-card.worklimate-board-hero {
+  border-style: solid;
+}
+
+.worklimate-click-card.worklimate-board-hero > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  font-size: 2.1rem;
+}
+
+.worklimate-click-card.worklimate-board-hero h3 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 1.35rem;
+}
+
+.worklimate-board-grid .worklimate-click-card {
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.worklimate-board-grid .worklimate-click-card > span {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: #e0f2fe;
+  font-size: 1.35rem;
+}
+
+.worklimate-board-grid .worklimate-click-card h3 { margin-bottom: 6px; }
+.worklimate-board-grid .worklimate-click-card p { margin: 0; color: #475569; line-height: 1.42; }
+
+.worklimate-detail-view {
+  display: grid;
+  gap: 14px;
+}
+
+.worklimate-detail-back {
+  justify-self: start;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.worklimate-detail-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.worklimate-detail-card h2,
+.worklimate-detail-card p,
+.worklimate-detail-card ul {
+  margin: 0;
+}
+
+.worklimate-detail-card p,
+.worklimate-detail-card li {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.worklimate-detail-card ul {
+  padding-left: 20px;
+}

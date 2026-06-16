@@ -21422,9 +21422,13 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   const target = currentWeatherTarget || getWeatherTargetCoordinates();
   const positionLabel = target?.source === "gps" ? "mia postazione GPS" : target?.source === "commessa" ? "zona della commessa" : "postazione predefinita";
   const overlay = document.createElement("div");
-  overlay.className = "worklimate-modal-overlay";
-  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal" role="dialog" aria-modal="true" aria-label="Bacheca Worklimate rischio calore">
-    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
+  overlay.className = "worklimate-modal-overlay worklimate-page-overlay";
+  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page" role="dialog" aria-modal="true" aria-label="Pagina Worklimate rischio calore">
+    <header class="worklimate-page-header">
+      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina Worklimate">←</button>
+      <div><p>Procedura sicurezza</p><strong>Rischio calore</strong></div>
+      <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
+    </header>
     <div class="worklimate-board-hero risk-${level}">
       <span class="worklimate-board-emoji" aria-hidden="true">${escapeHTML(icon)}</span>
       <div>
@@ -21436,6 +21440,10 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
     <section class="worklimate-law-card">
       <strong>📌 Ordinanza Regionale n. 72 del 03/06/2026</strong>
       <span>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</span>
+    </section>
+    <section class="worklimate-page-intro">
+      <h3>Indicazioni operative</h3>
+      <p>Questa pagina raccoglie cosa controllare prima del turno, quando rimodulare le attività e come ricevere gli aggiornamenti ufficiali.</p>
     </section>
     <div class="worklimate-board-grid">
       <article><span>🌡️</span><h3>Livello attuale</h3><p><b>${escapeHTML(levelLabel)}</b> per ${escapeHTML(positionLabel)}.</p></article>
@@ -21450,15 +21458,20 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
       <small>Apri Worklimate e controlla le previsioni per la tua postazione.</small>
     </div>
   </div>`;
-  const close = () => overlay.remove();
+  const close = () => {
+    document.body.classList.remove("worklimate-page-open");
+    overlay.remove();
+  };
+  document.body.classList.add("worklimate-page-open");
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
+  overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
   overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
     const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
     window.open(visitUrl, "_blank", "noopener,noreferrer");
   });
   document.body.appendChild(overlay);
-  overlay.querySelector(".worklimate-visit-btn")?.focus();
+  overlay.querySelector(".worklimate-page-back")?.focus();
 }
 
 function buildCivilProtectionAlertChip(alert) {

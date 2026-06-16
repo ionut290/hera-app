@@ -9312,3 +9312,25 @@ body.auth-required .menu-overlay {
     grid-template-columns: 1fr;
   }
 }
+
+.home-worklimate-btn {
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 800;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.home-worklimate-btn:hover,
+.home-worklimate-btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+  outline: none;
+}
+
+.home-worklimate-btn.risk-verde { border-color: #16a34a; background: #dcfce7; color: #14532d; }
+.home-worklimate-btn.risk-giallo { border-color: #ca8a04; background: #fef9c3; color: #713f12; }
+.home-worklimate-btn.risk-arancione { border-color: #ea580c; background: #ffedd5; color: #7c2d12; }
+.home-worklimate-btn.risk-rosso { border-color: #dc2626; background: #fee2e2; color: #7f1d1d; }

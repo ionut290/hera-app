@@ -9119,6 +9119,13 @@ function createWorklimateButton(commessa) {
   return button;
 }
 
+function appendSquadreHeaderRiskActions(container, commessa, dateKey = getActiveSquadreDateKey()) {
+  const alertButton = createSquadraWeatherAlertButton(commessa, dateKey);
+  if (alertButton) container?.appendChild(alertButton);
+  const worklimateButton = createWorklimateButton(commessa);
+  if (worklimateButton) container?.appendChild(worklimateButton);
+}
+
 function openWorklimateDetails(context) {
   const { commessa, risk, alert, riskLevel } = context;
   const comune = risk?.comune || alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile";
@@ -18624,10 +18631,7 @@ function renderSquadre() {
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
-    const alertButton = createSquadraWeatherAlertButton(commessa, selectedDateKey);
-    if (alertButton) head?.appendChild(alertButton);
-    const worklimateButton = createWorklimateButton(commessa);
-    if (worklimateButton) head?.appendChild(worklimateButton);
+    appendSquadreHeaderRiskActions(head, commessa, selectedDateKey);
     appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
     head?.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;

@@ -9335,6 +9335,102 @@ body.auth-required .menu-overlay {
 .home-worklimate-btn.risk-arancione { border-color: #ea580c; background: #ffedd5; color: #7c2d12; }
 .home-worklimate-btn.risk-rosso { border-color: #dc2626; background: #fee2e2; color: #7f1d1d; }
 
+
+body.worklimate-page-open {
+  overflow: hidden;
+}
+
+.worklimate-page-overlay {
+  place-items: stretch;
+  padding: 0;
+  background: #f8fafc;
+}
+
+.worklimate-board-modal.worklimate-board-page {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  box-shadow: none;
+}
+
+.worklimate-page-header {
+  position: sticky;
+  top: calc(-1 * max(16px, env(safe-area-inset-top)));
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  gap: 10px;
+  align-items: center;
+  margin: calc(-1 * max(16px, env(safe-area-inset-top))) calc(-1 * max(18px, env(safe-area-inset-right))) 18px calc(-1 * max(18px, env(safe-area-inset-left)));
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 12px max(14px, env(safe-area-inset-left));
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.worklimate-page-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.worklimate-page-header strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1.08rem;
+}
+
+.worklimate-page-back {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 1.35rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.worklimate-board-page .worklimate-modal-close {
+  position: static;
+  width: 40px;
+  height: 40px;
+  color: #1d4ed8;
+}
+
+.worklimate-page-intro {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.worklimate-page-intro h3 { margin-bottom: 6px; }
+.worklimate-page-intro p { margin: 0; line-height: 1.45; }
+
+@media (min-width: 820px) {
+  .worklimate-board-modal.worklimate-board-page {
+    padding-right: max(32px, env(safe-area-inset-right));
+    padding-left: max(32px, env(safe-area-inset-left));
+  }
+
+  .worklimate-board-page > :not(.worklimate-page-header) {
+    max-width: 980px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+}
+
 .worklimate-board-modal {
   width: min(760px, 100%);
   background:

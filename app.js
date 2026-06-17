@@ -798,6 +798,7 @@ let unsubscribeHoursStats = null;
 let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
 let currentWeatherTarget = { lat: 44.4949, lon: 11.3426 };
+let homeWorklimateProcedureSnapshot = null;
 let currentCivilProtectionAlert = { level: "green", label: "Nessuna allerta", url: "" };
 let currentImpianti = [];
 let currentCommessaNotes = [];
@@ -9221,6 +9222,54 @@ function getWeatherAlertSafetyIndications(tipo = "") {
   return ["Valutare le condizioni operative prima dell'avvio attività.", "Seguire le procedure aziendali e le indicazioni del preposto.", "Sospendere le attività non sicure e avvisare il responsabile."];
 }
 
+function getWeatherAlertNumericValue(alert = {}, keys = []) {
+  for (const key of keys) {
+    const value = key.split(".").reduce((acc, part) => acc?.[part], alert);
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function formatWeatherAlertMetric(value, suffix = "") {
+  if (value === null || value === undefined || value === "") return "N/D";
+  const number = Number(value);
+  if (Number.isFinite(number)) return `${Math.round(number)}${suffix}`;
+  return String(value);
+}
+
+function getWeatherAlertLevelMeta(livello = "") {
+  const level = normalizeWorklimateLevel(livello);
+  const labels = {
+    verde: { text: "Rischio basso", explanation: "Condizioni generalmente compatibili con le attività ordinarie: mantenere idratazione e monitoraggio." },
+    giallo: { text: "Rischio moderato", explanation: "Possibili condizioni di disagio: programmare pause e verificare lavoratori più esposti." },
+    arancione: { text: "Rischio moderato-alto", explanation: "Condizioni meteorologiche che possono comportare rischi per la salute: attenzione e precauzioni necessarie." },
+    rosso: { text: "Rischio alto", explanation: "Condizioni critiche: ridurre l'esposizione, sospendere o rimodulare le attività pesanti e sorvegliare gli operatori." }
+  };
+  return { level, ...(labels[level] || labels.verde) };
+}
+
+function getWeatherAlertTrend(alert = {}) {
+  const explicit = alert.tendenzaRischio || alert.tendenza || alert.trend || alert.raw?.trend;
+  if (explicit) return explicit;
+  const level = normalizeWorklimateLevel(alert.livello);
+  if (level === "rosso") return "Critica";
+  if (level === "arancione") return "In aumento / elevata";
+  if (level === "giallo") return "Da monitorare";
+  return "Stabile";
+}
+
+function getOfficialUpdateButtonsMarkup(alert = {}) {
+  const regionalUrl = alert.url || alert.link || CIVIL_PROTECTION_ALERT_PAGE;
+  const buttons = [
+    ["Worklimate", WORKLIMATE_FORECAST_URL, "🌡️"],
+    ["Bollettino meteo regionale", regionalUrl, "☁️"],
+    ["Protezione Civile", CIVIL_PROTECTION_ALERT_PAGE, "🚨"],
+    ["Ministero della Salute", "https://www.salute.gov.it/portale/caldo/homeCaldo.jsp", "🏛️"]
+  ];
+  return buttons.map(([label, href, icon]) => `<a class="heat-official-btn" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer"><span>${escapeHTML(icon)}</span>${escapeHTML(label)}<b aria-hidden="true">→</b></a>`).join("");
+}
+
 function renderWeatherAlertSafetyPage(alertId = "") {
   const commessa = commesseById.get(selectedCommessaId);
   let alert = getAlertsForCommessa(commessa).find((item) => String(item.id || "") === String(alertId || "")) || getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
@@ -9228,24 +9277,50 @@ function renderWeatherAlertSafetyPage(alertId = "") {
   const dataProgrammata = getCommessaScheduledDate(commessa?.id);
   const impianto = getScheduledImpiantiForCommessa(commessa, dataProgrammata).find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
   selectedWeatherAlertContext = { commessa, alert, impianto, dataProgrammata };
-  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || "Comune"}`;
-  const indications = getWeatherAlertSafetyIndications(alert.tipoAllerta).map((text) => `<li>${escapeHTML(text)}</li>`).join("");
-  const isWorklimateHeat = normalizeWeatherAlertKey(alert.fonte).includes("worklimate") && normalizeWeatherAlertKey(alert.tipoAllerta).includes("caldo");
-  const worklimateScenario = isWorklimateHeat ? `<p><b>Scenario Worklimate:</b> lavoratore esposto al sole, attività fisica intensa, previsione ore 12:00.</p>` : "";
+  const meta = getWeatherAlertLevelMeta(alert.livello);
+  const source = alert.fonte || alert.source || "Protezione Civile / Worklimate";
+  const maxTemp = getWeatherAlertNumericValue(alert, ["temperaturaMassima", "maxTemperature", "temperatureMax", "raw.temperaturaMassima", "raw.maxTemp"]);
+  const perceived = getWeatherAlertNumericValue(alert, ["temperaturaPercepita", "apparentTemperature", "apparentTemp", "raw.temperaturaPercepita", "raw.apparentTemperature"]);
+  const wbgt = getWeatherAlertNumericValue(alert, ["wbgt", "indiceWbgt", "worklimateIndex", "raw.wbgt", "raw.indiceWbgt"]);
+  const humidity = getWeatherAlertNumericValue(alert, ["umidita", "humidity", "relativeHumidity", "raw.umidita", "raw.relativeHumidity"]);
+  const wind = getWeatherAlertNumericValue(alert, ["vento", "windSpeed", "windSpeedKmh", "raw.vento", "raw.windSpeedKmh"]);
+  const updatedAt = alert.updatedAt || alert.lastUpdated || alert.validFrom || alert.data || null;
+  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || impianto.comune || "Comune"} • ${source}`;
+  if (ui.weatherAlertSafetyConfirmBtn) ui.weatherAlertSafetyConfirmBtn.textContent = "Ho letto e confermo";
   if (ui.weatherAlertSafetyContent) ui.weatherAlertSafetyContent.innerHTML = `
-    <article class="weather-detail-section"><h3>Riepilogo</h3>
-      <p><b>Commessa:</b> ${escapeHTML([commessa?.codice, commessa?.nome].filter(Boolean).join(" • ") || "Commessa")}</p>
-      <p><b>Nome cantiere/impianto:</b> ${escapeHTML(impianto.denominazione || impianto.nome || commessa?.nome || "Cantiere")}</p>
-      <p><b>Comune:</b> ${escapeHTML(alert.comune || "-")}</p>
-      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello colore:</b> ${escapeHTML(alert.livello || "-")}</p>
-      <p><b>Data programmata squadra:</b> ${escapeHTML(dataProgrammata || alert.data || "-")}</p>
-      <p><b>Validità allerta:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
-      <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "Protezione Civile")}</p>
-      ${worklimateScenario}
-      <p><b>Descrizione allerta:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
-    </article>
-    <article class="weather-detail-section weather-detail-indications-card"><h3>Indicazioni operative</h3><ul>${indications}</ul></article>
-    <article class="weather-detail-risk-box risk-giallo"><strong>Riferimenti e misure</strong><p>D.Lgs. 81/2008, valutazione del rischio meteo nel DVR/POS, procedure aziendali, indicazioni Protezione Civile/Regione e Worklimate ove applicabili. Applicare eventuali misure straordinarie decise dal preposto o responsabile. Emergenza: 112.</p></article>`;
+    <section class="heat-safety-page risk-${meta.level}">
+      <article class="heat-hero-card">
+        <div class="heat-hero-icon" aria-hidden="true">${WEATHER_ALERT_ICON[meta.level] || "🟢"}</div>
+        <div><p class="heat-eyebrow">Livello attuale</p><h3>${escapeHTML(meta.level)}</h3><strong>${escapeHTML(meta.text)}</strong></div>
+        <p>${escapeHTML(meta.explanation)}</p>
+      </article>
+
+      <article class="heat-card heat-forecast-card"><div class="heat-section-head"><h3>Previsioni meteo</h3><span>Ultimo aggiornamento: ${escapeHTML(formatAlertTimestamp(updatedAt))}</span></div>
+        <div class="heat-metric-grid">
+          <div><span>🌡️ Temperatura massima</span><strong>${formatWeatherAlertMetric(maxTemp, "°C")}</strong></div>
+          <div><span>🤚 Temperatura percepita</span><strong>${formatWeatherAlertMetric(perceived, "°C")}</strong></div>
+          <div><span>💧 Indice WBGT / Worklimate</span><strong>${formatWeatherAlertMetric(wbgt, wbgt === null ? "" : "°C")}</strong></div>
+          <div><span>💦 Umidità</span><strong>${formatWeatherAlertMetric(humidity, "%")}</strong></div>
+          <div><span>💨 Vento</span><strong>${formatWeatherAlertMetric(wind, " km/h")}</strong></div>
+          <div><span>📈 Tendenza rischio</span><strong>${escapeHTML(getWeatherAlertTrend(alert))}</strong></div>
+        </div>
+        <p class="heat-note">Le condizioni possono variare rapidamente: verifica gli aggiornamenti prima e durante il turno.</p>
+      </article>
+
+      ${meta.level === "arancione" ? `<article class="heat-attention-box"><strong>ATTENZIONE: rischio caldo elevato.</strong> Rimodulare le attività più pesanti, aumentare le pause, lavorare all’ombra dove possibile e controllare frequentemente i lavoratori esposti.</article>` : ""}
+
+      <article class="heat-card"><h3>Norme di comportamento</h3><div class="heat-behaviour-grid">
+        ${[["💧","Bere acqua spesso"],["🕒","Evitare le ore più calde"],["🌳","Fare pause regolari"],["🧢","Proteggersi dal sole"],["👕","Usare abbigliamento leggero"],["📣","Avvisare subito il preposto in caso di malessere"]].map(([icon, text]) => `<div><span>${icon}</span><strong>${text}</strong></div>`).join("")}
+      </div></article>
+
+      <article class="heat-card heat-symptoms-card"><h3>Sintomi da colpo di calore</h3><div class="heat-chip-list">${["Mal di testa", "Nausea", "Crampi", "Vertigini", "Confusione", "Pelle calda e secca"].map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div><p><b>In caso di sintomi:</b> fermare il lavoro, andare all’ombra, bere acqua e chiamare 112 se grave.</p></article>
+
+      <article class="heat-card heat-law-card"><h3>⚖️ Ordinanza Regionale n. 72 del 03/06/2026</h3><p>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</p></article>
+
+      <article class="heat-card"><h3>Aggiornamenti ufficiali</h3><div class="heat-official-grid">${getOfficialUpdateButtonsMarkup(alert)}</div></article>
+
+      <article class="heat-confirm-summary"><strong>Conferma lettura</strong><p>La conferma salverà utente, nome, timestamp, livello rischio, comune/impianto, commessa e fonte allerta.</p></article>
+    </section>`;
 }
 
 async function confirmWeatherAlertRead() {
@@ -9254,14 +9329,20 @@ async function confirmWeatherAlertRead() {
   ui.weatherAlertSafetyConfirmBtn.disabled = true;
   await db.collection("alertReadConfirmations").add({
     utente: currentUser.uid,
+    uidUtente: currentUser.uid,
+    nomeUtente: currentUser.displayName || currentUser.email || "Operatore",
     dataOra: firebase.firestore.FieldValue.serverTimestamp(),
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     commessa: commessa?.id || selectedCommessaId,
-    impianto: impianto?.idSap || impianto?.denominazione || "",
-    comune: alert.comune || "",
+    commessaNome: commessa?.nome || selectedCommessaName || "",
+    impianto: impianto?.idSap || impianto?.denominazione || impianto?.nome || "",
+    impiantoNome: impianto?.denominazione || impianto?.nome || "",
+    comune: alert.comune || impianto?.comune || "",
     tipoAllerta: alert.tipoAllerta || "",
     livello: alert.livello || "",
+    livelloRischio: normalizeWorklimateLevel(alert.livello || ""),
     dataProgrammata: selectedWeatherAlertContext.dataProgrammata || alert.data || getActiveSquadreDateKey(),
-    fonteAllerta: alert.fonte || ""
+    fonteAllerta: alert.fonte || alert.source || ""
   });
   ui.weatherAlertSafetyConfirmBtn.disabled = false;
   setCommessaHash();
@@ -21203,6 +21284,22 @@ async function renderWeatherDetails(data, target) {
   const visibilities = (data.hourly && data.hourly.visibility) || [];
   const codes = (data.hourly && data.hourly.weather_code) || [];
   const winds = (data.hourly && data.hourly.wind_speed_10m) || [];
+  const apparentTemps = (data.hourly && data.hourly.apparent_temperature) || [];
+  const current = data.current || {};
+  homeWorklimateProcedureSnapshot = {
+    riskLevel: getHomeWorklimateRiskLevel(temps),
+    maxTemp: Math.max(...temps.slice(0, 12).map((value) => Number(value) || -100), -100),
+    apparentTemp: Number.isFinite(Number(current.apparent_temperature)) ? Number(current.apparent_temperature) : Math.max(...apparentTemps.slice(0, 12).map((value) => Number(value) || -100), -100),
+    wbgt: null,
+    humidity: Number.isFinite(Number(current.relative_humidity_2m)) ? Number(current.relative_humidity_2m) : null,
+    wind: Math.max(Number(current.wind_speed_10m) || 0, ...winds.slice(0, 12).map((value) => Number(value) || 0)),
+    trend: "Stabile",
+    updatedAt: Date.now(),
+    source: "Cache meteo app / Worklimate",
+    comune: currentWeatherTarget?.source === "gps" ? "Posizione GPS" : "Postazione app"
+  };
+  if (homeWorklimateProcedureSnapshot.maxTemp <= -99) homeWorklimateProcedureSnapshot.maxTemp = null;
+  if (homeWorklimateProcedureSnapshot.apparentTemp <= -99) homeWorklimateProcedureSnapshot.apparentTemp = null;
   const maxRain = Math.max(...rains.slice(0, 12).map((value) => Number(value) || 0), 0);
   const snowSum = snows.slice(0, 12).reduce((acc, value) => acc + (Number(value) || 0), 0);
   const minVisibility = Math.min(...visibilities.slice(0, 12).map((value) => Number(value) || Number.MAX_SAFE_INTEGER));
@@ -21415,91 +21512,97 @@ function bindHomeWorklimateButton() {
   });
 }
 
-function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
-  const level = normalizeWorklimateLevel(riskLevel);
-  const levelLabel = WORKLIMATE_COLOR_LABEL[level] || level;
-  const icon = WEATHER_ALERT_ICON[level] || "🟢";
+function getHomeWorklimateProcedureContext({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
+  const snapshot = homeWorklimateProcedureSnapshot || {};
   const target = currentWeatherTarget || getWeatherTargetCoordinates();
-  const positionLabel = target?.source === "gps" ? "mia postazione GPS" : target?.source === "commessa" ? "zona della commessa" : "postazione predefinita";
-  const detailItems = [
-    {
-      id: "hero",
-      eyebrow: "Normativa in alto • Estate 2026",
-      icon,
-      title: "Gestione rischio calore",
-      summary: "Procedura operativa per consultare Worklimate e organizzare il lavoro in sicurezza.",
-      details: ["Consulta la previsione prima di iniziare il turno e condividi eventuali criticità con il tecnico di riferimento.", "Usa il livello di rischio per programmare pause, idratazione, ombreggiamento e possibile rimodulazione delle attività."]
-    },
-    {
-      id: "law",
-      eyebrow: "Ordinanza regionale",
-      icon: "📌",
-      title: "Ordinanza Regionale n. 72 del 03/06/2026",
-      summary: "Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.",
-      details: ["La disposizione richiede attenzione specifica alle attività all'aperto nelle fasce più calde.", "In presenza di rischio elevato occorre coordinarsi con responsabile e tecnico per applicare le misure organizzative previste."]
-    },
-    {
-      id: "indications",
-      eyebrow: "Guida rapida",
-      icon: "ℹ️",
-      title: "Indicazioni operative",
-      summary: "Cosa controllare prima del turno, quando rimodulare le attività e come ricevere gli aggiornamenti ufficiali.",
-      details: ["Prima del turno verifica livello Worklimate, posizione usata per la previsione e mansioni previste.", "Durante la giornata mantieni disponibilità a modifiche di orario o attività se la previsione cambia."]
-    },
-    { id: "level", icon: "🌡️", title: "Livello attuale", summary: `${levelLabel} per ${positionLabel}.`, details: ["Il livello è stimato sulla postazione selezionata nell'app.", "Se la posizione non è corretta, aggiorna GPS o commessa e riapri la scheda per una lettura coerente."] },
-    { id: "daily", icon: "👷‍♂️", title: "Controllo giornaliero", summary: "Il tecnico di riferimento verifica ogni giorno le previsioni sul portale Worklimate.", details: ["Il controllo serve a intercettare in anticipo le giornate critiche.", "Segui le indicazioni operative comunicate dal tecnico per la tua squadra o area di lavoro."] },
-    { id: "high", icon: "🚫", title: "Rischio ALTO", summary: "Se previsto per il giorno successivo, sospendere le attività all'aperto dalle 12:30 alle 16:00.", details: ["Le lavorazioni all'aperto vanno ripianificate fuori dalla fascia più critica.", "Se non è possibile rimodulare l'attività, avvisa il referente prima di procedere."] },
-    { id: "comms", icon: "💬", title: "Comunicazioni", summary: "La comunicazione arriva solo in caso di previsione di rischio alto, tramite WhatsApp dal tecnico.", details: ["Controlla i messaggi prima dell'avvio del turno e durante eventuali aggiornamenti.", "In assenza di comunicazioni resta comunque valida la verifica ordinaria delle condizioni operative."] },
-    { id: "early", icon: "🕘", title: "Orario anticipato", summary: "In caso di rischio alto può essere adottata fine giornata alle 12:30 con rientro in sede.", details: ["L'anticipo dell'orario riduce l'esposizione nella fascia più calda.", "Concorda rientro, materiali e mezzi con il responsabile per chiudere le attività in sicurezza."] },
-    { id: "attention", icon: "⚠️", title: "Attenzione", summary: "Le previsioni possono variare: serve massima disponibilità e flessibilità organizzativa.", details: ["Il meteo può cambiare anche a breve distanza: ricontrolla le informazioni quando richiesto.", "Segnala sintomi, malesseri o condizioni non sicure senza attendere la fine del turno."] }
-  ];
-  const getItem = (id) => detailItems.find((item) => item.id === id) || detailItems[0];
-  const renderDetail = (id) => {
-    const item = getItem(id);
-    const detailList = item.details.map((detail) => `<li>${escapeHTML(detail)}</li>`).join("");
-    return `<section class="worklimate-detail-view" data-worklimate-detail-view="${escapeHTML(item.id)}">
-      <button type="button" class="worklimate-detail-back" data-worklimate-main-back>← Torna alla procedura</button>
-      <div class="worklimate-detail-card">
-        <span class="worklimate-board-emoji" aria-hidden="true">${escapeHTML(item.icon)}</span>
-        ${item.eyebrow ? `<p class="worklimate-board-kicker">${escapeHTML(item.eyebrow)}</p>` : ""}
-        <h2>${escapeHTML(item.title)}</h2>
-        <p>${escapeHTML(item.summary)}</p>
-        <ul>${detailList}</ul>
+  const selectedCommessa = commesseById.get(selectedCommessaId) || null;
+  const impianto = currentImpianti.find((item) => item.comune || item.denominazione || item.nome) || {};
+  const level = normalizeWorklimateLevel(snapshot.riskLevel || riskLevel);
+  return {
+    ...snapshot,
+    riskLevel: level,
+    url,
+    source: snapshot.source || "Worklimate / cache meteo app",
+    updatedAt: snapshot.updatedAt || Date.now(),
+    target,
+    commessaId: selectedCommessa?.id || selectedCommessaId || "",
+    commessaName: selectedCommessa?.nome || selectedCommessaName || "",
+    comune: snapshot.comune || impianto.comune || (target?.source === "gps" ? "Posizione GPS" : "Postazione app"),
+    impianto: snapshot.impianto || impianto.denominazione || impianto.nome || "Postazione app"
+  };
+}
+
+function renderHeatProcedureContent(context = {}) {
+  const meta = getWeatherAlertLevelMeta(context.riskLevel);
+  const updatedAt = context.updatedAt ? new Date(context.updatedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "Non disponibile";
+  const alertLike = { ...context, livello: context.riskLevel, fonte: context.source, tendenzaRischio: context.trend };
+  return `<section class="heat-safety-page risk-${meta.level}">
+    <article class="heat-hero-card">
+      <div class="heat-hero-icon" aria-hidden="true">${WEATHER_ALERT_ICON[meta.level] || "🟢"}</div>
+      <div><p class="heat-eyebrow">Livello attuale</p><h3>${escapeHTML(meta.level)}</h3><strong>${escapeHTML(meta.text)}</strong></div>
+      <p>${escapeHTML(meta.explanation)}</p>
+    </article>
+    <article class="heat-card heat-forecast-card"><div class="heat-section-head"><h3>Previsioni meteo</h3><span>Ultimo aggiornamento: ${escapeHTML(updatedAt)}</span></div>
+      <div class="heat-metric-grid">
+        <div><span>🌡️ Temperatura massima</span><strong>${formatWeatherAlertMetric(context.maxTemp, "°C")}</strong></div>
+        <div><span>🤚 Temperatura percepita</span><strong>${formatWeatherAlertMetric(context.apparentTemp, "°C")}</strong></div>
+        <div><span>💧 Indice WBGT / Worklimate</span><strong>${formatWeatherAlertMetric(context.wbgt, context.wbgt == null ? "" : "°C")}</strong></div>
+        <div><span>💦 Umidità</span><strong>${formatWeatherAlertMetric(context.humidity, "%")}</strong></div>
+        <div><span>💨 Vento</span><strong>${formatWeatherAlertMetric(context.wind, " km/h")}</strong></div>
+        <div><span>📈 Tendenza rischio</span><strong>${escapeHTML(getWeatherAlertTrend(alertLike))}</strong></div>
       </div>
-    </section>`;
+      <p class="heat-note">Le condizioni possono variare rapidamente: verifica gli aggiornamenti prima e durante il turno.</p>
+    </article>
+    ${meta.level === "arancione" ? `<article class="heat-attention-box"><strong>ATTENZIONE: rischio caldo elevato.</strong> Rimodulare le attività più pesanti, aumentare le pause, lavorare all’ombra dove possibile e controllare frequentemente i lavoratori esposti.</article>` : ""}
+    <article class="heat-card"><h3>Norme di comportamento</h3><div class="heat-behaviour-grid">
+      ${[["💧","Bere acqua spesso"],["🕒","Evitare le ore più calde"],["🌳","Fare pause regolari"],["🧢","Proteggersi dal sole"],["👕","Usare abbigliamento leggero"],["📣","Avvisare subito il preposto in caso di malessere"]].map(([icon, text]) => `<div><span>${icon}</span><strong>${text}</strong></div>`).join("")}
+    </div></article>
+    <article class="heat-card heat-symptoms-card"><h3>Sintomi da colpo di calore</h3><div class="heat-chip-list">${["Mal di testa", "Nausea", "Crampi", "Vertigini", "Confusione", "Pelle calda e secca"].map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div><p><b>In caso di sintomi:</b> fermare il lavoro, andare all’ombra, bere acqua e chiamare 112 se grave.</p></article>
+    <article class="heat-card heat-law-card"><h3>⚖️ Ordinanza Regionale n. 72 del 03/06/2026</h3><p>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</p></article>
+    <article class="heat-card"><h3>Aggiornamenti ufficiali</h3><div class="heat-official-grid">${getOfficialUpdateButtonsMarkup({ fonte: context.source })}</div></article>
+    <article class="heat-confirm-summary"><strong>Conferma lettura</strong><p>La conferma salverà utente, nome, timestamp, livello rischio, comune/impianto, commessa e fonte allerta.</p></article>
+  </section>`;
+}
+
+async function confirmHomeWorklimateProcedureRead(context = {}) {
+  if (!currentUser || !db) return;
+  const payload = {
+    utente: currentUser.uid,
+    uidUtente: currentUser.uid,
+    nomeUtente: currentUser.displayName || currentUser.email || "Operatore",
+    dataOra: firebase.firestore.FieldValue.serverTimestamp(),
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    commessa: context.commessaId || selectedCommessaId || "",
+    commessaNome: context.commessaName || selectedCommessaName || "",
+    impianto: context.impianto || "",
+    impiantoNome: context.impianto || "",
+    comune: context.comune || "",
+    tipoAllerta: "Rischio calore",
+    livello: context.riskLevel || "verde",
+    livelloRischio: normalizeWorklimateLevel(context.riskLevel || ""),
+    fonteAllerta: context.source || "Worklimate / cache meteo app"
   };
-  const openDetail = (id) => {
-    const detailMount = overlay.querySelector("[data-worklimate-detail-mount]");
-    detailMount.innerHTML = renderDetail(id);
-    overlay.querySelector("[data-worklimate-main]")?.classList.add("hidden");
-    detailMount.classList.remove("hidden");
-    detailMount.querySelector("[data-worklimate-main-back]")?.addEventListener("click", showMain);
-    detailMount.querySelector(".worklimate-detail-back")?.focus();
-  };
-  const showMain = () => {
-    overlay.querySelector("[data-worklimate-detail-mount]")?.classList.add("hidden");
-    overlay.querySelector("[data-worklimate-main]")?.classList.remove("hidden");
-    overlay.querySelector(".worklimate-page-back")?.focus();
-  };
-  const cardButton = (item, className = "") => `<button type="button" class="worklimate-click-card ${className}" data-worklimate-detail="${escapeHTML(item.id)}">
-    <span aria-hidden="true">${escapeHTML(item.icon)}</span><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.summary)}</p><small>Apri approfondimento →</small>
-  </button>`;
+  await db.collection("alertReadConfirmations").add(payload);
+}
+
+function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
+  const context = getHomeWorklimateProcedureContext({ riskLevel, url });
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay worklimate-page-overlay";
-  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page" role="dialog" aria-modal="true" aria-label="Pagina Worklimate rischio calore">
+  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-worklimate-page" role="dialog" aria-modal="true" aria-label="Procedura sicurezza rischio calore">
     <header class="worklimate-page-header">
-      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina Worklimate">←</button>
+      <button type="button" class="worklimate-page-back" aria-label="Chiudi procedura rischio calore">←</button>
       <div><p>Procedura sicurezza</p><strong>Rischio calore</strong></div>
       <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
     </header>
-    <main data-worklimate-main>
-      ${cardButton(detailItems[0], `worklimate-board-hero risk-${level}`)}
-      ${cardButton(detailItems[1], "worklimate-law-card")}
-      ${cardButton(detailItems[2], "worklimate-page-intro")}
-      <div class="worklimate-board-grid">${detailItems.slice(3).map((item) => cardButton(item)).join("")}</div>
-      <div class="worklimate-board-actions"><button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Visita il sito</button><small>Apri Worklimate e controlla le previsioni per la tua postazione.</small></div>
+    <main class="heat-worklimate-main">
+      ${renderHeatProcedureContent(context)}
+      <div class="worklimate-board-actions heat-worklimate-actions">
+        <button type="button" class="btn btn-primary" data-home-worklimate-confirm>Ho letto e confermo</button>
+        <button type="button" class="btn worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Visita Worklimate</button>
+        <small data-home-worklimate-confirm-status>Fonte: ${escapeHTML(context.source)} • ${escapeHTML(context.comune || "Postazione app")}</small>
+      </div>
     </main>
-    <div class="hidden" data-worklimate-detail-mount></div>
   </div>`;
   const close = () => {
     document.body.classList.remove("worklimate-page-open");
@@ -21509,10 +21612,24 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
   overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
-  overlay.querySelectorAll("[data-worklimate-detail]").forEach((button) => button.addEventListener("click", () => openDetail(button.getAttribute("data-worklimate-detail"))));
   overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
     const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
     window.open(visitUrl, "_blank", "noopener,noreferrer");
+  });
+  overlay.querySelector("[data-home-worklimate-confirm]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const status = overlay.querySelector("[data-home-worklimate-confirm-status]");
+    button.disabled = true;
+    if (status) status.textContent = "Salvataggio conferma...";
+    try {
+      await confirmHomeWorklimateProcedureRead(context);
+      if (status) status.textContent = "Conferma salvata correttamente.";
+      button.textContent = "Confermato";
+    } catch (error) {
+      console.error("Conferma procedura Worklimate non salvata:", error);
+      button.disabled = false;
+      if (status) status.textContent = "Impossibile salvare la conferma. Riprova.";
+    }
   });
   document.body.appendChild(overlay);
   overlay.querySelector(".worklimate-page-back")?.focus();

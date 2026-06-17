@@ -21121,7 +21121,7 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
     latitude: String(target.lat),
     longitude: String(target.lon),
     current: "temperature_2m,wind_speed_10m,weather_code",
-    hourly: "temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m",
+    hourly: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m",
     forecast_days: "2"
   };
 
@@ -21131,7 +21131,7 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
     ...baseParams,
     current: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
     minutely_15: "precipitation,weather_code",
-    hourly: "temperature_2m,precipitation_probability,precipitation,rain,showers,snowfall,visibility,weather_code,apparent_temperature,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    hourly: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,rain,showers,snowfall,visibility,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
     forecast_hours: "12",
     forecast_minutely_15: "48",
     forecast_days: "1",
@@ -21196,6 +21196,8 @@ async function fetchOpenWeatherPrimary(target, options = {}) {
     hourly: {
       time: hourly.map((it) => new Date((it.dt || 0) * 1000).toISOString()),
       temperature_2m: hourly.map((it) => it?.main?.temp),
+      apparent_temperature: hourly.map((it) => it?.main?.feels_like ?? it?.main?.temp),
+      relative_humidity_2m: hourly.map((it) => it?.main?.humidity),
       precipitation_probability: hourly.map((it) => Math.round(Number(it?.pop || 0) * 100)),
       snowfall: hourly.map((it) => Number(it?.snow?.["3h"] || 0)),
       visibility: hourly.map((it) => it?.visibility),
@@ -21278,6 +21280,8 @@ function getWeatherTargetCoordinates() {
 async function renderWeatherDetails(data, target) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
+  const apparentTemps = (data.hourly && data.hourly.apparent_temperature) || [];
+  const humidities = (data.hourly && data.hourly.relative_humidity_2m) || [];
   const rains = (data.hourly && data.hourly.precipitation_probability) || [];
   const snows = (data.hourly && data.hourly.snowfall) || [];
   const visibilities = (data.hourly && data.hourly.visibility) || [];
@@ -21297,7 +21301,7 @@ async function renderWeatherDetails(data, target) {
 
   const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
   const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
-  ui.weatherRisks.innerHTML = `${riskChips}${buildCivilProtectionAlertChip(alert)}${buildHomeWorklimateButton({ temps, target })}`;
+  ui.weatherRisks.innerHTML = `${riskChips}${buildCivilProtectionAlertChip(alert)}${buildHomeWorklimateButton({ temps, apparentTemps, humidities, target })}`;
   bindHomeWorklimateButton();
   renderCivilProtectionAlert(alert);
 
@@ -21466,11 +21470,22 @@ function buildAlertLabel(level, phenomenon) {
   return phenomenon && phenomenon !== "Protezione Civile" ? `Allerta ${phenomenon}` : "Allerta Protezione Civile";
 }
 
-function getHomeWorklimateRiskLevel(temps = []) {
-  const maxTemp = Math.max(...temps.slice(0, 12).map((value) => Number(value) || -100), -100);
-  if (maxTemp >= 38) return "rosso";
-  if (maxTemp >= 35) return "arancione";
-  if (maxTemp >= 32) return "giallo";
+function getHomeWorklimateRiskLevel(temps = [], apparentTemps = [], humidities = []) {
+  const next12Temps = temps.slice(0, 12).map((value) => Number(value)).filter(Number.isFinite);
+  const next12ApparentTemps = apparentTemps.slice(0, 12).map((value) => Number(value)).filter(Number.isFinite);
+  const next12Humidities = humidities.slice(0, 12).map((value) => Number(value)).filter(Number.isFinite);
+  const maxTemp = Math.max(...next12Temps, -100);
+  const maxApparentTemp = Math.max(...next12ApparentTemps, maxTemp);
+  const maxHumidity = Math.max(...next12Humidities, 0);
+  const heatStress = Math.max(maxTemp, maxApparentTemp);
+
+  // Worklimate classifica il rischio per stress termico, quindi la temperatura
+  // percepita deve prevalere sulla sola temperatura dell'aria. Questo evita di
+  // sottostimare giornate umide come Bologna 17/06/2026, mostrate come rosse
+  // dal portale ufficiale ma arancioni con la sola soglia della temperatura.
+  if (heatStress >= 37 || (maxTemp >= 35 && maxHumidity >= 55)) return "rosso";
+  if (heatStress >= 34 || maxTemp >= 35) return "arancione";
+  if (heatStress >= 31 || maxTemp >= 32) return "giallo";
   return "verde";
 }
 
@@ -21478,8 +21493,8 @@ function getHomeWorklimateButtonLabel() {
   return "worklimate";
 }
 
-function buildHomeWorklimateButton({ temps = [], target = null } = {}) {
-  const riskLevel = getHomeWorklimateRiskLevel(temps);
+function buildHomeWorklimateButton({ temps = [], apparentTemps = [], humidities = [], target = null } = {}) {
+  const riskLevel = getHomeWorklimateRiskLevel(temps, apparentTemps, humidities);
   const label = getHomeWorklimateButtonLabel(riskLevel, target);
   return `<button type="button" class="weather-risk-chip home-worklimate-btn risk-${riskLevel}" data-home-worklimate-url="${escapeHTML(WORKLIMATE_FORECAST_URL)}" data-home-worklimate-risk="${escapeHTML(riskLevel)}" aria-label="Apri bacheca Worklimate">${escapeHTML(label)}</button>`;
 }

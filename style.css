@@ -9643,3 +9643,226 @@ body.worklimate-page-open {
 .worklimate-detail-card ul {
   padding-left: 20px;
 }
+
+/* Heat alert safety procedure */
+.heat-safety-page {
+  --heat-accent: #16a34a;
+  --heat-accent-strong: #15803d;
+  --heat-soft: #f0fdf4;
+  display: grid;
+  gap: 14px;
+}
+
+.heat-safety-page.risk-giallo { --heat-accent: #ca8a04; --heat-accent-strong: #a16207; --heat-soft: #fef9c3; }
+.heat-safety-page.risk-arancione { --heat-accent: #f97316; --heat-accent-strong: #ea580c; --heat-soft: #fff7ed; }
+.heat-safety-page.risk-rosso { --heat-accent: #dc2626; --heat-accent-strong: #b91c1c; --heat-soft: #fef2f2; }
+
+.heat-hero-card,
+.heat-card,
+.heat-confirm-summary {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 22px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+
+.heat-hero-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--heat-accent) 45%, #ffffff);
+  background: linear-gradient(135deg, var(--heat-accent-strong), var(--heat-accent));
+  color: #ffffff;
+}
+
+.heat-hero-card > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.45;
+}
+
+.heat-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 2rem;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.heat-eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.88;
+}
+
+.heat-hero-card h3 {
+  margin: 0;
+  font-size: clamp(1.8rem, 9vw, 3rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.heat-hero-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.05rem;
+}
+
+.heat-card h3,
+.heat-confirm-summary strong {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.heat-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.heat-section-head h3 { margin: 0; }
+.heat-section-head span { color: #64748b; font-size: 0.78rem; font-weight: 800; text-align: right; }
+
+.heat-metric-grid,
+.heat-behaviour-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.heat-metric-grid div,
+.heat-behaviour-grid div {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 11px;
+}
+
+.heat-metric-grid span,
+.heat-behaviour-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.heat-metric-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--heat-accent-strong);
+  font-size: 1.18rem;
+}
+
+.heat-behaviour-grid div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: center;
+  background: #ffffff;
+}
+
+.heat-behaviour-grid span { font-size: 1.45rem; }
+.heat-behaviour-grid strong { color: #0f172a; line-height: 1.25; }
+
+.heat-note,
+.heat-confirm-summary p,
+.heat-law-card p,
+.heat-symptoms-card p {
+  margin: 10px 0 0;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.heat-note {
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  background: #fffbeb;
+  padding: 10px;
+  color: #9a3412;
+  font-weight: 800;
+}
+
+.heat-attention-box {
+  border: 2px solid #fb923c;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  color: #9a3412;
+  padding: 14px;
+  font-weight: 850;
+  line-height: 1.45;
+  box-shadow: 0 14px 30px rgba(249, 115, 22, 0.14);
+}
+
+.heat-attention-box strong { display: block; color: #c2410c; }
+
+.heat-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.heat-chip-list span {
+  border-radius: 999px;
+  background: var(--heat-soft);
+  color: var(--heat-accent-strong);
+  padding: 7px 10px;
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+
+.heat-law-card {
+  border-color: #fde68a;
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.heat-official-grid {
+  display: grid;
+  gap: 9px;
+}
+
+.heat-official-btn {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  border-radius: 15px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 11px;
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.heat-confirm-summary {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+@media (min-width: 720px) {
+  .heat-hero-card { grid-template-columns: auto 1fr minmax(220px, 0.8fr); }
+  .heat-hero-card > p { grid-column: auto; }
+  .heat-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .heat-behaviour-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .heat-official-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 420px) {
+  .heat-metric-grid,
+  .heat-behaviour-grid { grid-template-columns: 1fr; }
+  .heat-section-head { display: grid; }
+  .heat-section-head span { text-align: left; }
+}

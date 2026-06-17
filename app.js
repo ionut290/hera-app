@@ -9221,54 +9221,6 @@ function getWeatherAlertSafetyIndications(tipo = "") {
   return ["Valutare le condizioni operative prima dell'avvio attività.", "Seguire le procedure aziendali e le indicazioni del preposto.", "Sospendere le attività non sicure e avvisare il responsabile."];
 }
 
-function getWeatherAlertNumericValue(alert = {}, keys = []) {
-  for (const key of keys) {
-    const value = key.split(".").reduce((acc, part) => acc?.[part], alert);
-    const number = Number(value);
-    if (Number.isFinite(number)) return number;
-  }
-  return null;
-}
-
-function formatWeatherAlertMetric(value, suffix = "") {
-  if (value === null || value === undefined || value === "") return "N/D";
-  const number = Number(value);
-  if (Number.isFinite(number)) return `${Math.round(number)}${suffix}`;
-  return String(value);
-}
-
-function getWeatherAlertLevelMeta(livello = "") {
-  const level = normalizeWorklimateLevel(livello);
-  const labels = {
-    verde: { text: "Rischio basso", explanation: "Condizioni generalmente compatibili con le attività ordinarie: mantenere idratazione e monitoraggio." },
-    giallo: { text: "Rischio moderato", explanation: "Possibili condizioni di disagio: programmare pause e verificare lavoratori più esposti." },
-    arancione: { text: "Rischio moderato-alto", explanation: "Condizioni meteorologiche che possono comportare rischi per la salute: attenzione e precauzioni necessarie." },
-    rosso: { text: "Rischio alto", explanation: "Condizioni critiche: ridurre l'esposizione, sospendere o rimodulare le attività pesanti e sorvegliare gli operatori." }
-  };
-  return { level, ...(labels[level] || labels.verde) };
-}
-
-function getWeatherAlertTrend(alert = {}) {
-  const explicit = alert.tendenzaRischio || alert.tendenza || alert.trend || alert.raw?.trend;
-  if (explicit) return explicit;
-  const level = normalizeWorklimateLevel(alert.livello);
-  if (level === "rosso") return "Critica";
-  if (level === "arancione") return "In aumento / elevata";
-  if (level === "giallo") return "Da monitorare";
-  return "Stabile";
-}
-
-function getOfficialUpdateButtonsMarkup(alert = {}) {
-  const regionalUrl = alert.url || alert.link || CIVIL_PROTECTION_ALERT_PAGE;
-  const buttons = [
-    ["Worklimate", WORKLIMATE_FORECAST_URL, "🌡️"],
-    ["Bollettino meteo regionale", regionalUrl, "☁️"],
-    ["Protezione Civile", CIVIL_PROTECTION_ALERT_PAGE, "🚨"],
-    ["Ministero della Salute", "https://www.salute.gov.it/portale/caldo/homeCaldo.jsp", "🏛️"]
-  ];
-  return buttons.map(([label, href, icon]) => `<a class="heat-official-btn" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer"><span>${escapeHTML(icon)}</span>${escapeHTML(label)}<b aria-hidden="true">→</b></a>`).join("");
-}
-
 function renderWeatherAlertSafetyPage(alertId = "") {
   const commessa = commesseById.get(selectedCommessaId);
   let alert = getAlertsForCommessa(commessa).find((item) => String(item.id || "") === String(alertId || "")) || getMostSevereWeatherAlert(getAlertsForCommessa(commessa));
@@ -9276,50 +9228,24 @@ function renderWeatherAlertSafetyPage(alertId = "") {
   const dataProgrammata = getCommessaScheduledDate(commessa?.id);
   const impianto = getScheduledImpiantiForCommessa(commessa, dataProgrammata).find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
   selectedWeatherAlertContext = { commessa, alert, impianto, dataProgrammata };
-  const meta = getWeatherAlertLevelMeta(alert.livello);
-  const source = alert.fonte || alert.source || "Protezione Civile / Worklimate";
-  const maxTemp = getWeatherAlertNumericValue(alert, ["temperaturaMassima", "maxTemperature", "temperatureMax", "raw.temperaturaMassima", "raw.maxTemp"]);
-  const perceived = getWeatherAlertNumericValue(alert, ["temperaturaPercepita", "apparentTemperature", "apparentTemp", "raw.temperaturaPercepita", "raw.apparentTemperature"]);
-  const wbgt = getWeatherAlertNumericValue(alert, ["wbgt", "indiceWbgt", "worklimateIndex", "raw.wbgt", "raw.indiceWbgt"]);
-  const humidity = getWeatherAlertNumericValue(alert, ["umidita", "humidity", "relativeHumidity", "raw.umidita", "raw.relativeHumidity"]);
-  const wind = getWeatherAlertNumericValue(alert, ["vento", "windSpeed", "windSpeedKmh", "raw.vento", "raw.windSpeedKmh"]);
-  const updatedAt = alert.updatedAt || alert.lastUpdated || alert.validFrom || alert.data || null;
-  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || impianto.comune || "Comune"} • ${source}`;
-  if (ui.weatherAlertSafetyConfirmBtn) ui.weatherAlertSafetyConfirmBtn.textContent = "Ho letto e confermo";
+  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || "Comune"}`;
+  const indications = getWeatherAlertSafetyIndications(alert.tipoAllerta).map((text) => `<li>${escapeHTML(text)}</li>`).join("");
+  const isWorklimateHeat = normalizeWeatherAlertKey(alert.fonte).includes("worklimate") && normalizeWeatherAlertKey(alert.tipoAllerta).includes("caldo");
+  const worklimateScenario = isWorklimateHeat ? `<p><b>Scenario Worklimate:</b> lavoratore esposto al sole, attività fisica intensa, previsione ore 12:00.</p>` : "";
   if (ui.weatherAlertSafetyContent) ui.weatherAlertSafetyContent.innerHTML = `
-    <section class="heat-safety-page risk-${meta.level}">
-      <article class="heat-hero-card">
-        <div class="heat-hero-icon" aria-hidden="true">${WEATHER_ALERT_ICON[meta.level] || "🟢"}</div>
-        <div><p class="heat-eyebrow">Livello attuale</p><h3>${escapeHTML(meta.level)}</h3><strong>${escapeHTML(meta.text)}</strong></div>
-        <p>${escapeHTML(meta.explanation)}</p>
-      </article>
-
-      <article class="heat-card heat-forecast-card"><div class="heat-section-head"><h3>Previsioni meteo</h3><span>Ultimo aggiornamento: ${escapeHTML(formatAlertTimestamp(updatedAt))}</span></div>
-        <div class="heat-metric-grid">
-          <div><span>🌡️ Temperatura massima</span><strong>${formatWeatherAlertMetric(maxTemp, "°C")}</strong></div>
-          <div><span>🤚 Temperatura percepita</span><strong>${formatWeatherAlertMetric(perceived, "°C")}</strong></div>
-          <div><span>💧 Indice WBGT / Worklimate</span><strong>${formatWeatherAlertMetric(wbgt, wbgt === null ? "" : "°C")}</strong></div>
-          <div><span>💦 Umidità</span><strong>${formatWeatherAlertMetric(humidity, "%")}</strong></div>
-          <div><span>💨 Vento</span><strong>${formatWeatherAlertMetric(wind, " km/h")}</strong></div>
-          <div><span>📈 Tendenza rischio</span><strong>${escapeHTML(getWeatherAlertTrend(alert))}</strong></div>
-        </div>
-        <p class="heat-note">Le condizioni possono variare rapidamente: verifica gli aggiornamenti prima e durante il turno.</p>
-      </article>
-
-      ${meta.level === "arancione" ? `<article class="heat-attention-box"><strong>ATTENZIONE: rischio caldo elevato.</strong> Rimodulare le attività più pesanti, aumentare le pause, lavorare all’ombra dove possibile e controllare frequentemente i lavoratori esposti.</article>` : ""}
-
-      <article class="heat-card"><h3>Norme di comportamento</h3><div class="heat-behaviour-grid">
-        ${[["💧","Bere acqua spesso"],["🕒","Evitare le ore più calde"],["🌳","Fare pause regolari"],["🧢","Proteggersi dal sole"],["👕","Usare abbigliamento leggero"],["📣","Avvisare subito il preposto in caso di malessere"]].map(([icon, text]) => `<div><span>${icon}</span><strong>${text}</strong></div>`).join("")}
-      </div></article>
-
-      <article class="heat-card heat-symptoms-card"><h3>Sintomi da colpo di calore</h3><div class="heat-chip-list">${["Mal di testa", "Nausea", "Crampi", "Vertigini", "Confusione", "Pelle calda e secca"].map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div><p><b>In caso di sintomi:</b> fermare il lavoro, andare all’ombra, bere acqua e chiamare 112 se grave.</p></article>
-
-      <article class="heat-card heat-law-card"><h3>⚖️ Ordinanza Regionale n. 72 del 03/06/2026</h3><p>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</p></article>
-
-      <article class="heat-card"><h3>Aggiornamenti ufficiali</h3><div class="heat-official-grid">${getOfficialUpdateButtonsMarkup(alert)}</div></article>
-
-      <article class="heat-confirm-summary"><strong>Conferma lettura</strong><p>La conferma salverà utente, nome, timestamp, livello rischio, comune/impianto, commessa e fonte allerta.</p></article>
-    </section>`;
+    <article class="weather-detail-section"><h3>Riepilogo</h3>
+      <p><b>Commessa:</b> ${escapeHTML([commessa?.codice, commessa?.nome].filter(Boolean).join(" • ") || "Commessa")}</p>
+      <p><b>Nome cantiere/impianto:</b> ${escapeHTML(impianto.denominazione || impianto.nome || commessa?.nome || "Cantiere")}</p>
+      <p><b>Comune:</b> ${escapeHTML(alert.comune || "-")}</p>
+      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello colore:</b> ${escapeHTML(alert.livello || "-")}</p>
+      <p><b>Data programmata squadra:</b> ${escapeHTML(dataProgrammata || alert.data || "-")}</p>
+      <p><b>Validità allerta:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
+      <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "Protezione Civile")}</p>
+      ${worklimateScenario}
+      <p><b>Descrizione allerta:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
+    </article>
+    <article class="weather-detail-section weather-detail-indications-card"><h3>Indicazioni operative</h3><ul>${indications}</ul></article>
+    <article class="weather-detail-risk-box risk-giallo"><strong>Riferimenti e misure</strong><p>D.Lgs. 81/2008, valutazione del rischio meteo nel DVR/POS, procedure aziendali, indicazioni Protezione Civile/Regione e Worklimate ove applicabili. Applicare eventuali misure straordinarie decise dal preposto o responsabile. Emergenza: 112.</p></article>`;
 }
 
 async function confirmWeatherAlertRead() {
@@ -9328,20 +9254,14 @@ async function confirmWeatherAlertRead() {
   ui.weatherAlertSafetyConfirmBtn.disabled = true;
   await db.collection("alertReadConfirmations").add({
     utente: currentUser.uid,
-    uidUtente: currentUser.uid,
-    nomeUtente: currentUser.displayName || currentUser.email || "Operatore",
     dataOra: firebase.firestore.FieldValue.serverTimestamp(),
-    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     commessa: commessa?.id || selectedCommessaId,
-    commessaNome: commessa?.nome || selectedCommessaName || "",
-    impianto: impianto?.idSap || impianto?.denominazione || impianto?.nome || "",
-    impiantoNome: impianto?.denominazione || impianto?.nome || "",
-    comune: alert.comune || impianto?.comune || "",
+    impianto: impianto?.idSap || impianto?.denominazione || "",
+    comune: alert.comune || "",
     tipoAllerta: alert.tipoAllerta || "",
     livello: alert.livello || "",
-    livelloRischio: normalizeWorklimateLevel(alert.livello || ""),
     dataProgrammata: selectedWeatherAlertContext.dataProgrammata || alert.data || getActiveSquadreDateKey(),
-    fonteAllerta: alert.fonte || alert.source || ""
+    fonteAllerta: alert.fonte || ""
   });
   ui.weatherAlertSafetyConfirmBtn.disabled = false;
   setCommessaHash();

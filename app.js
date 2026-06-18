@@ -18077,8 +18077,56 @@ function openSquadraCompositionEditor(commessaId, dateKey, focusIndex = 0) {
   }, 80);
 }
 
-function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", impianti: "" }) {
+
+function parseSquadraTimeToMinutes(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function formatSquadraHours(hours) {
+  if (!Number.isFinite(hours)) return "";
+  const rounded = Math.round(hours * 10) / 10;
+  return String(rounded).replace(".", ",");
+}
+
+function calculateSquadraPausaPranzoMinutes(startMinutes, endMinutes, senzaPausaPranzo) {
+  if (senzaPausaPranzo) return 0;
+  const pausaStart = 12 * 60 + 30;
+  const pausaEnd = 13 * 60;
+  const overlap = Math.min(endMinutes, pausaEnd) - Math.max(startMinutes, pausaStart);
+  return Math.max(0, overlap);
+}
+
+function getSquadraOrarioParts(row) {
+  const rawStart = String(row?.orario || "").trim();
+  const explicitEnd = String(row?.orarioFine || "").trim();
+  const legacyRange = rawStart.match(/^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})$/);
+  return {
+    start: legacyRange ? legacyRange[1] : rawStart,
+    end: explicitEnd || (legacyRange ? legacyRange[2] : "")
+  };
+}
+
+function formatSquadraOrario(row) {
+  const { start, end } = getSquadraOrarioParts(row);
+  if (!start) return "";
+  const startMinutes = parseSquadraTimeToMinutes(start);
+  const endMinutes = parseSquadraTimeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return start;
+  const normalizedEndMinutes = endMinutes >= startMinutes ? endMinutes : endMinutes + 24 * 60;
+  const pausaMinutes = calculateSquadraPausaPranzoMinutes(startMinutes, normalizedEndMinutes, Boolean(row?.senzaPausaPranzo));
+  const workedMinutes = Math.max(0, normalizedEndMinutes - startMinutes - pausaMinutes);
+  const suffix = row?.senzaPausaPranzo ? " (senza pausa)" : "";
+  return `${start} - ${end} = ${formatSquadraHours(workedMinutes / 60)} h${suffix}`;
+}
+
+function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", orarioFine: "", senzaPausaPranzo: false, impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
+  const orarioParts = getSquadraOrarioParts(rowData);
   const personaleValues = parseMultiEntryValue(rowData.personale);
   const mezziValues = parseMultiEntryValue(rowData.mezzi);
   const impiantiValues = parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "");
@@ -18092,9 +18140,18 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
     <label class="squadra-simple-field">Caposquadra
       <input type="text" class="squadra-caposquadra-input" list="personale-options" placeholder="Caposquadra" value="${escapeHTML(rowData.caposquadra || "")}">
     </label>
-    <label class="squadra-simple-field">Orario
-      <input type="time" class="squadra-orario-input" value="${escapeHTML(rowData.orario || "")}">
-    </label>
+    <div class="squadra-orario-fields">
+      <label class="squadra-simple-field">Ora inizio
+        <input type="time" class="squadra-orario-input" value="${escapeHTML(orarioParts.start || "")}">
+      </label>
+      <label class="squadra-simple-field">Ora fine
+        <input type="time" class="squadra-orario-fine-input" value="${escapeHTML(orarioParts.end || "")}">
+      </label>
+      <label class="squadra-checkbox-field">
+        <input type="checkbox" class="squadra-senza-pausa-input" ${rowData.senzaPausaPranzo ? "checked" : ""}>
+        <span>Senza pausa pranzo</span>
+      </label>
+    </div>
     <div class="squadra-multi-field">
       <div class="squadra-multi-field-head"><strong>👥 Operatori</strong></div>
       <div class="squadra-personale-list"></div>
@@ -18215,7 +18272,7 @@ function updateEmptySquadraRowsHint() {
 }
 
 function isSquadraRowFilled(row) {
-  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario);
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario || row?.orarioFine);
 }
 
 function readSquadraRows() {
@@ -18234,7 +18291,9 @@ function readSquadraRows() {
       .filter(Boolean)
       .join(", "),
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
-    orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim()
+    orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
+    orarioFine: String(row.querySelector(".squadra-orario-fine-input")?.value || "").trim(),
+    senzaPausaPranzo: Boolean(row.querySelector(".squadra-senza-pausa-input")?.checked)
   })).filter(isSquadraRowFilled);
 }
 
@@ -18606,9 +18665,10 @@ function renderSquadre() {
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     const rowsHtml = squadRows.map((row, idx) => {
+      const orarioLabel = formatSquadraOrario(row);
       const details = [
         row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
-        row.orario ? `<br><b>🕒 Orario:</b> ${escapeHTML(row.orario)}` : "",
+        orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");

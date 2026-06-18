@@ -4168,6 +4168,27 @@ textarea:focus-visible {
   font-weight: 800;
 }
 
+
+.squadra-orario-fields {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.squadra-checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  min-height: 40px;
+}
+
+.squadra-checkbox-field input {
+  width: auto;
+  margin: 0;
+}
+
 .squadra-simple-field,
 .squadra-note-field {
   display: grid;

@@ -8,7 +8,8 @@
     "android:add": "npx cap add android",
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
-    "check:syntax": "node --check app.js"
+    "check:syntax": "node --check app.js",
+    "check:done-button": "node scripts/check-done-button-logic.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

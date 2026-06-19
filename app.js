@@ -12971,6 +12971,8 @@ function renderImpianti() {
       openImpiantoSafetyProcedureModal(impianto);
     });
     secondaryActionsRow.appendChild(safetyQuickBtn);
+    // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
+    // Questo è il pulsante operativo visibile che conserva il flusso attuale Whazzup / Fatto.
     if (!impianto.done) {
       addAction(
         "whatsapp",
@@ -12984,6 +12986,8 @@ function renderImpianti() {
         primaryActionsRow
       );
     }
+    // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
+    // Pulsante nascosto usato dal recovery/safety check per spostare nei Fatti senza cambiare il flusso WhatsApp.
     const hiddenMoveDoneBtn = document.createElement("button");
     hiddenMoveDoneBtn.type = "button";
     hiddenMoveDoneBtn.hidden = true;
@@ -16908,6 +16912,8 @@ async function navigateToImpianto(impianto) {
   }
 }
 
+// LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
+// Protegge il flusso attuale: controlli GPS/distanza, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
 async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
@@ -17031,6 +17037,8 @@ async function markImpiantoDone(impianto, options = {}) {
   return true;
 }
 
+// LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
+// Fallback visuale usato dal flusso WhatsApp/Fatto: non cambiare senza aggiornare i test dedicati.
 function markImpiantoDoneVisualFallback(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!ids.length) return;
@@ -18763,6 +18771,8 @@ function getPersonaleDisplayName(person) {
   return composed || String(person.fullName || "").trim();
 }
 
+// LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
+// Persistenza Firestore dello stato Fatto/Reset: i campi done*, reset* e Timestamp sono coperti da test statici.
 async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const user = auth.currentUser;
   if (!user) return;

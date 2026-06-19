@@ -9121,6 +9121,59 @@ body.auth-required .menu-overlay {
   font-size: 0.95rem;
 }
 
+
+.whazzup-preparing-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(2px);
+  color: var(--text);
+}
+
+.whazzup-preparing-feedback.hidden {
+  display: none !important;
+}
+
+.whazzup-preparing-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(320px, 100%);
+  padding: 20px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  text-align: center;
+}
+
+.whazzup-preparing-card strong {
+  color: #047857;
+  font-size: 1.05rem;
+}
+
+.whazzup-preparing-card span:not(.whazzup-preparing-spinner) {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.whazzup-preparing-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(34, 197, 94, 0.22);
+  border-top-color: #16a34a;
+  border-radius: 999px;
+  animation: whazzupPreparingSpin 0.8s linear infinite;
+}
+
+@keyframes whazzupPreparingSpin {
+  to { transform: rotate(360deg); }
+}
+
 .squadra-edit-link {
   appearance: none;
   border: 0;

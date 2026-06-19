@@ -270,6 +270,7 @@ const ui = {
   menuCloseBtn: document.getElementById("menu-close-btn"),
   sideMenu: document.getElementById("side-menu"),
   menuOverlay: document.getElementById("menu-overlay"),
+  whazzupPreparingFeedback: document.getElementById("whazzup-preparing-feedback"),
   authGate: document.getElementById("auth-gate"),
   authGateLoginBtn: document.getElementById("auth-gate-login-btn"),
   authGateMessage: document.getElementById("auth-gate-message"),
@@ -18811,6 +18812,37 @@ function triggerImpiantoWhatsAppAction(impianto, options = {}) {
   return openWhatsApp(impianto);
 }
 
+function setWhazzupPreparingFeedback(visible, message = "") {
+  if (!ui.whazzupPreparingFeedback) return;
+  const cardMessage = ui.whazzupPreparingFeedback.querySelector(".whazzup-preparing-card span:not(.whazzup-preparing-spinner)");
+  if (cardMessage && message) cardMessage.textContent = message;
+  ui.whazzupPreparingFeedback.classList.toggle("hidden", !visible);
+}
+
+function createDelayedWhazzupPreparingFeedback(message = "Attendere, sto creando il messaggio.", delayMs = 250) {
+  let shown = false;
+  const timerId = setTimeout(() => {
+    shown = true;
+    setWhazzupPreparingFeedback(true, message);
+  }, delayMs);
+  return {
+    showNow() {
+      clearTimeout(timerId);
+      shown = true;
+      setWhazzupPreparingFeedback(true, message);
+    },
+    hide(minVisibleMs = 0) {
+      clearTimeout(timerId);
+      if (!shown) return;
+      setTimeout(() => setWhazzupPreparingFeedback(false), minVisibleMs);
+    }
+  };
+}
+
+function waitForNextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 function triggerHiddenMoveDoneButton(impianto) {
   const impiantoKey = buildImpiantoKey(impianto);
   if (!impiantoKey || !ui.impiantiLista) return;
@@ -18828,12 +18860,23 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
+  let whatsappTargetWindow = null;
+  try {
+    whatsappTargetWindow = window.open("", "_blank");
+  } catch (error) {
+    console.debug("Popup Whazzup non disponibile prima della preparazione:", error);
+  }
+
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
   markImpiantoDoneVisualFallback({ ...impianto, doneAt, doneBy });
   updateConnectivityStatus();
 
-  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
+  whazzupFeedback.showNow();
+  await waitForNextFrame();
+  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy, targetWindow: whatsappTargetWindow });
+  whazzupFeedback.hide(opened ? 700 : 0);
   if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {

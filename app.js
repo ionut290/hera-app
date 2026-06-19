@@ -18871,12 +18871,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
-  let whatsappTargetWindow = null;
-  try {
-    whatsappTargetWindow = window.open("", "_blank");
-  } catch (error) {
-    console.debug("Popup Whazzup non disponibile prima della preparazione:", error);
-  }
 
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
@@ -18884,9 +18878,9 @@ async function handleImpiantoWhatsAppClick(impianto) {
   updateConnectivityStatus();
 
   whazzupFeedback.showNow();
-  await waitForNextFrame();
-  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy, targetWindow: whatsappTargetWindow });
+  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
   whazzupFeedback.hide(opened ? 700 : 0);
+  await waitForNextFrame();
   if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {

@@ -10815,33 +10815,37 @@ function openExternalUrl(url, options = {}) {
 function buildWhatsAppWebUrl(encodedMessage, phone = "") {
   const normalizedPhone = sanitizePhone(phone).replace(/\+/g, "");
   if (normalizedPhone) return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
-  return `https://api.whatsapp.com/send?text=${encodedMessage}`;
+  return `https://wa.me/?text=${encodedMessage}`;
 }
 
 function safeOpenWhatsAppMessage(message, options = {}) {
   const encodedMessage = encodeURIComponent(String(message || ""));
   const appUrl = options?.appUrl || `whatsapp://send?text=${encodedMessage}`;
   const webUrl = options?.webUrl || buildWhatsAppWebUrl(encodedMessage, options?.phone);
-  const target = options?.target || "_blank";
-  const usePopup = options?.usePopup !== false;
-  if (!usePopup || target === "_self") {
+  const fallbackDelayMs = Number.isFinite(options?.fallbackDelayMs) ? options.fallbackDelayMs : 1200;
+  console.log("Apro WhatsApp app:", appUrl);
+  console.log("Messaggio WhatsApp:", String(message || ""));
+  try {
+    window.location.href = appUrl;
+    if (options?.disableWebFallback !== true) {
+      setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          window.location.href = webUrl;
+        }
+      }, fallbackDelayMs);
+    }
+    return true;
+  } catch (error) {
+    console.error("Errore apertura WhatsApp app:", error);
+    if (options?.disableWebFallback === true) return false;
     try {
       window.location.href = webUrl;
       return true;
-    } catch (error) {
-      console.error("Errore apertura WhatsApp in stessa finestra:", error);
+    } catch (fallbackError) {
+      console.error("Errore fallback WhatsApp wa.me:", fallbackError);
       return false;
     }
   }
-  return openExternalUrl(webUrl, {
-    target,
-    features: "noopener",
-    allowSameWindowFallback: true
-  }) || openExternalUrl(appUrl, {
-    target,
-    features: "noopener",
-    allowSameWindowFallback: false
-  });
 }
 
 function openPhoneOnWhatsApp(value) {
@@ -19140,7 +19144,7 @@ function buildImpiantoWhatsAppPayload(impianto, options = {}) {
   return {
     message,
     appUrl: `whatsapp://send?text=${encodedMessage}`,
-    webUrl: `https://api.whatsapp.com/send?text=${encodedMessage}`
+    webUrl: `https://wa.me/?text=${encodedMessage}`
   };
 }
 
@@ -19176,10 +19180,16 @@ function openWhatsApp(impianto, options = {}) {
     appUrl,
     webUrl,
     target,
-    usePopup: target !== "_self"
+    usePopup: target !== "_self",
+    disableWebFallback
   });
   if (!opened && !disableWebFallback) {
-    openExternalUrl(webUrl, { target: "_blank", features: "noopener", allowSameWindowFallback: true });
+    try {
+      window.location.href = webUrl;
+      return true;
+    } catch (error) {
+      console.error("Errore fallback WhatsApp wa.me:", error);
+    }
   }
   return Boolean(opened);
 }

@@ -1037,7 +1037,8 @@
       <p class="muted">Seleziona mese e commessa per visualizzare la tabella ore.</p>
       <div class="hours-view-toolbar">
         <div class="item-actions">
-          <input id="hours-table-month" type="month">
+          <label class="hours-period-field">Da <input id="hours-table-month" type="month"></label>
+          <label class="hours-period-field">A <input id="hours-table-month-end" type="month"></label>
           <select id="hours-table-commessa-select" class="hidden" aria-hidden="true" tabindex="-1">
             <option value="">Seleziona commessa</option>
           </select>
@@ -1290,6 +1291,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="app.js?v=20260610"></script>
+  <script src="hours-export-range.js?v=20260619"></script>
 
   <script>
     if ("serviceWorker" in navigator) {

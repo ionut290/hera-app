@@ -10854,7 +10854,7 @@ function openExternalUrl(url, options = {}) {
 function buildWhatsAppWebUrl(encodedMessage, phone = "") {
   const normalizedPhone = sanitizePhone(phone).replace(/\+/g, "");
   if (normalizedPhone) return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
-  return `https://wa.me/?text=${encodedMessage}`;
+  return `https://api.whatsapp.com/send?text=${encodedMessage}`;
 }
 
 function safeOpenWhatsAppMessage(message, options = {}) {
@@ -19123,9 +19123,7 @@ function buildImpiantoWhatsAppPayload(impianto, options = {}) {
   return {
     message,
     appUrl: `whatsapp://send?text=${encodedMessage}`,
-    webUrl: options.preferContactPicker === false
-      ? `https://api.whatsapp.com/send?text=${encodedMessage}`
-      : `https://wa.me/?text=${encodedMessage}`
+    webUrl: `https://api.whatsapp.com/send?text=${encodedMessage}`
   };
 }
 

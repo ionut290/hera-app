@@ -18822,50 +18822,60 @@ function triggerHiddenMoveDoneButton(impianto) {
 async function handleImpiantoWhatsAppClick(impianto) {
   if (!impianto) return;
 
+  const processingKey = getWhazzupProcessingKey(impianto);
+  if (processingKey && isImpiantoWhazzupProcessing(impianto)) return;
+  if (processingKey) whazzupProcessingByImpianto.add(processingKey);
+
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
+  markImpiantoDoneVisualFallback({ ...impianto, doneAt, doneBy });
   updateConnectivityStatus();
 
-  const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
-    .catch((error) => {
-      console.error("Errore avvio audit log Whazzup:", error);
-      return null;
-    });
+  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
+  if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
-  try {
-    console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
-    const doneMarked = await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" });
-    if (!doneMarked) {
-      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
-      alert("Errore salvataggio. Riprova.");
-      return;
+  void (async () => {
+    const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
+      .catch((error) => {
+        console.error("Errore avvio audit log Whazzup:", error);
+        return null;
+      });
+
+    try {
+      console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
+      const doneMarked = await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" });
+      if (!doneMarked) {
+        await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
+        await handleImpiantoDoneSaveFailure(impianto, "Salvataggio FATTO non completato dopo apertura WhatsApp.");
+        return;
+      }
+
+      const persisted = await isImpiantoPersistedAsDone(impianto);
+      await updateAuditLogWhazzupClick(auditLogId, {
+        fattoEsito: persisted ? "persisted" : "verify_failed",
+        fattoConfermato: Boolean(persisted)
+      });
+      if (!persisted) {
+        await handleImpiantoDoneSaveFailure(impianto, "Verifica immediata post-salvataggio negativa: impianto non presente nei FATTI.");
+        return;
+      }
+
+      updateConnectivityStatus();
+      renderImpianti();
+    } catch (error) {
+      console.error("Errore processo FATTO:", error);
+      await updateAuditLogWhazzupClick(auditLogId, {
+        fattoEsito: "save_exception",
+        fattoConfermato: false,
+        errorMessage: String(error?.message || error || "Errore sconosciuto")
+      });
+      await handleImpiantoDoneSaveFailure(impianto, "Eccezione durante il salvataggio FATTO dopo apertura WhatsApp.");
+    } finally {
+      clearImpiantoWhazzupProcessing(impianto);
     }
-
-    const persisted = await isImpiantoPersistedAsDone(impianto);
-    await updateAuditLogWhazzupClick(auditLogId, {
-      fattoEsito: persisted ? "persisted" : "verify_failed",
-      fattoConfermato: Boolean(persisted)
-    });
-    if (!persisted) {
-      await handleImpiantoDoneSaveFailure(impianto, "Verifica immediata post-salvataggio negativa: impianto non presente nei FATTI.");
-      return;
-    }
-
-    const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
-    if (!opened) alert("Impianto salvato come FATTO, ma non è stato possibile aprire WhatsApp automaticamente.");
-    updateConnectivityStatus();
-    renderImpianti();
-  } catch (error) {
-    console.error("Errore processo FATTO:", error);
-    await updateAuditLogWhazzupClick(auditLogId, {
-      fattoEsito: "save_exception",
-      fattoConfermato: false,
-      errorMessage: String(error?.message || error || "Errore sconosciuto")
-    });
-    alert("Errore salvataggio. Riprova.");
-  }
+  })();
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {

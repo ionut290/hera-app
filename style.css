@@ -10222,3 +10222,77 @@ body.worklimate-page-open {
   .heat-place-grid,
   .heat-coordinate-form { grid-template-columns: 1fr; }
 }
+
+.heat-forecast-card[data-heat-day] {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.heat-forecast-card[data-heat-day]:hover,
+.heat-forecast-card[data-heat-day]:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  outline: 2px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 2px;
+}
+
+.heat-forecast-card em {
+  display: inline-flex;
+  margin-top: 10px;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.heat-hourly-overlay { z-index: 2700; }
+
+.heat-hourly-modal {
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(760px, calc(100vh - 24px));
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
+}
+
+.heat-hourly-list {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.heat-hourly-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.heat-hourly-row.risk-verde { border-color: #bbf7d0; background: #f0fdf4; }
+.heat-hourly-row.risk-giallo { border-color: #fde68a; background: #fefce8; }
+.heat-hourly-row.risk-arancione { border-color: #fed7aa; background: #fff7ed; }
+.heat-hourly-row.risk-rosso { border-color: #fecaca; background: #fef2f2; }
+
+.heat-hourly-row div {
+  display: grid;
+  place-items: center;
+  min-width: 54px;
+}
+
+.heat-hourly-row div span { font-size: 1.35rem; }
+.heat-hourly-row p,
+.heat-hourly-row small,
+.heat-hourly-row em { margin: 0; color: #475569; font-weight: 800; }
+.heat-hourly-row p { color: #0f172a; }
+.heat-hourly-row b { color: #0f172a; font-size: 1.2rem; }
+.heat-hourly-row small { grid-column: 2 / 4; }
+.heat-hourly-row em { grid-column: 1 / 4; font-style: normal; text-transform: capitalize; }

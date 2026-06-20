@@ -21783,25 +21783,51 @@ function openHeatLocationPicker(boardOverlay) {
 }
 
 function openHeatFullScreenMap(onSelect) {
-  const map = document.createElement("div");
-  map.className = "heat-full-map";
-  map.innerHTML = `<button type="button" class="heat-map-close" aria-label="Chiudi mappa">×</button><div class="heat-map-canvas" data-map-canvas><div class="heat-map-pin" data-map-pin>📍</div></div><div class="heat-map-toolbar"><strong>Scegli posizione sulla mappa</strong><span data-map-coordinates>Tocca un punto</span><button type="button" class="btn btn-primary" data-confirm-map disabled>Conferma posizione</button></div>`;
+  const overlay = document.createElement("div");
+  overlay.className = "heat-full-map";
+  overlay.innerHTML = `<button type="button" class="heat-map-close" aria-label="Chiudi mappa">×</button><div class="heat-map-canvas" data-map-canvas></div><div class="heat-map-toolbar"><strong>Scegli posizione sulla mappa</strong><span data-map-coordinates>Tocca un punto</span><button type="button" class="btn btn-primary" data-confirm-map disabled>Conferma posizione</button></div>`;
   let selected = null;
-  map.querySelector(".heat-map-close")?.addEventListener("click", () => map.remove());
-  map.querySelector("[data-map-canvas]")?.addEventListener("click", (event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
-    const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-    selected = { name: "Posizione scelta su mappa", lat: 44.95 - (y / rect.height) * 1.1, lon: 10.55 + (x / rect.width) * 1.9 };
-    const pin = map.querySelector("[data-map-pin]");
-    pin.style.left = `${x}px`;
-    pin.style.top = `${y}px`;
-    pin.classList.add("visible");
-    map.querySelector("[data-map-coordinates]").textContent = `${selected.lat.toFixed(4)}, ${selected.lon.toFixed(4)}`;
-    map.querySelector("[data-confirm-map]").disabled = false;
+  let heatMap = null;
+  let marker = null;
+  const closeMap = () => {
+    if (heatMap) {
+      heatMap.remove();
+      heatMap = null;
+    }
+    overlay.remove();
+  };
+  overlay.querySelector(".heat-map-close")?.addEventListener("click", closeMap);
+  overlay.querySelector("[data-confirm-map]")?.addEventListener("click", () => {
+    if (!selected) return;
+    closeMap();
+    onSelect(selected);
   });
-  map.querySelector("[data-confirm-map]")?.addEventListener("click", () => { if (selected) { map.remove(); onSelect(selected); } });
-  document.body.appendChild(map);
+  document.body.appendChild(overlay);
+
+  if (typeof L === "undefined") {
+    const fallback = overlay.querySelector("[data-map-canvas]");
+    if (fallback) fallback.textContent = "Mappa non disponibile: ricarica la pagina e riprova.";
+    return;
+  }
+
+  const initialLocation = selectedWeatherLocation || currentWeatherTarget || HEAT_DEFAULT_LOCATION;
+  heatMap = L.map(overlay.querySelector("[data-map-canvas]"), {
+    zoomControl: true,
+    attributionControl: true
+  }).setView([Number(initialLocation.lat) || HEAT_DEFAULT_LOCATION.lat, Number(initialLocation.lon) || HEAT_DEFAULT_LOCATION.lon], 11);
+  L.tileLayer(STANDARD_TILE_URL, STANDARD_TILE_OPTIONS).addTo(heatMap);
+  const selectPoint = (latlng) => {
+    selected = { name: "Posizione scelta su mappa", lat: latlng.lat, lon: latlng.lng };
+    if (!marker) {
+      marker = L.marker(latlng).addTo(heatMap);
+    } else {
+      marker.setLatLng(latlng);
+    }
+    overlay.querySelector("[data-map-coordinates]").textContent = `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
+    overlay.querySelector("[data-confirm-map]").disabled = false;
+  };
+  heatMap.on("click", (event) => selectPoint(event.latlng));
+  setTimeout(() => heatMap?.invalidateSize(), 60);
 }
 
 function buildCivilProtectionAlertChip(alert) {

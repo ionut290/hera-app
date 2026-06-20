@@ -9016,6 +9016,38 @@ function getMostSevereWorklimateRisk(items = []) {
   })[0] || null;
 }
 
+function getRomeDateHourFromTimestamp(value) {
+  const timestamp = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  if (!timestamp || Number.isNaN(timestamp.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(timestamp).reduce((acc, part) => {
+    if (part.type !== "literal") acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return { dateKey: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+}
+
+function getWorklimateRiskForDateHour(items = [], dateKey = getActiveSquadreDateKey(), hour = 12) {
+  const matchingItems = items.filter((item) => {
+    const forecast = getRomeDateHourFromTimestamp(item?.forecastAt);
+    return forecast?.dateKey === dateKey && forecast.hour === hour;
+  });
+  return getMostSevereWorklimateRisk(matchingItems);
+}
+
+function getWorklimateContextForCommessaAtNoon(commessa, dateKey = getCommessaScheduledDate(commessa?.id)) {
+  if (!commessa?.id) return null;
+  const risk = getWorklimateRiskForDateHour(worklimateRiskByCommessaId.get(commessa.id) || [], dateKey, 12);
+  if (!risk) return null;
+  return { commessa, risk, alert: null, riskLevel: normalizeWorklimateLevel(risk.riskLevel || risk.livello || "verde") };
+}
+
 function normalizeWorklimateRiskDoc(doc) {
   const data = doc.data?.() || doc || {};
   const path = String(data.impiantoPath || "");
@@ -9124,18 +9156,20 @@ function getCommessaMajorityImpiantiLocation(commessa, dateKey = getCommessaSche
 }
 
 function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
-  const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
+  const scheduledDateKey = getCommessaScheduledDate(commessa?.id);
+  const noonContext = getWorklimateContextForCommessaAtNoon(commessa, scheduledDateKey);
+  const context = noonContext || getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
   const temperature = getCommessaAverageImpiantiTemperature(commessa);
   const temperatureLabel = formatSquadraAverageTemperature(temperature);
   const level = normalizeWorklimateLevel(context.riskLevel);
   const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
-    ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
+    ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
     : "";
-  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate sulla località con più impianti: temperatura media ${escapeHTML(temperatureLabel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature risk-${escapeHTML(level)}" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: temperatura media ${escapeHTML(temperatureLabel)}, codice ${escapeHTML(level)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
 }
 
 async function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey(), options = {}) {
-  const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
+  const context = getWorklimateContextForCommessaAtNoon(commessa, dateKey) || getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
   const riskLevel = normalizeWorklimateLevel(context.riskLevel);
   const majorityLocation = getCommessaMajorityImpiantiLocation(commessa, dateKey);
   const comune = options.preferMajorityLocation

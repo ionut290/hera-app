@@ -9717,3 +9717,208 @@ body.worklimate-page-open {
 .worklimate-detail-card ul {
   padding-left: 20px;
 }
+
+.heat-dashboard {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
+}
+
+.heat-dashboard-main {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.heat-status-card,
+.heat-section,
+.heat-info-card,
+.heat-law-compact {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.heat-status-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+
+.heat-status-card.risk-verde { border-color: #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #ffffff); }
+.heat-status-card.risk-giallo { border-color: #fde68a; background: linear-gradient(135deg, #fefce8, #ffffff); }
+.heat-status-card.risk-arancione { border-color: #fed7aa; background: linear-gradient(135deg, #fff7ed, #ffffff); }
+.heat-status-card.risk-rosso { border-color: #fecaca; background: linear-gradient(135deg, #fef2f2, #ffffff); }
+
+.heat-status-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 1.9rem;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.heat-status-card h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.35rem, 5vw, 2rem);
+  line-height: 1.05;
+}
+
+.heat-status-card p,
+.heat-status-card small {
+  display: block;
+  margin: 3px 0 0;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.heat-status-card > strong {
+  justify-self: end;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.07);
+  color: #0f172a;
+  text-transform: capitalize;
+}
+
+.heat-section {
+  padding: 14px;
+}
+
+.heat-section-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.heat-section-title h2,
+.heat-info-card h2,
+.heat-law-compact h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
+.heat-forecast-strip {
+  display: grid;
+  grid-auto-columns: minmax(154px, 42%);
+  grid-auto-flow: column;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.heat-forecast-card {
+  scroll-snap-align: start;
+  min-height: 158px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.heat-forecast-card.risk-verde { background: #f0fdf4; border-color: #bbf7d0; }
+.heat-forecast-card.risk-giallo { background: #fefce8; border-color: #fde68a; }
+.heat-forecast-card.risk-arancione { background: #fff7ed; border-color: #fed7aa; }
+.heat-forecast-card.risk-rosso { background: #fef2f2; border-color: #fecaca; }
+
+.heat-forecast-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heat-forecast-card span { font-size: 1.45rem; }
+.heat-forecast-card b { display: block; margin: 7px 0; color: #0f172a; font-size: 1.7rem; }
+.heat-forecast-card small { color: #475569; font-weight: 800; line-height: 1.25; }
+
+.heat-risk-pill {
+  display: inline-flex;
+  margin: 10px 0 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.heat-forecast-unavailable p,
+.worklimate-empty-state {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.heat-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.heat-action-card {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #f8fafc;
+}
+
+.heat-action-card > span {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: #e0f2fe;
+  font-size: 1.3rem;
+}
+
+.heat-action-card h3 { margin: 0 0 8px; color: #0f172a; font-size: 1rem; }
+.heat-action-card ul { margin: 0; padding-left: 18px; color: #475569; font-weight: 750; line-height: 1.35; }
+
+.heat-info-card,
+.heat-law-compact {
+  padding: 14px;
+}
+
+.heat-info-card.hydration {
+  border-color: #bae6fd;
+  background: linear-gradient(135deg, #eff6ff, #ecfeff);
+}
+
+.heat-info-card p,
+.heat-law-compact p { margin: 6px 0 0; color: #475569; font-weight: 800; }
+
+.heat-law-compact {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+@media (min-width: 760px) {
+  .heat-forecast-strip { grid-auto-columns: minmax(170px, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .heat-status-card { grid-template-columns: auto 1fr; }
+  .heat-status-card > strong { grid-column: 1 / -1; justify-self: start; }
+  .heat-actions-grid,
+  .heat-law-compact { grid-template-columns: 1fr; }
+  .heat-law-compact .btn { justify-self: start; }
+}

@@ -799,6 +799,7 @@ let unsubscribeHoursStats = null;
 let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
 let currentWeatherTarget = { lat: 44.4949, lon: 11.3426 };
+let currentHomeWeatherForecast = null;
 let currentCivilProtectionAlert = { level: "green", label: "Nessuna allerta", url: "" };
 let currentImpianti = [];
 let currentCommessaNotes = [];
@@ -21283,6 +21284,7 @@ function getWeatherTargetCoordinates() {
 async function renderWeatherDetails(data, target) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
+  currentHomeWeatherForecast = { times, temps, codes: (data.hourly && data.hourly.weather_code) || [], updatedAt: Date.now() };
   const rains = (data.hourly && data.hourly.precipitation_probability) || [];
   const snows = (data.hourly && data.hourly.snowfall) || [];
   const visibilities = (data.hourly && data.hourly.visibility) || [];
@@ -21500,91 +21502,103 @@ function bindHomeWorklimateButton() {
   });
 }
 
+function formatHeatDashboardDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
+  const day = date.toLocaleDateString("it-IT", { weekday: "short" });
+  const numeric = date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
+  return `${day.charAt(0).toUpperCase()}${day.slice(1)} ${numeric}`;
+}
+
+function getHeatRiskSuggestion(level) {
+  const normalized = normalizeWorklimateLevel(level);
+  if (normalized === "rosso") return "Evitare attività pesanti nelle ore centrali";
+  if (normalized === "arancione") return "Programmare pause aggiuntive";
+  if (normalized === "giallo") return "Bere spesso e fare pause brevi";
+  return "Condizioni ordinarie, mantenere idratazione";
+}
+
+function getHeatRiskFromTemp(maxTemp) {
+  if (!Number.isFinite(Number(maxTemp))) return "verde";
+  return getHomeWorklimateRiskLevel([Number(maxTemp)]);
+}
+
+function buildHeatForecastDays() {
+  const forecast = currentHomeWeatherForecast || {};
+  const times = Array.isArray(forecast.times) ? forecast.times : [];
+  const temps = Array.isArray(forecast.temps) ? forecast.temps : [];
+  const codes = Array.isArray(forecast.codes) ? forecast.codes : [];
+  const byDate = new Map();
+  times.forEach((time, idx) => {
+    const date = new Date(time);
+    if (Number.isNaN(date.getTime())) return;
+    const key = date.toISOString().slice(0, 10);
+    const item = byDate.get(key) || { date, maxTemp: -Infinity, code: codes[idx] };
+    const temp = Number(temps[idx]);
+    if (Number.isFinite(temp) && temp > item.maxTemp) {
+      item.maxTemp = temp;
+      item.code = codes[idx];
+    }
+    byDate.set(key, item);
+  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Array.from({ length: 5 }, (_, offset) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + offset);
+    const key = date.toISOString().slice(0, 10);
+    const item = byDate.get(key);
+    if (!item || !Number.isFinite(item.maxTemp)) return { date, available: false };
+    const level = getHeatRiskFromTemp(item.maxTemp);
+    return { date, available: true, maxTemp: Math.round(item.maxTemp), code: item.code, level, suggestion: getHeatRiskSuggestion(level) };
+  });
+}
+
+function renderHeatForecastCards() {
+  const days = buildHeatForecastDays();
+  if (!days.some((day) => day.available)) return `<p class="worklimate-empty-state">Dati non disponibili, riprova più tardi.</p>`;
+  return `<div class="heat-forecast-strip" aria-label="Previsioni rischio calore prossimi 5 giorni">${days.map((day) => {
+    if (!day.available) return `<article class="heat-forecast-card heat-forecast-unavailable"><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><p>Dati non disponibili, riprova più tardi.</p></article>`;
+    const icon = WEATHER_ALERT_ICON[day.level] || "🟢";
+    const weatherIcon = weatherCodeLabel(day.code).split(" ")[0] || "☀️";
+    const label = WORKLIMATE_COLOR_LABEL[day.level] || day.level;
+    return `<article class="heat-forecast-card risk-${escapeHTML(day.level)}"><div><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><span>${escapeHTML(weatherIcon)}</span></div><p class="heat-risk-pill">${escapeHTML(icon)} ${escapeHTML(label)}</p><b>${escapeHTML(String(day.maxTemp))}°C</b><small>${escapeHTML(day.suggestion)}</small></article>`;
+  }).join("")}</div>`;
+}
+
 function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
   const level = normalizeWorklimateLevel(riskLevel);
   const levelLabel = WORKLIMATE_COLOR_LABEL[level] || level;
   const icon = WEATHER_ALERT_ICON[level] || "🟢";
   const target = currentWeatherTarget || getWeatherTargetCoordinates();
-  const positionLabel = target?.source === "gps" ? "mia postazione GPS" : target?.source === "commessa" ? "zona della commessa" : "postazione predefinita";
-  const detailItems = [
-    {
-      id: "hero",
-      eyebrow: "Normativa in alto • Estate 2026",
-      icon,
-      title: "Gestione rischio calore",
-      summary: "Procedura operativa per consultare Worklimate e organizzare il lavoro in sicurezza.",
-      details: ["Consulta la previsione prima di iniziare il turno e condividi eventuali criticità con il tecnico di riferimento.", "Usa il livello di rischio per programmare pause, idratazione, ombreggiamento e possibile rimodulazione delle attività."]
-    },
-    {
-      id: "law",
-      eyebrow: "Ordinanza regionale",
-      icon: "📌",
-      title: "Ordinanza Regionale n. 72 del 03/06/2026",
-      summary: "Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.",
-      details: ["La disposizione richiede attenzione specifica alle attività all'aperto nelle fasce più calde.", "In presenza di rischio elevato occorre coordinarsi con responsabile e tecnico per applicare le misure organizzative previste."]
-    },
-    {
-      id: "indications",
-      eyebrow: "Guida rapida",
-      icon: "ℹ️",
-      title: "Indicazioni operative",
-      summary: "Cosa controllare prima del turno, quando rimodulare le attività e come ricevere gli aggiornamenti ufficiali.",
-      details: ["Prima del turno verifica livello Worklimate, posizione usata per la previsione e mansioni previste.", "Durante la giornata mantieni disponibilità a modifiche di orario o attività se la previsione cambia."]
-    },
-    { id: "level", icon: "🌡️", title: "Livello attuale", summary: `${levelLabel} per ${positionLabel}.`, details: ["Il livello è stimato sulla postazione selezionata nell'app.", "Se la posizione non è corretta, aggiorna GPS o commessa e riapri la scheda per una lettura coerente."] },
-    { id: "daily", icon: "👷‍♂️", title: "Controllo giornaliero", summary: "Il tecnico di riferimento verifica ogni giorno le previsioni sul portale Worklimate.", details: ["Il controllo serve a intercettare in anticipo le giornate critiche.", "Segui le indicazioni operative comunicate dal tecnico per la tua squadra o area di lavoro."] },
-    { id: "high", icon: "🚫", title: "Rischio ALTO", summary: "Se previsto per il giorno successivo, sospendere le attività all'aperto dalle 12:30 alle 16:00.", details: ["Le lavorazioni all'aperto vanno ripianificate fuori dalla fascia più critica.", "Se non è possibile rimodulare l'attività, avvisa il referente prima di procedere."] },
-    { id: "comms", icon: "💬", title: "Comunicazioni", summary: "La comunicazione arriva solo in caso di previsione di rischio alto, tramite WhatsApp dal tecnico.", details: ["Controlla i messaggi prima dell'avvio del turno e durante eventuali aggiornamenti.", "In assenza di comunicazioni resta comunque valida la verifica ordinaria delle condizioni operative."] },
-    { id: "early", icon: "🕘", title: "Orario anticipato", summary: "In caso di rischio alto può essere adottata fine giornata alle 12:30 con rientro in sede.", details: ["L'anticipo dell'orario riduce l'esposizione nella fascia più calda.", "Concorda rientro, materiali e mezzi con il responsabile per chiudere le attività in sicurezza."] },
-    { id: "attention", icon: "⚠️", title: "Attenzione", summary: "Le previsioni possono variare: serve massima disponibilità e flessibilità organizzativa.", details: ["Il meteo può cambiare anche a breve distanza: ricontrolla le informazioni quando richiesto.", "Segnala sintomi, malesseri o condizioni non sicure senza attendere la fine del turno."] }
+  const coordinatesLabel = Number.isFinite(Number(target?.lat)) && Number.isFinite(Number(target?.lon)) ? `${Number(target.lat).toFixed(4)}, ${Number(target.lon).toFixed(4)}` : "";
+  const positionLabel = target?.source === "gps" ? `Posizione GPS attuale${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "commessa" ? `Comune/zona della commessa${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : "Postazione predefinita";
+  const updatedLabel = currentHomeWeatherForecast?.updatedAt ? new Date(currentHomeWeatherForecast.updatedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "Dati non disponibili";
+  const operationalCards = [
+    { icon: "📋", title: "Prima del turno", items: ["Controllare Worklimate", "Verificare disponibilità acqua", "Informare la squadra"] },
+    { icon: "☀️", title: "Durante il turno", items: ["Fare pause regolari", "Lavorare preferibilmente all’ombra"] },
+    { icon: "🔥", title: "Ore centrali 12:30-16:00", items: ["Ridurre le attività pesanti", "Aumentare la frequenza delle pause"] },
+    { icon: "🚨", title: "In caso di livello rosso", items: ["Rimodulare le attività", "Spostare i lavori gravosi al mattino", "Valutare la sospensione dei lavori più pesanti"] }
   ];
-  const getItem = (id) => detailItems.find((item) => item.id === id) || detailItems[0];
-  const renderDetail = (id) => {
-    const item = getItem(id);
-    const detailList = item.details.map((detail) => `<li>${escapeHTML(detail)}</li>`).join("");
-    return `<section class="worklimate-detail-view" data-worklimate-detail-view="${escapeHTML(item.id)}">
-      <button type="button" class="worklimate-detail-back" data-worklimate-main-back>← Torna alla procedura</button>
-      <div class="worklimate-detail-card">
-        <span class="worklimate-board-emoji" aria-hidden="true">${escapeHTML(item.icon)}</span>
-        ${item.eyebrow ? `<p class="worklimate-board-kicker">${escapeHTML(item.eyebrow)}</p>` : ""}
-        <h2>${escapeHTML(item.title)}</h2>
-        <p>${escapeHTML(item.summary)}</p>
-        <ul>${detailList}</ul>
-      </div>
-    </section>`;
-  };
-  const openDetail = (id) => {
-    const detailMount = overlay.querySelector("[data-worklimate-detail-mount]");
-    detailMount.innerHTML = renderDetail(id);
-    overlay.querySelector("[data-worklimate-main]")?.classList.add("hidden");
-    detailMount.classList.remove("hidden");
-    detailMount.querySelector("[data-worklimate-main-back]")?.addEventListener("click", showMain);
-    detailMount.querySelector(".worklimate-detail-back")?.focus();
-  };
-  const showMain = () => {
-    overlay.querySelector("[data-worklimate-detail-mount]")?.classList.add("hidden");
-    overlay.querySelector("[data-worklimate-main]")?.classList.remove("hidden");
-    overlay.querySelector(".worklimate-page-back")?.focus();
-  };
-  const cardButton = (item, className = "") => `<button type="button" class="worklimate-click-card ${className}" data-worklimate-detail="${escapeHTML(item.id)}">
-    <span aria-hidden="true">${escapeHTML(item.icon)}</span><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.summary)}</p><small>Apri approfondimento →</small>
-  </button>`;
+  const operationalMarkup = operationalCards.map((card) => `<article class="heat-action-card"><span aria-hidden="true">${escapeHTML(card.icon)}</span><h3>${escapeHTML(card.title)}</h3><ul>${card.items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></article>`).join("");
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay worklimate-page-overlay";
-  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page" role="dialog" aria-modal="true" aria-label="Pagina Worklimate rischio calore">
+  overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-dashboard" role="dialog" aria-modal="true" aria-label="Procedura sicurezza rischio calore">
     <header class="worklimate-page-header">
-      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina Worklimate">←</button>
+      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina rischio calore">←</button>
       <div><p>Procedura sicurezza</p><strong>Rischio calore</strong></div>
       <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
     </header>
-    <main data-worklimate-main>
-      ${cardButton(detailItems[0], `worklimate-board-hero risk-${level}`)}
-      ${cardButton(detailItems[1], "worklimate-law-card")}
-      ${cardButton(detailItems[2], "worklimate-page-intro")}
-      <div class="worklimate-board-grid">${detailItems.slice(3).map((item) => cardButton(item)).join("")}</div>
-      <div class="worklimate-board-actions"><button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Visita il sito</button><small>Apri Worklimate e controlla le previsioni per la tua postazione.</small></div>
+    <main data-worklimate-main class="heat-dashboard-main">
+      <section class="heat-status-card risk-${escapeHTML(level)}">
+        <div class="heat-status-icon" aria-hidden="true">${escapeHTML(icon)}</div>
+        <div><h1>Rischio calore</h1><p>${escapeHTML(positionLabel)}</p><small>Ultimo aggiornamento: ${escapeHTML(updatedLabel)}</small></div>
+        <strong>${escapeHTML(levelLabel)}</strong>
+      </section>
+      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">☀️</span><h2>Previsioni prossimi 5 giorni</h2></div>${renderHeatForecastCards()}</section>
+      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">⚠️</span><h2>Indicazioni operative</h2></div><div class="heat-actions-grid">${operationalMarkup}</div></section>
+      <section class="heat-info-card hydration"><h2>💧 Idratazione</h2><p>Bere almeno 250 ml di acqua ogni 20 minuti.</p></section>
+      <section class="heat-law-compact"><div><h2>📌 Ordinanza Regionale n.72 del 03/06/2026</h2><p>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</p></div><button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Apri documento</button></section>
     </main>
-    <div class="hidden" data-worklimate-detail-mount></div>
   </div>`;
   const close = () => {
     document.body.classList.remove("worklimate-page-open");
@@ -21594,7 +21608,6 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
   overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
-  overlay.querySelectorAll("[data-worklimate-detail]").forEach((button) => button.addEventListener("click", () => openDetail(button.getAttribute("data-worklimate-detail"))));
   overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
     const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
     window.open(visitUrl, "_blank", "noopener,noreferrer");

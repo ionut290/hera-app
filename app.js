@@ -9099,6 +9099,30 @@ function getCommessaAverageImpiantiTemperature(commessa) {
   return total / temperatures.length;
 }
 
+function getCommessaMajorityImpiantiLocation(commessa, dateKey = getCommessaScheduledDate(commessa?.id)) {
+  const scheduledImpianti = getScheduledImpiantiForCommessa(commessa, dateKey);
+  const buckets = new Map();
+  scheduledImpianti.forEach((impianto) => {
+    const comune = String(impianto?.comune || impianto?.localita || impianto?.citta || impianto?.city || "").trim();
+    if (!comune) return;
+    const key = normalizeWeatherAlertKey(comune);
+    if (!buckets.has(key)) buckets.set(key, { comune, count: 0, coordinates: [] });
+    const bucket = buckets.get(key);
+    bucket.count += 1;
+    const lat = Number(impianto?.gpsY ?? impianto?.lat ?? impianto?.latitude);
+    const lon = Number(impianto?.gpsX ?? impianto?.lng ?? impianto?.lon ?? impianto?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) bucket.coordinates.push({ lat, lon });
+  });
+  const majority = Array.from(buckets.values()).sort((a, b) => b.count - a.count || a.comune.localeCompare(b.comune, "it"))[0] || null;
+  if (!majority) return null;
+  if (majority.coordinates.length) {
+    const sum = majority.coordinates.reduce((acc, pos) => ({ lat: acc.lat + pos.lat, lon: acc.lon + pos.lon }), { lat: 0, lon: 0 });
+    majority.lat = sum.lat / majority.coordinates.length;
+    majority.lon = sum.lon / majority.coordinates.length;
+  }
+  return majority;
+}
+
 function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
   const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
   const temperature = getCommessaAverageImpiantiTemperature(commessa);
@@ -9107,14 +9131,22 @@ function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
   const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
     ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
     : "";
-  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><span class="squadra-commessa-temperature" aria-label="Temperatura media impianti ${escapeHTML(temperatureLabel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</span>${badgeMarkup}</span>`;
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate sulla località con più impianti: temperatura media ${escapeHTML(temperatureLabel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
 }
 
-function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey()) {
+async function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey(), options = {}) {
   const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
   const riskLevel = normalizeWorklimateLevel(context.riskLevel);
-  const comune = context.risk?.comune || context.alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile";
-  const temperature = getWorklimateAverageTemperature(context);
+  const majorityLocation = getCommessaMajorityImpiantiLocation(commessa, dateKey);
+  const comune = options.preferMajorityLocation
+    ? (majorityLocation?.comune || context.risk?.comune || context.alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile")
+    : (context.risk?.comune || context.alert?.comune || majorityLocation?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile");
+  const temperature = options.preferAverageTemperature ? getCommessaAverageImpiantiTemperature(commessa) : getWorklimateAverageTemperature(context);
+  if (options.preferMajorityLocation && Number.isFinite(Number(majorityLocation?.lat)) && Number.isFinite(Number(majorityLocation?.lon))) {
+    selectedWeatherLocation = { name: majorityLocation.comune, lat: Number(majorityLocation.lat), lon: Number(majorityLocation.lon), source: "commessa" };
+    currentWeatherTarget = { ...selectedWeatherLocation };
+    await fetchWeather();
+  }
   openHomeWorklimateBoard({
     riskLevel,
     url: WORKLIMATE_FORECAST_URL,
@@ -9125,7 +9157,7 @@ function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey
       selectedDate: dateKey || "",
       averageTemperature: temperature,
       alertLevel: riskLevel,
-      source: context.risk?.source || context.alert?.fonte || "Worklimate/meteo"
+      source: options.preferMajorityLocation ? `Località prevalente impianti (${majorityLocation?.count || 0})` : (context.risk?.source || context.alert?.fonte || "Worklimate/meteo")
     }
   });
 }
@@ -18786,6 +18818,11 @@ function renderSquadre() {
       event.preventDefault();
       event.stopPropagation();
       openSquadraWorklimateSafety(commessa, selectedDateKey);
+    });
+    item.querySelector("[data-worklimate-temperature-commessa]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSquadraWorklimateSafety(commessa, selectedDateKey, { preferMajorityLocation: true, preferAverageTemperature: true });
     });
     const warningToggle = item.querySelector(".squadra-warning-toggle");
     warningToggle?.addEventListener("click", (event) => {

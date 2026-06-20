@@ -4094,7 +4094,8 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.squadra-commessa-code-badge {
+.squadra-commessa-code-badge,
+.squadra-commessa-code-line {
   display: inline-flex;
   align-items: center;
   padding: 1px 8px;
@@ -4108,6 +4109,58 @@ textarea:focus-visible {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+
+.squadra-commessa-code-line {
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.squadra-commessa-code-text,
+.squadra-commessa-temperature,
+.squadra-code-separator {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.squadra-worklimate-code-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.squadra-worklimate-code-badge.risk-rosso { border: 1px solid #fecaca; background: #fee2e2; color: #991b1b; }
+.squadra-worklimate-code-badge.risk-arancione { border: 1px solid #fed7aa; background: #ffedd5; color: #9a3412; }
+.squadra-worklimate-code-badge.risk-giallo { border: 1px solid #fde68a; background: #fef9c3; color: #854d0e; }
+
+.squadra-worklimate-code-badge:hover,
+.squadra-worklimate-code-badge:focus-visible {
+  filter: brightness(0.98);
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+}
+
+.heat-context-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.heat-context-card h2,
+.heat-context-card p { margin: 0; }
+.heat-context-card p + p { margin-top: 4px; }
 
 @media (max-width: 640px) {
   .squadra-commessa-title-wrap {

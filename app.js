@@ -9047,6 +9047,7 @@ function normalizeWorklimateRiskDoc(doc) {
 
 function getFirstFiniteNumber(...values) {
   for (const value of values) {
+    if (value === null || value === undefined || String(value).trim() === "") continue;
     const number = Number(value);
     if (Number.isFinite(number)) return number;
   }

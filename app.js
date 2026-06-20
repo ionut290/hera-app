@@ -21713,7 +21713,7 @@ function buildHeatForecastDays() {
   times.forEach((time, idx) => {
     const date = new Date(time);
     if (Number.isNaN(date.getTime())) return;
-    const key = date.toISOString().slice(0, 10);
+    const key = getHeatForecastDayKey(date);
     const item = byDate.get(key) || { date, maxTemp: -Infinity, code: codes[idx] };
     const temp = Number(temps[idx]);
     if (Number.isFinite(temp) && temp > item.maxTemp) {
@@ -21727,7 +21727,7 @@ function buildHeatForecastDays() {
   return Array.from({ length: 5 }, (_, offset) => {
     const date = new Date(today);
     date.setDate(today.getDate() + offset);
-    const key = date.toISOString().slice(0, 10);
+    const key = getHeatForecastDayKey(date);
     const item = byDate.get(key);
     if (!item || !Number.isFinite(item.maxTemp)) return { date, available: false };
     const level = getHeatRiskFromTemp(item.maxTemp);
@@ -21737,7 +21737,17 @@ function buildHeatForecastDays() {
 
 function getHeatForecastDayKey(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getHeatForecastCurrentDayStart(dateKey) {
+  const now = new Date();
+  if (getHeatForecastDayKey(now) !== dateKey) return null;
+  now.setMinutes(0, 0, 0);
+  return now;
 }
 
 function getHeatHourlyForecastForDay(dateKey) {
@@ -21747,9 +21757,11 @@ function getHeatHourlyForecastForDay(dateKey) {
   const codes = Array.isArray(forecast.codes) ? forecast.codes : [];
   const rains = Array.isArray(forecast.rains) ? forecast.rains : [];
   const winds = Array.isArray(forecast.winds) ? forecast.winds : [];
+  const currentDayStart = getHeatForecastCurrentDayStart(dateKey);
   return times.map((time, idx) => {
     const date = new Date(time);
     if (Number.isNaN(date.getTime()) || getHeatForecastDayKey(date) !== dateKey) return null;
+    if (currentDayStart && date < currentDayStart) return null;
     const temp = Number(temps[idx]);
     const level = getHeatRiskFromTemp(temp);
     return { date, temp, code: codes[idx], rain: rains[idx], wind: winds[idx], level };

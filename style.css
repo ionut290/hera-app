@@ -10049,3 +10049,168 @@ body.worklimate-page-open {
   .heat-law-compact { grid-template-columns: 1fr; }
   .heat-law-compact .btn { justify-self: start; }
 }
+
+.heat-location-button {
+  justify-self: end;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 9px 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+
+.heat-location-button:hover,
+.heat-location-button:focus-visible {
+  background: #dbeafe;
+  transform: translateY(-1px);
+}
+
+.heat-location-overlay { z-index: 2600; }
+
+.heat-location-view {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
+}
+
+.heat-location-main {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.heat-location-panel {
+  padding: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.heat-location-panel h2 { margin: 0 0 6px; color: #0f172a; }
+.heat-location-panel p { margin: 0 0 14px; color: #64748b; font-weight: 800; }
+
+.heat-place-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.heat-place-option {
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.heat-place-option strong,
+.heat-place-option span { display: block; }
+.heat-place-option strong { color: #0f172a; font-size: 1rem; }
+.heat-place-option span { margin-top: 4px; color: #64748b; font-weight: 800; }
+
+.heat-coordinate-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.heat-coordinate-form label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-weight: 900;
+}
+
+.heat-coordinate-form label:first-child,
+.heat-coordinate-form button { grid-column: 1 / -1; }
+
+.heat-coordinate-form input {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.heat-map-open {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid #bfdbfe;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(59, 130, 246, 0.2)), repeating-linear-gradient(45deg, rgba(37, 99, 235, 0.16) 0 2px, transparent 2px 26px);
+  color: #0f172a;
+  font-size: 1.15rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.heat-map-open span { font-size: 3rem; }
+
+.heat-full-map {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: #0f172a;
+  color: #fff;
+}
+
+.heat-map-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: crosshair;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.62), rgba(14, 165, 233, 0.58)), repeating-linear-gradient(0deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 80px), repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 80px);
+}
+
+.heat-map-pin {
+  position: absolute;
+  display: none;
+  transform: translate(-50%, -100%);
+  font-size: 3rem;
+  filter: drop-shadow(0 8px 12px rgba(15, 23, 42, 0.45));
+}
+
+.heat-map-pin.visible { display: block; }
+
+.heat-map-close {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(255,255,255,0.45);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.92);
+  color: #1d4ed8;
+  font-size: 2rem;
+}
+
+.heat-map-toolbar {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.84);
+  backdrop-filter: blur(18px);
+}
+
+.heat-map-toolbar span { color: #cbd5e1; font-weight: 800; }
+
+@media (max-width: 640px) {
+  .heat-status-card { grid-template-columns: 1fr; }
+  .heat-location-button { justify-self: start; }
+  .heat-place-grid,
+  .heat-coordinate-form { grid-template-columns: 1fr; }
+}

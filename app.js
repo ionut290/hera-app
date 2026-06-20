@@ -799,6 +799,7 @@ let unsubscribeHoursStats = null;
 let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
 let currentWeatherTarget = { lat: 44.4949, lon: 11.3426 };
+let selectedWeatherLocation = null;
 let currentHomeWeatherForecast = null;
 let currentCivilProtectionAlert = { level: "green", label: "Nessuna allerta", url: "" };
 let currentImpianti = [];
@@ -21270,6 +21271,7 @@ async function fetchWeather() {
 }
 
 function getWeatherTargetCoordinates() {
+  if (selectedWeatherLocation) return { ...selectedWeatherLocation, source: "manual" };
   if (currentUserPos) return { lat: Number(currentUserPos.lat), lon: Number(currentUserPos.lng), source: "gps" };
   const gpsImpianti = currentImpianti
     .map((impianto) => ({ lat: Number(impianto.gpsY), lon: Number(impianto.gpsX) }))
@@ -21571,7 +21573,7 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   const icon = WEATHER_ALERT_ICON[level] || "🟢";
   const target = currentWeatherTarget || getWeatherTargetCoordinates();
   const coordinatesLabel = Number.isFinite(Number(target?.lat)) && Number.isFinite(Number(target?.lon)) ? `${Number(target.lat).toFixed(4)}, ${Number(target.lon).toFixed(4)}` : "";
-  const positionLabel = target?.source === "gps" ? `Posizione GPS attuale${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "commessa" ? `Comune/zona della commessa${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : "Postazione predefinita";
+  const positionLabel = target?.source === "gps" ? `Posizione GPS attuale${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "manual" ? `${target.name || "Località scelta"}${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "commessa" ? `Comune/zona della commessa${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : "Postazione predefinita";
   const updatedLabel = currentHomeWeatherForecast?.updatedAt ? new Date(currentHomeWeatherForecast.updatedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "Dati non disponibili";
   const operationalCards = [
     { icon: "📋", title: "Prima del turno", items: ["Controllare Worklimate", "Verificare disponibilità acqua", "Informare la squadra"] },
@@ -21592,6 +21594,7 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
       <section class="heat-status-card risk-${escapeHTML(level)}">
         <div class="heat-status-icon" aria-hidden="true">${escapeHTML(icon)}</div>
         <div><h1>Rischio calore</h1><p>${escapeHTML(positionLabel)}</p><small>Ultimo aggiornamento: ${escapeHTML(updatedLabel)}</small></div>
+        <button type="button" class="heat-location-button" data-heat-location-picker>📍 Cambia località</button>
         <strong>${escapeHTML(levelLabel)}</strong>
       </section>
       <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">☀️</span><h2>Previsioni prossimi 5 giorni</h2></div>${renderHeatForecastCards()}</section>
@@ -21608,12 +21611,96 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
   overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
+  overlay.querySelector("[data-heat-location-picker]")?.addEventListener("click", () => openHeatLocationPicker(overlay));
   overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
     const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
     window.open(visitUrl, "_blank", "noopener,noreferrer");
   });
   document.body.appendChild(overlay);
   overlay.querySelector(".worklimate-page-back")?.focus();
+}
+
+
+function buildHeatLocationOptionMarkup() {
+  const places = [
+    { name: "Bologna", lat: 44.4949, lon: 11.3426 },
+    { name: "Modena", lat: 44.6471, lon: 10.9252 },
+    { name: "Ferrara", lat: 44.8381, lon: 11.6198 },
+    { name: "Ravenna", lat: 44.4184, lon: 12.2035 }
+  ];
+  return places.map((place) => `<button type="button" class="heat-place-option" data-place-name="${escapeHTML(place.name)}" data-place-lat="${escapeHTML(place.lat)}" data-place-lon="${escapeHTML(place.lon)}"><strong>${escapeHTML(place.name)}</strong><span>${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)}</span></button>`).join("");
+}
+
+function openHeatLocationPicker(boardOverlay) {
+  const picker = document.createElement("div");
+  picker.className = "worklimate-modal-overlay heat-location-overlay";
+  picker.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-location-view" role="dialog" aria-modal="true" aria-label="Scegli località rischio calore">
+    <header class="worklimate-page-header">
+      <button type="button" class="worklimate-page-back" data-location-close aria-label="Torna al rischio calore">←</button>
+      <div><p>Rischio calore</p><strong>Cambia località</strong></div>
+      <button type="button" class="worklimate-modal-close" data-location-close aria-label="Chiudi">×</button>
+    </header>
+    <main class="heat-location-main">
+      <section class="heat-location-panel">
+        <h2>1. Scegli una località</h2>
+        <p>Seleziona una città rapida oppure inserisci coordinate precise.</p>
+        <div class="heat-place-grid">${buildHeatLocationOptionMarkup()}</div>
+        <form class="heat-coordinate-form" data-coordinate-form>
+          <label>Nome località<input name="name" type="text" placeholder="Es. Cantiere nord"></label>
+          <label>Latitudine<input name="lat" type="number" step="0.0001" min="-90" max="90" required></label>
+          <label>Longitudine<input name="lon" type="number" step="0.0001" min="-180" max="180" required></label>
+          <button type="submit" class="btn btn-primary">Usa questa località</button>
+        </form>
+      </section>
+      <section class="heat-location-panel heat-map-panel">
+        <h2>2. Scegli sulla mappa</h2>
+        <p>Tocca la mappa a schermo intero per posizionare il punto.</p>
+        <button type="button" class="heat-map-open" data-open-full-map><span>🗺️</span>Apri mappa a schermo intero</button>
+      </section>
+    </main>
+  </div>`;
+  const closePicker = () => picker.remove();
+  const applyLocation = async (location) => {
+    selectedWeatherLocation = location;
+    currentWeatherTarget = { ...location, source: "manual" };
+    closePicker();
+    boardOverlay?.remove();
+    document.body.classList.remove("worklimate-page-open");
+    await fetchWeather();
+    openHomeWorklimateBoard({ riskLevel: getHomeWorklimateRiskLevel(currentHomeWeatherForecast?.temps || []), url: WORKLIMATE_FORECAST_URL });
+  };
+  picker.querySelectorAll("[data-location-close]").forEach((btn) => btn.addEventListener("click", closePicker));
+  picker.querySelectorAll("[data-place-name]").forEach((btn) => btn.addEventListener("click", () => applyLocation({ name: btn.dataset.placeName, lat: Number(btn.dataset.placeLat), lon: Number(btn.dataset.placeLon) })));
+  picker.querySelector("[data-coordinate-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    applyLocation({ name: String(form.get("name") || "Località scelta").trim(), lat: Number(form.get("lat")), lon: Number(form.get("lon")) });
+  });
+  picker.querySelector("[data-open-full-map]")?.addEventListener("click", () => openHeatFullScreenMap(applyLocation));
+  document.body.appendChild(picker);
+  picker.querySelector(".worklimate-page-back")?.focus();
+}
+
+function openHeatFullScreenMap(onSelect) {
+  const map = document.createElement("div");
+  map.className = "heat-full-map";
+  map.innerHTML = `<button type="button" class="heat-map-close" aria-label="Chiudi mappa">×</button><div class="heat-map-canvas" data-map-canvas><div class="heat-map-pin" data-map-pin>📍</div></div><div class="heat-map-toolbar"><strong>Scegli posizione sulla mappa</strong><span data-map-coordinates>Tocca un punto</span><button type="button" class="btn btn-primary" data-confirm-map disabled>Conferma posizione</button></div>`;
+  let selected = null;
+  map.querySelector(".heat-map-close")?.addEventListener("click", () => map.remove());
+  map.querySelector("[data-map-canvas]")?.addEventListener("click", (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
+    const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
+    selected = { name: "Posizione scelta su mappa", lat: 44.95 - (y / rect.height) * 1.1, lon: 10.55 + (x / rect.width) * 1.9 };
+    const pin = map.querySelector("[data-map-pin]");
+    pin.style.left = `${x}px`;
+    pin.style.top = `${y}px`;
+    pin.classList.add("visible");
+    map.querySelector("[data-map-coordinates]").textContent = `${selected.lat.toFixed(4)}, ${selected.lon.toFixed(4)}`;
+    map.querySelector("[data-confirm-map]").disabled = false;
+  });
+  map.querySelector("[data-confirm-map]")?.addEventListener("click", () => { if (selected) { map.remove(); onSelect(selected); } });
+  document.body.appendChild(map);
 }
 
 function buildCivilProtectionAlertChip(alert) {

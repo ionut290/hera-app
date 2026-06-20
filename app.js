@@ -9030,8 +9030,74 @@ function normalizeWorklimateRiskDoc(doc) {
     forecastAt: data.forecastAt || data.validAt || data.updatedAt || null,
     updatedAt: data.updatedAt || data.forecastAt || null,
     operationalAdvice: Array.isArray(data.operationalAdvice) && data.operationalAdvice.length ? data.operationalAdvice : WORKLIMATE_DEFAULT_ADVICE,
-    source: data.source || data.fonte || "Worklimate"
+    source: data.source || data.fonte || "Worklimate",
+    averageTemperature: getFirstFiniteNumber(
+      data.averageTemperature,
+      data.temperaturaMedia,
+      data.temperatureAvg,
+      data.tempMedia,
+      data.temperature,
+      data.temperatura,
+      data.raw?.averageTemperature,
+      data.raw?.temperaturaMedia,
+      data.raw?.temperature
+    )
   };
+}
+
+function getFirstFiniteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function getWorklimateAverageTemperature(context = {}) {
+  const risk = context.risk || {};
+  const alert = context.alert || {};
+  return getFirstFiniteNumber(
+    risk.averageTemperature,
+    risk.temperaturaMedia,
+    risk.temperature,
+    alert.averageTemperature,
+    alert.temperaturaMedia,
+    alert.temperature
+  );
+}
+
+function formatWorklimateTemperature(value) {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–°C";
+}
+
+function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
+  const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
+  const temperature = getWorklimateAverageTemperature(context);
+  const level = normalizeWorklimateLevel(context.riskLevel);
+  const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
+    ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
+    : "";
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><span class="squadra-code-separator" aria-hidden="true">·</span><span class="squadra-commessa-temperature" aria-label="Temperatura media ${escapeHTML(formatWorklimateTemperature(temperature))}">🌡️ ${escapeHTML(formatWorklimateTemperature(temperature))}</span>${badgeMarkup ? `<span class="squadra-code-separator" aria-hidden="true">·</span>${badgeMarkup}` : ""}</span>`;
+}
+
+function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey()) {
+  const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
+  const riskLevel = normalizeWorklimateLevel(context.riskLevel);
+  const comune = context.risk?.comune || context.alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile";
+  const temperature = getWorklimateAverageTemperature(context);
+  openHomeWorklimateBoard({
+    riskLevel,
+    url: WORKLIMATE_FORECAST_URL,
+    contextData: {
+      commessa: commessa.nome || "Commessa",
+      codiceCommessa: commessa.codice || "",
+      comune,
+      selectedDate: dateKey || "",
+      averageTemperature: temperature,
+      alertLevel: riskLevel,
+      source: context.risk?.source || context.alert?.fonte || "Worklimate/meteo"
+    }
+  });
 }
 
 function loadWorklimateRiskCacheBackground() {
@@ -9084,8 +9150,7 @@ function createWorklimateButton(commessa) {
 function appendSquadreHeaderRiskActions(container, commessa, dateKey = getActiveSquadreDateKey()) {
   const alertButton = createSquadraWeatherAlertButton(commessa, dateKey);
   if (alertButton) container?.appendChild(alertButton);
-  const worklimateButton = createWorklimateButton(commessa);
-  if (worklimateButton) container?.appendChild(worklimateButton);
+  // Worklimate is shown inline on the compact codice commessa row.
 }
 
 function openWorklimateDetails(context) {
@@ -18657,7 +18722,7 @@ function renderSquadre() {
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
           <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-          ${codiceCommessa ? `<span class="squadra-commessa-code-badge" aria-label="Codice commessa ${escapeHTML(codiceCommessa)}">${escapeHTML(codiceCommessa)}</span>` : ""}
+          ${codiceCommessa ? getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) : ""}
         </div>
         ${warningMarkup}
       </div>
@@ -18686,6 +18751,11 @@ function renderSquadre() {
     });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    item.querySelector("[data-worklimate-commessa]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSquadraWorklimateSafety(commessa, selectedDateKey);
     });
     const warningToggle = item.querySelector(".squadra-warning-toggle");
     warningToggle?.addEventListener("click", (event) => {
@@ -21565,7 +21635,7 @@ function renderHeatForecastCards() {
   }).join("")}</div>`;
 }
 
-function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL } = {}) {
+function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL, contextData = null } = {}) {
   const level = normalizeWorklimateLevel(riskLevel);
   const levelLabel = WORKLIMATE_COLOR_LABEL[level] || level;
   const icon = WEATHER_ALERT_ICON[level] || "🟢";
@@ -21580,6 +21650,7 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
     { icon: "🚨", title: "In caso di livello rosso", items: ["Rimodulare le attività", "Spostare i lavori gravosi al mattino", "Valutare la sospensione dei lavori più pesanti"] }
   ];
   const operationalMarkup = operationalCards.map((card) => `<article class="heat-action-card"><span aria-hidden="true">${escapeHTML(card.icon)}</span><h3>${escapeHTML(card.title)}</h3><ul>${card.items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></article>`).join("");
+  const contextMarkup = contextData ? `<section class="heat-context-card"><h2>Commessa selezionata</h2><p><b>${escapeHTML(contextData.commessa || "Commessa")}</b>${contextData.codiceCommessa ? ` · ${escapeHTML(contextData.codiceCommessa)}` : ""}</p><p>${escapeHTML(contextData.comune || "Comune non disponibile")} · ${escapeHTML(contextData.selectedDate || "Data non disponibile")} · 🌡️ ${escapeHTML(formatWorklimateTemperature(contextData.averageTemperature))}</p><p>Livello allerta: <b>Codice ${escapeHTML(contextData.alertLevel || level)}</b> · Fonte: ${escapeHTML(contextData.source || "Worklimate/meteo")}</p></section>` : "";
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay worklimate-page-overlay";
   overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-dashboard" role="dialog" aria-modal="true" aria-label="Procedura sicurezza rischio calore">
@@ -21594,6 +21665,7 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
         <div><h1>Rischio calore</h1><p>${escapeHTML(positionLabel)}</p><small>Ultimo aggiornamento: ${escapeHTML(updatedLabel)}</small></div>
         <strong>${escapeHTML(levelLabel)}</strong>
       </section>
+      ${contextMarkup}
       <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">☀️</span><h2>Previsioni prossimi 5 giorni</h2></div>${renderHeatForecastCards()}</section>
       <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">⚠️</span><h2>Indicazioni operative</h2></div><div class="heat-actions-grid">${operationalMarkup}</div></section>
       <section class="heat-info-card hydration"><h2>💧 Idratazione</h2><p>Bere almeno 250 ml di acqua ogni 20 minuti.</p></section>

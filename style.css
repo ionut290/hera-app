@@ -9916,8 +9916,82 @@ body.worklimate-page-open {
 }
 
 @media (max-width: 640px) {
-  .heat-status-card { grid-template-columns: auto 1fr; }
-  .heat-status-card > strong { grid-column: 1 / -1; justify-self: start; }
+  .worklimate-board-modal.worklimate-board-page {
+    width: 100dvw;
+    min-width: 0;
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+    overflow-x: hidden;
+  }
+
+  .worklimate-page-header {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    margin-right: calc(-1 * max(12px, env(safe-area-inset-right)));
+    margin-left: calc(-1 * max(12px, env(safe-area-inset-left)));
+  }
+
+  .worklimate-page-header > div { min-width: 0; }
+  .worklimate-page-header p,
+  .worklimate-page-header strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .heat-dashboard-main,
+  .heat-status-card,
+  .heat-section,
+  .heat-info-card,
+  .heat-law-compact {
+    min-width: 0;
+  }
+
+  .heat-dashboard-main { gap: 12px; }
+  .heat-status-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .heat-status-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    font-size: 1.45rem;
+  }
+
+  .heat-status-card h1 { font-size: 1.45rem; }
+  .heat-status-card p,
+  .heat-status-card small {
+    overflow-wrap: anywhere;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+
+  .heat-status-card > strong { justify-self: start; }
+  .heat-section { padding: 12px; }
+  .heat-section-title h2,
+  .heat-info-card h2,
+  .heat-law-compact h2 { font-size: 1rem; }
+
+  .heat-forecast-strip {
+    grid-auto-columns: minmax(136px, 72vw);
+    margin-right: -12px;
+    margin-left: -12px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .heat-forecast-card {
+    min-width: 0;
+    min-height: 150px;
+    padding: 11px;
+  }
+
+  .heat-forecast-card b { font-size: 1.55rem; }
+  .heat-forecast-card small { font-size: 0.88rem; }
+  .heat-risk-pill { font-size: 0.8rem; }
+
   .heat-actions-grid,
   .heat-law-compact { grid-template-columns: 1fr; }
   .heat-law-compact .btn { justify-self: start; }

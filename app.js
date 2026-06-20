@@ -21558,7 +21558,9 @@ function buildOperationalForecastAlert({ temps = [], winds = [], snows = [], vis
   if (hasStormCode) return { level: "yellow", label: buildAlertLabel("yellow", "Temporali"), phenomenon: "Temporali" };
   if (minTemp <= -2) return { level: "yellow", label: buildAlertLabel("yellow", "ghiaccio"), phenomenon: "ghiaccio" };
   if (minVisibility < 500) return { level: "yellow", label: buildAlertLabel("yellow", "nebbia"), phenomenon: "nebbia" };
-  if (maxTemp >= 38) return { level: "yellow", label: buildAlertLabel("yellow", "caldo estremo"), phenomenon: "caldo estremo" };
+  if (maxTemp >= 35) return { level: "red", label: buildAlertLabel("red", "caldo estremo"), phenomenon: "caldo estremo" };
+  if (maxTemp >= 32) return { level: "orange", label: buildAlertLabel("orange", "caldo intenso"), phenomenon: "caldo intenso" };
+  if (maxTemp >= 30) return { level: "yellow", label: buildAlertLabel("yellow", "caldo"), phenomenon: "caldo" };
   return { level: "green", label: "Nessuna allerta", phenomenon: "" };
 }
 
@@ -21576,9 +21578,9 @@ function buildAlertLabel(level, phenomenon) {
 
 function getHomeWorklimateRiskLevel(temps = []) {
   const maxTemp = Math.max(...temps.slice(0, 12).map((value) => Number(value) || -100), -100);
-  if (maxTemp >= 38) return "rosso";
-  if (maxTemp >= 35) return "arancione";
-  if (maxTemp >= 32) return "giallo";
+  if (maxTemp >= 35) return "rosso";
+  if (maxTemp >= 32) return "arancione";
+  if (maxTemp >= 30) return "giallo";
   return "verde";
 }
 

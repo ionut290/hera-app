@@ -21385,7 +21385,14 @@ function getWeatherTargetCoordinates() {
 async function renderWeatherDetails(data, target) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
-  currentHomeWeatherForecast = { times, temps, codes: (data.hourly && data.hourly.weather_code) || [], updatedAt: Date.now() };
+  currentHomeWeatherForecast = {
+    times,
+    temps,
+    codes: (data.hourly && data.hourly.weather_code) || [],
+    rains: (data.hourly && data.hourly.precipitation_probability) || [],
+    winds: (data.hourly && data.hourly.wind_speed_10m) || [],
+    updatedAt: Date.now()
+  };
   const rains = (data.hourly && data.hourly.precipitation_probability) || [];
   const snows = (data.hourly && data.hourly.snowfall) || [];
   const visibilities = (data.hourly && data.hourly.visibility) || [];
@@ -21656,6 +21663,27 @@ function buildHeatForecastDays() {
   });
 }
 
+function getHeatForecastDayKey(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function getHeatHourlyForecastForDay(dateKey) {
+  const forecast = currentHomeWeatherForecast || {};
+  const times = Array.isArray(forecast.times) ? forecast.times : [];
+  const temps = Array.isArray(forecast.temps) ? forecast.temps : [];
+  const codes = Array.isArray(forecast.codes) ? forecast.codes : [];
+  const rains = Array.isArray(forecast.rains) ? forecast.rains : [];
+  const winds = Array.isArray(forecast.winds) ? forecast.winds : [];
+  return times.map((time, idx) => {
+    const date = new Date(time);
+    if (Number.isNaN(date.getTime()) || getHeatForecastDayKey(date) !== dateKey) return null;
+    const temp = Number(temps[idx]);
+    const level = getHeatRiskFromTemp(temp);
+    return { date, temp, code: codes[idx], rain: rains[idx], wind: winds[idx], level };
+  }).filter(Boolean);
+}
+
 function renderHeatForecastCards() {
   const days = buildHeatForecastDays();
   if (!days.some((day) => day.available)) return `<p class="worklimate-empty-state">Dati non disponibili, riprova più tardi.</p>`;
@@ -21664,8 +21692,35 @@ function renderHeatForecastCards() {
     const icon = WEATHER_ALERT_ICON[day.level] || "🟢";
     const weatherIcon = weatherCodeLabel(day.code).split(" ")[0] || "☀️";
     const label = WORKLIMATE_COLOR_LABEL[day.level] || day.level;
-    return `<article class="heat-forecast-card risk-${escapeHTML(day.level)}"><div><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><span>${escapeHTML(weatherIcon)}</span></div><p class="heat-risk-pill">${escapeHTML(icon)} ${escapeHTML(label)}</p><b>${escapeHTML(String(day.maxTemp))}°C</b><small>${escapeHTML(day.suggestion)}</small></article>`;
+    const dayKey = getHeatForecastDayKey(day.date);
+    return `<button type="button" class="heat-forecast-card risk-${escapeHTML(day.level)}" data-heat-day="${escapeHTML(dayKey)}" aria-label="Apri previsioni ora per ora per ${escapeHTML(formatHeatDashboardDate(day.date))}"><div><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><span>${escapeHTML(weatherIcon)}</span></div><p class="heat-risk-pill">${escapeHTML(icon)} ${escapeHTML(label)}</p><b>${escapeHTML(String(day.maxTemp))}°C</b><small>${escapeHTML(day.suggestion)}</small><em>Ora per ora</em></button>`;
   }).join("")}</div>`;
+}
+
+function openHeatHourlyForecast(dayKey) {
+  const slots = getHeatHourlyForecastForDay(dayKey);
+  const dayDate = slots[0]?.date || new Date(`${dayKey}T00:00:00`);
+  const title = formatHeatDashboardDate(dayDate);
+  const rows = slots.map((slot) => {
+    const hour = slot.date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const label = weatherCodeLabel(slot.code);
+    const icon = label.split(" ")[0] || "☀️";
+    const riskIcon = WEATHER_ALERT_ICON[slot.level] || "🟢";
+    const riskLabel = WORKLIMATE_COLOR_LABEL[slot.level] || slot.level;
+    const tempLabel = Number.isFinite(slot.temp) ? `${Math.round(slot.temp)}°C` : "n/d";
+    const rainLabel = Number.isFinite(Number(slot.rain)) ? `${Math.round(Number(slot.rain))}%` : "n/d";
+    const windLabel = Number.isFinite(Number(slot.wind)) ? `${Math.round(Number(slot.wind))} km/h` : "n/d";
+    return `<article class="heat-hourly-row risk-${escapeHTML(slot.level)}"><div><strong>${escapeHTML(hour)}</strong><span aria-hidden="true">${escapeHTML(icon)}</span></div><p>${escapeHTML(label.replace(/^[^A-Za-zÀ-ÿ]+\s*/, ""))}</p><b>${escapeHTML(tempLabel)}</b><small>🌧️ ${escapeHTML(rainLabel)} · 🌬️ ${escapeHTML(windLabel)}</small><em>${escapeHTML(riskIcon)} ${escapeHTML(riskLabel)}</em></article>`;
+  }).join("");
+  const overlay = document.createElement("div");
+  overlay.className = "worklimate-modal-overlay heat-hourly-overlay";
+  overlay.innerHTML = `<div class="worklimate-modal heat-hourly-modal" role="dialog" aria-modal="true" aria-label="Previsioni ora per ora rischio calore"><header class="worklimate-page-header"><button type="button" class="worklimate-page-back" aria-label="Torna al rischio calore">←</button><div><p>Previsioni ora per ora</p><strong>${escapeHTML(title)}</strong></div><button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button></header><main class="heat-hourly-list">${rows || "<p class='worklimate-empty-state'>Previsioni orarie non disponibili per questo giorno.</p>"}</main></div>`;
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
+  overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
+  document.body.appendChild(overlay);
+  overlay.querySelector(".worklimate-page-back")?.focus();
 }
 
 function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL, contextData = null } = {}) {
@@ -21715,6 +21770,9 @@ function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAS
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
   overlay.querySelector(".worklimate-page-back")?.addEventListener("click", close);
   overlay.querySelector("[data-heat-location-picker]")?.addEventListener("click", () => openHeatLocationPicker(overlay));
+  overlay.querySelectorAll("[data-heat-day]").forEach((card) => {
+    card.addEventListener("click", () => openHeatHourlyForecast(card.getAttribute("data-heat-day") || ""));
+  });
   overlay.querySelector("[data-worklimate-visit]")?.addEventListener("click", (event) => {
     const visitUrl = event.currentTarget.getAttribute("data-worklimate-visit") || WORKLIMATE_FORECAST_URL;
     window.open(visitUrl, "_blank", "noopener,noreferrer");

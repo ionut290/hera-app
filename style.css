@@ -4140,10 +4140,14 @@ textarea:focus-visible {
   font-family: inherit;
 }
 
+.squadra-commessa-temperature.risk-verde { border-color: #86efac; background: #dcfce7; color: #14532d; }
+.squadra-commessa-temperature.risk-giallo { border-color: #fde68a; background: #fef9c3; color: #854d0e; }
+.squadra-commessa-temperature.risk-arancione { border-color: #fed7aa; background: #ffedd5; color: #9a3412; }
+.squadra-commessa-temperature.risk-rosso { border-color: #fecaca; background: #fee2e2; color: #991b1b; }
+
 .squadra-commessa-temperature:hover,
 .squadra-commessa-temperature:focus-visible {
-  border-color: #38bdf8;
-  background: #e0f2fe;
+  filter: brightness(0.98);
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
   outline: none;
 }

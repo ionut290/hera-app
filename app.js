@@ -21299,7 +21299,8 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
     longitude: String(target.lon),
     current: "temperature_2m,wind_speed_10m,weather_code",
     hourly: "temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m",
-    forecast_days: "2"
+    forecast_days: "5",
+    timezone: "auto"
   };
 
   if (!operational) return baseParams;

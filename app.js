@@ -9072,14 +9072,42 @@ function formatWorklimateTemperature(value) {
   return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–°C";
 }
 
+function formatSquadraAverageTemperature(value) {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–";
+}
+
+function getValidImpiantoTemperature(impianto) {
+  const cachedWeather = getCachedImpiantoWeatherStatus(impianto);
+  return getFirstFiniteNumber(
+    cachedWeather?.temperature,
+    cachedWeather?.currentWeather?.temperature_2m,
+    cachedWeather?.currentWeather?.temperature,
+    impianto?.temperature,
+    impianto?.temperatura,
+    impianto?.temperaturaMedia,
+    impianto?.meteo?.temperature,
+    impianto?.meteo?.temperatura
+  );
+}
+
+function getCommessaAverageImpiantiTemperature(commessa) {
+  const temperatures = getCommessaCachedImpianti(commessa?.id)
+    .map(getValidImpiantoTemperature)
+    .filter((value) => Number.isFinite(Number(value)));
+  if (!temperatures.length) return null;
+  const total = temperatures.reduce((sum, value) => sum + Number(value), 0);
+  return total / temperatures.length;
+}
+
 function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
   const context = getWorklimateContextForCommessa(commessa) || { commessa, riskLevel: "verde" };
-  const temperature = getWorklimateAverageTemperature(context);
+  const temperature = getCommessaAverageImpiantiTemperature(commessa);
+  const temperatureLabel = formatSquadraAverageTemperature(temperature);
   const level = normalizeWorklimateLevel(context.riskLevel);
   const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
     ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
     : "";
-  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><span class="squadra-code-separator" aria-hidden="true">·</span><span class="squadra-commessa-temperature" aria-label="Temperatura media ${escapeHTML(formatWorklimateTemperature(temperature))}">🌡️ ${escapeHTML(formatWorklimateTemperature(temperature))}</span>${badgeMarkup ? `<span class="squadra-code-separator" aria-hidden="true">·</span>${badgeMarkup}` : ""}</span>`;
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><span class="squadra-commessa-temperature" aria-label="Temperatura media impianti ${escapeHTML(temperatureLabel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</span>${badgeMarkup}</span>`;
 }
 
 function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey()) {
@@ -18724,7 +18752,7 @@ function renderSquadre() {
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
           <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
-          ${codiceCommessa ? getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) : ""}
+          ${getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa)}
         </div>
         ${warningMarkup}
       </div>

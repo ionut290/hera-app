@@ -4136,6 +4136,16 @@ textarea:focus-visible {
   border: 1px solid #bae6fd;
   background: #f0f9ff;
   color: #075985;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.squadra-commessa-temperature:hover,
+.squadra-commessa-temperature:focus-visible {
+  border-color: #38bdf8;
+  background: #e0f2fe;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+  outline: none;
 }
 
 .squadra-worklimate-code-badge {

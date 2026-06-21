@@ -9108,6 +9108,15 @@ function formatSquadraAverageTemperature(value) {
   return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–";
 }
 
+function getSquadraAverageTemperatureLevel(value) {
+  const temperature = Number(value);
+  if (!Number.isFinite(temperature)) return "verde";
+  if (temperature >= 35) return "rosso";
+  if (temperature >= 30) return "arancione";
+  if (temperature >= 26) return "giallo";
+  return "verde";
+}
+
 function getValidImpiantoTemperature(impianto) {
   const cachedWeather = getCachedImpiantoWeatherStatus(impianto);
   return getFirstFiniteNumber(
@@ -9162,10 +9171,11 @@ function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
   const temperature = getCommessaAverageImpiantiTemperature(commessa);
   const temperatureLabel = formatSquadraAverageTemperature(temperature);
   const level = normalizeWorklimateLevel(context.riskLevel);
+  const temperatureLevel = getSquadraAverageTemperatureLevel(temperature);
   const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
     ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
     : "";
-  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature risk-${escapeHTML(level)}" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: temperatura media ${escapeHTML(temperatureLabel)}, codice ${escapeHTML(level)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature risk-${escapeHTML(temperatureLevel)}" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: temperatura media ${escapeHTML(temperatureLabel)}, codice temperatura ${escapeHTML(temperatureLevel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
 }
 
 async function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey(), options = {}) {

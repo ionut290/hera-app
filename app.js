@@ -12958,7 +12958,7 @@ function renderImpianti() {
   if (isTombiniEnabledForCurrentCommessa()) {
     const special = document.createElement("article");
     special.className = "impianto-item card-impianto todo biogas-special-item tombini-special-item";
-    special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>⚫ TOMBINI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
+    special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🔴 POZZETTI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
     special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("tombini"));
     ui.impiantiLista.appendChild(special);
   }
@@ -13892,6 +13892,7 @@ function getCurrentCommessaSafetyKind() {
 }
 
 function isBiogasEnabledForCurrentCommessa() {
+  if (isTombiniEnabledForCurrentCommessa()) return false;
   return getCurrentCommessaSafetyKind() === "discariche";
 }
 
@@ -13970,9 +13971,9 @@ function getBiogasMapConfig(type = biogasMapContentType) {
   const isTombini = type === "tombini";
   return {
     type: isTombini ? "tombini" : "rete_biogas",
-    label: isTombini ? "Tombini" : "Rete biogas",
-    lowerLabel: isTombini ? "tombini" : "rete biogas",
-    itemLabel: isTombini ? "tombino" : "tubo",
+    label: isTombini ? "Pozzetti" : "Rete biogas",
+    lowerLabel: isTombini ? "pozzetti" : "rete biogas",
+    itemLabel: isTombini ? "pozzetto" : "tubo",
     collection: isTombini ? "tombiniNetwork" : "biogasNetwork",
     cachePrefix: isTombini ? "hera_tombini_cache" : "hera_biogas_cache",
     kmlField: isTombini ? "tombiniKmlUrl" : "biogasKmlUrl"
@@ -13986,7 +13987,7 @@ function updateBiogasMapChrome() {
   if (ui.biogasMapToggleBtn) ui.biogasMapToggleBtn.textContent = `Mostra/Nascondi ${cfg.label}`;
   if (ui.biogasMapRefreshBtn) ui.biogasMapRefreshBtn.textContent = `Aggiorna ${cfg.lowerLabel}`;
   if (ui.biogasMapDeleteBtn) ui.biogasMapDeleteBtn.textContent = `Elimina ${cfg.lowerLabel}`;
-  if (ui.biogasMapAddPipesBtn) ui.biogasMapAddPipesBtn.textContent = biogasMapContentType === "tombini" ? "Aggiungi tombini" : "Aggiungi tubi";
+  if (ui.biogasMapAddPipesBtn) ui.biogasMapAddPipesBtn.textContent = biogasMapContentType === "tombini" ? "Aggiungi pozzetti" : "Aggiungi tubi";
   if (ui.biogasMapSearch) {
     ui.biogasMapSearch.placeholder = `Cerca ${cfg.itemLabel}...`;
     ui.biogasMapSearch.setAttribute("aria-label", `Cerca ${cfg.itemLabel}`);
@@ -14236,7 +14237,7 @@ function toggleBiogasBaseLayerMode() {
 function ensureBiogasPipeCodes(features = []) {
   return (Array.isArray(features) ? features : []).map((feature, idx) => {
     const existingCode = String(feature?.code || feature?.id || "").trim();
-    const generatedCode = `T${idx + 1}`;
+    const generatedCode = `${biogasMapContentType === "tombini" ? "P" : "T"}${idx + 1}`;
     return { ...feature, code: existingCode || generatedCode, name: String(feature?.name || existingCode || generatedCode).trim() || generatedCode };
   });
 }

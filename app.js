@@ -3824,7 +3824,7 @@ function applyRoute() {
   const showAtexProcedure = Boolean(commessaRoute.atex && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety);
   const showCapitolatoOperativo = Boolean(commessaRoute.capitolato && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
   const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showCapitolatoOperativo);
-  const showBiogasMap = Boolean(commessaRoute.biogas && selectedCommessaId === commessaIdFromHash && getCurrentCommessaSafetyKind() === "discariche");
+  const showBiogasMap = Boolean(commessaRoute.biogas && selectedCommessaId === commessaIdFromHash && isBiogasEnabledForCurrentCommessa());
   const showTombiniMap = Boolean(commessaRoute.tombini && selectedCommessaId === commessaIdFromHash && isTombiniEnabledForCurrentCommessa());
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap && !showTombiniMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
@@ -12904,11 +12904,26 @@ function matchesImpiantoSearch(impianto) {
   return haystack.includes(impiantiSearchTerm);
 }
 
+function renderBiogasSpecialCard() {
+  if (!isBiogasEnabledForCurrentCommessa()) return false;
+  const special = document.createElement("article");
+  special.className = "impianto-item card-impianto todo biogas-special-item";
+  special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🟡 RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
+  special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("rete_biogas"));
+  ui.biogasMapRefreshBtn?.classList.remove("hidden");
+  ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
+  ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
+  ui.impiantiLista.appendChild(special);
+  return true;
+}
+
 function renderImpianti() {
   ui.impiantiLista.innerHTML = "";
 
+  const hasBiogasSpecialCard = renderBiogasSpecialCard();
+
   if (!currentImpianti.length) {
-    ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
+    if (!hasBiogasSpecialCard) ui.impiantiLista.innerHTML = "<p class='muted'>Nessun impianto in questa commessa.</p>";
     renderNextActionCard();
     return;
   }
@@ -12926,21 +12941,19 @@ function renderImpianti() {
   });
 
   if (!sorted.length) {
-    ui.impiantiLista.innerHTML = impiantiViewMode === "alerts"
-      ? "<p class='muted'>Nessun impianto da fare con segnalazione collegata.</p>"
-      : "<p class='muted'>Nessun impianto trovato con i filtri correnti.</p>";
+    const emptyMessage = impiantiViewMode === "alerts"
+      ? "Nessun impianto da fare con segnalazione collegata."
+      : "Nessun impianto trovato con i filtri correnti.";
+    if (hasBiogasSpecialCard) {
+      const message = document.createElement("p");
+      message.className = "muted";
+      message.textContent = emptyMessage;
+      ui.impiantiLista.appendChild(message);
+    } else {
+      ui.impiantiLista.innerHTML = `<p class='muted'>${emptyMessage}</p>`;
+    }
     renderNextActionCard();
     return;
-  }
-  if (getCurrentCommessaSafetyKind() === "discariche") {
-    const special = document.createElement("article");
-    special.className = "impianto-item card-impianto todo biogas-special-item";
-    special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🟡 RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
-    special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("rete_biogas"));
-    ui.biogasMapRefreshBtn?.classList.remove("hidden");
-    ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
-    ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
-    ui.impiantiLista.appendChild(special);
   }
   if (isTombiniEnabledForCurrentCommessa()) {
     const special = document.createElement("article");
@@ -13878,6 +13891,10 @@ function getCurrentCommessaSafetyKind() {
   return getCommessaSafetyKind(selectedCommessaId);
 }
 
+function isBiogasEnabledForCurrentCommessa() {
+  return getCurrentCommessaSafetyKind() === "discariche";
+}
+
 function isTombiniEnabledForCurrentCommessa() {
   const commessa = commesseById.get(selectedCommessaId) || {};
   const values = [selectedCommessaId, selectedCommessaName, commessa.nome, commessa.name, commessa.codice, commessa.code];
@@ -13940,6 +13957,7 @@ function openBiogasMapPage(type = "rete_biogas") {
   if (!selectedCommessaId) return;
   const safeType = type === "tombini" ? "tombini" : "rete_biogas";
   if (safeType === "tombini" && !isTombiniEnabledForCurrentCommessa()) return;
+  if (safeType === "rete_biogas" && !isBiogasEnabledForCurrentCommessa()) return;
   window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&${safeType === "tombini" ? "tombini" : "biogas"}`;
   applyRoute();
 }

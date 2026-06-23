@@ -1389,6 +1389,27 @@ textarea:focus-visible {
   min-height: 420px;
 }
 
+.tombino-map-marker {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #475569 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #111827 0 2px, #334155 3px 5px, #111827 6px 7px),
+    radial-gradient(circle at 50% 50%, #64748b 0, #1f2937 72%, #020617 100%);
+  border: 2px solid #020617;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.45), inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+}
+
+.tombino-map-marker span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent 0 43%, rgba(226, 232, 240, 0.28) 44% 56%, transparent 57% 100%);
+  transform: rotate(35deg);
+}
+
 #map-fullscreen-view {
   position: absolute;
   inset: 0;

@@ -1394,11 +1394,20 @@ textarea:focus-visible {
   height: 30px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 50%, #475569 0 18%, transparent 19%),
-    repeating-radial-gradient(circle at 50% 50%, #111827 0 2px, #334155 3px 5px, #111827 6px 7px),
-    radial-gradient(circle at 50% 50%, #64748b 0, #1f2937 72%, #020617 100%);
-  border: 2px solid #020617;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.45), inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+    radial-gradient(circle at 50% 50%, #fecaca 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #7f1d1d 0 2px, #ef4444 3px 5px, #991b1b 6px 7px),
+    radial-gradient(circle at 50% 50%, #f87171 0, #dc2626 72%, #7f1d1d 100%);
+  border: 2px solid #991b1b;
+  box-shadow: 0 2px 8px rgba(127, 29, 29, 0.45), inset 0 0 0 2px rgba(254, 202, 202, 0.5);
+}
+
+.tombino-map-marker.is-done {
+  background:
+    radial-gradient(circle at 50% 50%, #bbf7d0 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #14532d 0 2px, #22c55e 3px 5px, #166534 6px 7px),
+    radial-gradient(circle at 50% 50%, #4ade80 0, #16a34a 72%, #14532d 100%);
+  border-color: #166534;
+  box-shadow: 0 2px 8px rgba(20, 83, 45, 0.45), inset 0 0 0 2px rgba(187, 247, 208, 0.5);
 }
 
 .tombino-map-marker span {

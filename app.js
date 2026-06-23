@@ -986,6 +986,12 @@ let biogasBaseLayerMode = localStorage.getItem("hera_biogas_base_layer") || "sta
 let biogasHighlightedLayer = null;
 let biogasPipeRenderLayers = [];
 let biogasNearestSnapshot = null;
+let biogasMapContentType = "rete_biogas";
+const TOMBINI_ENABLED_COMMESSE = [
+  "DISCARICA RETI BENTIVOGLIO",
+  "DISCARICA RETI FERRARA CA",
+  "DISCARICA RETI FERRARA 2B"
+];
 let fullscreenMapMode = "standard";
 let selectedFullscreenImpiantoId = "";
 let selectedImpiantoId = "";
@@ -1526,14 +1532,15 @@ ui.biogasMapSettingsBtn?.addEventListener("click", toggleBiogasMapControls);
 ui.biogasMapLayerBtn?.addEventListener("click", toggleBiogasBaseLayerMode);
 ui.biogasMapToggleBtn?.addEventListener("click", toggleBiogasNetworkVisibility);
 ui.biogasMapSearch?.addEventListener("input", onBiogasSearchInput);
-ui.biogasMapRefreshBtn?.addEventListener("click", () => loadBiogasNetworkForCurrentCommessa({ forceRefresh: true }));
+ui.biogasMapRefreshBtn?.addEventListener("click", () => loadBiogasNetworkForCurrentCommessa({ forceRefresh: true, type: biogasMapContentType }));
 ui.biogasMapDeleteBtn?.addEventListener("click", deleteBiogasNetworkForCurrentCommessa);
 ui.biogasMapAddPipesBtn?.addEventListener("click", () => ui.biogasMapFileInput?.click());
 ui.biogasMapFileInput?.addEventListener("change", onBiogasFileSelected);
 ui.biogasDistanceIndicator?.addEventListener("click", () => {
   if (!biogasMapInstance || !biogasNearestSnapshot || !Number.isFinite(biogasNearestSnapshot.dist)) return;
+  const cfg = getBiogasMapConfig();
   const nearest = biogasNearestSnapshot.nearest || [0, 0];
-  const html = `<div><b>Codice tubo:</b> ${escapeHTML(biogasNearestSnapshot.code)}<br><b>Distanza:</b> ${Math.round(biogasNearestSnapshot.dist)} m<br><b>Coordinate:</b> ${nearest[0].toFixed(6)}, ${nearest[1].toFixed(6)}<br><button type="button" id="biogas-center-map-btn" class="btn" style="margin-top:6px">Centra sulla mappa</button></div>`;
+  const html = `<div><b>Codice ${escapeHTML(cfg.itemLabel)}:</b> ${escapeHTML(biogasNearestSnapshot.code)}<br><b>Distanza:</b> ${Math.round(biogasNearestSnapshot.dist)} m<br><b>Coordinate:</b> ${nearest[0].toFixed(6)}, ${nearest[1].toFixed(6)}<br><button type="button" id="biogas-center-map-btn" class="btn" style="margin-top:6px">Centra sulla mappa</button></div>`;
   L.popup().setLatLng(biogasUserMarker?.getLatLng?.() || biogasMapInstance.getCenter()).setContent(html).openOn(biogasMapInstance);
 });
 
@@ -3760,7 +3767,7 @@ function shareDrawnAreaViaWhatsapp() {
 
 function parseCommessaHash(hash = window.location.hash || "") {
   const rawHash = String(hash || "").replace(/^#/, "");
-  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", alert: "", atex: "", safety: "", capitolato: "", biogas: false };
+  if (!rawHash.startsWith("commessa=")) return { id: "", resource: "", notes: false, impianto: "", meteo: "", alert: "", atex: "", safety: "", capitolato: "", biogas: false, tombini: false };
   const params = new URLSearchParams(rawHash);
   return {
     id: params.get("commessa") || "",
@@ -3772,7 +3779,8 @@ function parseCommessaHash(hash = window.location.hash || "") {
     atex: params.get("atex") || "",
     safety: params.get("safety") || "",
     capitolato: params.get("capitolato") || "",
-    biogas: params.has("biogas")
+    biogas: params.has("biogas"),
+    tombini: params.has("tombini")
   };
 }
 
@@ -3817,9 +3825,10 @@ function applyRoute() {
   const showCapitolatoOperativo = Boolean(commessaRoute.capitolato && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure);
   const showImpiantoSafety = Boolean(commessaRoute.safety && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showAtexProcedure && !showCapitolatoOperativo);
   const showBiogasMap = Boolean(commessaRoute.biogas && selectedCommessaId === commessaIdFromHash && getCurrentCommessaSafetyKind() === "discariche");
-  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap);
+  const showTombiniMap = Boolean(commessaRoute.tombini && selectedCommessaId === commessaIdFromHash && isTombiniEnabledForCurrentCommessa());
+  const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap && !showTombiniMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
@@ -3827,7 +3836,7 @@ function applyRoute() {
   ui.impiantoSafetyPage?.classList.toggle("hidden", !(showImpiantoSafety || showCapitolatoOperativo));
   ui.commessaNotesPage?.classList.toggle("hidden", !showNotesPage);
   ui.mapFullscreenPage?.classList.toggle("hidden", !isMapFullscreenPageOpen);
-  ui.biogasMapPage?.classList.toggle("hidden", !showBiogasMap);
+  ui.biogasMapPage?.classList.toggle("hidden", !(showBiogasMap || showTombiniMap));
   ui.fuelPage.classList.toggle("hidden", !showFuel);
   ui.personalServicesPage.classList.toggle("hidden", !showPersonalServices);
   ui.segnalazioniPage.classList.toggle("hidden", !showSegnalazioni);
@@ -3861,7 +3870,8 @@ function applyRoute() {
   if (showImpiantoSafety) {
     renderImpiantoSafetyPage(commessaRoute.safety);
   }
-  if (showBiogasMap) loadBiogasNetworkForCurrentCommessa();
+  if (showBiogasMap) loadBiogasNetworkForCurrentCommessa({ type: "rete_biogas" });
+  else if (showTombiniMap) loadBiogasNetworkForCurrentCommessa({ type: "tombini" });
   else teardownBiogasMapPage();
   if (showCapitolatoOperativo) {
     renderCapitolatoOperativoPage(commessaRoute.capitolato);
@@ -12926,10 +12936,17 @@ function renderImpianti() {
     const special = document.createElement("article");
     special.className = "impianto-item card-impianto todo biogas-special-item";
     special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🟡 RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
-    special.querySelector("button")?.addEventListener("click", openBiogasMapPage);
+    special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("rete_biogas"));
     ui.biogasMapRefreshBtn?.classList.remove("hidden");
     ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
     ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
+    ui.impiantiLista.appendChild(special);
+  }
+  if (isTombiniEnabledForCurrentCommessa()) {
+    const special = document.createElement("article");
+    special.className = "impianto-item card-impianto todo biogas-special-item tombini-special-item";
+    special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>⚫ TOMBINI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
+    special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("tombini"));
     ui.impiantiLista.appendChild(special);
   }
 
@@ -13861,6 +13878,16 @@ function getCurrentCommessaSafetyKind() {
   return getCommessaSafetyKind(selectedCommessaId);
 }
 
+function isTombiniEnabledForCurrentCommessa() {
+  const commessa = commesseById.get(selectedCommessaId) || {};
+  const values = [selectedCommessaId, selectedCommessaName, commessa.nome, commessa.name, commessa.codice, commessa.code];
+  const normalizedValues = values.filter(Boolean).map((value) => normalizeCommessaNameForRules(value));
+  return TOMBINI_ENABLED_COMMESSE.some((enabledName) => {
+    const normalizedEnabled = normalizeCommessaNameForRules(enabledName);
+    return normalizedValues.some((value) => value === normalizedEnabled || value.includes(normalizedEnabled));
+  });
+}
+
 function getCommessaSafetyKind(commessaId) {
   const commessa = commesseById.get(commessaId) || {};
   const values = [];
@@ -13909,14 +13936,43 @@ function closeImpiantoSafetyPage() {
   openImpiantiPage();
 }
 
-function openBiogasMapPage() {
+function openBiogasMapPage(type = "rete_biogas") {
   if (!selectedCommessaId) return;
-  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&biogas`;
+  const safeType = type === "tombini" ? "tombini" : "rete_biogas";
+  if (safeType === "tombini" && !isTombiniEnabledForCurrentCommessa()) return;
+  window.location.hash = `commessa=${encodeURIComponent(selectedCommessaId)}&${safeType === "tombini" ? "tombini" : "biogas"}`;
   applyRoute();
 }
 
 function closeBiogasMapPage() {
   openImpiantiPage();
+}
+
+function getBiogasMapConfig(type = biogasMapContentType) {
+  const isTombini = type === "tombini";
+  return {
+    type: isTombini ? "tombini" : "rete_biogas",
+    label: isTombini ? "Tombini" : "Rete biogas",
+    lowerLabel: isTombini ? "tombini" : "rete biogas",
+    itemLabel: isTombini ? "tombino" : "tubo",
+    collection: isTombini ? "tombiniNetwork" : "biogasNetwork",
+    cachePrefix: isTombini ? "hera_tombini_cache" : "hera_biogas_cache",
+    kmlField: isTombini ? "tombiniKmlUrl" : "biogasKmlUrl"
+  };
+}
+
+function updateBiogasMapChrome() {
+  const cfg = getBiogasMapConfig();
+  if (ui.biogasDistanceIndicator) ui.biogasDistanceIndicator.setAttribute("aria-label", `Distanza dal ${cfg.itemLabel}`);
+  if (ui.biogasMapSettingsBtn) ui.biogasMapSettingsBtn.setAttribute("aria-label", `Apri impostazioni ${cfg.lowerLabel}`);
+  if (ui.biogasMapToggleBtn) ui.biogasMapToggleBtn.textContent = `Mostra/Nascondi ${cfg.label}`;
+  if (ui.biogasMapRefreshBtn) ui.biogasMapRefreshBtn.textContent = `Aggiorna ${cfg.lowerLabel}`;
+  if (ui.biogasMapDeleteBtn) ui.biogasMapDeleteBtn.textContent = `Elimina ${cfg.lowerLabel}`;
+  if (ui.biogasMapAddPipesBtn) ui.biogasMapAddPipesBtn.textContent = biogasMapContentType === "tombini" ? "Aggiungi tombini" : "Aggiungi tubi";
+  if (ui.biogasMapSearch) {
+    ui.biogasMapSearch.placeholder = `Cerca ${cfg.itemLabel}...`;
+    ui.biogasMapSearch.setAttribute("aria-label", `Cerca ${cfg.itemLabel}`);
+  }
 }
 
 function parseKmlPipelines(text) {
@@ -13959,6 +14015,20 @@ function parseKmlPipelines(text) {
   return items;
 }
 
+function parseKmlPoints(text) {
+  const xml = new DOMParser().parseFromString(String(text || ""), "text/xml");
+  const parseErrors = xml.getElementsByTagName("parsererror");
+  if (parseErrors?.length) throw new Error("KML non valido o XML corrotto.");
+  const getChildTextByLocalName = (parent, localName) => Array.from(parent?.getElementsByTagName("*") || []).find((item) => item.localName === localName)?.textContent?.trim() || "";
+  return Array.from(xml.getElementsByTagName("*")).filter((node) => node.localName === "Placemark").map((p, idx) => {
+    const coordsText = getChildTextByLocalName(p, "coordinates");
+    const [lng, lat] = coordsText.split(/\s+/)[0]?.split(",").map(Number) || [];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const name = getChildTextByLocalName(p, "name") || `tombino ${idx + 1}`;
+    return { name, coords: [[lat, lng]] };
+  }).filter(Boolean);
+}
+
 function parseGeoJsonPipelines(data) {
   const items = [];
   const features = Array.isArray(data?.features) ? data.features : [];
@@ -13976,6 +14046,18 @@ function parseGeoJsonPipelines(data) {
   return items;
 }
 
+function parseGeoJsonPoints(data) {
+  const features = Array.isArray(data?.features) ? data.features : [];
+  return features.map((feature, idx) => {
+    const geometry = feature?.geometry || {};
+    if (geometry.type !== "Point" || !Array.isArray(geometry.coordinates)) return null;
+    const [lng, lat] = geometry.coordinates;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const name = String(feature?.properties?.name || feature?.properties?.nome || `tombino ${idx + 1}`).trim();
+    return { name, coords: [[lat, lng]] };
+  }).filter(Boolean);
+}
+
 
 function serializeBiogasPipelinesForFirestore(pipelines) {
   return (Array.isArray(pipelines) ? pipelines : []).map((item) => ({
@@ -13984,7 +14066,7 @@ function serializeBiogasPipelinesForFirestore(pipelines) {
       lat: Number(Array.isArray(pair) ? pair[0] : pair?.lat),
       lng: Number(Array.isArray(pair) ? pair[1] : pair?.lng)
     })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
-  })).filter((item) => item.coords.length > 1);
+  })).filter((item) => item.coords.length > 0);
 }
 
 function normalizeBiogasPipelinesFromStorage(pipelines) {
@@ -13999,7 +14081,7 @@ function normalizeBiogasPipelinesFromStorage(pipelines) {
       const lng = Number(point?.lng);
       return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
     }).filter(Boolean)
-  })).filter((item) => item.coords.length > 1);
+  })).filter((item) => item.coords.length > 0);
 }
 function parseCsvPipelines(text) {
   const rows = String(text || "").split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
@@ -14015,42 +14097,56 @@ function parseCsvPipelines(text) {
   return Array.from(byName.entries()).map(([name, coords]) => ({ name, coords })).filter((item) => item.coords.length > 1);
 }
 
+function parseCsvPoints(text) {
+  return String(text || "").split(/\r?\n/).map((r) => r.trim()).filter(Boolean).slice(1).map((row, idx) => {
+    const [nameRaw = "", latRaw = "", lngRaw = ""] = row.split(",").map((v) => v.trim());
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { name: nameRaw || `tombino ${idx + 1}`, coords: [[lat, lng]] };
+  }).filter(Boolean);
+}
+
 async function onBiogasFileSelected(event) {
   const file = event.target?.files?.[0];
   if (!file || !selectedCommessaId) return;
+  const cfg = getBiogasMapConfig();
   if (!canManageData()) {
     ui.biogasMapFileInput.value = "";
-    ui.biogasMapStatus.textContent = "Solo l'admin può aggiungere o modificare la rete biogas.";
+    ui.biogasMapStatus.textContent = `Solo l'admin può aggiungere o modificare ${cfg.lowerLabel}.`;
     return;
   }
   ui.biogasMapFileInput.value = "";
-  ui.biogasMapStatus.textContent = "Caricamento rete biogas…";
+  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}…`;
   const ext = (file.name.split(".").pop() || "").toLowerCase();
   try {
     let pipelines = [];
     if (ext === "kml") {
-      pipelines = parseKmlPipelines(await file.text());
+      const text = await file.text();
+      pipelines = cfg.type === "tombini" ? parseKmlPoints(text) : parseKmlPipelines(text);
     } else if (ext === "geojson" || ext === "json") {
-      pipelines = parseGeoJsonPipelines(JSON.parse(await file.text()));
+      const json = JSON.parse(await file.text());
+      pipelines = cfg.type === "tombini" ? parseGeoJsonPoints(json) : parseGeoJsonPipelines(json);
     } else if (ext === "csv" || ext === "txt") {
-      pipelines = parseCsvPipelines(await file.text());
+      const text = await file.text();
+      pipelines = cfg.type === "tombini" ? parseCsvPoints(text) : parseCsvPipelines(text);
     } else if (ext === "gpx") {
       const gpxText = await file.text();
       const kmlLike = gpxText.replace(/<trkpt lat=\"([^\"]+)\" lon=\"([^\"]+)\"[^>]*>/g, "<coordinates>$2,$1</coordinates>");
-      pipelines = parseKmlPipelines(kmlLike);
+      pipelines = cfg.type === "tombini" ? parseKmlPoints(kmlLike) : parseKmlPipelines(kmlLike);
     } else if (ext === "kmz" || ext === "zip") {
       throw new Error("Formato compresso non supportato direttamente: carica preferibilmente KML.");
     } else {
       throw new Error("Formato non supportato. Usa KML (consigliato), GeoJSON o CSV.");
     }
-    if (!pipelines.length) throw new Error("Nessuna tubazione trovata nel file.");
+    if (!pipelines.length) throw new Error(cfg.type === "tombini" ? "Nessun tombino trovato nel file." : "Nessuna tubazione trovata nel file.");
     const firestorePipelines = serializeBiogasPipelinesForFirestore(pipelines);
     const payload = { pipelines: firestorePipelines, updatedAt: new Date().toISOString(), sourceFileName: file.name, sourceFileType: ext };
-    await db.collection("commesse").doc(selectedCommessaId).collection("biogasNetwork").doc("current").set(payload, { merge: true });
-    localStorage.setItem(`hera_biogas_cache_${selectedCommessaId}`, JSON.stringify(payload));
+    await db.collection("commesse").doc(selectedCommessaId).collection(cfg.collection).doc("current").set(payload, { merge: true });
+    localStorage.setItem(`${cfg.cachePrefix}_${selectedCommessaId}`, JSON.stringify(payload));
     biogasFeatures = ensureBiogasPipeCodes(normalizeBiogasPipelinesFromStorage(payload.pipelines));
-    ui.biogasMapLastUpdate.textContent = `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
-    ui.biogasMapStatus.textContent = `Rete importata da ${file.name}.`;
+    ui.biogasMapLastUpdate.textContent = `Ultimo aggiornamento ${cfg.lowerLabel}: ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
+    ui.biogasMapStatus.textContent = `${cfg.label} importata da ${file.name}.`;
     renderBiogasMap();
   } catch (error) {
     ui.biogasMapStatus.textContent = `Errore importazione: ${error?.message || "formato non valido"}`;
@@ -14059,12 +14155,15 @@ async function onBiogasFileSelected(event) {
 
 async function loadBiogasNetworkForCurrentCommessa(options = {}) {
   if (!selectedCommessaId || !ui.biogasMapStatus) return;
-  ui.biogasMapStatus.textContent = "Caricamento rete biogas…";
+  biogasMapContentType = options.type === "tombini" ? "tombini" : "rete_biogas";
+  updateBiogasMapChrome();
+  const cfg = getBiogasMapConfig();
+  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}…`;
   const commessaRef = db.collection("commesse").doc(selectedCommessaId);
-  const cacheKey = `hera_biogas_cache_${selectedCommessaId}`;
+  const cacheKey = `${cfg.cachePrefix}_${selectedCommessaId}`;
   let payload = null;
   if (!options.forceRefresh) {
-    const snap = await commessaRef.collection("biogasNetwork").doc("current").get();
+    const snap = await commessaRef.collection(cfg.collection).doc("current").get();
     if (snap.exists) payload = snap.data();
   }
   if (!payload) {
@@ -14074,21 +14173,21 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
   if (!payload || options.forceRefresh) {
     try {
       const c = commesseById.get(selectedCommessaId) || {};
-      const kmlUrl = String(c.biogasKmlUrl || c.kmlUrl || "").trim();
+      const kmlUrl = String(c[cfg.kmlField] || (cfg.type === "rete_biogas" ? c.kmlUrl : "") || "").trim();
       if (!kmlUrl) throw new Error("KML mancante");
       const resp = await fetch(kmlUrl);
       const text = await resp.text();
-      const pipelines = parseKmlPipelines(text);
+      const pipelines = cfg.type === "tombini" ? parseKmlPoints(text) : parseKmlPipelines(text);
       payload = { pipelines: serializeBiogasPipelinesForFirestore(pipelines), updatedAt: new Date().toISOString() };
-      await commessaRef.collection("biogasNetwork").doc("current").set(payload, { merge: true });
+      await commessaRef.collection(cfg.collection).doc("current").set(payload, { merge: true });
       localStorage.setItem(cacheKey, JSON.stringify(payload));
     } catch (error) {
-      ui.biogasMapStatus.textContent = "Errore caricamento rete biogas. Torna indietro e riprova.";
+      ui.biogasMapStatus.textContent = `Errore caricamento ${cfg.lowerLabel}. Torna indietro e riprova.`;
       return;
     }
   }
   biogasFeatures = ensureBiogasPipeCodes(normalizeBiogasPipelinesFromStorage(payload.pipelines));
-  ui.biogasMapLastUpdate.textContent = payload.updatedAt ? `Ultimo aggiornamento rete biogas: ${new Date(payload.updatedAt).toLocaleString("it-IT")}` : "";
+  ui.biogasMapLastUpdate.textContent = payload.updatedAt ? `Ultimo aggiornamento ${cfg.lowerLabel}: ${new Date(payload.updatedAt).toLocaleString("it-IT")}` : "";
   renderBiogasMap();
 }
 
@@ -14128,8 +14227,22 @@ function renderBiogasPipeLayer(map, geoJsonData) {
   if (!map || !biogasLayerGroup) return [];
   const layers = [];
   const collection = Array.isArray(geoJsonData) ? geoJsonData : [];
+  const manholeIcon = L.divIcon({
+    className: "tombino-map-marker",
+    html: "<span></span>",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -12]
+  });
   collection.forEach((pipe) => {
     const coords = Array.isArray(pipe?.coords) ? pipe.coords : [];
+    if (biogasMapContentType === "tombini") {
+      const point = coords[0];
+      if (!point) return;
+      const marker = L.marker(point, { icon: manholeIcon, name: pipe.name, code: pipe.code }).addTo(biogasLayerGroup);
+      layers.push({ code: pipe.code, name: pipe.name, coords, main: marker, marker });
+      return;
+    }
     if (coords.length < 2) return;
     const shadow = L.polyline(coords, { color: "#000000", opacity: 0.35, weight: 14, interactive: false, lineCap: "round", lineJoin: "round" }).addTo(biogasLayerGroup);
     const edge = L.polyline(coords, { color: "#5b3200", opacity: 0.9, weight: 11, interactive: false, lineCap: "round", lineJoin: "round" }).addTo(biogasLayerGroup);
@@ -14142,6 +14255,7 @@ function renderBiogasPipeLayer(map, geoJsonData) {
 
 function renderBiogasMap() {
   if (!ui.biogasMapPage || ui.biogasMapPage.classList.contains("hidden")) return;
+  const cfg = getBiogasMapConfig();
   if (!biogasMapInstance) biogasMapInstance = L.map("biogas-map-view", { zoomControl: true });
   applyBiogasBaseLayerMode();
   if (!biogasLayerGroup) biogasLayerGroup = L.layerGroup().addTo(biogasMapInstance);
@@ -14150,21 +14264,23 @@ function renderBiogasMap() {
   biogasPipeRenderLayers = renderBiogasPipeLayer(biogasMapInstance, biogasFeatures);
   const bounds = [];
   biogasPipeRenderLayers.forEach((pipeLayer) => {
-    pipeLayer.main.bindPopup(`Rete biogas<br>Attenzione: possibile presenza tubo biogas`);
-    pipeLayer.main.on("mouseover", () => pipeLayer.main.setStyle({ weight: 10, color: "#ffb347" }));
-    pipeLayer.main.on("mouseout", () => pipeLayer.main.setStyle({ weight: 8, color: "#ff9f1c" }));
+    pipeLayer.main.bindPopup(`${cfg.label}<br>Attenzione: possibile presenza ${cfg.itemLabel}`);
+    if (biogasMapContentType !== "tombini") {
+      pipeLayer.main.on("mouseover", () => pipeLayer.main.setStyle({ weight: 10, color: "#ffb347" }));
+      pipeLayer.main.on("mouseout", () => pipeLayer.main.setStyle({ weight: 8, color: "#ff9f1c" }));
+    }
     pipeLayer.main.on("click", () => {
       const nearestText = biogasNearestSnapshot?.code === pipeLayer.code && Number.isFinite(biogasNearestSnapshot?.dist)
         ? `${pipeLayer.code} - DISTANZA ${Math.round(biogasNearestSnapshot.dist)} m`
         : `${pipeLayer.code} - DISTANZA -- m`;
-      pipeLayer.main.setPopupContent(`Rete biogas<br>Attenzione: possibile presenza tubo biogas<br>${nearestText}`);
+      pipeLayer.main.setPopupContent(`${cfg.label}<br>Attenzione: possibile presenza ${cfg.itemLabel}<br>${nearestText}`);
       pipeLayer.main.openPopup();
     });
     bounds.push(...pipeLayer.coords);
   });
   if (bounds.length) biogasMapInstance.fitBounds(bounds, { padding: [30, 30] });
   else biogasMapInstance.setView([44.4949, 11.3426], 12);
-  ui.biogasMapStatus.textContent = biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile.";
+  ui.biogasMapStatus.textContent = biogasFeatures.length ? `${cfg.label} caricata.` : (biogasMapContentType === "tombini" ? "Nessun tombino disponibile." : "Nessuna tubazione disponibile.");
   updateBiogasDistanceIndicator({ dist: Infinity, code: "" });
   if (biogasWatchId == null && navigator.geolocation) {
     biogasWatchId = navigator.geolocation.watchPosition((pos) => {
@@ -14174,7 +14290,7 @@ function renderBiogasMap() {
       evaluateBiogasDistanceAlerts(latlng);
     }, () => {
       updateBiogasDistanceIndicator({ dist: Infinity, code: "" });
-      ui.biogasMapStatus.textContent = `${biogasFeatures.length ? "Rete biogas caricata." : "Nessuna tubazione disponibile."} Posizione non disponibile: abilita GPS e permessi posizione.`;
+      ui.biogasMapStatus.textContent = `${biogasFeatures.length ? `${cfg.label} caricata.` : (biogasMapContentType === "tombini" ? "Nessun tombino disponibile." : "Nessuna tubazione disponibile.")} Posizione non disponibile: abilita GPS e permessi posizione.`;
     }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
   }
 }
@@ -14200,7 +14316,8 @@ function onBiogasSearchInput() {
   if (!q || !biogasMapInstance) return;
   const match = biogasFeatures.find((f) => f.name.toLowerCase().includes(q));
   if (!match?.coords?.length) return;
-  biogasMapInstance.fitBounds(match.coords, { maxZoom: 19, padding: [25, 25] });
+  if (biogasMapContentType === "tombini") biogasMapInstance.setView(match.coords[0], 19);
+  else biogasMapInstance.fitBounds(match.coords, { maxZoom: 19, padding: [25, 25] });
   biogasLayerGroup?.eachLayer?.((layer) => {
     const isMatch = String(layer?.options?.name || "").toLowerCase() === match.name.toLowerCase();
     layer.setStyle?.({ weight: isMatch ? 8 : 5 });
@@ -14213,8 +14330,9 @@ function onBiogasSearchInput() {
 
 async function deleteBiogasNetworkForCurrentCommessa() {
   if (!selectedCommessaId || !canManageData()) return;
-  await db.collection("commesse").doc(selectedCommessaId).collection("biogasNetwork").doc("current").delete();
-  localStorage.removeItem(`hera_biogas_cache_${selectedCommessaId}`);
+  const cfg = getBiogasMapConfig();
+  await db.collection("commesse").doc(selectedCommessaId).collection(cfg.collection).doc("current").delete();
+  localStorage.removeItem(`${cfg.cachePrefix}_${selectedCommessaId}`);
   biogasFeatures = [];
   renderBiogasMap();
 }
@@ -14271,10 +14389,21 @@ function pointToSegmentDistanceMeters(point, a, b) {
   return Math.hypot(x - px, y - py);
 }
 
+function distanceBetweenLatLng(a, b) {
+  return haversine(a[0], a[1], b[0], b[1]) * 1000;
+}
+
 function evaluateBiogasDistanceAlerts(userLatLng) {
   let best = { dist: Infinity, code: "", nearest: null };
   biogasFeatures.forEach((feature) => {
     const coords = Array.isArray(feature.coords) ? feature.coords : [];
+    if (biogasMapContentType === "tombini") {
+      const point = coords[0];
+      if (!point) return;
+      const dist = distanceBetweenLatLng(userLatLng, point);
+      if (dist < best.dist) best = { dist, code: feature.code || feature.name, nearest: point };
+      return;
+    }
     for (let i = 1; i < coords.length; i += 1) {
       const a = coords[i - 1];
       const b = coords[i];

@@ -12961,6 +12961,9 @@ function renderImpianti() {
     special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🔴 POZZETTI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
     special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("tombini"));
     ui.impiantiLista.appendChild(special);
+    ui.biogasMapRefreshBtn?.classList.remove("hidden");
+    ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
+    ui.biogasMapAddPipesBtn?.classList.toggle("hidden", !canManageData());
   }
 
   sorted.forEach((impianto) => {
@@ -14039,12 +14042,18 @@ function parseKmlPoints(text) {
   const parseErrors = xml.getElementsByTagName("parsererror");
   if (parseErrors?.length) throw new Error("KML non valido o XML corrotto.");
   const getChildTextByLocalName = (parent, localName) => Array.from(parent?.getElementsByTagName("*") || []).find((item) => item.localName === localName)?.textContent?.trim() || "";
+  const parseFirstCoordinate = (rawText = "") => {
+    const firstPoint = String(rawText || "").trim().split(/\s+/).find(Boolean) || "";
+    const [lng, lat] = firstPoint.split(",").map(Number);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+  };
   return Array.from(xml.getElementsByTagName("*")).filter((node) => node.localName === "Placemark").map((p, idx) => {
-    const coordsText = getChildTextByLocalName(p, "coordinates");
-    const [lng, lat] = coordsText.split(/\s+/)[0]?.split(",").map(Number) || [];
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const name = getChildTextByLocalName(p, "name") || `tombino ${idx + 1}`;
-    return { name, coords: [[lat, lng]] };
+    const pointNode = Array.from(p.getElementsByTagName("*")).find((node) => node.localName === "Point");
+    const coordsText = pointNode ? getChildTextByLocalName(pointNode, "coordinates") : getChildTextByLocalName(p, "coordinates");
+    const point = parseFirstCoordinate(coordsText);
+    if (!point) return null;
+    const name = getChildTextByLocalName(p, "name") || `pozzetto ${idx + 1}`;
+    return { name, coords: [point] };
   }).filter(Boolean);
 }
 
@@ -14158,7 +14167,7 @@ async function onBiogasFileSelected(event) {
     } else {
       throw new Error("Formato non supportato. Usa KML (consigliato), GeoJSON o CSV.");
     }
-    if (!pipelines.length) throw new Error(cfg.type === "tombini" ? "Nessun tombino trovato nel file." : "Nessuna tubazione trovata nel file.");
+    if (!pipelines.length) throw new Error(cfg.type === "tombini" ? "Nessun pozzetto trovato nel file KML: verifica che ogni pozzetto abbia un elemento Point con coordinate GPS." : "Nessuna tubazione trovata nel file.");
     const firestorePipelines = serializeBiogasPipelinesForFirestore(pipelines);
     const payload = { pipelines: firestorePipelines, updatedAt: new Date().toISOString(), sourceFileName: file.name, sourceFileType: ext };
     await db.collection("commesse").doc(selectedCommessaId).collection(cfg.collection).doc("current").set(payload, { merge: true });

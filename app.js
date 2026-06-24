@@ -17724,7 +17724,7 @@ function normalizeMezzoNId(value) {
 
 function isMezzoTrasportoA(mezzoOrId) {
   const nId = typeof mezzoOrId === "object" && mezzoOrId !== null
-    ? String(mezzoOrId.nId || mezzoOrId.nome || "")
+    ? String(mezzoOrId.nId || mezzoOrId.nome || mezzoOrId.id || "")
     : String(mezzoOrId || "");
   return /^a/i.test(nId.trim());
 }
@@ -18349,30 +18349,77 @@ function renderMezziList(container, items, onDelete) {
     container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
     return;
   }
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "simple-list-item";
-    const title = item.nId || item.nome || "-";
-    const portataLabel = item.portataCarico || item.portataCaricoKg || item.portata || "";
-    const massaLabel = item.massaComplessivaKg || item.massaComplessiva || item.massa || "";
-    const postiLabel = getMezzoPostiLabel(item);
-    const details = [
-      isMezzoTrasportoA(item) ? "Trasporto" : "",
-      postiLabel ? `Posti: ${postiLabel}` : "",
-      item.marca ? `Marca: ${item.marca}` : "",
-      item.modello ? `Modello: ${item.modello}` : "",
-      portataLabel ? `Portata: ${portataLabel}` : "",
-      massaLabel ? `Massa complessiva: ${massaLabel}` : "",
-      item.alimentazione ? `Alimentazione: ${item.alimentazione}` : ""
-    ].filter(Boolean).join(" • ");
-    const label = document.createElement("span");
-    label.textContent = details ? `${title} — ${details}` : title;
-    row.appendChild(label);
-    const deleteBtn = createButton("Elimina", () => onDelete(item.id, title || "elemento"));
-    deleteBtn.disabled = !canManageData();
-    row.appendChild(deleteBtn);
-    container.appendChild(row);
-  });
+
+  const mezziTrasporto = items.filter((item) => isMezzoTrasportoA(item));
+  const altriMezzi = items.filter((item) => !isMezzoTrasportoA(item));
+
+  const renderSection = (title, sectionItems) => {
+    if (!sectionItems.length) return;
+    const heading = document.createElement("h4");
+    heading.textContent = title;
+    container.appendChild(heading);
+
+    sectionItems.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "simple-list-item";
+      const title = item.nId || item.nome || item.id || "-";
+      const portataLabel = item.portataCarico || item.portataCaricoKg || item.portata || "";
+      const massaLabel = item.massaComplessivaKg || item.massaComplessiva || item.massa || "";
+      const postiLabel = getMezzoPostiLabel(item);
+      const details = [
+        isMezzoTrasportoA(item) ? "Trasporto" : "",
+        postiLabel ? `Posti: ${postiLabel}` : "",
+        item.marca ? `Marca: ${item.marca}` : "",
+        item.modello ? `Modello: ${item.modello}` : "",
+        portataLabel ? `Portata: ${portataLabel}` : "",
+        massaLabel ? `Massa complessiva: ${massaLabel}` : "",
+        item.alimentazione ? `Alimentazione: ${item.alimentazione}` : ""
+      ].filter(Boolean).join(" • ");
+      const label = document.createElement("span");
+      label.textContent = details ? `${title} — ${details}` : title;
+      row.appendChild(label);
+
+      if (isMezzoTrasportoA(item)) {
+        const postiSelect = document.createElement("select");
+        [
+          { value: "", label: "Posti" },
+          { value: "2", label: "2 posti" },
+          { value: "3", label: "3 posti" }
+        ].forEach((optionData) => {
+          const option = document.createElement("option");
+          option.value = optionData.value;
+          option.textContent = optionData.label;
+          postiSelect.appendChild(option);
+        });
+        postiSelect.value = normalizeMezzoPosti(item.posti || item.numeroPosti || item.postiTrasporto || "");
+        postiSelect.disabled = !canManageData();
+        postiSelect.addEventListener("change", async () => {
+          if (!canManageData()) return;
+          postiSelect.disabled = true;
+          try {
+            await db.collection("mezzi").doc(item.id).update({
+              posti: normalizeMezzoPosti(postiSelect.value)
+            });
+          } catch (error) {
+            console.error("Errore durante il salvataggio dei posti del mezzo", error);
+            alert("Impossibile salvare i posti del mezzo. Riprova.");
+            postiSelect.value = normalizeMezzoPosti(item.posti || item.numeroPosti || item.postiTrasporto || "");
+          } finally {
+            postiSelect.disabled = !canManageData();
+          }
+        });
+        row.appendChild(postiSelect);
+      }
+
+      const deleteBtn = createButton("Elimina", () => onDelete(item.id, title || "elemento"));
+      deleteBtn.disabled = !canManageData();
+      row.appendChild(deleteBtn);
+      container.appendChild(row);
+    });
+  };
+
+  renderSection("Mezzi di trasporto", mezziTrasporto);
+  renderSection("Altri mezzi / attrezzature", altriMezzi);
 }
 
 async function deletePersonale(id, nome) {

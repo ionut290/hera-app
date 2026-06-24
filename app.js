@@ -17722,6 +17722,9 @@ function normalizeMezzoNId(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+const MEZZO_TRASPORTO_A_REGEX = /^a\d/i;
+const MEZZO_POSTO_SINGOLO_REGEX = /^[tr]\d/i;
+
 function getMezzoNIdForClassification(mezzoOrId) {
   return typeof mezzoOrId === "object" && mezzoOrId !== null
     ? String(mezzoOrId.nId || mezzoOrId.nome || mezzoOrId.id || "").trim()
@@ -17729,11 +17732,11 @@ function getMezzoNIdForClassification(mezzoOrId) {
 }
 
 function isMezzoTrasportoA(mezzoOrId) {
-  return /^a\d/i.test(getMezzoNIdForClassification(mezzoOrId));
+  return MEZZO_TRASPORTO_A_REGEX.test(getMezzoNIdForClassification(mezzoOrId));
 }
 
 function isMezzoPostoSingolo(mezzoOrId) {
-  return /^[tr]\d/i.test(getMezzoNIdForClassification(mezzoOrId));
+  return MEZZO_POSTO_SINGOLO_REGEX.test(getMezzoNIdForClassification(mezzoOrId));
 }
 
 function normalizeMezzoPosti(value) {

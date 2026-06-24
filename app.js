@@ -463,6 +463,7 @@ const ui = {
   mezzoPortataCarico: document.getElementById("mezzo-portata-carico"),
   mezzoMassaComplessivaKg: document.getElementById("mezzo-massa-complessiva-kg"),
   mezzoAlimentazione: document.getElementById("mezzo-alimentazione"),
+  mezzoPosti: document.getElementById("mezzo-posti"),
   mezziLista: document.getElementById("mezzi-lista"),
   squadraForm: document.getElementById("squadra-form"),
   squadraCommessa: document.getElementById("squadra-commessa"),
@@ -2032,7 +2033,8 @@ function normalizeMezzoDocument(doc) {
     marca: String(data.marca || ""),
     modello: String(data.modello || ""),
     targa: String(data.targa || ""),
-    ...data
+    ...data,
+    posti: normalizeMezzoPosti(data.posti || data.numeroPosti || data.postiTrasporto || "")
   };
 }
 
@@ -17622,7 +17624,8 @@ async function addMezzo(event) {
     modello: String(ui.mezzoModello?.value || "").trim(),
     portataCarico: String(ui.mezzoPortataCarico?.value || "").trim(),
     massaComplessivaKg: String(ui.mezzoMassaComplessivaKg?.value || "").trim(),
-    alimentazione: String(ui.mezzoAlimentazione?.value || "").trim()
+    alimentazione: String(ui.mezzoAlimentazione?.value || "").trim(),
+    posti: normalizeMezzoPosti(ui.mezzoPosti?.value || "")
   };
   if (!mezzo.nId) return;
 
@@ -17709,7 +17712,8 @@ async function parseMezziExcelRows(file) {
       modello: get(["modello", "model"]),
       portataCarico: get(["portatacarico", "portatacaricokg", "portata", "portatakg"]),
       massaComplessivaKg: get(["massacomplessivapesodelcamioncaricokg", "massacomplessivakg", "massa"]),
-      alimentazione: get(["alimentazione"])
+      alimentazione: get(["alimentazione"]),
+      posti: normalizeMezzoPosti(get(["posti", "postimezzo", "numeroposti", "nposti", "n.posti", "sedili"]))
     };
   }).filter((row) => row.nId);
 }
@@ -17718,9 +17722,27 @@ function normalizeMezzoNId(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function isMezzoTrasportoA(mezzoOrId) {
+  const nId = typeof mezzoOrId === "object" && mezzoOrId !== null
+    ? String(mezzoOrId.nId || mezzoOrId.nome || "")
+    : String(mezzoOrId || "");
+  return /^a/i.test(nId.trim());
+}
+
+function normalizeMezzoPosti(value) {
+  const match = String(value || "").match(/[23]/);
+  return match ? match[0] : "";
+}
+
+function getMezzoPostiLabel(mezzo) {
+  if (!isMezzoTrasportoA(mezzo)) return "";
+  const posti = normalizeMezzoPosti(mezzo?.posti || mezzo?.numeroPosti || mezzo?.postiTrasporto || "");
+  return posti ? `${posti} posti` : "Posti non indicati";
+}
+
 function mergeMezzoData(base, incoming) {
   const result = { ...base };
-  ["nId", "marca", "modello", "portataCarico", "massaComplessivaKg", "alimentazione"].forEach((field) => {
+  ["nId", "marca", "modello", "portataCarico", "massaComplessivaKg", "alimentazione", "posti"].forEach((field) => {
     if (incoming[field]) result[field] = incoming[field];
   });
   return result;
@@ -17734,7 +17756,8 @@ function buildMezzoPatch(existing, incoming) {
     modello: existing.modello || "",
     portataCarico: existing.portataCarico || "",
     massaComplessivaKg: existing.massaComplessivaKg || "",
-    alimentazione: existing.alimentazione || ""
+    alimentazione: existing.alimentazione || "",
+    posti: normalizeMezzoPosti(existing.posti || existing.numeroPosti || existing.postiTrasporto || "")
   }, incoming);
   patch.nome = merged.nId || existing.nome || "";
   Object.assign(patch, merged);
@@ -18332,7 +18355,10 @@ function renderMezziList(container, items, onDelete) {
     const title = item.nId || item.nome || "-";
     const portataLabel = item.portataCarico || item.portataCaricoKg || item.portata || "";
     const massaLabel = item.massaComplessivaKg || item.massaComplessiva || item.massa || "";
+    const postiLabel = getMezzoPostiLabel(item);
     const details = [
+      isMezzoTrasportoA(item) ? "Trasporto" : "",
+      postiLabel ? `Posti: ${postiLabel}` : "",
       item.marca ? `Marca: ${item.marca}` : "",
       item.modello ? `Modello: ${item.modello}` : "",
       portataLabel ? `Portata: ${portataLabel}` : "",
@@ -20718,10 +20744,12 @@ function renderFuelMezzoDetails() {
   }
   const portataLabel = selectedFuelMezzo.portataCarico || selectedFuelMezzo.portataCaricoKg || selectedFuelMezzo.portata || "-";
   const massaLabel = selectedFuelMezzo.massaComplessivaKg || selectedFuelMezzo.massaComplessiva || selectedFuelMezzo.massa || "-";
+  const postiLabel = getMezzoPostiLabel(selectedFuelMezzo) || "-";
   ui.fuelMezzoDetails.innerHTML = `
     <p><b>N. ID:</b> ${escapeHTML(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "-")}</p>
     <p><b>Marca:</b> ${escapeHTML(selectedFuelMezzo.marca || "-")}</p>
     <p><b>Modello:</b> ${escapeHTML(selectedFuelMezzo.modello || "-")}</p>
+    <p><b>Posti:</b> ${escapeHTML(postiLabel)}</p>
     <p><b>Portata (carico):</b> ${escapeHTML(portataLabel)}</p>
     <p><b>Massa complessiva (kg):</b> ${escapeHTML(massaLabel)}</p>
     <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>

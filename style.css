@@ -1410,6 +1410,46 @@ textarea:focus-visible {
   transform: rotate(35deg);
 }
 
+.tombino-map-marker--verde {
+  background:
+    radial-gradient(circle at 50% 50%, #bbf7d0 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #14532d 0 2px, #22c55e 3px 5px, #166534 6px 7px),
+    radial-gradient(circle at 50% 50%, #86efac 0, #16a34a 72%, #14532d 100%);
+  border-color: #166534;
+  box-shadow: 0 2px 8px rgba(20, 83, 45, 0.45), inset 0 0 0 2px rgba(187, 247, 208, 0.55);
+}
+
+.tombino-popup {
+  min-width: 180px;
+}
+
+.tombino-popup-status {
+  display: inline-flex;
+  align-items: center;
+  margin: 8px 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tombino-popup-status--rosso {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tombino-popup-status--verde {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.tombino-toggle-btn {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  min-height: 36px;
+}
+
 #map-fullscreen-view {
   position: absolute;
   inset: 0;

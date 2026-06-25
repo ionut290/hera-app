@@ -268,6 +268,7 @@ const ui = {
   refreshAppBtn: document.getElementById("refresh-app-btn"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
+  installAppBtn: document.getElementById("install-app-btn"),
   sideMenu: document.getElementById("side-menu"),
   menuOverlay: document.getElementById("menu-overlay"),
   whazzupPreparingFeedback: document.getElementById("whazzup-preparing-feedback"),
@@ -848,6 +849,7 @@ let driveChatFolderId = "";
 let driveReportsFolderId = "";
 let driveSquadreFolderId = "";
 let driveHelpCenterFolderId = "";
+let deferredInstallPrompt = null;
 let driveTokenRefreshPromise = null;
 const commessaSheetCache = new Map();
 let commesseById = new Map();
@@ -1089,6 +1091,7 @@ const PERSONAL_SERVICE_CATEGORIES = {
 };
 const PUSH_PUBLIC_VAPID_KEY = resolvePushPublicVapidKey();
 const AUTO_ENABLE_NOTIFICATIONS_KEY = "heraAutoEnableNotifications";
+const INSTALL_APP_INSTALLED_KEY = "heraPwaInstallCompleted";
 let serviceWorkerRegistration = null;
 let hasTriedAutoEnableNotifications = false;
 
@@ -1330,6 +1333,12 @@ const HELP_CENTER_FAQ_FALLBACK = {
       domanda: "Come collego Google Drive?",
       risposta: "Solo l'admin deve collegare Google Drive: il cloud centralizzato viene poi usato automaticamente da tutti gli utenti loggati.",
       passi: ["Login admin", "Premi Collega Google Drive", "Concedi autorizzazioni", "Verifica Cloud centralizzato attivo"]
+    },
+    {
+      id: "faq-install-app",
+      domanda: "Come installare l’app sul telefono?",
+      risposta: "Dal menu laterale premi Installa app. Su iPhone o Safari usa il menu Condividi del browser e scegli Aggiungi alla schermata Home.",
+      passi: ["Apri il menu laterale", "Premi Installa app", "Se compare il prompt, conferma l’installazione", "Su iPhone/Safari: Apri Condividi → Aggiungi alla schermata Home"]
     }
   ]
 };
@@ -1478,6 +1487,7 @@ ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
 ui.menuCloseBtn?.addEventListener("click", closeSideMenu);
+ui.installAppBtn?.addEventListener("click", handleInstallAppClick);
 ui.menuOverlay?.addEventListener("click", closeSideMenu);
 ui.logoutBtn?.addEventListener("click", logout);
 ui.driveConnectBtn?.addEventListener("click", connectGoogleDrive);
@@ -1828,6 +1838,7 @@ renderFaqHelpCenter(HELP_CENTER_FAQ_FALLBACK);
 renderResourceManageFilters();
 updateResourceFormByType();
 initPwaCapabilities();
+updateInstallAppButtonState();
 initNativeGeofenceBridge();
 initWorkBannerObservers();
 
@@ -2080,6 +2091,103 @@ function updateNotificationUi(message, canTest = false) {
   if (ui.pwaNotificationStatus) ui.pwaNotificationStatus.textContent = message;
   if (ui.testNotificationBtn) ui.testNotificationBtn.disabled = !canTest;
 }
+
+function hasStoredAppInstallFlag() {
+  try {
+    return localStorage.getItem(INSTALL_APP_INSTALLED_KEY) === "true";
+  } catch (error) {
+    console.warn("Stato installazione app non leggibile:", error);
+    return false;
+  }
+}
+
+function setStoredAppInstallFlag(installed) {
+  try {
+    if (installed) {
+      localStorage.setItem(INSTALL_APP_INSTALLED_KEY, "true");
+    } else {
+      localStorage.removeItem(INSTALL_APP_INSTALLED_KEY);
+    }
+  } catch (error) {
+    console.warn("Stato installazione app non salvabile:", error);
+  }
+}
+
+function isAppInstalled() {
+  return Boolean(
+    window.matchMedia?.("(display-mode: standalone)")?.matches
+    || window.matchMedia?.("(display-mode: fullscreen)")?.matches
+    || window.navigator?.standalone
+    || hasStoredAppInstallFlag()
+  );
+}
+
+function updateInstallAppButtonState() {
+  if (!ui.installAppBtn) return;
+  const installed = isAppInstalled();
+  ui.installAppBtn.textContent = installed ? "App installata" : "Installa app";
+  ui.installAppBtn.setAttribute("aria-label", installed ? "App già installata su questo dispositivo" : "Installa app");
+  ui.installAppBtn.title = installed
+    ? "App già installata su questo dispositivo"
+    : "Installa questa app sul dispositivo";
+  ui.installAppBtn.dataset.installState = installed ? "installed" : (deferredInstallPrompt ? "available" : "unavailable");
+}
+
+function isIosOrSafariInstallFlow() {
+  const userAgent = String(navigator.userAgent || "");
+  const vendor = String(navigator.vendor || "");
+  const isIos = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isSafari = /Safari/i.test(userAgent) && /Apple/i.test(vendor) && !/CriOS|FxiOS|EdgiOS|Chrome|Chromium|Android/i.test(userAgent);
+  return isIos || isSafari;
+}
+
+async function handleInstallAppClick() {
+  updateInstallAppButtonState();
+  if (isAppInstalled()) {
+    alert("L'app risulta già installata sul dispositivo.");
+    closeSideMenu();
+    return;
+  }
+
+  if (deferredInstallPrompt && typeof deferredInstallPrompt.prompt === "function") {
+    const promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    promptEvent.prompt();
+    try {
+      const choice = await promptEvent.userChoice;
+      if (choice?.outcome === "accepted") {
+        setStoredAppInstallFlag(true);
+        updateInstallAppButtonState();
+        alert("Installazione app avviata. Il pulsante mostrerà ‘App installata’ su questo dispositivo.");
+      } else {
+        alert("Installazione annullata. Puoi riprovare dal menu laterale quando il prompt sarà disponibile.");
+      }
+    } catch (error) {
+      console.warn("Risultato prompt installazione non disponibile:", error);
+    }
+    closeSideMenu();
+    return;
+  }
+
+  if (isIosOrSafariInstallFlow()) {
+    alert("Per installare l'app: Apri Condividi → Aggiungi alla schermata Home");
+  } else {
+    alert("Installazione non disponibile in questo momento: l'app potrebbe essere già installata oppure il browser non ha ancora reso disponibile il prompt.");
+  }
+  closeSideMenu();
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  updateInstallAppButtonState();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  setStoredAppInstallFlag(true);
+  updateInstallAppButtonState();
+});
 
 async function initPwaCapabilities() {
   if (!("serviceWorker" in navigator)) {

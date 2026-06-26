@@ -61,6 +61,16 @@ firebase deploy --only hosting
 - Endpoint usato dal backend: Forecast/Timelines Tomorrow.io con `location=<lat>,<lon>`, `timesteps=1h`, `units=metric` e campi `temperature`, `weatherCode`, `precipitationProbability`, `precipitationIntensity`, `rainIntensity`, `windSpeed`, `windDirection`, `windGust`.
 - Se Tomorrow.io non risponde, la vista commessa riusa l'ultimo dato locale salvato e mostra l'orario di aggiornamento.
 
+
+## Sincronizzazione squadre da Eggs Lavagna
+
+- Il backend espone la callable Function `syncLavagnaSquadre` e una schedulazione `scheduledSyncLavagnaSquadre` ogni 30 minuti per leggere `https://coopavola.eggsnext.cloud/main/functions/app/eggs-lavagna/lavagna`.
+- La sincronizzazione abbina il **codice cantiere** ricevuto da Lavagna al campo `codice` delle commesse in Firestore: importa solo i codici commessa già presenti nell'app e ignora quelli non presenti, senza creare nuove commesse o squadre per codici sconosciuti.
+- Se alle 19:00 sul sito è presente una squadra per il giorno successivo, la schedulazione ogni 30 minuti la legge e salva la composizione sulla data indicata da Lavagna, quindi anche la vista del giorno successivo dell'app viene aggiornata.
+- Le credenziali non vanno mai inserite nel frontend: configura le variabili ambiente delle Cloud Functions `LAVAGNA_USERNAME`, `LAVAGNA_PASSWORD` e, se necessario, `LAVAGNA_URL`. In alternativa sono supportati i config legacy `lavagna.username`, `lavagna.password`, `lavagna.url`.
+- Nel pannello Squadre è disponibile il pulsante admin **Aggiorna da Lavagna** per forzare subito la sincronizzazione manuale.
+- Il parser accetta risposte JSON (`data`, `rows`, `items`, `records` o array diretto) e, come fallback, tabelle HTML con intestazioni riconducibili a codice cantiere, data, personale/operatori, mezzi, impianti/zona, orario e note.
+
 ## Note Firestore
 
 La collezione usata è `impianti` con ordinamento per `createdAt` in `app.js`.

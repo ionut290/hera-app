@@ -569,8 +569,11 @@
           <input id="squadra-riferimento" type="date">
         </label>
         <div id="squadra-rows" class="squadra-rows"></div>
-        <button id="add-squadra-row-btn" class="btn" type="button">➕ Aggiungi squadra</button>
-        <button class="btn btn-primary" type="submit">✓ Fine: salva composizione</button>
+        <div class="squadra-actions">
+          <button id="add-squadra-row-btn" class="btn" type="button">➕ Aggiungi squadra</button>
+          <button id="sync-lavagna-squadre-btn" class="btn" type="button">🔄 Aggiorna da Lavagna</button>
+          <button class="btn btn-primary" type="submit">✓ Fine: salva composizione</button>
+        </div>
       </form>
       <p id="squadra-feedback" class="squadra-feedback muted" role="status" aria-live="polite"></p>
       <p id="squadra-hint" class="muted"></p>

@@ -423,3 +423,138 @@ exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").time
   await db.collection("appConfig").doc("worklimateUpdate").set({ lastRunAt: admin.firestore.FieldValue.serverTimestamp(), count }, { merge: true });
   return null;
 });
+
+const LAVAGNA_DEFAULT_URL = "https://coopavola.eggsnext.cloud/main/functions/app/eggs-lavagna/lavagna";
+
+function getLavagnaConfig() {
+  const cfg = functions.config().lavagna || {};
+  return {
+    url: process.env.LAVAGNA_URL || cfg.url || LAVAGNA_DEFAULT_URL,
+    username: process.env.LAVAGNA_USERNAME || cfg.username || "",
+    password: process.env.LAVAGNA_PASSWORD || cfg.password || ""
+  };
+}
+
+function parseLavagnaDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return dateKeyFromDate(new Date());
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ita = raw.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (ita) {
+    const year = ita[3].length === 2 ? `20${ita[3]}` : ita[3];
+    return `${year}-${ita[2].padStart(2, "0")}-${ita[1].padStart(2, "0")}`;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? dateKeyFromDate(new Date()) : dateKeyFromDate(parsed);
+}
+
+function normalizeLavagnaRow(row) {
+  const codiceCantiere = String(row.codiceCantiere || row.codice_cantiere || row.codice || row.cantiere || row.commessaCodice || row.commessa_codice || "").trim();
+  const dateKey = parseLavagnaDate(row.data || row.date || row.giorno || row.riferimentoData || row.riferimento_data);
+  const squadra = {
+    caposquadra: String(row.caposquadra || row.responsabile || row.leader || "").trim(),
+    personale: Array.isArray(row.personale) ? row.personale.join(", ") : String(row.personale || row.operatori || row.addetti || row.squadra || "").trim(),
+    mezzi: Array.isArray(row.mezzi) ? row.mezzi.join(", ") : String(row.mezzi || row.veicoli || row.attrezzature || "").trim(),
+    impianti: Array.isArray(row.impianti) ? row.impianti.join(", ") : String(row.impianti || row.zona || row.lavorazione || "").trim(),
+    note: String(row.note || row.descrizione || "").trim(),
+    orario: String(row.orario || row.oraInizio || row.ora_inizio || "").trim(),
+    orarioFine: String(row.orarioFine || row.oraFine || row.ora_fine || "").trim()
+  };
+  return { codiceCantiere, dateKey, squadra };
+}
+
+function extractJsonFromLavagnaPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.records)) return payload.records;
+  return [];
+}
+
+function extractLavagnaRowsFromHtml(html) {
+  const tableRows = Array.from(String(html || "").matchAll(/<tr[\s\S]*?<\/tr>/gi));
+  if (tableRows.length < 2) return [];
+  const cellsFor = (tr) => Array.from(tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)).map((m) => m[1].replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim());
+  const headers = cellsFor(tableRows[0][0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]+/g, "_"));
+  return tableRows.slice(1).map((match) => {
+    const cells = cellsFor(match[0]);
+    return headers.reduce((row, header, index) => ({ ...row, [header]: cells[index] || "" }), {});
+  });
+}
+
+async function fetchLavagnaSource() {
+  const cfg = getLavagnaConfig();
+  if (!cfg.username || !cfg.password) {
+    throw new functions.https.HttpsError("failed-precondition", "Credenziali Lavagna mancanti: configura LAVAGNA_USERNAME e LAVAGNA_PASSWORD nelle variabili ambiente delle Cloud Functions.");
+  }
+  const authHeader = `Basic ${Buffer.from(`${cfg.username}:${cfg.password}`).toString("base64")}`;
+  const response = await fetch(cfg.url, { headers: { "accept": "application/json,text/html;q=0.9,*/*;q=0.8", "authorization": authHeader } });
+  if (!response.ok) throw new functions.https.HttpsError("unavailable", `Lavagna non disponibile: HTTP ${response.status}`);
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (contentType.includes("application/json") || text.trim().startsWith("{") || text.trim().startsWith("[")) {
+    return extractJsonFromLavagnaPayload(JSON.parse(text));
+  }
+  return extractLavagnaRowsFromHtml(text);
+}
+
+async function syncLavagnaRowsToFirestore(db, rows) {
+  const commesseSnapshot = await db.collection("commesse").get();
+  const commesseByCode = new Map();
+  commesseSnapshot.forEach((doc) => {
+    const code = String(doc.data()?.codice || "").trim().toLowerCase();
+    if (code) commesseByCode.set(code, { id: doc.id, nome: doc.data()?.nome || "Commessa" });
+  });
+  const grouped = new Map();
+  const skippedUnknownCodes = new Set();
+  rows.map(normalizeLavagnaRow).forEach((item) => {
+    if (!item.codiceCantiere || !item.dateKey || !isSquadraRowFilledServer(item.squadra)) return;
+    const commessa = commesseByCode.get(item.codiceCantiere.toLowerCase());
+    if (!commessa) {
+      skippedUnknownCodes.add(item.codiceCantiere);
+      return;
+    }
+    const key = `${item.dateKey}__${commessa.id}`;
+    if (!grouped.has(key)) grouped.set(key, { commessa, dateKey: item.dateKey, rows: [] });
+    grouped.get(key).rows.push(item.squadra);
+  });
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  let batch = db.batch();
+  let writes = 0;
+  for (const [docId, group] of grouped.entries()) {
+    const payload = { commessaId: group.commessa.id, commessaNome: group.commessa.nome, riferimentoData: group.dateKey, dateKey: group.dateKey, squadre: group.rows, source: "eggs-lavagna", updatedAt: now, updatedBy: "sync-lavagna" };
+    batch.set(db.collection("squadreStorico").doc(docId), payload, { merge: true });
+    batch.set(db.collection("squadreCommesse").doc(group.commessa.id), payload, { merge: true });
+    writes += 2;
+    if (writes >= 450) { await batch.commit(); batch = db.batch(); writes = 0; }
+  }
+  if (writes) await batch.commit();
+  return {
+    matched: grouped.size,
+    importedRows: Array.from(grouped.values()).reduce((sum, group) => sum + group.rows.length, 0),
+    skippedUnknownCodes: skippedUnknownCodes.size
+  };
+}
+
+function isSquadraRowFilledServer(row) {
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario || row?.orarioFine);
+}
+
+exports.syncLavagnaSquadre = functions.https.onCall(async (_data, context) => {
+  const db = admin.firestore();
+  await assertAdmin(context, db);
+  const rawRows = await fetchLavagnaSource();
+  const result = await syncLavagnaRowsToFirestore(db, rawRows);
+  await db.collection("appConfig").doc("lavagnaSync").set({ ...result, lastRunAt: admin.firestore.FieldValue.serverTimestamp(), sourceUrl: getLavagnaConfig().url }, { merge: true });
+  return result;
+});
+
+exports.scheduledSyncLavagnaSquadre = functions.pubsub.schedule("every 30 minutes").timeZone("Europe/Rome").onRun(async () => {
+  const db = admin.firestore();
+  const rawRows = await fetchLavagnaSource();
+  const result = await syncLavagnaRowsToFirestore(db, rawRows);
+  await db.collection("appConfig").doc("lavagnaSync").set({ ...result, lastRunAt: admin.firestore.FieldValue.serverTimestamp(), sourceUrl: getLavagnaConfig().url }, { merge: true });
+  return result;
+});

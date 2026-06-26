@@ -474,6 +474,7 @@ const ui = {
   squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
   squadraFeedback: document.getElementById("squadra-feedback"),
+  syncLavagnaSquadreBtn: document.getElementById("sync-lavagna-squadre-btn"),
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
   toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
@@ -1613,6 +1614,7 @@ ui.mezziForm?.addEventListener("submit", addMezzo);
 ui.squadraForm?.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa?.addEventListener("change", autofillSquadraForm);
 ui.squadraRiferimento?.addEventListener("change", autofillSquadraForm);
+ui.syncLavagnaSquadreBtn?.addEventListener("click", syncLavagnaSquadreFromBackend);
 ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
@@ -18499,6 +18501,34 @@ async function deleteMezzo(id, nome) {
   if (!canManageData()) return;
   if (!window.confirm(`Eliminare ${nome} dai mezzi?`)) return;
   await db.collection("mezzi").doc(id).delete();
+}
+
+async function syncLavagnaSquadreFromBackend() {
+  if (!canManageData()) {
+    alert("Solo l'admin può aggiornare le squadre da Lavagna.");
+    return;
+  }
+  if (!functions || typeof functions.httpsCallable !== "function") {
+    setSquadraFeedback("Backend Firebase Functions non disponibile per la sincronizzazione Lavagna.", "error");
+    return;
+  }
+  const btn = ui.syncLavagnaSquadreBtn;
+  if (btn) btn.disabled = true;
+  setSquadraFeedback("Aggiornamento squadre da Lavagna in corso...", "info");
+  try {
+    const syncLavagnaSquadre = functions.httpsCallable("syncLavagnaSquadre");
+    const result = await syncLavagnaSquadre({});
+    const data = result?.data || {};
+    const skipped = data.skippedUnknownCodes ? ` (${data.skippedUnknownCodes} codici non presenti nell'app ignorati)` : "";
+    setSquadraFeedback(`✅ Lavagna aggiornata: ${data.importedRows || 0} righe importate su ${data.matched || 0} commesse/data${skipped}.`, "success");
+    if (currentUser) subscribeSquadre();
+    renderSquadre();
+  } catch (error) {
+    console.error("Errore sincronizzazione Lavagna:", error);
+    setSquadraFeedback(error?.message || "Errore durante l'aggiornamento da Lavagna.", "error");
+  } finally {
+    if (btn) btn.disabled = !canManageData();
+  }
 }
 
 async function autofillSquadraForm() {

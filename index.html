@@ -34,7 +34,7 @@
     <div class="side-menu-body">
       <button id="open-panel-commesse" class="btn menu-title-btn" type="button">Aggiungi commesse</button>
       <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
-      <button id="open-panel-lavagna" class="btn menu-title-btn" type="button">🧾 Lavagna Eggs</button>
+      <button id="open-lavagna-btn" class="btn menu-title-btn" type="button">🧾 Lavagna Eggs</button>
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
@@ -559,25 +559,6 @@
         </div>
       </section>
       <p id="global-map-feedback" class="muted"></p>
-    </div>
-    <div id="panel-lavagna" class="management-panel hidden">
-      <section class="lavagna-admin-card">
-        <div class="section-head">
-          <div>
-            <h3>Lavagna Eggs</h3>
-            <p class="muted">Accesso consentito solo agli amministratori dell'app.</p>
-          </div>
-        </div>
-        <div class="lavagna-login-card">
-          <strong>Login Lavagna richiesto</strong>
-          <p class="muted">Il sito EggsNext usa SSO e rifiuta il login dentro un iframe dell'app. Per accedere correttamente apri la Lavagna nel browser, completa il login e torna qui quando hai finito.</p>
-          <div class="item-actions">
-            <button id="lavagna-open-external" class="btn btn-primary" type="button">Accedi / apri Lavagna</button>
-            <button id="lavagna-open-same-window" class="btn" type="button">Apri in questa finestra</button>
-          </div>
-          <p class="muted">Se il browser blocca la nuova scheda, usa “Apri in questa finestra”.</p>
-        </div>
-      </section>
     </div>
     <div id="panel-squadre" class="management-panel hidden">
       <form id="squadra-form" class="squadra-form">

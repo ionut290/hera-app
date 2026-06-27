@@ -488,7 +488,7 @@ const ui = {
   mezziImportBtn: document.getElementById("mezzi-import-btn"),
   openPanelCommesse: document.getElementById("open-panel-commesse"),
   openPanelSquadre: document.getElementById("open-panel-squadre"),
-  openPanelLavagna: document.getElementById("open-panel-lavagna"),
+  openPanelLavagna: document.getElementById("open-lavagna-btn"),
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
@@ -506,14 +506,11 @@ const ui = {
   openSegnalazioniBtn: document.getElementById("open-segnalazioni-btn"),
   openHowtoBtn: document.getElementById("open-howto-btn"),
   openBookPdfBtn: document.getElementById("open-book-pdf-btn"),
-  lavagnaOpenExternal: document.getElementById("lavagna-open-external"),
-  lavagnaOpenSameWindow: document.getElementById("lavagna-open-same-window"),
   managementPage: document.getElementById("management-page"),
   managementTitle: document.getElementById("management-title"),
   managementCloseBtn: document.getElementById("management-close-btn"),
   panelCommesse: document.getElementById("panel-commesse"),
   panelSquadre: document.getElementById("panel-squadre"),
-  panelLavagna: document.getElementById("panel-lavagna"),
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
@@ -1165,13 +1162,13 @@ const MENU_HOWTO_CONTENT = {
     tags: ["squadre", "operativo", "personale", "mezzi"]
   },
 
-  "open-panel-lavagna": {
-    rispostaBreve: "Apre la Lavagna Eggs integrata nell'app, visibile solo agli amministratori.",
+  "open-lavagna-btn": {
+    rispostaBreve: "Apre la Lavagna Eggs nel browser per consentire il login SSO, visibile solo agli amministratori.",
     passi: [
       "Accedi con un account amministratore.",
       "Apri il menu (⋮) e premi “Lavagna Eggs”.",
-      "Premi “Accedi / apri Lavagna” e completa il login SSO nel browser.",
-      "Se la nuova scheda viene bloccata, premi “Apri in questa finestra”."
+      "Premi “Lavagna Eggs”: l’app apre la pagina nel browser per consentire il login SSO.",
+      "Completa il login EggsNext e usa la Lavagna nella scheda aperta."
     ],
     tags: ["lavagna", "eggs", "admin", "squadre"]
   },
@@ -1679,9 +1676,7 @@ ui.personaleImportBtn?.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn?.addEventListener("click", importMezziFromExcel);
 ui.openPanelCommesse?.addEventListener("click", () => openManagementPanel("commesse"));
 ui.openPanelSquadre?.addEventListener("click", () => openManagementPanel("squadre"));
-ui.openPanelLavagna?.addEventListener("click", () => openManagementPanel("lavagna"));
-ui.lavagnaOpenExternal?.addEventListener("click", () => openLavagnaEggs({ sameWindow: false }));
-ui.lavagnaOpenSameWindow?.addEventListener("click", () => openLavagnaEggs({ sameWindow: true }));
+ui.openPanelLavagna?.addEventListener("click", openLavagnaEggs);
 ui.openPanelPersonale?.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi?.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti?.addEventListener("click", () => openManagementPanel("utenti"));
@@ -3040,14 +3035,16 @@ function refreshApplicationData() {
   window.location.replace(refreshUrl.toString());
 }
 
-function openLavagnaEggs(options = {}) {
+function openLavagnaEggs() {
   if (!canManageData()) {
     alert("Solo l'admin può accedere alla Lavagna Eggs.");
+    closeSideMenu();
     return;
   }
 
+  closeSideMenu();
   openExternalUrl(LAVAGNA_EGGS_URL, {
-    target: options?.sameWindow ? "_self" : "_blank",
+    target: "_blank",
     features: "noopener,noreferrer",
     allowSameWindowFallback: true
   });
@@ -3061,7 +3058,6 @@ function openManagementPanel(panel) {
   const panelMap = {
     commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
-    lavagna: { el: ui.panelLavagna, title: "🧾 Lavagna Eggs" },
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
@@ -3073,7 +3069,7 @@ function openManagementPanel(panel) {
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelLavagna, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");

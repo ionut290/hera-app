@@ -10377,3 +10377,35 @@ body.worklimate-page-open {
 .heat-hourly-row b { color: #0f172a; font-size: 1.2rem; }
 .heat-hourly-row small { grid-column: 2 / 4; }
 .heat-hourly-row em { grid-column: 1 / 4; font-style: normal; text-transform: capitalize; }
+
+.lavagna-admin-card {
+  display: grid;
+  gap: 14px;
+}
+
+.lavagna-frame-wrap {
+  width: 100%;
+  min-height: min(72vh, 820px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.lavagna-frame {
+  display: block;
+  width: 100%;
+  height: min(72vh, 820px);
+  min-height: 560px;
+  border: 0;
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  .lavagna-frame-wrap,
+  .lavagna-frame {
+    min-height: 70vh;
+    height: 70vh;
+  }
+}

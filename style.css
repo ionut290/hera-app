@@ -10377,3 +10377,28 @@ body.worklimate-page-open {
 .heat-hourly-row b { color: #0f172a; font-size: 1.2rem; }
 .heat-hourly-row small { grid-column: 2 / 4; }
 .heat-hourly-row em { grid-column: 1 / 4; font-style: normal; text-transform: capitalize; }
+
+.lavagna-admin-card {
+  display: grid;
+  gap: 14px;
+}
+
+.lavagna-login-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.lavagna-login-card strong {
+  font-size: 1.1rem;
+}
+
+@media (max-width: 720px) {
+  .lavagna-login-card .item-actions {
+    display: grid;
+  }
+}

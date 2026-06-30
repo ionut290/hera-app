@@ -9,7 +9,7 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn()
         && (
-          request.auth.token.email == "ionut29019@gmail.com"
+          request.auth.token.email in ["ionut29019@gmail.com", "Ionut29019@gmail.com"]
           || (
             exists(/databases/$(database)/documents/appConfig/adminUsers)
             && request.auth.token.email in get(/databases/$(database)/documents/appConfig/adminUsers).data.emails
@@ -92,7 +92,8 @@ service cloud.firestore {
       allow read: if resource.data.active == true || request.auth != null;
       allow create, update, delete: if request.auth != null
         && request.auth.token.email in [
-          "ionut29019@gmail.com"
+          "ionut29019@gmail.com",
+          "Ionut29019@gmail.com"
         ];
     }
 

@@ -275,6 +275,11 @@ const ui = {
   authGate: document.getElementById("auth-gate"),
   authGateLoginBtn: document.getElementById("auth-gate-login-btn"),
   authGateMessage: document.getElementById("auth-gate-message"),
+  authEmailForm: document.getElementById("auth-email-form"),
+  authEmailInput: document.getElementById("auth-email-input"),
+  authPasswordInput: document.getElementById("auth-password-input"),
+  authEmailLoginBtn: document.getElementById("auth-email-login-btn"),
+  authEmailFeedback: document.getElementById("auth-email-feedback"),
   loginBtn: document.getElementById("login-btn"),
   switchAccountBtn: document.getElementById("switch-account-btn"),
   logoutBtn: document.getElementById("logout-btn"),
@@ -1496,6 +1501,10 @@ window.addEventListener("resize", () => {
 
 ui.loginBtn?.addEventListener("click", loginWithGoogle);
 ui.authGateLoginBtn?.addEventListener("click", loginWithGoogle);
+ui.authEmailForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void loginWithEmailPassword();
+});
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
@@ -8145,6 +8154,29 @@ function isAndroidWebViewRuntime() {
   const isAndroidUa = /Android/i.test(ua);
   const isWebViewUa = /; wv\)/i.test(ua) || /\bVersion\/[\d.]+ Chrome\/[\d.]+ Mobile\b/i.test(ua);
   return capacitorPlatform === "android" || isCapacitorNative || (isAndroidUa && isWebViewUa);
+}
+
+async function loginWithEmailPassword() {
+  const email = String(ui.authEmailInput?.value || "").trim();
+  const password = String(ui.authPasswordInput?.value || "");
+  if (!email || !password) {
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Inserisci email e password.";
+    return;
+  }
+  if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso in corso...";
+  if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = true;
+  try {
+    await ensureAuthLocalPersistence();
+    await auth.signInWithEmailAndPassword(email, password);
+    if (ui.authPasswordInput) ui.authPasswordInput.value = "";
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Login completato.";
+  } catch (error) {
+    console.error("Errore login email/password:", error);
+    recoverFirestorePersistence(error);
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = formatLoginError(error);
+  } finally {
+    if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = false;
+  }
 }
 
 function loginWithGoogle(forceAccountSelection = false) {

@@ -63,8 +63,17 @@
       <div class="auth-gate-logo">👤</div>
       <p class="auth-gate-kicker">Varga Cantieri</p>
       <h1>Login richiesto</h1>
-      <p id="auth-gate-message" class="muted">Accedi con il tuo account Google per utilizzare l'app.</p>
-      <button id="auth-gate-login-btn" class="btn btn-primary" type="button">Login con Google</button>
+      <p id="auth-gate-message" class="muted">Accedi con il tuo account Google oppure con le credenziali amministratore.</p>
+      <form id="auth-email-form" class="auth-email-form" autocomplete="on">
+        <label for="auth-email-input">Email</label>
+        <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
+        <label for="auth-password-input">Password</label>
+        <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
+        <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra come superadmin</button>
+        <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
+      </form>
+      <div class="auth-gate-divider"><span>oppure</span></div>
+      <button id="auth-gate-login-btn" class="btn" type="button">Login con Google</button>
     </div>
   </section>
 

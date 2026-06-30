@@ -1310,10 +1310,11 @@ const CENTRAL_DRIVE_LEGACY_FOLDER_NAME = "VECCHI DATI";
 const LEGACY_DRIVE_ROOT_FOLDER_NAMES = ["Hera App - Dati"];
 const LEGACY_DRIVE_MIGRATION_KEY = "heraLegacyDriveMigrationDone";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
+const BUILT_IN_SUPER_ADMIN_EMAILS = [ADMIN_EMAIL, "Ionut29019@gmail.com"];
 const POS_DEFAULT_CATEGORIES = ["POS", "PMS", "Schede lavorazioni", "Schede macchine e attrezzature", "Sicurezza", "Modulistica", "Altro"];
 const IMPIANTO_ACTIONS = ["done", "navigate", "reset", "whatsapp", "problem-report", "gps-update", "edit", "delete"];
 const ADMIN_ONLY_IMPIANTO_ACTIONS = ["reset", "edit", "delete"];
-let adminEmails = new Set([ADMIN_EMAIL]);
+let adminEmails = new Set(BUILT_IN_SUPER_ADMIN_EMAILS.map((email) => normalizeEmail(email)));
 let posDocuments = [];
 let unsubscribePosDocuments = null;
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
@@ -20846,9 +20847,14 @@ function getImpiantoDocIds(impianto) {
   return impianto.id ? [impianto.id] : [];
 }
 
+function isBuiltInSuperAdminEmail(email) {
+  const normalized = normalizeEmail(email);
+  return BUILT_IN_SUPER_ADMIN_EMAILS.some((adminEmail) => normalizeEmail(adminEmail) === normalized);
+}
+
 function canManageData() {
-  const email = (currentUser && currentUser.email) ? currentUser.email.toLowerCase() : "";
-  return adminEmails.has(email);
+  const email = normalizeEmail(currentUser?.email || "");
+  return isBuiltInSuperAdminEmail(email) || adminEmails.has(email);
 }
 
 function normalizeEmail(email) {
@@ -22764,11 +22770,20 @@ async function sendHoursDeadlineAlertIfMissing({ commessaId, commessaName, dateK
 
 async function upsertCurrentPlatformUser() {
   if (!currentUser) return;
+  const isSuperAdmin = isBuiltInSuperAdminEmail(currentUser.email);
+  const isAdminUser = canManageData();
   await db.collection("platformUsers").doc(currentUser.uid).set({
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
-    isAdmin: canManageData(),
+    isAdmin: isAdminUser,
+    ...(isSuperAdmin ? {
+      role: "super_admin",
+      ruolo: "super_admin",
+      abilitato: true,
+      enabled: true,
+      approved: true
+    } : {}),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -22781,7 +22796,7 @@ function subscribeAdminUsers() {
     const normalized = rawList
       .map((email) => normalizeEmail(email))
       .filter(Boolean);
-    adminEmails = new Set([ADMIN_EMAIL, ...normalized]);
+    adminEmails = new Set([...BUILT_IN_SUPER_ADMIN_EMAILS.map((email) => normalizeEmail(email)), ...normalized]);
     updateAdminControls();
     subscribePosDocuments();
     renderCommesseManagementList();
@@ -22793,7 +22808,7 @@ function subscribeAdminUsers() {
     }
   }, (error) => {
     console.error("Errore caricamento admin users:", error);
-    adminEmails = new Set([ADMIN_EMAIL]);
+    adminEmails = new Set(BUILT_IN_SUPER_ADMIN_EMAILS.map((email) => normalizeEmail(email)));
     updateAdminControls();
     subscribePosDocuments();
     renderCommesseManagementList();
@@ -22811,7 +22826,7 @@ function stopAdminUsersSubscription() {
     unsubscribeAdminUsers();
     unsubscribeAdminUsers = null;
   }
-  adminEmails = new Set([ADMIN_EMAIL]);
+  adminEmails = new Set(BUILT_IN_SUPER_ADMIN_EMAILS.map((email) => normalizeEmail(email)));
   renderAdminUsers();
 }
 
@@ -24210,7 +24225,7 @@ function renderAdminUsers() {
     const label = document.createElement("span");
     label.textContent = email;
     row.appendChild(label);
-    if (email !== ADMIN_EMAIL) {
+    if (!isBuiltInSuperAdminEmail(email)) {
       const revokeBtn = createButton("Rimuovi", () => removeAdminEmail(email));
       row.appendChild(revokeBtn);
     }
@@ -24244,7 +24259,7 @@ async function removeAdminEmail(email) {
     return;
   }
   const normalized = normalizeEmail(email);
-  if (!normalized || normalized === ADMIN_EMAIL) return;
+  if (!normalized || isBuiltInSuperAdminEmail(normalized)) return;
   const ok = window.confirm(`Rimuovere i permessi admin per ${normalized}?`);
   if (!ok) return;
   const next = Array.from(adminEmails).filter((item) => item !== normalized);

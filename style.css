@@ -10409,3 +10409,44 @@ body.worklimate-page-open {
     height: 70vh;
   }
 }
+
+.auth-email-form {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.auth-email-form label {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.auth-email-form .btn {
+  justify-self: stretch;
+  margin-top: 4px;
+}
+
+.auth-email-feedback {
+  min-height: 1.2em;
+  text-align: center;
+}
+
+.auth-gate-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-gate-divider::before,
+.auth-gate-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

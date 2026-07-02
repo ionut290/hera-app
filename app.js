@@ -479,7 +479,6 @@ const ui = {
   squadraCalendarDate: document.getElementById("squadra-calendar-date"),
   squadraHint: document.getElementById("squadra-hint"),
   squadraFeedback: document.getElementById("squadra-feedback"),
-  syncLavagnaSquadreBtn: document.getElementById("sync-lavagna-squadre-btn"),
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
   toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
@@ -493,7 +492,6 @@ const ui = {
   mezziImportBtn: document.getElementById("mezzi-import-btn"),
   openPanelCommesse: document.getElementById("open-panel-commesse"),
   openPanelSquadre: document.getElementById("open-panel-squadre"),
-  openPanelLavagna: document.getElementById("open-panel-lavagna"),
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
@@ -516,7 +514,6 @@ const ui = {
   managementCloseBtn: document.getElementById("management-close-btn"),
   panelCommesse: document.getElementById("panel-commesse"),
   panelSquadre: document.getElementById("panel-squadre"),
-  panelLavagna: document.getElementById("panel-lavagna"),
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
@@ -1168,15 +1165,6 @@ const MENU_HOWTO_CONTENT = {
     tags: ["squadre", "operativo", "personale", "mezzi"]
   },
 
-  "open-panel-lavagna": {
-    rispostaBreve: "Apre la Lavagna Eggs integrata nell'app, visibile solo agli amministratori.",
-    passi: [
-      "Accedi con un account amministratore.",
-      "Apri il menu (⋮) e premi “Lavagna Eggs”.",
-      "Usa la lavagna nel riquadro o aprila in una nuova scheda se il sito esterno blocca l'incorporamento."
-    ],
-    tags: ["lavagna", "eggs", "admin", "squadre"]
-  },
   "open-panel-personale": {
     rispostaBreve: "Da qui inserisci o importi l'anagrafica personale.",
     passi: [
@@ -1636,7 +1624,6 @@ ui.mezziForm?.addEventListener("submit", addMezzo);
 ui.squadraForm?.addEventListener("submit", saveSquadraComposition);
 ui.squadraCommessa?.addEventListener("change", autofillSquadraForm);
 ui.squadraRiferimento?.addEventListener("change", autofillSquadraForm);
-ui.syncLavagnaSquadreBtn?.addEventListener("click", syncLavagnaSquadreFromBackend);
 ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
@@ -1685,7 +1672,6 @@ ui.personaleImportBtn?.addEventListener("click", importPersonaleFromExcel);
 ui.mezziImportBtn?.addEventListener("click", importMezziFromExcel);
 ui.openPanelCommesse?.addEventListener("click", () => openManagementPanel("commesse"));
 ui.openPanelSquadre?.addEventListener("click", () => openManagementPanel("squadre"));
-ui.openPanelLavagna?.addEventListener("click", () => openManagementPanel("lavagna"));
 ui.openPanelPersonale?.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi?.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti?.addEventListener("click", () => openManagementPanel("utenti"));
@@ -2926,7 +2912,7 @@ function updateAdminControls() {
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelLavagna, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche, ui.openPanelProgrammazione]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche, ui.openPanelProgrammazione]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.programmazioneAddBtn?.classList.toggle("hidden", !canManage);
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
@@ -3052,7 +3038,6 @@ function openManagementPanel(panel) {
   const panelMap = {
     commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
-    lavagna: { el: ui.panelLavagna, title: "🧾 Lavagna Eggs" },
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
@@ -3064,7 +3049,7 @@ function openManagementPanel(panel) {
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelLavagna, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -18548,34 +18533,6 @@ async function deleteMezzo(id, nome) {
   if (!canManageData()) return;
   if (!window.confirm(`Eliminare ${nome} dai mezzi?`)) return;
   await db.collection("mezzi").doc(id).delete();
-}
-
-async function syncLavagnaSquadreFromBackend() {
-  if (!canManageData()) {
-    alert("Solo l'admin può aggiornare le squadre da Lavagna.");
-    return;
-  }
-  if (!functions || typeof functions.httpsCallable !== "function") {
-    setSquadraFeedback("Backend Firebase Functions non disponibile per la sincronizzazione Lavagna.", "error");
-    return;
-  }
-  const btn = ui.syncLavagnaSquadreBtn;
-  if (btn) btn.disabled = true;
-  setSquadraFeedback("Aggiornamento squadre da Lavagna in corso...", "info");
-  try {
-    const syncLavagnaSquadre = functions.httpsCallable("syncLavagnaSquadre");
-    const result = await syncLavagnaSquadre({});
-    const data = result?.data || {};
-    const skipped = data.skippedUnknownCodes ? ` (${data.skippedUnknownCodes} codici non presenti nell'app ignorati)` : "";
-    setSquadraFeedback(`✅ Lavagna aggiornata: ${data.importedRows || 0} righe importate su ${data.matched || 0} commesse/data${skipped}.`, "success");
-    if (currentUser) subscribeSquadre();
-    renderSquadre();
-  } catch (error) {
-    console.error("Errore sincronizzazione Lavagna:", error);
-    setSquadraFeedback(error?.message || "Errore durante l'aggiornamento da Lavagna.", "error");
-  } finally {
-    if (btn) btn.disabled = !canManageData();
-  }
 }
 
 async function autofillSquadraForm() {

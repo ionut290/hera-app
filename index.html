@@ -34,7 +34,6 @@
     <div class="side-menu-body">
       <button id="open-panel-commesse" class="btn menu-title-btn" type="button">Aggiungi commesse</button>
       <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
-      <button id="open-panel-lavagna" class="btn menu-title-btn" type="button">🧾 Lavagna Eggs</button>
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
@@ -569,28 +568,6 @@
       </section>
       <p id="global-map-feedback" class="muted"></p>
     </div>
-    <div id="panel-lavagna" class="management-panel hidden">
-      <section class="lavagna-admin-card">
-        <div class="section-head">
-          <div>
-            <h3>Lavagna Eggs</h3>
-            <p class="muted">Pagina esterna integrata nell'app. Accesso consentito solo agli amministratori.</p>
-          </div>
-          <a id="lavagna-open-external" class="btn" href="https://coopavola.eggsnext.cloud/main/functions/app/eggs-lavagna/lavagna" target="_blank" rel="noopener noreferrer">Apri in nuova scheda</a>
-        </div>
-        <div class="lavagna-frame-wrap">
-          <iframe
-            id="lavagna-frame"
-            class="lavagna-frame"
-            src="https://coopavola.eggsnext.cloud/main/functions/app/eggs-lavagna/lavagna"
-            title="Lavagna Eggs"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-          ></iframe>
-        </div>
-        <p class="muted">Se la pagina non viene visualizzata dentro l'app, usa “Apri in nuova scheda”.</p>
-      </section>
-    </div>
     <div id="panel-squadre" class="management-panel hidden">
       <form id="squadra-form" class="squadra-form">
         <select id="squadra-commessa" required>
@@ -603,7 +580,6 @@
         <div id="squadra-rows" class="squadra-rows"></div>
         <div class="squadra-actions">
           <button id="add-squadra-row-btn" class="btn" type="button">➕ Aggiungi squadra</button>
-          <button id="sync-lavagna-squadre-btn" class="btn" type="button">🔄 Aggiorna da Lavagna</button>
           <button class="btn btn-primary" type="submit">✓ Fine: salva composizione</button>
         </div>
       </form>

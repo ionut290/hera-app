@@ -3031,6 +3031,7 @@ function updateAdminControls() {
 }
 
 function openSideMenu() {
+  configureSnowSideMenu(isSnowServiceRoute());
   ui.sideMenu.classList.remove("hidden");
   ui.menuOverlay.classList.remove("hidden");
   ui.sideMenu.setAttribute("aria-hidden", "false");
@@ -4589,7 +4590,7 @@ async function loadSavedHoursReports() {
   if (ui.hoursSavedList) ui.hoursSavedList.innerHTML = "<p class='muted'>Caricamento ore salvate...</p>";
   try {
     await ensureHoursReportsDeduplicated();
-    const baseQuery = db.collection("oreReports");
+    const baseQuery = db.collection(getOreReportsCollectionName());
     const snapshot = await baseQuery.orderBy("createdAt", "desc").limit(100).get();
     const reports = deduplicateHoursRecordsForDisplay(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     renderSavedHoursReports(reports);
@@ -4668,13 +4669,13 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
   const includePendingApprovals = options?.includePendingApprovals === true;
   const fromDate = `${monthValue}-01`;
   const toDate = `${monthValue}-${String(monthMeta.daysInMonth).padStart(2, "0")}`;
-  const reportsQuery = db.collection("oreReports")
+  const reportsQuery = db.collection(getOreReportsCollectionName())
     .where("date", ">=", fromDate)
     .where("date", "<=", toDate)
     .orderBy("date", "asc")
     .get();
   const approvalsQuery = includePendingApprovals
-    ? db.collection("oreApprovalRequests")
+    ? db.collection(getOreApprovalRequestsCollectionName())
       .where("date", ">=", fromDate)
       .where("date", "<=", toDate)
       .orderBy("date", "asc")
@@ -4683,7 +4684,7 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
   const [reportsSnapshot, approvalsSnapshot] = await Promise.all([reportsQuery, approvalsQuery]);
   const reports = reportsSnapshot.docs.map((doc) => ({
     id: doc.id,
-    sourceCollection: "oreReports",
+    sourceCollection: getOreReportsCollectionName(),
     approvalStatus: "approved",
     ...doc.data()
   }));
@@ -4691,7 +4692,7 @@ async function fetchHoursReportsForMonth(monthValue, monthMeta, options = {}) {
     ? approvalsSnapshot.docs
       .map((doc) => ({
         id: doc.id,
-        sourceCollection: "oreApprovalRequests",
+        sourceCollection: getOreApprovalRequestsCollectionName(),
         ...doc.data()
       }))
       .filter((request) => !["approved", "rejected"].includes(String(request.status || "").trim()))
@@ -5045,14 +5046,14 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
         if (!operatorsMap.has(operatore)) {
           operatorsMap.set(operatore, Array.from({ length: monthMeta.daysInMonth }, () => []));
         }
-        const isPendingApproval = String(report.sourceCollection || "oreReports") === "oreApprovalRequests";
+        const isPendingApproval = String(report.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName();
         operatorsMap.get(operatore)[day - 1].push({ ore, isPendingApproval });
         const key = `${operatore}__${day}`;
         if (!hoursTableRowsMap.has(key)) hoursTableRowsMap.set(key, []);
         hoursTableRowsMap.get(key).push({
           recordId: report.id,
           reportId: report.id,
-          sourceCollection: report.sourceCollection || "oreReports",
+          sourceCollection: report.sourceCollection || getOreReportsCollectionName(),
           approvalStatus: report.status || report.approvalStatus || "approved",
           reportDate,
           monthValue: `${monthMeta.year}-${String(monthMeta.month).padStart(2, "0")}`,
@@ -5083,7 +5084,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
       if (!dayItems.length) return "<td>-</td>";
       const key = `${operatorName}__${day}`;
       const sources = hoursTableRowsMap.get(key) || [];
-      const pendingSources = sources.filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+      const pendingSources = sources.filter((source) => String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName());
       const hasPendingApproval = pendingSources.length > 0;
       const canManage = canManageData() && sources.length;
       const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
@@ -5180,7 +5181,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     ui.hoursTableFeedback.textContent = "Nessuna ora trovata: mostro una tabella vuota (minimo 10 righe).";
   } else {
     const hasPendingApprovals = (Array.isArray(reports) ? reports : [])
-      .some((report) => String(report.sourceCollection || "oreReports") === "oreApprovalRequests");
+      .some((report) => String(report.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName());
     ui.hoursTableFeedback.textContent = hasPendingApprovals
       ? "Mostro anche vecchie richieste da confermare: sono evidenziate in giallo finché l'admin non le approva. Le nuove ore vengono salvate subito."
       : canManageData()
@@ -5212,7 +5213,7 @@ function getPendingHoursSourcesForKeys(keys = []) {
   (Array.isArray(keys) ? keys : []).forEach((key) => {
     const sources = hoursTableRowsMap.get(String(key || "")) || [];
     sources.forEach((source) => {
-      if (String(source.sourceCollection || "oreReports") !== "oreApprovalRequests") return;
+      if (String(source.sourceCollection || getOreReportsCollectionName()) !== getOreApprovalRequestsCollectionName()) return;
       const sourceKey = `${source.reportId}__${source.entryIndex}__${source.rowIndex}`;
       if (seen.has(sourceKey)) return;
       seen.add(sourceKey);
@@ -5233,7 +5234,7 @@ function getHoursSourceDayLabel(source) {
 async function approvePendingHoursSourcesFromTable(sources = []) {
   if (!canManageData()) throw new Error("Solo admin può confermare le ore.");
   const pendingSources = (Array.isArray(sources) ? sources : [])
-    .filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests" && source.reportId);
+    .filter((source) => String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName() && source.reportId);
   if (!pendingSources.length) return [];
   const groupedByRequest = new Map();
   pendingSources.forEach((source) => {
@@ -5263,8 +5264,8 @@ function markConfirmedHoursCells(keys = []) {
   keySet.forEach((key) => {
     const sources = hoursTableRowsMap.get(key) || [];
     sources.forEach((source) => {
-      if (String(source.sourceCollection || "oreReports") !== "oreApprovalRequests") return;
-      source.sourceCollection = "oreReports";
+      if (String(source.sourceCollection || getOreReportsCollectionName()) !== getOreApprovalRequestsCollectionName()) return;
+      source.sourceCollection = getOreReportsCollectionName();
       source.approvalStatus = "approved";
     });
   });
@@ -5287,7 +5288,7 @@ function markConfirmedHoursCells(keys = []) {
 
 async function confirmPendingHoursFromTable(sources, options = {}) {
   const pendingSources = (Array.isArray(sources) ? sources : [])
-    .filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+    .filter((source) => String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName());
   if (!pendingSources.length) return;
   const confirmed = await openHoursConfirmModal({
     title: "Confermare ore?",
@@ -5342,7 +5343,7 @@ async function handleHoursValueAction(cellKey) {
   if (!canManageData()) return;
   let sources = hoursTableRowsMap.get(String(cellKey || ""));
   if (!sources || !sources.length) return;
-  const pendingSources = sources.filter((source) => String(source.sourceCollection || "oreReports") === "oreApprovalRequests");
+  const pendingSources = sources.filter((source) => String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName());
   if (pendingSources.length && pendingSources.length === sources.length) {
     const firstSource = pendingSources[0] || {};
     const operatorLabel = String(firstSource.operatore || "OPERATORE").trim() || "OPERATORE";
@@ -5396,9 +5397,9 @@ async function handleHoursValueAction(cellKey) {
   try {
     const groupedByReport = new Map();
     sources.forEach((source) => {
-      const collectionName = String(source.sourceCollection || "oreReports") === "oreApprovalRequests"
-        ? "oreApprovalRequests"
-        : "oreReports";
+      const collectionName = String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName()
+        ? getOreApprovalRequestsCollectionName()
+        : getOreReportsCollectionName();
       const groupKey = `${collectionName}::${source.reportId}`;
       if (!groupedByReport.has(groupKey)) groupedByReport.set(groupKey, { collectionName, reportId: source.reportId, sources: [] });
       groupedByReport.get(groupKey).sources.push(source);
@@ -6887,7 +6888,7 @@ function isActiveHoursLock(lockData = {}, skipApprovalRequestId = "") {
 async function reserveHoursApprovalRequestWithLocks(payload) {
   payload.entries = addHoursUniqueKeysToEntries(payload?.date, payload?.entries);
   const locks = getHoursUniqueLocks(payload?.date, payload?.entries);
-  const approvalRef = db.collection("oreApprovalRequests").doc();
+  const approvalRef = db.collection(getOreApprovalRequestsCollectionName()).doc();
   await db.runTransaction(async (transaction) => {
     const lockRefs = locks.map((lock) => ({
       lock,
@@ -7004,7 +7005,7 @@ function addHoursUniqueKeysToEntries(dateValue, entries = []) {
 
 
 function isAdminConfirmedHoursRecord(record = {}, collectionName = "") {
-  return String(collectionName || record.sourceCollection || "") === "oreReports"
+  return String(collectionName || record.sourceCollection || "") === getOreReportsCollectionName()
     || String(record.status || record.approvalStatus || "").trim() === "approved"
     || Boolean(record.level2ApprovedAt || record.finalizedReportId);
 }
@@ -7012,7 +7013,7 @@ function isAdminConfirmedHoursRecord(record = {}, collectionName = "") {
 function compareHoursRowPriority(a, b) {
   const confirmedDiff = Number(isAdminConfirmedHoursRecord(b.record, b.collectionName)) - Number(isAdminConfirmedHoursRecord(a.record, a.collectionName));
   if (confirmedDiff) return confirmedDiff;
-  const reportDiff = Number(b.collectionName === "oreReports") - Number(a.collectionName === "oreReports");
+  const reportDiff = Number(b.collectionName === getOreReportsCollectionName()) - Number(a.collectionName === getOreReportsCollectionName());
   if (reportDiff) return reportDiff;
   const bTs = getHoursRecordTimestampMillis(b.record);
   const aTs = getHoursRecordTimestampMillis(a.record);
@@ -7027,7 +7028,7 @@ function collectHoursRowRefs(records = []) {
   (Array.isArray(records) ? records : []).forEach((recordWrapper) => {
     const record = recordWrapper.data || recordWrapper;
     const dateValue = String(record.date || "").trim();
-    const collectionName = String(recordWrapper.collectionName || record.sourceCollection || "oreReports");
+    const collectionName = String(recordWrapper.collectionName || record.sourceCollection || getOreReportsCollectionName());
     const docId = String(recordWrapper.id || record.id || "").trim();
     const entries = Array.isArray(record.entries) ? record.entries : [];
     entries.forEach((entry, entryIndex) => {
@@ -7079,7 +7080,7 @@ function deduplicateHoursRecordsForDisplay(records = []) {
   const wrappers = (Array.isArray(records) ? records : []).map((record) => ({
     ...record,
     data: record,
-    collectionName: record.sourceCollection || "oreReports"
+    collectionName: record.sourceCollection || getOreReportsCollectionName()
   }));
   const rowRefs = collectHoursRowRefs(wrappers);
   const { keepRefs } = pickUniqueHoursRows(rowRefs);
@@ -7089,7 +7090,7 @@ function deduplicateHoursRecordsForDisplay(records = []) {
       const rows = (Array.isArray(entry.rows) ? entry.rows : [])
         .map((row, rowIndex) => {
           const match = rowRefs.find((rowRef) => rowRef.docId === String(record.id || "")
-            && rowRef.collectionName === String(record.sourceCollection || "oreReports")
+            && rowRef.collectionName === String(record.sourceCollection || getOreReportsCollectionName())
             && rowRef.entryIndex === entryIndex
             && rowRef.rowIndex === rowIndex);
           if (!match || !keepRefs.has(match)) return null;
@@ -7117,13 +7118,13 @@ async function repairDuplicateHours(options = {}) {
   if (hoursDuplicateCleanupPromise && options.force !== true) return hoursDuplicateCleanupPromise;
   hoursDuplicateCleanupPromise = (async () => {
     const [reportsSnapshot, approvalsSnapshot] = await Promise.all([
-      db.collection("oreReports").get(),
-      db.collection("oreApprovalRequests").get()
+      db.collection(getOreReportsCollectionName()).get(),
+      db.collection(getOreApprovalRequestsCollectionName()).get()
     ]);
     const docs = [
-      ...reportsSnapshot.docs.map((doc) => ({ id: doc.id, ref: doc.ref, collectionName: "oreReports", data: doc.data() || {} })),
+      ...reportsSnapshot.docs.map((doc) => ({ id: doc.id, ref: doc.ref, collectionName: getOreReportsCollectionName(), data: doc.data() || {} })),
       ...approvalsSnapshot.docs
-        .map((doc) => ({ id: doc.id, ref: doc.ref, collectionName: "oreApprovalRequests", data: doc.data() || {} }))
+        .map((doc) => ({ id: doc.id, ref: doc.ref, collectionName: getOreApprovalRequestsCollectionName(), data: doc.data() || {} }))
         .filter((doc) => !["rejected", "deleted", "void"].includes(String(doc.data.status || "").trim()))
     ];
     const rowRefs = collectHoursRowRefs(docs);
@@ -7199,8 +7200,8 @@ async function repairDuplicateHours(options = {}) {
         batch.set(ref, {
           ...lock,
           uniqueKey: rowRef.uniqueKey,
-          approvalRequestId: rowRef.collectionName === "oreApprovalRequests" ? rowRef.docId : "",
-          reportId: rowRef.collectionName === "oreReports" ? rowRef.docId : (rowRef.record.finalizedReportId || ""),
+          approvalRequestId: rowRef.collectionName === getOreApprovalRequestsCollectionName() ? rowRef.docId : "",
+          reportId: rowRef.collectionName === getOreReportsCollectionName() ? rowRef.docId : (rowRef.record.finalizedReportId || ""),
           status: isAdminConfirmedHoursRecord(rowRef.record, rowRef.collectionName) ? "approved" : String(rowRef.record.status || "pending_level1"),
           repairedAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -7241,7 +7242,7 @@ async function ensureHoursReportsDeduplicated() {
 window.repairDuplicateHours = repairDuplicateHours;
 
 async function createApprovedHoursReportWithLocks(request, reportPayload) {
-  const reportRef = db.collection("oreReports").doc();
+  const reportRef = db.collection(getOreReportsCollectionName()).doc();
   reportPayload.entries = addHoursUniqueKeysToEntries(reportPayload.date, reportPayload.entries);
   const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
   await db.runTransaction(async (transaction) => {
@@ -7282,7 +7283,7 @@ async function createApprovedHoursReportWithLocks(request, reportPayload) {
 }
 
 async function createDirectHoursReportWithLocks(reportPayload) {
-  const reportRef = db.collection("oreReports").doc();
+  const reportRef = db.collection(getOreReportsCollectionName()).doc();
   reportPayload.entries = addHoursUniqueKeysToEntries(reportPayload.date, reportPayload.entries);
   const locks = getHoursUniqueLocks(reportPayload.date, reportPayload.entries);
   await db.runTransaction(async (transaction) => {
@@ -7423,7 +7424,7 @@ async function saveApprovedHoursRequest(request, options = {}) {
         driveBackupLink: driveLink,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
-  await db.collection("oreApprovalRequests").doc(request.id).set(requestUpdate, { merge: true });
+  await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set(requestUpdate, { merge: true });
   await updateHoursLocksForEntries(dateValue, approvedEntries, {
     status: "approved",
     approvalRequestId: request.id || "",
@@ -7502,8 +7503,8 @@ async function findExistingHoursConflicts(dateValue, entries, options = {}) {
   if (!requestedKeys.size) return [];
 
   const [reportsSnapshot, approvalsSnapshot] = await Promise.all([
-    db.collection("oreReports").where("date", "==", dateValue).get(),
-    db.collection("oreApprovalRequests").where("date", "==", dateValue).get()
+    db.collection(getOreReportsCollectionName()).where("date", "==", dateValue).get(),
+    db.collection(getOreApprovalRequestsCollectionName()).where("date", "==", dateValue).get()
   ]);
 
   const conflicts = [];
@@ -8698,7 +8699,7 @@ async function createParentCommessa(event) {
   const nome = String(ui.parentCommessaName?.value || "").trim();
   const codice = String(ui.parentCommessaCode?.value || "").trim();
   if (!nome) return;
-  await db.collection("commesse").add({
+  await db.collection(getCommesseCollectionName()).add({
     nome,
     codice,
     parentCommessaId: null,
@@ -8729,7 +8730,7 @@ async function moveSelectedCommesseUnderParent(event) {
   }
   const batch = db.batch();
   selectedIds.forEach((id) => {
-    batch.set(db.collection("commesse").doc(id), {
+    batch.set(db.collection(getCommesseCollectionName()).doc(id), {
       parentCommessaId: parentId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: currentUser?.email || ""
@@ -8744,7 +8745,7 @@ async function moveSubcommessaToMain(commessaId) {
     alert("Solo un admin può spostare subcommesse nella vista principale.");
     return;
   }
-  await db.collection("commesse").doc(commessaId).set({
+  await db.collection(getCommesseCollectionName()).doc(commessaId).set({
     parentCommessaId: null,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: currentUser?.email || ""
@@ -8908,7 +8909,7 @@ function subscribeStatsForCommesse() {
 
 function subscribeHoursStats() {
   if (!unsubscribeHoursStats) {
-    unsubscribeHoursStats = db.collection("oreReports").onSnapshot((snapshot) => {
+    unsubscribeHoursStats = db.collection(getOreReportsCollectionName()).onSnapshot((snapshot) => {
       allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursReportsLoaded = true;
       recalculateCommessaWorkSummaries();
@@ -8918,7 +8919,7 @@ function subscribeHoursStats() {
     }, (error) => console.error("Errore stats ore commesse:", error));
   }
   if (!unsubscribeHoursApprovals) {
-    unsubscribeHoursApprovals = db.collection("oreApprovalRequests").onSnapshot((snapshot) => {
+    unsubscribeHoursApprovals = db.collection(getOreApprovalRequestsCollectionName()).onSnapshot((snapshot) => {
       allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursApprovalsLoaded = true;
       hoursApprovalRequests = allHoursApprovalRequests;
@@ -9716,7 +9717,7 @@ async function createCommessa(event) {
     return;
   }
 
-  const commessaRef = await db.collection("commesse").add({
+  const commessaRef = await db.collection(getCommesseCollectionName()).add({
     nome,
     codice,
     parentCommessaId: parentCommessaId || null,
@@ -9814,7 +9815,7 @@ function subscribeCommesse() {
     return Promise.resolve(false);
   }
 
-  const query = db.collection("commesse").orderBy("createdAt", "desc");
+  const query = db.collection(getCommesseCollectionName()).orderBy("createdAt", "desc");
   const applyCommesseSnapshot = (snapshot, { fromListener = false } = {}) => {
     clearCommesseLoadTimeout();
     const receivedCommesse = [];
@@ -18411,7 +18412,7 @@ function subscribeSquadre() {
     checkAndSendHoursDeadlineAlerts();
   };
 
-  const squadreQuery = db.collection("squadreStorico").where("dateKey", "==", selectedDateKey);
+  const squadreQuery = db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", selectedDateKey);
   console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico where dateKey == data selezionata. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
   const squadreDataPromise = runFirestoreGetWithRetry(squadreQuery, {
     label: "LOAD SQUADRE",
@@ -18997,8 +18998,8 @@ async function saveSquadraComposition(event) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   };
-  const currentRef = db.collection("squadreCommesse").doc(commessaId);
-  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  const currentRef = db.collection(getSquadreCurrentCollectionName()).doc(commessaId);
+  const historyRef = db.collection(getSquadreHistoryCollectionName()).doc(`${dateKey}__${commessaId}`);
   try {
     await db.runTransaction(async (transaction) => {
       const historySnap = await transaction.get(historyRef);
@@ -19053,8 +19054,8 @@ async function deleteSquadraCompositionForDate(commessaId, dateKey) {
   const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
   if (!window.confirm(`Eliminare tutte le squadre di ${commessaNome} per il ${dateLabel}?`)) return;
 
-  const currentRef = db.collection("squadreCommesse").doc(commessaId);
-  const historyRef = db.collection("squadreStorico").doc(`${dateKey}__${commessaId}`);
+  const currentRef = db.collection(getSquadreCurrentCollectionName()).doc(commessaId);
+  const historyRef = db.collection(getSquadreHistoryCollectionName()).doc(`${dateKey}__${commessaId}`);
   await db.runTransaction(async (transaction) => {
     const currentSnap = await transaction.get(currentRef);
     transaction.delete(historyRef);
@@ -22818,8 +22819,8 @@ async function checkAndSendHoursDeadlineAlerts() {
   if (!commesseConSquadra.length) return;
 
   const [reportsSnapshot, approvalSnapshot] = await Promise.all([
-    db.collection("oreReports").where("date", "==", dateKey).get(),
-    db.collection("oreApprovalRequests").where("date", "==", dateKey).get()
+    db.collection(getOreReportsCollectionName()).where("date", "==", dateKey).get(),
+    db.collection(getOreApprovalRequestsCollectionName()).where("date", "==", dateKey).get()
   ]);
 
   const reports = reportsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -23185,7 +23186,7 @@ async function unblockInvalidHoursRequest(request) {
   if (!request?.id) return;
   const ok = window.confirm(`Sbloccare la richiesta ore ${request.id}? Verrà marcata come rifiutata perché non contiene un record ore completo.`);
   if (!ok) return;
-  await db.collection("oreApprovalRequests").doc(request.id).set({
+  await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set({
     status: "rejected",
     rejectedBy: currentUser.email || currentUser.displayName || "admin",
     rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -23264,7 +23265,7 @@ async function approveHoursRequestLevel1(request) {
     alert("Non autorizzato al primo livello di approvazione.");
     return;
   }
-  await db.collection("oreApprovalRequests").doc(request.id).set({
+  await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set({
     status: "pending_admin",
     level1ApprovedBy: currentUser.email || currentUser.displayName || "utente",
     level1ApprovedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -23338,7 +23339,7 @@ async function rejectHoursRequestFromChat(requestId) {
   if (String(request.status || "") !== "pending_admin") {
     throw new Error(`Idempotenza: richiesta non pending_admin (stato: ${String(request.status || "sconosciuto")}).`);
   }
-  await db.collection("oreApprovalRequests").doc(request.id).set({
+  await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set({
     status: "rejected",
     rejectedBy: currentUser.email || currentUser.displayName || "admin",
     rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -23368,7 +23369,7 @@ async function rejectHoursRequest(request) {
     return;
   }
   const reason = window.prompt("Motivo del rifiuto (opzionale):", "") || "";
-  await db.collection("oreApprovalRequests").doc(request.id).set({
+  await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set({
     status: "rejected",
     rejectedBy: currentUser.email || currentUser.displayName || "utente",
     rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -24305,7 +24306,7 @@ async function renameCommessa(commessaId, currentName, currentCode = "") {
   const normalized = nextName.trim();
   const normalizedCode = String(nextCode || "").trim();
   if (!normalized) return;
-  await db.collection("commesse").doc(commessaId).set({ nome: normalized, codice: normalizedCode }, { merge: true });
+  await db.collection(getCommesseCollectionName()).doc(commessaId).set({ nome: normalized, codice: normalizedCode }, { merge: true });
   if (selectedCommessaId === commessaId) {
     selectedCommessaName = normalized;
     ui.commessaAttiva.textContent = normalizedCode ? `Commessa selezionata: ${normalized} • Cod. commessa: ${normalizedCode}` : `Commessa selezionata: ${normalized}`;
@@ -24618,7 +24619,7 @@ async function deleteChatMessageById(messageId) {
 async function getHoursApprovalRequestById(requestId) {
   const normalizedRequestId = String(requestId || "").trim();
   if (!normalizedRequestId) return null;
-  const docSnap = await db.collection("oreApprovalRequests").doc(normalizedRequestId).get();
+  const docSnap = await db.collection(getOreApprovalRequestsCollectionName()).doc(normalizedRequestId).get();
   if (!docSnap.exists) return null;
   return { id: docSnap.id, ...docSnap.data() };
 }
@@ -25460,7 +25461,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
       }
     } catch (error) {
       console.warn("Foglio configurato non più disponibile, provo ricreazione automatica:", error);
-      await db.collection("commesse").doc(commessaId).set({
+      await db.collection(getCommesseCollectionName()).doc(commessaId).set({
         sheetSpreadsheetId: firebase.firestore.FieldValue.delete(),
         sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -25481,7 +25482,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   if (Array.isArray(searchResponse.files) && searchResponse.files.length > 0) {
     const existing = searchResponse.files[0];
     commessaSheetCache.set(commessaId, existing.id);
-    await db.collection("commesse").doc(commessaId).set({
+    await db.collection(getCommesseCollectionName()).doc(commessaId).set({
       sheetSpreadsheetId: existing.id,
       sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
@@ -25507,7 +25508,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
   });
 
   commessaSheetCache.set(commessaId, created.id);
-  await db.collection("commesse").doc(commessaId).set({
+  await db.collection(getCommesseCollectionName()).doc(commessaId).set({
     sheetSpreadsheetId: created.id,
     sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -26116,13 +26117,30 @@ const SNOW_SERVICE_COMMESSE = [
 ];
 let snowServiceUnsubscribers = [];
 
+function isSnowServiceContext() {
+  return window.location.hash === "#servizio-neve" || document.body.classList.contains("snow-management-context");
+}
+
+function getCommesseCollectionName() { return isSnowServiceContext() ? "neve_commesse" : "commesse"; }
+function getSquadreCurrentCollectionName() { return isSnowServiceContext() ? "neve_squadre" : "squadreCommesse"; }
+function getSquadreHistoryCollectionName() { return isSnowServiceContext() ? "neve_squadre_storico" : "squadreStorico"; }
+function getOreReportsCollectionName() { return isSnowServiceContext() ? "neve_ore" : "oreReports"; }
+function getOreApprovalRequestsCollectionName() { return isSnowServiceContext() ? "neve_ore_richieste" : "oreApprovalRequests"; }
+
 function openSnowServicePage() {
+  document.body.classList.add("snow-management-context");
   window.location.hash = "servizio-neve";
+  subscribeCommesse();
+  subscribeSquadre();
   applyRoute();
 }
 
 function closeSnowServicePage() {
+  document.body.classList.remove("snow-management-context");
+  configureSnowSideMenu(false);
   window.location.hash = "";
+  subscribeCommesse();
+  subscribeSquadre();
   applyRoute();
 }
 
@@ -26138,41 +26156,53 @@ function renderSnowServiceList(element, rows, emptyText, renderRow) {
 }
 
 function renderSnowServiceCommesse() {
-  const list = document.getElementById("snow-commesse-list");
+  const list = document.getElementById("snow-squadre-lista");
   if (!list) return;
-  list.innerHTML = SNOW_SERVICE_COMMESSE.map((commessa, index) => `
-    <article class="squadra-item">
-      <div class="squadra-item-head">
-        <div class="squadra-commessa-title-wrap">
-          <strong>📁 ${escapeHTML(commessa.nome)}</strong>
-          <div class="snow-squadra-meta">
-            <span class="pill">Commessa neve ${index + 1}/9</span>
-            <span class="pill">❄️ Operativo</span>
-          </div>
-        </div>
-      </div>
-      <p><b>📅 Giorno:</b> ${escapeHTML(new Date().toLocaleDateString("it-IT"))}</p>
-      <div class="squadra-saved-row">
-        <p><b>👥 ${escapeHTML(commessa.squadra)}:</b> ${escapeHTML(commessa.operatori)}<br><b>🚚 Mezzi:</b> ${escapeHTML(commessa.mezzi)}</p>
-      </div>
-    </article>
-  `).join("");
+  if (squadreLoadState.status === "loading") {
+    list.innerHTML = "<p class='muted'>Caricamento squadre neve...</p>";
+    return;
+  }
+  const selectedDateKey = getActiveSquadreDateKey();
+  const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
+  const commesseNeve = Array.from(commesseById.values()).filter((commessa) => {
+    const squad = storicoDelGiorno.get(commessa.id) || {};
+    const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+    return rows.some(isSquadraRowFilled);
+  });
+  if (!commesseNeve.length) {
+    list.innerHTML = "<p class='muted'>Nessuna squadra neve creata per questo giorno</p>";
+    return;
+  }
+  list.innerHTML = commesseNeve.map((commessa) => {
+    const squad = storicoDelGiorno.get(commessa.id) || {};
+    const rows = (Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad)).map((row, idx) => {
+      const orarioLabel = formatSquadraOrario(row);
+      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : ""}${orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : ""}${row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""}<br><b>🚚 Mezzi:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
+    }).join("");
+    return `<article class="squadra-item"><div class="squadra-item-head"><div class="squadra-commessa-title-wrap"><strong>📁 ${escapeHTML(commessa.nome || "Commessa neve")}</strong><div class="snow-squadra-meta"><span class="pill">❄️ Servizio neve</span></div></div></div><p><b>📅 Giorno:</b> ${escapeHTML(formatDateKeyForDisplay(selectedDateKey))}</p>${rows}</article>`;
+  }).join("");
+}
+
+function syncSnowWeatherPanel() {
+  const summary = document.getElementById("snow-weather-summary");
+  const risks = document.getElementById("snow-weather-risks");
+  if (summary && ui.weatherSummary) summary.textContent = ui.weatherSummary.textContent || "Caricamento meteo...";
+  if (risks && ui.weatherRisks) risks.innerHTML = ui.weatherRisks.innerHTML;
+}
+
+function configureSnowSideMenu(isSnow) {
+  const allowed = new Set(["open-panel-commesse", "open-panel-squadre", "open-panel-personale", "open-panel-mezzi", "open-panel-utenti", "open-hours-btn"]);
+  document.body.classList.toggle("snow-management-context", Boolean(isSnow));
+  document.querySelectorAll("#side-menu .menu-title-btn").forEach((button) => {
+    button.classList.toggle("hidden", Boolean(isSnow) && !allowed.has(button.id));
+  });
 }
 
 function renderSnowService() {
+  syncSnowWeatherPanel();
+  configureSnowSideMenu(true);
   renderSnowServiceCommesse();
-  const canManage = canManageData();
-  document.querySelectorAll("#snow-service-menu [data-snow-action]").forEach((button) => {
-    const adminOnly = button.dataset.snowAction !== "settings";
-    button.classList.toggle("hidden", adminOnly && !canManage);
-  });
-  renderSnowServiceList(document.getElementById("snow-clients-list"), snowServiceState.clients, "Nessun comune/cliente neve assegnato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Comune / Cliente")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='clients:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
-  renderSnowServiceList(document.getElementById("snow-routes-list"), snowServiceState.routes, "Nessun percorso neve creato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Percorso neve")}</strong><p>${escapeHTML(item.cliente || "")}</p><div class='item-actions'><button type='button' class='btn' data-snow-navigate='${escapeHTML(item.id)}'>Apri navigazione</button>${canManage ? `<button type='button' class='btn btn-danger' data-snow-delete='routes:${escapeHTML(item.id)}'>Elimina</button>` : ""}</div></article>`);
-  renderSnowServiceList(document.getElementById("snow-vehicles-list"), snowServiceState.vehicles, "Nessun mezzo neve configurato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Mezzo neve")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='vehicles:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
-  renderSnowServiceList(document.getElementById("snow-operators-list"), snowServiceState.operators, "Nessun operatore neve assegnato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Operatore")}</strong><p>${escapeHTML(item.comuni || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='operators:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
-  renderSnowServiceList(document.getElementById("snow-reports-list"), snowServiceState.reports, "Nessuna segnalazione neve.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.titolo || "Segnalazione neve")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='reports:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
 }
-
 function subscribeSnowServiceCollections() {
   snowServiceUnsubscribers.forEach((unsubscribe) => unsubscribe && unsubscribe());
   snowServiceUnsubscribers = [];
@@ -26219,6 +26249,9 @@ function handleSnowServiceMenuAction(action) {
 document.getElementById("snow-service-btn")?.addEventListener("click", openSnowServicePage);
 document.getElementById("snow-service-back-btn")?.addEventListener("click", closeSnowServicePage);
 document.getElementById("snow-service-menu-btn")?.addEventListener("click", () => {
+  configureSnowSideMenu(true);
+  openSideMenu();
+  return;
   const menu = document.getElementById("snow-service-menu");
   const isOpen = !menu?.classList.contains("hidden");
   menu?.classList.toggle("hidden", isOpen);
@@ -26240,3 +26273,5 @@ document.getElementById("snow-service-page")?.addEventListener("click", (event) 
   const nav = event.target?.closest?.("[data-snow-navigate]");
   if (nav) alert("Navigazione percorso neve pronta: collega coordinate dedicate nella mappa neve.");
 });
+
+document.getElementById("snow-refresh-app-btn")?.addEventListener("click", refreshApplicationData);

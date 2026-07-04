@@ -61,6 +61,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+
+    match /neve_commesse/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+
+    match /neve_squadre/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+
+    match /neve_squadre_storico/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /weatherAlerts/{alertId} {
       allow read: if signedIn();
       allow write: if isAdmin();
@@ -191,6 +209,8 @@ service cloud.firestore {
         "oreApprovalRequests",
         "oreLocks",
         "oreReports",
+        "neve_ore_richieste",
+        "neve_ore",
         "personale",
         "privateDocuments",
         "sheetExportQueue",

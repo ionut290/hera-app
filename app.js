@@ -485,6 +485,9 @@ const ui = {
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
+  snowSquadreFilterControls: document.getElementById("snow-squadre-filter-controls"),
+  snowSquadreFilterDate: document.getElementById("snow-squadre-filter-date"),
+  snowSquadreFilterClearBtn: document.getElementById("snow-squadre-filter-clear-btn"),
   squadreFilterStatus: document.getElementById("squadre-filter-status"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
@@ -1628,9 +1631,11 @@ ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
+ui.snowSquadreFilterDate?.addEventListener("change", () => setSquadreDateOverride(ui.snowSquadreFilterDate?.value || ""));
 ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
 ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
 ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
+ui.snowSquadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
 
 function syncCommesseHomeToggle() {
   const isVisible = Boolean(isCommesseHomeCardVisible);
@@ -3006,8 +3011,11 @@ function updateAdminControls() {
   ui.squadraCommessa.disabled = !canManage;
   syncCommesseHomeToggle();
   ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
+  ui.snowSquadreFilterControls?.classList.toggle("hidden", !canManage);
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
   if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;
+  if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.disabled = !canManage;
+  if (ui.snowSquadreFilterClearBtn) ui.snowSquadreFilterClearBtn.disabled = !canManage;
   ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
   ui.exportCurrentCommessaBtn.disabled = !canManage || !auth.currentUser || !selectedCommessaId;
   if (ui.gpsRequestsList && !canManage) {
@@ -19115,6 +19123,7 @@ function getActiveSquadreDateKey() {
 function syncSquadreDateInputs() {
   const activeDateKey = getActiveSquadreDateKey();
   if (ui.squadreFilterDate) ui.squadreFilterDate.value = activeDateKey;
+  if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.value = activeDateKey;
   if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = activeDateKey;
 }
 
@@ -19133,6 +19142,7 @@ function setSquadreDateOverride(dateKey) {
   sharedSquadreDateKey = selectedDateKey;
   syncSquadreDateInputs();
   renderSquadre();
+  if (isSnowServiceRoute()) renderSnowServiceCommesse();
   if (currentUser) subscribeSquadre();
   persistSharedSquadreDate(manualSquadreFilterDateKey).catch((error) => {
     console.error("Errore salvataggio giorno squadre condiviso:", error);
@@ -19150,6 +19160,7 @@ function clearManualSquadreFilterDate() {
     console.error("Errore reset giorno squadre condiviso:", error);
   });
   initializeAutomaticSquadreDate();
+  if (isSnowServiceRoute()) renderSnowServiceCommesse();
   if (currentUser) subscribeSquadre();
 }
 
@@ -26158,11 +26169,26 @@ function renderSnowServiceList(element, rows, emptyText, renderRow) {
 function renderSnowServiceCommesse() {
   const list = document.getElementById("snow-squadre-lista");
   if (!list) return;
+  list.innerHTML = "";
+  if (areStartupCoreCollectionsLoading()) {
+    list.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra neve...")}</p>`;
+    return;
+  }
   if (squadreLoadState.status === "loading") {
-    list.innerHTML = "<p class='muted'>Caricamento squadre neve...</p>";
+    list.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre neve...")}</p>`;
+    return;
+  }
+  if (squadreLoadState.status === "auth-required") {
+    list.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Fai login per caricare le squadre neve.")}</p>`;
+    return;
+  }
+  if (squadreLoadState.status === "error") {
+    list.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Errore caricamento dati")}</p><button id='snow-squadre-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
+    list.querySelector("#snow-squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
   const selectedDateKey = getActiveSquadreDateKey();
+  if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   const commesseNeve = Array.from(commesseById.values()).filter((commessa) => {
     const squad = storicoDelGiorno.get(commessa.id) || {};
@@ -26173,14 +26199,84 @@ function renderSnowServiceCommesse() {
     list.innerHTML = "<p class='muted'>Nessuna squadra neve creata per questo giorno</p>";
     return;
   }
-  list.innerHTML = commesseNeve.map((commessa) => {
+  commesseNeve.forEach((commessa) => {
+    const item = document.createElement("article");
+    item.className = "squadra-item";
     const squad = storicoDelGiorno.get(commessa.id) || {};
-    const rows = (Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad)).map((row, idx) => {
+    const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
+    const riferimento = squad.riferimentoData
+      ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
+      : formatDateKeyForDisplay(selectedDateKey);
+    const rowsHtml = squadRows.map((row, idx) => {
       const orarioLabel = formatSquadraOrario(row);
-      return `<div class="squadra-saved-row"><p><b>👥 Squadra ${idx + 1}:</b> ${escapeHTML(row.personale || "-")}${row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : ""}${orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : ""}${row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""}<br><b>🚚 Mezzi:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
+      const details = [
+        row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
+        orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
+        row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
+      ].join("");
+      return `<div class="squadra-saved-row" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra neve ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
-    return `<article class="squadra-item"><div class="squadra-item-head"><div class="squadra-commessa-title-wrap"><strong>📁 ${escapeHTML(commessa.nome || "Commessa neve")}</strong><div class="snow-squadra-meta"><span class="pill">❄️ Servizio neve</span></div></div></div><p><b>📅 Giorno:</b> ${escapeHTML(formatDateKeyForDisplay(selectedDateKey))}</p>${rows}</article>`;
-  }).join("");
+    const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
+    const warningMarkup = warningIssues.length
+      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra neve">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
+      : "";
+    const codiceCommessa = String(commessa.codice || "").trim();
+    item.innerHTML = `
+      <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa neve ${escapeHTML(commessa.nome || "Commessa senza nome")}">
+        <div class="squadra-commessa-title-wrap">
+          <strong>📁 ${escapeHTML(commessa.nome || "Commessa neve")}</strong>
+          ${getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa)}
+          <div class="snow-squadra-meta"><span class="pill">❄️ Servizio neve</span></div>
+        </div>
+        ${warningMarkup}
+      </div>
+      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
+      ${rowsHtml}
+    `;
+    const head = item.querySelector(".squadra-item-head");
+    appendSquadreHeaderRiskActions(head, commessa, selectedDateKey);
+    appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
+    head?.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      openCommessaFromSquadre(commessa);
+    });
+    head?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      event.preventDefault();
+      openCommessaFromSquadre(commessa);
+    });
+    item.querySelectorAll(".squadra-edit-link").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openSquadraCompositionEditor(btn.dataset.commessaId || commessa.id, btn.dataset.dateKey || selectedDateKey, Number(btn.dataset.squadraIndex) || 0);
+      });
+    });
+    item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
+    });
+    item.querySelector("[data-worklimate-commessa]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSquadraWorklimateSafety(commessa, selectedDateKey);
+    });
+    item.querySelector("[data-worklimate-temperature-commessa]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSquadraWorklimateSafety(commessa, selectedDateKey, { preferMajorityLocation: true, preferAverageTemperature: true });
+    });
+    const warningToggle = item.querySelector(".squadra-warning-toggle");
+    warningToggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const details = item.querySelector(".squadra-warning-details");
+      const isHidden = details?.classList.contains("hidden");
+      details?.classList.toggle("hidden", !isHidden);
+      warningToggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    });
+    list.appendChild(item);
+  });
 }
 
 function syncSnowWeatherPanel() {
@@ -26200,6 +26296,7 @@ function configureSnowSideMenu(isSnow) {
 
 function renderSnowService() {
   syncSnowWeatherPanel();
+  syncSquadreDateInputs();
   configureSnowSideMenu(true);
   renderSnowServiceCommesse();
 }

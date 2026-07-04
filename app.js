@@ -13278,10 +13278,9 @@ function renderImpianti() {
       forceDoneBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (!canUseForceImpiantoDone(impianto)) return;
         forceDoneBtn.disabled = true;
         try {
-          await handleImpiantoWhatsAppClick(impianto);
+          await forceMarkDone(impianto);
         } finally {
           forceDoneBtn.disabled = false;
         }
@@ -13333,10 +13332,9 @@ function renderImpianti() {
     if (canUseImpiantoAction("delete")) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
     if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
-        if (!canManageData() && !canTriggerImpiantoWhatsApp(impianto, true)) return;
         forceMoveDoneBtn.disabled = true;
         try {
-          await forceMoveImpiantoToFatti(impianto, { source: "admin_force_done" });
+          await forceMarkDone(impianto);
         } finally {
           forceMoveDoneBtn.disabled = false;
         }
@@ -19400,6 +19398,51 @@ function canUseForceImpiantoDone(impianto) {
     alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
     return false;
   }
+  return true;
+}
+
+async function forceMarkDone(impianto) {
+  if (!canUseForceImpiantoDone(impianto)) return false;
+
+  const ids = getImpiantoDocIds(impianto);
+  if (!selectedCommessaId || !ids.length) return false;
+
+  const doneAtLocal = new Date();
+  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const doneByUid = auth.currentUser?.uid || "";
+  const doneByEmail = auth.currentUser?.email || "";
+  const payload = {
+    done: true,
+    doneAt: doneAtLocal,
+    doneBy: doneByLocal,
+    doneByUid,
+    doneByEmail
+  };
+
+  try {
+    if (!isNetworkOffline()) {
+      await setImpiantoDone(selectedCommessaId, ids, true, {
+        doneAt: doneAtLocal,
+        doneBy: doneByLocal,
+        doneByUid,
+        doneByEmail
+      });
+    }
+  } catch (error) {
+    console.error("Forzatura FATTO non salvata su Firebase al primo tentativo:", error);
+    const retrySucceeded = await retrySetImpiantoDone(selectedCommessaId, ids, true, {
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      doneByUid,
+      doneByEmail
+    });
+    if (!retrySucceeded) return false;
+  }
+
+  updateImpiantoLocalState(ids, payload);
+  expandedImpiantoKey = buildImpiantoKey(impianto);
+  setImpiantiViewMode("done");
+  renderImpianti();
   return true;
 }
 

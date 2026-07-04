@@ -2703,8 +2703,24 @@ if (!auth || firebaseInitError) {
   setAuthenticationGateState("checking");
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
-  ensureAuthLocalPersistence().finally(() => {
+  const authCheckWatchdog = setTimeout(() => {
+    if (authStateResolved) return;
+    console.warn("Timeout verifica sessione Firebase: mostro la schermata di login invece del caricamento infinito.");
+    authStateResolved = true;
+    currentUser = null;
+    setAuthenticationGateState("required", "Verifica sessione lenta o non disponibile. Riprova il login.");
+    squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
+    if (typeof renderSquadre === "function") renderSquadre();
+    hideStartupLoading();
+  }, 8000);
+  withTimeout(ensureAuthLocalPersistence(), 3500, "Timeout persistenza auth locale")
+    .catch((error) => {
+      console.warn("Persistenza auth locale non pronta, continuo comunque la verifica sessione:", error);
+      return false;
+    })
+    .finally(() => {
     auth.onAuthStateChanged(async (user) => {
+  clearTimeout(authCheckWatchdog);
   console.log("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
@@ -2807,11 +2823,19 @@ if (!auth || firebaseInitError) {
   applyRoute();
 
   if (loggedIn) {
-    try {
-      await loadStartupCoreCollections();
-    } catch (error) {
-      console.error("Caricamento iniziale collezioni principali non completato:", error);
-    }
+    hideStartupLoading();
+    loadStartupCoreCollections()
+      .catch((error) => {
+        console.error("Caricamento iniziale collezioni principali non completato:", error);
+      })
+      .finally(() => {
+        renderHeaderActivitySummary();
+        renderExternalApps();
+        renderPendingWhatsappList();
+        syncPendingImpiantoActions();
+        fetchWeather();
+        renderNextActionCard();
+      });
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
       () => upsertCurrentPlatformUser(),
@@ -2858,6 +2882,7 @@ if (!auth || firebaseInitError) {
   console.log("APP READY");
   hideStartupLoading();
 }, (error) => {
+  clearTimeout(authCheckWatchdog);
   console.error("Errore verifica login Firebase:", error);
   authStateResolved = true;
   currentUser = null;

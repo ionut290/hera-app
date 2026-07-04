@@ -2826,7 +2826,13 @@ if (!auth || firebaseInitError) {
 
   if (loggedIn) {
     hideStartupLoading();
-    loadStartupCoreCollections()
+    const loadInitialData = isSnowServiceRoute() && canManageData()
+      ? (() => {
+          document.body.classList.add("snow-management-context");
+          return loadSnowModeData();
+        })
+      : loadStartupCoreCollections;
+    loadInitialData()
       .catch((error) => {
         console.error("Caricamento iniziale collezioni principali non completato:", error);
       })
@@ -2834,8 +2840,8 @@ if (!auth || firebaseInitError) {
         renderHeaderActivitySummary();
         renderExternalApps();
         renderPendingWhatsappList();
-        syncPendingImpiantoActions();
         fetchWeather();
+        if (!isSnowServiceContext()) syncPendingImpiantoActions();
         renderNextActionCard();
       });
     runDeferredStartupTasks([
@@ -2897,6 +2903,72 @@ if (!auth || firebaseInitError) {
 }
 
 
+function stopNormalDataSubscriptionsForSnowMode() {
+  stopCommesseSubscription();
+  stopSquadreSubscription();
+  stopPersonaleSubscription();
+  stopMezziSubscription();
+}
+
+function clearSnowModeRuntimeData() {
+  snowServiceState.clients = [];
+  snowServiceState.routes = [];
+  snowServiceState.vehicles = [];
+  snowServiceState.operators = [];
+  snowServiceState.reports = [];
+  commesseById = new Map();
+  squadreByCommessa = new Map();
+  squadreHistoryByDate = new Map();
+  personaleRecords = [];
+  mezziRecords = [];
+  commesseLoadState = { status: "idle", message: "" };
+  squadreLoadState = { status: "idle", message: "" };
+  personaleLoadState = { status: "idle", message: "" };
+  mezziLoadState = { status: "idle", message: "" };
+}
+
+function stopSnowServiceCollections() {
+  snowServiceUnsubscribers.forEach((unsubscribe) => unsubscribe && unsubscribe());
+  snowServiceUnsubscribers = [];
+}
+
+function stopSnowModeData() {
+  stopSnowServiceCollections();
+  stopCommesseSubscription();
+  stopSquadreSubscription();
+  stopPersonaleSubscription();
+  stopMezziSubscription();
+  clearSnowModeRuntimeData();
+}
+
+function loadSnowModeData() {
+  if (!currentUser || !isSnowServiceContext()) return Promise.resolve(false);
+  return Promise.all([
+    subscribeCommesse(),
+    subscribeSquadre(),
+    subscribePersonale(),
+    subscribeMezzi(),
+    subscribeSnowServiceCollections()
+  ]);
+}
+
+function reloadNormalModeData() {
+  if (!currentUser) return Promise.resolve(false);
+  commesseById = new Map();
+  squadreByCommessa = new Map();
+  squadreHistoryByDate = new Map();
+  personaleRecords = [];
+  mezziRecords = [];
+  renderCommesseHomeList();
+  renderSquadre();
+  return Promise.all([
+    subscribeCommesse(),
+    subscribeSquadre(),
+    subscribePersonale(),
+    subscribeMezzi()
+  ]);
+}
+
 async function loadStartupCoreCollections() {
   if (!currentUser) return;
   startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
@@ -2917,7 +2989,6 @@ async function loadStartupCoreCollections() {
       subscribeCommesse(),
       subscribeMezzi()
     ]);
-    subscribeSnowServiceCollections();
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
@@ -17853,7 +17924,7 @@ async function addPersonale(event) {
     alert("Inserisci Cognome e Nome del personale.");
     return;
   }
-  await db.collection("personale").add({
+  await db.collection(getPersonaleCollectionName()).add({
     nome,
     cognome,
     fullName: `${cognome} ${nome}`.trim(),
@@ -17888,9 +17959,9 @@ async function addMezzo(event) {
 
   const existing = findExistingMezzoByNId(mezzo.nId);
   if (existing) {
-    await db.collection("mezzi").doc(existing.id).set(buildMezzoPatch(existing, mezzo), { merge: true });
+    await db.collection(getMezziCollectionName()).doc(existing.id).set(buildMezzoPatch(existing, mezzo), { merge: true });
   } else {
-    await db.collection("mezzi").add({
+    await db.collection(getMezziCollectionName()).add({
       nome: mezzo.nId,
       ...mezzo,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -17939,10 +18010,10 @@ async function importMezziFromExcel() {
   importByKey.forEach((mezzo, key) => {
     const existing = existingByKey.get(key);
     if (existing) {
-      batch.set(db.collection("mezzi").doc(existing.id), buildMezzoPatch(existing, mezzo), { merge: true });
+      batch.set(db.collection(getMezziCollectionName()).doc(existing.id), buildMezzoPatch(existing, mezzo), { merge: true });
       return;
     }
-    const ref = db.collection("mezzi").doc();
+    const ref = db.collection(getMezziCollectionName()).doc();
     batch.set(ref, {
       nome: mezzo.nId || "",
       ...mezzo,
@@ -18168,8 +18239,9 @@ function subscribePersonale() {
     return Promise.resolve(false);
   }
   personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
-  console.log("Query personale avviata", { collection: "personale", orderBy: "createdAt asc" });
-  const query = db.collection("personale").orderBy("createdAt", "asc");
+  const personaleCollectionName = getPersonaleCollectionName();
+  console.log("Query personale avviata", { collection: personaleCollectionName, orderBy: "createdAt asc" });
+  const query = db.collection(personaleCollectionName).orderBy("createdAt", "asc");
   const applySnapshot = (snapshot) => {
     personaleRecords = snapshot.docs.map(normalizePersonaleDocument);
     personaleLoadState = { status: "loaded", message: "" };
@@ -18391,7 +18463,7 @@ async function savePersonaleDetail(personId, root) {
     };
     return acc;
   }, {});
-  await db.collection("personale").doc(personId).set({
+  await db.collection(getPersonaleCollectionName()).doc(personId).set({
     nome, cognome, fullName: `${cognome} ${nome}`.trim(),
     telefono: String(root.querySelector(".personale-edit-tel")?.value || "").trim(),
     email: String(root.querySelector(".personale-edit-email")?.value || "").trim(),
@@ -18409,8 +18481,9 @@ function subscribeMezzi() {
     return Promise.resolve(false);
   }
   mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
-  console.log("Query mezzi avviata", { collection: "mezzi", orderBy: "createdAt asc" });
-  const query = db.collection("mezzi").orderBy("createdAt", "asc");
+  const mezziCollectionName = getMezziCollectionName();
+  console.log("Query mezzi avviata", { collection: mezziCollectionName, orderBy: "createdAt asc" });
+  const query = db.collection(mezziCollectionName).orderBy("createdAt", "asc");
   const applySnapshot = (snapshot) => {
     mezziRecords = snapshot.docs.map(normalizeMezzoDocument);
     mezziLoadState = { status: "loaded", message: "" };
@@ -18662,7 +18735,7 @@ function renderMezziList(container, items, onDelete) {
           if (!canManageData()) return;
           postiSelect.disabled = true;
           try {
-            await db.collection("mezzi").doc(item.id).update({
+            await db.collection(getMezziCollectionName()).doc(item.id).update({
               posti: normalizeMezzoPosti(postiSelect.value)
             });
           } catch (error) {
@@ -18690,13 +18763,13 @@ function renderMezziList(container, items, onDelete) {
 async function deletePersonale(id, nome) {
   if (!canManageData()) return;
   if (!window.confirm(`Eliminare ${nome} dal personale?`)) return;
-  await db.collection("personale").doc(id).delete();
+  await db.collection(getPersonaleCollectionName()).doc(id).delete();
 }
 
 async function deleteMezzo(id, nome) {
   if (!canManageData()) return;
   if (!window.confirm(`Eliminare ${nome} dai mezzi?`)) return;
-  await db.collection("mezzi").doc(id).delete();
+  await db.collection(getMezziCollectionName()).doc(id).delete();
 }
 
 async function autofillSquadraForm() {
@@ -25773,11 +25846,11 @@ async function backupSquadreSnapshotToDrive(dateKey, squadraPayload) {
 
 async function buildAppBackupPayload(dateKey, squadraPayload) {
   const [commesseSnapshot, personaleSnapshot, mezziSnapshot, squadreCorrentiSnapshot, squadreStoricoSnapshot] = await Promise.all([
-    db.collection("commesse").get(),
-    db.collection("personale").get(),
-    db.collection("mezzi").get(),
-    db.collection("squadreCommesse").get(),
-    db.collection("squadreStorico").where("dateKey", "==", dateKey).get()
+    db.collection(getCommesseCollectionName()).get(),
+    db.collection(getPersonaleCollectionName()).get(),
+    db.collection(getMezziCollectionName()).get(),
+    db.collection(getSquadreCurrentCollectionName()).get(),
+    db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", dateKey).get()
   ]);
   return {
     exportedAt: new Date().toISOString(),
@@ -26295,6 +26368,8 @@ function getSquadreCurrentCollectionName() { return isSnowServiceContext() ? "ne
 function getSquadreHistoryCollectionName() { return isSnowServiceContext() ? "neve_squadre_storico" : "squadreStorico"; }
 function getOreReportsCollectionName() { return isSnowServiceContext() ? "neve_ore" : "oreReports"; }
 function getOreApprovalRequestsCollectionName() { return isSnowServiceContext() ? "neve_ore_richieste" : "oreApprovalRequests"; }
+function getPersonaleCollectionName() { return isSnowServiceContext() ? "neve_personale" : "personale"; }
+function getMezziCollectionName() { return isSnowServiceContext() ? "neve_mezzi" : "mezzi"; }
 
 function openSnowServicePage() {
   if (!canManageData()) {
@@ -26303,17 +26378,17 @@ function openSnowServicePage() {
   }
   document.body.classList.add("snow-management-context");
   window.location.hash = "servizio-neve";
-  subscribeCommesse();
-  subscribeSquadre();
+  stopNormalDataSubscriptionsForSnowMode();
+  loadSnowModeData();
   applyRoute();
 }
 
 function closeSnowServicePage() {
+  stopSnowModeData();
   document.body.classList.remove("snow-management-context");
   configureSnowSideMenu(false);
   window.location.hash = "";
-  subscribeCommesse();
-  subscribeSquadre();
+  reloadNormalModeData();
   applyRoute();
 }
 
@@ -26463,15 +26538,15 @@ function renderSnowService() {
   renderSnowServiceCommesse();
 }
 function subscribeSnowServiceCollections() {
-  snowServiceUnsubscribers.forEach((unsubscribe) => unsubscribe && unsubscribe());
-  snowServiceUnsubscribers = [];
-  if (!db || !currentUser) return;
+  stopSnowServiceCollections();
+  if (!db || !currentUser || !isSnowServiceContext()) return Promise.resolve(false);
   Object.entries({ clients: SNOW_SERVICE_COLLECTIONS.clients, routes: SNOW_SERVICE_COLLECTIONS.routes, vehicles: SNOW_SERVICE_COLLECTIONS.vehicles, operators: SNOW_SERVICE_COLLECTIONS.operators, reports: SNOW_SERVICE_COLLECTIONS.reports }).forEach(([key, collectionName]) => {
     snowServiceUnsubscribers.push(db.collection(collectionName).orderBy("createdAt", "desc").onSnapshot((snapshot) => {
       snowServiceState[key] = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       renderSnowService();
     }, (error) => console.warn(`Errore caricamento ${collectionName}:`, error)));
   });
+  return Promise.resolve(true);
 }
 
 async function addSnowServiceItem(type) {

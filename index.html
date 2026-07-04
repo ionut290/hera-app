@@ -202,21 +202,16 @@
           <p class="weather-alert-banner">❄️ Monitoraggio dedicato a gelo, neve e viabilità.</p>
         </section>
 
-        <section class="card user-card">
-          <div class="user-details-panel">
-            <div class="weather-status-grid">
-              <p class="status status-chip">Servizio Neve attivo</p>
-              <p class="muted status-chip">Ambiente: ❄️ neve</p>
-              <p class="muted status-chip status-chip-drive">Dati separati: neve_commesse, neve_squadre, neve_ore</p>
-            </div>
-          </div>
-        </section>
       </section>
 
       <section class="card squadre-card">
         <div class="section-head squadre-section-head">
           <h2>Squadre per commessa</h2>
           <span class="pill squadre-status-pill">Servizio neve</span>
+        </div>
+        <div id="snow-squadre-filter-controls" class="inline-form squadre-filter-controls hidden" aria-label="Filtro giorno squadre neve">
+          <input id="snow-squadre-filter-date" type="date" aria-label="Giorno squadre neve">
+          <button id="snow-squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
         </div>
         <div id="snow-squadre-lista" class="squadre-lista"></div>
       </section>

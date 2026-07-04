@@ -235,6 +235,21 @@ h2 { font-size: 1.05rem; }
   gap: 8px;
 }
 
+.hours-team-status {
+  display: grid;
+  gap: 8px;
+}
+
+.hours-team-status-section {
+  display: grid;
+  gap: 4px;
+}
+
+.hours-team-status-section ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .hours-commessa-head {
   display: flex;
   justify-content: space-between;

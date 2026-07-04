@@ -6630,7 +6630,7 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
   const hasAssignedSquadra = squadRows.some(isSquadraRowFilled);
   if (!dateKey || !hasAssignedSquadra) return null;
-  if (hasHoursRecordForCommessaDateSquadra(commessaId, dateKey)) return null;
+  if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   const squadraIndex = assignment?.squadraIndex || "";
   return { dateKey, assignment, squadData, squadRows, squadraIndex };
@@ -6769,6 +6769,10 @@ function openCommessaFromSquadre(commessa = {}) {
   selectCommessa(target.id, target.nome || "Commessa", target.codice || "");
 }
 
+function getHoursParticipantDisplayName(participant = {}) {
+  return String(participant.operatore || participant.squadraLabel || "Operatore").trim() || "Operatore";
+}
+
 function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (!currentUser) {
     alert("Devi fare login per inserire le ore.");
@@ -6780,8 +6784,11 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     return;
   }
   const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
-  if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue)) {
-    alert("Le ore per questa commessa sono già state inserite e sono visibili in Visualizza ore.");
+  const requiredParticipants = Array.from(getRequiredHoursParticipantsForCommessaDate(id, targetDateValue).values());
+  const completedParticipants = getCompletedHoursParticipantsForCommessaDate(id, targetDateValue);
+  const missingParticipants = requiredParticipants.filter((participant) => !completedParticipants.has(participant.key));
+  if (requiredParticipants.length && !missingParticipants.length) {
+    alert("✅ Ore già completate per tutta la squadra.");
     renderSquadre();
     return;
   }
@@ -6790,12 +6797,26 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (ui.hoursDate) ui.hoursDate.value = targetDateValue;
   if (ui.hoursCommesseList) {
     ui.hoursCommesseList.innerHTML = "";
-    const card = addHoursCommessaBlock({ commessaId: id });
-    applyHoursSuggestedOperators(card, { force: true });
+    const card = addHoursCommessaBlock({
+      commessaId: id,
+      quickTeamHours: true,
+      title: "Inserimento ore squadra",
+      alreadyInserted: Array.from(completedParticipants.values()).map(getHoursParticipantDisplayName),
+      toComplete: missingParticipants.map(getHoursParticipantDisplayName),
+      rows: missingParticipants.length
+        ? missingParticipants.map((participant) => ({
+            operatore: getHoursParticipantDisplayName(participant),
+            ore: "",
+            squadraIndex: participant.squadraIndex || "",
+            squadraLabel: participant.squadraLabel || ""
+          }))
+        : undefined
+    });
+    if (!missingParticipants.length) applyHoursSuggestedOperators(card, { force: true });
   }
   if (ui.hoursFeedback) {
     const commessaName = commesseById.get(id)?.nome || "Commessa";
-    ui.hoursFeedback.textContent = `Compila le ore per ${commessaName}: il pulsante +ORE apre il form standard Gestione ore.`;
+    ui.hoursFeedback.textContent = `Compila le ore mancanti per ${commessaName}.`;
   }
   setTimeout(() => ui.hoursForm?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
 }
@@ -6891,7 +6912,7 @@ function addHoursCommessaBlock(blockData = null) {
   card.className = "hours-commessa-card";
   card.innerHTML = `
     <div class="hours-commessa-head">
-      <h3>Commessa</h3>
+      <h3>${escapeHTML(blockData?.title || "Commessa")}</h3>
       <div class="item-actions">
         <button type="button" class="btn hours-compact-pill hours-export-global-btn">📊 Excel</button>
         <button type="button" class="btn hours-compact-pill hours-remove-commessa-btn">🗑 Rimuovi</button>
@@ -6904,6 +6925,7 @@ function addHoursCommessaBlock(blockData = null) {
     <div class="hours-commesse-buttons hours-commessa-picker" aria-label="Seleziona commessa"></div>
     <p class="hours-team-label muted hidden"></p>
     <p class="hours-inserted-by-label muted hidden"></p>
+    <div class="hours-team-status hidden" aria-live="polite"></div>
     <div class="hours-operator-list"></div>
     <div class="item-actions">
       <button type="button" class="btn hours-add-operator-btn">+ Aggiungi operatore</button>
@@ -6972,6 +6994,24 @@ function addHoursCommessaBlock(blockData = null) {
         insertedByLabel.textContent = `Inserito da: ${blockData.insertedBy}`;
         insertedByLabel.classList.remove("hidden");
       }
+    }
+    if (blockData.quickTeamHours) {
+      const statusBox = card.querySelector(".hours-team-status");
+      const alreadyInserted = Array.isArray(blockData.alreadyInserted) ? blockData.alreadyInserted.filter(Boolean) : [];
+      const toComplete = Array.isArray(blockData.toComplete) ? blockData.toComplete.filter(Boolean) : [];
+      if (statusBox) {
+        statusBox.innerHTML = `
+          <section class="hours-team-status-section">
+            <strong>✅ Già inseriti</strong>
+            ${alreadyInserted.length ? `<ul>${alreadyInserted.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
+          </section>
+          <section class="hours-team-status-section">
+            <strong>🟡 Da completare</strong>
+            ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
+          </section>`;
+        statusBox.classList.remove("hidden");
+      }
+      card.querySelector(".hours-add-operator-btn")?.classList.add("hidden");
     }
     card.querySelector(".hours-note").value = blockData.note || "";
     const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];

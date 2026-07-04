@@ -173,41 +173,52 @@
 
 
     <section id="snow-service-page" class="hidden" aria-hidden="true">
-      <section class="card snow-service-card">
-        <div class="snow-service-head">
-          <button id="snow-service-back-btn" class="commessa-back-btn" type="button" aria-label="Torna alla home">←</button>
-          <div>
-            <p class="snow-service-kicker">Modulo indipendente</p>
-            <h2>❄️ Servizio Neve</h2>
-            <p class="muted">Commesse neve, comuni/clienti, percorsi, mappa, operatori, mezzi e segnalazioni separati dalla Manutenzione Verde.</p>
-          </div>
-          <div class="snow-service-menu-wrap">
-            <button id="snow-service-menu-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu Servizio Neve" aria-expanded="false">⋮</button>
-            <div id="snow-service-menu" class="snow-service-menu hidden" role="menu">
-              <button type="button" data-snow-action="add-client" role="menuitem">Aggiungi Comune / Cliente</button>
-              <button type="button" data-snow-action="add-route" role="menuitem">Aggiungi Percorso neve</button>
-              <button type="button" data-snow-action="manage-vehicles" role="menuitem">Gestione mezzi neve</button>
-              <button type="button" data-snow-action="manage-operators" role="menuitem">Gestione operatori</button>
-              <button type="button" data-snow-action="settings" role="menuitem">Impostazioni servizio neve</button>
+      <header class="card logo-card">
+        <div class="logo-head">
+          <button class="header-icon-btn" type="button" aria-label="Servizio Neve">❄️</button>
+          <h1>Servizio Neve</h1>
+          <div class="logo-head-actions">
+            <div class="logo-head-action-icons">
+              <button id="snow-refresh-app-btn" class="menu-toggle-btn refresh-header-btn" type="button" aria-label="Aggiorna dati neve">↻</button>
+              <button id="snow-service-menu-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu Servizio Neve" aria-expanded="false">⋮</button>
             </div>
+            <button id="snow-service-back-btn" class="snow-service-btn" type="button" aria-label="Torna alla Home normale">☀️ SOLE</button>
           </div>
         </div>
-        <section class="card squadre-card snow-squadre-card">
-          <div class="section-head squadre-section-head">
-            <h2>Squadre neve per commessa</h2>
-            <span class="pill squadre-status-pill">Servizio neve</span>
+        <div class="logo-meta">
+          <p class="muted">Ambiente neve: commesse, squadre e ore separate.</p>
+          <p class="muted">Personale e mezzi condivisi con la Home normale.</p>
+        </div>
+      </header>
+
+      <section class="home-top-grid">
+        <section class="card weather-card" id="snow-weather-card" role="button" tabindex="0">
+          <div class="section-head">
+            <h2>🌦️ Meteo operativo</h2>
+            <span class="pill">Pioggia/Neve/Nebbia</span>
           </div>
-          <div id="snow-commesse-list" class="squadre-lista"></div>
+          <p id="snow-weather-summary" class="muted weather-summary">Usa il pannello meteo operativo della Home per valutare il servizio neve.</p>
+          <div id="snow-weather-risks" class="weather-risks"></div>
+          <p class="weather-alert-banner">❄️ Monitoraggio dedicato a gelo, neve e viabilità.</p>
         </section>
 
-        <div class="snow-service-grid">
-          <article class="snow-panel"><h3>🏘️ Comuni / Clienti assegnati</h3><div id="snow-clients-list" class="simple-list"></div></article>
-          <article class="snow-panel"><h3>🛣️ Percorsi neve</h3><div id="snow-routes-list" class="simple-list"></div></article>
-          <article class="snow-panel"><h3>🗺️ Mappa neve dedicata</h3><div id="snow-map" class="snow-map-placeholder">Mappa neve separata pronta per percorsi e punti dedicati.</div></article>
-          <article class="snow-panel"><h3>🚜 Mezzi neve</h3><div id="snow-vehicles-list" class="simple-list"></div></article>
-          <article class="snow-panel"><h3>🧑‍🔧 Operatori assegnati</h3><div id="snow-operators-list" class="simple-list"></div></article>
-          <article class="snow-panel"><h3>⚠️ Segnalazioni neve</h3><div id="snow-reports-list" class="simple-list"></div></article>
+        <section class="card user-card">
+          <div class="user-details-panel">
+            <div class="weather-status-grid">
+              <p class="status status-chip">Servizio Neve attivo</p>
+              <p class="muted status-chip">Ambiente: ❄️ neve</p>
+              <p class="muted status-chip status-chip-drive">Dati separati: neve_commesse, neve_squadre, neve_ore</p>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="card squadre-card">
+        <div class="section-head squadre-section-head">
+          <h2>Squadre per commessa</h2>
+          <span class="pill squadre-status-pill">Servizio neve</span>
         </div>
+        <div id="snow-squadre-lista" class="squadre-lista"></div>
       </section>
     </section>
 

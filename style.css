@@ -10569,3 +10569,8 @@ body.worklimate-page-open {
   padding: 12px;
   font-weight: 800;
 }
+
+.snow-only-management { display: none; }
+.snow-management-context .snow-only-management { display: block; }
+.snow-roads-form { display: grid; gap: 0.75rem; }
+.snow-roads-form textarea { width: 100%; border: 1px solid var(--border, #cbd5e1); border-radius: 14px; padding: 0.85rem; font: inherit; resize: vertical; }

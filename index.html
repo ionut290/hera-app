@@ -406,6 +406,7 @@
           <button id="map-draw-redo-btn" class="btn hidden" type="button" disabled>🔁 Rifai</button>
           <button id="map-draw-clear-btn" class="btn hidden" type="button" disabled>🧹 Cancella</button>
           <button id="map-share-area-whatsapp-btn" class="btn hidden" type="button" disabled>📤 WhatsApp</button>
+          <button id="map-save-snow-road-btn" class="btn hidden" type="button" disabled>❄️ Salva via</button>
           <form id="map-fullscreen-number-search-form" class="map-number-search map-number-search--fullscreen" autocomplete="off">
             <input id="map-fullscreen-number-search-input" type="number" min="1" step="1" inputmode="numeric" placeholder="Cerca numero" aria-label="Cerca numero impianto">
             <button type="submit" class="btn btn-small">Vai</button>
@@ -570,6 +571,15 @@
         <button id="manual-impianto-submit" class="btn btn-primary" type="submit">Aggiungi impianto</button>
       </form>
       <p id="manual-impianto-feedback" class="muted"></p>
+      <section id="snow-roads-section" class="snow-only-management">
+        <h3>Vie neve da pulire</h3>
+        <p class="muted">Disponibile solo in Servizio Neve: incolla una via per riga. Vengono salvate nella commessa neve selezionata come cantieri indipendenti.</p>
+        <form id="snow-roads-form" class="snow-roads-form">
+          <textarea id="snow-roads-list" rows="5" placeholder="Via Roma\nVia Garibaldi\nSP 66 tratto ponte"></textarea>
+          <button class="btn btn-primary" type="submit">Aggiungi vie neve</button>
+        </form>
+        <p id="snow-roads-feedback" class="muted"></p>
+      </section>
     </div>
     <div id="panel-global" class="management-panel hidden">
       <h3>Global (separato dall'app principale)</h3>

@@ -65,6 +65,11 @@ service cloud.firestore {
     match /neve_commesse/{docId} {
       allow read: if signedIn();
       allow write: if isAdmin();
+
+      match /{document=**} {
+        allow read: if signedIn();
+        allow write: if isAdmin();
+      }
     }
 
 

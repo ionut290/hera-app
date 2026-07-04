@@ -13113,7 +13113,9 @@ function renderImpianti() {
     const detailsVisible = expandedImpiantoKey === impiantoKey;
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
-    const showWhazzupRecovery = !impianto.done && Boolean(whazzupSafetyState?.needsManualMove);
+    const showWhazzupRecovery = hasFailedFattoAttemptForImpianto(impianto);
+    const forceDoneDistanceAllowed = isForceImpiantoDoneDistanceAllowed(impianto);
+    const forceDoneEnabled = showWhazzupRecovery && forceDoneDistanceAllowed;
     const waitingForSync = isActionWaitingForSync(pendingAction);
     article.dataset.impiantoKey = impiantoKey;
     article.classList.toggle("is-expanded", detailsVisible);
@@ -13218,10 +13220,15 @@ function renderImpianti() {
         <button type="button" class="btn btn-small">Conferma FATTO</button>
       `;
       const moveBtn = warningBox.querySelector("button");
-      moveBtn?.addEventListener("click", async () => {
-        moveBtn.disabled = true;
-        await forceMoveImpiantoToFatti(impianto);
-      });
+      if (moveBtn) {
+        moveBtn.disabled = !forceDoneEnabled;
+        moveBtn.title = forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
+        moveBtn.addEventListener("click", async () => {
+          if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
+          moveBtn.disabled = true;
+          await forceMarkDone(impianto);
+        });
+      }
       details.appendChild(warningBox);
     }
     mainColumn.appendChild(details);
@@ -13275,14 +13282,20 @@ function renderImpianti() {
       forceDoneBtn.className = "impianto-force-done-btn";
       forceDoneBtn.textContent = "⚡ FORZA";
       forceDoneBtn.setAttribute("aria-label", "Forza chiusura impianto come fatto");
+      forceDoneBtn.title = !showWhazzupRecovery
+        ? FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE
+        : (forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+      forceDoneBtn.disabled = !forceDoneEnabled;
+      forceDoneBtn.classList.toggle("is-enabled", forceDoneEnabled);
       forceDoneBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
         forceDoneBtn.disabled = true;
         try {
           await forceMarkDone(impianto);
         } finally {
-          forceDoneBtn.disabled = false;
+          forceDoneBtn.disabled = !canUseForceImpiantoDone(impianto, { notify: false });
         }
       });
       secondaryActionsRow.appendChild(forceDoneBtn);
@@ -13332,14 +13345,19 @@ function renderImpianti() {
     if (canUseImpiantoAction("delete")) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
     if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
+        if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
         forceMoveDoneBtn.disabled = true;
         try {
           await forceMarkDone(impianto);
         } finally {
-          forceMoveDoneBtn.disabled = false;
+          forceMoveDoneBtn.disabled = !canUseForceImpiantoDone(impianto, { notify: false });
         }
       });
       forceMoveDoneBtn.classList.add("btn-primary");
+      forceMoveDoneBtn.disabled = !forceDoneEnabled;
+      forceMoveDoneBtn.title = !showWhazzupRecovery
+        ? FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE
+        : (forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
       managementActions.appendChild(forceMoveDoneBtn);
     }
     if (canManageData()) {
@@ -19387,22 +19405,34 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   }));
 }
 
-function canUseForceImpiantoDone(impianto) {
+const FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE = "⚠️ Prima premi FATTO. Usa FORZA solo se l’impianto rimane in DA FARE.";
+
+function hasFailedFattoAttemptForImpianto(impianto) {
+  if (impianto?.done) return false;
+  const safetyState = getWhazzupSafetyState(impianto);
+  return Boolean(safetyState?.needsManualMove);
+}
+
+function isForceImpiantoDoneDistanceAllowed(impianto) {
   if (canManageData()) return true;
-  if (!currentUserPos) {
-    alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
-    return false;
-  }
+  if (!currentUserPos) return false;
   const distanceKm = distanceFromUser(impianto);
-  if (!Number.isFinite(distanceKm) || distanceKm > 3) {
-    alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+  return Number.isFinite(distanceKm) && distanceKm <= 3;
+}
+
+function canUseForceImpiantoDone(impianto, options = {}) {
+  const notify = options.notify !== false;
+  if (!hasFailedFattoAttemptForImpianto(impianto)) {
+    if (notify) alert(FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE);
     return false;
   }
-  return true;
+  if (isForceImpiantoDoneDistanceAllowed(impianto)) return true;
+  if (notify) alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+  return false;
 }
 
 async function forceMarkDone(impianto) {
-  if (!canUseForceImpiantoDone(impianto)) return false;
+  if (!canUseForceImpiantoDone(impianto, { notify: true })) return false;
 
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;

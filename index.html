@@ -83,9 +83,11 @@
           <button id="user-toggle-btn" class="header-icon-btn" type="button" aria-label="Apri dati utente" aria-expanded="false" aria-controls="user-details-panel">👤</button>
           <h1>Varga Cantieri</h1>
           <div class="logo-head-actions">
+            <div class="logo-head-action-icons">
+              <button id="refresh-app-btn" class="menu-toggle-btn refresh-header-btn" type="button" aria-label="Aggiorna dati app">↻</button>
+              <button id="menu-toggle-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu">⋮</button>
+            </div>
             <button id="snow-service-btn" class="snow-service-btn" type="button" aria-label="Apri Servizio Neve">❄️ NEVE</button>
-            <button id="refresh-app-btn" class="menu-toggle-btn refresh-header-btn" type="button" aria-label="Aggiorna dati app">↻</button>
-            <button id="menu-toggle-btn" class="menu-toggle-btn" type="button" aria-label="Apri menu">⋮</button>
           </div>
         </div>
         <div class="logo-meta">
@@ -190,6 +192,14 @@
             </div>
           </div>
         </div>
+        <section class="card squadre-card snow-squadre-card">
+          <div class="section-head squadre-section-head">
+            <h2>Squadre neve per commessa</h2>
+            <span class="pill squadre-status-pill">Servizio neve</span>
+          </div>
+          <div id="snow-commesse-list" class="squadre-lista"></div>
+        </section>
+
         <div class="snow-service-grid">
           <article class="snow-panel"><h3>🏘️ Comuni / Clienti assegnati</h3><div id="snow-clients-list" class="simple-list"></div></article>
           <article class="snow-panel"><h3>🛣️ Percorsi neve</h3><div id="snow-routes-list" class="simple-list"></div></article>

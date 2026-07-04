@@ -1413,6 +1413,8 @@ const fullscreenHybridTileLayer = L.layerGroup([
 fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom);
 const fullscreenMarkerLayer = L.layerGroup().addTo(fullscreenMap);
 const fullscreenDrawLayer = L.layerGroup().addTo(fullscreenMap);
+const snowRoadLayer = L.layerGroup().addTo(map);
+const fullscreenSnowRoadLayer = L.layerGroup().addTo(fullscreenMap);
 const fullscreenBaseLayers = {
   "Mappa standard": fullscreenStandardTileLayer,
   "Satellite": fullscreenSatelliteTileLayer,
@@ -1505,6 +1507,7 @@ ui.menuOverlay?.addEventListener("click", closeSideMenu);
 ui.logoutBtn?.addEventListener("click", logout);
 ui.driveConnectBtn?.addEventListener("click", connectGoogleDrive);
 ui.commessaForm?.addEventListener("submit", createCommessa);
+document.getElementById("snow-roads-form")?.addEventListener("submit", addSnowRoadsToSelectedCommessa);
 ui.commessaType?.addEventListener("change", updateCommessaParentField);
 ui.openOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(true));
 ui.closeOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(false));
@@ -1594,6 +1597,7 @@ ui.mapDrawUndoBtn?.addEventListener("click", undoDrawnArea);
 ui.mapDrawRedoBtn?.addEventListener("click", redoDrawnArea);
 ui.mapDrawClearBtn?.addEventListener("click", clearDrawnArea);
 ui.mapShareAreaWhatsappBtn?.addEventListener("click", shareDrawnAreaViaWhatsapp);
+document.getElementById("map-save-snow-road-btn")?.addEventListener("click", saveDrawnSnowRoadPath);
 ui.mapFullscreenFeedbackClose?.addEventListener("click", () => ui.mapFullscreenFeedbackBanner?.classList.add("hidden"));
 ui.mapEnableLocationBtn?.addEventListener("click", () => { void requestLocationEnableFlow(); });
 ui.mapRetryLocationBtn?.addEventListener("click", () => { void requestLocationEnableFlow({ forceRetry: true }); });
@@ -1631,11 +1635,11 @@ ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
-ui.snowSquadreFilterDate?.addEventListener("change", () => setSquadreDateOverride(ui.snowSquadreFilterDate?.value || ""));
 ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
 ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
-ui.squadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
-ui.snowSquadreFilterClearBtn?.addEventListener("click", clearManualSquadreFilterDate);
+ui.squadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate());
+ui.snowSquadreFilterDate?.addEventListener("change", onSnowSquadreFilterDateChange);
+ui.snowSquadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate({ snow: true }));
 
 function syncCommesseHomeToggle() {
   const isVisible = Boolean(isCommesseHomeCardVisible);
@@ -3113,8 +3117,10 @@ function openMapFullscreenPage() {
   ui.mapFullscreenPage.classList.remove("hidden");
   ui.mapFullscreenBtn.textContent = "⤢ Mappa a schermo intero";
   ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
+  const saveSnowRoadBtn = document.getElementById("map-save-snow-road-btn");
+  saveSnowRoadBtn?.classList.toggle("hidden", !isSnowServiceContext());
   syncDrawAreaToolbarState();
-  setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
+  setFullscreenFeedback(isSnowServiceContext() ? "Seleziona una via neve, premi Disegna e salva il tracciato della strada." : "Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
     refreshFullscreenMapLayout();
@@ -3136,6 +3142,7 @@ function closeMapFullscreenPage() {
   ui.mapFullscreenPage.classList.add("hidden");
   ui.impiantiPage.classList.remove("hidden");
   ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
+  document.getElementById("map-save-snow-road-btn")?.classList.add("hidden");
   syncDrawAreaToolbarState();
   setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
@@ -3823,6 +3830,8 @@ function onFullscreenMapPointerUp(event) {
 
 function syncDrawAreaToolbarState() {
   if (ui.mapShareAreaWhatsappBtn) ui.mapShareAreaWhatsappBtn.disabled = drawnAreaPoints.length < 3;
+  const saveSnowRoadBtn = document.getElementById("map-save-snow-road-btn");
+  if (saveSnowRoadBtn) saveSnowRoadBtn.disabled = !isSnowServiceContext() || !selectedImpiantoData?.snowRoad || drawnAreaPoints.length < 2;
   if (ui.mapDrawUndoBtn) ui.mapDrawUndoBtn.disabled = drawnAreaPoints.length < 2;
   if (ui.mapDrawRedoBtn) ui.mapDrawRedoBtn.disabled = drawnAreaRedoStack.length < 2;
   if (ui.mapDrawClearBtn) ui.mapDrawClearBtn.disabled = drawnAreaPoints.length === 0;
@@ -3864,6 +3873,28 @@ function renderDrawnArea() {
   if (drawnAreaPoints.length >= 3) {
     L.polygon(drawnAreaPoints, { color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.12, weight: 3 }).addTo(fullscreenDrawLayer);
   }
+}
+
+async function saveDrawnSnowRoadPath() {
+  if (!isSnowServiceContext() || !selectedCommessaId || !selectedImpiantoData?.snowRoad) {
+    alert("Seleziona prima una via neve nella mappa.");
+    return;
+  }
+  if (drawnAreaPoints.length < 2) {
+    alert("Disegna almeno due punti sulla strada.");
+    return;
+  }
+  const path = drawnAreaPoints.map((point) => ({ lat: Number(point[0]), lng: Number(point[1]) }));
+  const impiantoId = selectedImpiantoData.id;
+  if (!impiantoId) return;
+  await db.collection("neve_commesse").doc(selectedCommessaId).collection("impianti").doc(impiantoId).set({
+    routePath: path,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
+  selectedImpiantoData = { ...selectedImpiantoData, routePath: path };
+  setFullscreenFeedback("Tracciato via neve salvato: la linea diventerà verde quando l’operatore passa sulla strada.");
+  renderMap();
 }
 
 function shareDrawnAreaViaWhatsapp() {
@@ -9746,6 +9777,47 @@ async function createCommessa(event) {
   updateCommessaParentField();
 }
 
+function parseSnowRoadLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => ({
+      denominazione: line,
+      indirizzo: line,
+      descrizioneVia: line,
+      tipologiaImpianto: "Via neve",
+      codicePrezzo: "NEVE-STRADA",
+      snowRoad: true,
+      roadStatus: "todo",
+      routePath: [],
+      done: false,
+      doneAt: null,
+      doneBy: "",
+      sortOrder: index + 1,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser?.email || ""
+    }));
+}
+
+async function addSnowRoadsToSelectedCommessa(event) {
+  event?.preventDefault?.();
+  if (!canManageData()) return alert("Solo un admin può aggiungere vie neve.");
+  if (!isSnowServiceContext()) return alert("Apri Servizio Neve per aggiungere vie neve separate.");
+  const commessaId = String(ui.commessaTargetSelect?.value || selectedCommessaId || "").trim();
+  if (!commessaId) return alert("Seleziona una commessa neve.");
+  const textarea = document.getElementById("snow-roads-list");
+  const rows = parseSnowRoadLines(textarea?.value || "");
+  if (!rows.length) return alert("Inserisci almeno una via, una per riga.");
+  const batch = db.batch();
+  const ref = db.collection("neve_commesse").doc(commessaId).collection("impianti");
+  rows.forEach((row) => batch.set(ref.doc(), row));
+  await batch.commit();
+  if (textarea) textarea.value = "";
+  const feedback = document.getElementById("snow-roads-feedback");
+  if (feedback) feedback.textContent = `${rows.length} vie neve aggiunte come cantieri da pulire.`;
+}
+
 function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot(async (doc) => {
     const data = doc.exists ? doc.data() : null;
@@ -9823,7 +9895,9 @@ function subscribeCommesse() {
     return Promise.resolve(false);
   }
 
-  const query = db.collection(getCommesseCollectionName()).orderBy("createdAt", "desc");
+  stopCommesseSubscription();
+  const commesseCollectionName = getCommesseCollectionName();
+  const query = db.collection(commesseCollectionName).orderBy("createdAt", "desc");
   const applyCommesseSnapshot = (snapshot, { fromListener = false } = {}) => {
     clearCommesseLoadTimeout();
     const receivedCommesse = [];
@@ -9853,7 +9927,7 @@ function subscribeCommesse() {
     renderNextActionCard();
   };
 
-  console.log("Query commesse avviata", { collection: "commesse", orderBy: "createdAt desc", mode: "getDocs initial" });
+  console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "createdAt desc", mode: "getDocs initial" });
   return runFirestoreGetWithRetry(query, {
     label: "LOAD COMMESSE",
     timeoutMs: 9000,
@@ -11676,6 +11750,7 @@ function subscribeImpianti() {
         runWhazzupPendingDoneSafetyCheck();
         preloadCommessaWeatherForVisibleImpianti();
         evaluateImpiantoProximityAlerts();
+        autoCompletePassedSnowRoads().catch((error) => console.warn("Completamento automatico vie neve non riuscito:", error));
         if (!currentUserPos) fetchWeather();
 
         const currentDoneSignature = rawImpianti
@@ -18389,12 +18464,13 @@ function subscribeSquadre() {
     return Promise.resolve(false);
   }
 
+  stopSquadreSubscription();
   const selectedDateKey = getActiveSquadreDateKey();
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
   console.log("LOAD SQUADRE START", {
-    collections: ["squadreStorico", "appConfig/squadreView"],
+    collections: [getSquadreHistoryCollectionName(), isSnowServiceContext() ? "appConfig/neveSquadreView" : "appConfig/squadreView"],
     dateKey: selectedDateKey,
     uid: currentUser.uid
   });
@@ -18444,8 +18520,9 @@ function subscribeSquadre() {
       renderCommesseHomeList();
     });
 
-  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", "squadreView"), {
-    label: "LOAD SQUADRE VIEW CONFIG",
+  const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
+  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId), {
+    label: isSnowServiceContext() ? "LOAD SQUADRE NEVE VIEW CONFIG" : "LOAD SQUADRE VIEW CONFIG",
     timeoutMs: 9000,
     retries: 1
   })
@@ -18454,7 +18531,13 @@ function subscribeSquadre() {
       const data = doc.exists ? doc.data() || {} : {};
       const sharedDate = String(data.selectedDateKey || "").trim();
       sharedSquadreViewConfigLoaded = true;
-      if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
+      if (isSnowServiceContext()) {
+        if (sharedDate && sharedDate !== snowSharedSquadreDateKey && !snowManualSquadreFilterDateKey) {
+          snowSharedSquadreDateKey = sharedDate;
+          syncSquadreDateInputs();
+          subscribeSquadre();
+        }
+      } else if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
         sharedSquadreDateKey = sharedDate;
         syncSquadreDateInputs();
         subscribeSquadre();
@@ -19113,39 +19196,56 @@ function initializeAutomaticSquadreDate() {
   renderSquadre();
 }
 
-function getActiveSquadreDateKey() {
+function getNormalSquadreDateKey() {
   if (manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
   if (sharedSquadreDateKey) return sharedSquadreDateKey;
   if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
   return automaticSquadreDateKey;
 }
 
-function syncSquadreDateInputs() {
-  const activeDateKey = getActiveSquadreDateKey();
-  if (ui.squadreFilterDate) ui.squadreFilterDate.value = activeDateKey;
-  if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.value = activeDateKey;
-  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = activeDateKey;
+function getSnowSquadreDateKey() {
+  if (snowManualSquadreFilterDateKey) return snowManualSquadreFilterDateKey;
+  if (snowSharedSquadreDateKey) return snowSharedSquadreDateKey;
+  if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  return automaticSquadreDateKey;
 }
 
-async function persistSharedSquadreDate(dateKey) {
+function getActiveSquadreDateKey() {
+  return isSnowServiceContext() ? getSnowSquadreDateKey() : getNormalSquadreDateKey();
+}
+
+function syncSquadreDateInputs() {
+  const normalDateKey = getNormalSquadreDateKey();
+  const snowDateKey = getSnowSquadreDateKey();
+  if (ui.squadreFilterDate) ui.squadreFilterDate.value = normalDateKey;
+  if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.value = snowDateKey;
+  if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = normalDateKey;
+}
+
+async function persistSharedSquadreDate(dateKey, { snow = false } = {}) {
   if (!canManageData()) return;
-  await db.collection("appConfig").doc("squadreView").set({
+  await db.collection("appConfig").doc(snow ? "neveSquadreView" : "squadreView").set({
     selectedDateKey: dateKey || "",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
   }, { merge: true });
 }
 
-function setSquadreDateOverride(dateKey) {
+function setSquadreDateOverride(dateKey, { snow = false } = {}) {
   const selectedDateKey = String(dateKey || "").trim();
-  manualSquadreFilterDateKey = selectedDateKey;
-  sharedSquadreDateKey = selectedDateKey;
+  if (snow) {
+    snowManualSquadreFilterDateKey = selectedDateKey;
+    snowSharedSquadreDateKey = selectedDateKey;
+  } else {
+    manualSquadreFilterDateKey = selectedDateKey;
+    sharedSquadreDateKey = selectedDateKey;
+  }
   syncSquadreDateInputs();
   renderSquadre();
   if (isSnowServiceRoute()) renderSnowServiceCommesse();
   if (currentUser) subscribeSquadre();
-  persistSharedSquadreDate(manualSquadreFilterDateKey).catch((error) => {
-    console.error("Errore salvataggio giorno squadre condiviso:", error);
+  persistSharedSquadreDate(selectedDateKey, { snow }).catch((error) => {
+    console.error(snow ? "Errore salvataggio giorno squadre neve:" : "Errore salvataggio giorno squadre condiviso:", error);
   });
 }
 
@@ -19153,11 +19253,20 @@ function onSquadreFilterDateChange() {
   setSquadreDateOverride(ui.squadreFilterDate?.value || "");
 }
 
-function clearManualSquadreFilterDate() {
-  manualSquadreFilterDateKey = "";
-  sharedSquadreDateKey = "";
-  persistSharedSquadreDate("").catch((error) => {
-    console.error("Errore reset giorno squadre condiviso:", error);
+function onSnowSquadreFilterDateChange() {
+  setSquadreDateOverride(ui.snowSquadreFilterDate?.value || "", { snow: true });
+}
+
+function clearManualSquadreFilterDate({ snow = false } = {}) {
+  if (snow) {
+    snowManualSquadreFilterDateKey = "";
+    snowSharedSquadreDateKey = "";
+  } else {
+    manualSquadreFilterDateKey = "";
+    sharedSquadreDateKey = "";
+  }
+  persistSharedSquadreDate("", { snow }).catch((error) => {
+    console.error(snow ? "Errore reset giorno squadre neve:" : "Errore reset giorno squadre condiviso:", error);
   });
   initializeAutomaticSquadreDate();
   if (isSnowServiceRoute()) renderSnowServiceCommesse();
@@ -19398,7 +19507,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(doneAtDate) : null;
 
   if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
-  const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+  const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
   await Promise.all(impiantoIds.map((impiantoId) => {
     const payload = {
       done,
@@ -19773,7 +19882,7 @@ async function isImpiantoPersistedAsDone(impianto) {
   const impiantoIds = getImpiantoDocIds(impianto).filter(Boolean);
   if (!commessaId || !impiantoIds.length) return false;
   try {
-    const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+    const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
     const snapshots = await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).get()));
     return snapshots.some((snap) => snap.exists && isImpiantoDoneState(snap.data() || {}));
   } catch (error) {
@@ -20373,13 +20482,17 @@ function renderMap() {
   const bounds = [];
   mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
   const mapDataSignature = currentImpianti
-    .map((impianto) => `${buildImpiantoKey(impianto)}|${Number(impianto.gpsY) || ""}|${Number(impianto.gpsX) || ""}`)
+    .map((impianto) => `${buildImpiantoKey(impianto)}|${Number(impianto.gpsY) || ""}|${Number(impianto.gpsX) || ""}|${JSON.stringify(getSnowRoadPath(impianto))}|${impianto.done ? "1" : "0"}`)
     .sort()
     .join(";");
   let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
+    const snowRoadPath = getSnowRoadPath(impianto);
+    addSnowRoadPolylineToLayer(impianto, snowRoadLayer, map);
+    addSnowRoadPolylineToLayer(impianto, fullscreenSnowRoadLayer, fullscreenMap);
+    snowRoadPath.forEach((point) => bounds.push(point));
     const marker = addImpiantoMarkerToMapLayer(impianto, markerLayer, map);
     if (marker) impiantoMarkerByKey.set(impiantoKey, marker);
     const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer, fullscreenMap);
@@ -20429,6 +20542,39 @@ function keepSelectedFullscreenPopupOpen(markerForSelectedImpianto) {
   };
   requestAnimationFrame(reopenPopup);
   setTimeout(reopenPopup, 80);
+}
+
+
+function getSnowRoadPath(impianto) {
+  const raw = Array.isArray(impianto?.routePath) ? impianto.routePath : [];
+  return raw.map((point) => Array.isArray(point)
+    ? [Number(point[0]), Number(point[1])]
+    : [Number(point?.lat ?? point?.latitude), Number(point?.lng ?? point?.lon ?? point?.longitude)]
+  ).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+}
+
+function addSnowRoadPolylineToLayer(impianto, targetLayer, targetMap) {
+  const path = getSnowRoadPath(impianto);
+  if (!impianto?.snowRoad || path.length < 2) return null;
+  const color = impianto.done ? "#16a34a" : "#2563eb";
+  const line = L.polyline(path, { color, weight: 6, opacity: 0.9, lineCap: "round", lineJoin: "round" });
+  if (targetMap !== fullscreenMap) line.bindPopup(buildImpiantoMapPopup(impianto, impianto.tipoManutenzione || "Via neve"));
+  line.on("click", () => selectImpiantoForMapDetail(impianto));
+  line.addTo(targetLayer);
+  return line;
+}
+
+function distanceMetersToSnowRoad(impianto, position) {
+  const path = getSnowRoadPath(impianto);
+  if (!position || path.length < 2) return Number.POSITIVE_INFINITY;
+  return path.reduce((best, point) => Math.min(best, haversine(position.lat, position.lng, point[0], point[1]) * 1000), Number.POSITIVE_INFINITY);
+}
+
+async function autoCompletePassedSnowRoads() {
+  if (!isSnowServiceContext() || !selectedCommessaId || !currentUserPos) return;
+  const passed = currentImpianti.filter((impianto) => impianto?.snowRoad && !impianto.done && distanceMetersToSnowRoad(impianto, currentUserPos) <= 25);
+  if (!passed.length) return;
+  await setImpiantoDone(selectedCommessaId, passed.map((impianto) => impianto.id).filter(Boolean), true, { doneBy: currentUser?.displayName || currentUser?.email || "Operatore neve" });
 }
 
 function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
@@ -21002,6 +21148,8 @@ function clearMap() {
   impiantoMarkerByKey.clear();
   fullscreenImpiantoMarkerByKey.clear();
   markerLayer.clearLayers();
+  snowRoadLayer.clearLayers();
+  fullscreenSnowRoadLayer.clearLayers();
   fullscreenMarkerLayer.clearLayers();
 }
 
@@ -21682,6 +21830,7 @@ function initGeolocation(options = {}) {
     renderImpianti();
     renderMap();
     evaluateImpiantoProximityAlerts();
+    autoCompletePassedSnowRoads().catch((error) => console.warn("Completamento automatico vie neve non riuscito:", error));
   };
 
   navigator.geolocation.getCurrentPosition((pos) => {
@@ -23519,7 +23668,7 @@ async function notifyGpsDecision(request, approved) {
 }
 
 async function updateImpiantoCoordinates(commessaId, impiantoIds, lat, lng) {
-  const ref = db.collection("commesse").doc(commessaId).collection("impianti");
+  const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
   await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).update({
     gpsY: Number(lat),
     gpsX: Number(lng),
@@ -26127,6 +26276,8 @@ const SNOW_SERVICE_COMMESSE = [
   { nome: "Comune di Occhiobello", squadra: "Squadra Neve 9", operatori: "Caposquadra, autista trattore, supporto ponti", mezzi: "Trattore neve, lama laterale" }
 ];
 let snowServiceUnsubscribers = [];
+let snowManualSquadreFilterDateKey = "";
+let snowSharedSquadreDateKey = "";
 
 function isSnowServiceContext() {
   return window.location.hash === "#servizio-neve" || document.body.classList.contains("snow-management-context");

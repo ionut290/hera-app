@@ -13269,6 +13269,25 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    if (!impianto.done) {
+      const forceDoneBtn = document.createElement("button");
+      forceDoneBtn.type = "button";
+      forceDoneBtn.className = "impianto-force-done-btn";
+      forceDoneBtn.textContent = "⚡ FORZA";
+      forceDoneBtn.setAttribute("aria-label", "Forza chiusura impianto come fatto");
+      forceDoneBtn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!canUseForceImpiantoDone(impianto)) return;
+        forceDoneBtn.disabled = true;
+        try {
+          await handleImpiantoWhatsAppClick(impianto);
+        } finally {
+          forceDoneBtn.disabled = false;
+        }
+      });
+      secondaryActionsRow.appendChild(forceDoneBtn);
+    }
     const safetyQuickBtn = document.createElement("button");
     safetyQuickBtn.type = "button";
     safetyQuickBtn.className = "impianto-safety-quick-btn";
@@ -19368,6 +19387,20 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
     }
     return ref.doc(impiantoId).set(payload, { merge: true });
   }));
+}
+
+function canUseForceImpiantoDone(impianto) {
+  if (canManageData()) return true;
+  if (!currentUserPos) {
+    alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+    return false;
+  }
+  const distanceKm = distanceFromUser(impianto);
+  if (!Number.isFinite(distanceKm) || distanceKm > 3) {
+    alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+    return false;
+  }
+  return true;
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {

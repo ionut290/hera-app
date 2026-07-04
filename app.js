@@ -6646,9 +6646,78 @@ function createAddHoursButton(commessa, dateValue = "") {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    openHoursPageForCommessa(commessa.id, dateValue);
+    handleQuickAddHoursClick(commessa, dateValue);
   });
   return button;
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function buildSquadraDateCorrectionWhatsappUrl({ commessaName, squadraDate, todayDate, operatorName }) {
+  const message = [
+    "⚠️ RICHIESTA CORREZIONE GIORNO SQUADRA",
+    "",
+    "Ciao, sto provando a inserire le ore, ma la squadra risulta programmata per un giorno diverso da oggi.",
+    "",
+    `Commessa: ${commessaName || "Commessa"}`,
+    `Data squadra: ${formatDateKeyForDisplay(squadraDate)}`,
+    `Data attuale: ${formatDateKeyForDisplay(todayDate)}`,
+    `Operatore: ${operatorName || "Operatore"}`,
+    "",
+    "Puoi verificare e correggere il giorno della squadra?",
+    "",
+    "Grazie."
+  ].join("\n");
+  return `https://wa.me/393892352575?text=${encodeURIComponent(message)}`;
+}
+
+function openSquadraDifferentDayInfoPopup({ commessa, squadraDate, todayDate, onContinue }) {
+  const commessaName = commessa?.nome || "Commessa";
+  const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-modal";
+  overlay.innerHTML = `
+    <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-labelledby="squadra-day-warning-title">
+      <h2 id="squadra-day-warning-title">⚠️ Giorno diverso da oggi</h2>
+      <p>Stai inserendo le ore per una squadra programmata in un giorno diverso da oggi.</p>
+      <p>Se il giorno è sbagliato, avvisa l’amministratore per correggere la data della squadra.<br>Se invece vuoi continuare comunque, puoi inserire le ore per il giorno selezionato.</p>
+      <div class="confirm-modal-actions">
+        <button type="button" class="btn btn-primary" data-hours-day-continue>Inserisci lo stesso</button>
+        <button type="button" class="btn" data-hours-day-correction>Richiedi correzione</button>
+      </div>
+    </div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector("[data-hours-day-continue]")?.addEventListener("click", () => {
+    close();
+    onContinue?.();
+  });
+  overlay.querySelector("[data-hours-day-correction]")?.addEventListener("click", () => {
+    const url = buildSquadraDateCorrectionWhatsappUrl({ commessaName, squadraDate, todayDate, operatorName });
+    window.open(url, "_blank", "noopener,noreferrer");
+    close();
+  });
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+  document.body.appendChild(overlay);
+  overlay.querySelector("[data-hours-day-continue]")?.focus();
+}
+
+function handleQuickAddHoursClick(commessa, dateValue = "") {
+  const squadraDate = String(dateValue || "").trim() || getActiveSquadreDateKey() || getTodayDateKey();
+  const todayDate = getTodayDateKey();
+  if (!isSnowServiceContext() && squadraDate && squadraDate !== todayDate) {
+    openSquadraDifferentDayInfoPopup({
+      commessa,
+      squadraDate,
+      todayDate,
+      onContinue: () => openHoursPageForCommessa(commessa?.id, squadraDate)
+    });
+    return;
+  }
+  openHoursPageForCommessa(commessa?.id, squadraDate);
 }
 
 function appendAddHoursButtonIfAllowed(container, commessa, dateValue = "") {

@@ -488,6 +488,7 @@ const ui = {
   snowSquadreFilterControls: document.getElementById("snow-squadre-filter-controls"),
   snowSquadreFilterDate: document.getElementById("snow-squadre-filter-date"),
   snowSquadreFilterClearBtn: document.getElementById("snow-squadre-filter-clear-btn"),
+  snowServiceBtn: document.getElementById("snow-service-btn"),
   squadreFilterStatus: document.getElementById("squadre-filter-status"),
   personaleExcelFile: document.getElementById("personale-excel-file"),
   personaleImportBtn: document.getElementById("personale-import-btn"),
@@ -2943,6 +2944,8 @@ function updateAdminControls() {
   ui.operatorPositionsToggleBtn?.classList.add("hidden");
   if (ui.operatorPositionsToggleBtn) ui.operatorPositionsToggleBtn.disabled = true;
   ui.chatClearBtn?.classList.toggle("hidden", !canManage);
+  ui.snowServiceBtn?.classList.toggle("hidden", !canManage);
+  if (ui.snowServiceBtn) ui.snowServiceBtn.disabled = !canManage;
   if (ui.chatClearBtn) ui.chatClearBtn.disabled = !canManage;
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
@@ -3968,7 +3971,11 @@ function applyRoute() {
   const showPos = hash === "#pos" || (window.location.pathname === "/pos" && !hash);
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
-  const showSnowService = hash === "#servizio-neve";
+  const showSnowService = hash === "#servizio-neve" && canManageData();
+  if (hash === "#servizio-neve" && !canManageData()) {
+    closeSnowServicePage();
+    return;
+  }
   const commessaIdFromHash = commessaRoute.id;
   const resourceTypeFromHash = commessaRoute.resource;
   const showFuel = Boolean(fuelMatch);
@@ -26290,6 +26297,10 @@ function getOreReportsCollectionName() { return isSnowServiceContext() ? "neve_o
 function getOreApprovalRequestsCollectionName() { return isSnowServiceContext() ? "neve_ore_richieste" : "oreApprovalRequests"; }
 
 function openSnowServicePage() {
+  if (!canManageData()) {
+    alert("Solo l'admin può accedere al Servizio Neve.");
+    return;
+  }
   document.body.classList.add("snow-management-context");
   window.location.hash = "servizio-neve";
   subscribeCommesse();

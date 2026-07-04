@@ -2907,6 +2907,7 @@ async function loadStartupCoreCollections() {
       subscribeCommesse(),
       subscribeMezzi()
     ]);
+    subscribeSnowServiceCollections();
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
@@ -3927,6 +3928,7 @@ function applyRoute() {
   const showPos = hash === "#pos" || (window.location.pathname === "/pos" && !hash);
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
+  const showSnowService = hash === "#servizio-neve";
   const commessaIdFromHash = commessaRoute.id;
   const resourceTypeFromHash = commessaRoute.resource;
   const showFuel = Boolean(fuelMatch);
@@ -3941,7 +3943,7 @@ function applyRoute() {
   const showTombiniMap = Boolean(commessaRoute.tombini && selectedCommessaId === commessaIdFromHash && isTombiniEnabledForCurrentCommessa());
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap && !showTombiniMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices);
+  ui.homePage.classList.toggle("hidden", showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showPrivateDocs || showPos || showHours || showPersonalServices || showSnowService);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
@@ -3957,6 +3959,9 @@ function applyRoute() {
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
   ui.posPage?.classList.toggle("hidden", !showPos);
   ui.hoursPage.classList.toggle("hidden", !showHours);
+  document.getElementById("snow-service-page")?.classList.toggle("hidden", !showSnowService);
+  document.getElementById("snow-service-page")?.setAttribute("aria-hidden", String(!showSnowService));
+  if (showSnowService) renderSnowService();
   document.body.classList.toggle("resource-view-open", showResourceViewer);
   ui.mapFullscreenBtn.classList.toggle("hidden", showResourceViewer);
   ui.commessaNotesToggleBtn?.classList.toggle("hidden", showResourceViewer);
@@ -26087,4 +26092,117 @@ document.addEventListener("click", (event) => {
   if (event.target?.id !== "biogas-center-map-btn") return;
   if (!biogasMapInstance || !biogasUserMarker) return;
   biogasMapInstance.setView(biogasUserMarker.getLatLng(), Math.max(biogasMapInstance.getZoom(), 18));
+});
+
+const SNOW_SERVICE_COLLECTIONS = {
+  clients: "servizioNeveClienti",
+  routes: "servizioNevePercorsi",
+  vehicles: "servizioNeveMezzi",
+  operators: "servizioNeveOperatori",
+  reports: "servizioNeveSegnalazioni",
+  settings: "servizioNeveImpostazioni"
+};
+const snowServiceState = { clients: [], routes: [], vehicles: [], operators: [], reports: [] };
+let snowServiceUnsubscribers = [];
+
+function openSnowServicePage() {
+  window.location.hash = "servizio-neve";
+  applyRoute();
+}
+
+function closeSnowServicePage() {
+  window.location.hash = "";
+  applyRoute();
+}
+
+function isSnowServiceRoute() {
+  return window.location.hash === "#servizio-neve";
+}
+
+function renderSnowServiceList(element, rows, emptyText, renderRow) {
+  if (!element) return;
+  element.innerHTML = rows.length
+    ? rows.map(renderRow).join("")
+    : `<p class='muted'>${escapeHTML(emptyText)}</p>`;
+}
+
+function renderSnowService() {
+  const canManage = canManageData();
+  document.querySelectorAll("#snow-service-menu [data-snow-action]").forEach((button) => {
+    const adminOnly = button.dataset.snowAction !== "settings";
+    button.classList.toggle("hidden", adminOnly && !canManage);
+  });
+  renderSnowServiceList(document.getElementById("snow-clients-list"), snowServiceState.clients, "Nessun comune/cliente neve assegnato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Comune / Cliente")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='clients:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
+  renderSnowServiceList(document.getElementById("snow-routes-list"), snowServiceState.routes, "Nessun percorso neve creato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Percorso neve")}</strong><p>${escapeHTML(item.cliente || "")}</p><div class='item-actions'><button type='button' class='btn' data-snow-navigate='${escapeHTML(item.id)}'>Apri navigazione</button>${canManage ? `<button type='button' class='btn btn-danger' data-snow-delete='routes:${escapeHTML(item.id)}'>Elimina</button>` : ""}</div></article>`);
+  renderSnowServiceList(document.getElementById("snow-vehicles-list"), snowServiceState.vehicles, "Nessun mezzo neve configurato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Mezzo neve")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='vehicles:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
+  renderSnowServiceList(document.getElementById("snow-operators-list"), snowServiceState.operators, "Nessun operatore neve assegnato.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.nome || "Operatore")}</strong><p>${escapeHTML(item.comuni || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='operators:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
+  renderSnowServiceList(document.getElementById("snow-reports-list"), snowServiceState.reports, "Nessuna segnalazione neve.", (item) => `<article class='simple-list-item'><strong>${escapeHTML(item.titolo || "Segnalazione neve")}</strong><p>${escapeHTML(item.note || "")}</p>${canManage ? `<div class='item-actions'><button type='button' class='btn btn-danger' data-snow-delete='reports:${escapeHTML(item.id)}'>Elimina</button></div>` : ""}</article>`);
+}
+
+function subscribeSnowServiceCollections() {
+  snowServiceUnsubscribers.forEach((unsubscribe) => unsubscribe && unsubscribe());
+  snowServiceUnsubscribers = [];
+  if (!db || !currentUser) return;
+  Object.entries({ clients: SNOW_SERVICE_COLLECTIONS.clients, routes: SNOW_SERVICE_COLLECTIONS.routes, vehicles: SNOW_SERVICE_COLLECTIONS.vehicles, operators: SNOW_SERVICE_COLLECTIONS.operators, reports: SNOW_SERVICE_COLLECTIONS.reports }).forEach(([key, collectionName]) => {
+    snowServiceUnsubscribers.push(db.collection(collectionName).orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+      snowServiceState[key] = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderSnowService();
+    }, (error) => console.warn(`Errore caricamento ${collectionName}:`, error)));
+  });
+}
+
+async function addSnowServiceItem(type) {
+  if (!canManageData()) return alert("Solo admin può modificare il Servizio Neve.");
+  const config = {
+    clients: { collection: SNOW_SERVICE_COLLECTIONS.clients, prompt: "Nome Comune / Cliente neve", field: "nome" },
+    routes: { collection: SNOW_SERVICE_COLLECTIONS.routes, prompt: "Nome percorso neve", field: "nome" },
+    vehicles: { collection: SNOW_SERVICE_COLLECTIONS.vehicles, prompt: "Nome mezzo neve", field: "nome" },
+    operators: { collection: SNOW_SERVICE_COLLECTIONS.operators, prompt: "Nome operatore neve", field: "nome" },
+    reports: { collection: SNOW_SERVICE_COLLECTIONS.reports, prompt: "Titolo segnalazione neve", field: "titolo" }
+  }[type];
+  if (!config) return;
+  const value = String(window.prompt(config.prompt, "") || "").trim();
+  if (!value) return;
+  const note = String(window.prompt("Note / dettagli (opzionale)", "") || "").trim();
+  await db.collection(config.collection).add({ [config.field]: value, note, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: currentUser?.email || "" });
+}
+
+async function deleteSnowServiceItem(type, id) {
+  if (!canManageData()) return alert("Solo admin può eliminare elementi del Servizio Neve.");
+  const collection = SNOW_SERVICE_COLLECTIONS[type];
+  if (!collection || !id || !window.confirm("Eliminare questo elemento neve?")) return;
+  await db.collection(collection).doc(id).delete();
+}
+
+function handleSnowServiceMenuAction(action) {
+  if (action === "settings") return alert("Impostazioni servizio neve: modulo dedicato e separato dalla Manutenzione Verde.");
+  if (action === "add-client") return addSnowServiceItem("clients");
+  if (action === "add-route") return addSnowServiceItem("routes");
+  if (action === "manage-vehicles") return addSnowServiceItem("vehicles");
+  if (action === "manage-operators") return addSnowServiceItem("operators");
+}
+
+document.getElementById("snow-service-btn")?.addEventListener("click", openSnowServicePage);
+document.getElementById("snow-service-back-btn")?.addEventListener("click", closeSnowServicePage);
+document.getElementById("snow-service-menu-btn")?.addEventListener("click", () => {
+  const menu = document.getElementById("snow-service-menu");
+  const isOpen = !menu?.classList.contains("hidden");
+  menu?.classList.toggle("hidden", isOpen);
+  document.getElementById("snow-service-menu-btn")?.setAttribute("aria-expanded", String(!isOpen));
+});
+document.getElementById("snow-service-menu")?.addEventListener("click", (event) => {
+  const button = event.target?.closest?.("[data-snow-action]");
+  if (!button) return;
+  document.getElementById("snow-service-menu")?.classList.add("hidden");
+  handleSnowServiceMenuAction(button.dataset.snowAction || "");
+});
+document.getElementById("snow-service-page")?.addEventListener("click", (event) => {
+  const del = event.target?.closest?.("[data-snow-delete]");
+  if (del) {
+    const [type, id] = String(del.dataset.snowDelete || "").split(":");
+    deleteSnowServiceItem(type, id);
+    return;
+  }
+  const nav = event.target?.closest?.("[data-snow-navigate]");
+  if (nav) alert("Navigazione percorso neve pronta: collega coordinate dedicate nella mappa neve.");
 });

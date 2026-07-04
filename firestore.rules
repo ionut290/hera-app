@@ -66,6 +66,37 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /servizioNeveClienti/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /servizioNevePercorsi/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /servizioNeveMezzi/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /servizioNeveOperatori/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /servizioNeveSegnalazioni/{docId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /servizioNeveImpostazioni/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /worklimateRiskByImpianto/{riskId} {
       allow read: if signedIn();
       allow write: if isAdmin();

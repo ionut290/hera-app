@@ -10450,3 +10450,97 @@ body.worklimate-page-open {
   height: 1px;
   background: var(--border);
 }
+
+.snow-service-btn {
+  border: 1px solid #7dd3fc;
+  background: linear-gradient(135deg, #e0f7ff 0%, #bfdbfe 52%, #60a5fa 100%);
+  color: #075985;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
+  border-radius: 14px;
+  font-weight: 900;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.snow-service-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.snow-service-kicker {
+  margin: 0 0 4px;
+  color: #0284c7;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.snow-service-card {
+  background: linear-gradient(160deg, #fff 0%, #eff6ff 60%, #e0f2fe 100%);
+}
+
+.snow-service-menu-wrap {
+  position: relative;
+}
+
+.snow-service-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: min(270px, 78vw);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+
+.snow-service-menu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.snow-service-menu button:hover,
+.snow-service-menu button:focus-visible {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.snow-service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.snow-panel {
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 14px;
+}
+
+.snow-map-placeholder {
+  min-height: 180px;
+  border: 1px dashed #38bdf8;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #0369a1;
+  background: radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.35), transparent 35%), #f0f9ff;
+  padding: 12px;
+  font-weight: 800;
+}

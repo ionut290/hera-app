@@ -672,6 +672,9 @@ const ui = {
   hoursConfirmText: document.getElementById("hours-confirm-text"),
   hoursConfirmCancelBtn: document.getElementById("hours-confirm-cancel-btn"),
   hoursConfirmOkBtn: document.getElementById("hours-confirm-ok-btn"),
+  hoursDateWarningModal: document.getElementById("hours-date-warning-modal"),
+  hoursDateWarningTodayBtn: document.getElementById("hours-date-warning-today-btn"),
+  hoursDateWarningSelectedBtn: document.getElementById("hours-date-warning-selected-btn"),
   privateDocsPresetPinBtn: document.getElementById("private-docs-preset-pin-btn"),
   privateDocsPresetTesseraBtn: document.getElementById("private-docs-preset-tessera-btn"),
   privateDocsForm: document.getElementById("private-docs-form"),
@@ -1757,6 +1760,11 @@ ui.hoursConfirmCancelBtn?.addEventListener("click", () => closeHoursConfirmModal
 ui.hoursConfirmOkBtn?.addEventListener("click", () => closeHoursConfirmModal(true));
 ui.hoursConfirmModal?.addEventListener("click", (event) => {
   if (event.target === ui.hoursConfirmModal) closeHoursConfirmModal(false);
+});
+ui.hoursDateWarningTodayBtn?.addEventListener("click", () => closeHoursDateWarningModal("today"));
+ui.hoursDateWarningSelectedBtn?.addEventListener("click", () => closeHoursDateWarningModal("selected"));
+ui.hoursDateWarningModal?.addEventListener("click", (event) => {
+  if (event.target === ui.hoursDateWarningModal) closeHoursDateWarningModal("");
 });
 ui.privateDocsPresetPinBtn?.addEventListener("click", () => applyPrivateDocPreset("pin"));
 ui.privateDocsPresetTesseraBtn?.addEventListener("click", () => applyPrivateDocPreset("tessera"));
@@ -4285,10 +4293,51 @@ function closePrivateDocsPage() {
   applyRoute();
 }
 
+function getLocalDateKey(date = new Date()) {
+  return getDateKeyFromLocalDate(date);
+}
+
+let hoursDateWarningResolver = null;
+
+function closeHoursDateWarningModal(choice = "") {
+  if (ui.hoursDateWarningModal) {
+    ui.hoursDateWarningModal.classList.add("hidden");
+    ui.hoursDateWarningModal.setAttribute("aria-hidden", "true");
+  }
+  if (hoursDateWarningResolver) {
+    const resolve = hoursDateWarningResolver;
+    hoursDateWarningResolver = null;
+    resolve(choice);
+  }
+}
+
+function showHoursDateWarningModal() {
+  if (!ui.hoursDateWarningModal) return Promise.resolve("selected");
+  ui.hoursDateWarningModal.classList.remove("hidden");
+  ui.hoursDateWarningModal.setAttribute("aria-hidden", "false");
+  ui.hoursDateWarningTodayBtn?.focus();
+  return new Promise((resolve) => {
+    hoursDateWarningResolver = resolve;
+  });
+}
+
+async function confirmQuickHoursDateIfNeeded(dateValue) {
+  const selectedDate = String(dateValue || "").trim();
+  const today = getLocalDateKey();
+  if (canManageData() || !selectedDate || selectedDate === today) return selectedDate || today;
+  const choice = await showHoursDateWarningModal();
+  if (choice === "today") {
+    setSquadreDateOverride(today);
+    return today;
+  }
+  if (choice === "selected") return selectedDate;
+  return "";
+}
+
 function initHoursPage() {
-  if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
-  if (ui.hoursTableMonth) ui.hoursTableMonth.value = new Date().toISOString().slice(0, 7);
-  if (ui.hoursStatsMonth) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
+  if (ui.hoursDate) ui.hoursDate.value = getLocalDateKey();
+  if (ui.hoursTableMonth) ui.hoursTableMonth.value = getLocalDateKey().slice(0, 7);
+  if (ui.hoursStatsMonth) ui.hoursStatsMonth.value = getLocalDateKey().slice(0, 7);
   if (!ui.hoursCommesseList) return;
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   renderHoursOperatoriOptions();
@@ -4305,8 +4354,8 @@ function openHoursPage() {
     alert("Devi fare login per compilare la gestione ore.");
     return;
   }
-  if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
-  if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
+  if (ui.hoursDate) ui.hoursDate.value = getLocalDateKey();
+  if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = getLocalDateKey().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card")).forEach((card) => {
     applyHoursSuggestedOperators(card, { force: true });
@@ -6552,7 +6601,7 @@ function openCommessaFromSquadre(commessa = {}) {
   selectCommessa(target.id, target.nome || "Commessa", target.codice || "");
 }
 
-function openHoursPageForCommessa(commessaId, dateValue = "") {
+async function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (!currentUser) {
     alert("Devi fare login per inserire le ore.");
     return;
@@ -6562,7 +6611,9 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     alert("Commessa non disponibile per l'inserimento ore.");
     return;
   }
-  const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
+  const selectedDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || getLocalDateKey();
+  const targetDateValue = await confirmQuickHoursDateIfNeeded(selectedDateValue);
+  if (!targetDateValue) return;
   if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue)) {
     alert("Le ore per questa commessa sono già state inserite e sono visibili in Visualizza ore.");
     renderSquadre();

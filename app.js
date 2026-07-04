@@ -4346,10 +4346,22 @@ function showHoursDateWarningModal() {
   });
 }
 
-async function confirmQuickHoursDateIfNeeded(dateValue) {
+function isValidDateKey(value) {
+  const dateKey = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  return !Number.isNaN(parsed.getTime()) && getDateKeyFromLocalDate(parsed) === dateKey;
+}
+
+function getSafeQuickHoursDateKey(dateValue) {
   const selectedDate = String(dateValue || "").trim();
+  return isValidDateKey(selectedDate) ? selectedDate : getLocalDateKey();
+}
+
+async function confirmQuickHoursDateIfNeeded(dateValue) {
+  const selectedDate = getSafeQuickHoursDateKey(dateValue);
   const today = getLocalDateKey();
-  if (canManageData() || !selectedDate || selectedDate === today) return selectedDate || today;
+  if (selectedDate === today) return today;
   const choice = await showHoursDateWarningModal();
   if (choice === "today") {
     setSquadreDateOverride(today);
@@ -4357,6 +4369,13 @@ async function confirmQuickHoursDateIfNeeded(dateValue) {
   }
   if (choice === "selected") return selectedDate;
   return "";
+}
+
+function showQuickHoursErrorMessage(error) {
+  console.error("[ORE] Errore apertura rapida ore", error);
+  const message = "Errore durante l'apertura delle ore. L'app resta attiva: riprova o apri Gestione ore dal menu.";
+  if (ui.hoursFeedback) ui.hoursFeedback.textContent = message;
+  alert(message);
 }
 
 function initHoursPage() {
@@ -6569,10 +6588,14 @@ function createAddHoursButton(commessa, dateValue = "") {
   button.textContent = "+ ORE";
   button.dataset.addHoursCommessaId = commessa.id || "";
   button.setAttribute("aria-label", `Inserisci ore per ${commessa.nome || "commessa"}`);
-  button.addEventListener("click", (event) => {
+  button.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
-    openHoursPageForCommessa(commessa.id, dateValue);
+    try {
+      await openHoursPageForCommessa(commessa.id, dateValue);
+    } catch (error) {
+      showQuickHoursErrorMessage(error);
+    }
   });
   return button;
 }
@@ -6636,7 +6659,7 @@ async function openHoursPageForCommessa(commessaId, dateValue = "") {
     alert("Commessa non disponibile per l'inserimento ore.");
     return;
   }
-  const selectedDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || getLocalDateKey();
+  const selectedDateValue = getSafeQuickHoursDateKey(dateValue || getActiveSquadreDateKey());
   const targetDateValue = await confirmQuickHoursDateIfNeeded(selectedDateValue);
   if (!targetDateValue) return;
   if (hasHoursRecordForCommessaDateSquadra(id, targetDateValue)) {

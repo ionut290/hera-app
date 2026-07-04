@@ -26103,6 +26103,17 @@ const SNOW_SERVICE_COLLECTIONS = {
   settings: "servizioNeveImpostazioni"
 };
 const snowServiceState = { clients: [], routes: [], vehicles: [], operators: [], reports: [] };
+const SNOW_SERVICE_COMMESSE = [
+  { nome: "Comune di Ferrara", squadra: "Squadra Neve 1", operatori: "Caposquadra, autista lama, supporto sale", mezzi: "Lama 1, spargisale 1" },
+  { nome: "Comune di Vigarano Mainarda", squadra: "Squadra Neve 2", operatori: "Caposquadra, autista trattore, supporto viabilità", mezzi: "Trattore neve, spargisale 2" },
+  { nome: "Comune di Bondeno", squadra: "Squadra Neve 3", operatori: "Caposquadra, autista pala, operatore manuale", mezzi: "Pala gommata, pick-up neve" },
+  { nome: "Comune di Cento", squadra: "Squadra Neve 4", operatori: "Caposquadra, autista lama, supporto emergenze", mezzi: "Lama 2, spargisale 3" },
+  { nome: "Comune di Copparo", squadra: "Squadra Neve 5", operatori: "Caposquadra, autista trattore, operatore sale", mezzi: "Trattore lama, tramoggia sale" },
+  { nome: "Comune di Argenta", squadra: "Squadra Neve 6", operatori: "Caposquadra, autista mezzo 4x4, supporto reperibilità", mezzi: "4x4 neve, spargisale compatto" },
+  { nome: "Comune di Portomaggiore", squadra: "Squadra Neve 7", operatori: "Caposquadra, autista lama, supporto strade", mezzi: "Lama 3, pick-up sale" },
+  { nome: "Comune di Comacchio", squadra: "Squadra Neve 8", operatori: "Caposquadra, autista pala, supporto litorale", mezzi: "Pala compatta, spargisale 4" },
+  { nome: "Comune di Occhiobello", squadra: "Squadra Neve 9", operatori: "Caposquadra, autista trattore, supporto ponti", mezzi: "Trattore neve, lama laterale" }
+];
 let snowServiceUnsubscribers = [];
 
 function openSnowServicePage() {
@@ -26126,7 +26137,30 @@ function renderSnowServiceList(element, rows, emptyText, renderRow) {
     : `<p class='muted'>${escapeHTML(emptyText)}</p>`;
 }
 
+function renderSnowServiceCommesse() {
+  const list = document.getElementById("snow-commesse-list");
+  if (!list) return;
+  list.innerHTML = SNOW_SERVICE_COMMESSE.map((commessa, index) => `
+    <article class="squadra-item">
+      <div class="squadra-item-head">
+        <div class="squadra-commessa-title-wrap">
+          <strong>📁 ${escapeHTML(commessa.nome)}</strong>
+          <div class="snow-squadra-meta">
+            <span class="pill">Commessa neve ${index + 1}/9</span>
+            <span class="pill">❄️ Operativo</span>
+          </div>
+        </div>
+      </div>
+      <p><b>📅 Giorno:</b> ${escapeHTML(new Date().toLocaleDateString("it-IT"))}</p>
+      <div class="squadra-saved-row">
+        <p><b>👥 ${escapeHTML(commessa.squadra)}:</b> ${escapeHTML(commessa.operatori)}<br><b>🚚 Mezzi:</b> ${escapeHTML(commessa.mezzi)}</p>
+      </div>
+    </article>
+  `).join("");
+}
+
 function renderSnowService() {
+  renderSnowServiceCommesse();
   const canManage = canManageData();
   document.querySelectorAll("#snow-service-menu [data-snow-action]").forEach((button) => {
     const adminOnly = button.dataset.snowAction !== "settings";

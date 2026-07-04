@@ -5888,6 +5888,27 @@ textarea:focus-visible {
   align-items: center;
 }
 
+.impianto-force-done-btn {
+  border: 1px solid #f97316;
+  border-radius: 999px;
+  background: #f97316;
+  color: #fff;
+  cursor: pointer;
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.impianto-force-done-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .impianto-secondary-actions > * + * {
   position: relative;
   padding-left: 8px;

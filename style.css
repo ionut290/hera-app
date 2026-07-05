@@ -10612,3 +10612,19 @@ body.worklimate-page-open {
 .active-log-type.error { color: #dc2626; font-weight: 700; }
 .active-log-type.important { color: #ea580c; font-weight: 700; }
 .active-log-type.normal { color: #2563eb; font-weight: 700; }
+
+.active-users-log-row.is-clickable { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.active-users-log-row.is-clickable:hover,
+.active-users-log-row.is-clickable:focus-visible { border-color: rgba(37,99,235,.55); box-shadow: 0 10px 24px rgba(15,23,42,.10); transform: translateY(-1px); outline: none; }
+.active-log-status { display: inline-flex; margin-left: .35rem; padding: .1rem .45rem; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: .78rem; font-weight: 800; }
+.active-log-repeat { display: inline-flex; width: fit-content; padding: .15rem .5rem; border-radius: 999px; background: #fee2e2; color: #b91c1c; font-size: .82rem; }
+.active-log-detail-modal { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 16px; background: rgba(15,23,42,.55); }
+.active-log-detail-card { width: min(980px, 100%); max-height: min(88vh, 900px); overflow: auto; display: grid; gap: 1rem; padding: 1rem; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(15,23,42,.28); }
+.active-log-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+.active-log-detail-grid section { padding: .75rem; border: 1px solid rgba(148,163,184,.32); border-radius: 14px; background: #f8fafc; }
+.active-log-detail-grid section.wide { grid-column: 1 / -1; }
+.active-log-detail-grid h4 { margin: 0 0 .35rem; font-size: .85rem; color: #475569; text-transform: uppercase; letter-spacing: .03em; }
+.active-log-detail-grid p { margin: 0; }
+.active-log-detail-grid pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: .82rem; }
+.firestore-debug { border-color: rgba(220,38,38,.25) !important; background: #fff7ed !important; }
+.active-log-status-editor { display: flex; gap: .5rem; align-items: center; font-weight: 800; }

@@ -1989,14 +1989,34 @@ function getReadableFirestoreError(error, fallback = "Errore caricamento dati") 
 }
 
 function logFirestoreError(label, error, extra = {}) {
+  const firebaseCode = getFirebaseErrorCode(error);
+  const firebaseMessage = getFirebaseErrorMessage(error);
+  const firestoreFailureType = firebaseCode.includes("permission-denied")
+    ? "permesso negato"
+    : firebaseCode.includes("unavailable") || /network|offline|timeout/i.test(firebaseMessage)
+      ? "rete"
+      : /missing|not-found|undefined|null/i.test(firebaseMessage)
+        ? "dato mancante"
+        : "errore tecnico";
   console.error(`${label} ERROR`, {
     code: error?.code || "",
-    message: getFirebaseErrorMessage(error),
+    message: firebaseMessage,
     stack: error?.stack || "",
     ...extra
   }, error);
-  logActivity("errore_firestore", "Errori Firestore", { detail: `${label}: ${getFirebaseErrorMessage(error)}` });
-  if (getFirebaseErrorCode(error).includes("permission-denied")) {
+  logActivity("errore_firestore", "Errori Firestore", {
+    detail: `${label}: ${firebaseMessage}`,
+    technicalError: `${firebaseCode || "firestore-error"}: ${firebaseMessage}${error?.stack ? `\n${error.stack}` : ""}`,
+    errorCode: firebaseCode,
+    firestoreCollection: extra.collection || extra.collectionPath || extra.path || "Da verificare nel codice",
+    firestoreOperation: extra.operation || label || "Operazione Firestore",
+    firestoreFailureType,
+    unsavedData: extra.unsavedData || extra.payload || extra.data || "Possibili dati non salvati: verificare operazione e payload nel punto errore.",
+    firestoreRuleHint: extra.ruleHint || "Controllare allow read/write della collection per ruolo utente, uid, commessaId e campi obbligatori.",
+    possibleCause: firestoreFailureType === "permesso negato" ? "Le regole Firestore potrebbero bloccare l'utente o il ruolo corrente." : firestoreFailureType === "rete" ? "Connessione instabile, Firestore non raggiungibile o timeout." : "Dato assente/non valido oppure errore applicativo durante la richiesta.",
+    resolutionHint: "Copiare l'errore per Codex, controllare regole Firestore, collection, operazione e dati inviati; poi riprovare il salvataggio."
+  });
+  if (firebaseCode.includes("permission-denied")) {
     console.error("Verifica regole Firestore: l'utente autenticato deve poter leggere squadre, commesse, impianti, mezzi e utenti/platformUsers.");
   }
 }
@@ -26781,6 +26801,97 @@ function getUserRole(user = {}) {
   return adminEmails.has(normalizeEmail(user.email)) ? "Admin" : "Operatore";
 }
 
+
+const ACTIVE_LOG_STATUS_OPTIONS = ["Aperto", "In controllo", "Risolto", "Ignorato"];
+const ACTIVE_LOG_STATUS_STORAGE_KEY = "activeLogProblemStatuses";
+
+function getCurrentViewName() {
+  const hash = String(window.location.hash || "").replace(/^#/, "");
+  if (hash.startsWith("commessa=")) return parseCommessaHash(`#${hash}`).impianto ? "Dettaglio impianto" : "Commessa / impianti";
+  if (hash === "dettaglio-utenti-attivi") return "Console amministratore / Registro azioni";
+  if (hash === "ore") return "Gestione ore";
+  if (hash === "segnalazioni") return "Segnalazioni";
+  if (hash === "documenti") return "Documenti";
+  return hash || "Home";
+}
+
+function readActiveLogStatuses() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_LOG_STATUS_STORAGE_KEY) || "{}"); }
+  catch (_) { return {}; }
+}
+
+function getActiveLogStatus(id) {
+  return readActiveLogStatuses()[id] || "Aperto";
+}
+
+function setActiveLogStatus(id, status) {
+  if (!id) return;
+  const statuses = readActiveLogStatuses();
+  statuses[id] = ACTIVE_LOG_STATUS_OPTIONS.includes(status) ? status : "Aperto";
+  localStorage.setItem(ACTIVE_LOG_STATUS_STORAGE_KEY, JSON.stringify(statuses));
+}
+
+function isErrorActivity(log = {}) {
+  return /errore|error|fail|failed|permission|denied/i.test(`${log.actionType || ""} ${log.actionDescription || ""} ${log.detail || ""} ${log.errorCode || ""}`);
+}
+
+function getProblemGroupKey(log = {}) {
+  if (!isErrorActivity(log)) return log.id || `${log.actionType}-${firestoreDateToMillis(log.createdAt)}`;
+  return [log.actionType, log.errorCode, log.firestoreCollection, log.firestoreOperation, log.detail || log.actionDescription, log.commessaId || log.commessaName, log.impiantoId || log.impiantoName].map(v => String(v || "-").toLowerCase().trim()).join("|");
+}
+
+function buildActiveLogGroups(logs = []) {
+  const groups = new Map();
+  logs.forEach((log) => {
+    const key = getProblemGroupKey(log);
+    if (!groups.has(key)) groups.set(key, { key, primary: log, logs: [] });
+    groups.get(key).logs.push(log);
+  });
+  return Array.from(groups.values()).map((group) => {
+    group.logs.sort((a, b) => firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt));
+    group.primary = group.logs[0] || group.primary;
+    return group;
+  });
+}
+
+function activeLogSummaryText(group) {
+  const log = group.primary || {};
+  const lines = [
+    `Tipo: ${log.actionType || "azione"}`,
+    `Stato: ${getActiveLogStatus(log.id || group.key)}`,
+    `Cosa è successo: ${log.actionDescription || log.detail || "Evento registrato"}`,
+    `Utente: ${log.userName || log.userEmail || "-"}`,
+    `Quando: ${formatActivityDate(log.createdAt)}`,
+    `View/pagina: ${log.viewName || "Da verificare"}`,
+    `Pulsante premuto: ${log.buttonLabel || "Non indicato"}`,
+    `Commessa: ${log.commessaName || log.commessaId || "-"}`,
+    `Impianto: ${log.impiantoName || log.impiantoId || "-"}`,
+    `Errore tecnico completo: ${log.technicalError || log.detail || "-"}`,
+    `Possibile causa: ${log.possibleCause || (isErrorActivity(log) ? "Da analizzare: vedere errore tecnico, utente, view e permessi." : "- ")}`,
+    `Suggerimento: ${log.resolutionHint || (isErrorActivity(log) ? "Riprodurre il flusso, verificare permessi/dati e controllare console." : "- ")}`
+  ];
+  if (String(log.actionType || "").includes("firestore")) {
+    lines.push(`Collection Firestore: ${log.firestoreCollection || "Da verificare"}`);
+    lines.push(`Operazione tentata: ${log.firestoreOperation || "Da verificare"}`);
+    lines.push(`Tipo blocco: ${log.firestoreFailureType || "permesso negato / rete / dato mancante da verificare"}`);
+    lines.push(`Dati non salvati: ${log.unsavedData || "Da verificare"}`);
+    lines.push(`Regola Firestore possibile: ${log.firestoreRuleHint || "Controllare allow read/write della collection interessata."}`);
+  }
+  if (group.logs.length > 1) lines.push(`Errore ripetuto ${group.logs.length} volte: ${group.logs.map(l => `${l.userName || l.userEmail || "-"} @ ${formatActivityDate(l.createdAt)} (${l.viewName || "view?"})`).join("; ")}`);
+  return lines.join("\n");
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+  return Promise.resolve();
+}
+
 async function logActivity(actionType, actionDescription, extra = {}) {
   if (!db || !currentUser) return;
   const normalizedType = String(actionType || "azione").trim();
@@ -26797,6 +26908,17 @@ async function logActivity(actionType, actionDescription, extra = {}) {
       impiantoId: extra.impiantoId || "",
       impiantoName: extra.impiantoName || "",
       detail: extra.detail || "",
+      viewName: extra.viewName || getCurrentViewName(),
+      buttonLabel: extra.buttonLabel || "",
+      technicalError: extra.technicalError || extra.error || "",
+      errorCode: extra.errorCode || "",
+      possibleCause: extra.possibleCause || "",
+      resolutionHint: extra.resolutionHint || "",
+      firestoreCollection: extra.firestoreCollection || "",
+      firestoreOperation: extra.firestoreOperation || "",
+      firestoreFailureType: extra.firestoreFailureType || "",
+      unsavedData: extra.unsavedData || "",
+      firestoreRuleHint: extra.firestoreRuleHint || "",
       deviceInfo: navigator.userAgent || "",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -26818,7 +26940,7 @@ function filterActiveUsersLogs() {
     if (impiantoTerm && !`${log.impiantoName || ""} ${log.impiantoId || ""}`.toLowerCase().includes(impiantoTerm)) return false;
     if (operator && String(log.userId || log.userEmail || "") !== operator) return false;
     if (action && log.actionType !== action) return false;
-    if (errorsOnly && !String(log.actionType || "").toLowerCase().includes("error")) return false;
+    if (errorsOnly && !isErrorActivity(log)) return false;
     return true;
   });
 }
@@ -26831,7 +26953,7 @@ function renderActiveUsersDetail() {
   const metrics = [
     ["Utenti online adesso", onlineUsers.length], ["Utenti oggi", usersToday.size], ["Totale azioni oggi", activeUsersLogs.filter(l => firestoreDateToMillis(l.createdAt) >= todayStart.getTime()).length],
     ["Impianti completati oggi", activeUsersLogs.filter(l => l.actionType === "pressione_fatto").length], ["Ore inserite oggi", activeUsersLogs.filter(l => l.actionType === "inserimento_ore").length],
-    ["Navigazioni avviate", activeUsersLogs.filter(l => l.actionType === "pressione_naviga").length], ["Ultima sincronizzazione", new Date().toLocaleTimeString("it-IT")], ["Eventuali errori", activeUsersLogs.filter(l => String(l.actionType || "").includes("errore")).length]
+    ["Navigazioni avviate", activeUsersLogs.filter(l => l.actionType === "pressione_naviga").length], ["Ultima sincronizzazione", new Date().toLocaleTimeString("it-IT")], ["Eventuali errori", activeUsersLogs.filter(isErrorActivity).length]
   ];
   ui.activeUsersDashboard.innerHTML = metrics.map(([k,v]) => `<article class="card active-users-metric"><strong>${escapeHTML(k)}</strong><p>${escapeHTML(String(v))}</p></article>`).join("");
   ui.activeUsersNowList.innerHTML = onlineUsers.map(user => `<article class="active-users-row"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot online">🟢 online</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span></div></article>`).join("") || '<p class="muted">Nessun utente online.</p>';
@@ -26841,11 +26963,40 @@ function renderActiveUsersDetail() {
     const online = Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000;
     return `<article class="active-users-row is-clickable" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span>${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>${formatActivityDate(user.lastSeenAt)}</span><span>${escapeHTML(last.commessaName || "-")}</span><span>${escapeHTML(last.impiantoName || "-")}</span><span>Azioni: ${userLogs.length}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span></div></article>`;
   }).join("") || '<p class="muted">Nessun utente.</p>';
-  ui.activeUsersLogList.innerHTML = logs.map(log => {
-    const typeClass = String(log.actionType || "").includes("errore") ? "error" : (["pressione_forza","creazione_squadre","modifica_ore"].includes(log.actionType) ? "important" : "normal");
-    return `<article class="active-users-log-row"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "🔴" : typeClass === "important" ? "🟠" : "🔵"} ${escapeHTML(log.actionType || "azione")}</span> • ${formatActivityDate(log.createdAt)}</div><div>${escapeHTML(log.userName || log.userEmail || "-")} • Commessa: ${escapeHTML(log.commessaName || "-")} • Impianto: ${escapeHTML(log.impiantoName || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p></article>`;
+  const logGroups = buildActiveLogGroups(logs);
+  ui.activeUsersLogList.innerHTML = logGroups.map((group, index) => {
+    const log = group.primary || {};
+    const typeClass = isErrorActivity(log) ? "error" : (["pressione_forza","creazione_squadre","modifica_ore"].includes(log.actionType) ? "important" : "normal");
+    const status = getActiveLogStatus(log.id || group.key);
+    const repeated = group.logs.length > 1 ? `<strong class="active-log-repeat">Errore ripetuto ${group.logs.length} volte</strong>` : "";
+    return `<article class="active-users-log-row is-clickable" role="button" tabindex="0" data-active-log-group="${index}"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "🔴" : typeClass === "important" ? "🟠" : "🔵"} ${escapeHTML(log.actionType || "azione")}</span> • ${formatActivityDate(log.createdAt)} <span class="active-log-status">${escapeHTML(status)}</span></div><div>${escapeHTML(log.userName || log.userEmail || "-")} • View: ${escapeHTML(log.viewName || "-")} • Pulsante: ${escapeHTML(log.buttonLabel || "-")}</div><div>Commessa: ${escapeHTML(log.commessaName || log.commessaId || "-")} • Impianto: ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p>${repeated}</article>`;
   }).join("") || '<p class="muted">Nessuna azione nel periodo.</p>';
+  ui.activeUsersLogList.dataset.groups = "rendered";
+  window.activeUsersRenderedLogGroups = logGroups;
   renderSelectedActiveUserDetail();
+}
+
+
+function openActiveLogProblemDetail(group) {
+  const log = group?.primary || {};
+  if (!log) return;
+  const modal = document.createElement("div");
+  modal.className = "active-log-detail-modal";
+  const isFirestore = String(log.actionType || "").includes("firestore");
+  const detailText = activeLogSummaryText(group);
+  const statusOptions = ACTIVE_LOG_STATUS_OPTIONS.map(status => `<option value="${escapeHTML(status)}" ${getActiveLogStatus(log.id || group.key) === status ? "selected" : ""}>${escapeHTML(status)}</option>`).join("");
+  const repeats = group.logs.length > 1 ? `<section><h4>Errore ripetuto ${group.logs.length} volte</h4><ul>${group.logs.map(l => `<li>${escapeHTML(l.userName || l.userEmail || "-")} • ${formatActivityDate(l.createdAt)} • ${escapeHTML(l.viewName || "-")}</li>`).join("")}</ul></section>` : "";
+  modal.innerHTML = `<div class="active-log-detail-card" role="dialog" aria-modal="true" aria-label="Dettaglio problema / azione"><div class="section-head"><h2>Dettaglio problema / azione</h2><button type="button" class="btn" data-active-log-close>Chiudi</button></div><div class="active-log-detail-grid"><section><h4>Cosa è successo</h4><p>${escapeHTML(log.actionDescription || log.detail || "Evento registrato")}</p></section><section><h4>Utente</h4><p>${escapeHTML(log.userName || log.userEmail || "-")}</p></section><section><h4>Quando</h4><p>${formatActivityDate(log.createdAt)}</p></section><section><h4>View / pagina</h4><p>${escapeHTML(log.viewName || "Da verificare")}</p></section><section><h4>Pulsante premuto</h4><p>${escapeHTML(log.buttonLabel || "Non indicato")}</p></section><section><h4>Commessa / impianto</h4><p>${escapeHTML(log.commessaName || log.commessaId || "-")} / ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</p></section><section class="wide"><h4>Errore tecnico completo</h4><pre>${escapeHTML(log.technicalError || log.detail || "-")}</pre></section><section><h4>Possibile causa</h4><p>${escapeHTML(log.possibleCause || (isErrorActivity(log) ? "Da analizzare in base a errore tecnico, permessi, dati e view." : "-"))}</p></section><section><h4>Suggerimento per risolvere</h4><p>${escapeHTML(log.resolutionHint || (isErrorActivity(log) ? "Riprodurre il flusso, controllare permessi/dati e console, poi correggere il codice o le regole." : "-"))}</p></section>${isFirestore ? `<section class="wide firestore-debug"><h4>Dettagli Firestore</h4><p><strong>Collection:</strong> ${escapeHTML(log.firestoreCollection || "Da verificare")}</p><p><strong>Operazione tentata:</strong> ${escapeHTML(log.firestoreOperation || "Da verificare")}</p><p><strong>Permesso negato / rete / dato mancante:</strong> ${escapeHTML(log.firestoreFailureType || "Da verificare")}</p><p><strong>Dati non salvati:</strong> ${escapeHTML(log.unsavedData || "Da verificare")}</p><p><strong>Regola Firestore che potrebbe bloccare:</strong> ${escapeHTML(log.firestoreRuleHint || "Controllare allow read/write della collection interessata.")}</p></section>` : ""}${repeats}</div><label class="active-log-status-editor">Stato problema <select data-active-log-status>${statusOptions}</select></label><div class="item-actions"><button type="button" class="btn" data-copy-details>Copia dettagli</button><button type="button" class="btn btn-primary" data-copy-codex>${isFirestore ? "Copia errore per Codex" : "Copia per Codex"}</button><button type="button" class="btn" data-mark-resolved>Segna risolto</button><button type="button" class="btn" data-open-commessa ${log.commessaId ? "" : "disabled"}>Apri commessa</button><button type="button" class="btn" data-open-impianto ${log.commessaId && (log.impiantoId || log.impiantoName) ? "" : "disabled"}>Apri impianto</button></div></div>`;
+  document.body.appendChild(modal);
+  const close = () => { modal.remove(); renderActiveUsersDetail(); };
+  modal.querySelector("[data-active-log-close]")?.addEventListener("click", close);
+  modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
+  modal.querySelector("[data-active-log-status]")?.addEventListener("change", (event) => setActiveLogStatus(log.id || group.key, event.target.value));
+  modal.querySelector("[data-copy-details]")?.addEventListener("click", () => copyTextToClipboard(detailText));
+  modal.querySelector("[data-copy-codex]")?.addEventListener("click", () => copyTextToClipboard(`Analizza e correggi questo problema dell'app Hera:\n\n${detailText}`));
+  modal.querySelector("[data-mark-resolved]")?.addEventListener("click", () => { setActiveLogStatus(log.id || group.key, "Risolto"); close(); });
+  modal.querySelector("[data-open-commessa]")?.addEventListener("click", () => { if (log.commessaId) { window.location.hash = `commessa=${encodeURIComponent(log.commessaId)}`; close(); } });
+  modal.querySelector("[data-open-impianto]")?.addEventListener("click", () => { if (log.commessaId) { const impianto = log.impiantoId || log.impiantoName || ""; window.location.hash = `commessa=${encodeURIComponent(log.commessaId)}${impianto ? `&impianto=${encodeURIComponent(impianto)}` : ""}`; close(); } });
 }
 
 function renderSelectedActiveUserDetail() {
@@ -26855,7 +27006,7 @@ function renderSelectedActiveUserDetail() {
   const userLogs = activeUsersLogs.filter(l => (l.userId && l.userId === user.id) || normalizeEmail(l.userEmail) === normalizeEmail(user.email));
   const count = (type) => userLogs.filter(l => l.actionType === type).length;
   ui.activeUsersUserDetail.classList.remove("hidden");
-  ui.activeUsersUserDetail.innerHTML = `<div class="section-head"><h2>Dettaglio singolo utente</h2><span class="pill">${escapeHTML(getUserRole(user))}</span></div><div class="active-users-row-grid"><span>Nome: ${escapeHTML(getUserDisplayName(user))}</span><span>Email: ${escapeHTML(user.email || "-")}</span><span>Stato: ${Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10*60*1000 ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ore inserite: ${count("inserimento_ore")}</span><span>Impianti FATTO: ${count("pressione_fatto")}</span><span>FORZA: ${count("pressione_forza")}</span><span>NAVIGA: ${count("pressione_naviga")}</span><span>Commesse consultate: ${new Set(userLogs.map(l => l.commessaId || l.commessaName).filter(Boolean)).size}</span><span>Errori: ${userLogs.filter(l => String(l.actionType || "").includes("errore")).length}</span></div><h3>Cronologia attività</h3>${userLogs.slice(0,30).map(l => `<p class="muted">${formatActivityDate(l.createdAt)} — ${escapeHTML(l.actionDescription || l.actionType || "-")}</p>`).join("") || '<p class="muted">Nessuna attività.</p>'}`;
+  ui.activeUsersUserDetail.innerHTML = `<div class="section-head"><h2>Dettaglio singolo utente</h2><span class="pill">${escapeHTML(getUserRole(user))}</span></div><div class="active-users-row-grid"><span>Nome: ${escapeHTML(getUserDisplayName(user))}</span><span>Email: ${escapeHTML(user.email || "-")}</span><span>Stato: ${Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10*60*1000 ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ore inserite: ${count("inserimento_ore")}</span><span>Impianti FATTO: ${count("pressione_fatto")}</span><span>FORZA: ${count("pressione_forza")}</span><span>NAVIGA: ${count("pressione_naviga")}</span><span>Commesse consultate: ${new Set(userLogs.map(l => l.commessaId || l.commessaName).filter(Boolean)).size}</span><span>Errori: ${userLogs.filter(isErrorActivity).length}</span></div><h3>Cronologia attività</h3>${userLogs.slice(0,30).map(l => `<p class="muted">${formatActivityDate(l.createdAt)} — ${escapeHTML(l.actionDescription || l.actionType || "-")}</p>`).join("") || '<p class="muted">Nessuna attività.</p>'}`;
 }
 
 async function loadActiveUsersLogs() {
@@ -26892,15 +27043,25 @@ ui.activeUsersBackBtn?.addEventListener("click", () => { window.location.hash = 
 ui.activeUsersRefreshBtn?.addEventListener("click", () => { activeUsersLoaded = false; openActiveUsersDetailView(); });
 [ui.activeUsersSearchUser, ui.activeUsersSearchCommessa, ui.activeUsersSearchImpianto, ui.activeUsersFilterOperator, ui.activeUsersFilterAction, ui.activeUsersErrorsOnly].forEach(el => el?.addEventListener("input", renderActiveUsersDetail));
 ui.activeUsersFullList?.addEventListener("click", (event) => { const row = event.target.closest("[data-active-user-id]"); if (!row) return; selectedActiveUsersUserId = row.getAttribute("data-active-user-id") || ""; renderSelectedActiveUserDetail(); });
+ui.activeUsersLogList?.addEventListener("click", (event) => { const row = event.target.closest("[data-active-log-group]"); if (!row) return; openActiveLogProblemDetail(window.activeUsersRenderedLogGroups?.[Number(row.getAttribute("data-active-log-group"))]); });
+ui.activeUsersLogList?.addEventListener("keydown", (event) => { if (event.key !== "Enter" && event.key !== " ") return; const row = event.target.closest("[data-active-log-group]"); if (!row) return; event.preventDefault(); openActiveLogProblemDetail(window.activeUsersRenderedLogGroups?.[Number(row.getAttribute("data-active-log-group"))]); });
 
 
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button, a");
   if (!button || !currentUser) return;
   const label = String(button.textContent || button.getAttribute("aria-label") || "").trim().toLowerCase();
-  if (label.includes("naviga")) logActivity("pressione_naviga", "Pressione NAVIGA");
-  if (label.includes("fatto")) logActivity("pressione_fatto", "Pressione FATTO");
-  if (label.includes("forza")) logActivity("pressione_forza", "Pressione FORZA");
-  if (label.includes("whatsapp")) logActivity("invio_whatsapp", "Invio WhatsApp");
-  if (label.includes("mappa")) logActivity("apertura_mappa", "Apertura mappa");
+  const extra = {
+    buttonLabel: String(button.textContent || button.getAttribute("aria-label") || button.title || "").trim(),
+    viewName: getCurrentViewName(),
+    commessaId: selectedCommessaId || "",
+    commessaName: selectedCommessaName || "",
+    impiantoId: button.getAttribute("data-impianto-key") || button.getAttribute("data-impianto-id") || "",
+    impiantoName: button.getAttribute("data-impianto-name") || ""
+  };
+  if (label.includes("naviga")) logActivity("pressione_naviga", "Pressione NAVIGA", extra);
+  if (label.includes("fatto")) logActivity("pressione_fatto", "Pressione FATTO", extra);
+  if (label.includes("forza")) logActivity("pressione_forza", "Pressione FORZA", extra);
+  if (label.includes("whatsapp")) logActivity("invio_whatsapp", "Invio WhatsApp", extra);
+  if (label.includes("mappa")) logActivity("apertura_mappa", "Apertura mappa", extra);
 });

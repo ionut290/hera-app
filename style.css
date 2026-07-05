@@ -10589,3 +10589,26 @@ body.worklimate-page-open {
 .snow-management-context .snow-only-management { display: block; }
 .snow-roads-form { display: grid; gap: 0.75rem; }
 .snow-roads-form textarea { width: 100%; border: 1px solid var(--border, #cbd5e1); border-radius: 14px; padding: 0.85rem; font: inherit; resize: vertical; }
+
+.active-users-summary.is-admin-clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.active-users-summary.is-admin-clickable:hover { color: var(--primary, #2563eb); }
+.active-users-admin-console { display: grid; gap: 1rem; }
+.active-users-filters { gap: .6rem; flex-wrap: wrap; }
+.active-users-filters input, .active-users-filters select { min-width: 150px; }
+.active-users-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; }
+.active-users-metric { border-left: 4px solid #2563eb; }
+.active-users-table, .active-users-log-list { display: grid; gap: .5rem; }
+.active-users-row, .active-users-log-row { display: grid; gap: .35rem; padding: .75rem; border: 1px solid rgba(148,163,184,.35); border-radius: 14px; background: rgba(255,255,255,.72); }
+.active-users-row.is-clickable { cursor: pointer; }
+.active-users-row.is-clickable:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15,23,42,.08); }
+.active-users-row-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .4rem .75rem; }
+.active-status-dot { display: inline-flex; align-items: center; gap: .3rem; font-weight: 700; }
+.active-status-dot.online { color: #16a34a; }
+.active-status-dot.offline { color: #64748b; }
+.active-log-type.error { color: #dc2626; font-weight: 700; }
+.active-log-type.important { color: #ea580c; font-weight: 700; }
+.active-log-type.normal { color: #2563eb; font-weight: 700; }

@@ -91,7 +91,7 @@
           </div>
         </div>
         <div class="logo-meta">
-          <p id="active-users-summary" class="muted">Utenti attivi: 0</p>
+          <p id="active-users-summary" class="muted active-users-summary" role="button" tabindex="-1" aria-label="Utenti attivi">Utenti attivi: 0</p>
           <p id="last-impianto-action-summary" class="muted">Ultima azione impianto: -</p>
           <p id="next-action-summary" class="muted">Prossima azione consigliata: caricamento...</p>
         </div>
@@ -214,6 +214,62 @@
           <button id="snow-squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
         </div>
         <div id="snow-squadre-lista" class="squadre-lista"></div>
+      </section>
+    </section>
+
+    <section id="active-users-detail-page" class="hidden" aria-live="polite">
+      <header class="card logo-card">
+        <div class="logo-head">
+          <button id="active-users-back-btn" class="header-icon-btn" type="button" aria-label="Indietro">←</button>
+          <h1>Dettaglio utenti attivi</h1>
+          <span class="pill">Console admin</span>
+        </div>
+        <p id="active-users-access-message" class="muted"></p>
+      </header>
+
+      <section id="active-users-admin-console" class="active-users-admin-console">
+        <section class="card active-users-filter-card">
+          <div class="section-head"><h2>Filtro periodo</h2><span class="pill">Caricato solo all'apertura</span></div>
+          <div class="inline-form active-users-filters">
+            <select id="active-users-period-select" aria-label="Periodo">
+              <option value="today">Oggi</option>
+              <option value="yesterday">Ieri</option>
+              <option value="last7">Ultimi 7 giorni</option>
+              <option value="month">Questo mese</option>
+              <option value="custom">Periodo personalizzato</option>
+            </select>
+            <input id="active-users-start-date" type="date" aria-label="Data inizio">
+            <input id="active-users-end-date" type="date" aria-label="Data fine">
+            <button id="active-users-refresh-btn" class="btn" type="button">Aggiorna</button>
+          </div>
+          <div class="inline-form active-users-filters">
+            <input id="active-users-search-user" type="search" placeholder="Cerca utente">
+            <input id="active-users-search-commessa" type="search" placeholder="Cerca commessa">
+            <input id="active-users-search-impianto" type="search" placeholder="Cerca impianto">
+            <select id="active-users-filter-operator" aria-label="Filtra operatore"><option value="">Tutti operatori</option></select>
+            <select id="active-users-filter-action" aria-label="Filtra azione"><option value="">Tutte azioni</option></select>
+            <label class="checkbox-row"><input id="active-users-errors-only" type="checkbox"> Solo errori</label>
+          </div>
+        </section>
+
+        <section class="active-users-dashboard-grid" id="active-users-dashboard"></section>
+
+        <section class="card">
+          <div class="section-head"><h2>Attivi adesso</h2><span class="pill">ultimi 10 minuti</span></div>
+          <div id="active-users-now-list" class="active-users-table"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head"><h2>Lista completa utenti</h2><span class="pill">clicca un utente</span></div>
+          <div id="active-users-full-list" class="active-users-table"></div>
+        </section>
+
+        <section id="active-users-user-detail" class="card hidden"></section>
+
+        <section class="card">
+          <div class="section-head"><h2>Registro azioni completo</h2><span class="pill">activityLogs</span></div>
+          <div id="active-users-log-list" class="active-users-log-list"></div>
+        </section>
       </section>
     </section>
 

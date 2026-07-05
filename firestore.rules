@@ -177,6 +177,13 @@ service cloud.firestore {
       allow read, write: if signedIn() && !(configId in ["driveAdminSecret", "driveBridge"]);
     }
 
+    match /activityLogs/{logId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+    }
+
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
       allow create, update: if validOperatorPositionWrite(userId);

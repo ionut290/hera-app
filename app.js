@@ -1871,6 +1871,9 @@ initHoursPage();
 initGeolocation();
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
+if (window.location.hash) {
+  window.location.hash = "";
+}
 applyRoute();
 window.addEventListener("hashchange", applyRoute);
 window.addEventListener("popstate", applyRoute);
@@ -6469,29 +6472,9 @@ function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey
 }
 
 function tryAutoOpenAssignedCommessaAtStartup() {
-  if (startupAssignedCommessaAutoOpenDone || !currentUser) return;
-  if (parseCommessaHash().id) {
-    startupAssignedCommessaAutoOpenDone = true;
-    return;
-  }
-  if (!sharedSquadreViewConfigLoaded) return;
-  if (commesseLoadState.status !== "loaded" && commesseLoadState.status !== "empty") return;
-  if (squadreLoadState.status !== "loaded") return;
-
-  const dateKey = getActiveSquadreDateKey();
-  const assignments = getCurrentUserAssignedCommesseForDate(dateKey);
+  // All'avvio l'app deve restare sempre sulla home principale: non ripristina
+  // commesse salvate e non apre automaticamente le commesse assegnate.
   startupAssignedCommessaAutoOpenDone = true;
-  if (!assignments.length) return;
-
-  const primary = assignments[0];
-  selectCommessa(primary.commessaId, primary.commessaName, primary.commessa.codice || "");
-
-  const otherAssignments = assignments.slice(1);
-  if (otherAssignments.length) {
-    const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
-    const otherNames = otherAssignments.map((assignment) => `• ${assignment.commessaName}`).join("\n");
-    alert(`Sei assegnato a più commesse per il ${dateLabel}. Ho aperto ${primary.commessaName}. Altre commesse trovate:\n${otherNames}`);
-  }
 }
 
 function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
@@ -10159,14 +10142,7 @@ function subscribeCommesse() {
       ? { status: "loaded", message: "" }
       : { status: "empty", message: "Nessuna commessa disponibile" };
 
-    const routeCommessaId = parseCommessaHash().id;
-    const activeStoredId = routeCommessaId || localStorage.getItem(LAST_OPENED_COMMESSA_KEY) || localStorage.getItem(LAST_SELECTED_COMMESSA_KEY) || "";
-    const shouldRestoreOpenCommessa = Boolean(!selectedCommessaId && activeStoredId && commesseById.has(activeStoredId));
     refreshCommesseDependentUI(Boolean(currentUser));
-    if (!selectedCommessaId && shouldRestoreOpenCommessa) {
-      const restored = commesseById.get(activeStoredId);
-      if (restored) selectCommessa(restored.id, restored.nome || "Commessa", restored.codice || "");
-    }
     tryAutoOpenAssignedCommessaAtStartup();
     renderNextActionCard();
   };

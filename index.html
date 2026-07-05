@@ -228,8 +228,13 @@
       </header>
 
       <section id="active-users-admin-console" class="active-users-admin-console">
+        <section class="active-users-dashboard-grid active-users-top-grid" id="active-users-top-summary"></section>
+
         <section class="card active-users-filter-card">
-          <div class="section-head"><h2>Filtro periodo</h2><span class="pill">Caricato solo all'apertura</span></div>
+          <button id="active-users-filter-toggle" class="active-users-section-toggle" type="button" aria-expanded="false" aria-controls="active-users-filter-panel">
+            <span>📅 Seleziona periodo</span><span class="active-users-toggle-icon" aria-hidden="true">▾</span>
+          </button>
+          <div id="active-users-filter-panel" class="active-users-collapsible-panel hidden">
           <div class="inline-form active-users-filters">
             <select id="active-users-period-select" aria-label="Periodo">
               <option value="today">Oggi</option>
@@ -250,25 +255,27 @@
             <select id="active-users-filter-action" aria-label="Filtra azione"><option value="">Tutte azioni</option></select>
             <label class="checkbox-row"><input id="active-users-errors-only" type="checkbox"> Solo errori</label>
           </div>
+          </div>
         </section>
 
         <section class="active-users-dashboard-grid" id="active-users-dashboard"></section>
 
-        <section class="card">
-          <div class="section-head"><h2>Attivi adesso</h2><span class="pill">ultimi 10 minuti</span></div>
-          <div id="active-users-now-list" class="active-users-table"></div>
-        </section>
+        <section id="active-users-card-detail" class="card hidden"></section>
 
-        <section class="card">
-          <div class="section-head"><h2>Lista completa utenti</h2><span class="pill">clicca un utente</span></div>
-          <div id="active-users-full-list" class="active-users-table"></div>
+        <section class="card active-users-collapsible-card">
+          <button id="active-users-full-toggle" class="active-users-section-toggle" type="button" aria-expanded="false" aria-controls="active-users-full-list">
+            <span>👥 Lista completa utenti</span><span class="pill">apri/chiudi</span>
+          </button>
+          <div id="active-users-full-list" class="active-users-table hidden"></div>
         </section>
 
         <section id="active-users-user-detail" class="card hidden"></section>
 
-        <section class="card">
-          <div class="section-head"><h2>Registro azioni completo</h2><span class="pill">activityLogs</span></div>
-          <div id="active-users-log-list" class="active-users-log-list"></div>
+        <section class="card active-users-collapsible-card">
+          <button id="active-users-log-toggle" class="active-users-section-toggle" type="button" aria-expanded="false" aria-controls="active-users-log-list">
+            <span>📋 Registro completo azioni</span><span class="pill">activityLogs</span>
+          </button>
+          <div id="active-users-log-list" class="active-users-log-list hidden"></div>
         </section>
       </section>
     </section>

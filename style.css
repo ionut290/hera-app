@@ -10628,3 +10628,38 @@ body.worklimate-page-open {
 .active-log-detail-grid pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: .82rem; }
 .firestore-debug { border-color: rgba(220,38,38,.25) !important; background: #fff7ed !important; }
 .active-log-status-editor { display: flex; gap: .5rem; align-items: center; font-weight: 800; }
+
+.active-users-top-grid { order: -2; }
+.active-users-filter-card { order: -1; }
+.active-users-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  padding: .1rem 0;
+}
+.active-users-section-toggle:focus-visible,
+.active-users-metric-button:focus-visible { outline: 3px solid rgba(37,99,235,.35); outline-offset: 3px; }
+.active-users-collapsible-panel { display: grid; gap: .7rem; margin-top: .8rem; }
+.active-users-metric-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(148,163,184,.38);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.active-users-metric-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37,99,235,.45);
+  box-shadow: 0 12px 24px rgba(15,23,42,.10);
+}
+.active-users-metric-button p { margin: .45rem 0 0; font-size: 1.35rem; font-weight: 900; }
+.active-users-collapsible-card { display: grid; gap: .75rem; }

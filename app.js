@@ -2457,6 +2457,13 @@ function loadWorkBannerForm(config = {}) {
   renderWorkBannerNotesList(config.notes || []);
 }
 
+function syncBannerFormFromSelection() {
+  if (ui.bannerNoteDate && !ui.bannerNoteDate.value) {
+    ui.bannerNoteDate.value = getDateKeyFromLocalDate(new Date());
+  }
+  renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
+}
+
 function renderWorkBannerNotesList(notes = []) {
   if (!ui.bannerNotesList) return;
   const safeNotes = Array.isArray(notes) ? notes : [];

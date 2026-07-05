@@ -8653,7 +8653,15 @@ function refreshCommesseDependentUI(includeRemoteStats = true) {
   renderSquadre();
   renderResourcesList();
   renderResourceButtonsForCommessa();
-  syncBannerFormFromSelection();
+  if (typeof syncBannerFormFromSelection === "function") {
+    syncBannerFormFromSelection();
+  } else {
+    console.warn("syncBannerFormFromSelection non disponibile durante refreshCommesseDependentUI: aggiorno solo la lista note banner.");
+    if (ui.bannerNoteDate && !ui.bannerNoteDate.value) {
+      ui.bannerNoteDate.value = getDateKeyFromLocalDate(new Date());
+    }
+    renderWorkBannerNotesList(currentWorkBannerConfig.notes || []);
+  }
   updateCommessaContextUI();
   renderParentCommessaOverview();
   renderNextActionCard();

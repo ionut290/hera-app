@@ -592,7 +592,13 @@ const ui = {
   activeUsersFilterOperator: document.getElementById("active-users-filter-operator"),
   activeUsersFilterAction: document.getElementById("active-users-filter-action"),
   activeUsersErrorsOnly: document.getElementById("active-users-errors-only"),
+  activeUsersTopSummary: document.getElementById("active-users-top-summary"),
+  activeUsersFilterToggle: document.getElementById("active-users-filter-toggle"),
+  activeUsersFilterPanel: document.getElementById("active-users-filter-panel"),
   activeUsersDashboard: document.getElementById("active-users-dashboard"),
+  activeUsersCardDetail: document.getElementById("active-users-card-detail"),
+  activeUsersFullToggle: document.getElementById("active-users-full-toggle"),
+  activeUsersLogToggle: document.getElementById("active-users-log-toggle"),
   activeUsersNowList: document.getElementById("active-users-now-list"),
   activeUsersFullList: document.getElementById("active-users-full-list"),
   activeUsersUserDetail: document.getElementById("active-users-user-detail"),
@@ -867,6 +873,10 @@ let operatorPositions = [];
 let operatorPositionsVisible = true;
 let activeUsersLogs = [];
 let activeUsersLoaded = false;
+let activeUsersFilterOpen = false;
+let activeUsersFullListOpen = false;
+let activeUsersLogListOpen = false;
+let selectedActiveUsersCard = "";
 let selectedActiveUsersUserId = "";
 let deniedImpiantoActions = new Set();
 const usedActionKeys = new Set();
@@ -26928,34 +26938,85 @@ function filterActiveUsersLogs() {
   });
 }
 
-function renderActiveUsersDetail() {
-  const logs = filterActiveUsersLogs();
-  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-  const usersToday = new Set(activeUsersLogs.filter(l => firestoreDateToMillis(l.createdAt) >= todayStart.getTime()).map(l => l.userId || l.userEmail));
-  const onlineUsers = platformUsers.filter((user) => Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000);
-  const metrics = [
-    ["Utenti online adesso", onlineUsers.length], ["Utenti oggi", usersToday.size], ["Totale azioni oggi", activeUsersLogs.filter(l => firestoreDateToMillis(l.createdAt) >= todayStart.getTime()).length],
-    ["Impianti completati oggi", activeUsersLogs.filter(l => l.actionType === "pressione_fatto").length], ["Ore inserite oggi", activeUsersLogs.filter(l => l.actionType === "inserimento_ore").length],
-    ["Navigazioni avviate", activeUsersLogs.filter(l => l.actionType === "pressione_naviga").length], ["Ultima sincronizzazione", new Date().toLocaleTimeString("it-IT")], ["Eventuali errori", activeUsersLogs.filter(isErrorActivity).length]
-  ];
-  ui.activeUsersDashboard.innerHTML = metrics.map(([k,v]) => `<article class="card active-users-metric"><strong>${escapeHTML(k)}</strong><p>${escapeHTML(String(v))}</p></article>`).join("");
-  ui.activeUsersNowList.innerHTML = onlineUsers.map(user => `<article class="active-users-row"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot online">🟢 online</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span></div></article>`).join("") || '<p class="muted">Nessun utente online.</p>';
-  ui.activeUsersFullList.innerHTML = platformUsers.map(user => {
-    const userLogs = activeUsersLogs.filter(l => (l.userId && l.userId === user.id) || normalizeEmail(l.userEmail) === normalizeEmail(user.email));
+function buildActiveUsersRows(users = [], logs = activeUsersLogs) {
+  return users.map(user => {
+    const userLogs = logs.filter(l => (l.userId && (l.userId === user.id || l.userId === user.uid)) || normalizeEmail(l.userEmail) === normalizeEmail(user.email));
     const last = userLogs[0] || {};
     const online = Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000;
-    return `<article class="active-users-row is-clickable" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span>${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>${formatActivityDate(user.lastSeenAt)}</span><span>${escapeHTML(last.commessaName || "-")}</span><span>${escapeHTML(last.impiantoName || "-")}</span><span>Azioni: ${userLogs.length}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span></div></article>`;
+    const problems = userLogs.filter(isErrorActivity).length;
+    return `<article class="active-users-row is-clickable" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span><span>Ultima azione: ${escapeHTML(last.actionDescription || last.actionType || "-")}</span><span>Commessa: ${escapeHTML(last.commessaName || last.commessaId || "-")}</span><span>Problemi: ${problems}</span></div></article>`;
   }).join("") || '<p class="muted">Nessun utente.</p>';
+}
+
+function buildActiveLogList(logs = filterActiveUsersLogs()) {
   const logGroups = buildActiveLogGroups(logs);
-  ui.activeUsersLogList.innerHTML = logGroups.map((group, index) => {
+  window.activeUsersRenderedLogGroupsByKey = window.activeUsersRenderedLogGroupsByKey || {};
+  return logGroups.map((group, index) => {
     const log = group.primary || {};
     const typeClass = isErrorActivity(log) ? "error" : (["pressione_forza","creazione_squadre","modifica_ore"].includes(log.actionType) ? "important" : "normal");
     const status = getActiveLogStatus(log.id || group.key);
     const repeated = group.logs.length > 1 ? `<strong class="active-log-repeat">Errore ripetuto ${group.logs.length} volte</strong>` : "";
-    return `<article class="active-users-log-row is-clickable" role="button" tabindex="0" data-active-log-group="${index}"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "🔴" : typeClass === "important" ? "🟠" : "🔵"} ${escapeHTML(log.actionType || "azione")}</span> • ${formatActivityDate(log.createdAt)} <span class="active-log-status">${escapeHTML(status)}</span></div><div>${escapeHTML(log.userName || log.userEmail || "-")} • View: ${escapeHTML(log.viewName || "-")} • Pulsante: ${escapeHTML(log.buttonLabel || "-")}</div><div>Commessa: ${escapeHTML(log.commessaName || log.commessaId || "-")} • Impianto: ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p>${repeated}</article>`;
+    const rowKey = `log-${index}-${String(group.key || log.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
+    window.activeUsersRenderedLogGroupsByKey[rowKey] = group;
+    return `<article class="active-users-log-row is-clickable" role="button" tabindex="0" data-active-log-key="${escapeHTML(rowKey)}"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "🔴" : typeClass === "important" ? "🟠" : "🔵"} ${escapeHTML(log.actionType || "azione")}</span> • ${formatActivityDate(log.createdAt)} <span class="active-log-status">${escapeHTML(status)}</span></div><div>${escapeHTML(log.userName || log.userEmail || "-")} • View: ${escapeHTML(log.viewName || "-")} • Pulsante: ${escapeHTML(log.buttonLabel || "-")}</div><div>Commessa: ${escapeHTML(log.commessaName || log.commessaId || "-")} • Impianto: ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p>${repeated}</article>`;
   }).join("") || '<p class="muted">Nessuna azione nel periodo.</p>';
-  ui.activeUsersLogList.dataset.groups = "rendered";
-  window.activeUsersRenderedLogGroups = logGroups;
+}
+
+function renderActiveUsersCardDetail(metricsByKey = {}) {
+  if (!ui.activeUsersCardDetail) return;
+  if (!selectedActiveUsersCard) return ui.activeUsersCardDetail.classList.add("hidden");
+  const cfg = metricsByKey[selectedActiveUsersCard];
+  if (!cfg) return ui.activeUsersCardDetail.classList.add("hidden");
+  ui.activeUsersCardDetail.classList.remove("hidden");
+  ui.activeUsersCardDetail.innerHTML = `<div class="section-head"><h2>${escapeHTML(cfg.title)}</h2><button class="btn" type="button" data-active-card-close>Chiudi</button></div>${cfg.html}`;
+}
+
+function renderActiveUsersDetail() {
+  const logs = filterActiveUsersLogs();
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayLogs = activeUsersLogs.filter(l => firestoreDateToMillis(l.createdAt) >= todayStart.getTime());
+  const usersTodayIds = new Set(todayLogs.map(l => l.userId || normalizeEmail(l.userEmail)).filter(Boolean));
+  const onlineUsers = platformUsers.filter((user) => Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000);
+  const todayUsers = platformUsers.filter(u => usersTodayIds.has(u.id) || usersTodayIds.has(u.uid) || usersTodayIds.has(normalizeEmail(u.email)));
+  const byType = (type) => logs.filter(l => l.actionType === type);
+  const errorLogs = logs.filter(isErrorActivity);
+  window.activeUsersRenderedLogGroupsByKey = {};
+  const metrics = [
+    { key: "online", label: "🟢 Utenti online adesso", value: onlineUsers.length },
+    { key: "today", label: "👥 Utenti oggi", value: usersTodayIds.size },
+    { key: "actions", label: "📊 Totale azioni oggi", value: todayLogs.length },
+    { key: "done", label: "✅ Impianti completati", value: byType("pressione_fatto").length },
+    { key: "hours", label: "⏱ Ore inserite", value: byType("inserimento_ore").length },
+    { key: "nav", label: "🧭 Navigazioni avviate", value: byType("pressione_naviga").length },
+    { key: "sync", label: "🔄 Ultima sincronizzazione", value: new Date().toLocaleTimeString("it-IT") },
+    { key: "errors", label: "⚠️ Eventuali errori", value: errorLogs.length }
+  ];
+  if (ui.activeUsersTopSummary) ui.activeUsersTopSummary.innerHTML = metrics.slice(0,2).map(m => `<button class="card active-users-metric active-users-metric-button" type="button" data-active-card="${m.key}"><strong>${escapeHTML(m.label)}</strong><p>${escapeHTML(String(m.value))}</p></button>`).join("");
+  ui.activeUsersDashboard.innerHTML = metrics.map(m => `<button class="card active-users-metric active-users-metric-button" type="button" data-active-card="${m.key}"><strong>${escapeHTML(m.label)}</strong><p>${escapeHTML(String(m.value))}</p></button>`).join("");
+  const metricsByKey = {
+    online: { title: "Utenti collegati ora", html: buildActiveUsersRows(onlineUsers, logs) },
+    today: { title: "Utenti che hanno usato l'app oggi", html: buildActiveUsersRows(todayUsers, logs) },
+    actions: { title: "Cronologia completa azioni", html: `<div class="active-users-log-list">${buildActiveLogList(todayLogs)}</div>` },
+    done: { title: "Impianti completati", html: `<div class="active-users-log-list">${buildActiveLogList(byType("pressione_fatto"))}</div>` },
+    hours: { title: "Ore inserite", html: `<div class="active-users-log-list">${buildActiveLogList(byType("inserimento_ore"))}</div>` },
+    nav: { title: "Navigazioni avviate", html: `<div class="active-users-log-list">${buildActiveLogList(byType("pressione_naviga"))}</div>` },
+    sync: { title: "Sincronizzazioni riuscite e dispositivi", html: `<div class="active-users-log-list">${buildActiveLogList(logs.filter(l => /sync|sincron/i.test(`${l.actionType || ""} ${l.actionDescription || ""}`)))}</div>` },
+    errors: { title: "Lista problemi", html: `<div class="active-users-log-list">${buildActiveLogList(errorLogs)}</div>` }
+  };
+  renderActiveUsersCardDetail(metricsByKey);
+  if (ui.activeUsersFullList) {
+    ui.activeUsersFullList.classList.toggle("hidden", !activeUsersFullListOpen);
+    ui.activeUsersFullList.innerHTML = activeUsersFullListOpen ? buildActiveUsersRows(platformUsers, logs) : "";
+  }
+  if (ui.activeUsersLogList) {
+    ui.activeUsersLogList.classList.toggle("hidden", !activeUsersLogListOpen);
+    ui.activeUsersLogList.innerHTML = activeUsersLogListOpen ? buildActiveLogList(logs) : "";
+    ui.activeUsersLogList.dataset.groups = "rendered";
+  }
+  ui.activeUsersFilterPanel?.classList.toggle("hidden", !activeUsersFilterOpen);
+  ui.activeUsersFilterToggle?.setAttribute("aria-expanded", String(activeUsersFilterOpen));
+  ui.activeUsersFullToggle?.setAttribute("aria-expanded", String(activeUsersFullListOpen));
+  ui.activeUsersLogToggle?.setAttribute("aria-expanded", String(activeUsersLogListOpen));
   renderSelectedActiveUserDetail();
 }
 
@@ -27024,10 +27085,26 @@ ui.activeUsersSummary?.addEventListener("click", () => {
 ui.activeUsersSummary?.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && canManageData()) { event.preventDefault(); window.location.hash = "#dettaglio-utenti-attivi"; } });
 ui.activeUsersBackBtn?.addEventListener("click", () => { window.location.hash = ""; });
 ui.activeUsersRefreshBtn?.addEventListener("click", () => { activeUsersLoaded = false; openActiveUsersDetailView(); });
+ui.activeUsersFilterToggle?.addEventListener("click", () => { activeUsersFilterOpen = !activeUsersFilterOpen; renderActiveUsersDetail(); });
+ui.activeUsersFullToggle?.addEventListener("click", () => { activeUsersFullListOpen = !activeUsersFullListOpen; renderActiveUsersDetail(); });
+ui.activeUsersLogToggle?.addEventListener("click", () => { activeUsersLogListOpen = !activeUsersLogListOpen; renderActiveUsersDetail(); });
 [ui.activeUsersSearchUser, ui.activeUsersSearchCommessa, ui.activeUsersSearchImpianto, ui.activeUsersFilterOperator, ui.activeUsersFilterAction, ui.activeUsersErrorsOnly].forEach(el => el?.addEventListener("input", renderActiveUsersDetail));
-ui.activeUsersFullList?.addEventListener("click", (event) => { const row = event.target.closest("[data-active-user-id]"); if (!row) return; selectedActiveUsersUserId = row.getAttribute("data-active-user-id") || ""; renderSelectedActiveUserDetail(); });
-ui.activeUsersLogList?.addEventListener("click", (event) => { const row = event.target.closest("[data-active-log-group]"); if (!row) return; openActiveLogProblemDetail(window.activeUsersRenderedLogGroups?.[Number(row.getAttribute("data-active-log-group"))]); });
-ui.activeUsersLogList?.addEventListener("keydown", (event) => { if (event.key !== "Enter" && event.key !== " ") return; const row = event.target.closest("[data-active-log-group]"); if (!row) return; event.preventDefault(); openActiveLogProblemDetail(window.activeUsersRenderedLogGroups?.[Number(row.getAttribute("data-active-log-group"))]); });
+ui.activeUsersAdminConsole?.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-active-card]");
+  if (card) { selectedActiveUsersCard = card.getAttribute("data-active-card") || ""; renderActiveUsersDetail(); return; }
+  if (event.target.closest("[data-active-card-close]")) { selectedActiveUsersCard = ""; renderActiveUsersDetail(); return; }
+  const userRow = event.target.closest("[data-active-user-id]");
+  if (userRow) { selectedActiveUsersUserId = userRow.getAttribute("data-active-user-id") || ""; renderSelectedActiveUserDetail(); return; }
+  const logRow = event.target.closest("[data-active-log-key]");
+  if (logRow) openActiveLogProblemDetail(window.activeUsersRenderedLogGroupsByKey?.[logRow.getAttribute("data-active-log-key")]);
+});
+ui.activeUsersAdminConsole?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("[data-active-log-key]");
+  if (!row) return;
+  event.preventDefault();
+  openActiveLogProblemDetail(window.activeUsersRenderedLogGroupsByKey?.[row.getAttribute("data-active-log-key")]);
+});
 
 
 document.addEventListener("click", (event) => {

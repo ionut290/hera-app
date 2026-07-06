@@ -5504,7 +5504,7 @@ textarea:focus-visible {
 /* Gestione ore: pulsanti compatti e gerarchia azioni mobile-first */
 #hours-page .hours-main-actions {
   display: grid;
-  grid-template-columns: minmax(112px, 0.72fr) minmax(170px, 1.28fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
   gap: 8px;
   align-items: center;
   margin-top: 4px;
@@ -5680,12 +5680,13 @@ textarea:focus-visible {
 
 @media (max-width: 420px) {
   #hours-page .hours-main-actions {
-    grid-template-columns: minmax(104px, 0.68fr) minmax(156px, 1.32fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
   }
 
   .hours-add-commessa-secondary {
-    font-size: 0.8rem;
-    padding-inline: 8px;
+    font-size: 0.76rem;
+    padding-inline: 6px;
+    white-space: nowrap;
   }
 
   .hours-finalize-primary {

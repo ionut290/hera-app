@@ -4524,6 +4524,8 @@ function openHoursPage() {
     return;
   }
   if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
+  ui.addHoursCommessaBtn?.classList.remove("hidden");
+  ui.hoursFinalizeBtn?.classList.remove("hidden");
   if (!ui.hoursStatsMonth?.value) ui.hoursStatsMonth.value = new Date().toISOString().slice(0, 7);
   if (!ui.hoursCommesseList.children.length) addHoursCommessaBlock();
   Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card")).forEach((card) => {
@@ -6582,8 +6584,14 @@ function getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue) {
     const names = parseMultiEntryValue(row?.personale || "");
     if (names.length) {
       names.forEach((name) => {
+        const operatoreId = resolveHoursOperatorId(name);
         const participantId = getHoursParticipantId(
-          { operatore: name, squadraIndex, squadraLabel },
+          {
+            operatore: name,
+            operatoreId,
+            squadraIndex,
+            squadraLabel
+          },
           { squadraIndex, squadraLabel },
           { allowSquadraFallback: false }
         );
@@ -6592,6 +6600,7 @@ function getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue) {
         participants.set(key, {
           key,
           participantId,
+          operatoreId,
           operatore: name,
           squadraIndex,
           squadraLabel
@@ -6823,6 +6832,51 @@ function getHoursParticipantDisplayName(participant = {}) {
   return String(participant.operatore || participant.squadraLabel || "Operatore").trim() || "Operatore";
 }
 
+function getQuickTeamHoursState(commessaId, dateValue) {
+  const requiredParticipants = Array.from(getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue).values());
+  const completedParticipants = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
+  const missingParticipants = requiredParticipants.filter((participant) => !completedParticipants.has(participant.key));
+  return { requiredParticipants, completedParticipants, missingParticipants };
+}
+
+function updateQuickTeamHoursCard(card) {
+  if (!card || card.dataset.quickTeamHours !== "true") return;
+  const commessaId = String(card.dataset.lockedCommessaId || card.querySelector(".hours-commessa-select")?.value || "").trim();
+  const dateValue = String(ui.hoursDate?.value || "").trim();
+  const operatorList = card.querySelector(".hours-operator-list");
+  if (!commessaId || !dateValue || !operatorList) return;
+  const { completedParticipants, missingParticipants } = getQuickTeamHoursState(commessaId, dateValue);
+  const alreadyInserted = Array.from(completedParticipants.values()).map(getHoursParticipantDisplayName);
+  const toComplete = missingParticipants.map(getHoursParticipantDisplayName);
+  const statusBox = card.querySelector(".hours-team-status");
+  if (statusBox) {
+    statusBox.innerHTML = `
+      <section class="hours-team-status-section">
+        <strong>✅ Già inseriti</strong>
+        ${alreadyInserted.length ? `<ul>${alreadyInserted.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
+      </section>
+      <section class="hours-team-status-section">
+        <strong>🟡 Da completare</strong>
+        ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno già inserito le ore</p>`}
+      </section>`;
+    statusBox.classList.remove("hidden");
+  }
+  operatorList.innerHTML = "";
+  missingParticipants.forEach((participant) => addHoursOperatoreRow(operatorList, {
+    operatore: getHoursParticipantDisplayName(participant),
+    ore: "",
+    operatoreId: participant.operatoreId || "",
+    participantId: participant.participantId || "",
+    squadraIndex: participant.squadraIndex || "",
+    squadraLabel: participant.squadraLabel || ""
+  }, card));
+  card.querySelector(".hours-add-operator-btn")?.classList.add("hidden");
+  card.querySelector(".hours-note")?.classList.toggle("hidden", missingParticipants.length === 0);
+  if (ui.addHoursCommessaBtn) ui.addHoursCommessaBtn.classList.toggle("hidden", missingParticipants.length === 0);
+  if (ui.hoursFinalizeBtn) ui.hoursFinalizeBtn.classList.toggle("hidden", missingParticipants.length === 0);
+  renderHoursSummary();
+}
+
 function openHoursPageForCommessa(commessaId, dateValue = "") {
   if (!currentUser) {
     alert("Devi fare login per inserire le ore.");
@@ -6834,9 +6888,7 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
     return;
   }
   const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
-  const requiredParticipants = Array.from(getRequiredHoursParticipantsForCommessaDate(id, targetDateValue).values());
-  const completedParticipants = getCompletedHoursParticipantsForCommessaDate(id, targetDateValue);
-  const missingParticipants = requiredParticipants.filter((participant) => !completedParticipants.has(participant.key));
+  const { requiredParticipants, completedParticipants, missingParticipants } = getQuickTeamHoursState(id, targetDateValue);
   if (requiredParticipants.length && !missingParticipants.length) {
     alert("✅ Ore già completate per tutta la squadra.");
     renderSquadre();
@@ -6857,6 +6909,8 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
         ? missingParticipants.map((participant) => ({
             operatore: getHoursParticipantDisplayName(participant),
             ore: "",
+            operatoreId: participant.operatoreId || "",
+            participantId: participant.participantId || "",
             squadraIndex: participant.squadraIndex || "",
             squadraLabel: participant.squadraLabel || ""
           }))
@@ -6915,6 +6969,8 @@ function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }, c
   row.className = "hours-operator-row";
   if (rowData.squadraIndex) row.dataset.squadraIndex = String(rowData.squadraIndex || "");
   if (rowData.squadraLabel) row.dataset.squadraLabel = String(rowData.squadraLabel || "");
+  if (rowData.operatoreId) row.dataset.operatoreId = String(rowData.operatoreId || "");
+  if (rowData.participantId) row.dataset.participantId = String(rowData.participantId || "");
   row.innerHTML = `
     <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}" autocomplete="off">
     <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
@@ -7046,6 +7102,7 @@ function addHoursCommessaBlock(blockData = null) {
       }
     }
     if (blockData.quickTeamHours) {
+      card.dataset.quickTeamHours = "true";
       const statusBox = card.querySelector(".hours-team-status");
       const alreadyInserted = Array.isArray(blockData.alreadyInserted) ? blockData.alreadyInserted.filter(Boolean) : [];
       const toComplete = Array.isArray(blockData.toComplete) ? blockData.toComplete.filter(Boolean) : [];
@@ -7057,15 +7114,18 @@ function addHoursCommessaBlock(blockData = null) {
           </section>
           <section class="hours-team-status-section">
             <strong>🟡 Da completare</strong>
-            ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
+            ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno già inserito le ore</p>`}
           </section>`;
         statusBox.classList.remove("hidden");
       }
       card.querySelector(".hours-add-operator-btn")?.classList.add("hidden");
     }
     card.querySelector(".hours-note").value = blockData.note || "";
-    const rows = Array.isArray(blockData.rows) && blockData.rows.length ? blockData.rows : [{}];
+    const rows = Array.isArray(blockData.rows) ? blockData.rows : [{}];
     rows.forEach((row) => addHoursOperatoreRow(operatorList, row, card));
+    if (blockData.quickTeamHours && !rows.length) {
+      card.querySelector(".hours-note")?.classList.add("hidden");
+    }
     renderHoursOperatorSuggestions(card);
   } else {
     applyHoursSuggestedOperators(card, { force: true });
@@ -7085,7 +7145,8 @@ function collectHoursEntries() {
     const rows = Array.from(card.querySelectorAll(".hours-operator-row")).map((row) => ({
       operatore: String(row.querySelector(".hours-operatore")?.value || "").trim(),
       ore: Number(row.querySelector(".hours-ore")?.value || 0),
-      operatoreId: resolveHoursOperatorId(row.querySelector(".hours-operatore")?.value || ""),
+      operatoreId: String(row.dataset.operatoreId || resolveHoursOperatorId(row.querySelector(".hours-operatore")?.value || "")).trim(),
+      participantId: String(row.dataset.participantId || "").trim(),
       squadraIndex: String(row.dataset.squadraIndex || squadraIndex || "").trim(),
       squadraLabel: String(row.dataset.squadraLabel || squadraLabel || "").trim()
     })).filter((row) => row.operatore && row.ore > 0);
@@ -7826,9 +7887,14 @@ function renderHoursSummary(forcedEntries = null) {
     return;
   }
   const html = entries.map((entry, idx) => {
+    const suggestedRows = !entry.rows.length && entry.commessaId
+      ? getSuggestedHoursOperators(entry.commessaId, ui.hoursDate?.value || "")
+      : [];
     const rows = entry.rows.length
       ? entry.rows.map((row) => `<li>${escapeHTML(row.operatore || "-")}: <b>${escapeHTML(String(row.ore || 0))}h</b></li>`).join("")
-      : "<li>Nessun operatore indicato.</li>";
+      : (suggestedRows.length
+        ? suggestedRows.map((name) => `<li>${escapeHTML(name)}</li>`).join("")
+        : "<li>Nessun operatore indicato.</li>");
     return `
       <article class="item-card">
         <h3>${idx + 1}. ${escapeHTML(entry.commessaName || "Commessa non selezionata")}</h3>
@@ -7981,6 +8047,9 @@ async function finalizeHoursReport(event) {
         .map((row) => ({
           operatore: row.operatore,
           operatoreId: row.operatoreId || resolveHoursOperatorId(row.operatore),
+          participantId: row.participantId || "",
+          squadraIndex: row.squadraIndex || "",
+          squadraLabel: row.squadraLabel || "",
           ore: row.ore
         }))
     })).filter((entry) => entry.commessaId && entry.rows.length),
@@ -8019,10 +8088,16 @@ async function finalizeHoursReport(event) {
     await notifyHoursInsertedToChat(reportRef.id, payload);
     await notifyAdminsHoursInsertedNoApproval(reportRef.id, payload);
 
+    allHoursReports.unshift({ id: reportRef.id, ...payload, createdAt: new Date() });
     setHoursFinalizeButtonText("saved");
     ui.hoursFeedback.textContent = `Ore salvate automaticamente con successo (report ${reportRef.id}). Non serve conferma dell'amministratore.`;
-    ui.hoursCommesseList.innerHTML = "";
-    addHoursCommessaBlock();
+    const quickCards = Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card[data-quick-team-hours='true']"));
+    if (quickCards.length) {
+      quickCards.forEach(updateQuickTeamHoursCard);
+    } else {
+      ui.hoursCommesseList.innerHTML = "";
+      addHoursCommessaBlock();
+    }
     setHoursFinalizeLocked(true);
     renderHoursSummary();
     loadSavedHoursReports();

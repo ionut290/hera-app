@@ -38,6 +38,149 @@ try {
   firebaseInitError = error;
   console.error("FIREBASE INIT ERROR", error);
 }
+
+const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
+const PERSISTED_SESSION_VERSION = 1;
+
+function getCapacitorPreferencesPlugin() {
+  return window.Capacitor
+    && window.Capacitor.Plugins
+    && window.Capacitor.Plugins.Preferences
+    && typeof window.Capacitor.Plugins.Preferences.get === "function"
+    ? window.Capacitor.Plugins.Preferences
+    : null;
+}
+
+function buildPersistedSession(user, overrides = {}) {
+  const email = String(overrides.email ?? user?.email ?? "");
+  const displayName = String(overrides.displayName ?? user?.displayName ?? (email || "Utente"));
+  const isAdmin = Boolean(overrides.isAdmin ?? canManageData());
+  const role = String(overrides.role || overrides.ruolo || (isAdmin ? "admin" : "user"));
+  const teamId = String(overrides.teamId || user?.teamId || "").trim();
+  return {
+    version: PERSISTED_SESSION_VERSION,
+    uid: String(overrides.uid ?? user?.uid ?? ""),
+    email,
+    displayName,
+    userName: displayName,
+    role,
+    ruolo: role,
+    isAdmin,
+    admin: isAdmin,
+    teamId: teamId || null,
+    lastLoginAt: overrides.lastLoginAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function isValidPersistedSession(session) {
+  return Boolean(
+    session
+    && Number(session.version) === PERSISTED_SESSION_VERSION
+    && String(session.uid || "").trim()
+    && String(session.email || "").includes("@")
+    && String(session.lastLoginAt || "").trim()
+  );
+}
+
+function readLocalPersistedSession() {
+  try {
+    const raw = localStorage.getItem(PERSISTED_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isValidPersistedSession(parsed) ? parsed : null;
+  } catch (error) {
+    console.warn("Sessione locale corrotta: verrà ignorata.", error);
+    return null;
+  }
+}
+
+async function readPersistedSession() {
+  const localSession = readLocalPersistedSession();
+  const preferences = getCapacitorPreferencesPlugin();
+  if (!preferences) return localSession;
+  try {
+    const result = await preferences.get({ key: PERSISTED_SESSION_KEY });
+    if (!result?.value) return localSession;
+    const nativeSession = JSON.parse(result.value);
+    return isValidPersistedSession(nativeSession) ? nativeSession : localSession;
+  } catch (error) {
+    console.warn("Sessione Capacitor Preferences non leggibile: uso localStorage se disponibile.", error);
+    return localSession;
+  }
+}
+
+async function savePersistedSession(user, overrides = {}) {
+  if (!user?.uid) return null;
+  const session = buildPersistedSession(user, overrides);
+  const serialized = JSON.stringify(session);
+  try {
+    localStorage.setItem(PERSISTED_SESSION_KEY, serialized);
+  } catch (error) {
+    console.warn("Salvataggio sessione localStorage non riuscito:", error);
+  }
+  const preferences = getCapacitorPreferencesPlugin();
+  if (preferences && typeof preferences.set === "function") {
+    try {
+      await preferences.set({ key: PERSISTED_SESSION_KEY, value: serialized });
+    } catch (error) {
+      console.warn("Salvataggio sessione Capacitor Preferences non riuscito:", error);
+    }
+  }
+  return session;
+}
+
+async function clearPersistedSession() {
+  try {
+    localStorage.removeItem(PERSISTED_SESSION_KEY);
+  } catch (error) {
+    console.warn("Cancellazione sessione localStorage non riuscita:", error);
+  }
+  const preferences = getCapacitorPreferencesPlugin();
+  if (preferences && typeof preferences.remove === "function") {
+    try {
+      await preferences.remove({ key: PERSISTED_SESSION_KEY });
+    } catch (error) {
+      console.warn("Cancellazione sessione Capacitor Preferences non riuscita:", error);
+    }
+  }
+}
+
+function applyPersistedSessionPreview(session) {
+  if (!isValidPersistedSession(session)) return false;
+  currentUser = {
+    uid: session.uid,
+    email: session.email,
+    displayName: session.displayName || session.userName || session.email,
+    teamId: session.teamId || "",
+    persistedOnly: true
+  };
+  setAuthenticationGateState("checking", "Sessione salvata trovata. Ripristino accesso in corso...");
+  if (ui.user) ui.user.textContent = `Sessione salvata: ${session.email}`;
+  if (ui.userName) ui.userName.textContent = `Nome utente: ${session.displayName || session.userName || "Nome non disponibile"}`;
+  return true;
+}
+
+async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
+  if (!user?.uid || !savedSession || !db) return { valid: true, profile: null };
+  const doc = await db.collection("platformUsers").doc(user.uid).get();
+  if (!doc.exists) return { valid: false, profile: null };
+  const profile = doc.data() || {};
+  const normalizedEmail = normalizeEmail(profile.email || user.email);
+  const isAdminUser = isBuiltInSuperAdminEmail(normalizedEmail) || adminEmails.has(normalizedEmail);
+  await savePersistedSession(user, {
+    ...profile,
+    uid: user.uid,
+    email: profile.email || user.email || "",
+    displayName: profile.displayName || user.displayName || user.email || "Utente",
+    isAdmin: isAdminUser,
+    role: profile.role || profile.ruolo || (isAdminUser ? "admin" : "user"),
+    teamId: profile.teamId || "",
+    lastLoginAt: savedSession.lastLoginAt || new Date().toISOString()
+  });
+  return { valid: true, profile };
+}
+
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
@@ -45,11 +188,12 @@ let authLocalPersistencePromise = null;
 let authStateResolved = false;
 
 function getFirebaseLocalAuthPersistence() {
-  return firebase
-    && firebase.auth
-    && firebase.auth.Auth
-    && firebase.auth.Auth.Persistence
-    && firebase.auth.Auth.Persistence.LOCAL;
+  return (firebase && firebase.auth && firebase.auth.browserLocalPersistence)
+    || (firebase
+      && firebase.auth
+      && firebase.auth.Auth
+      && firebase.auth.Auth.Persistence
+      && firebase.auth.Auth.Persistence.LOCAL);
 }
 
 function ensureAuthLocalPersistence() {
@@ -2766,6 +2910,11 @@ if (!auth || firebaseInitError) {
   hideStartupLoading();
 } else {
   setAuthenticationGateState("checking");
+  let savedStartupSession = null;
+  void readPersistedSession().then((session) => {
+    savedStartupSession = session;
+    if (!authStateResolved && session) applyPersistedSessionPreview(session);
+  });
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
   const authCheckWatchdog = setTimeout(() => {
@@ -2795,9 +2944,30 @@ if (!auth || firebaseInitError) {
     uid: user?.uid || ""
   });
   if (loggedIn) {
+    try {
+      const savedSession = savedStartupSession || await readPersistedSession();
+      const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
+      if (!databaseCheck.valid) {
+        console.warn("Sessione salvata non valida: utente non presente in platformUsers.");
+        await clearPersistedSession();
+        await auth.signOut();
+        currentUser = null;
+        setAuthenticationGateState("required", "Sessione non più valida. Effettua di nuovo il login.");
+        hideStartupLoading();
+        return;
+      }
+      await savePersistedSession(user, databaseCheck.profile || {});
+    } catch (error) {
+      console.error("Errore verifica sessione salvata:", error);
+      if (String(error?.code || "").startsWith("auth/")) {
+        await clearPersistedSession();
+      }
+    }
     console.log("USER UID", user.uid);
     logActivity("login_app", "Login app");
     logActivity("apertura_app", "Apertura app");
+  } else {
+    savedStartupSession = null;
   }
   setAuthenticationGateState(loggedIn ? "authenticated" : "required");
 
@@ -2956,9 +3126,10 @@ if (!auth || firebaseInitError) {
   renderNextActionCard();
   console.log("APP READY");
   hideStartupLoading();
-}, (error) => {
+}, async (error) => {
   clearTimeout(authCheckWatchdog);
   console.error("Errore verifica login Firebase:", error);
+  if (String(error?.code || "").startsWith("auth/")) await clearPersistedSession();
   authStateResolved = true;
   currentUser = null;
   setAuthenticationGateState("required", "Non riesco a verificare la sessione. Riprova il login.");
@@ -8583,6 +8754,7 @@ function loginWithGoogle(forceAccountSelection = false) {
 
 async function switchGoogleAccount() {
   try {
+    await clearPersistedSession();
     await auth.signOut();
   } catch (error) {
     console.warn("Logout durante cambio account non riuscito:", error);
@@ -8633,8 +8805,9 @@ async function autoConnectDriveBridge(options = {}) {
   }
 }
 
-function logout() {
+async function logout() {
   resetDriveState();
+  await clearPersistedSession();
   auth.signOut();
 }
 
@@ -23380,7 +23553,7 @@ async function upsertCurrentPlatformUser() {
   if (!currentUser) return;
   const isSuperAdmin = isBuiltInSuperAdminEmail(currentUser.email);
   const isAdminUser = canManageData();
-  await db.collection("platformUsers").doc(currentUser.uid).set({
+  const profilePatch = {
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
@@ -23394,7 +23567,9 @@ async function upsertCurrentPlatformUser() {
     } : {}),
     notificationsAutoEnabled: isAutoNotificationEnabled(),
     lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
+  };
+  await db.collection("platformUsers").doc(currentUser.uid).set(profilePatch, { merge: true });
+  await savePersistedSession(currentUser, profilePatch);
 }
 
 function subscribeAdminUsers() {
@@ -23410,6 +23585,7 @@ function subscribeAdminUsers() {
     renderCommesseManagementList();
     renderAdminUsers();
     if (currentUser) {
+      void savePersistedSession(currentUser, { isAdmin: canManageData(), role: canManageData() ? "admin" : "user" });
       subscribeUsers();
       subscribeOperatorPositions();
       subscribeProgrammazioni();
@@ -23465,6 +23641,14 @@ function subscribeUsers() {
     renderExternalApps();
     renderImpianti();
     renderMap();
+    const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser?.uid || ""));
+    if (currentUser && currentProfile) {
+      void savePersistedSession(currentUser, {
+        ...currentProfile,
+        isAdmin: canManageData(),
+        role: currentProfile.role || currentProfile.ruolo || (canManageData() ? "admin" : "user")
+      });
+    }
     checkAndSendHoursDeadlineAlerts();
   };
   runFirestoreGetWithRetry(source, { label: "LOAD UTENTI", timeoutMs: 9000, retries: 2 })

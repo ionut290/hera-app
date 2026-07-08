@@ -13620,8 +13620,8 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>⚠️ Da confermare</b> — WhatsApp aperto, ma il salvataggio FATTO non è stato confermato.</p>
-        <button type="button" class="btn btn-small">Conferma FATTO</button>
+        <p><b>⚠️ Sincronizzazione non riuscita</b> — ${escapeHTML(FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE)}</p>
+        <button type="button" class="btn btn-small">⚡ FORZA</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       if (moveBtn) {
@@ -19849,18 +19849,19 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
 }
 
 const FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE = "⚠️ Prima premi FATTO. Usa FORZA solo se l’impianto rimane in DA FARE.";
+const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "L’impianto risulta ancora nell’elenco ‘Da fare’. Se hai già eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
 
 function hasFailedFattoAttemptForImpianto(impianto) {
   if (impianto?.done) return false;
   const safetyState = getWhazzupSafetyState(impianto);
-  return Boolean(safetyState?.needsManualMove);
+  return Boolean(safetyState?.whazzupPremuto && safetyState?.needsManualMove);
 }
 
 function isForceImpiantoDoneDistanceAllowed(impianto) {
   if (canManageData()) return true;
   if (!currentUserPos) return false;
   const distanceKm = distanceFromUser(impianto);
-  return Number.isFinite(distanceKm) && distanceKm <= 3;
+  return Number.isFinite(distanceKm) && distanceKm <= 4;
 }
 
 function canUseForceImpiantoDone(impianto, options = {}) {
@@ -19913,6 +19914,12 @@ async function forceMarkDone(impianto) {
   }
 
   updateImpiantoLocalState(ids, payload);
+  const state = getWhazzupSafetyState(impianto);
+  if (state) {
+    state.needsManualMove = false;
+    state.whazzupPremuto = false;
+  }
+  clearWhazzupPendingDoneEntry(impianto);
   expandedImpiantoKey = buildImpiantoKey(impianto);
   setImpiantiViewMode("done");
   renderImpianti();
@@ -19989,14 +19996,10 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);
-  markImpiantoDoneVisualFallback({ ...impianto, doneAt, doneBy });
   updateConnectivityStatus();
 
   whazzupFeedback.showNow();
-  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
-  whazzupFeedback.hide(opened ? 700 : 0);
   await waitForNextFrame();
-  if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {
     const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
@@ -20010,19 +20013,20 @@ async function handleImpiantoWhatsAppClick(impianto) {
       const doneMarked = await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" });
       if (!doneMarked) {
         await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
-        await handleImpiantoDoneSaveFailure(impianto, "Salvataggio FATTO non completato dopo apertura WhatsApp.");
+        await verifyImpiantoDoneBackground(impianto);
         return;
       }
 
-      const persisted = await isImpiantoPersistedAsDone(impianto);
+      whazzupFeedback.hide(700);
+      const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
+      if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
+
+      const persisted = await verifyImpiantoDoneBackground(impianto);
       await updateAuditLogWhazzupClick(auditLogId, {
         fattoEsito: persisted ? "persisted" : "verify_failed",
         fattoConfermato: Boolean(persisted)
       });
-      if (!persisted) {
-        await handleImpiantoDoneSaveFailure(impianto, "Verifica immediata post-salvataggio negativa: impianto non presente nei FATTI.");
-        return;
-      }
+      if (!persisted) return;
 
       updateConnectivityStatus();
       renderImpianti();
@@ -20033,8 +20037,9 @@ async function handleImpiantoWhatsAppClick(impianto) {
         fattoConfermato: false,
         errorMessage: String(error?.message || error || "Errore sconosciuto")
       });
-      await handleImpiantoDoneSaveFailure(impianto, "Eccezione durante il salvataggio FATTO dopo apertura WhatsApp.");
+      await verifyImpiantoDoneBackground(impianto);
     } finally {
+      whazzupFeedback.hide(0);
       clearImpiantoWhazzupProcessing(impianto);
     }
   })();
@@ -20114,7 +20119,7 @@ async function verifyImpiantoDoneBackground(impianto) {
   console.debug("[WHAZZUP->FATTO] Esito verifica persistenza", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto), persisted });
   updateWhazzupSafetyAfterBackgroundCheck(impianto, persisted);
   if (persisted) return true;
-  await handleImpiantoDoneSaveFailure(impianto, "Verifica post-salvataggio negativa: impianto non presente nei FATTI.");
+  if (ui.gpsStatus) ui.gpsStatus.textContent = FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE;
   return false;
 }
 

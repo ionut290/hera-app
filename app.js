@@ -20545,7 +20545,7 @@ function buildImpiantoWhatsAppTemplate(impianto) {
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
     `📍 Comune: ${impianto.comune || "-"}`,
     `🛣️ Via: ${impianto.indirizzo || "-"}`,
-    `🏷️ Tipologia: ${tipologia}`,
+    `📝 Note: ${tipologia}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     ...noteLines
   ].join("\n");

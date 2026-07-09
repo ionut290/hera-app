@@ -1206,6 +1206,7 @@ let selectedNotificationCalendarDateKey = "";
 const impiantoMarkerByKey = new Map();
 const fullscreenImpiantoMarkerByKey = new Map();
 const whazzupProcessingByImpianto = new Set();
+const impiantoWhatsAppTemplateCache = new Map();
 let mapMarkerSequenceByKey = new Map();
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const HOURS_DEADLINE_ALERT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -12228,6 +12229,7 @@ function subscribeImpianti() {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
+        refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
         updateCommessaDashboard();
@@ -12267,6 +12269,7 @@ function stopImpiantiSubscription() {
     unsubscribeImpianti = null;
   }
   currentImpianti = [];
+  clearImpiantoWhatsAppTemplateCache();
   activeNearbyImpiantoContext = null;
   renderHeaderActivitySummary();
   clearMap();
@@ -12287,6 +12290,7 @@ function subscribeCommessaNotes() {
           if (dateCompare) return dateCompare;
           return firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt);
         });
+      refreshImpiantoWhatsAppTemplateCache(currentImpianti);
       renderCommessaNotes();
       updateCommessaDashboard();
       if (selectedCommessaId && ui.impiantiLista && !ui.impiantiPage?.classList.contains("hidden")) renderImpianti();
@@ -12302,6 +12306,7 @@ function stopCommessaNotesSubscription() {
     unsubscribeCommessaNotes = null;
   }
   currentCommessaNotes = [];
+  refreshImpiantoWhatsAppTemplateCache(currentImpianti);
   renderCommessaNotes();
 }
 
@@ -14059,6 +14064,7 @@ async function saveImpiantoEdits(event) {
   const ref = db.collection("commesse").doc(selectedCommessaId).collection("impianti");
   trackLocalSheetMutation(selectedCommessaId);
   await Promise.all(editingImpiantoIds.map((id) => ref.doc(id).set(patch, { merge: true })));
+  invalidateImpiantoWhatsAppTemplate(editingImpiantoIds);
   ui.impiantoEditFeedback.textContent = "Modifiche salvate. Sincronizzazione per tutti gli utenti in corso...";
   setTimeout(closeImpiantoEditor, 500);
 }
@@ -20437,36 +20443,103 @@ async function notifyAdminsForImpiantoDoneSaveError(impianto, reason = "") {
   })));
 }
 
-function buildImpiantoWhatsAppPayload(impianto, options = {}) {
-  const user = auth.currentUser;
+function getImpiantoWhatsAppTemplateCacheKey(impianto, commessaId = selectedCommessaId) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  return commessaId && impiantoKey ? `${commessaId}:${impiantoKey}` : "";
+}
+
+function getImpiantoWhatsAppTemplateSignature(impianto) {
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  return JSON.stringify({
+    commessaId: selectedCommessaId || "",
+    idSap: impianto?.idSap || "",
+    denominazione: impianto?.denominazione || "",
+    comune: impianto?.comune || "",
+    indirizzo: impianto?.indirizzo || "",
+    codicePrezzo: impianto?.codicePrezzo || "",
+    tipologia: impianto?.tipologiaImpianto || impianto?.tipoImpianto || impianto?.tipologiaIntervento || "",
+    commessa: selectedCommessaName || "",
+    lavorazioniRichieste: impianto?.lavorazioniRichieste || "",
+    tipologiaIntervento: impianto?.tipologiaIntervento || "",
+    noteImpianto: impianto?.noteImpianto || "",
+    linkedNotes: linkedNotes.map((note) => ({ id: note.id || "", title: getCommessaNoteTitle(note), text: note.text || "" }))
+  });
+}
+
+function buildImpiantoWhatsAppTemplate(impianto) {
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const title = isOnlyOrdinaria
     ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
+  const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || "-";
+  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
+  const noteLines = [
+    impianto.noteImpianto ? `📝 Note impianto: ${impianto.noteImpianto}` : "",
+    ...(linkedNotes.length ? [
+      "⚠️ A questo impianto è stata segnalata una criticità:",
+      ...linkedNotes.map((note) => `${getCommessaNoteTitle(note)}\n${note.text || "-"}`)
+    ] : [])
+  ].filter(Boolean);
+  return [
+    `${title} - Report operativo`,
+    `🆔 ID SAP: ${impianto.idSap || "-"}`,
+    `🏗️ Impianto: ${impianto.denominazione || "-"}`,
+    `📍 Comune: ${impianto.comune || "-"}`,
+    `🛣️ Via: ${impianto.indirizzo || "-"}`,
+    `🏷️ Tipologia: ${tipologia}`,
+    `📌 Commessa: ${selectedCommessaName || "-"}`,
+    ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
+    ...noteLines
+  ].join("\n");
+}
+
+function prepareImpiantoWhatsAppTemplate(impianto) {
+  const cacheKey = getImpiantoWhatsAppTemplateCacheKey(impianto);
+  if (!cacheKey) return null;
+  const signature = getImpiantoWhatsAppTemplateSignature(impianto);
+  const cached = impiantoWhatsAppTemplateCache.get(cacheKey);
+  if (cached?.signature === signature) return cached;
+  const prepared = { signature, template: buildImpiantoWhatsAppTemplate(impianto), updatedAt: Date.now() };
+  impiantoWhatsAppTemplateCache.set(cacheKey, prepared);
+  return prepared;
+}
+
+function refreshImpiantoWhatsAppTemplateCache(impianti = []) {
+  const activeKeys = new Set();
+  impianti.forEach((impianto) => {
+    const prepared = prepareImpiantoWhatsAppTemplate(impianto);
+    const cacheKey = getImpiantoWhatsAppTemplateCacheKey(impianto);
+    if (prepared && cacheKey) activeKeys.add(cacheKey);
+  });
+  Array.from(impiantoWhatsAppTemplateCache.keys()).forEach((key) => {
+    if (key.startsWith(`${selectedCommessaId}:`) && !activeKeys.has(key)) impiantoWhatsAppTemplateCache.delete(key);
+  });
+}
+
+function invalidateImpiantoWhatsAppTemplate(impiantoOrIds) {
+  const ids = Array.isArray(impiantoOrIds) ? impiantoOrIds : getImpiantoDocIds(impiantoOrIds);
+  const idSet = new Set(ids.filter(Boolean));
+  const matching = currentImpianti.filter((item) => getImpiantoDocIds(item).some((id) => idSet.has(id)));
+  matching.forEach((impianto) => impiantoWhatsAppTemplateCache.delete(getImpiantoWhatsAppTemplateCacheKey(impianto)));
+}
+
+function clearImpiantoWhatsAppTemplateCache() {
+  impiantoWhatsAppTemplateCache.clear();
+}
+
+function buildImpiantoWhatsAppPayload(impianto, options = {}) {
+  const user = auth.currentUser;
   const doneAt = options.doneAt || impianto.doneAt || new Date();
   const doneInfo = formatDoneDateTime(doneAt);
   const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
   const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
-  const linkedNotes = getCommessaNoteLinkedNotes(impianto);
-  const segnalazioniLines = linkedNotes.length
-    ? [
-        "",
-        "⚠️ A questo impianto è stata segnalata una criticità:",
-        ...linkedNotes.map((note) => `${getCommessaNoteTitle(note)}\n${note.text || "-"}`)
-      ]
-    : [];
   const operatorName = options.operatorName || user?.displayName || user?.email || impianto.doneBy || "-";
+  const preparedTemplate = prepareImpiantoWhatsAppTemplate(impianto)?.template || buildImpiantoWhatsAppTemplate(impianto);
   const message = [
-    `${title} - Report operativo`,
-    `🏗️ Impianto: ${impianto.denominazione || "-"}`,
-    `📍 Comune: ${impianto.comune || "-"}`,
-    `🛣️ Via: ${impianto.indirizzo || "-"}`,
-    `🆔 ID SAP: ${impianto.idSap || "-"}`,
-    ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
+    preparedTemplate,
     `👷 Operatore: ${operatorName}`,
     `📅 Data: ${date}`,
-    `🕒 Ora: ${time}`,
-    ...segnalazioniLines
+    `🕒 Ora: ${time}`
   ].join("\n");
 
   const encodedMessage = encodeURIComponent(message);

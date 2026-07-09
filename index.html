@@ -26,6 +26,14 @@
       <span>Attendere, sto creando il messaggio.</span>
     </div>
   </div>
+  <div id="sync-progress-overlay" class="sync-progress-overlay hidden" role="status" aria-live="polite" aria-hidden="true">
+    <div class="sync-progress-card">
+      <span class="whazzup-preparing-spinner" aria-hidden="true"></span>
+      <strong id="sync-progress-title">Sincronizzazione...</strong>
+      <p id="sync-progress-detail" class="muted">Preparo la coda offline.</p>
+      <div id="sync-progress-list" class="sync-progress-list"></div>
+    </div>
+  </div>
   <aside id="side-menu" class="side-menu hidden" aria-hidden="true">
     <div class="side-menu-header">
       <h2>Menu</h2>
@@ -90,6 +98,11 @@
             </div>
             <button id="snow-service-btn" class="snow-service-btn" type="button" aria-label="Apri Servizio Neve">❄️ NEVE</button>
           </div>
+        </div>
+        <div id="user-connection-bar" class="user-connection-bar" role="status" aria-live="polite">
+          <p id="operator-greeting" class="user-connection-greeting">👋 Ciao, Operatore</p>
+          <p id="connection-indicator" class="user-connection-indicator">🟢 Online • Connessione in verifica</p>
+          <p id="offline-mode-indicator" class="user-connection-offline hidden">📦 Modalità offline attiva</p>
         </div>
         <div class="logo-meta">
           <p id="active-users-summary" class="muted active-users-summary" role="button" tabindex="-1" aria-label="Utenti attivi">Utenti attivi: 0</p>

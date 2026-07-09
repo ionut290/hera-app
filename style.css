@@ -10680,3 +10680,84 @@ body.worklimate-page-open {
 .user-ban-status--active { color: #047857; }
 .user-ban-status--banned { color: #b91c1c; }
 .btn-danger { background: #b91c1c; color: #fff; border-color: #991b1b; }
+
+
+.user-connection-bar {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.user-connection-bar p {
+  margin: 0;
+}
+
+.user-connection-greeting {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.user-connection-indicator,
+.user-connection-offline {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.user-connection-offline {
+  color: #92400e;
+}
+
+.sync-progress-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.sync-progress-card {
+  width: min(440px, 94vw);
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.sync-progress-card strong {
+  font-size: 1.1rem;
+}
+
+.sync-progress-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.sync-progress-list p {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.sync-progress-list span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}

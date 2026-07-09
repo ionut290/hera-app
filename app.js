@@ -15293,7 +15293,6 @@ function buildImpiantoSafetyWhatsappText(impianto = {}) {
   const operator = currentUser?.displayName || currentUser?.email || "Operatore";
   return [
     "⚠️ SEGNALAZIONE SICUREZZA IMPIANTO",
-    `Commessa: ${selectedCommessaName || "Commessa"}`,
     `Impianto: ${getImpiantoDisplayName(impianto) || "non disponibile"}`,
     `Comune: ${getImpiantoComune(impianto) || "non disponibile"}`,
     `Operatore: ${operator}`,
@@ -16274,7 +16273,6 @@ function getAtexWhatsappText(impianto = {}) {
   const operator = currentUser?.displayName || currentUser?.email || "Operatore non indicato";
   return [
     "⚠️ PROBLEMA ATEX RILEVATO",
-    `Commessa: ${getSelectedAtexCommessaName()}`,
     `Impianto: ${impianto.denominazione || impianto.nome || "Impianto non indicato"}`,
     `Comune: ${impianto.comune || "Comune non indicato"}`,
     `Operatore: ${operator}`,

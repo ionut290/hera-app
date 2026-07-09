@@ -606,6 +606,13 @@ const ui = {
   pendingWhatsappSummary: document.getElementById("pending-whatsapp-summary"),
   pendingWhatsappBadge: document.getElementById("pending-whatsapp-badge"),
   pendingWhatsappList: document.getElementById("pending-whatsapp-list"),
+  operatorGreeting: document.getElementById("operator-greeting"),
+  connectionIndicator: document.getElementById("connection-indicator"),
+  offlineModeIndicator: document.getElementById("offline-mode-indicator"),
+  syncProgressOverlay: document.getElementById("sync-progress-overlay"),
+  syncProgressTitle: document.getElementById("sync-progress-title"),
+  syncProgressDetail: document.getElementById("sync-progress-detail"),
+  syncProgressList: document.getElementById("sync-progress-list"),
   mapImpiantoDetailPanel: document.getElementById("map-impianto-detail-panel"),
   mapImpiantoDetailBody: document.getElementById("map-impianto-detail-body"),
   biogasMapPage: document.getElementById("biogas-map-page"),
@@ -1522,6 +1529,7 @@ let posDocuments = [];
 let unsubscribePosDocuments = null;
 const PENDING_SHEET_EXPORTS_KEY = "heraPendingSheetExports";
 const PENDING_IMPIANTO_ACTIONS_KEY = "heraPendingImpiantoActions";
+const PENDING_OFFLINE_MUTATIONS_KEY = "heraPendingOfflineMutations";
 const COMMESSE_LOCAL_CACHE_KEY = "heraCommesseCache";
 const LAST_SELECTED_COMMESSA_KEY = "heraLastSelectedCommessaId";
 const LAST_OPENED_COMMESSA_KEY = "heraLastOpenedCommessaId";
@@ -2037,7 +2045,11 @@ ui.notificationDocViewerCloseBtn?.addEventListener("click", closeNotificationDoc
 ui.notificationDocViewerModal?.addEventListener("click", (event) => {
   if (event.target === ui.notificationDocViewerModal) closeNotificationDocumentViewer();
 });
-window.addEventListener("online", () => { setFirestoreConnectionState("Online", ""); });
+window.addEventListener("online", () => {
+  setFirestoreConnectionState("Online", "");
+  syncPendingImpiantoActions();
+  syncPendingOfflineMutations();
+});
 window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
@@ -2145,6 +2157,7 @@ const FIRESTORE_RETRY_DELAYS_MS = [700, 1600];
 let firestoreNetworkState = navigator.onLine ? "Online" : "Offline";
 let firestoreCacheState = "";
 let firestoreSlowTimer = null;
+let lastConnectionMbps = null;
 updateConnectivityStatus();
 
 function sleep(ms) {
@@ -2156,6 +2169,11 @@ function setFirestoreConnectionState(state, detail = "") {
   firestoreCacheState = detail || firestoreCacheState;
   console.log(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
   updateConnectivityStatus();
+}
+
+const browserConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+if (browserConnection && typeof browserConnection.addEventListener === "function") {
+  browserConnection.addEventListener("change", updateConnectivityStatus);
 }
 
 function startFirestoreSlowWatch(label) {
@@ -3138,7 +3156,10 @@ if (!auth || firebaseInitError) {
         renderExternalApps();
         renderPendingWhatsappList();
         fetchWeather();
-        if (!isSnowServiceContext()) syncPendingImpiantoActions();
+        if (!isSnowServiceContext()) {
+          syncPendingImpiantoActions();
+          syncPendingOfflineMutations();
+        }
         renderNextActionCard();
       });
     runDeferredStartupTasks([
@@ -8308,6 +8329,16 @@ async function finalizeHoursReport(event) {
       return;
     }
 
+    if (isNetworkOffline()) {
+      enqueueOfflineMutation("hoursReport", { ...payload, createdAt: new Date().toISOString() });
+      allHoursReports.unshift({ id: `offline-${Date.now()}`, ...payload, createdAt: new Date(), offlinePending: true });
+      setHoursFinalizeButtonText("saved");
+      ui.hoursFeedback.textContent = "Offline: ore salvate nella coda di sincronizzazione. Verranno inviate appena torna internet.";
+      setHoursFinalizeLocked(true);
+      renderHoursSummary();
+      return;
+    }
+
     const existingConflicts = await findExistingHoursConflicts(dateValue, payload.entries);
     if (existingConflicts.length) {
       ui.hoursFeedback.textContent = formatHoursDuplicateMessage(existingConflicts, { admin: false });
@@ -11952,6 +11983,82 @@ function savePendingImpiantoActions() {
   }
 }
 
+function loadPendingOfflineMutations() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_OFFLINE_MUTATIONS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.id && item?.type) : [];
+  } catch (error) {
+    console.warn("Coda offline non leggibile:", error);
+    return [];
+  }
+}
+
+function savePendingOfflineMutations(items) {
+  try {
+    localStorage.setItem(PENDING_OFFLINE_MUTATIONS_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+  } catch (error) {
+    console.warn("Coda offline non salvata:", error);
+  }
+}
+
+function enqueueOfflineMutation(type, payload) {
+  const queue = loadPendingOfflineMutations();
+  const item = {
+    id: `${type}:${currentUser?.uid || "user"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    payload,
+    userId: currentUser?.uid || "",
+    userEmail: currentUser?.email || "",
+    createdAt: new Date().toISOString(),
+    status: "pending"
+  };
+  queue.push(item);
+  savePendingOfflineMutations(queue);
+  return item;
+}
+
+async function syncPendingOfflineMutations() {
+  if (isNetworkOffline() || !currentUser) return;
+  const queue = loadPendingOfflineMutations();
+  const pending = queue.filter((item) => item.status !== "synced" && (!item.userId || item.userId === currentUser.uid));
+  if (!pending.length) return;
+  for (let index = 0; index < pending.length; index += 1) {
+    showSyncProgress(pending.map((item) => ({ impiantoName: getOfflineMutationLabel(item), commessaName: item.payload?.commessaName || "Coda offline" })), index);
+    const item = pending[index];
+    if (item.type === "hoursReport") {
+      const payload = {
+        ...item.payload,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        syncedFromOfflineQueue: true,
+        offlineCreatedAt: item.createdAt
+      };
+      const reportRef = await createDirectHoursReportWithLocks(payload);
+      await notifyHoursInsertedToChat(reportRef.id, payload);
+      await notifyAdminsHoursInsertedNoApproval(reportRef.id, payload);
+    } else if (item.type === "commessaNote") {
+      const payload = {
+        ...item.payload,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        syncedFromOfflineQueue: true,
+        offlineCreatedAt: item.createdAt
+      };
+      const notesRef = db.collection("commesse").doc(payload.commessaId).collection("noteCommessa");
+      if (payload.noteId) await notesRef.doc(payload.noteId).set(payload, { merge: true });
+      else await notesRef.add({ ...payload, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: payload.createdBy || currentUser?.email || "" });
+    }
+    item.status = "synced";
+  }
+  savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
+  showSyncProgress([], pending.length, true);
+  loadSavedHoursReports?.();
+}
+
+function getOfflineMutationLabel(item) {
+  if (item?.type === "hoursReport") return "Ore inserite offline";
+  if (item?.type === "commessaNote") return item.payload?.title || "Nota offline";
+  return "Operazione offline";
+}
+
 function loadWhazzupPendingDoneEntries() {
   try {
     const raw = localStorage.getItem(WHAZZUP_PENDING_DONE_KEY);
@@ -12124,6 +12231,7 @@ function markPendingActionStatus(actionId, patch) {
   };
   savePendingImpiantoActions();
   renderPendingWhatsappList();
+  const remainingToSync = getCurrentUserPendingActions().filter((action) => isActionWaitingForSync(action));
   if (selectedCommessaId) {
     currentImpianti = applyPendingActionsToImpianti(currentImpianti, selectedCommessaId);
     renderImpianti();
@@ -12154,7 +12262,10 @@ async function syncPendingImpiantoActions() {
     return;
   }
   const syncedWhatsappActions = [];
-  for (const action of actionsToSync) {
+  showSyncProgress(actionsToSync, 0);
+  for (let actionIndex = 0; actionIndex < actionsToSync.length; actionIndex += 1) {
+    const action = actionsToSync[actionIndex];
+    showSyncProgress(actionsToSync, actionIndex);
     const impiantoIds = Array.isArray(action.impiantoIds) ? action.impiantoIds.filter(Boolean) : [];
     if (!action.commessaId || !impiantoIds.length) continue;
     markPendingActionStatus(action.id, { status: "syncing", lastError: "" });
@@ -12194,6 +12305,7 @@ async function syncPendingImpiantoActions() {
       });
     }
   }
+  const remainingToSync = getCurrentUserPendingActions().filter((action) => isActionWaitingForSync(action));
   if (selectedCommessaId) {
     currentImpianti = applyPendingActionsToImpianti(currentImpianti, selectedCommessaId);
     renderImpianti();
@@ -12205,6 +12317,42 @@ async function syncPendingImpiantoActions() {
     alert("Ci sono messaggi WhatsApp da inviare");
   }
   renderPendingWhatsappList();
+  if (!remainingToSync.length) showSyncProgress([], actionsToSync.length, true);
+  else showSyncProgress([]);
+}
+
+function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
+  if (!ui.syncProgressOverlay || !ui.syncProgressTitle || !ui.syncProgressDetail) return;
+  if (completed) {
+    ui.syncProgressOverlay.classList.remove("hidden");
+    ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
+    ui.syncProgressTitle.textContent = "✅ Tutto sincronizzato";
+    ui.syncProgressDetail.textContent = "Tutte le operazioni offline sono state inviate una alla volta.";
+    if (ui.syncProgressList) ui.syncProgressList.innerHTML = "";
+    setTimeout(() => {
+      ui.syncProgressOverlay?.classList.add("hidden");
+      ui.syncProgressOverlay?.setAttribute("aria-hidden", "true");
+    }, 1800);
+    return;
+  }
+  if (!actions.length) {
+    ui.syncProgressOverlay.classList.add("hidden");
+    ui.syncProgressOverlay.setAttribute("aria-hidden", "true");
+    return;
+  }
+  const total = actions.length;
+  const safeIndex = Math.min(currentIndex + 1, total);
+  ui.syncProgressOverlay.classList.remove("hidden");
+  ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
+  ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex}/${total}...`;
+  const action = actions[currentIndex] || actions[0];
+  ui.syncProgressDetail.textContent = `${action.commessaName || "Commessa"} • ${action.impiantoName || "Impianto"}`;
+  if (ui.syncProgressList) {
+    ui.syncProgressList.innerHTML = actions.map((item, index) => {
+      const state = index < currentIndex ? "✅" : (index === currentIndex ? "🔄" : "⏳");
+      return `<p>${state} ${escapeHTML(item.impiantoName || "Impianto")} <span>${escapeHTML(item.commessaName || "Commessa")}</span></p>`;
+    }).join("");
+  }
 }
 
 function openPendingWhatsApp(actionId) {
@@ -12574,6 +12722,20 @@ async function saveCommessaNote(event) {
   }
   if (!payload.text) {
     alert("Inserisci il testo della nota.");
+    return;
+  }
+  if (isNetworkOffline()) {
+    enqueueOfflineMutation("commessaNote", {
+      ...payload,
+      noteId,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.email || ""
+    });
+    currentCommessaNotes.unshift({ id: noteId || `offline-${Date.now()}`, ...payload, updatedAt: new Date(), offlinePending: true });
+    renderCommessaNotes();
+    closeCommessaNoteForm();
+    alert("Offline: nota salvata nella coda di sincronizzazione.");
     return;
   }
   const notesRef = db.collection("commesse").doc(selectedCommessaId).collection("noteCommessa");
@@ -14157,14 +14319,48 @@ async function setImpiantoRequestDriveLink(impianto) {
   }
 }
 
+function getConnectionMbps() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const downlink = Number(connection?.downlink);
+  return Number.isFinite(downlink) && downlink > 0 ? downlink : null;
+}
+
+function getOperatorDisplayName() {
+  const user = auth?.currentUser || currentUser || readLocalPersistedSession();
+  const fallbackEmail = String(user?.email || "").trim();
+  const rawName = String(user?.displayName || user?.userName || fallbackEmail || "Operatore").trim();
+  return rawName.includes("@") ? rawName.split("@")[0] : rawName;
+}
+
+function formatConnectionLabel(baseState) {
+  if (baseState === "Offline") return "🔴 Offline";
+  const mbps = getConnectionMbps();
+  if (mbps != null) lastConnectionMbps = mbps;
+  const effectiveMbps = mbps ?? lastConnectionMbps;
+  const isSlow = baseState === "Connessione lenta" || (effectiveMbps != null && effectiveMbps < 2);
+  if (isSlow) {
+    return effectiveMbps != null
+      ? `🟡 Connessione lenta • ${Math.round(effectiveMbps)} Mbps`
+      : "🟡 Connessione lenta";
+  }
+  return effectiveMbps != null
+    ? `🟢 Online • ${Math.round(effectiveMbps)} Mbps • Connessione ottima`
+    : "🟢 Online • Connessione disponibile";
+}
+
 function updateConnectivityStatus() {
   const browserOnline = navigator.onLine;
   const baseState = firestoreNetworkState === "Connessione lenta"
     ? "Connessione lenta"
     : (browserOnline ? "Online" : "Offline");
   firestoreNetworkState = baseState;
-  if (!ui.gpsStatus) return;
   const cacheSuffix = firestoreCacheState ? ` • ${firestoreCacheState}` : "";
+
+  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${getOperatorDisplayName()}`;
+  if (ui.connectionIndicator) ui.connectionIndicator.textContent = formatConnectionLabel(baseState);
+  ui.offlineModeIndicator?.classList.toggle("hidden", baseState !== "Offline");
+
+  if (!ui.gpsStatus) return;
   if (baseState === "Connessione lenta") {
     ui.gpsStatus.textContent = `Connessione lenta: sblocco la schermata e uso gli ultimi dati disponibili.${cacheSuffix}`;
   } else if (browserOnline) {

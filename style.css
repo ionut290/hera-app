@@ -10664,3 +10664,19 @@ body.worklimate-page-open {
 }
 .active-users-metric-button p { margin: .45rem 0 0; font-size: 1.35rem; font-weight: 900; }
 .active-users-collapsible-card { display: grid; gap: .75rem; }
+
+.banned-request-access-btn {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.auth-banned .auth-gate-logo { background: #fee2e2; color: #b91c1c; }
+.auth-banned .auth-gate-card { border: 2px solid #fecaca; }
+.user-ban-status { font-weight: 800; }
+.user-ban-status--active { color: #047857; }
+.user-ban-status--banned { color: #b91c1c; }
+.btn-danger { background: #b91c1c; color: #fff; border-color: #991b1b; }

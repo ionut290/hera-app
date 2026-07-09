@@ -68,6 +68,10 @@ function buildPersistedSession(user, overrides = {}) {
     isAdmin,
     admin: isAdmin,
     teamId: teamId || null,
+    banned: Boolean(overrides.banned),
+    bannedReason: overrides.bannedReason || null,
+    bannedAt: overrides.bannedAt || null,
+    bannedBy: overrides.bannedBy || null,
     lastLoginAt: overrides.lastLoginAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -147,7 +151,7 @@ async function clearPersistedSession() {
 }
 
 function applyPersistedSessionPreview(session) {
-  if (!isValidPersistedSession(session)) return false;
+  if (!isValidPersistedSession(session) || session.banned) return false;
   currentUser = {
     uid: session.uid,
     email: session.email,
@@ -178,7 +182,29 @@ async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
     teamId: profile.teamId || "",
     lastLoginAt: savedSession.lastLoginAt || new Date().toISOString()
   });
-  return { valid: true, profile };
+  return { valid: true, profile, banned: Boolean(profile.banned) };
+}
+
+function buildBannedWhatsAppUrl(profile = currentUserBanProfile) {
+  const now = new Date().toLocaleString("it-IT");
+  const name = profile?.displayName || currentUser?.displayName || currentUser?.email || "Utente";
+  const email = profile?.email || currentUser?.email || "";
+  const text = `Ciao Admin, ti chiedo di riattivare il mio accesso alla Hera App.
+
+Nome utente: ${name}
+Email: ${email}
+Data richiesta: ${now}
+
+Grazie.`;
+  return `https://wa.me/393892352575?text=${encodeURIComponent(text)}`;
+}
+
+function openBannedAccessRequest() {
+  window.open(buildBannedWhatsAppUrl(), "_blank", "noopener,noreferrer");
+}
+
+function isCurrentUserBanned() {
+  return Boolean(currentUserBanProfile?.banned);
 }
 
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
@@ -418,6 +444,7 @@ const ui = {
   whazzupPreparingFeedback: document.getElementById("whazzup-preparing-feedback"),
   authGate: document.getElementById("auth-gate"),
   authGateLoginBtn: document.getElementById("auth-gate-login-btn"),
+  bannedRequestAccessBtn: document.getElementById("banned-request-access-btn"),
   authGateMessage: document.getElementById("auth-gate-message"),
   authEmailForm: document.getElementById("auth-email-form"),
   authEmailInput: document.getElementById("auth-email-input"),
@@ -700,6 +727,7 @@ const ui = {
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
+  userBanList: document.getElementById("user-ban-list"),
   userPermissionsList: document.getElementById("user-permissions-list"),
   externalAppForm: document.getElementById("external-app-form"),
   externalAppName: document.getElementById("external-app-name"),
@@ -1009,6 +1037,7 @@ let presenceHeartbeatTimer = null;
 let chatMessages = [];
 let chatNotificationsInitialized = false;
 let platformUsers = [];
+let currentUserBanProfile = null;
 let programmazioni = [];
 let programmazioneOperatorAutocomplete = null;
 let programmazioneMezziAutocomplete = null;
@@ -2049,22 +2078,32 @@ function setAuthenticationGateState(state, message = "") {
   const isChecking = state === "checking";
   const isRequired = state === "required";
   const isAuthenticated = state === "authenticated";
+  const isBanned = state === "banned";
 
   document.body.classList.toggle("auth-pending", isChecking);
-  document.body.classList.toggle("auth-required", isRequired);
-  ui.authGate?.classList.toggle("hidden", !isRequired);
+  document.body.classList.toggle("auth-required", isRequired || isBanned);
+  document.body.classList.toggle("auth-banned", isBanned);
+  ui.authGate?.classList.toggle("hidden", !(isRequired || isBanned));
   if (ui.authGateMessage) {
-    ui.authGateMessage.textContent = message || "Accedi con il tuo account Google per utilizzare l'app.";
+    ui.authGateMessage.textContent = isBanned
+      ? "Ti è stato negato l’accesso. Richiedi l’accesso all’amministratore."
+      : (message || "Accedi con il tuo account Google per utilizzare l'app.");
   }
-  if (ui.authGateLoginBtn) ui.authGateLoginBtn.disabled = isChecking;
+  if (ui.authGateLoginBtn) {
+    ui.authGateLoginBtn.disabled = isChecking;
+    ui.authGateLoginBtn.classList.toggle("hidden", isBanned);
+  }
+  ui.authEmailForm?.classList.toggle("hidden", isBanned);
+  ui.bannedRequestAccessBtn?.classList.toggle("hidden", !isBanned);
 
-  if (isRequired) {
+  if (isRequired || isBanned) {
     ui.sideMenu?.classList.add("hidden");
     ui.sideMenu?.setAttribute("aria-hidden", "true");
     ui.menuOverlay?.classList.add("hidden");
   }
   if (isAuthenticated) {
     ui.authGate?.classList.add("hidden");
+    document.body.classList.remove("auth-banned");
   }
 }
 
@@ -2939,6 +2978,7 @@ if (!auth || firebaseInitError) {
   console.log("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
+  currentUserBanProfile = null;
   const loggedIn = Boolean(user);
   console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
@@ -2948,6 +2988,25 @@ if (!auth || firebaseInitError) {
     try {
       const savedSession = savedStartupSession || await readPersistedSession();
       const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
+      if (databaseCheck.banned) {
+        currentUserBanProfile = databaseCheck.profile || { email: user.email, displayName: user.displayName };
+        await savePersistedSession(user, currentUserBanProfile);
+        stopCommesseSubscription();
+        stopImpiantiSubscription();
+        stopCommessaNotesSubscription();
+        stopChatSubscription();
+        stopPersonaleSubscription();
+        stopMezziSubscription();
+        stopSquadreSubscription();
+        stopUsersSubscription();
+        stopOperatorPositionsSubscription();
+        stopGlobalNotificationsSubscription();
+        stopUserAlertsSubscription();
+        setAuthenticationGateState("banned");
+        hideStartupLoading();
+        return;
+      }
+      currentUserBanProfile = null;
       if (!databaseCheck.valid) {
         console.warn("Sessione salvata non valida: utente non presente in platformUsers.");
         await clearPersistedSession();
@@ -23684,6 +23743,7 @@ function stopAdminUsersSubscription() {
   }
   adminEmails = new Set(BUILT_IN_SUPER_ADMIN_EMAILS.map((email) => normalizeEmail(email)));
   renderAdminUsers();
+  renderUserBanList();
 }
 
 function subscribeUsers() {
@@ -23707,13 +23767,20 @@ function subscribeUsers() {
     maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
+    const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser?.uid || ""));
+    if (currentProfile?.banned && !canManageData()) {
+      currentUserBanProfile = currentProfile;
+      stopCommesseSubscription(); stopImpiantiSubscription(); stopSquadreSubscription(); stopPersonaleSubscription(); stopMezziSubscription(); stopGlobalNotificationsSubscription();
+      setAuthenticationGateState("banned");
+      return;
+    }
     renderUserPermissionList();
+    renderUserBanList();
     renderNotificationTargetUsers();
     renderHeaderActivitySummary();
     renderExternalApps();
     renderImpianti();
     renderMap();
-    const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser?.uid || ""));
     if (currentUser && currentProfile) {
       void savePersistedSession(currentUser, {
         ...currentProfile,
@@ -24360,6 +24427,49 @@ function renderUserPermissionList() {
   });
 }
 
+function renderUserBanList() {
+  if (!ui.userBanList) return;
+  if (!canManageData()) {
+    ui.userBanList.innerHTML = "<p class='muted'>Solo un admin può bloccare o sbloccare utenti.</p>";
+    return;
+  }
+  const users = platformUsers.filter((user) => String(user.id || user.uid || "") !== String(currentUser?.uid || ""));
+  if (!users.length) {
+    ui.userBanList.innerHTML = "<p class='muted'>Nessun utente disponibile.</p>";
+    return;
+  }
+  ui.userBanList.innerHTML = "";
+  users.forEach((user) => {
+    const banned = Boolean(user.banned);
+    const row = document.createElement("div");
+    row.className = "simple-list-item stacked";
+    const title = document.createElement("strong");
+    title.textContent = user.displayName || user.email || user.id;
+    row.appendChild(title);
+    const status = document.createElement("span");
+    status.className = banned ? "user-ban-status user-ban-status--banned" : "user-ban-status user-ban-status--active";
+    status.textContent = banned ? "🔴 Accesso negato" : "🟢 Attivo";
+    row.appendChild(status);
+    const btn = createButton(banned ? "SBLOCCA UTENTE" : "BANNA UTENTE", () => setUserBanned(user, !banned));
+    btn.classList.add("btn-small", banned ? "btn-primary" : "btn-danger");
+    row.appendChild(btn);
+    ui.userBanList.appendChild(row);
+  });
+}
+
+async function setUserBanned(user, banned) {
+  if (!canManageData()) return alert("Solo un admin può bloccare o sbloccare utenti.");
+  const userId = String(user?.id || user?.uid || "");
+  if (!userId) return;
+  const payload = banned
+    ? { banned: true, bannedReason: "Bloccato da amministratore", bannedAt: firebase.firestore.FieldValue.serverTimestamp(), bannedBy: currentUser?.email || currentUser?.uid || "admin" }
+    : { banned: false, bannedReason: firebase.firestore.FieldValue.delete(), bannedAt: firebase.firestore.FieldValue.delete(), bannedBy: firebase.firestore.FieldValue.delete() };
+  await db.collection("platformUsers").doc(userId).set({
+    ...payload,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser?.email || ""
+  }, { merge: true });
+}
 
 function getPlatformUserLabel(user) {
   if (!user) return "Utente sconosciuto";

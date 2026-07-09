@@ -2,12 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    function authPresent() {
       return request.auth != null;
     }
 
+    function signedIn() {
+      return authPresent() && (isAdmin() || !isBannedUser());
+    }
+
+    function isBannedUser() {
+      return authPresent()
+        && exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.banned == true;
+    }
+
     function isAdmin() {
-      return signedIn()
+      return authPresent()
         && (
           request.auth.token.email in ["ionut29019@gmail.com", "Ionut29019@gmail.com"]
           || (
@@ -18,7 +28,7 @@ service cloud.firestore {
     }
 
     function isSelf(userId) {
-      return signedIn() && request.auth.uid == userId;
+      return authPresent() && request.auth.uid == userId;
     }
 
     function createsNoInlinePosition() {
@@ -37,12 +47,20 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["allowedImpiantoActions", "deniedImpiantoActions"]);
     }
 
+    function createsNoBanFields() {
+      return !request.resource.data.keys().hasAny(["banned", "bannedReason", "bannedAt", "bannedBy"]);
+    }
+
+    function updatesNoBanFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["banned", "bannedReason", "bannedAt", "bannedBy"]);
+    }
+
     match /commesse/{commessaId} {
       allow read: if signedIn();
       allow write: if signedIn();
 
       match /{document=**} {
-        allow read, write: if request.auth != null;
+        allow read, write: if signedIn();
       }
     }
 
@@ -143,16 +161,13 @@ service cloud.firestore {
     }
 
     match /posDocuments/{docId} {
-      allow read: if resource.data.active == true || request.auth != null;
-      allow create, update, delete: if request.auth != null
-        && request.auth.token.email in [
-          "ionut29019@gmail.com",
-          "Ionut29019@gmail.com"
-        ];
+      allow read: if resource.data.active == true || signedIn();
+      allow create, update, delete: if isAdmin();
     }
 
     function validOperatorPositionWrite(userId) {
-      return isSelf(userId)
+      return signedIn()
+        && isSelf(userId)
         && request.resource.data.userId == userId
         && request.resource.data.uid == userId
         && request.resource.data.lat is number
@@ -187,14 +202,14 @@ service cloud.firestore {
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
       allow create, update: if validOperatorPositionWrite(userId);
-      allow delete: if isAdmin() || isSelf(userId);
+      allow delete: if isAdmin();
     }
 
     match /platformUsers/{userId} {
       allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition() && createsNoPermissionFields());
-      allow update: if isAdmin() || (isSelf(userId) && updatesNoInlinePosition() && updatesNoPermissionFields());
-      allow delete: if isAdmin() || isSelf(userId);
+      allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition() && createsNoPermissionFields() && createsNoBanFields());
+      allow update: if isAdmin() || (isSelf(userId) && !isBannedUser() && updatesNoInlinePosition() && updatesNoPermissionFields() && updatesNoBanFields());
+      allow delete: if isAdmin();
     }
 
     match /chatMessages/{messageId} {
@@ -208,7 +223,7 @@ service cloud.firestore {
     }
 
     match /{collection}/{docId} {
-      allow read, write: if request.auth != null && collection in [
+      allow read, write: if signedIn() && collection in [
         "appNotifications",
         "commessaResources",
         "globalCommesse",
@@ -232,7 +247,7 @@ service cloud.firestore {
       ];
 
       match /{document=**} {
-        allow read, write: if request.auth != null && collection in [
+        allow read, write: if signedIn() && collection in [
           "globalCommesse",
           "privateDocuments"
         ];

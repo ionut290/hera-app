@@ -20507,10 +20507,23 @@ function getImpiantoWhatsAppTemplateCacheKey(impianto, commessaId = selectedComm
   return commessaId && impiantoKey ? `${commessaId}:${impiantoKey}` : "";
 }
 
+function getCurrentWhatsAppOperatorName() {
+  const user = auth.currentUser || currentUser || null;
+  return String(user?.displayName || user?.email || "Operatore").trim() || "Operatore";
+}
+
+function getDeviceWhatsAppDateLabel(date = new Date()) {
+  const value = date instanceof Date ? date : new Date(date);
+  const validDate = Number.isNaN(value.getTime()) ? new Date() : value;
+  return validDate.toLocaleDateString("it-IT");
+}
+
 function getImpiantoWhatsAppTemplateSignature(impianto) {
   const linkedNotes = getCommessaNoteLinkedNotes(impianto);
   return JSON.stringify({
     commessaId: selectedCommessaId || "",
+    operatorName: getCurrentWhatsAppOperatorName(),
+    deviceDate: getDeviceWhatsAppDateLabel(),
     idSap: impianto?.idSap || "",
     denominazione: impianto?.denominazione || "",
     comune: impianto?.comune || "",
@@ -20527,6 +20540,8 @@ function getImpiantoWhatsAppTemplateSignature(impianto) {
 
 function buildImpiantoWhatsAppTemplate(impianto) {
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
+  const operatorName = getCurrentWhatsAppOperatorName();
+  const date = getDeviceWhatsAppDateLabel();
   const title = isOnlyOrdinaria
     ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
     : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
@@ -20547,7 +20562,9 @@ function buildImpiantoWhatsAppTemplate(impianto) {
     `🛣️ Via: ${impianto.indirizzo || "-"}`,
     `📝 Note: ${tipologia}`,
     ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
-    ...noteLines
+    ...noteLines,
+    `👷 Operatore: ${operatorName}`,
+    `📅 Data: ${date}`
   ].join("\n");
 }
 
@@ -20586,19 +20603,16 @@ function clearImpiantoWhatsAppTemplateCache() {
 }
 
 function buildImpiantoWhatsAppPayload(impianto, options = {}) {
-  const user = auth.currentUser;
   const doneAt = options.doneAt || impianto.doneAt || new Date();
   const doneInfo = formatDoneDateTime(doneAt);
-  const date = doneInfo.date === "-" ? new Date().toLocaleDateString("it-IT") : doneInfo.date;
   const time = doneInfo.time === "-" ? new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false }) : doneInfo.time;
-  const operatorName = options.operatorName || user?.displayName || user?.email || impianto.doneBy || "-";
+  const executionNote = String(options.note || options.executionNote || impianto.executionNote || "").trim();
   const preparedTemplate = prepareImpiantoWhatsAppTemplate(impianto)?.template || buildImpiantoWhatsAppTemplate(impianto);
   const message = [
     preparedTemplate,
-    `👷 Operatore: ${operatorName}`,
-    `📅 Data: ${date}`,
-    `🕒 Ora: ${time}`
-  ].join("\n");
+    `🕒 Ora: ${time}`,
+    executionNote ? `📝 Nota esecuzione: ${executionNote}` : ""
+  ].filter(Boolean).join("\n");
 
   const encodedMessage = encodeURIComponent(message);
   return {

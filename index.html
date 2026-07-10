@@ -58,6 +58,7 @@
       <button id="open-pos-btn" class="btn menu-title-btn" type="button">📄 POS</button>
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
+      <button id="open-control-center-btn" class="btn menu-title-btn" type="button">🛠️ Centro di controllo</button>
       <button id="install-app-btn" class="btn menu-title-btn" type="button">Installa app</button>
       <button id="open-book-pdf-btn" class="btn menu-title-btn" type="button">Libro PDF</button>
     </div>
@@ -501,6 +502,20 @@
           </aside>
         </div>
       </section>
+    </section>
+
+    <section id="control-center-page" class="hidden control-center-page">
+      <header class="card control-center-hero">
+        <button id="back-from-control-center-btn" class="btn" type="button">← Home</button>
+        <div>
+          <p class="control-center-kicker">🛠️ CENTRO DI CONTROLLO</p>
+          <h1>CENTRO DI CONTROLLO</h1>
+          <p class="muted">Controlla lo stato completo di Hera App</p>
+        </div>
+        <button id="run-control-check-btn" class="btn btn-primary control-center-check-btn" type="button">ESEGUI CONTROLLO APP</button>
+      </header>
+      <div id="control-center-results" class="control-center-results hidden" role="status" aria-live="polite"></div>
+      <div id="control-center-content" class="control-center-grid" aria-live="polite"></div>
     </section>
     <section id="biogas-map-page" class="hidden">
       <section class="map-fullscreen-page-card">

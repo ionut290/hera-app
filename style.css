@@ -10761,3 +10761,32 @@ body.worklimate-page-open {
   font-size: 0.82rem;
   font-weight: 600;
 }
+
+.control-center-page { display: grid; gap: 16px; }
+.control-center-hero { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; background: linear-gradient(135deg, #eff6ff, #f8fafc); }
+.control-center-kicker { margin: 0 0 4px; font-weight: 900; color: #1d4ed8; letter-spacing: .06em; }
+.control-center-hero h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); }
+.control-center-check-btn { min-height: 56px; font-size: 1rem; box-shadow: 0 16px 30px rgba(37,99,235,.22); }
+.control-center-results { border: 1px solid rgba(37,99,235,.24); border-radius: 18px; padding: 14px 16px; background: #eff6ff; color: #0f172a; }
+.control-center-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; align-items: start; }
+.control-center-card { padding: 0; overflow: hidden; }
+.control-center-card summary { display: flex; align-items: center; gap: 10px; padding: 16px; cursor: pointer; font-weight: 900; color: #0f172a; }
+.control-center-card[open] summary { border-bottom: 1px solid rgba(148,163,184,.24); }
+.control-center-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.1fr); gap: 10px; padding: 10px 16px; border-bottom: 1px solid rgba(226,232,240,.8); }
+.control-center-row span { color: #64748b; }
+.control-center-row strong { color: #0f172a; text-align: right; overflow-wrap: anywhere; }
+.control-dot { width: 12px; height: 12px; border-radius: 999px; display: inline-block; box-shadow: 0 0 0 4px rgba(148,163,184,.16); }
+.control-dot.green { background: #22c55e; }
+.control-dot.yellow { background: #facc15; }
+.control-dot.red { background: #ef4444; }
+.control-dot.gray { background: #94a3b8; }
+.control-dot.blue { background: #3b82f6; }
+.control-center-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.control-center-list { margin: 0; padding: 0 16px 16px 34px; color: #334155; }
+.control-center-list li { margin: 8px 0; }
+.control-center-warning { margin: 12px 16px 16px; padding: 10px 12px; border-radius: 12px; background: #fef3c7; color: #92400e; font-weight: 700; }
+@media (max-width: 720px) {
+  .control-center-hero { grid-template-columns: 1fr; }
+  .control-center-row { grid-template-columns: 1fr; }
+  .control-center-row strong { text-align: left; }
+}

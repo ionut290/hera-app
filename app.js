@@ -40,77 +40,6 @@ try {
 }
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
-const APP_CACHE_VERSION = 1;
-const APP_CACHE_DB_NAME = "hera-app-cache";
-const APP_CACHE_STORE = "records";
-let appCacheDbPromise = null;
-let appDiagnostics = {
-  logs: [],
-  metrics: { startupAt: Date.now(), firstVisibleAt: 0, authMs: 0, commesseMs: 0, openCommessaMs: 0, mapOpenMs: 0, syncMs: 0 },
-  reads: { startup: 0, commessa: 0, map: 0, ore: 0, sync: 0 }
-};
-function logDiagnostic(category, message, details = {}) {
-  const entry = { category, message: String(message || ""), at: new Date().toISOString(), fn: details.fn || "", user: currentUser?.uid || currentUser?.email || "", online: navigator.onLine, details: sanitizeDiagnosticDetails(details) };
-  appDiagnostics.logs.unshift(entry);
-  appDiagnostics.logs = appDiagnostics.logs.slice(0, 80);
-  try { localStorage.setItem("heraRecentDiagnostics", JSON.stringify(appDiagnostics.logs)); } catch (_) {}
-}
-function sanitizeDiagnosticDetails(details = {}) {
-  const blocked = /token|password|secret|key/i;
-  return Object.fromEntries(Object.entries(details).filter(([key]) => !blocked.test(key)).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 240) : value]));
-}
-function openAppCacheDb() {
-  if (!("indexedDB" in window)) return Promise.resolve(null);
-  if (appCacheDbPromise) return appCacheDbPromise;
-  appCacheDbPromise = new Promise((resolve) => {
-    const request = indexedDB.open(APP_CACHE_DB_NAME, APP_CACHE_VERSION);
-    request.onupgradeneeded = () => request.result.createObjectStore(APP_CACHE_STORE, { keyPath: "key" });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => { logDiagnostic("OFFLINE", "IndexedDB non disponibile", { fn: "openAppCacheDb", error: request.error?.message }); resolve(null); };
-  });
-  return appCacheDbPromise;
-}
-function cacheKeyForUser(scope, id = "default") { return `${currentUser?.uid || "anonymous"}::${scope}::${id}`; }
-async function setAppCacheRecord(scope, id, value, options = {}) {
-  const database = await openAppCacheDb();
-  if (!database) return false;
-  const record = { key: cacheKeyForUser(scope, id), scope, id, userId: currentUser?.uid || "anonymous", teamId: currentUser?.teamId || "", value, updatedAt: new Date().toISOString(), version: options.version || APP_CACHE_VERSION, expiresAt: options.expiresAt || null };
-  return new Promise((resolve) => {
-    const tx = database.transaction(APP_CACHE_STORE, "readwrite");
-    tx.objectStore(APP_CACHE_STORE).put(record);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => resolve(false);
-  });
-}
-async function getAppCacheRecord(scope, id = "default") {
-  const database = await openAppCacheDb();
-  if (!database) return null;
-  return new Promise((resolve) => {
-    const request = database.transaction(APP_CACHE_STORE, "readonly").objectStore(APP_CACHE_STORE).get(cacheKeyForUser(scope, id));
-    request.onsuccess = () => {
-      const record = request.result || null;
-      if (record?.expiresAt && Date.now() > new Date(record.expiresAt).getTime()) return resolve(null);
-      resolve(record);
-    };
-    request.onerror = () => resolve(null);
-  });
-}
-async function clearAppDataCacheSafe() {
-  if (getControlCenterPendingItems().length) { alert("Cache non cancellata: sono presenti operazioni offline non sincronizzate."); return false; }
-  const database = await openAppCacheDb();
-  if (!database) return false;
-  return new Promise((resolve) => { const tx = database.transaction(APP_CACHE_STORE, "readwrite"); tx.objectStore(APP_CACHE_STORE).clear(); tx.oncomplete = () => resolve(true); tx.onerror = () => resolve(false); });
-}
-function trackFirestoreReads(area, count) { appDiagnostics.reads[area] = (appDiagnostics.reads[area] || 0) + Number(count || 0); }
-function updateConnectionBar() {
-  const name = currentUser?.displayName || currentUser?.email?.split("@")[0] || "Operatore";
-  const pending = getControlCenterPendingItems().length;
-  const downlink = navigator.connection?.downlink;
-  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `Ciao ${name}`;
-  if (ui.connectionIndicator) ui.connectionIndicator.textContent = navigator.onLine ? `Online · ${downlink ? `${downlink} Mbps` : "connessione attiva"}` : `Offline · ${pending} elementi da sincronizzare`;
-  ui.offlineModeIndicator?.classList.toggle("hidden", navigator.onLine);
-}
-
 const PERSISTED_SESSION_VERSION = 1;
 
 function getCapacitorPreferencesPlugin() {
@@ -733,14 +662,7 @@ const ui = {
   toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
-  squadreDateBarTitle: document.getElementById("squadre-date-bar-title"),
-  squadreDateBarLabel: document.getElementById("squadre-date-bar-label"),
-  squadreDateBarAction: document.getElementById("squadre-date-bar-action"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
-  squadrePrevDayBtn: document.getElementById("squadre-prev-day-btn"),
-  squadreNextDayBtn: document.getElementById("squadre-next-day-btn"),
-  squadrePublishDayBtn: document.getElementById("squadre-publish-day-btn"),
-  squadrePublicDayStatus: document.getElementById("squadre-public-day-status"),
   snowSquadreFilterControls: document.getElementById("snow-squadre-filter-controls"),
   snowSquadreFilterDate: document.getElementById("snow-squadre-filter-date"),
   snowSquadreFilterClearBtn: document.getElementById("snow-squadre-filter-clear-btn"),
@@ -886,8 +808,6 @@ const ui = {
   userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
   weatherDiagnostics: document.getElementById("weather-diagnostics"),
-  weatherUpdatedAt: document.getElementById("weather-updated-at"),
-  weatherRetryBtn: document.getElementById("weather-retry-btn"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
   weatherDetails: document.getElementById("weather-details"),
@@ -1115,7 +1035,6 @@ let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeSquadreViewConfig = null;
-let unsubscribeOperationalDaySettings = null;
 let unsubscribeUsers = null;
 let unsubscribeOperatorPositions = null;
 let unsubscribeAdminUsers = null;
@@ -1185,9 +1104,6 @@ let squadreByCommessa = new Map();
 let squadreHistoryByDate = new Map();
 let latestSquadraAutofillRequestId = 0;
 let squadreLoadState = { status: "idle", message: "" };
-let loadingSquads = false;
-let squadsLoadError = "";
-let squads = [];
 let squadreLoadTimeout = null;
 const weatherAlertsByDate = new Map();
 let weatherAlertsDateLoaded = "";
@@ -1195,12 +1111,11 @@ const worklimateRiskByCommessaId = new Map();
 let worklimateRiskCacheLoaded = false;
 let worklimateRiskCacheLoading = false;
 let selectedWeatherAlertContext = null;
-let giornoOperativo = "";
-let publishedSquadreDateUpdatedAt = null;
+let manualSquadreFilterDateKey = "";
+let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
 let startupAssignedCommessaAutoOpenDone = false;
 let sharedSquadreViewConfigLoaded = false;
-let operationalDaySettingsLoaded = false;
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
@@ -1941,18 +1856,9 @@ ui.squadraCalendarDate?.addEventListener("change", () => {
   setSquadreDateOverride(ui.squadraCalendarDate.value || "");
 });
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
-ui.squadreFilterControls?.addEventListener("click", () => {
-  if (!canManageData() || !ui.squadreFilterDate || ui.squadreFilterDate.disabled) return;
-  if (typeof ui.squadreFilterDate.showPicker === "function") ui.squadreFilterDate.showPicker();
-  else ui.squadreFilterDate.focus();
-});
 ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
 ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
-ui.squadreFilterClearBtn?.addEventListener("click", () => syncSquadreDateInputs());
-ui.squadrePrevDayBtn?.addEventListener("click", () => shiftAdminSquadreDate(-1));
-ui.squadreNextDayBtn?.addEventListener("click", () => shiftAdminSquadreDate(1));
-ui.squadrePublishDayBtn?.addEventListener("click", confirmPublishedSquadreDay);
-ui.weatherRetryBtn?.addEventListener("click", () => fetchWeather({ force: true }));
+ui.squadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate());
 ui.snowSquadreFilterDate?.addEventListener("change", onSnowSquadreFilterDateChange);
 ui.snowSquadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate({ snow: true }));
 
@@ -2152,9 +2058,8 @@ window.addEventListener("online", () => {
   setFirestoreConnectionState("Online", "");
   syncPendingImpiantoActions();
   syncPendingOfflineMutations();
-  updateConnectionBar();
 });
-window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); updateConnectionBar(); });
+window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -2168,6 +2073,7 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
 startQuickSquadraWindowTicker();
 addSquadraRow();
 initHoursPage();
+initGeolocation();
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
 if (window.location.hash) {
@@ -2186,7 +2092,6 @@ initNativeGeofenceBridge();
 initWorkBannerObservers();
 
 function hideStartupLoading() {
-  if (!appDiagnostics.metrics.firstVisibleAt) appDiagnostics.metrics.firstVisibleAt = Math.round(performance.now());
   document.getElementById("app-startup-loading")?.classList.add("hidden");
 }
 
@@ -3050,12 +2955,10 @@ pendingImpiantoActions = loadPendingImpiantoActions();
 renderPendingWhatsappList();
 
 window.addEventListener("online", () => {
-  updateConnectionBar();
   syncPendingImpiantoActions();
   runWhazzupPendingDoneSafetyCheck();
 });
 window.addEventListener("offline", () => {
-  updateConnectionBar();
   renderPendingWhatsappList();
 });
 document.addEventListener("visibilitychange", () => {
@@ -3063,7 +2966,6 @@ document.addEventListener("visibilitychange", () => {
 });
 
 console.log("AUTH CHECK START");
-const authCheckStartedAt = performance.now();
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
@@ -3102,7 +3004,6 @@ if (!auth || firebaseInitError) {
   clearTimeout(authCheckWatchdog);
   console.log("AUTH READY");
   authStateResolved = true;
-  appDiagnostics.metrics.authMs = Math.round(performance.now() - authCheckStartedAt);
   currentUser = user || null;
   currentUserBanProfile = null;
   const loggedIn = Boolean(user);
@@ -3211,7 +3112,8 @@ if (!auth || firebaseInitError) {
   personaleLoadState = { status: "idle", message: "" };
   mezziLoadState = { status: "idle", message: "" };
   startupCoreCollectionsLoadState = { status: "idle", message: "" };
-  giornoOperativo = "";
+  manualSquadreFilterDateKey = "";
+  sharedSquadreDateKey = "";
   startupAssignedCommessaAutoOpenDone = false;
   sharedSquadreViewConfigLoaded = false;
   squadreByCommessa = new Map();
@@ -3219,8 +3121,7 @@ if (!auth || firebaseInitError) {
   commesseById = new Map();
   personaleRecords = [];
   mezziRecords = [];
-  syncSquadreDateInputs();
-  renderSquadre();
+  initializeAutomaticSquadreDate();
   globalCommesseById = new Map();
   globalImpianti = [];
   pendingGlobalRows = [];
@@ -3263,6 +3164,7 @@ if (!auth || firebaseInitError) {
         renderHeaderActivitySummary();
         renderExternalApps();
         renderPendingWhatsappList();
+        fetchWeather();
         if (!isSnowServiceContext()) {
           syncPendingImpiantoActions();
           syncPendingOfflineMutations();
@@ -3272,7 +3174,17 @@ if (!auth || firebaseInitError) {
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
       () => upsertCurrentPlatformUser(),
+      () => initGeolocation({ forcePublishCurrent: true }),
+      () => subscribeUsers(),
+      () => subscribeAdminUsers(),
+      () => subscribeChat(),
+      () => subscribeOperatorPositions(),
       () => subscribeDriveBridge(),
+      () => subscribeResources(),
+      () => subscribeGlobalCommesse(),
+      () => subscribePrivateDocs(),
+      () => subscribePosDocuments(),
+      () => subscribeGpsRequests(),
       () => subscribeGlobalNotifications(),
       () => subscribeWorkBanner(),
       () => subscribeUserAlerts(),
@@ -3300,7 +3212,7 @@ if (!auth || firebaseInitError) {
   renderExternalApps();
   renderPendingWhatsappList();
   syncPendingImpiantoActions();
-  updateConnectionBar();
+  fetchWeather();
   renderNextActionCard();
   console.log("APP READY");
   hideStartupLoading();
@@ -3387,31 +3299,31 @@ function reloadNormalModeData() {
 
 async function loadStartupCoreCollections() {
   if (!currentUser) return;
-  const start = performance.now();
-  startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento essenziale..." };
-  commesseLoadState = { status: "loading", message: "Caricamento commesse assegnate..." };
-  squadreLoadState = { status: "idle", message: "Squadre caricate su richiesta." };
-  personaleLoadState = { status: "idle", message: "Anagrafica caricata su richiesta." };
-  mezziLoadState = { status: "idle", message: "Mezzi caricati su richiesta." };
+  startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
+  commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
+  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
+  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
+  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderCommesseHomeList();
   renderSquadre();
-  const cachedProfile = await getAppCacheRecord("profile");
-  if (cachedProfile?.value) {
-    if (ui.userName) ui.userName.textContent = `Nome utente: ${cachedProfile.value.displayName || cachedProfile.value.email || "Nome non disponibile"}`;
-  }
+
   try {
-    await subscribeCommesse();
-    await setAppCacheRecord("profile", "default", { uid: currentUser.uid, email: currentUser.email || "", displayName: currentUser.displayName || "", role: getControlCenterRoleLabel(), permissions: { admin: canManageData() } });
+    const personalePromise = subscribePersonale();
+    await Promise.all([
+      personalePromise, // anagrafiche personale
+      personalePromise, // qualifiche/corsi salvati sulle anagrafiche
+      personalePromise, // sicurezza salvata sulle anagrafiche
+      subscribeSquadre(),
+      subscribeCommesse(),
+      subscribeMezzi()
+    ]);
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
-    appDiagnostics.metrics.commesseMs = Math.round(performance.now() - start);
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
-    logDiagnostic("STARTUP", "Caricamento essenziale non completato", { fn: "loadStartupCoreCollections", error: error?.message });
     throw error;
   } finally {
     renderCommesseHomeList();
     renderSquadre();
-    updateConnectionBar();
   }
 }
 
@@ -3504,14 +3416,10 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   syncCommesseHomeToggle();
-  ui.squadreFilterControls?.classList.remove("hidden");
-  renderSquadrePublicDayStatus();
+  ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
   ui.snowSquadreFilterControls?.classList.toggle("hidden", !canManage);
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
   if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;
-  if (ui.squadrePrevDayBtn) ui.squadrePrevDayBtn.disabled = !canManage;
-  if (ui.squadreNextDayBtn) ui.squadreNextDayBtn.disabled = !canManage;
-  if (ui.squadrePublishDayBtn) ui.squadrePublishDayBtn.disabled = !canManage;
   if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.disabled = !canManage;
   if (ui.snowSquadreFilterClearBtn) ui.snowSquadreFilterClearBtn.disabled = !canManage;
   ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
@@ -3555,18 +3463,12 @@ function refreshApplicationData() {
     ui.refreshAppBtn.disabled = true;
     ui.refreshAppBtn.classList.add("is-reloading");
   }
-  if (ui.commesseNextAction) ui.commesseNextAction.textContent = "Aggiornamento dati in corso...";
-  Promise.allSettled([
-    fetchWeather({ force: true }),
-    currentUser ? subscribeSquadre() : Promise.resolve(false),
-    currentUser ? subscribeCommesse() : Promise.resolve(false)
-  ]).finally(() => {
-    if (ui.refreshAppBtn) {
-      ui.refreshAppBtn.disabled = false;
-      ui.refreshAppBtn.classList.remove("is-reloading");
-    }
-    if (ui.commesseNextAction) ui.commesseNextAction.textContent = navigator.onLine ? "Dati aggiornati." : "Offline – dati dell’ultima sincronizzazione";
-  });
+  if (ui.commesseNextAction) {
+    ui.commesseNextAction.textContent = "Aggiornamento app in corso...";
+  }
+  const refreshUrl = new URL(window.location.href);
+  refreshUrl.searchParams.set("refreshTs", String(Date.now()));
+  window.location.replace(refreshUrl.toString());
 }
 
 function openManagementPanel(panel) {
@@ -3605,7 +3507,6 @@ function closeManagementPanel() {
 }
 
 function openMapFullscreenPage() {
-  const mapStart = performance.now();
   if (!ui.mapFullscreenPage) return;
   isMapFullscreenPageOpen = true;
   drawAreaModeActive = false;
@@ -3626,7 +3527,6 @@ function openMapFullscreenPage() {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
     refreshFullscreenMapLayout();
     renderMap();
-    appDiagnostics.metrics.mapOpenMs = Math.round(performance.now() - mapStart);
   }, 60);
   setTimeout(() => {
     if (fullscreenMap) fullscreenMap.invalidateSize({ pan: false, animate: false });
@@ -4564,7 +4464,7 @@ function applyRoute() {
   if (showHowto) renderHowtoFaq();
   if (showControlCenter) renderControlCenter();
   if (showPrivateDocs) renderPrivateDocsList();
-  if (showPos) { if (!unsubscribePosDocuments) subscribePosDocuments(); renderPosDocuments(); } else stopPosDocumentsSubscription();
+  if (showPos) renderPosDocuments();
   if (showFuel) {
     setTimeout(() => {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
@@ -4860,23 +4760,17 @@ function renderControlCenter() {
   const quality = getConnectionQuality();
   const installedVersion = document.querySelector('meta[name="app-version"]')?.content || "1.0.0";
   const pending = getControlCenterPendingItems();
-  const recentErrors = (appDiagnostics.logs.length ? appDiagnostics.logs : JSON.parse(localStorage.getItem("heraRecentDiagnostics") || "[]")).slice(0, 8);
   const impiantiCount = Array.from(impiantiByCommessaId.values()).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), currentImpianti.length || 0);
   const todayKey = new Date().toISOString().slice(0, 10);
   const appRows = [
-    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"],
-    ["Versione cache", APP_CACHE_VERSION],
-    ["Ultima sincronizzazione riuscita", localStorage.getItem("heraLastSyncAt") || "Non ancora disponibile"],
-    ["Service worker", navigator.serviceWorker?.controller ? "Attivo" : ("serviceWorker" in navigator ? "Registrato/non attivo" : "Non supportato")], ["Versione installata", installedVersion], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? "Attivo" : "Scaduto"]
+    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"], ["Versione installata", installedVersion], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? "Attivo" : "Scaduto"]
   ];
   const cloudRows = [["Firebase Authentication", auth ? "Operativo" : "Errore"], ["Cloud Firestore", db ? "Operativo" : "Errore"], ["Firebase Realtime Database", firebase?.database ? "Operativo" : "Non configurato"], ["Firebase Storage", firebase?.storage ? "Operativo" : "Non configurato"], ["Hosting", "Operativo"], ["Google Drive", driveBridgeState.configured || driveRootFolderId ? "Operativo" : "Non collegato"], ["Servizio notifiche", firebaseMessaging ? "Operativo" : "Non configurato"]];
   const dataRows = ["Commesse", "Impianti", "Squadre", "Ore lavorate", "Segnalazioni", "Note commessa", "Documenti POS", "Mezzi", "Utenti", "Notifiche", "Posizioni operatori"].map((name) => [name, "Ultimo aggiornamento: dati caricati nella sessione corrente"]);
   const pendingExtra = `<div class="control-center-actions"><button class="btn btn-primary" type="button" onclick="syncPendingImpiantoActions(); syncPendingOfflineMutations(); renderControlCenter();">SINCRONIZZA TUTTO</button><button class="btn" type="button" onclick="syncPendingImpiantoActions(); renderControlCenter();">RIPROVA ERRORI</button><button class="btn" type="button">VISUALIZZA DETTAGLI</button>${isAdmin ? '<button class="btn" type="button">ELIMINA OPERAZIONE</button>' : ''}</div><ol class="control-center-list">${pending.map((item) => `<li><strong>${escapeHTML(item.controlType)}</strong><br><span>${escapeHTML(formatControlCenterDate(item.when))} • ${escapeHTML(item.operator || "Operatore")}</span><br><em>${escapeHTML(item.status || "In attesa")}</em></li>`).join("") || "<li>Nessuna operazione in attesa.</li>"}</ol>`;
   const usageRows = [["Utenti registrati", platformUsers.length], ["Utenti attivi oggi", platformUsers.filter((u) => String(u.lastSeenAt || u.lastLoginAt || "").includes(todayKey)).length], ["Utenti online ora", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Dispositivi collegati", platformUsers.length], ["Numero commesse", commesseById.size], ["Numero impianti", impiantiCount], ["Impianti fatti oggi", currentImpianti.filter((i) => String(i.doneAt || "").includes(todayKey)).length], ["Ore inserite oggi", allHoursReports.filter((r) => String(r.date || r.createdAt || "").includes(todayKey)).length], ["Segnalazioni aperte", "Verifica da archivio segnalazioni"], ["Notifiche non confermate", "Verifica da notifiche"], ["Dati offline in attesa", pending.length]];
-  const perfRows = [["Prima schermata visibile", `${appDiagnostics.metrics.firstVisibleAt || Math.round(performance.now())} ms`], ["Autenticazione", `${appDiagnostics.metrics.authMs || 0} ms`], ["Caricamento commesse", `${appDiagnostics.metrics.commesseMs || 0} ms`], ["Apertura commessa", `${appDiagnostics.metrics.openCommessaMs || 0} ms`], ["Apertura mappa", `${appDiagnostics.metrics.mapOpenMs || 0} ms`], ["Sync", `${appDiagnostics.metrics.syncMs || 0} ms`], ["Letture startup", appDiagnostics.reads.startup], ["Letture commessa", appDiagnostics.reads.commessa], ["Letture mappa", appDiagnostics.reads.map], ["Letture ore", appDiagnostics.reads.ore], ["Letture sync", appDiagnostics.reads.sync]];
-  const diagnosticsExtra = `<ol class="control-center-list">${recentErrors.map((item) => `<li><strong>${escapeHTML(item.category || "LOG")}</strong> ${escapeHTML(item.message || "")}</li>`).join("") || "<li>Nessun errore recente.</li>"}</ol><div class="control-center-actions"><button class="btn" type="button" onclick="clearAppDataCacheSafe().then(() => renderControlCenter())">Pulisci cache dati</button><button class="btn" type="button" onclick="updateConnectionBar(); renderControlCenter();">Aggiorna stato</button><button class="btn" type="button" onclick="copyTextToClipboard(JSON.stringify({diagnostics: appDiagnostics, pending: getControlCenterPendingItems()}, null, 2))">Esporta diagnostica</button></div>`;
-  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' }), buildControlCenterCard("Diagnostica", [["Errori recenti", recentErrors.length], ["Cache IndexedDB", "Attiva per profilo/commesse/impianti recenti"], ["Coda offline", `${pending.length} elementi`]], { color: pending.length ? "yellow" : "green", extra: diagnosticsExtra })];
-  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Prestazioni", perfRows, { color: "blue" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
+  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
+  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
   ui.controlCenterContent.innerHTML = [...operatorCards, ...adminCards].join("");
 }
 
@@ -4979,7 +4873,6 @@ function initHoursPage() {
 }
 
 function openHoursPage() {
-  subscribeHoursStats();
   if (!currentUser) {
     alert("Devi fare login per compilare la gestione ore.");
     return;
@@ -5004,7 +4897,6 @@ function closeHoursPage() {
 }
 
 function openPosPage() {
-  if (!unsubscribePosDocuments) subscribePosDocuments();
   if (window.location.pathname !== "/pos" || window.location.hash) {
     window.history.pushState({}, "", "/pos");
   }
@@ -9191,7 +9083,8 @@ function loadCommesseFromLocalCache() {
 
 function refreshCommesseDependentUI(includeRemoteStats = true) {
   if (includeRemoteStats) {
-    // Statistiche impianti e ore caricate solo aprendo la commessa o Gestione ore.
+    subscribeStatsForCommesse();
+    subscribeHoursStats();
   }
   renderCommesseHomeList();
   renderCommessaSelects();
@@ -9742,7 +9635,6 @@ function subscribeStatsForCommesse() {
 function subscribeHoursStats() {
   if (!unsubscribeHoursStats) {
     unsubscribeHoursStats = db.collection(getOreReportsCollectionName()).onSnapshot((snapshot) => {
-      trackFirestoreReads("ore", snapshot.size);
       allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursReportsLoaded = true;
       recalculateCommessaWorkSummaries();
@@ -9753,7 +9645,6 @@ function subscribeHoursStats() {
   }
   if (!unsubscribeHoursApprovals) {
     unsubscribeHoursApprovals = db.collection(getOreApprovalRequestsCollectionName()).onSnapshot((snapshot) => {
-      trackFirestoreReads("ore", snapshot.size);
       allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursApprovalsLoaded = true;
       hoursApprovalRequests = allHoursApprovalRequests;
@@ -10706,8 +10597,6 @@ function subscribeCommesse() {
 
     if (!fromListener) console.log("Numero commesse trovate", snapshot.size);
     saveCommesseLocalCache(receivedCommesse);
-    setAppCacheRecord("commesse", "recenti", receivedCommesse.slice(0, 100)).catch(() => {});
-    trackFirestoreReads("startup", snapshot.size || receivedCommesse.length);
     commesseLoadState = receivedCommesse.length
       ? { status: "loaded", message: "" }
       : { status: "empty", message: "Nessuna commessa disponibile" };
@@ -12083,7 +11972,6 @@ function downloadVCard(name, phone) {
 }
 
 function selectCommessa(id, nome, codice = "") {
-  const openStart = performance.now();
   selectedCommessaId = id;
   selectedCommessaName = nome;
   setCommessaWeatherRefreshStatus("");
@@ -12123,8 +12011,6 @@ function selectCommessa(id, nome, codice = "") {
   else if (!hasSubcommesse && commessaRoute.atex) openImpiantiPage(`&atex=${encodeURIComponent(commessaRoute.atex)}`);
   else if (!hasSubcommesse) openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
   else openImpiantiPage("");
-  setAppCacheRecord("commessa-recente", id, { id, nome, codice, openedAt: new Date().toISOString() }).catch(() => {});
-  appDiagnostics.metrics.openCommessaMs = Math.round(performance.now() - openStart);
 }
 
 function updateCommessaContextUI() {
@@ -12234,7 +12120,6 @@ function enqueueOfflineMutation(type, payload) {
 }
 
 async function syncPendingOfflineMutations() {
-  const syncStart = performance.now();
   if (isNetworkOffline() || !currentUser) return;
   const queue = loadPendingOfflineMutations();
   const pending = queue.filter((item) => item.status !== "synced" && (!item.userId || item.userId === currentUser.uid));
@@ -12267,8 +12152,6 @@ async function syncPendingOfflineMutations() {
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
   showSyncProgress([], pending.length, true);
-  appDiagnostics.metrics.syncMs = Math.round(performance.now() - syncStart);
-  localStorage.setItem("heraLastSyncAt", new Date().toISOString());
   loadSavedHoursReports?.();
 }
 
@@ -12471,7 +12354,6 @@ function buildPendingActionImpianto(action) {
 }
 
 async function syncPendingImpiantoActions() {
-  const syncStart = performance.now();
   if (isNetworkOffline() || !currentUser) {
     renderPendingWhatsappList();
     return;
@@ -12539,8 +12421,6 @@ async function syncPendingImpiantoActions() {
   renderPendingWhatsappList();
   if (!remainingToSync.length) showSyncProgress([], actionsToSync.length, true);
   else showSyncProgress([]);
-  appDiagnostics.metrics.syncMs = Math.round(performance.now() - syncStart);
-  localStorage.setItem("heraLastSyncAt", new Date().toISOString());
 }
 
 function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
@@ -12657,20 +12537,18 @@ function subscribeImpianti() {
       .onSnapshot((snapshot) => {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
-        trackFirestoreReads("commessa", snapshot.size);
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
         refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
-        setAppCacheRecord("impianti-recenti", selectedCommessaId, currentImpianti.slice(0, 500)).catch(() => {});
-        if (!ui.impiantiPage?.classList.contains("hidden") || isMapFullscreenPageOpen) renderMap();
+        renderMap();
         runWhazzupPendingDoneSafetyCheck();
-        if (isMapFullscreenPageOpen) preloadCommessaWeatherForVisibleImpianti();
+        preloadCommessaWeatherForVisibleImpianti();
         evaluateImpiantoProximityAlerts();
         autoCompletePassedSnowRoads().catch((error) => console.warn("Completamento automatico vie neve non riuscito:", error));
-        // Meteo caricato su richiesta: dettaglio meteo o pulsante radar.
+        if (!currentUserPos) fetchWeather();
 
         const currentDoneSignature = rawImpianti
           .filter((impianto) => Boolean(impianto.done))
@@ -19441,17 +19319,7 @@ function subscribeSquadre() {
 
   stopSquadreSubscription();
   const selectedDateKey = getActiveSquadreDateKey();
-  const cachedSquadre = readJsonCache(`heraSquadre:history:${getSquadreHistoryCollectionName()}:${selectedDateKey}`);
-  if (cachedSquadre?.rows?.length) {
-    squadreHistoryByDate.set(selectedDateKey, new Map(cachedSquadre.rows));
-    squadreLoadState = { status: "loaded", message: navigator.onLine ? "" : "Offline – dati dell’ultima sincronizzazione" };
-    renderSquadre();
-    renderCommesseHomeList();
-  }
-  squadreLoadState = { status: "loading", message: navigator.onLine ? "Caricamento squadre..." : "Offline – dati dell’ultima sincronizzazione" };
-  loadingSquads = true;
-  squadsLoadError = "";
-  squads = [];
+  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
   console.log("LOAD SQUADRE START", {
@@ -19468,11 +19336,7 @@ function subscribeSquadre() {
       historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
-    writeJsonCache(`heraSquadre:history:${getSquadreHistoryCollectionName()}:${selectedDateKey}`, { rows: Array.from(historyForDate.entries()), updatedAt: Date.now() });
     squadreLoadState = { status: "loaded", message: "" };
-    loadingSquads = false;
-    squadsLoadError = "";
-    squads = Array.from(historyForDate.values());
     console.log("LOAD SQUADRE OK numero:", historyForDate.size);
     renderSquadre();
     updateCommessaDashboard();
@@ -19504,77 +19368,40 @@ function subscribeSquadre() {
     .catch((error) => {
       clearSquadreLoadTimeout();
       logFirestoreError("LOAD SQUADRE", error, { dateKey: selectedDateKey });
-      squadreLoadState = { status: "error", message: "Impossibile caricare le squadre" };
-      loadingSquads = false;
-      squadsLoadError = "Impossibile caricare le squadre";
+      squadreLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento squadre") };
       renderSquadre();
       renderCommesseHomeList();
     });
 
-  const squadreViewConfigPromise = ensureOperationalDaySettingsListener();
+  const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
+  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId), {
+    label: isSnowServiceContext() ? "LOAD SQUADRE NEVE VIEW CONFIG" : "LOAD SQUADRE VIEW CONFIG",
+    timeoutMs: 9000,
+    retries: 1
+  })
+    .then((snapshot) => {
+      const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
+      const data = doc.exists ? doc.data() || {} : {};
+      const sharedDate = String(data.selectedDateKey || "").trim();
+      sharedSquadreViewConfigLoaded = true;
+      if (isSnowServiceContext()) {
+        if (sharedDate && sharedDate !== snowSharedSquadreDateKey && !snowManualSquadreFilterDateKey) {
+          snowSharedSquadreDateKey = sharedDate;
+          syncSquadreDateInputs();
+          subscribeSquadre();
+        }
+      } else if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
+        sharedSquadreDateKey = sharedDate;
+        syncSquadreDateInputs();
+        subscribeSquadre();
+      }
+    })
+    .catch((error) => {
+      logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
+      sharedSquadreViewConfigLoaded = true;
+    });
 
   return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
-}
-
-function applyOperationalDaySettings(data = {}, { fromCache = false } = {}) {
-  const dateKey = String(data.giornoOperativo || data.selectedDate || data.data || "").trim();
-  if (!isValidDateKey(dateKey)) return false;
-  const previousDateKey = giornoOperativo;
-  giornoOperativo = dateKey;
-  publishedSquadreDateUpdatedAt = data.aggiornatoAlle || data.updatedAt || data.updatedAtMillis || null;
-  writeJsonCache(OPERATIONAL_DAY_CACHE_KEY, {
-    giornoOperativo: dateKey,
-    aggiornatoDa: data.aggiornatoDa || data.updatedByName || "",
-    updatedAt: Date.now()
-  });
-  writeJsonCache("heraSquadre:lastPublishedDay", { data: dateKey, updatedAt: Date.now() });
-  operationalDaySettingsLoaded = true;
-  sharedSquadreViewConfigLoaded = true;
-  syncSquadreDateInputs();
-  renderSquadrePublicDayStatus();
-  if (!fromCache && previousDateKey !== dateKey) {
-    renderCommesseHomeList();
-    fetchWeather({ force: true }).catch((error) => console.warn("Meteo giorno operativo non aggiornato:", error));
-    if (currentUser) subscribeSquadre();
-  }
-  return previousDateKey !== dateKey;
-}
-
-function ensureOperationalDaySettingsListener() {
-  return new Promise((resolve) => {
-    if (!db || isSnowServiceContext()) {
-      operationalDaySettingsLoaded = true;
-      sharedSquadreViewConfigLoaded = true;
-      resolve(true);
-      return;
-    }
-    if (unsubscribeOperationalDaySettings) {
-      resolve(true);
-      return;
-    }
-    const cachedDay = getCachedOperationalDayKey();
-    if (cachedDay && !giornoOperativo) applyOperationalDaySettings({ giornoOperativo: cachedDay }, { fromCache: true });
-    unsubscribeOperationalDaySettings = db.collection(OPERATIONAL_DAY_DOC.collection).doc(OPERATIONAL_DAY_DOC.doc).onSnapshot((doc) => {
-      const data = doc.exists ? doc.data() || {} : {};
-      const changed = applyOperationalDaySettings(data);
-      if (!doc.exists && !giornoOperativo) {
-        operationalDaySettingsLoaded = true;
-        sharedSquadreViewConfigLoaded = true;
-        syncSquadreDateInputs();
-        renderSquadrePublicDayStatus();
-      }
-      resolve(true);
-    }, (error) => {
-      logFirestoreError("LOAD GIORNO OPERATIVO", error);
-      const fallback = getCachedOperationalDayKey();
-      if (fallback) applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
-      operationalDaySettingsLoaded = true;
-      sharedSquadreViewConfigLoaded = true;
-      syncSquadreDateInputs();
-      renderSquadrePublicDayStatus();
-      resolve(false);
-    });
-  });
 }
 
 function stopPersonaleSubscription() {
@@ -19604,10 +19431,6 @@ function stopSquadreSubscription() {
   if (unsubscribeSquadreViewConfig) {
     unsubscribeSquadreViewConfig();
     unsubscribeSquadreViewConfig = null;
-  }
-  if (unsubscribeOperationalDaySettings) {
-    unsubscribeOperationalDaySettings();
-    unsubscribeOperationalDaySettings = null;
   }
 }
 
@@ -20093,7 +19916,7 @@ async function saveSquadraComposition(event) {
     alert("Seleziona una commessa.");
     return;
   }
-  const dateKey = ui.squadraRiferimento.value || getActiveSquadreDateKey() || getCachedOperationalDayKey();
+  const dateKey = ui.squadraRiferimento.value || new Date().toISOString().slice(0, 10);
   if (!dateKey) {
     setSquadraFeedback("Seleziona una data per la composizione squadre.", "error");
     alert("Seleziona una data per la composizione squadre.");
@@ -20208,7 +20031,7 @@ function getNextDayDateKey(now = new Date()) {
 function setDefaultSquadraCompositionDate({ force = false } = {}) {
   if (!ui.squadraRiferimento) return;
   if (force || !ui.squadraRiferimento.value) {
-    ui.squadraRiferimento.value = getActiveSquadreDateKey() || getCachedOperationalDayKey();
+    ui.squadraRiferimento.value = getNextDayDateKey();
   }
 }
 
@@ -20221,27 +20044,16 @@ function getAutomaticSquadreDateKey(now = new Date()) {
 }
 
 function initializeAutomaticSquadreDate() {
-  automaticSquadreDateKey = getTodayDateKey();
+  automaticSquadreDateKey = getAutomaticSquadreDateKey();
   syncSquadreDateInputs();
   renderSquadre();
 }
 
-function isValidDateKey(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
-}
-
-function getCachedOperationalDayKey() {
-  const cached = readJsonCache(OPERATIONAL_DAY_CACHE_KEY) || readJsonCache("heraSquadre:lastPublishedDay");
-  const dateKey = String(cached?.giornoOperativo || cached?.data || "").trim();
-  return isValidDateKey(dateKey) ? dateKey : "";
-}
-
-function getFallbackOperationalDayKey() {
-  return giornoOperativo || getCachedOperationalDayKey() || automaticSquadreDateKey || "";
-}
-
 function getNormalSquadreDateKey() {
-  return giornoOperativo || getCachedOperationalDayKey() || "";
+  if (manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
+  if (sharedSquadreDateKey) return sharedSquadreDateKey;
+  if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  return automaticSquadreDateKey;
 }
 
 function getSnowSquadreDateKey() {
@@ -20259,103 +20071,39 @@ function syncSquadreDateInputs() {
   const normalDateKey = getNormalSquadreDateKey();
   const snowDateKey = getSnowSquadreDateKey();
   if (ui.squadreFilterDate) ui.squadreFilterDate.value = normalDateKey;
-  renderSquadrePublicDayStatus();
   if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.value = snowDateKey;
   if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = normalDateKey;
 }
 
 async function persistSharedSquadreDate(dateKey, { snow = false } = {}) {
-  if (!canManageData() || snow) return;
-  const normalDateKey = String(dateKey || "").trim();
-  if (!isValidDateKey(normalDateKey)) return;
-  const adminName = currentUser?.displayName || currentUser?.email || "admin";
-  const payload = {
-    giornoOperativo: normalDateKey,
-    data: normalDateKey,
-    selectedDate: normalDateKey,
-    aggiornatoDa: adminName,
-    aggiornatoDaUid: currentUser?.uid || "",
-    aggiornatoAlle: firebase.firestore.FieldValue.serverTimestamp(),
+  if (!canManageData()) return;
+  await db.collection("appConfig").doc(snow ? "neveSquadreView" : "squadreView").set({
+    selectedDateKey: dateKey || "",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedByUid: currentUser?.uid || "",
-    updatedByName: adminName
-  };
-  writeJsonCache(OPERATIONAL_DAY_CACHE_KEY, { giornoOperativo: normalDateKey, aggiornatoDa: adminName, updatedAt: Date.now() });
-  writeJsonCache("heraSquadre:lastPublishedDay", { data: normalDateKey, updatedAt: Date.now() });
-  if (!navigator.onLine) {
-    alert("Sei offline. Mostro l’ultimo giorno operativo salvato: il cambio sarà completato quando torna la connessione.");
-  }
-  await db.collection(OPERATIONAL_DAY_DOC.collection).doc(OPERATIONAL_DAY_DOC.doc).set(payload, { merge: true });
+    updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  }, { merge: true });
 }
 
-function setSquadreDateOverride(dateKey, { snow = false, publish = true } = {}) {
-  if (!canManageData() && !snow) return;
+function setSquadreDateOverride(dateKey, { snow = false } = {}) {
   const selectedDateKey = String(dateKey || "").trim();
   if (snow) {
     snowManualSquadreFilterDateKey = selectedDateKey;
     snowSharedSquadreDateKey = selectedDateKey;
   } else {
-    if (!isValidDateKey(selectedDateKey)) return syncSquadreDateInputs();
-    giornoOperativo = selectedDateKey;
+    manualSquadreFilterDateKey = selectedDateKey;
+    sharedSquadreDateKey = selectedDateKey;
   }
   syncSquadreDateInputs();
   renderSquadre();
   if (isSnowServiceRoute()) renderSnowServiceCommesse();
   if (currentUser) subscribeSquadre();
-  if (!publish) return;
   persistSharedSquadreDate(selectedDateKey, { snow }).catch((error) => {
     console.error(snow ? "Errore salvataggio giorno squadre neve:" : "Errore salvataggio giorno squadre condiviso:", error);
   });
 }
 
 function onSquadreFilterDateChange() {
-  if (!canManageData()) return syncSquadreDateInputs();
-  setSquadreDateOverride(ui.squadreFilterDate?.value || "", { publish: true });
-}
-
-function shiftAdminSquadreDate(deltaDays) {
-  if (!canManageData()) return;
-  const current = ui.squadreFilterDate?.value || getNormalSquadreDateKey();
-  if (!isValidDateKey(current)) return syncSquadreDateInputs();
-  const date = new Date(`${current}T00:00:00`);
-  date.setDate(date.getDate() + Number(deltaDays || 0));
-  setSquadreDateOverride(getDateKeyFromLocalDate(date));
-}
-
-function confirmPublishedSquadreDay() {
-  if (!canManageData()) return;
-  const dateKey = ui.squadreFilterDate?.value || getNormalSquadreDateKey();
-  if (!isValidDateKey(dateKey)) return;
-  const label = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
-  if (!window.confirm(`Vuoi rendere visibile agli utenti la giornata del ${label}?`)) return;
-  giornoOperativo = dateKey;
-  persistSharedSquadreDate(dateKey).then(() => {
-    if (ui.squadrePublicDayStatus) ui.squadrePublicDayStatus.textContent = `Giornata squadre pubblicata per tutti: ${label}`;
-  }).catch((error) => {
-    logFirestoreError("SAVE GIORNO SQUADRE VISIBILE", error);
-    alert("Errore salvataggio giornata pubblica squadre.");
-  });
-}
-
-function formatOperationalDayLabel(dateKey) {
-  if (!dateKey) return "Giornata non impostata";
-  const label = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function renderSquadrePublicDayStatus() {
-  if (!ui.squadrePublicDayStatus) return;
-  const dateKey = getNormalSquadreDateKey();
-  if (ui.squadreDateBarTitle) ui.squadreDateBarTitle.textContent = "Giorno operativo:";
-  if (ui.squadreDateBarLabel) ui.squadreDateBarLabel.textContent = dateKey ? new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT") : "Non impostato";
-  if (ui.squadreDateBarAction) {
-    ui.squadreDateBarAction.textContent = canManageData() ? "✏️ Cambia giorno" : "";
-    ui.squadreDateBarAction.classList.toggle("hidden", !canManageData());
-  }
-  if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManageData();
-  ui.squadrePublicDayStatus.textContent = canManageData()
-    ? "Tocca “Cambia giorno”: il calendario nativo salva subito il giorno per tutti."
-    : "Giornata globale impostata dall’amministratore";
+  setSquadreDateOverride(ui.squadreFilterDate?.value || "");
 }
 
 function onSnowSquadreFilterDateChange() {
@@ -20367,9 +20115,9 @@ function clearManualSquadreFilterDate({ snow = false } = {}) {
     snowManualSquadreFilterDateKey = "";
     snowSharedSquadreDateKey = "";
   } else {
-    giornoOperativo = "";
+    manualSquadreFilterDateKey = "";
+    sharedSquadreDateKey = "";
   }
-  if (!snow) return syncSquadreDateInputs();
   persistSharedSquadreDate("", { snow }).catch((error) => {
     console.error(snow ? "Errore reset giorno squadre neve:" : "Errore reset giorno squadre condiviso:", error);
   });
@@ -20459,8 +20207,7 @@ function renderSquadre() {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;
     return;
   }
-  const selectedDateKey = getActiveSquadreDateKey();
-  if (squadreLoadState.status === "loading" && !(squadreHistoryByDate.get(selectedDateKey)?.size)) {
+  if (squadreLoadState.status === "loading") {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre...")}</p>`;
     return;
   }
@@ -20473,6 +20220,7 @@ function renderSquadre() {
     ui.squadreLista.querySelector("#squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
+  const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
 
@@ -20483,7 +20231,7 @@ function renderSquadre() {
     return rows.some(isSquadraRowFilled);
   });
   if (!commesseConSquadre.length) {
-    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra presente per questa giornata</p>";
+    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra trovata</p>";
     return;
   }
 
@@ -23160,53 +22908,6 @@ function evaluateTimbraturaReminders(now = new Date()) {
 }
 
 const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/mappe-rischi/bollettino-di-criticita/";
-
-const HOME_WEATHER_CACHE_KEY = "heraHomeOperationalWeather:lastValid";
-const OPERATIONAL_DAY_CACHE_KEY = "heraSettings:giornoOperativo";
-const OPERATIONAL_DAY_DOC = { collection: "settings", doc: "giornoOperativo" };
-const HOME_WEATHER_TIMEOUT_MS = 10000;
-function withTimeout(promise, ms, label = "timeout") {
-  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
-}
-function readJsonCache(key, fallback = null) {
-  try { return JSON.parse(localStorage.getItem(key) || "null") || fallback; } catch { return fallback; }
-}
-function writeJsonCache(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { console.warn("Cache locale non salvata:", key, error); }
-}
-function formatCacheDate(value) {
-  const ms = Number(value || 0);
-  return ms ? new Date(ms).toLocaleString("it-IT") : "-";
-}
-function getHomeWeatherCacheKey(dateKey = getActiveSquadreDateKey()) {
-  return `${HOME_WEATHER_CACHE_KEY}:${dateKey || "global"}`;
-}
-function renderCachedHomeWeather({ staleMessage = "" } = {}) {
-  const cached = readJsonCache(getHomeWeatherCacheKey()) || readJsonCache(HOME_WEATHER_CACHE_KEY);
-  if (!cached) return false;
-  if (ui.weatherSummary) ui.weatherSummary.textContent = cached.summary || "Meteo temporaneamente non disponibile";
-  if (ui.weatherRisks) ui.weatherRisks.innerHTML = cached.risksHtml || "<span class='weather-risk-chip'>Dati meteo salvati</span>";
-  if (ui.weatherDetails) ui.weatherDetails.innerHTML = cached.detailsHtml || "<p class='muted'>Dati dell’ultima sincronizzazione.</p>";
-  const time = new Date(Number(cached.updatedAt || 0)).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = staleMessage ? `${staleMessage} • Ultimo aggiornamento disponibile ore ${time}` : `Ultimo aggiornamento disponibile ore ${time}`;
-  return true;
-}
-function getWeatherErrorMessage(error) {
-  const text = String(error?.message || error || "");
-  if (!navigator.onLine) return "Meteo non disponibile: dispositivo offline";
-  if (/coordinate/i.test(text)) return "Coordinate non disponibili";
-  if (/OPENWEATHER_API_KEY|401|403|API key/i.test(text)) return "Configurazione meteo non valida";
-  if (/timeout|non ha risposto|momentaneamente/i.test(text)) return "Il servizio meteo non ha risposto";
-  if (/404|429|CORS|Network|Failed to fetch/i.test(text)) return "Impossibile caricare il meteo operativo";
-  return "Impossibile caricare il meteo operativo";
-}
-function setWeatherUnavailable(error) {
-  const message = getWeatherErrorMessage(error);
-  if (!renderCachedHomeWeather({ staleMessage: message }) && ui.weatherSummary) ui.weatherSummary.textContent = message || "Meteo temporaneamente non disponibile";
-  if (ui.weatherRetryBtn) ui.weatherRetryBtn.classList.remove("hidden");
-  if (ui.weatherUpdatedAt && !readJsonCache(getHomeWeatherCacheKey())) ui.weatherUpdatedAt.textContent = message;
-  console.error("Errore ricevuto", error);
-}
 const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
 const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
 const WORKLIMATE_FORECAST_URL = "https://app.worklimate.it/ordinanza-caldo-lavoro";
@@ -23343,14 +23044,8 @@ function mapOpenWeatherCodeToWmo(code) {
   return 3;
 }
 
-async function fetchWeather(options = {}) {
-  if (!options.force) renderCachedHomeWeather();
-  if (ui.weatherRetryBtn) ui.weatherRetryBtn.classList.add("hidden");
-  if (ui.weatherSummary) ui.weatherSummary.textContent = "Caricamento meteo...";
-  console.log("Avvio caricamento meteo");
+async function fetchWeather() {
   const target = getWeatherTargetCoordinates();
-  if (!Number.isFinite(Number(target.lat)) || !Number.isFinite(Number(target.lon))) throw new Error("Coordinate non disponibili");
-  console.log("Coordinate usate", target);
   currentWeatherTarget = target;
   renderCivilProtectionAlert({ level: "green", label: "Verifica Protezione Civile...", url: CIVIL_PROTECTION_ALERT_PAGE, loading: true });
 
@@ -23361,8 +23056,7 @@ async function fetchWeather(options = {}) {
   try {
     let data;
     try {
-      const primary = await withTimeout(fetchOpenWeatherPrimary(target), HOME_WEATHER_TIMEOUT_MS, "Il servizio meteo non ha risposto");
-      console.log("Risposta API ricevuta", primary.httpStatus, primary.url);
+      const primary = await fetchOpenWeatherPrimary(target);
       data = primary.data;
       diagnostics.provider = "OpenWeather";
       diagnostics.url = primary.url;
@@ -23372,8 +23066,7 @@ async function fetchWeather(options = {}) {
       diagnostics.error = primaryError?.message || "errore provider primario";
       const params = new URLSearchParams(buildWeatherForecastRequestParams(target));
       diagnostics.url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
-      const fallback = await withTimeout(fetchWeatherForecast(target), HOME_WEATHER_TIMEOUT_MS, "Il servizio meteo non ha risposto");
-      console.log("Risposta API ricevuta", "Open-Meteo fallback");
+      const fallback = await fetchWeatherForecast(target);
       data = fallback;
       diagnostics.httpStatus = 200;
     }
@@ -23381,38 +23074,23 @@ async function fetchWeather(options = {}) {
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     await renderWeatherDetails(data, target);
-    const updatedAt = Date.now();
-    const dayLabel = formatDateKeyForDisplay(getActiveSquadreDateKey());
-    if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = `${target.name || "Bologna"} • Giorno operativo ${dayLabel} • Aggiornato alle ${new Date(updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
-    const weatherCachePayload = { summary: ui.weatherSummary?.textContent || "", risksHtml: ui.weatherRisks?.innerHTML || "", detailsHtml: ui.weatherDetails?.innerHTML || "", updatedAt, giornoOperativo: getActiveSquadreDateKey() };
-    writeJsonCache(getHomeWeatherCacheKey(), weatherCachePayload);
-    writeJsonCache(HOME_WEATHER_CACHE_KEY, weatherCachePayload);
     renderWeatherDiagnostics(diagnostics);
   } catch (error) {
-    setWeatherUnavailable(error);
-    ui.weatherRisks.innerHTML = ui.weatherRisks.innerHTML || `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
+    ui.weatherSummary.textContent = "Meteo non disponibile.";
+    ui.weatherRisks.innerHTML = `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
     bindHomeWorklimateButton();
     renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
+    ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
     diagnostics.error = error?.message || "errore sconosciuto";
     if (!diagnostics.httpStatus && /CORS|Failed to fetch|NetworkError|fetch/i.test(diagnostics.error)) diagnostics.httpStatus = "CORS/Network";
     diagnostics.updatedAt = Date.now();
     renderWeatherDiagnostics(diagnostics);
-  } finally {
-    if (ui.weatherSummary && ui.weatherSummary.textContent === "Caricamento meteo...") ui.weatherSummary.textContent = "Meteo temporaneamente non disponibile";
   }
 }
 
 function getWeatherTargetCoordinates() {
-  if (selectedWeatherLocation) {
-    const lat = Number(selectedWeatherLocation.lat);
-    const lon = Number(selectedWeatherLocation.lon ?? selectedWeatherLocation.lng);
-    if (Number.isFinite(lat) && Number.isFinite(lon)) return { ...selectedWeatherLocation, lat, lon, source: "manual" };
-  }
-  if (currentUserPos) {
-    const lat = Number(currentUserPos.lat);
-    const lon = Number(currentUserPos.lng ?? currentUserPos.lon);
-    if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon, source: "gps", name: "Posizione telefono" };
-  }
+  if (selectedWeatherLocation) return { ...selectedWeatherLocation, source: "manual" };
+  if (currentUserPos) return { lat: Number(currentUserPos.lat), lon: Number(currentUserPos.lng), source: "gps" };
   const gpsImpianti = currentImpianti
     .map((impianto) => ({ lat: Number(impianto.gpsY), lon: Number(impianto.gpsX) }))
     .filter((pos) => Number.isFinite(pos.lat) && Number.isFinite(pos.lon));
@@ -23420,7 +23098,7 @@ function getWeatherTargetCoordinates() {
     const sum = gpsImpianti.reduce((acc, pos) => ({ lat: acc.lat + pos.lat, lon: acc.lon + pos.lon }), { lat: 0, lon: 0 });
     return { lat: sum.lat / gpsImpianti.length, lon: sum.lon / gpsImpianti.length, source: "commessa" };
   }
-  return { lat: 44.4949, lon: 11.3426, source: "fallback", name: "Bologna" };
+  return { lat: 44.4949, lon: 11.3426, source: "fallback" };
 }
 
 async function renderWeatherDetails(data, target) {
@@ -23446,19 +23124,10 @@ async function renderWeatherDetails(data, target) {
   const riskIce = temps.slice(0, 12).some((value, idx) => Number(value) <= 1 && Number(rains[idx] || 0) >= 40);
 
   const risks = [];
-  const maxWind = Math.max(...winds.slice(0, 12).map((value) => Number(value) || 0), 0);
   risks.push(maxRain >= 60 ? "🌧️ Rischio pioggia alta" : "🌧️ Rischio pioggia bassa");
-  risks.push(`💨 Vento max ${Math.round(maxWind)} km/h`);
   if (snowSum > 0) risks.push("❄️ Possibile neve");
   if (hasFogCode || minVisibility < 1200) risks.push("🌫️ Possibile nebbia");
   if (riskIce) risks.push("🧊 Possibile ghiaccio");
-  const operationalLevel = (maxRain >= 80 || snowSum >= 5 || maxWind >= 70 || minVisibility < 500)
-    ? { emoji: "🔴", text: "Rischio alto / valutare sospensione attività", advice: "Valutare sospensione attività esposte, lavori in quota, viabilità e squadre isolate." }
-    : (maxRain >= 50 || snowSum > 0 || maxWind >= 45 || hasFogCode || minVisibility < 1200)
-      ? { emoji: "🟡", text: "Attenzione condizioni meteo", advice: "Procedere con DPI adeguati, verifica strade/accessi e rivalutazione prima delle attività critiche." }
-      : { emoji: "🟢", text: "Lavoro regolare", advice: "Condizioni compatibili con attività ordinarie; mantenere il monitoraggio." };
-  risks.unshift(`${operationalLevel.emoji} ${operationalLevel.text}`);
-  risks.push(`Consiglio operativo: ${operationalLevel.advice}`);
 
   const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
   const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
@@ -27675,6 +27344,7 @@ function renderSnowServiceCommesse() {
     list.querySelector("#snow-squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
+  const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   const commesseNeve = Array.from(commesseById.values()).filter((commessa) => {

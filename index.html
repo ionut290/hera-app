@@ -125,8 +125,6 @@
             <span class="pill">Pioggia/Neve/Nebbia</span>
           </div>
           <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
-          <p id="weather-updated-at" class="muted weather-updated-at"></p>
-          <button id="weather-retry-btn" class="btn hidden" type="button">Riprova</button>
           <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
           <div id="weather-risks" class="weather-risks"></div>
           <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
@@ -172,14 +170,10 @@
           <button id="toggle-commesse-home-btn" class="btn squadre-commesse-toggle" type="button" aria-controls="commesse-home-card" aria-expanded="false">Tutte le commesse</button>
           <span class="pill squadre-status-pill">Operativo</span>
         </div>
-        <label id="squadre-filter-controls" class="squadre-date-bar" aria-label="Giorno operativo globale">
-          <span class="squadre-date-bar-icon" aria-hidden="true">📅</span>
-          <span id="squadre-date-bar-title" class="squadre-date-bar-title">Giorno operativo</span>
-          <span id="squadre-date-bar-label" class="squadre-date-bar-label">13/07/2026</span>
-          <span id="squadre-date-bar-action" class="squadre-date-bar-action">✏️ Cambia giorno (solo admin)</span>
-          <input id="squadre-filter-date" class="squadre-date-native" type="date" aria-label="Cambia giorno operativo globale">
-        </label>
-        <p id="squadre-public-day-status" class="muted squadre-public-day-status">Giornata impostata dall’amministratore</p>
+        <div id="squadre-filter-controls" class="inline-form squadre-filter-controls hidden" aria-label="Filtro giorno squadre">
+          <input id="squadre-filter-date" type="date" aria-label="Giorno squadre">
+          <button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
+        </div>
         <div id="squadre-lista" class="squadre-lista"></div>
       </section>
       <section id="programmazioni-home-card" class="card hidden" aria-hidden="true">

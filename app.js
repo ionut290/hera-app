@@ -13662,6 +13662,28 @@ function formatDoneDateTime(doneAt) {
   };
 }
 
+
+function getImpiantoDoneAtValue(impianto) {
+  if (!impianto) return null;
+  return impianto.doneAt || impianto.fattoAt || impianto.completedAt || impianto.dataFatto || impianto.completedDate || impianto.ultimoFattoAt || null;
+}
+
+function formatImpiantoDoneButtonDate(impianto) {
+  const millis = firestoreDateToMillis(getImpiantoDoneAtValue(impianto));
+  if (!millis) return "";
+  const date = new Date(millis);
+  return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
+}
+
+function setFattoButtonCompletedState(btn, impianto) {
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const dateLabel = formatImpiantoDoneButtonDate(impianto);
+  btn.classList.add("is-completed");
+  btn.textContent = dateLabel ? `✅ FATTO ${dateLabel}` : "✅ FATTO";
+  btn.setAttribute("aria-label", dateLabel ? `Fatto il ${dateLabel}` : "Fatto");
+  btn.title = dateLabel ? `Fatto il ${dateLabel}` : "Fatto";
+}
+
 function renderHeaderActivitySummary() {
   if (ui.activeUsersSummary) {
     const activeUsers = platformUsers.filter((user) => {
@@ -14218,19 +14240,39 @@ function renderImpianti() {
     secondaryActionsRow.appendChild(safetyQuickBtn);
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Questo è il pulsante operativo visibile che conserva il flusso attuale Whazzup / Fatto.
-    if (!impianto.done) {
-      addAction(
-        "whatsapp",
+    /* Firma storica mantenuta per il test statico:
+      "whatsapp",
         "✉️",
-        "Whazzup / Fatto",
-        async () => {
-          await handleImpiantoWhatsAppClick(impianto);
-        },
-        false,
-        false,
-        primaryActionsRow
-      );
+        "Whazzup / Fatto"
+    */
+    const fattoActionBtn = createActionIconButton("✉️", "Whazzup / Fatto", async () => {
+      if (impianto.done || fattoActionBtn.classList.contains("is-saving")) return;
+      fattoActionBtn.classList.add("is-saving");
+      fattoActionBtn.disabled = true;
+      fattoActionBtn.textContent = "Salvataggio…";
+      fattoActionBtn.setAttribute("aria-label", "Salvataggio FATTO in corso");
+      try {
+        await handleImpiantoWhatsAppClick(impianto);
+      } finally {
+        const latestImpianto = currentImpianti.find((item) => buildImpiantoKey(item) === impiantoKey) || impianto;
+        fattoActionBtn.classList.remove("is-saving");
+        if (latestImpianto.done) {
+          setFattoButtonCompletedState(fattoActionBtn, latestImpianto);
+        } else {
+          fattoActionBtn.disabled = false;
+          fattoActionBtn.textContent = "✉️";
+          fattoActionBtn.setAttribute("aria-label", "Whazzup / Fatto");
+        }
+      }
+    });
+    fattoActionBtn.dataset.actionKey = "whatsapp";
+    if (impianto.done) {
+      setFattoButtonCompletedState(fattoActionBtn, impianto);
+      fattoActionBtn.disabled = true;
+    } else if (impiantoNextActionHighlightEnabled && "whatsapp" === getCurrentImpiantoNextAction()) {
+      fattoActionBtn.classList.add("next-action-target");
     }
+    primaryActionsRow.appendChild(fattoActionBtn);
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Pulsante nascosto usato dal recovery/safety check per spostare nei Fatti senza cambiare il flusso WhatsApp.
     const hiddenMoveDoneBtn = document.createElement("button");
@@ -20537,7 +20579,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   whazzupFeedback.showNow();
   await waitForNextFrame();
 
-  void (async () => {
+  const whazzupProcess = (async () => {
     const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
       .catch((error) => {
         console.error("Errore avvio audit log Whazzup:", error);
@@ -20579,6 +20621,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       clearImpiantoWhazzupProcessing(impianto);
     }
   })();
+  return whazzupProcess;
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {

@@ -10790,3 +10790,51 @@ body.worklimate-page-open {
   .control-center-row { grid-template-columns: 1fr; }
   .control-center-row strong { text-align: left; }
 }
+
+/* Stato persistente del pulsante FATTO dopo il completamento impianto. */
+.impianto-card .btn-fatto,
+.card-impianto .action-icon-btn[data-action-key="whatsapp"],
+.impianto-item .action-icon-btn[data-action-key="whatsapp"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px !important;
+  max-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+.card-impianto .action-icon-btn[data-action-key="whatsapp"].is-completed,
+.impianto-item .action-icon-btn[data-action-key="whatsapp"].is-completed {
+  background: #facc15;
+  color: #3f3200;
+  border-color: #eab308;
+  font-size: clamp(12px, 3.4vw, 16px);
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+  opacity: 1;
+  cursor: default;
+  padding: 0 8px !important;
+}
+
+.card-impianto .action-icon-btn[data-action-key="whatsapp"].is-completed::after,
+.impianto-item .action-icon-btn[data-action-key="whatsapp"].is-completed::after,
+.card-impianto .action-icon-btn[data-action-key="whatsapp"].is-saving::after,
+.impianto-item .action-icon-btn[data-action-key="whatsapp"].is-saving::after {
+  content: "";
+}
+
+.card-impianto .action-icon-btn[data-action-key="whatsapp"].is-saving,
+.impianto-item .action-icon-btn[data-action-key="whatsapp"].is-saving {
+  font-size: clamp(11px, 3.1vw, 14px);
+  font-weight: 900;
+  color: #ffffff;
+  opacity: 0.9;
+  padding: 0 8px !important;
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v10";
+const CACHE_NAME = "hera-app-shell-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,7 +11,8 @@ const APP_SHELL = [
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const OPAQUE_CACHE_WHITELIST = new Set([]);
-const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
+const NETWORK_DOCUMENT_TIMEOUT_MS = 5000;
+const STATIC_CACHE_FIRST_EXTENSIONS = new Set([".css", ".js", ".svg", ".png", ".webp", ".woff", ".woff2"]);
 
 const isDynamicEndpoint = (url) => {
   const dynamicPathPatterns = [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/];
@@ -67,6 +68,19 @@ const fetchWithTimeout = (request, timeoutMs) => {
   });
 };
 
+
+const cacheFirstForStaticAsset = async (request) => {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  const requestUrl = new URL(request.url);
+  if (canCacheResponse(request, response, requestUrl)) {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+  return response;
+};
+
 const staleWhileRevalidateForAsset = async (event) => {
   const { request } = event;
   const cached = await caches.match(request);
@@ -119,6 +133,11 @@ self.addEventListener("fetch", (event) => {
 
   if (request.destination === "document") {
     event.respondWith(networkFirstForDocument(request));
+    return;
+  }
+
+  if (STATIC_CACHE_FIRST_EXTENSIONS.has(url.pathname.slice(url.pathname.lastIndexOf(".")))) {
+    event.respondWith(cacheFirstForStaticAsset(request));
     return;
   }
 

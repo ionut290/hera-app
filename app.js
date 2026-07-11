@@ -40,6 +40,77 @@ try {
 }
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
+const APP_CACHE_VERSION = 1;
+const APP_CACHE_DB_NAME = "hera-app-cache";
+const APP_CACHE_STORE = "records";
+let appCacheDbPromise = null;
+let appDiagnostics = {
+  logs: [],
+  metrics: { startupAt: Date.now(), firstVisibleAt: 0, authMs: 0, commesseMs: 0, openCommessaMs: 0, mapOpenMs: 0, syncMs: 0 },
+  reads: { startup: 0, commessa: 0, map: 0, ore: 0, sync: 0 }
+};
+function logDiagnostic(category, message, details = {}) {
+  const entry = { category, message: String(message || ""), at: new Date().toISOString(), fn: details.fn || "", user: currentUser?.uid || currentUser?.email || "", online: navigator.onLine, details: sanitizeDiagnosticDetails(details) };
+  appDiagnostics.logs.unshift(entry);
+  appDiagnostics.logs = appDiagnostics.logs.slice(0, 80);
+  try { localStorage.setItem("heraRecentDiagnostics", JSON.stringify(appDiagnostics.logs)); } catch (_) {}
+}
+function sanitizeDiagnosticDetails(details = {}) {
+  const blocked = /token|password|secret|key/i;
+  return Object.fromEntries(Object.entries(details).filter(([key]) => !blocked.test(key)).map(([key, value]) => [key, typeof value === "string" ? value.slice(0, 240) : value]));
+}
+function openAppCacheDb() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  if (appCacheDbPromise) return appCacheDbPromise;
+  appCacheDbPromise = new Promise((resolve) => {
+    const request = indexedDB.open(APP_CACHE_DB_NAME, APP_CACHE_VERSION);
+    request.onupgradeneeded = () => request.result.createObjectStore(APP_CACHE_STORE, { keyPath: "key" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => { logDiagnostic("OFFLINE", "IndexedDB non disponibile", { fn: "openAppCacheDb", error: request.error?.message }); resolve(null); };
+  });
+  return appCacheDbPromise;
+}
+function cacheKeyForUser(scope, id = "default") { return `${currentUser?.uid || "anonymous"}::${scope}::${id}`; }
+async function setAppCacheRecord(scope, id, value, options = {}) {
+  const database = await openAppCacheDb();
+  if (!database) return false;
+  const record = { key: cacheKeyForUser(scope, id), scope, id, userId: currentUser?.uid || "anonymous", teamId: currentUser?.teamId || "", value, updatedAt: new Date().toISOString(), version: options.version || APP_CACHE_VERSION, expiresAt: options.expiresAt || null };
+  return new Promise((resolve) => {
+    const tx = database.transaction(APP_CACHE_STORE, "readwrite");
+    tx.objectStore(APP_CACHE_STORE).put(record);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+async function getAppCacheRecord(scope, id = "default") {
+  const database = await openAppCacheDb();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    const request = database.transaction(APP_CACHE_STORE, "readonly").objectStore(APP_CACHE_STORE).get(cacheKeyForUser(scope, id));
+    request.onsuccess = () => {
+      const record = request.result || null;
+      if (record?.expiresAt && Date.now() > new Date(record.expiresAt).getTime()) return resolve(null);
+      resolve(record);
+    };
+    request.onerror = () => resolve(null);
+  });
+}
+async function clearAppDataCacheSafe() {
+  if (getControlCenterPendingItems().length) { alert("Cache non cancellata: sono presenti operazioni offline non sincronizzate."); return false; }
+  const database = await openAppCacheDb();
+  if (!database) return false;
+  return new Promise((resolve) => { const tx = database.transaction(APP_CACHE_STORE, "readwrite"); tx.objectStore(APP_CACHE_STORE).clear(); tx.oncomplete = () => resolve(true); tx.onerror = () => resolve(false); });
+}
+function trackFirestoreReads(area, count) { appDiagnostics.reads[area] = (appDiagnostics.reads[area] || 0) + Number(count || 0); }
+function updateConnectionBar() {
+  const name = currentUser?.displayName || currentUser?.email?.split("@")[0] || "Operatore";
+  const pending = getControlCenterPendingItems().length;
+  const downlink = navigator.connection?.downlink;
+  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `Ciao ${name}`;
+  if (ui.connectionIndicator) ui.connectionIndicator.textContent = navigator.onLine ? `Online · ${downlink ? `${downlink} Mbps` : "connessione attiva"}` : `Offline · ${pending} elementi da sincronizzare`;
+  ui.offlineModeIndicator?.classList.toggle("hidden", navigator.onLine);
+}
+
 const PERSISTED_SESSION_VERSION = 1;
 
 function getCapacitorPreferencesPlugin() {
@@ -2058,8 +2129,9 @@ window.addEventListener("online", () => {
   setFirestoreConnectionState("Online", "");
   syncPendingImpiantoActions();
   syncPendingOfflineMutations();
+  updateConnectionBar();
 });
-window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
+window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); updateConnectionBar(); });
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -2073,7 +2145,6 @@ document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
 startQuickSquadraWindowTicker();
 addSquadraRow();
 initHoursPage();
-initGeolocation();
 prefillSegnalazioneDateTime();
 renderHowtoFaq();
 if (window.location.hash) {
@@ -2092,6 +2163,7 @@ initNativeGeofenceBridge();
 initWorkBannerObservers();
 
 function hideStartupLoading() {
+  if (!appDiagnostics.metrics.firstVisibleAt) appDiagnostics.metrics.firstVisibleAt = Math.round(performance.now());
   document.getElementById("app-startup-loading")?.classList.add("hidden");
 }
 
@@ -2955,10 +3027,12 @@ pendingImpiantoActions = loadPendingImpiantoActions();
 renderPendingWhatsappList();
 
 window.addEventListener("online", () => {
+  updateConnectionBar();
   syncPendingImpiantoActions();
   runWhazzupPendingDoneSafetyCheck();
 });
 window.addEventListener("offline", () => {
+  updateConnectionBar();
   renderPendingWhatsappList();
 });
 document.addEventListener("visibilitychange", () => {
@@ -2966,6 +3040,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 console.log("AUTH CHECK START");
+const authCheckStartedAt = performance.now();
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
@@ -3004,6 +3079,7 @@ if (!auth || firebaseInitError) {
   clearTimeout(authCheckWatchdog);
   console.log("AUTH READY");
   authStateResolved = true;
+  appDiagnostics.metrics.authMs = Math.round(performance.now() - authCheckStartedAt);
   currentUser = user || null;
   currentUserBanProfile = null;
   const loggedIn = Boolean(user);
@@ -3164,7 +3240,6 @@ if (!auth || firebaseInitError) {
         renderHeaderActivitySummary();
         renderExternalApps();
         renderPendingWhatsappList();
-        fetchWeather();
         if (!isSnowServiceContext()) {
           syncPendingImpiantoActions();
           syncPendingOfflineMutations();
@@ -3174,17 +3249,7 @@ if (!auth || firebaseInitError) {
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
       () => upsertCurrentPlatformUser(),
-      () => initGeolocation({ forcePublishCurrent: true }),
-      () => subscribeUsers(),
-      () => subscribeAdminUsers(),
-      () => subscribeChat(),
-      () => subscribeOperatorPositions(),
       () => subscribeDriveBridge(),
-      () => subscribeResources(),
-      () => subscribeGlobalCommesse(),
-      () => subscribePrivateDocs(),
-      () => subscribePosDocuments(),
-      () => subscribeGpsRequests(),
       () => subscribeGlobalNotifications(),
       () => subscribeWorkBanner(),
       () => subscribeUserAlerts(),
@@ -3212,7 +3277,7 @@ if (!auth || firebaseInitError) {
   renderExternalApps();
   renderPendingWhatsappList();
   syncPendingImpiantoActions();
-  fetchWeather();
+  updateConnectionBar();
   renderNextActionCard();
   console.log("APP READY");
   hideStartupLoading();
@@ -3299,31 +3364,31 @@ function reloadNormalModeData() {
 
 async function loadStartupCoreCollections() {
   if (!currentUser) return;
-  startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
-  commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
-  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
-  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
-  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
+  const start = performance.now();
+  startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento essenziale..." };
+  commesseLoadState = { status: "loading", message: "Caricamento commesse assegnate..." };
+  squadreLoadState = { status: "idle", message: "Squadre caricate su richiesta." };
+  personaleLoadState = { status: "idle", message: "Anagrafica caricata su richiesta." };
+  mezziLoadState = { status: "idle", message: "Mezzi caricati su richiesta." };
   renderCommesseHomeList();
   renderSquadre();
-
+  const cachedProfile = await getAppCacheRecord("profile");
+  if (cachedProfile?.value) {
+    if (ui.userName) ui.userName.textContent = `Nome utente: ${cachedProfile.value.displayName || cachedProfile.value.email || "Nome non disponibile"}`;
+  }
   try {
-    const personalePromise = subscribePersonale();
-    await Promise.all([
-      personalePromise, // anagrafiche personale
-      personalePromise, // qualifiche/corsi salvati sulle anagrafiche
-      personalePromise, // sicurezza salvata sulle anagrafiche
-      subscribeSquadre(),
-      subscribeCommesse(),
-      subscribeMezzi()
-    ]);
+    await subscribeCommesse();
+    await setAppCacheRecord("profile", "default", { uid: currentUser.uid, email: currentUser.email || "", displayName: currentUser.displayName || "", role: getControlCenterRoleLabel(), permissions: { admin: canManageData() } });
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
+    appDiagnostics.metrics.commesseMs = Math.round(performance.now() - start);
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
+    logDiagnostic("STARTUP", "Caricamento essenziale non completato", { fn: "loadStartupCoreCollections", error: error?.message });
     throw error;
   } finally {
     renderCommesseHomeList();
     renderSquadre();
+    updateConnectionBar();
   }
 }
 
@@ -3507,6 +3572,7 @@ function closeManagementPanel() {
 }
 
 function openMapFullscreenPage() {
+  const mapStart = performance.now();
   if (!ui.mapFullscreenPage) return;
   isMapFullscreenPageOpen = true;
   drawAreaModeActive = false;
@@ -3527,6 +3593,7 @@ function openMapFullscreenPage() {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
     refreshFullscreenMapLayout();
     renderMap();
+    appDiagnostics.metrics.mapOpenMs = Math.round(performance.now() - mapStart);
   }, 60);
   setTimeout(() => {
     if (fullscreenMap) fullscreenMap.invalidateSize({ pan: false, animate: false });
@@ -4464,7 +4531,7 @@ function applyRoute() {
   if (showHowto) renderHowtoFaq();
   if (showControlCenter) renderControlCenter();
   if (showPrivateDocs) renderPrivateDocsList();
-  if (showPos) renderPosDocuments();
+  if (showPos) { if (!unsubscribePosDocuments) subscribePosDocuments(); renderPosDocuments(); } else stopPosDocumentsSubscription();
   if (showFuel) {
     setTimeout(() => {
       if (fuelMapInstance) fuelMapInstance.invalidateSize();
@@ -4760,17 +4827,23 @@ function renderControlCenter() {
   const quality = getConnectionQuality();
   const installedVersion = document.querySelector('meta[name="app-version"]')?.content || "1.0.0";
   const pending = getControlCenterPendingItems();
+  const recentErrors = (appDiagnostics.logs.length ? appDiagnostics.logs : JSON.parse(localStorage.getItem("heraRecentDiagnostics") || "[]")).slice(0, 8);
   const impiantiCount = Array.from(impiantiByCommessaId.values()).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), currentImpianti.length || 0);
   const todayKey = new Date().toISOString().slice(0, 10);
   const appRows = [
-    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"], ["Versione installata", installedVersion], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? "Attivo" : "Scaduto"]
+    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"],
+    ["Versione cache", APP_CACHE_VERSION],
+    ["Ultima sincronizzazione riuscita", localStorage.getItem("heraLastSyncAt") || "Non ancora disponibile"],
+    ["Service worker", navigator.serviceWorker?.controller ? "Attivo" : ("serviceWorker" in navigator ? "Registrato/non attivo" : "Non supportato")], ["Versione installata", installedVersion], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? "Attivo" : "Scaduto"]
   ];
   const cloudRows = [["Firebase Authentication", auth ? "Operativo" : "Errore"], ["Cloud Firestore", db ? "Operativo" : "Errore"], ["Firebase Realtime Database", firebase?.database ? "Operativo" : "Non configurato"], ["Firebase Storage", firebase?.storage ? "Operativo" : "Non configurato"], ["Hosting", "Operativo"], ["Google Drive", driveBridgeState.configured || driveRootFolderId ? "Operativo" : "Non collegato"], ["Servizio notifiche", firebaseMessaging ? "Operativo" : "Non configurato"]];
   const dataRows = ["Commesse", "Impianti", "Squadre", "Ore lavorate", "Segnalazioni", "Note commessa", "Documenti POS", "Mezzi", "Utenti", "Notifiche", "Posizioni operatori"].map((name) => [name, "Ultimo aggiornamento: dati caricati nella sessione corrente"]);
   const pendingExtra = `<div class="control-center-actions"><button class="btn btn-primary" type="button" onclick="syncPendingImpiantoActions(); syncPendingOfflineMutations(); renderControlCenter();">SINCRONIZZA TUTTO</button><button class="btn" type="button" onclick="syncPendingImpiantoActions(); renderControlCenter();">RIPROVA ERRORI</button><button class="btn" type="button">VISUALIZZA DETTAGLI</button>${isAdmin ? '<button class="btn" type="button">ELIMINA OPERAZIONE</button>' : ''}</div><ol class="control-center-list">${pending.map((item) => `<li><strong>${escapeHTML(item.controlType)}</strong><br><span>${escapeHTML(formatControlCenterDate(item.when))} • ${escapeHTML(item.operator || "Operatore")}</span><br><em>${escapeHTML(item.status || "In attesa")}</em></li>`).join("") || "<li>Nessuna operazione in attesa.</li>"}</ol>`;
   const usageRows = [["Utenti registrati", platformUsers.length], ["Utenti attivi oggi", platformUsers.filter((u) => String(u.lastSeenAt || u.lastLoginAt || "").includes(todayKey)).length], ["Utenti online ora", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Dispositivi collegati", platformUsers.length], ["Numero commesse", commesseById.size], ["Numero impianti", impiantiCount], ["Impianti fatti oggi", currentImpianti.filter((i) => String(i.doneAt || "").includes(todayKey)).length], ["Ore inserite oggi", allHoursReports.filter((r) => String(r.date || r.createdAt || "").includes(todayKey)).length], ["Segnalazioni aperte", "Verifica da archivio segnalazioni"], ["Notifiche non confermate", "Verifica da notifiche"], ["Dati offline in attesa", pending.length]];
-  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
-  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
+  const perfRows = [["Prima schermata visibile", `${appDiagnostics.metrics.firstVisibleAt || Math.round(performance.now())} ms`], ["Autenticazione", `${appDiagnostics.metrics.authMs || 0} ms`], ["Caricamento commesse", `${appDiagnostics.metrics.commesseMs || 0} ms`], ["Apertura commessa", `${appDiagnostics.metrics.openCommessaMs || 0} ms`], ["Apertura mappa", `${appDiagnostics.metrics.mapOpenMs || 0} ms`], ["Sync", `${appDiagnostics.metrics.syncMs || 0} ms`], ["Letture startup", appDiagnostics.reads.startup], ["Letture commessa", appDiagnostics.reads.commessa], ["Letture mappa", appDiagnostics.reads.map], ["Letture ore", appDiagnostics.reads.ore], ["Letture sync", appDiagnostics.reads.sync]];
+  const diagnosticsExtra = `<ol class="control-center-list">${recentErrors.map((item) => `<li><strong>${escapeHTML(item.category || "LOG")}</strong> ${escapeHTML(item.message || "")}</li>`).join("") || "<li>Nessun errore recente.</li>"}</ol><div class="control-center-actions"><button class="btn" type="button" onclick="clearAppDataCacheSafe().then(() => renderControlCenter())">Pulisci cache dati</button><button class="btn" type="button" onclick="updateConnectionBar(); renderControlCenter();">Aggiorna stato</button><button class="btn" type="button" onclick="copyTextToClipboard(JSON.stringify({diagnostics: appDiagnostics, pending: getControlCenterPendingItems()}, null, 2))">Esporta diagnostica</button></div>`;
+  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' }), buildControlCenterCard("Diagnostica", [["Errori recenti", recentErrors.length], ["Cache IndexedDB", "Attiva per profilo/commesse/impianti recenti"], ["Coda offline", `${pending.length} elementi`]], { color: pending.length ? "yellow" : "green", extra: diagnosticsExtra })];
+  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Prestazioni", perfRows, { color: "blue" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
   ui.controlCenterContent.innerHTML = [...operatorCards, ...adminCards].join("");
 }
 
@@ -4873,6 +4946,7 @@ function initHoursPage() {
 }
 
 function openHoursPage() {
+  subscribeHoursStats();
   if (!currentUser) {
     alert("Devi fare login per compilare la gestione ore.");
     return;
@@ -4897,6 +4971,7 @@ function closeHoursPage() {
 }
 
 function openPosPage() {
+  if (!unsubscribePosDocuments) subscribePosDocuments();
   if (window.location.pathname !== "/pos" || window.location.hash) {
     window.history.pushState({}, "", "/pos");
   }
@@ -9083,8 +9158,7 @@ function loadCommesseFromLocalCache() {
 
 function refreshCommesseDependentUI(includeRemoteStats = true) {
   if (includeRemoteStats) {
-    subscribeStatsForCommesse();
-    subscribeHoursStats();
+    // Statistiche impianti e ore caricate solo aprendo la commessa o Gestione ore.
   }
   renderCommesseHomeList();
   renderCommessaSelects();
@@ -9635,6 +9709,7 @@ function subscribeStatsForCommesse() {
 function subscribeHoursStats() {
   if (!unsubscribeHoursStats) {
     unsubscribeHoursStats = db.collection(getOreReportsCollectionName()).onSnapshot((snapshot) => {
+      trackFirestoreReads("ore", snapshot.size);
       allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursReportsLoaded = true;
       recalculateCommessaWorkSummaries();
@@ -9645,6 +9720,7 @@ function subscribeHoursStats() {
   }
   if (!unsubscribeHoursApprovals) {
     unsubscribeHoursApprovals = db.collection(getOreApprovalRequestsCollectionName()).onSnapshot((snapshot) => {
+      trackFirestoreReads("ore", snapshot.size);
       allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursApprovalsLoaded = true;
       hoursApprovalRequests = allHoursApprovalRequests;
@@ -10597,6 +10673,8 @@ function subscribeCommesse() {
 
     if (!fromListener) console.log("Numero commesse trovate", snapshot.size);
     saveCommesseLocalCache(receivedCommesse);
+    setAppCacheRecord("commesse", "recenti", receivedCommesse.slice(0, 100)).catch(() => {});
+    trackFirestoreReads("startup", snapshot.size || receivedCommesse.length);
     commesseLoadState = receivedCommesse.length
       ? { status: "loaded", message: "" }
       : { status: "empty", message: "Nessuna commessa disponibile" };
@@ -11972,6 +12050,7 @@ function downloadVCard(name, phone) {
 }
 
 function selectCommessa(id, nome, codice = "") {
+  const openStart = performance.now();
   selectedCommessaId = id;
   selectedCommessaName = nome;
   setCommessaWeatherRefreshStatus("");
@@ -12011,6 +12090,8 @@ function selectCommessa(id, nome, codice = "") {
   else if (!hasSubcommesse && commessaRoute.atex) openImpiantiPage(`&atex=${encodeURIComponent(commessaRoute.atex)}`);
   else if (!hasSubcommesse) openImpiantiPage(commessaRoute.impianto ? `&impianto=${encodeURIComponent(commessaRoute.impianto)}` : "");
   else openImpiantiPage("");
+  setAppCacheRecord("commessa-recente", id, { id, nome, codice, openedAt: new Date().toISOString() }).catch(() => {});
+  appDiagnostics.metrics.openCommessaMs = Math.round(performance.now() - openStart);
 }
 
 function updateCommessaContextUI() {
@@ -12120,6 +12201,7 @@ function enqueueOfflineMutation(type, payload) {
 }
 
 async function syncPendingOfflineMutations() {
+  const syncStart = performance.now();
   if (isNetworkOffline() || !currentUser) return;
   const queue = loadPendingOfflineMutations();
   const pending = queue.filter((item) => item.status !== "synced" && (!item.userId || item.userId === currentUser.uid));
@@ -12152,6 +12234,8 @@ async function syncPendingOfflineMutations() {
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
   showSyncProgress([], pending.length, true);
+  appDiagnostics.metrics.syncMs = Math.round(performance.now() - syncStart);
+  localStorage.setItem("heraLastSyncAt", new Date().toISOString());
   loadSavedHoursReports?.();
 }
 
@@ -12354,6 +12438,7 @@ function buildPendingActionImpianto(action) {
 }
 
 async function syncPendingImpiantoActions() {
+  const syncStart = performance.now();
   if (isNetworkOffline() || !currentUser) {
     renderPendingWhatsappList();
     return;
@@ -12421,6 +12506,8 @@ async function syncPendingImpiantoActions() {
   renderPendingWhatsappList();
   if (!remainingToSync.length) showSyncProgress([], actionsToSync.length, true);
   else showSyncProgress([]);
+  appDiagnostics.metrics.syncMs = Math.round(performance.now() - syncStart);
+  localStorage.setItem("heraLastSyncAt", new Date().toISOString());
 }
 
 function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
@@ -12537,18 +12624,20 @@ function subscribeImpianti() {
       .onSnapshot((snapshot) => {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
+        trackFirestoreReads("commessa", snapshot.size);
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
         refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
-        renderMap();
+        setAppCacheRecord("impianti-recenti", selectedCommessaId, currentImpianti.slice(0, 500)).catch(() => {});
+        if (!ui.impiantiPage?.classList.contains("hidden") || isMapFullscreenPageOpen) renderMap();
         runWhazzupPendingDoneSafetyCheck();
-        preloadCommessaWeatherForVisibleImpianti();
+        if (isMapFullscreenPageOpen) preloadCommessaWeatherForVisibleImpianti();
         evaluateImpiantoProximityAlerts();
         autoCompletePassedSnowRoads().catch((error) => console.warn("Completamento automatico vie neve non riuscito:", error));
-        if (!currentUserPos) fetchWeather();
+        // Meteo caricato su richiesta: dettaglio meteo o pulsante radar.
 
         const currentDoneSignature = rawImpianti
           .filter((impianto) => Boolean(impianto.done))

@@ -734,6 +734,10 @@ const ui = {
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
+  squadrePrevDayBtn: document.getElementById("squadre-prev-day-btn"),
+  squadreNextDayBtn: document.getElementById("squadre-next-day-btn"),
+  squadrePublishDayBtn: document.getElementById("squadre-publish-day-btn"),
+  squadrePublicDayStatus: document.getElementById("squadre-public-day-status"),
   snowSquadreFilterControls: document.getElementById("snow-squadre-filter-controls"),
   snowSquadreFilterDate: document.getElementById("snow-squadre-filter-date"),
   snowSquadreFilterClearBtn: document.getElementById("snow-squadre-filter-clear-btn"),
@@ -879,6 +883,8 @@ const ui = {
   userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
   weatherDiagnostics: document.getElementById("weather-diagnostics"),
+  weatherUpdatedAt: document.getElementById("weather-updated-at"),
+  weatherRetryBtn: document.getElementById("weather-retry-btn"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
   weatherDetails: document.getElementById("weather-details"),
@@ -1184,6 +1190,7 @@ let worklimateRiskCacheLoading = false;
 let selectedWeatherAlertContext = null;
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
+let publishedSquadreDateUpdatedAt = null;
 let automaticSquadreDateKey = "";
 let startupAssignedCommessaAutoOpenDone = false;
 let sharedSquadreViewConfigLoaded = false;
@@ -1929,7 +1936,11 @@ ui.squadraCalendarDate?.addEventListener("change", () => {
 ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
 ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
 ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
-ui.squadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate());
+ui.squadreFilterClearBtn?.addEventListener("click", () => setSquadreDateOverride(getDateKeyFromLocalDate(new Date())));
+ui.squadrePrevDayBtn?.addEventListener("click", () => shiftAdminSquadreDate(-1));
+ui.squadreNextDayBtn?.addEventListener("click", () => shiftAdminSquadreDate(1));
+ui.squadrePublishDayBtn?.addEventListener("click", confirmPublishedSquadreDay);
+ui.weatherRetryBtn?.addEventListener("click", () => fetchWeather({ force: true }));
 ui.snowSquadreFilterDate?.addEventListener("change", onSnowSquadreFilterDateChange);
 ui.snowSquadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate({ snow: true }));
 
@@ -3482,9 +3493,13 @@ function updateAdminControls() {
   ui.squadraCommessa.disabled = !canManage;
   syncCommesseHomeToggle();
   ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
+  renderSquadrePublicDayStatus();
   ui.snowSquadreFilterControls?.classList.toggle("hidden", !canManage);
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
   if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;
+  if (ui.squadrePrevDayBtn) ui.squadrePrevDayBtn.disabled = !canManage;
+  if (ui.squadreNextDayBtn) ui.squadreNextDayBtn.disabled = !canManage;
+  if (ui.squadrePublishDayBtn) ui.squadrePublishDayBtn.disabled = !canManage;
   if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.disabled = !canManage;
   if (ui.snowSquadreFilterClearBtn) ui.snowSquadreFilterClearBtn.disabled = !canManage;
   ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
@@ -3528,12 +3543,18 @@ function refreshApplicationData() {
     ui.refreshAppBtn.disabled = true;
     ui.refreshAppBtn.classList.add("is-reloading");
   }
-  if (ui.commesseNextAction) {
-    ui.commesseNextAction.textContent = "Aggiornamento app in corso...";
-  }
-  const refreshUrl = new URL(window.location.href);
-  refreshUrl.searchParams.set("refreshTs", String(Date.now()));
-  window.location.replace(refreshUrl.toString());
+  if (ui.commesseNextAction) ui.commesseNextAction.textContent = "Aggiornamento dati in corso...";
+  Promise.allSettled([
+    fetchWeather({ force: true }),
+    currentUser ? subscribeSquadre() : Promise.resolve(false),
+    currentUser ? subscribeCommesse() : Promise.resolve(false)
+  ]).finally(() => {
+    if (ui.refreshAppBtn) {
+      ui.refreshAppBtn.disabled = false;
+      ui.refreshAppBtn.classList.remove("is-reloading");
+    }
+    if (ui.commesseNextAction) ui.commesseNextAction.textContent = navigator.onLine ? "Dati aggiornati." : "Offline – dati dell’ultima sincronizzazione";
+  });
 }
 
 function openManagementPanel(panel) {
@@ -19408,7 +19429,14 @@ function subscribeSquadre() {
 
   stopSquadreSubscription();
   const selectedDateKey = getActiveSquadreDateKey();
-  squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
+  const cachedSquadre = readJsonCache(`heraSquadre:history:${getSquadreHistoryCollectionName()}:${selectedDateKey}`);
+  if (cachedSquadre?.rows?.length) {
+    squadreHistoryByDate.set(selectedDateKey, new Map(cachedSquadre.rows));
+    squadreLoadState = { status: "loaded", message: navigator.onLine ? "" : "Offline – dati dell’ultima sincronizzazione" };
+    renderSquadre();
+    renderCommesseHomeList();
+  }
+  squadreLoadState = { status: "loading", message: navigator.onLine ? "Caricamento squadre..." : "Offline – dati dell’ultima sincronizzazione" };
   renderSquadre();
   startSquadreLoadTimeout();
   console.log("LOAD SQUADRE START", {
@@ -19425,6 +19453,7 @@ function subscribeSquadre() {
       historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
+    writeJsonCache(`heraSquadre:history:${getSquadreHistoryCollectionName()}:${selectedDateKey}`, { rows: Array.from(historyForDate.entries()), updatedAt: Date.now() });
     squadreLoadState = { status: "loaded", message: "" };
     console.log("LOAD SQUADRE OK numero:", historyForDate.size);
     renderSquadre();
@@ -19462,33 +19491,39 @@ function subscribeSquadre() {
       renderCommesseHomeList();
     });
 
-  const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
-  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId), {
-    label: isSnowServiceContext() ? "LOAD SQUADRE NEVE VIEW CONFIG" : "LOAD SQUADRE VIEW CONFIG",
-    timeoutMs: 9000,
-    retries: 1
-  })
-    .then((snapshot) => {
-      const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
+  const squadreViewConfigPromise = new Promise((resolve) => {
+    if (isSnowServiceContext()) {
+      sharedSquadreViewConfigLoaded = true;
+      resolve(true);
+      return;
+    }
+    if (unsubscribeSquadreViewConfig) unsubscribeSquadreViewConfig();
+    unsubscribeSquadreViewConfig = db.collection("configurazioneApp").doc("giornoSquadreVisibile").onSnapshot((doc) => {
       const data = doc.exists ? doc.data() || {} : {};
-      const sharedDate = String(data.selectedDateKey || "").trim();
+      const sharedDate = String(data.data || "").trim();
+      publishedSquadreDateUpdatedAt = data.aggiornatoIl || null;
       sharedSquadreViewConfigLoaded = true;
-      if (isSnowServiceContext()) {
-        if (sharedDate && sharedDate !== snowSharedSquadreDateKey && !snowManualSquadreFilterDateKey) {
-          snowSharedSquadreDateKey = sharedDate;
-          syncSquadreDateInputs();
-          subscribeSquadre();
-        }
-      } else if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
+      if (sharedDate && sharedDate !== sharedSquadreDateKey) {
+        writeJsonCache("heraSquadre:lastPublishedDay", { data: sharedDate, updatedAt: Date.now() });
         sharedSquadreDateKey = sharedDate;
+        if (!canManageData()) manualSquadreFilterDateKey = "";
         syncSquadreDateInputs();
+        renderSquadrePublicDayStatus();
         subscribeSquadre();
+      } else {
+        renderSquadrePublicDayStatus();
       }
-    })
-    .catch((error) => {
-      logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
+      resolve(true);
+    }, (error) => {
+      logFirestoreError("LOAD GIORNO SQUADRE VISIBILE", error);
+      const cached = readJsonCache("heraSquadre:lastPublishedDay");
+      if (cached?.data && !sharedSquadreDateKey) sharedSquadreDateKey = cached.data;
       sharedSquadreViewConfigLoaded = true;
+      syncSquadreDateInputs();
+      renderSquadrePublicDayStatus();
+      resolve(false);
     });
+  });
 
   return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
 }
@@ -20139,10 +20174,10 @@ function initializeAutomaticSquadreDate() {
 }
 
 function getNormalSquadreDateKey() {
-  if (manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
+  if (canManageData() && manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
   if (sharedSquadreDateKey) return sharedSquadreDateKey;
   if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
-  return automaticSquadreDateKey;
+  return canManageData() ? automaticSquadreDateKey : automaticSquadreDateKey;
 }
 
 function getSnowSquadreDateKey() {
@@ -20160,20 +20195,23 @@ function syncSquadreDateInputs() {
   const normalDateKey = getNormalSquadreDateKey();
   const snowDateKey = getSnowSquadreDateKey();
   if (ui.squadreFilterDate) ui.squadreFilterDate.value = normalDateKey;
+  renderSquadrePublicDayStatus();
   if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.value = snowDateKey;
   if (ui.squadraCalendarDate) ui.squadraCalendarDate.value = normalDateKey;
 }
 
 async function persistSharedSquadreDate(dateKey, { snow = false } = {}) {
-  if (!canManageData()) return;
-  await db.collection("appConfig").doc(snow ? "neveSquadreView" : "squadreView").set({
-    selectedDateKey: dateKey || "",
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy: (currentUser && currentUser.email) ? currentUser.email : ""
+  if (!canManageData() || snow) return;
+  const normalDateKey = String(dateKey || "").trim();
+  await db.collection("configurazioneApp").doc("giornoSquadreVisibile").set({
+    data: normalDateKey,
+    impostataDa: (currentUser && currentUser.email) ? currentUser.email : "admin",
+    aggiornatoIl: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
 
-function setSquadreDateOverride(dateKey, { snow = false } = {}) {
+function setSquadreDateOverride(dateKey, { snow = false, publish = false } = {}) {
+  if (!canManageData() && !snow) return;
   const selectedDateKey = String(dateKey || "").trim();
   if (snow) {
     snowManualSquadreFilterDateKey = selectedDateKey;
@@ -20186,6 +20224,7 @@ function setSquadreDateOverride(dateKey, { snow = false } = {}) {
   renderSquadre();
   if (isSnowServiceRoute()) renderSnowServiceCommesse();
   if (currentUser) subscribeSquadre();
+  if (!publish) return;
   persistSharedSquadreDate(selectedDateKey, { snow }).catch((error) => {
     console.error(snow ? "Errore salvataggio giorno squadre neve:" : "Errore salvataggio giorno squadre condiviso:", error);
   });
@@ -20193,6 +20232,37 @@ function setSquadreDateOverride(dateKey, { snow = false } = {}) {
 
 function onSquadreFilterDateChange() {
   setSquadreDateOverride(ui.squadreFilterDate?.value || "");
+}
+
+function shiftAdminSquadreDate(deltaDays) {
+  if (!canManageData()) return;
+  const current = ui.squadreFilterDate?.value || getNormalSquadreDateKey();
+  const date = new Date(`${current}T00:00:00`);
+  date.setDate(date.getDate() + Number(deltaDays || 0));
+  setSquadreDateOverride(getDateKeyFromLocalDate(date));
+}
+
+function confirmPublishedSquadreDay() {
+  if (!canManageData()) return;
+  const dateKey = ui.squadreFilterDate?.value || getNormalSquadreDateKey();
+  const label = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
+  if (!window.confirm(`Vuoi rendere visibile agli utenti la giornata del ${label}?`)) return;
+  manualSquadreFilterDateKey = dateKey;
+  sharedSquadreDateKey = dateKey;
+  persistSharedSquadreDate(dateKey).then(() => {
+    if (ui.squadrePublicDayStatus) ui.squadrePublicDayStatus.textContent = `Giornata squadre pubblicata per tutti: ${label}`;
+  }).catch((error) => {
+    logFirestoreError("SAVE GIORNO SQUADRE VISIBILE", error);
+    alert("Errore salvataggio giornata pubblica squadre.");
+  });
+}
+
+function renderSquadrePublicDayStatus() {
+  if (!ui.squadrePublicDayStatus) return;
+  const label = sharedSquadreDateKey ? new Date(`${sharedSquadreDateKey}T00:00:00`).toLocaleDateString("it-IT") : "-";
+  ui.squadrePublicDayStatus.textContent = canManageData()
+    ? `Giornata squadre pubblicata per tutti: ${label}`
+    : `Giornata impostata dall’amministratore: ${label}`;
 }
 
 function onSnowSquadreFilterDateChange() {
@@ -20296,7 +20366,8 @@ function renderSquadre() {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;
     return;
   }
-  if (squadreLoadState.status === "loading") {
+  const selectedDateKey = getActiveSquadreDateKey();
+  if (squadreLoadState.status === "loading" && !(squadreHistoryByDate.get(selectedDateKey)?.size)) {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre...")}</p>`;
     return;
   }
@@ -20309,7 +20380,6 @@ function renderSquadre() {
     ui.squadreLista.querySelector("#squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
-  const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
 
@@ -22997,6 +23067,37 @@ function evaluateTimbraturaReminders(now = new Date()) {
 }
 
 const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/mappe-rischi/bollettino-di-criticita/";
+
+const HOME_WEATHER_CACHE_KEY = "heraHomeOperationalWeather:lastValid";
+const HOME_WEATHER_TIMEOUT_MS = 6500;
+function withTimeout(promise, ms, label = "timeout") {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
+}
+function readJsonCache(key, fallback = null) {
+  try { return JSON.parse(localStorage.getItem(key) || "null") || fallback; } catch { return fallback; }
+}
+function writeJsonCache(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { console.warn("Cache locale non salvata:", key, error); }
+}
+function formatCacheDate(value) {
+  const ms = Number(value || 0);
+  return ms ? new Date(ms).toLocaleString("it-IT") : "-";
+}
+function renderCachedHomeWeather() {
+  const cached = readJsonCache(HOME_WEATHER_CACHE_KEY);
+  if (!cached) return false;
+  if (ui.weatherSummary) ui.weatherSummary.textContent = cached.summary || "Meteo momentaneamente non disponibile";
+  if (ui.weatherRisks) ui.weatherRisks.innerHTML = cached.risksHtml || "<span class='weather-risk-chip'>Dati meteo salvati</span>";
+  if (ui.weatherDetails) ui.weatherDetails.innerHTML = cached.detailsHtml || "<p class='muted'>Dati dell’ultima sincronizzazione.</p>";
+  if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = `Ultimo aggiornamento: ${formatCacheDate(cached.updatedAt)}`;
+  return true;
+}
+function setWeatherUnavailable(error) {
+  if (!renderCachedHomeWeather() && ui.weatherSummary) ui.weatherSummary.textContent = "Meteo momentaneamente non disponibile";
+  if (ui.weatherRetryBtn) ui.weatherRetryBtn.classList.remove("hidden");
+  if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = navigator.onLine ? "Meteo momentaneamente non disponibile" : "Offline – dati dell’ultima sincronizzazione";
+  console.warn("Meteo home non disponibile:", error);
+}
 const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
 const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
 const WORKLIMATE_FORECAST_URL = "https://app.worklimate.it/ordinanza-caldo-lavoro";
@@ -23133,7 +23234,9 @@ function mapOpenWeatherCodeToWmo(code) {
   return 3;
 }
 
-async function fetchWeather() {
+async function fetchWeather(options = {}) {
+  if (!options.force) renderCachedHomeWeather();
+  if (ui.weatherRetryBtn) ui.weatherRetryBtn.classList.add("hidden");
   const target = getWeatherTargetCoordinates();
   currentWeatherTarget = target;
   renderCivilProtectionAlert({ level: "green", label: "Verifica Protezione Civile...", url: CIVIL_PROTECTION_ALERT_PAGE, loading: true });
@@ -23145,7 +23248,7 @@ async function fetchWeather() {
   try {
     let data;
     try {
-      const primary = await fetchOpenWeatherPrimary(target);
+      const primary = await withTimeout(fetchOpenWeatherPrimary(target), HOME_WEATHER_TIMEOUT_MS, "Meteo momentaneamente non disponibile");
       data = primary.data;
       diagnostics.provider = "OpenWeather";
       diagnostics.url = primary.url;
@@ -23155,7 +23258,7 @@ async function fetchWeather() {
       diagnostics.error = primaryError?.message || "errore provider primario";
       const params = new URLSearchParams(buildWeatherForecastRequestParams(target));
       diagnostics.url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
-      const fallback = await fetchWeatherForecast(target);
+      const fallback = await withTimeout(fetchWeatherForecast(target), HOME_WEATHER_TIMEOUT_MS, "Meteo momentaneamente non disponibile");
       data = fallback;
       diagnostics.httpStatus = 200;
     }
@@ -23163,13 +23266,15 @@ async function fetchWeather() {
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     await renderWeatherDetails(data, target);
+    const updatedAt = Date.now();
+    if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = `Ultimo aggiornamento: ${formatCacheDate(updatedAt)}`;
+    writeJsonCache(HOME_WEATHER_CACHE_KEY, { summary: ui.weatherSummary?.textContent || "", risksHtml: ui.weatherRisks?.innerHTML || "", detailsHtml: ui.weatherDetails?.innerHTML || "", updatedAt });
     renderWeatherDiagnostics(diagnostics);
   } catch (error) {
-    ui.weatherSummary.textContent = "Meteo non disponibile.";
-    ui.weatherRisks.innerHTML = `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
+    setWeatherUnavailable(error);
+    ui.weatherRisks.innerHTML = ui.weatherRisks.innerHTML || `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
     bindHomeWorklimateButton();
     renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
-    ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
     diagnostics.error = error?.message || "errore sconosciuto";
     if (!diagnostics.httpStatus && /CORS|Failed to fetch|NetworkError|fetch/i.test(diagnostics.error)) diagnostics.httpStatus = "CORS/Network";
     diagnostics.updatedAt = Date.now();
@@ -23213,10 +23318,19 @@ async function renderWeatherDetails(data, target) {
   const riskIce = temps.slice(0, 12).some((value, idx) => Number(value) <= 1 && Number(rains[idx] || 0) >= 40);
 
   const risks = [];
+  const maxWind = Math.max(...winds.slice(0, 12).map((value) => Number(value) || 0), 0);
   risks.push(maxRain >= 60 ? "🌧️ Rischio pioggia alta" : "🌧️ Rischio pioggia bassa");
+  risks.push(`💨 Vento max ${Math.round(maxWind)} km/h`);
   if (snowSum > 0) risks.push("❄️ Possibile neve");
   if (hasFogCode || minVisibility < 1200) risks.push("🌫️ Possibile nebbia");
   if (riskIce) risks.push("🧊 Possibile ghiaccio");
+  const operationalLevel = (maxRain >= 80 || snowSum >= 5 || maxWind >= 70 || minVisibility < 500)
+    ? { emoji: "🔴", text: "Rischio alto / valutare sospensione attività", advice: "Valutare sospensione attività esposte, lavori in quota, viabilità e squadre isolate." }
+    : (maxRain >= 50 || snowSum > 0 || maxWind >= 45 || hasFogCode || minVisibility < 1200)
+      ? { emoji: "🟡", text: "Attenzione condizioni meteo", advice: "Procedere con DPI adeguati, verifica strade/accessi e rivalutazione prima delle attività critiche." }
+      : { emoji: "🟢", text: "Lavoro regolare", advice: "Condizioni compatibili con attività ordinarie; mantenere il monitoraggio." };
+  risks.unshift(`${operationalLevel.emoji} ${operationalLevel.text}`);
+  risks.push(`Consiglio operativo: ${operationalLevel.advice}`);
 
   const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
   const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
@@ -27433,7 +27547,6 @@ function renderSnowServiceCommesse() {
     list.querySelector("#snow-squadre-retry-btn")?.addEventListener("click", () => subscribeSquadre());
     return;
   }
-  const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
   const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
   const commesseNeve = Array.from(commesseById.values()).filter((commessa) => {

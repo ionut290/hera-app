@@ -108,6 +108,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /configurazione/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /weatherAlerts/{alertId} {
       allow read: if signedIn();
       allow write: if isAdmin();

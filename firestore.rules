@@ -102,17 +102,6 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-
-    match /configurazioneApp/{docId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /configurazione/{docId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
     match /weatherAlerts/{alertId} {
       allow read: if signedIn();
       allow write: if isAdmin();
@@ -229,11 +218,6 @@ service cloud.firestore {
     }
 
     match /safetyContacts/{contactId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /settings/{settingId} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
     }

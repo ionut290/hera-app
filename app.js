@@ -1195,8 +1195,7 @@ const worklimateRiskByCommessaId = new Map();
 let worklimateRiskCacheLoaded = false;
 let worklimateRiskCacheLoading = false;
 let selectedWeatherAlertContext = null;
-let manualSquadreFilterDateKey = "";
-let sharedSquadreDateKey = "";
+let giornoOperativo = "";
 let publishedSquadreDateUpdatedAt = null;
 let automaticSquadreDateKey = "";
 let startupAssignedCommessaAutoOpenDone = false;
@@ -3207,8 +3206,7 @@ if (!auth || firebaseInitError) {
   personaleLoadState = { status: "idle", message: "" };
   mezziLoadState = { status: "idle", message: "" };
   startupCoreCollectionsLoadState = { status: "idle", message: "" };
-  manualSquadreFilterDateKey = "";
-  sharedSquadreDateKey = "";
+  giornoOperativo = "";
   startupAssignedCommessaAutoOpenDone = false;
   sharedSquadreViewConfigLoaded = false;
   squadreByCommessa = new Map();
@@ -3500,7 +3498,7 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   syncCommesseHomeToggle();
-  ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
+  ui.squadreFilterControls?.classList.remove("hidden");
   renderSquadrePublicDayStatus();
   ui.snowSquadreFilterControls?.classList.toggle("hidden", !canManage);
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
@@ -19515,9 +19513,8 @@ function subscribeSquadre() {
 function applyOperationalDaySettings(data = {}, { fromCache = false } = {}) {
   const dateKey = String(data.giornoOperativo || data.selectedDate || data.data || "").trim();
   if (!isValidDateKey(dateKey)) return false;
-  const previousDateKey = sharedSquadreDateKey;
-  sharedSquadreDateKey = dateKey;
-  manualSquadreFilterDateKey = "";
+  const previousDateKey = giornoOperativo;
+  giornoOperativo = dateKey;
   publishedSquadreDateUpdatedAt = data.aggiornatoAlle || data.updatedAt || data.updatedAtMillis || null;
   writeJsonCache(OPERATIONAL_DAY_CACHE_KEY, {
     giornoOperativo: dateKey,
@@ -19550,19 +19547,19 @@ function ensureOperationalDaySettingsListener() {
       return;
     }
     const cachedDay = getCachedOperationalDayKey();
-    if (cachedDay && !sharedSquadreDateKey) applyOperationalDaySettings({ giornoOperativo: cachedDay }, { fromCache: true });
+    if (cachedDay && !giornoOperativo) applyOperationalDaySettings({ giornoOperativo: cachedDay }, { fromCache: true });
     unsubscribeOperationalDaySettings = db.collection(OPERATIONAL_DAY_DOC.collection).doc(OPERATIONAL_DAY_DOC.doc).onSnapshot((doc) => {
       const data = doc.exists ? doc.data() || {} : {};
       const changed = applyOperationalDaySettings(data);
-      if (!doc.exists && !sharedSquadreDateKey) {
-        const fallback = getCachedOperationalDayKey();
-        if (fallback) applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
+      if (!doc.exists && !giornoOperativo) {
+        const fallback = getCachedOperationalDayKey() || getTodayDateKey();
+        applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
       }
       resolve(true);
     }, (error) => {
       logFirestoreError("LOAD GIORNO OPERATIVO", error);
-      const fallback = getCachedOperationalDayKey();
-      if (fallback) applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
+      const fallback = getCachedOperationalDayKey() || getTodayDateKey();
+      applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
       operationalDaySettingsLoaded = true;
       sharedSquadreViewConfigLoaded = true;
       syncSquadreDateInputs();
@@ -20216,7 +20213,7 @@ function getAutomaticSquadreDateKey(now = new Date()) {
 }
 
 function initializeAutomaticSquadreDate() {
-  automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  automaticSquadreDateKey = getTodayDateKey();
   syncSquadreDateInputs();
   renderSquadre();
 }
@@ -20232,11 +20229,11 @@ function getCachedOperationalDayKey() {
 }
 
 function getFallbackOperationalDayKey() {
-  return sharedSquadreDateKey || getCachedOperationalDayKey() || automaticSquadreDateKey || getAutomaticSquadreDateKey();
+  return giornoOperativo || getCachedOperationalDayKey() || automaticSquadreDateKey || getTodayDateKey();
 }
 
 function getNormalSquadreDateKey() {
-  return sharedSquadreDateKey || getCachedOperationalDayKey() || getFallbackOperationalDayKey();
+  return giornoOperativo || getCachedOperationalDayKey() || getFallbackOperationalDayKey();
 }
 
 function getSnowSquadreDateKey() {
@@ -20289,8 +20286,7 @@ function setSquadreDateOverride(dateKey, { snow = false, publish = true } = {}) 
     snowManualSquadreFilterDateKey = selectedDateKey;
     snowSharedSquadreDateKey = selectedDateKey;
   } else {
-    manualSquadreFilterDateKey = selectedDateKey;
-    sharedSquadreDateKey = selectedDateKey;
+    giornoOperativo = selectedDateKey;
   }
   syncSquadreDateInputs();
   renderSquadre();
@@ -20320,8 +20316,7 @@ function confirmPublishedSquadreDay() {
   const dateKey = ui.squadreFilterDate?.value || getNormalSquadreDateKey();
   const label = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
   if (!window.confirm(`Vuoi rendere visibile agli utenti la giornata del ${label}?`)) return;
-  manualSquadreFilterDateKey = dateKey;
-  sharedSquadreDateKey = dateKey;
+  giornoOperativo = dateKey;
   persistSharedSquadreDate(dateKey).then(() => {
     if (ui.squadrePublicDayStatus) ui.squadrePublicDayStatus.textContent = `Giornata squadre pubblicata per tutti: ${label}`;
   }).catch((error) => {
@@ -20339,12 +20334,15 @@ function formatOperationalDayLabel(dateKey) {
 function renderSquadrePublicDayStatus() {
   if (!ui.squadrePublicDayStatus) return;
   const dateKey = getNormalSquadreDateKey();
-  if (ui.squadreDateBarTitle) ui.squadreDateBarTitle.textContent = "Giorno operativo";
+  if (ui.squadreDateBarTitle) ui.squadreDateBarTitle.textContent = "Giorno operativo:";
   if (ui.squadreDateBarLabel) ui.squadreDateBarLabel.textContent = dateKey ? new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT") : "Non impostato";
-  if (ui.squadreDateBarAction) ui.squadreDateBarAction.textContent = canManageData() ? "✏️ Cambia giorno (solo admin)" : "🔒 Impostato dall’amministratore";
+  if (ui.squadreDateBarAction) {
+    ui.squadreDateBarAction.textContent = canManageData() ? "✏️ Cambia giorno" : "";
+    ui.squadreDateBarAction.classList.toggle("hidden", !canManageData());
+  }
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManageData();
   ui.squadrePublicDayStatus.textContent = canManageData()
-    ? "Tocca la barra per cambiare: il giorno viene salvato subito per tutti."
+    ? "Tocca “Cambia giorno”: il calendario nativo salva subito il giorno per tutti."
     : "Giornata globale impostata dall’amministratore";
 }
 
@@ -20357,8 +20355,7 @@ function clearManualSquadreFilterDate({ snow = false } = {}) {
     snowManualSquadreFilterDateKey = "";
     snowSharedSquadreDateKey = "";
   } else {
-    manualSquadreFilterDateKey = "";
-    sharedSquadreDateKey = "";
+    giornoOperativo = "";
   }
   persistSharedSquadreDate("", { snow }).catch((error) => {
     console.error(snow ? "Errore reset giorno squadre neve:" : "Errore reset giorno squadre condiviso:", error);

@@ -10791,51 +10791,66 @@ body.worklimate-page-open {
   .control-center-row strong { text-align: left; }
 }
 
-/* Giornata operativa squadre: barra compatta stile iPhone */
+/* Giornata operativa squadre: barra globale compatta */
 .squadre-date-bar {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
-  gap: 4px 10px;
-  min-height: 56px;
+  gap: 2px 10px;
+  min-height: 62px;
   margin: 10px 0 6px;
-  padding: 9px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  cursor: default;
+  padding: 10px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(239,246,255,0.98), rgba(255,255,255,0.96));
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+  cursor: pointer;
+  overflow: hidden;
 }
 
 .squadre-date-bar-title {
   display: block;
-  color: #64748b;
+  grid-column: 2;
+  color: #1e3a8a;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .squadre-date-bar-label {
   display: block;
+  grid-column: 2;
   color: #0f172a;
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 1.08rem;
+  font-weight: 900;
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
 
-.squadre-date-bar-icon {
-  grid-row: 1 / span 2;
+.squadre-date-bar-action {
+  display: block;
   grid-column: 2;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.squadre-date-bar-icon {
+  grid-row: 1 / span 3;
+  grid-column: 1;
   font-size: 1.25rem;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: #eef2ff;
+  border-radius: 14px;
+  background: #dbeafe;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
 }
 
 .squadre-date-native {
@@ -10851,6 +10866,11 @@ body.worklimate-page-open {
 .squadre-date-native:disabled {
   pointer-events: none;
   cursor: default;
+}
+
+.squadre-date-bar:has(.squadre-date-native:disabled) {
+  cursor: default;
+  background: linear-gradient(135deg, rgba(248,250,252,0.98), rgba(255,255,255,0.96));
 }
 
 .squadre-public-day-status {

@@ -735,6 +735,7 @@ const ui = {
   squadreFilterDate: document.getElementById("squadre-filter-date"),
   squadreDateBarTitle: document.getElementById("squadre-date-bar-title"),
   squadreDateBarLabel: document.getElementById("squadre-date-bar-label"),
+  squadreDateBarAction: document.getElementById("squadre-date-bar-action"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
   squadrePrevDayBtn: document.getElementById("squadre-prev-day-btn"),
   squadreNextDayBtn: document.getElementById("squadre-next-day-btn"),
@@ -1114,6 +1115,7 @@ let unsubscribeMezzi = null;
 let unsubscribeSquadre = null;
 let unsubscribeSquadreHistory = null;
 let unsubscribeSquadreViewConfig = null;
+let unsubscribeOperationalDaySettings = null;
 let unsubscribeUsers = null;
 let unsubscribeOperatorPositions = null;
 let unsubscribeAdminUsers = null;
@@ -1199,6 +1201,7 @@ let publishedSquadreDateUpdatedAt = null;
 let automaticSquadreDateKey = "";
 let startupAssignedCommessaAutoOpenDone = false;
 let sharedSquadreViewConfigLoaded = false;
+let operationalDaySettingsLoaded = false;
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
@@ -19504,41 +19507,69 @@ function subscribeSquadre() {
       renderCommesseHomeList();
     });
 
-  const squadreViewConfigPromise = new Promise((resolve) => {
-    if (isSnowServiceContext()) {
+  const squadreViewConfigPromise = ensureOperationalDaySettingsListener();
+
+  return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
+}
+
+function applyOperationalDaySettings(data = {}, { fromCache = false } = {}) {
+  const dateKey = String(data.giornoOperativo || data.selectedDate || data.data || "").trim();
+  if (!isValidDateKey(dateKey)) return false;
+  const previousDateKey = sharedSquadreDateKey;
+  sharedSquadreDateKey = dateKey;
+  manualSquadreFilterDateKey = "";
+  publishedSquadreDateUpdatedAt = data.aggiornatoAlle || data.updatedAt || data.updatedAtMillis || null;
+  writeJsonCache(OPERATIONAL_DAY_CACHE_KEY, {
+    giornoOperativo: dateKey,
+    aggiornatoDa: data.aggiornatoDa || data.updatedByName || "",
+    updatedAt: Date.now()
+  });
+  writeJsonCache("heraSquadre:lastPublishedDay", { data: dateKey, updatedAt: Date.now() });
+  operationalDaySettingsLoaded = true;
+  sharedSquadreViewConfigLoaded = true;
+  syncSquadreDateInputs();
+  renderSquadrePublicDayStatus();
+  if (!fromCache && previousDateKey !== dateKey) {
+    renderCommesseHomeList();
+    fetchWeather({ force: true }).catch((error) => console.warn("Meteo giorno operativo non aggiornato:", error));
+    if (currentUser) subscribeSquadre();
+  }
+  return previousDateKey !== dateKey;
+}
+
+function ensureOperationalDaySettingsListener() {
+  return new Promise((resolve) => {
+    if (!db || isSnowServiceContext()) {
+      operationalDaySettingsLoaded = true;
       sharedSquadreViewConfigLoaded = true;
       resolve(true);
       return;
     }
-    if (unsubscribeSquadreViewConfig) unsubscribeSquadreViewConfig();
-    unsubscribeSquadreViewConfig = db.collection("configurazione").doc("giornataOperativa").onSnapshot((doc) => {
+    if (unsubscribeOperationalDaySettings) {
+      resolve(true);
+      return;
+    }
+    const cachedDay = getCachedOperationalDayKey();
+    if (cachedDay && !sharedSquadreDateKey) applyOperationalDaySettings({ giornoOperativo: cachedDay }, { fromCache: true });
+    unsubscribeOperationalDaySettings = db.collection(OPERATIONAL_DAY_DOC.collection).doc(OPERATIONAL_DAY_DOC.doc).onSnapshot((doc) => {
       const data = doc.exists ? doc.data() || {} : {};
-      const sharedDate = String(data.selectedDate || "").trim() || getDateKeyFromLocalDate(new Date());
-      publishedSquadreDateUpdatedAt = data.updatedAt || null;
-      sharedSquadreViewConfigLoaded = true;
-      if (sharedDate && sharedDate !== sharedSquadreDateKey) {
-        writeJsonCache("heraSquadre:lastPublishedDay", { data: sharedDate, updatedAt: Date.now() });
-        sharedSquadreDateKey = sharedDate;
-        manualSquadreFilterDateKey = "";
-        syncSquadreDateInputs();
-        renderSquadrePublicDayStatus();
-        subscribeSquadre();
-      } else {
-        renderSquadrePublicDayStatus();
+      const changed = applyOperationalDaySettings(data);
+      if (!doc.exists && !sharedSquadreDateKey) {
+        const fallback = getCachedOperationalDayKey();
+        if (fallback) applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
       }
       resolve(true);
     }, (error) => {
-      logFirestoreError("LOAD GIORNO SQUADRE VISIBILE", error);
-      const cached = readJsonCache("heraSquadre:lastPublishedDay");
-      if (cached?.data && !sharedSquadreDateKey) sharedSquadreDateKey = cached.data;
+      logFirestoreError("LOAD GIORNO OPERATIVO", error);
+      const fallback = getCachedOperationalDayKey();
+      if (fallback) applyOperationalDaySettings({ giornoOperativo: fallback }, { fromCache: true });
+      operationalDaySettingsLoaded = true;
       sharedSquadreViewConfigLoaded = true;
       syncSquadreDateInputs();
       renderSquadrePublicDayStatus();
       resolve(false);
     });
   });
-
-  return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
 }
 
 function stopPersonaleSubscription() {
@@ -19568,6 +19599,10 @@ function stopSquadreSubscription() {
   if (unsubscribeSquadreViewConfig) {
     unsubscribeSquadreViewConfig();
     unsubscribeSquadreViewConfig = null;
+  }
+  if (unsubscribeOperationalDaySettings) {
+    unsubscribeOperationalDaySettings();
+    unsubscribeOperationalDaySettings = null;
   }
 }
 
@@ -20186,11 +20221,22 @@ function initializeAutomaticSquadreDate() {
   renderSquadre();
 }
 
+function isValidDateKey(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function getCachedOperationalDayKey() {
+  const cached = readJsonCache(OPERATIONAL_DAY_CACHE_KEY) || readJsonCache("heraSquadre:lastPublishedDay");
+  const dateKey = String(cached?.giornoOperativo || cached?.data || "").trim();
+  return isValidDateKey(dateKey) ? dateKey : "";
+}
+
+function getFallbackOperationalDayKey() {
+  return sharedSquadreDateKey || getCachedOperationalDayKey() || automaticSquadreDateKey || getAutomaticSquadreDateKey();
+}
+
 function getNormalSquadreDateKey() {
-  if (canManageData() && manualSquadreFilterDateKey) return manualSquadreFilterDateKey;
-  if (sharedSquadreDateKey) return sharedSquadreDateKey;
-  if (!automaticSquadreDateKey) automaticSquadreDateKey = getAutomaticSquadreDateKey();
-  return canManageData() ? automaticSquadreDateKey : automaticSquadreDateKey;
+  return sharedSquadreDateKey || getCachedOperationalDayKey() || getFallbackOperationalDayKey();
 }
 
 function getSnowSquadreDateKey() {
@@ -20216,17 +20262,24 @@ function syncSquadreDateInputs() {
 async function persistSharedSquadreDate(dateKey, { snow = false } = {}) {
   if (!canManageData() || snow) return;
   const normalDateKey = String(dateKey || "").trim();
-  if (!normalDateKey) return;
+  if (!isValidDateKey(normalDateKey)) return;
+  const adminName = currentUser?.displayName || currentUser?.email || "admin";
   const payload = {
+    giornoOperativo: normalDateKey,
     selectedDate: normalDateKey,
+    aggiornatoDa: adminName,
+    aggiornatoDaUid: currentUser?.uid || "",
+    aggiornatoAlle: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedByUid: currentUser?.uid || "",
-    updatedByName: currentUser?.displayName || currentUser?.email || "admin"
+    updatedByName: adminName
   };
+  writeJsonCache(OPERATIONAL_DAY_CACHE_KEY, { giornoOperativo: normalDateKey, aggiornatoDa: adminName, updatedAt: Date.now() });
+  writeJsonCache("heraSquadre:lastPublishedDay", { data: normalDateKey, updatedAt: Date.now() });
   if (!navigator.onLine) {
-    alert("Sei offline. La giornata sarà aggiornata quando torna la connessione.");
+    alert("Sei offline. Mostro l’ultimo giorno operativo salvato: il cambio sarà completato quando torna la connessione.");
   }
-  await db.collection("configurazione").doc("giornataOperativa").set(payload, { merge: true });
+  await db.collection(OPERATIONAL_DAY_DOC.collection).doc(OPERATIONAL_DAY_DOC.doc).set(payload, { merge: true });
 }
 
 function setSquadreDateOverride(dateKey, { snow = false, publish = true } = {}) {
@@ -20286,12 +20339,13 @@ function formatOperationalDayLabel(dateKey) {
 function renderSquadrePublicDayStatus() {
   if (!ui.squadrePublicDayStatus) return;
   const dateKey = getNormalSquadreDateKey();
-  if (ui.squadreDateBarTitle) ui.squadreDateBarTitle.textContent = canManageData() ? "Giorno operativo visibile a tutti" : "Giornata impostata dall’amministratore";
-  if (ui.squadreDateBarLabel) ui.squadreDateBarLabel.textContent = formatOperationalDayLabel(dateKey);
+  if (ui.squadreDateBarTitle) ui.squadreDateBarTitle.textContent = "Giorno operativo";
+  if (ui.squadreDateBarLabel) ui.squadreDateBarLabel.textContent = dateKey ? new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT") : "Non impostato";
+  if (ui.squadreDateBarAction) ui.squadreDateBarAction.textContent = canManageData() ? "✏️ Cambia giorno (solo admin)" : "🔒 Impostato dall’amministratore";
   if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManageData();
   ui.squadrePublicDayStatus.textContent = canManageData()
-    ? "Tocca la data per cambiare: il salvataggio è automatico."
-    : "Giornata impostata dall’amministratore";
+    ? "Tocca la barra per cambiare: il giorno viene salvato subito per tutti."
+    : "Giornata globale impostata dall’amministratore";
 }
 
 function onSnowSquadreFilterDateChange() {
@@ -23098,6 +23152,8 @@ function evaluateTimbraturaReminders(now = new Date()) {
 const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/mappe-rischi/bollettino-di-criticita/";
 
 const HOME_WEATHER_CACHE_KEY = "heraHomeOperationalWeather:lastValid";
+const OPERATIONAL_DAY_CACHE_KEY = "heraSettings:giornoOperativo";
+const OPERATIONAL_DAY_DOC = { collection: "settings", doc: "giornoOperativo" };
 const HOME_WEATHER_TIMEOUT_MS = 10000;
 function withTimeout(promise, ms, label = "timeout") {
   return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
@@ -23112,8 +23168,11 @@ function formatCacheDate(value) {
   const ms = Number(value || 0);
   return ms ? new Date(ms).toLocaleString("it-IT") : "-";
 }
+function getHomeWeatherCacheKey(dateKey = getActiveSquadreDateKey()) {
+  return `${HOME_WEATHER_CACHE_KEY}:${dateKey || "global"}`;
+}
 function renderCachedHomeWeather({ staleMessage = "" } = {}) {
-  const cached = readJsonCache(HOME_WEATHER_CACHE_KEY);
+  const cached = readJsonCache(getHomeWeatherCacheKey()) || readJsonCache(HOME_WEATHER_CACHE_KEY);
   if (!cached) return false;
   if (ui.weatherSummary) ui.weatherSummary.textContent = cached.summary || "Meteo temporaneamente non disponibile";
   if (ui.weatherRisks) ui.weatherRisks.innerHTML = cached.risksHtml || "<span class='weather-risk-chip'>Dati meteo salvati</span>";
@@ -23135,7 +23194,7 @@ function setWeatherUnavailable(error) {
   const message = getWeatherErrorMessage(error);
   if (!renderCachedHomeWeather({ staleMessage: message }) && ui.weatherSummary) ui.weatherSummary.textContent = message || "Meteo temporaneamente non disponibile";
   if (ui.weatherRetryBtn) ui.weatherRetryBtn.classList.remove("hidden");
-  if (ui.weatherUpdatedAt && !readJsonCache(HOME_WEATHER_CACHE_KEY)) ui.weatherUpdatedAt.textContent = message;
+  if (ui.weatherUpdatedAt && !readJsonCache(getHomeWeatherCacheKey())) ui.weatherUpdatedAt.textContent = message;
   console.error("Errore ricevuto", error);
 }
 const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
@@ -23313,8 +23372,11 @@ async function fetchWeather(options = {}) {
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     await renderWeatherDetails(data, target);
     const updatedAt = Date.now();
-    if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = `${target.name || "Bologna"} • Aggiornato alle ${new Date(updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
-    writeJsonCache(HOME_WEATHER_CACHE_KEY, { summary: ui.weatherSummary?.textContent || "", risksHtml: ui.weatherRisks?.innerHTML || "", detailsHtml: ui.weatherDetails?.innerHTML || "", updatedAt });
+    const dayLabel = formatDateKeyForDisplay(getActiveSquadreDateKey());
+    if (ui.weatherUpdatedAt) ui.weatherUpdatedAt.textContent = `${target.name || "Bologna"} • Giorno operativo ${dayLabel} • Aggiornato alle ${new Date(updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+    const weatherCachePayload = { summary: ui.weatherSummary?.textContent || "", risksHtml: ui.weatherRisks?.innerHTML || "", detailsHtml: ui.weatherDetails?.innerHTML || "", updatedAt, giornoOperativo: getActiveSquadreDateKey() };
+    writeJsonCache(getHomeWeatherCacheKey(), weatherCachePayload);
+    writeJsonCache(HOME_WEATHER_CACHE_KEY, weatherCachePayload);
     renderWeatherDiagnostics(diagnostics);
   } catch (error) {
     setWeatherUnavailable(error);

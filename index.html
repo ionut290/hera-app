@@ -125,6 +125,8 @@
             <span class="pill">Pioggia/Neve/Nebbia</span>
           </div>
           <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
+          <p id="weather-updated-at" class="muted weather-updated-at"></p>
+          <button id="weather-retry-btn" class="btn hidden" type="button">Riprova</button>
           <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
           <div id="weather-risks" class="weather-risks"></div>
           <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
@@ -171,9 +173,13 @@
           <span class="pill squadre-status-pill">Operativo</span>
         </div>
         <div id="squadre-filter-controls" class="inline-form squadre-filter-controls hidden" aria-label="Filtro giorno squadre">
+          <button id="squadre-prev-day-btn" class="btn squadre-auto-btn" type="button">◀ giorno precedente</button>
           <input id="squadre-filter-date" type="date" aria-label="Giorno squadre">
-          <button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button>
+          <button id="squadre-next-day-btn" class="btn squadre-auto-btn" type="button">▶ giorno successivo</button>
+          <button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">OGGI</button>
+          <button id="squadre-publish-day-btn" class="btn btn-primary squadre-auto-btn" type="button">CONFERMA GIORNO PER TUTTI</button>
         </div>
+        <p id="squadre-public-day-status" class="muted">Giornata impostata dall’amministratore</p>
         <div id="squadre-lista" class="squadre-lista"></div>
       </section>
       <section id="programmazioni-home-card" class="card hidden" aria-hidden="true">

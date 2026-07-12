@@ -1,12 +1,9 @@
-const CACHE_NAME = "hera-app-shell-v13";
+const CACHE_NAME = "hera-app-shell-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./app.js?v=20260705",
-  "./hours-export-range.js",
-  "./hours-export-range.js?v=20260619",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./offline.html",
@@ -14,7 +11,7 @@ const APP_SHELL = [
 ];
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
-const OPAQUE_CACHE_WHITELIST = new Set(["https://www.gstatic.com", "https://cdn.jsdelivr.net", "https://unpkg.com"]);
+const OPAQUE_CACHE_WHITELIST = new Set([]);
 const NETWORK_DOCUMENT_TIMEOUT_MS = 3500;
 const MAX_DYNAMIC_CACHE_ENTRIES = 80;
 
@@ -30,9 +27,7 @@ const hasNoStoreDirective = (headers) => {
 
 const shouldHandleRequest = (request, url) => {
   if (request.method !== "GET") return false;
-  const isSameOrigin = url.origin === self.location.origin;
-  const isStaticCdn = OPAQUE_CACHE_WHITELIST.has(url.origin);
-  if (!isSameOrigin && !isStaticCdn) return false;
+  if (url.origin !== self.location.origin) return false;
   if (!CACHEABLE_DESTINATIONS.has(request.destination)) return false;
   if (hasNoStoreDirective(request.headers)) return false;
   if (isDynamicEndpoint(url)) return false;
@@ -83,10 +78,9 @@ const fetchWithTimeout = (request, timeoutMs) => {
   });
 };
 
-const cacheFirstForAsset = async (event) => {
+const staleWhileRevalidateForAsset = async (event) => {
   const { request } = event;
-  const cached = await caches.match(request, { ignoreSearch: request.url.startsWith(self.location.origin) });
-  if (cached) return cached;
+  const cached = await caches.match(request);
 
   const networkUpdate = fetch(request)
     .then(async (response) => {
@@ -100,6 +94,11 @@ const cacheFirstForAsset = async (event) => {
     })
     .catch(() => null);
 
+  if (cached) {
+    event.waitUntil(networkUpdate);
+    return cached;
+  }
+
   const response = await networkUpdate;
   if (response) return response;
 
@@ -112,6 +111,7 @@ const cacheFirstForAsset = async (event) => {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -134,7 +134,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(cacheFirstForAsset(event));
+  event.respondWith(staleWhileRevalidateForAsset(event));
 });
 
 self.addEventListener("push", (event) => {

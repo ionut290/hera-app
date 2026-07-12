@@ -10838,3 +10838,28 @@ body.worklimate-page-open {
   opacity: 0.9;
   padding: 0 8px !important;
 }
+
+.impianto-already-done-details {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.impianto-already-done-details > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.impianto-already-done-details dt {
+  font-weight: 700;
+}
+
+.impianto-already-done-details dd {
+  margin: 0;
+}
+
+.impianto-already-done-actions {
+  flex-wrap: wrap;
+}

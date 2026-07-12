@@ -11131,3 +11131,61 @@ body.worklimate-page-open {
     border-top-color: #334155;
   }
 }
+
+.offline-done-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.offline-done-card {
+  width: min(520px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  border-radius: 24px;
+  padding: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  color: #0f172a;
+}
+
+.offline-done-card h2 {
+  margin: 0 0 10px;
+  color: #166534;
+}
+
+.offline-done-card dl {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 10px 14px;
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.offline-done-card dt {
+  color: #64748b;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.offline-done-card dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.offline-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}

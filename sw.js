@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v11";
+const CACHE_NAME = "hera-app-shell-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./app.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
+  "./offline.html",
   "./icons/hera-icon.svg"
 ];
 
@@ -65,7 +66,7 @@ const networkFirstForDocument = async (request) => {
   } catch (error) {
     const cached = await caches.match(request);
     if (cached) return cached;
-    return caches.match("./index.html");
+    return caches.match("./index.html").then((cachedIndex) => cachedIndex || caches.match("./offline.html"));
   }
 };
 
@@ -105,7 +106,7 @@ const staleWhileRevalidateForAsset = async (event) => {
     return caches.match("./icons/hera-icon.svg");
   }
 
-  return caches.match("./index.html");
+  return caches.match("./index.html").then((cachedIndex) => cachedIndex || caches.match("./offline.html"));
 };
 
 self.addEventListener("install", (event) => {

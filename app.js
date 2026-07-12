@@ -50,7 +50,7 @@ try {
 }
 
 
-const HERA_IDB_VERSION = 3;
+const HERA_IDB_VERSION = 4;
 const HERA_IDB_NAME = "hera-app-cache";
 const HERA_MEMORY_CACHE = new Map();
 let heraIdbPromise = null;
@@ -63,7 +63,7 @@ function openHeraCacheDb() {
     const request = indexedDB.open(HERA_IDB_NAME, HERA_IDB_VERSION);
     request.onupgradeneeded = () => {
       const idb = request.result;
-      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates"].forEach((store) => {
+      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates", "receipts", "session", "notes", "reports", "coordinates", "notifications", "syncState"].forEach((store) => {
         if (!idb.objectStoreNames.contains(store)) idb.createObjectStore(store, { keyPath: "key" });
       });
     };
@@ -75,6 +75,9 @@ function openHeraCacheDb() {
 
 async function heraCacheSet(store, key, value, meta = {}) {
   HERA_MEMORY_CACHE.set(`${store}:${key}`, value);
+  if (["commesse", "impianti", "squadre", "offlineQueue", "notes", "reports", "coordinates", "notifications", "syncState"].includes(store)) {
+    try { localStorage.setItem("heraLastStructuredCacheUpdate", String(Date.now())); } catch (error) {}
+  }
   const idb = await openHeraCacheDb();
   if (!idb) return false;
   return new Promise((resolve) => {
@@ -104,10 +107,82 @@ async function heraCacheGet(store, key, { maxAgeMs = 0 } = {}) {
   });
 }
 
+const HERA_BACKEND_PROBE_TIMEOUT_MS = 4500;
+const HERA_BACKEND_PROBE_INTERVAL_MS = 30000;
+const heraConnectionManager = {
+  state: navigator.onLine === false ? "offline" : "checking",
+  reachable: navigator.onLine !== false,
+  lastProbeAt: 0,
+  lastOnlineAt: 0,
+  lastOfflineAt: navigator.onLine === false ? Date.now() : 0,
+  checking: null,
+  listeners: new Set()
+};
+
+function getBackendProbeUrl() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  if (projectId) return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents?key=${encodeURIComponent(firebaseConfig?.apiKey || "")}&pageSize=1`;
+  return `${window.location.origin}${window.location.pathname || "/"}`;
+}
+
+async function probeBackendReachability({ force = false } = {}) {
+  if (navigator.onLine === false) {
+    setHeraConnectionState("offline", { reachable: false, detail: "Browser offline" });
+    return false;
+  }
+  if (!force && Date.now() - heraConnectionManager.lastProbeAt < HERA_BACKEND_PROBE_INTERVAL_MS) {
+    return heraConnectionManager.reachable;
+  }
+  if (heraConnectionManager.checking) return heraConnectionManager.checking;
+  heraConnectionManager.checking = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HERA_BACKEND_PROBE_TIMEOUT_MS);
+    try {
+      heraConnectionManager.lastProbeAt = Date.now();
+      const response = await fetch(getBackendProbeUrl(), { method: "GET", cache: "no-store", signal: controller.signal });
+      const reachable = response.status < 500;
+      setHeraConnectionState(reachable ? "online" : "offline", { reachable, detail: reachable ? "Backend raggiungibile" : `Backend HTTP ${response.status}` });
+      return reachable;
+    } catch (error) {
+      setHeraConnectionState("offline", { reachable: false, detail: "Backend non raggiungibile" });
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+      heraConnectionManager.checking = null;
+    }
+  })();
+  return heraConnectionManager.checking;
+}
+
+function setHeraConnectionState(state, patch = {}) {
+  const previous = heraConnectionManager.state;
+  heraConnectionManager.state = state;
+  heraConnectionManager.reachable = patch.reachable !== undefined ? Boolean(patch.reachable) : state === "online";
+  heraConnectionManager.detail = patch.detail || heraConnectionManager.detail || "";
+  if (state === "online") heraConnectionManager.lastOnlineAt = Date.now();
+  if (state === "offline") heraConnectionManager.lastOfflineAt = Date.now();
+  if (previous !== state) heraConnectionManager.listeners.forEach((listener) => { try { listener({ ...heraConnectionManager, previous }); } catch (error) { console.warn("Listener connessione non riuscito:", error); } });
+  try { updateConnectivityStatus?.(); } catch (error) { /* UI non ancora pronta durante il bootstrap */ }
+}
+
+function onHeraConnectionChange(listener) {
+  heraConnectionManager.listeners.add(listener);
+  return () => heraConnectionManager.listeners.delete(listener);
+}
+
+function isBackendOnline() {
+  return navigator.onLine !== false && heraConnectionManager.state === "online" && heraConnectionManager.reachable;
+}
+
+setInterval(() => { void probeBackendReachability(); }, HERA_BACKEND_PROBE_INTERVAL_MS);
+window.addEventListener("online", () => { setHeraConnectionState("checking", { reachable: false, detail: "Connessione ripristinata" }); void probeBackendReachability({ force: true }); });
+window.addEventListener("offline", () => setHeraConnectionState("offline", { reachable: false, detail: "Dispositivo offline" }));
+void probeBackendReachability();
+
 function getConnectionInfo() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
   return {
-    online: navigator.onLine !== false,
+    online: isBackendOnline(),
     effectiveType: connection.effectiveType || "unknown",
     downlink: Number(connection.downlink || 0),
     saveData: Boolean(connection.saveData)
@@ -3117,12 +3192,25 @@ if (!auth || firebaseInitError) {
   });
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
-  const authCheckWatchdog = setTimeout(() => {
+  const authCheckWatchdog = setTimeout(async () => {
     if (authStateResolved) return;
+    const savedSession = savedStartupSession || await readPersistedSession();
+    if (savedSession && isNetworkOffline()) {
+      console.warn("Timeout verifica Firebase offline: uso sessione locale valida e dati IndexedDB.");
+      authStateResolved = true;
+      applyPersistedSessionPreview(savedSession);
+      setAuthenticationGateState("authenticated");
+      hideStartupLoading();
+      await loadStartupCoreCollections().catch((error) => console.warn("Avvio offline da IndexedDB non completo:", error));
+      renderHeaderActivitySummary();
+      renderPendingWhatsappList();
+      renderNextActionCard();
+      return;
+    }
     console.warn("Timeout verifica sessione Firebase: mostro la schermata di login invece del caricamento infinito.");
     authStateResolved = true;
     currentUser = null;
-    setAuthenticationGateState("required", "Verifica sessione lenta o non disponibile. Riprova il login.");
+    setAuthenticationGateState("required", savedSession ? "Verifica sessione lenta. Torna online o riprova." : "Primo accesso necessario: per configurare l’app è necessario effettuare almeno un primo accesso con connessione Internet. Successivamente l’app funzionerà anche offline.");
     squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
     if (typeof renderSquadre === "function") renderSquadre();
     hideStartupLoading();
@@ -3471,8 +3559,14 @@ async function loadStartupCoreCollections() {
       () => subscribeMezzi()
     ], { baseDelayMs: shouldReduceBackgroundData() ? 2500 : 700 });
   } catch (error) {
-    startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
-    throw error;
+    if (isNetworkOffline()) {
+      startupCoreCollectionsLoadState = { status: "loaded", message: "Dati locali IndexedDB" };
+      commesseLoadState = commesseById.size ? { status: "loaded", message: "Dati locali" } : { status: "empty", message: "Nessuna commessa salvata sul dispositivo." };
+      squadreLoadState = squadreHistoryByDate.size ? { status: "loaded", message: "Giorno operativo salvato sul dispositivo" } : { status: "empty", message: "Squadre non ancora salvate su questo dispositivo." };
+    } else {
+      startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
+      throw error;
+    }
   } finally {
     renderCommesseHomeList();
     renderSquadre();
@@ -12216,7 +12310,7 @@ function getTargetCommessaName() {
 }
 
 function isNetworkOffline() {
-  return typeof navigator !== "undefined" && navigator.onLine === false;
+  return typeof navigator === "undefined" ? false : !isBackendOnline();
 }
 
 function loadPendingImpiantoActions() {
@@ -12554,7 +12648,10 @@ async function syncPendingImpiantoActions() {
       const doneAtDate = action.doneAt ? new Date(action.doneAt) : new Date();
       await setImpiantoDone(action.commessaId, impiantoIds, true, {
         doneAt: doneAtDate,
-        doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore"
+        doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore",
+        doneByUid: action.userId || currentUser.uid || "",
+        doneByEmail: action.userEmail || currentUser.email || "",
+        operationId: action.operationId || action.id || ""
       });
       const exportPayload = {
         commessaId: action.commessaId,
@@ -12573,6 +12670,7 @@ async function syncPendingImpiantoActions() {
       });
       const updatedAction = markPendingActionStatus(action.id, {
         status: "synced",
+        syncState: "synced",
         syncedAt: new Date().toISOString(),
         whatsappStatus: action.whatsappStatus === "sent" ? "sent" : "pending",
         lastError: ""
@@ -12595,7 +12693,7 @@ async function syncPendingImpiantoActions() {
   const alertable = syncedWhatsappActions.filter((action) => !pendingWhatsappAlertShownForSyncIds.has(action.id));
   if (alertable.length) {
     alertable.forEach((action) => pendingWhatsappAlertShownForSyncIds.add(action.id));
-    alert("Ci sono messaggi WhatsApp da inviare");
+    alert("Impianto sincronizzato.\n\nIl messaggio WhatsApp è pronto. Apri la scheda WhatsApp in attesa per inviarlo, condividere la ricevuta o rimandare a più tardi.");
   }
   renderPendingWhatsappList();
   if (!remainingToSync.length) showSyncProgress([], actionsToSync.length, true);
@@ -14802,23 +14900,53 @@ function formatConnectionLabel(baseState) {
     : "🟢 Online • Connessione disponibile";
 }
 
+function getLocalCacheLastUpdatedLabel() {
+  const candidates = [
+    ...Array.from(HERA_MEMORY_CACHE.keys()).filter((key) => /^(commesse|impianti|squadre|offlineQueue):/.test(key)).map(() => Date.now()),
+    Number(localStorage.getItem("heraLastStructuredCacheUpdate") || 0)
+  ].filter(Boolean);
+  const latest = candidates.length ? Math.max(...candidates) : 0;
+  return latest ? new Date(latest).toLocaleString("it-IT") : "non disponibile";
+}
+
+function getPendingOfflineOperationsCount() {
+  const offlineMutations = loadPendingOfflineMutations().filter((item) => item.status !== "synced").length;
+  const doneActions = (canManageData() ? pendingImpiantoActions : getCurrentUserPendingActions()).filter(isActionWaitingForSync).length;
+  return offlineMutations + doneActions;
+}
+
 function updateConnectivityStatus() {
-  const browserOnline = navigator.onLine;
+  const pendingCount = getPendingOfflineOperationsCount();
+  const connectionState = heraConnectionManager.state;
   const baseState = firestoreNetworkState === "Connessione lenta"
     ? "Connessione lenta"
-    : (browserOnline ? "Online" : "Offline");
-  firestoreNetworkState = baseState;
+    : (connectionState === "online" ? "Online" : (connectionState === "checking" ? "Ripristino" : "Offline"));
+  firestoreNetworkState = baseState === "Ripristino" ? "Online" : baseState;
   const cacheSuffix = firestoreCacheState ? ` • ${firestoreCacheState}` : "";
 
   if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${getOperatorDisplayName()}`;
-  if (ui.connectionIndicator) ui.connectionIndicator.textContent = formatConnectionLabel(baseState);
+  if (ui.connectionIndicator) {
+    if (baseState === "Offline") {
+      ui.connectionIndicator.textContent = pendingCount
+        ? `🔴 Offline • ${pendingCount} operazion${pendingCount === 1 ? "e" : "i"} da sincronizzare`
+        : `🔴 Offline • Dati aggiornati il ${getLocalCacheLastUpdatedLabel()}`;
+    } else if (baseState === "Ripristino") {
+      ui.connectionIndicator.textContent = "🟡 Connessione ripristinata • Sincronizzazione…";
+    } else if (baseState === "Connessione lenta") {
+      ui.connectionIndicator.textContent = "🟡 Connessione lenta • Uso cache locale";
+    } else {
+      ui.connectionIndicator.textContent = pendingCount ? `🟡 Online • Sincronizzazione ${pendingCount} operazioni…` : "🟢 Online • Tutto sincronizzato";
+    }
+  }
   ui.offlineModeIndicator?.classList.toggle("hidden", baseState !== "Offline");
 
   if (!ui.gpsStatus) return;
   if (baseState === "Connessione lenta") {
     ui.gpsStatus.textContent = `Connessione lenta: sblocco la schermata e uso gli ultimi dati disponibili.${cacheSuffix}`;
-  } else if (browserOnline) {
+  } else if (baseState === "Online") {
     ui.gpsStatus.textContent = `Online: modifiche sincronizzate con il cloud (cache offline attiva).${cacheSuffix}`;
+  } else if (baseState === "Ripristino") {
+    ui.gpsStatus.textContent = "Connessione ripristinata: sincronizzazione coda offline in corso…";
   } else {
     ui.gpsStatus.textContent = `Offline: l'app continua con gli ultimi dati disponibili e sincronizza appena torna la rete.${cacheSuffix}`;
   }
@@ -18733,6 +18861,124 @@ async function navigateToImpianto(impianto) {
   }
 }
 
+
+function buildOfflineReceiptFileName(impianto, doneAt = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const idSap = String(impianto?.idSap || "impianto").replace(/[^a-z0-9_-]+/gi, "");
+  return `VargaCantieri_${idSap}_${doneAt.getFullYear()}-${pad(doneAt.getMonth() + 1)}-${pad(doneAt.getDate())}_${pad(doneAt.getHours())}-${pad(doneAt.getMinutes())}.png`;
+}
+
+function createOfflineReceiptDataUrl(impianto, options = {}) {
+  const doneAt = options.doneAt instanceof Date ? options.doneAt : new Date();
+  const doneBy = options.doneBy || getCurrentWhatsAppOperatorName();
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext("2d");
+  const drawRoundRect = (x, y, width, height, radius) => {
+    if (typeof ctx.roundRect === "function") return ctx.roundRect(x, y, width, height, radius);
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    return ctx;
+  };
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#16a34a";
+  ctx.beginPath();
+  drawRoundRect(70, 70, 940, 210, 38);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 54px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("✅ IMPIANTO ESEGUITO", 110, 165);
+  ctx.font = "500 30px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Registrato offline • In attesa di sincronizzazione", 112, 225);
+  ctx.strokeStyle = "#d1fae5";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  drawRoundRect(70, 330, 940, 760, 30);
+  ctx.stroke();
+  const rows = [
+    ["Impianto", impianto?.denominazione || "-"],
+    ["ID SAP", impianto?.idSap || "-"],
+    ["Comune", impianto?.comune || "-"],
+    ["Indirizzo", impianto?.indirizzo || "-"],
+    ["Commessa", selectedCommessaName || "Commessa"],
+    ["Data", doneAt.toLocaleDateString("it-IT")],
+    ["Ora", doneAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })],
+    ["Operatore", doneBy],
+    ["Stato", "Registrato offline"]
+  ];
+  let y = 395;
+  rows.forEach(([label, value]) => {
+    ctx.fillStyle = "#64748b";
+    ctx.font = "700 25px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText(label.toUpperCase(), 120, y);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "600 34px system-ui, -apple-system, Segoe UI, sans-serif";
+    const text = String(value || "-");
+    const clipped = text.length > 43 ? `${text.slice(0, 40)}...` : text;
+    ctx.fillText(clipped, 120, y + 42);
+    y += 82;
+  });
+  ctx.fillStyle = "#f0fdf4";
+  ctx.beginPath();
+  drawRoundRect(120, 1125, 840, 105, 28);
+  ctx.fill();
+  ctx.fillStyle = "#166534";
+  ctx.font = "700 34px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Varga Cantieri", 150, 1178);
+  ctx.font = "500 25px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Ricevuta generata automaticamente offline", 150, 1215);
+  return canvas.toDataURL("image/png");
+}
+
+async function saveOfflineReceipt(impianto, options = {}) {
+  const doneAt = options.doneAt instanceof Date ? options.doneAt : new Date();
+  const fileName = buildOfflineReceiptFileName(impianto, doneAt);
+  const dataUrl = createOfflineReceiptDataUrl(impianto, { ...options, doneAt });
+  const record = { key: options.operationId || fileName, fileName, dataUrl, createdAt: doneAt.toISOString(), impiantoKey: buildImpiantoKey(impianto), commessaId: selectedCommessaId || "" };
+  await heraCacheSet("receipts", record.key, record, { updatedAt: Date.now() });
+  try {
+    const Filesystem = window.Capacitor?.Plugins?.Filesystem;
+    if (Filesystem?.writeFile) {
+      await Filesystem.writeFile({ path: fileName, data: dataUrl.split(",")[1], directory: "DOCUMENTS", recursive: true });
+      record.storageStatus = "Salvata nella memoria privata del dispositivo";
+      return record;
+    }
+  } catch (error) {
+    record.storageStatus = "Memoria privata non disponibile: ricevuta salvata in IndexedDB";
+  }
+  record.storageStatus = record.storageStatus || "Ricevuta salvata in IndexedDB";
+  return record;
+}
+
+function downloadDataUrl(dataUrl, fileName) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function showOfflineDoneReceiptPopup({ impianto, doneAt, doneBy, receipt, pendingCount }) {
+  const overlay = document.createElement("div");
+  overlay.className = "offline-done-modal";
+  overlay.innerHTML = `<div class="offline-done-card" role="dialog" aria-modal="true"><h2>Impianto registrato offline</h2><p>L’impianto è stato salvato sul dispositivo e spostato nei Fatti.<br>La sincronizzazione verrà eseguita automaticamente quando tornerà Internet.</p><dl><dt>Impianto</dt><dd>${escapeHTML(impianto?.denominazione || "Impianto")}</dd><dt>Data</dt><dd>${escapeHTML(doneAt.toLocaleDateString("it-IT"))}</dd><dt>Ora</dt><dd>${escapeHTML(doneAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }))}</dd><dt>Operatore</dt><dd>${escapeHTML(doneBy)}</dd><dt>Ricevuta</dt><dd>${escapeHTML(receipt?.storageStatus || "Generata offline")}</dd><dt>Operazioni in attesa</dt><dd>${pendingCount}</dd></dl><div class="offline-done-actions"><button type="button" data-action="view" class="btn btn-primary">Visualizza ricevuta</button><button type="button" data-action="gallery" class="btn">Apri galleria</button><button type="button" data-action="close" class="btn">Chiudi</button></div></div>`;
+  overlay.addEventListener("click", (event) => {
+    const action = event.target?.dataset?.action;
+    if (!action && event.target !== overlay) return;
+    if (action === "view" && receipt?.dataUrl) window.open(receipt.dataUrl, "_blank", "noopener,noreferrer");
+    if (action === "gallery" && receipt?.dataUrl) downloadDataUrl(receipt.dataUrl, receipt.fileName || "ricevuta.png");
+    if (action === "close" || event.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
 // Protegge il flusso attuale: controlli GPS/distanza, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
 async function markImpiantoDone(impianto, options = {}) {
@@ -18767,6 +19013,17 @@ async function markImpiantoDone(impianto, options = {}) {
 
   if (isNetworkOffline()) {
     const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+    const receipt = await saveOfflineReceipt(impianto, { doneAt: doneAtLocal, doneBy: doneByLocal, operationId: pendingAction.id });
+    pendingAction.receiptFileName = receipt.fileName;
+    pendingAction.receiptStorageStatus = receipt.storageStatus;
+    pendingAction.receiptCacheKey = receipt.key;
+    pendingAction.idSap = impianto.idSap || "";
+    pendingAction.comune = impianto.comune || "";
+    pendingAction.indirizzo = impianto.indirizzo || "";
+    pendingAction.coordinate = { lat: Number(impianto.gpsY), lng: Number(impianto.gpsX) };
+    pendingAction.syncState = "pending";
+    savePendingImpiantoActions();
+    await heraCacheSet("offlineQueue", pendingAction.id, pendingAction, { updatedAt: Date.now(), type: "impiantoDone" });
     expandedImpiantoKey = buildImpiantoKey(impianto);
     updateImpiantoLocalState(ids, {
       done: true,
@@ -18777,7 +19034,10 @@ async function markImpiantoDone(impianto, options = {}) {
       pendingWhatsappStatus: "pending"
     });
     setImpiantiViewMode("done");
-    alert("Sei offline: FATTO salvato localmente. WhatsApp resta in attesa e sarà disponibile quando torna internet.");
+    renderImpianti();
+    renderMap();
+    showOfflineDoneReceiptPopup({ impianto, doneAt: doneAtLocal, doneBy: doneByLocal, receipt, pendingCount: getPendingOfflineOperationsCount() });
+    updateConnectivityStatus();
     return true;
   }
 
@@ -20729,7 +20989,8 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       doneAt,
       doneBy: done ? (options.doneBy || user.displayName || user.email || "Operatore") : "",
       doneByUid: done ? String(options.doneByUid || user.uid || "") : "",
-      doneByEmail: done ? String(options.doneByEmail || user.email || "") : ""
+      doneByEmail: done ? String(options.doneByEmail || user.email || "") : "",
+      operationId: done ? String(options.operationId || "") : ""
     };
     if (done) {
       payload.resetAt = null;
@@ -20890,6 +21151,18 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+
+  if (isNetworkOffline()) {
+    try {
+      markWhazzupSafetyPressed(impianto, doneAt);
+      upsertWhazzupPendingDoneEntry(impianto, doneAt);
+      await forceMoveImpiantoToFatti(impianto, { source: "whatsapp-offline" });
+    } finally {
+      clearImpiantoWhazzupProcessing(impianto);
+    }
+    return;
+  }
+
   const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
 
   markWhazzupSafetyPressed(impianto, doneAt);
@@ -21054,7 +21327,7 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
 async function forceMoveImpiantoToFatti(impianto, options = {}) {
   const moved = await markImpiantoDone(impianto, {
     source: options.source || "whatsapp",
-    requireFirestoreConfirmation: true
+    requireFirestoreConfirmation: options.source !== "whatsapp-offline"
   });
   if (!moved) return false;
   const state = getWhazzupSafetyState(impianto);

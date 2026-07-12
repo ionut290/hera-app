@@ -11189,3 +11189,39 @@ body.worklimate-page-open {
   gap: 10px;
   justify-content: flex-end;
 }
+
+/* Badge offline e banner ripristino connessione */
+.user-connection-offline {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  font-weight: 900;
+}
+
+.connection-restored-banner {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 10050;
+  transform: translate(-50%, -140%);
+  opacity: 0;
+  pointer-events: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+  box-shadow: 0 14px 34px rgba(22, 101, 52, 0.22);
+  font-weight: 900;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.connection-restored-banner.visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}

@@ -1,4 +1,12 @@
-console.log("APP START");
+const HERA_DEBUG = new URLSearchParams(window.location.search || "").get("debug") === "1" || localStorage.getItem("heraDebug") === "1";
+const heraLog = {
+  debug: (...args) => { if (HERA_DEBUG) console.debug(...args); },
+  info: (...args) => { if (HERA_DEBUG) console.info(...args); },
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args)
+};
+performance.mark?.("hera-app-script-start");
+heraLog.info("APP START");
 
 const firebaseConfig = window.firebaseConfig || {};
 const requiredFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "appId"];
@@ -28,15 +36,111 @@ try {
     throw new Error("Firebase Auth o Firestore non disponibili nel SDK caricato.");
   }
 
-  console.log("FIREBASE INIT OK", {
+  performance.mark?.("hera-firebase-init-ready");
+  performance.measure?.("hera-firebase-init", "hera-app-script-start", "hera-firebase-init-ready");
+  heraLog.info("FIREBASE INIT OK", {
     appName: firebaseApp.name,
     projectId: firebaseConfig?.projectId || "non impostato",
     sdkVersion: firebase.SDK_VERSION || "non disponibile"
   });
-  console.log("FIREBASE READY");
+  heraLog.info("FIREBASE READY");
 } catch (error) {
   firebaseInitError = error;
   console.error("FIREBASE INIT ERROR", error);
+}
+
+
+const HERA_IDB_VERSION = 3;
+const HERA_IDB_NAME = "hera-app-cache";
+const HERA_MEMORY_CACHE = new Map();
+let heraIdbPromise = null;
+const heraRuntimeMetrics = { firestoreReads: 0, activeListeners: 0, networkRequests: 0, networkErrors: 0 };
+
+function openHeraCacheDb() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  if (heraIdbPromise) return heraIdbPromise;
+  heraIdbPromise = new Promise((resolve) => {
+    const request = indexedDB.open(HERA_IDB_NAME, HERA_IDB_VERSION);
+    request.onupgradeneeded = () => {
+      const idb = request.result;
+      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates"].forEach((store) => {
+        if (!idb.objectStoreNames.contains(store)) idb.createObjectStore(store, { keyPath: "key" });
+      });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => { heraLog.warn("IndexedDB cache non disponibile:", request.error); resolve(null); };
+  });
+  return heraIdbPromise;
+}
+
+async function heraCacheSet(store, key, value, meta = {}) {
+  HERA_MEMORY_CACHE.set(`${store}:${key}`, value);
+  const idb = await openHeraCacheDb();
+  if (!idb) return false;
+  return new Promise((resolve) => {
+    const tx = idb.transaction(store, "readwrite");
+    tx.objectStore(store).put({ key, value, meta, savedAt: Date.now(), cacheVersion: HERA_IDB_VERSION });
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => { heraLog.warn("Scrittura cache IndexedDB non riuscita", store, key, tx.error); resolve(false); };
+  });
+}
+
+async function heraCacheGet(store, key, { maxAgeMs = 0 } = {}) {
+  const memoryKey = `${store}:${key}`;
+  if (HERA_MEMORY_CACHE.has(memoryKey)) return HERA_MEMORY_CACHE.get(memoryKey);
+  const idb = await openHeraCacheDb();
+  if (!idb) return null;
+  return new Promise((resolve) => {
+    const tx = idb.transaction(store, "readonly");
+    const request = tx.objectStore(store).get(key);
+    request.onsuccess = () => {
+      const entry = request.result;
+      if (!entry || entry.cacheVersion !== HERA_IDB_VERSION) return resolve(null);
+      if (maxAgeMs && Date.now() - Number(entry.savedAt || 0) > maxAgeMs) return resolve(null);
+      HERA_MEMORY_CACHE.set(memoryKey, entry.value);
+      resolve(entry.value);
+    };
+    request.onerror = () => resolve(null);
+  });
+}
+
+function getConnectionInfo() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
+  return {
+    online: navigator.onLine !== false,
+    effectiveType: connection.effectiveType || "unknown",
+    downlink: Number(connection.downlink || 0),
+    saveData: Boolean(connection.saveData)
+  };
+}
+
+function shouldReduceBackgroundData() {
+  const info = getConnectionInfo();
+  return info.saveData || ["slow-2g", "2g", "3g"].includes(String(info.effectiveType));
+}
+
+function trackFirestoreListener(unsubscribe) {
+  if (typeof unsubscribe !== "function") return unsubscribe;
+  heraRuntimeMetrics.activeListeners += 1;
+  let closed = false;
+  return () => {
+    if (closed) return;
+    closed = true;
+    heraRuntimeMetrics.activeListeners = Math.max(0, heraRuntimeMetrics.activeListeners - 1);
+    unsubscribe();
+  };
+}
+
+function runWhenVisible(task, delayMs = 0) {
+  const run = () => setTimeout(task, delayMs);
+  if (!document.hidden) return run();
+  const handler = () => {
+    if (document.hidden) return;
+    document.removeEventListener("visibilitychange", handler);
+    run();
+  };
+  document.addEventListener("visibilitychange", handler);
+  return null;
 }
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
@@ -234,7 +338,7 @@ function ensureAuthLocalPersistence() {
 
   authLocalPersistencePromise = auth.setPersistence(localPersistence)
     .then(() => {
-      console.log("AUTH PERSISTENCE LOCAL READY");
+      heraLog.info("AUTH PERSISTENCE LOCAL READY");
       return true;
     })
     .catch((error) => {
@@ -2139,7 +2243,8 @@ function runAfterFirstRender(callback) {
   window.requestAnimationFrame(() => setTimeout(runner, 0));
 }
 
-function runDeferredStartupTasks(tasks = []) {
+function runDeferredStartupTasks(tasks = [], options = {}) {
+  const baseDelayMs = Number(options.baseDelayMs || 0);
   runAfterFirstRender(() => {
     tasks.forEach((task, index) => {
       setTimeout(() => {
@@ -2148,7 +2253,7 @@ function runDeferredStartupTasks(tasks = []) {
         } catch (error) {
           console.error("Errore task avvio differito:", error);
         }
-      }, index * 75);
+      }, baseDelayMs + index * (shouldReduceBackgroundData() ? 250 : 75));
     });
   });
 }
@@ -2176,7 +2281,7 @@ function sleep(ms) {
 function setFirestoreConnectionState(state, detail = "") {
   firestoreNetworkState = state || firestoreNetworkState;
   firestoreCacheState = detail || firestoreCacheState;
-  console.log(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
+  heraLog.info(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
   updateConnectivityStatus();
 }
 
@@ -2258,6 +2363,7 @@ async function runFirestoreGetWithRetry(query, options = {}) {
     try {
       startFirestoreSlowWatch(label);
       const snapshot = await withTimeout(query.get(), timeoutMs, `Timeout ${label}`);
+      heraRuntimeMetrics.firestoreReads += Number(snapshot?.size || 0);
       clearFirestoreSlowWatch();
       if (snapshot?.metadata?.fromCache) {
         setFirestoreConnectionState(navigator.onLine ? "Online" : "Offline", "Dati caricati da cache");
@@ -2951,6 +3057,32 @@ function weatherCodeLabel(weatherCode) {
   return weatherMap[code] || "ℹ️ Condizioni variabili";
 }
 
+
+function suspendNonEssentialBackgroundWork() {
+  stopChatRetentionLoop?.();
+  stopHoursDeadlineAlertLoop?.();
+  if (typeof stopRadarAnimation === "function") stopRadarAnimation();
+  stopPresenceHeartbeat?.();
+  if (unsubscribeOperatorPositions) { unsubscribeOperatorPositions(); unsubscribeOperatorPositions = null; }
+  if (unsubscribeGpsRequests) { unsubscribeGpsRequests(); unsubscribeGpsRequests = null; }
+}
+
+function resumeVisibleWork() {
+  if (!currentUser) return;
+  startPresenceHeartbeat?.();
+  runDeferredStartupTasks([
+    () => subscribeOperatorPositions?.(),
+    () => subscribeGpsRequests?.(),
+    () => syncPendingImpiantoActions?.(),
+    () => syncPendingOfflineMutations?.()
+  ], { baseDelayMs: shouldReduceBackgroundData() ? 1500 : 150 });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) suspendNonEssentialBackgroundWork();
+  else resumeVisibleWork();
+});
+
 pendingImpiantoActions = loadPendingImpiantoActions();
 renderPendingWhatsappList();
 
@@ -2965,7 +3097,8 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) runWhazzupPendingDoneSafetyCheck();
 });
 
-console.log("AUTH CHECK START");
+heraLog.info("AUTH CHECK START");
+performance.mark?.("hera-auth-check-start");
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
@@ -3002,12 +3135,14 @@ if (!auth || firebaseInitError) {
     .finally(() => {
     auth.onAuthStateChanged(async (user) => {
   clearTimeout(authCheckWatchdog);
-  console.log("AUTH READY");
+  performance.mark?.("hera-auth-ready");
+  performance.measure?.("hera-auth-check", "hera-auth-check-start", "hera-auth-ready");
+  heraLog.info("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
   currentUserBanProfile = null;
   const loggedIn = Boolean(user);
-  console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
+  heraLog.info(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
@@ -3214,7 +3349,9 @@ if (!auth || firebaseInitError) {
   syncPendingImpiantoActions();
   fetchWeather();
   renderNextActionCard();
-  console.log("APP READY");
+  performance.mark?.("hera-first-usable-screen");
+  performance.measure?.("hera-time-to-first-usable-screen", "hera-app-script-start", "hera-first-usable-screen");
+  heraLog.info("APP READY");
   hideStartupLoading();
 }, async (error) => {
   clearTimeout(authCheckWatchdog);
@@ -3299,25 +3436,40 @@ function reloadNormalModeData() {
 
 async function loadStartupCoreCollections() {
   if (!currentUser) return;
+  performance.mark?.("hera-local-cache-load-start");
   startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
   commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
-  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
-  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderCommesseHomeList();
   renderSquadre();
 
+  const cachedCommesse = await heraCacheGet("commesse", "home");
+  if (Array.isArray(cachedCommesse) && cachedCommesse.length) {
+    commesseById = new Map(cachedCommesse.map((commessa) => [commessa.id, commessa]));
+    commesseLoadState = { status: "loaded", message: "" };
+    refreshCommesseDependentUI(false);
+  } else {
+    loadCommesseFromLocalCache();
+  }
+  const cachedSquadre = await heraCacheGet("squadre", getLocalDateKey?.(new Date()) || "today");
+  if (cachedSquadre?.dateKey && Array.isArray(cachedSquadre.rows)) {
+    squadreHistoryByDate.set(cachedSquadre.dateKey, new Map(cachedSquadre.rows.map((row) => [row.commessaId, row])));
+    squadreLoadState = { status: "loaded", message: "" };
+    renderSquadre();
+  }
+  performance.mark?.("hera-local-cache-load-end");
+  performance.measure?.("hera-local-cache-load", "hera-local-cache-load-start", "hera-local-cache-load-end");
+
   try {
-    const personalePromise = subscribePersonale();
     await Promise.all([
-      personalePromise, // anagrafiche personale
-      personalePromise, // qualifiche/corsi salvati sulle anagrafiche
-      personalePromise, // sicurezza salvata sulle anagrafiche
       subscribeSquadre(),
-      subscribeCommesse(),
-      subscribeMezzi()
+      subscribeCommesse()
     ]);
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
+    runDeferredStartupTasks([
+      () => subscribePersonale(),
+      () => subscribeMezzi()
+    ], { baseDelayMs: shouldReduceBackgroundData() ? 2500 : 700 });
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
     throw error;
@@ -10597,6 +10749,7 @@ function subscribeCommesse() {
 
     if (!fromListener) console.log("Numero commesse trovate", snapshot.size);
     saveCommesseLocalCache(receivedCommesse);
+    heraCacheSet("commesse", "home", receivedCommesse, { updatedAt: Date.now() });
     commesseLoadState = receivedCommesse.length
       ? { status: "loaded", message: "" }
       : { status: "empty", message: "Nessuna commessa disponibile" };
@@ -10621,14 +10774,14 @@ function subscribeCommesse() {
       runAfterFirstRender(() => {
         if (!currentUser || unsubscribeCommesse) return;
         try {
-          unsubscribeCommesse = query.onSnapshot((liveSnapshot) => {
+          unsubscribeCommesse = trackFirestoreListener(query.onSnapshot((liveSnapshot) => {
             applyCommesseSnapshot(liveSnapshot, { fromListener: true });
           }, (error) => {
             logFirestoreError("LOAD COMMESSE LISTENER", error);
             loadCommesseFromLocalCache();
             commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
             refreshCommesseDependentUI(false);
-          });
+          }));
         } catch (error) {
           console.error("Errore inizializzazione listener commesse:", error);
         }
@@ -12105,18 +12258,32 @@ function savePendingOfflineMutations(items) {
 
 function enqueueOfflineMutation(type, payload) {
   const queue = loadPendingOfflineMutations();
+  const operationId = payload?.operationId || `${type}:${currentUser?.uid || "user"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  const existing = queue.find((entry) => entry.operationId === operationId || entry.id === operationId);
+  if (existing) return existing;
   const item = {
-    id: `${type}:${currentUser?.uid || "user"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    key: operationId,
+    id: operationId,
+    operationId,
     type,
-    payload,
+    payload: { ...payload, operationId },
     userId: currentUser?.uid || "",
     userEmail: currentUser?.email || "",
     createdAt: new Date().toISOString(),
-    status: "pending"
+    status: "pending",
+    attempts: 0,
+    lastError: "",
+    nextAttemptAt: new Date().toISOString()
   };
   queue.push(item);
   savePendingOfflineMutations(queue);
+  heraCacheSet("offlineQueue", operationId, item, { updatedAt: Date.now() });
   return item;
+}
+
+function getOfflineRetryDelayMs(attempts = 0) {
+  const delays = [2000, 5000, 15000, 30000, 60000, 120000];
+  return delays[Math.min(Math.max(0, attempts), delays.length - 1)];
 }
 
 async function syncPendingOfflineMutations() {
@@ -12127,6 +12294,9 @@ async function syncPendingOfflineMutations() {
   for (let index = 0; index < pending.length; index += 1) {
     showSyncProgress(pending.map((item) => ({ impiantoName: getOfflineMutationLabel(item), commessaName: item.payload?.commessaName || "Coda offline" })), index);
     const item = pending[index];
+    if (item.nextAttemptAt && Date.parse(item.nextAttemptAt) > Date.now()) continue;
+    item.status = "syncing";
+    try {
     if (item.type === "hoursReport") {
       const payload = {
         ...item.payload,
@@ -12149,6 +12319,15 @@ async function syncPendingOfflineMutations() {
       else await notesRef.add({ ...payload, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: payload.createdBy || currentUser?.email || "" });
     }
     item.status = "synced";
+    item.lastError = "";
+    } catch (error) {
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.status = "syncFailed";
+      item.lastError = String(error?.message || error || "Errore sincronizzazione").slice(0, 500);
+      item.nextAttemptAt = new Date(Date.now() + getOfflineRetryDelayMs(item.attempts - 1)).toISOString();
+      heraRuntimeMetrics.networkErrors += 1;
+      break;
+    }
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
   showSyncProgress([], pending.length, true);
@@ -12523,6 +12702,16 @@ function renderPendingWhatsappList() {
 
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
+  heraCacheGet("impianti", selectedCommessaId).then((cached) => {
+    if (!Array.isArray(cached) || !cached.length || unsubscribeImpianti) return;
+    currentImpianti = applyPendingActionsToImpianti(cached, selectedCommessaId);
+    impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
+    refreshImpiantoWhatsAppTemplateCache(currentImpianti);
+    renderHeaderActivitySummary();
+    updateCommessaDashboard();
+    renderImpianti();
+    renderMap();
+  });
   let previousDoneSignature = null;
   console.log("Query impianti avviata", {
     collectionPath: `commesse/${selectedCommessaId}/impianti`,
@@ -12530,7 +12719,7 @@ function subscribeImpianti() {
   });
 
   try {
-    unsubscribeImpianti = db
+    unsubscribeImpianti = trackFirestoreListener(db
       .collection("commesse")
       .doc(selectedCommessaId)
       .collection("impianti")
@@ -12538,6 +12727,7 @@ function subscribeImpianti() {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
+        heraCacheSet("impianti", selectedCommessaId, currentImpianti, { updatedAt: Date.now() });
         refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
@@ -12565,7 +12755,7 @@ function subscribeImpianti() {
       }, (error) => {
         console.error("Errore Firestore caricamento impianti:", error);
         ui.impiantiLista.innerHTML = `<p class='muted'>Errore caricamento impianti: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
-      });
+      }));
   } catch (error) {
     console.error("Errore inizializzazione query impianti:", error);
     ui.impiantiLista.innerHTML = `<p class='muted'>Errore inizializzazione impianti: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
@@ -19378,6 +19568,7 @@ function subscribeSquadre() {
       historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
+    heraCacheSet("squadre", selectedDateKey, { dateKey: selectedDateKey, rows: Array.from(historyForDate.values()) }, { updatedAt: Date.now() });
     squadreLoadState = { status: "loaded", message: "" };
     console.log("LOAD SQUADRE OK numero:", historyForDate.size);
     renderSquadre();
@@ -21061,7 +21252,12 @@ async function submitImpiantoReport(event) {
   setTimeout(closeImpiantoReportModal, 200);
 }
 
-function getCurrentPositionOnce() {
+let lastKnownGeolocation = null;
+function getCurrentPositionOnce(options = {}) {
+  const maxAgeMs = Number(options.maximumAge ?? 2 * 60 * 1000);
+  if (!options.force && lastKnownGeolocation && Date.now() - lastKnownGeolocation.at <= maxAgeMs) {
+    return Promise.resolve({ lat: lastKnownGeolocation.lat, lng: lastKnownGeolocation.lng });
+  }
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("Geolocalizzazione non supportata."));
@@ -21069,13 +21265,16 @@ function getCurrentPositionOnce() {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        resolve({
+        lastKnownGeolocation = {
           lat: Number(pos.coords.latitude),
-          lng: Number(pos.coords.longitude)
-        });
+          lng: Number(pos.coords.longitude),
+          at: Date.now()
+        };
+        heraCacheSet("kv", "lastKnownGeolocation", lastKnownGeolocation, { updatedAt: Date.now() });
+        resolve({ lat: lastKnownGeolocation.lat, lng: lastKnownGeolocation.lng });
       },
       (error) => reject(error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: Boolean(options.enableHighAccuracy), timeout: Number(options.timeout || 10000), maximumAge: maxAgeMs }
     );
   });
 }

@@ -13865,6 +13865,90 @@ function formatImpiantoDoneButtonDate(impianto) {
   return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
 }
 
+
+function getImpiantoDoneInfoForNavigation(impianto) {
+  const doneAt = getImpiantoDoneAtValue(impianto);
+  const doneDateTime = formatDoneDateTime(doneAt);
+  const operator = String(
+    impianto?.doneBy
+    || impianto?.operatoreFatto
+    || impianto?.completedBy
+    || impianto?.operator
+    || impianto?.operatore
+    || "Operatore"
+  ).trim() || "Operatore";
+  return {
+    doneAt,
+    date: doneDateTime.date,
+    time: doneDateTime.time,
+    operator
+  };
+}
+
+function showAlreadyDoneNavigationConfirm(impianto) {
+  const doneInfo = getImpiantoDoneInfoForNavigation(impianto);
+
+  if (typeof document === "undefined" || !document.body) {
+    const fallback = window.confirm(`⚠️ Attenzione\n\nQuesto impianto è già stato eseguito.\n\nData: ${doneInfo.date}\nOra: ${doneInfo.time}\nOperatore: ${doneInfo.operator}\n\nPremi OK per navigare comunque, Annulla per non eseguire nessuna azione.`);
+    return Promise.resolve(fallback ? "navigate" : "cancel");
+  }
+
+  const overlay = document.createElement("section");
+  overlay.className = "chat-modal impianto-already-done-modal";
+  overlay.setAttribute("aria-hidden", "false");
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "impianto-already-done-title");
+  overlay.innerHTML = `
+    <div class="chat-modal-content impianto-alert-content">
+      <div class="chat-modal-header">
+        <h2 id="impianto-already-done-title">⚠️ Attenzione</h2>
+      </div>
+      <div class="impianto-alert-body">
+        <p>Questo impianto è già stato eseguito.</p>
+        <dl class="impianto-already-done-details">
+          <div><dt>Data:</dt><dd>${escapeHTML(doneInfo.date)}</dd></div>
+          <div><dt>Ora:</dt><dd>${escapeHTML(doneInfo.time)}</dd></div>
+          <div><dt>Operatore:</dt><dd>${escapeHTML(doneInfo.operator)}</dd></div>
+        </dl>
+        <p>Cosa desideri fare?</p>
+      </div>
+      <div class="navigation-weather-warning-actions impianto-already-done-actions">
+        <button type="button" class="btn btn-primary" data-already-done-action="navigate">🟢 Naviga comunque</button>
+        <button type="button" class="btn" data-already-done-action="move">🔵 Sposta nei “Fatti”</button>
+        <button type="button" class="btn" data-already-done-action="cancel">⚪ Annulla</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  return new Promise((resolve) => {
+    const cleanup = (action) => {
+      overlay.remove();
+      resolve(action);
+    };
+    overlay.querySelectorAll("[data-already-done-action]").forEach((button) => {
+      button.addEventListener("click", () => cleanup(button.dataset.alreadyDoneAction || "cancel"), { once: true });
+    });
+    overlay.querySelector("[data-already-done-action='navigate']")?.focus();
+  });
+}
+
+function moveAlreadyDoneImpiantoToDoneList(impianto) {
+  const ids = getImpiantoDocIds(impianto);
+  if (!ids.length) return;
+  const doneInfo = getImpiantoDoneInfoForNavigation(impianto);
+  updateImpiantoLocalState(ids, {
+    done: true,
+    doneAt: doneInfo.doneAt || impianto.doneAt || null,
+    doneBy: doneInfo.operator
+  });
+  if (selectedCommessaId) {
+    impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
+    heraCacheSet("impianti", selectedCommessaId, currentImpianti, { updatedAt: Date.now() });
+  }
+}
+
 function setFattoButtonCompletedState(btn, impianto) {
   if (!(btn instanceof HTMLButtonElement)) return;
   const dateLabel = formatImpiantoDoneButtonDate(impianto);
@@ -18546,6 +18630,15 @@ async function navigateToImpianto(impianto) {
   if (!url) {
     alert("Coordinate mancanti per questo impianto.");
     return;
+  }
+
+  if (isImpiantoDoneState(impianto)) {
+    const alreadyDoneAction = await showAlreadyDoneNavigationConfirm(impianto);
+    if (alreadyDoneAction === "cancel") return;
+    if (alreadyDoneAction === "move") {
+      moveAlreadyDoneImpiantoToDoneList(impianto);
+      return;
+    }
   }
 
   const canContinueImpiantoAlerts = await confirmImpiantoNavigationAlerts(impianto);

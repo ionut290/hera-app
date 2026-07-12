@@ -10839,27 +10839,295 @@ body.worklimate-page-open {
   padding: 0 8px !important;
 }
 
-.impianto-already-done-details {
-  display: grid;
-  gap: 0.5rem;
-  margin: 1rem 0;
+.impianto-already-done-modal {
+  background: rgba(15, 23, 42, 0.46);
+  padding: clamp(0.75rem, 3vw, 1.25rem);
+  backdrop-filter: blur(2px);
 }
 
-.impianto-already-done-details > div {
+.impianto-already-done-card {
+  width: min(94vw, 430px);
+  max-height: min(92vh, 720px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.22);
+}
+
+.impianto-already-done-scroll {
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  padding: clamp(1rem, 4vw, 1.35rem);
+  -webkit-overflow-scrolling: touch;
+}
+
+.impianto-already-done-heading {
   display: grid;
-  grid-template-columns: minmax(6rem, auto) 1fr;
+  grid-template-columns: 48px 4px 1fr;
   gap: 0.75rem;
-  align-items: baseline;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.impianto-already-done-warning-icon {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 1.35rem;
+}
+
+.impianto-already-done-heading-line {
+  width: 4px;
+  height: 38px;
+  border-radius: 999px;
+  background: #facc15;
+}
+
+.impianto-already-done-heading h2 {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(1.35rem, 6vw, 1.8rem);
+  line-height: 1.1;
+}
+
+.impianto-already-done-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.impianto-already-done-message,
+.impianto-already-done-question {
+  margin: 0;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.impianto-already-done-status {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border: 1px solid #fde68a;
+  border-radius: 16px;
+  background: #fffbeb;
+  color: #713f12;
+  line-height: 1.35;
+}
+
+.impianto-already-done-status strong {
+  color: #92400e;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+
+.impianto-already-done-details {
+  overflow: hidden;
+  display: grid;
+  margin: 0.1rem 0 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.impianto-already-done-detail-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.9fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 52px;
+  padding: 0.72rem 0.85rem;
+}
+
+.impianto-already-done-detail-row + .impianto-already-done-detail-row {
+  border-top: 1px solid #e2e8f0;
 }
 
 .impianto-already-done-details dt {
-  font-weight: 700;
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: #64748b;
+  font-weight: 800;
 }
 
 .impianto-already-done-details dd {
+  min-width: 0;
   margin: 0;
+  color: #0f172a;
+  font-weight: 800;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.impianto-already-done-question {
+  margin-top: 0.1rem;
+  color: #0f172a;
+  font-weight: 900;
+  text-align: center;
 }
 
 .impianto-already-done-actions {
-  flex-wrap: wrap;
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.impianto-already-done-action {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 24px;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 64px;
+  width: 100%;
+  padding: 0.72rem 0.85rem;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.impianto-already-done-action:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.impianto-already-done-action:active {
+  transform: scale(0.99);
+}
+
+.impianto-already-done-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.impianto-already-done-action-icon {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 1.1rem;
+}
+
+.impianto-already-done-action-text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.impianto-already-done-action-text strong {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.impianto-already-done-action-text small {
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.impianto-already-done-action-arrow {
+  font-size: 1.8rem;
+  line-height: 1;
+  text-align: right;
+}
+
+.impianto-already-done-action-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.28);
+}
+
+.impianto-already-done-action-primary .impianto-already-done-action-icon {
+  background: #ffffff;
+  color: #1d4ed8;
+}
+
+.impianto-already-done-action-primary small,
+.impianto-already-done-action-primary .impianto-already-done-action-arrow {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.impianto-already-done-action-secondary {
+  background: #ffffff;
+  border-color: #bae6fd;
+  color: #075985;
+}
+
+.impianto-already-done-action-secondary .impianto-already-done-action-icon {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.impianto-already-done-action-secondary small,
+.impianto-already-done-action-secondary .impianto-already-done-action-arrow {
+  color: #0c4a6e;
+}
+
+.impianto-already-done-action-neutral {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.impianto-already-done-action-neutral .impianto-already-done-action-icon {
+  background: #e5e7eb;
+  color: #475569;
+}
+
+.impianto-already-done-action-neutral small,
+.impianto-already-done-action-neutral .impianto-already-done-action-arrow {
+  color: #64748b;
+}
+
+@media (max-width: 360px) {
+  .impianto-already-done-scroll {
+    padding: 0.85rem;
+  }
+
+  .impianto-already-done-detail-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .impianto-already-done-details dd {
+    text-align: left;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .impianto-already-done-card {
+    border-color: rgba(71, 85, 105, 0.9);
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  .impianto-already-done-heading h2,
+  .impianto-already-done-question,
+  .impianto-already-done-details dd {
+    color: #f8fafc;
+  }
+
+  .impianto-already-done-message {
+    color: #cbd5e1;
+  }
+
+  .impianto-already-done-details,
+  .impianto-already-done-action-secondary,
+  .impianto-already-done-action-neutral {
+    background: #111827;
+    border-color: #334155;
+  }
+
+  .impianto-already-done-detail-row + .impianto-already-done-detail-row {
+    border-top-color: #334155;
+  }
 }

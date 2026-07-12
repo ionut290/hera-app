@@ -13900,30 +13900,66 @@ function showAlreadyDoneNavigationConfirm(impianto) {
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "impianto-already-done-title");
   overlay.innerHTML = `
-    <div class="chat-modal-content impianto-alert-content">
-      <div class="chat-modal-header">
-        <h2 id="impianto-already-done-title">⚠️ Attenzione</h2>
-      </div>
-      <div class="impianto-alert-body">
-        <p>Questo impianto è già stato eseguito.</p>
-        <dl class="impianto-already-done-details">
-          <div><dt>Data:</dt><dd>${escapeHTML(doneInfo.date)}</dd></div>
-          <div><dt>Ora:</dt><dd>${escapeHTML(doneInfo.time)}</dd></div>
-          <div><dt>Operatore:</dt><dd>${escapeHTML(doneInfo.operator)}</dd></div>
-        </dl>
-        <p>Cosa desideri fare?</p>
-      </div>
-      <div class="navigation-weather-warning-actions impianto-already-done-actions">
-        <button type="button" class="btn btn-primary" data-already-done-action="navigate">🟢 Naviga comunque</button>
-        <button type="button" class="btn" data-already-done-action="move">🔵 Sposta nei “Fatti”</button>
-        <button type="button" class="btn" data-already-done-action="cancel">⚪ Annulla</button>
+    <div class="chat-modal-content impianto-already-done-card">
+      <div class="impianto-already-done-scroll">
+        <div class="impianto-already-done-heading">
+          <span class="impianto-already-done-warning-icon" aria-hidden="true">⚠️</span>
+          <span class="impianto-already-done-heading-line" aria-hidden="true"></span>
+          <h2 id="impianto-already-done-title">Attenzione</h2>
+        </div>
+        <div class="impianto-already-done-body">
+          <p class="impianto-already-done-message">Questo impianto è già stato eseguito in precedenza.</p>
+          <div class="impianto-already-done-status" role="note">
+            <strong>Stato: ESEGUITO</strong>
+            <span>Vuoi navigare comunque oppure spostarlo nell’elenco “Fatti”?</span>
+          </div>
+          <dl class="impianto-already-done-details">
+            <div class="impianto-already-done-detail-row">
+              <dt><span aria-hidden="true">📅</span><span>Data</span></dt>
+              <dd>${escapeHTML(doneInfo.date)}</dd>
+            </div>
+            <div class="impianto-already-done-detail-row">
+              <dt><span aria-hidden="true">🕒</span><span>Ora</span></dt>
+              <dd>${escapeHTML(doneInfo.time)}</dd>
+            </div>
+            <div class="impianto-already-done-detail-row">
+              <dt><span aria-hidden="true">👷</span><span>Operatore</span></dt>
+              <dd>${escapeHTML(doneInfo.operator)}</dd>
+            </div>
+          </dl>
+          <p class="impianto-already-done-question">Cosa desideri fare?</p>
+        </div>
+        <div class="impianto-already-done-actions">
+          <button type="button" class="impianto-already-done-action impianto-already-done-action-primary" data-already-done-action="navigate">
+            <span class="impianto-already-done-action-icon" aria-hidden="true">🧭</span>
+            <span class="impianto-already-done-action-text"><strong>Naviga comunque</strong><small>Apri la navigazione verso questo impianto</small></span>
+            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="impianto-already-done-action impianto-already-done-action-secondary" data-already-done-action="move">
+            <span class="impianto-already-done-action-icon" aria-hidden="true">📁</span>
+            <span class="impianto-already-done-action-text"><strong>Sposta nei “Fatti”</strong><small>Sposta questo impianto nell’elenco dei fatti</small></span>
+            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="impianto-already-done-action impianto-already-done-action-neutral" data-already-done-action="cancel">
+            <span class="impianto-already-done-action-icon" aria-hidden="true">✕</span>
+            <span class="impianto-already-done-action-text"><strong>Annulla</strong><small>Torna indietro senza fare nulla</small></span>
+            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
+          </button>
+        </div>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
 
   return new Promise((resolve) => {
+    let didChooseAction = false;
     const cleanup = (action) => {
+      if (didChooseAction) return;
+      didChooseAction = true;
+      overlay.querySelectorAll("[data-already-done-action]").forEach((button) => {
+        button.disabled = true;
+        button.setAttribute("aria-disabled", "true");
+      });
       overlay.remove();
       resolve(action);
     };

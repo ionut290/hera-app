@@ -348,6 +348,44 @@ function applyPersistedSessionPreview(session) {
   return true;
 }
 
+function buildOfflineGuestSession() {
+  return {
+    version: PERSISTED_SESSION_VERSION,
+    uid: "offline-local-user",
+    email: "offline@vargacantieri.local",
+    displayName: "Operatore Offline",
+    lastLoginAt: new Date().toISOString(),
+    offlineOnly: true
+  };
+}
+
+async function enterOfflineHomeFromLocalData(reason = "Avvio offline") {
+  const savedSession = await readPersistedSession() || buildOfflineGuestSession();
+  applyPersistedSessionPreview(savedSession);
+  currentUser = currentUser || {
+    uid: savedSession.uid,
+    email: savedSession.email,
+    displayName: savedSession.displayName || "Operatore Offline",
+    persistedOnly: true,
+    offlineOnly: true
+  };
+  authStateResolved = true;
+  setHeraConnectionState("offline", { reachable: false, detail: reason });
+  setAuthenticationGateState("authenticated");
+  hideStartupLoading();
+  try {
+    await loadStartupCoreCollections();
+  } catch (error) {
+    console.warn("Avvio offline da cache locale non completo:", error);
+  }
+  renderHeaderActivitySummary?.();
+  renderExternalApps?.();
+  renderPendingWhatsappList?.();
+  renderNextActionCard?.();
+  updateConnectivityStatus?.();
+  return true;
+}
+
 async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
   if (!user?.uid || !savedSession || !db) return { valid: true, profile: null };
   const doc = await db.collection("platformUsers").doc(user.uid).get();
@@ -2239,10 +2277,21 @@ ui.notificationDocViewerModal?.addEventListener("click", (event) => {
 });
 window.addEventListener("online", () => {
   setFirestoreConnectionState("Online", "");
-  syncPendingImpiantoActions();
-  syncPendingOfflineMutations();
+  void probeBackendReachability({ force: true }).then((online) => {
+    if (!online) return;
+    showConnectionRestoredBanner();
+    syncPendingImpiantoActions();
+    syncPendingOfflineMutations();
+  });
 });
 window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
+onHeraConnectionChange((info) => {
+  if (info.previous === "offline" && info.state === "online") {
+    showConnectionRestoredBanner();
+    syncPendingImpiantoActions?.();
+    syncPendingOfflineMutations?.();
+  }
+});
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -3187,12 +3236,16 @@ performance.mark?.("hera-auth-check-start");
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
-  setAuthenticationGateState("required", "Login non disponibile: configurazione Firebase non caricata correttamente.");
-  authStateResolved = true;
-  currentUser = null;
-  squadreLoadState = { status: "error", message: "Errore caricamento dati" };
-  if (typeof renderSquadre === "function") renderSquadre();
-  hideStartupLoading();
+  if (isNetworkOffline() || firebaseInitError) {
+    void enterOfflineHomeFromLocalData("Firebase non disponibile all'avvio");
+  } else {
+    setAuthenticationGateState("required", "Login non disponibile: configurazione Firebase non caricata correttamente.");
+    authStateResolved = true;
+    currentUser = null;
+    squadreLoadState = { status: "error", message: "Errore caricamento dati" };
+    if (typeof renderSquadre === "function") renderSquadre();
+    hideStartupLoading();
+  }
 } else {
   setAuthenticationGateState("checking");
   let savedStartupSession = null;
@@ -3205,26 +3258,14 @@ if (!auth || firebaseInitError) {
   const authCheckWatchdog = setTimeout(async () => {
     if (authStateResolved) return;
     const savedSession = savedStartupSession || await readPersistedSession();
-    if (savedSession && isNetworkOffline()) {
-      console.warn("Timeout verifica Firebase offline: uso sessione locale valida e dati IndexedDB.");
-      authStateResolved = true;
-      applyPersistedSessionPreview(savedSession);
-      setAuthenticationGateState("authenticated");
-      hideStartupLoading();
-      await loadStartupCoreCollections().catch((error) => console.warn("Avvio offline da IndexedDB non completo:", error));
-      renderHeaderActivitySummary();
-      renderPendingWhatsappList();
-      renderNextActionCard();
+    if (isNetworkOffline() || savedSession) {
+      console.warn("Timeout avvio Firebase: apro la Home con dati locali e continuo in background.");
+      await enterOfflineHomeFromLocalData("Timeout Firebase 2 secondi");
       return;
     }
-    console.warn("Timeout verifica sessione Firebase: mostro la schermata di login invece del caricamento infinito.");
-    authStateResolved = true;
-    currentUser = null;
-    setAuthenticationGateState("required", savedSession ? "Verifica sessione lenta. Torna online o riprova." : "Primo accesso necessario: per configurare l’app è necessario effettuare almeno un primo accesso con connessione Internet. Successivamente l’app funzionerà anche offline.");
-    squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
-    if (typeof renderSquadre === "function") renderSquadre();
-    hideStartupLoading();
-  }, 8000);
+    console.warn("Timeout verifica sessione Firebase: sblocco comunque la Home in modalità locale.");
+    await enterOfflineHomeFromLocalData("Timeout verifica sessione 2 secondi");
+  }, 2000);
   withTimeout(ensureAuthLocalPersistence(), 3500, "Timeout persistenza auth locale")
     .catch((error) => {
       console.warn("Persistenza auth locale non pronta, continuo comunque la verifica sessione:", error);
@@ -3233,6 +3274,10 @@ if (!auth || firebaseInitError) {
     .finally(() => {
     auth.onAuthStateChanged(async (user) => {
   clearTimeout(authCheckWatchdog);
+  if (authStateResolved && currentUser?.persistedOnly && !user) {
+    console.warn("Firebase Auth ha risposto dopo l'avvio locale: mantengo la Home offline già utilizzabile.");
+    return;
+  }
   performance.mark?.("hera-auth-ready");
   performance.measure?.("hera-auth-check", "hera-auth-check-start", "hera-auth-ready");
   heraLog.info("AUTH READY");
@@ -3559,6 +3604,12 @@ async function loadStartupCoreCollections() {
   performance.measure?.("hera-local-cache-load", "hera-local-cache-load-start", "hera-local-cache-load-end");
 
   try {
+    if (isNetworkOffline()) {
+      startupCoreCollectionsLoadState = { status: "loaded", message: "Dati locali IndexedDB" };
+      commesseLoadState = commesseById.size ? { status: "loaded", message: "Dati locali" } : { status: "empty", message: "Nessuna commessa salvata sul dispositivo." };
+      squadreLoadState = squadreHistoryByDate.size ? { status: "loaded", message: "Giorno operativo salvato sul dispositivo" } : { status: "empty", message: "Squadre non ancora salvate su questo dispositivo." };
+      return;
+    }
     await Promise.all([
       subscribeSquadre(),
       subscribeCommesse()
@@ -12430,7 +12481,7 @@ async function syncPendingOfflineMutations() {
       item.lastError = String(error?.message || error || "Errore sincronizzazione").slice(0, 500);
       item.nextAttemptAt = new Date(Date.now() + getOfflineRetryDelayMs(item.attempts - 1)).toISOString();
       heraRuntimeMetrics.networkErrors += 1;
-      break;
+      continue;
     }
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
@@ -12715,7 +12766,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   if (completed) {
     ui.syncProgressOverlay.classList.remove("hidden");
     ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
-    ui.syncProgressTitle.textContent = "✅ Tutto sincronizzato";
+    ui.syncProgressTitle.textContent = "✅ Tutti i dati sincronizzati";
     ui.syncProgressDetail.textContent = "Tutte le operazioni offline sono state inviate una alla volta.";
     if (ui.syncProgressList) ui.syncProgressList.innerHTML = "";
     setTimeout(() => {
@@ -12733,7 +12784,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   const safeIndex = Math.min(currentIndex + 1, total);
   ui.syncProgressOverlay.classList.remove("hidden");
   ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
-  ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex}/${total}...`;
+  ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex} di ${total}`;
   const action = actions[currentIndex] || actions[0];
   ui.syncProgressDetail.textContent = `${action.commessaName || "Commessa"} • ${action.impiantoName || "Impianto"}`;
   if (ui.syncProgressList) {
@@ -14923,6 +14974,22 @@ function getPendingOfflineOperationsCount() {
   const offlineMutations = loadPendingOfflineMutations().filter((item) => item.status !== "synced").length;
   const doneActions = (canManageData() ? pendingImpiantoActions : getCurrentUserPendingActions()).filter(isActionWaitingForSync).length;
   return offlineMutations + doneActions;
+}
+
+
+function showConnectionRestoredBanner() {
+  let banner = document.getElementById("connection-restored-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "connection-restored-banner";
+    banner.className = "connection-restored-banner";
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+    document.body.appendChild(banner);
+  }
+  banner.textContent = "🟢 Connessione ripristinata";
+  banner.classList.add("visible");
+  setTimeout(() => banner.classList.remove("visible"), 2600);
 }
 
 function updateConnectivityStatus() {

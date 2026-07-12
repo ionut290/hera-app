@@ -50,7 +50,7 @@ try {
 }
 
 
-const HERA_IDB_VERSION = 5;
+const HERA_IDB_VERSION = 4;
 const HERA_IDB_NAME = "hera-app-cache";
 const HERA_MEMORY_CACHE = new Map();
 let heraIdbPromise = null;
@@ -63,7 +63,7 @@ function openHeraCacheDb() {
     const request = indexedDB.open(HERA_IDB_NAME, HERA_IDB_VERSION);
     request.onupgradeneeded = () => {
       const idb = request.result;
-      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates", "receipts", "session", "notes", "reports", "coordinates", "notifications", "syncState", "appSettings", "doneImpianti", "hours", "operatorDay", "localDataSummary"].forEach((store) => {
+      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates", "receipts", "session", "notes", "reports", "coordinates", "notifications", "syncState"].forEach((store) => {
         if (!idb.objectStoreNames.contains(store)) idb.createObjectStore(store, { keyPath: "key" });
       });
     };
@@ -107,7 +107,7 @@ async function heraCacheGet(store, key, { maxAgeMs = 0 } = {}) {
   });
 }
 
-const HERA_BACKEND_PROBE_TIMEOUT_MS = 1500;
+const HERA_BACKEND_PROBE_TIMEOUT_MS = 4500;
 const HERA_BACKEND_PROBE_INTERVAL_MS = 30000;
 const heraConnectionManager = {
   state: navigator.onLine === false ? "offline" : "checking",
@@ -144,9 +144,11 @@ async function probeBackendReachability({ force = false } = {}) {
       setHeraConnectionState(reachable ? "online" : "offline", { reachable, detail: reachable ? "Backend raggiungibile" : `Backend HTTP ${response.status}` });
       return reachable;
     } catch (error) {
-      const state = navigator.onLine === false ? "offline" : "server-unreachable";
-      setHeraConnectionState(state, { reachable: false, detail: state === "server-unreachable" ? "Rete presente ma Firebase non raggiungibile" : "Backend non raggiungibile" });
-      if (state === "server-unreachable") console.warn("FIREBASE_BACKGROUND_TIMEOUT", error?.message || error);
+      if (navigator.onLine !== false) {
+        setHeraConnectionState("online", { reachable: true, detail: "Dispositivo online; verifica backend non conclusiva" });
+        return true;
+      }
+      setHeraConnectionState("offline", { reachable: false, detail: "Backend non raggiungibile" });
       return false;
     } finally {
       clearTimeout(timeoutId);
@@ -174,11 +176,6 @@ function onHeraConnectionChange(listener) {
 
 function isBackendOnline() {
   return navigator.onLine !== false && heraConnectionManager.state === "online" && heraConnectionManager.reachable;
-}
-
-function logStartupDiagnostic(event, detail = {}) {
-  console.info(event, detail);
-  try { localStorage.setItem("heraLastStartupEvent", `${event}:${new Date().toISOString()}`); } catch (error) {}
 }
 
 setInterval(() => { void probeBackendReachability(); }, HERA_BACKEND_PROBE_INTERVAL_MS);
@@ -363,43 +360,29 @@ function buildOfflineGuestSession() {
 }
 
 async function enterOfflineHomeFromLocalData(reason = "Avvio offline") {
-  logStartupDiagnostic("START_LOCAL_BOOT", { reason });
-  const savedSession = await readPersistedSession();
-  if (savedSession) {
-    applyPersistedSessionPreview(savedSession);
-    currentUser = currentUser || {
-      uid: savedSession.uid,
-      email: savedSession.email,
-      displayName: savedSession.displayName || savedSession.email || "Operatore",
-      persistedOnly: true,
-      offlineOnly: true
-    };
-    logStartupDiagnostic("LOCAL_SESSION_RESTORED", { uid: savedSession.uid });
-  } else {
-    currentUser = null;
-  }
+  const savedSession = await readPersistedSession() || buildOfflineGuestSession();
+  applyPersistedSessionPreview(savedSession);
+  currentUser = currentUser || {
+    uid: savedSession.uid,
+    email: savedSession.email,
+    displayName: savedSession.displayName || "Operatore Offline",
+    persistedOnly: true,
+    offlineOnly: true
+  };
   authStateResolved = true;
-  setHeraConnectionState(navigator.onLine === false ? "offline" : "server-unreachable", { reachable: false, detail: reason });
-  setAuthenticationGateState(savedSession ? "authenticated" : "required", savedSession ? "Sessione offline" : "Modalità offline: connettiti almeno una volta per scaricare i dati.");
+  setHeraConnectionState("offline", { reachable: false, detail: reason });
+  setAuthenticationGateState("authenticated");
+  hideStartupLoading();
   try {
     await loadStartupCoreCollections();
-    logStartupDiagnostic("LOCAL_DATA_LOADED");
   } catch (error) {
     console.warn("Avvio offline da cache locale non completo:", error);
-    loadCommesseFromLocalCache?.();
-  } finally {
-    if (!savedSession && ui.commesseLista) {
-      ui.commesseLista.innerHTML = "<section class='card'><h2>Modalità offline</h2><p class='muted'>Non sono ancora disponibili dati salvati su questo dispositivo. Connettiti almeno una volta a Internet per scaricare i dati.</p><button class='btn btn-primary' type='button' onclick='probeBackendReachability({ force: true }).then(() => location.reload())'>Riprova connessione</button></section>";
-    }
-    renderHeaderActivitySummary?.();
-    renderExternalApps?.();
-    renderPendingWhatsappList?.();
-    renderNextActionCard?.();
-    updateConnectivityStatus?.();
-    logStartupDiagnostic("HOME_RENDERED");
-    logStartupDiagnostic("OFFLINE_MODE_ENABLED", { reason });
-    hideStartupLoading();
   }
+  renderHeaderActivitySummary?.();
+  renderExternalApps?.();
+  renderPendingWhatsappList?.();
+  renderNextActionCard?.();
+  updateConnectivityStatus?.();
   return true;
 }
 
@@ -3248,7 +3231,6 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) runWhazzupPendingDoneSafetyCheck();
 });
 
-logStartupDiagnostic("START_LOCAL_BOOT", { phase: "auth-bootstrap" });
 heraLog.info("AUTH CHECK START");
 performance.mark?.("hera-auth-check-start");
 
@@ -3278,12 +3260,10 @@ if (!auth || firebaseInitError) {
     const savedSession = savedStartupSession || await readPersistedSession();
     if (isNetworkOffline() || savedSession) {
       console.warn("Timeout avvio Firebase: apro la Home con dati locali e continuo in background.");
-      logStartupDiagnostic("FIREBASE_BACKGROUND_TIMEOUT", { timeoutMs: 2000 });
       await enterOfflineHomeFromLocalData("Timeout Firebase 2 secondi");
       return;
     }
     console.warn("Timeout verifica sessione Firebase: sblocco comunque la Home in modalità locale.");
-    logStartupDiagnostic("FIREBASE_BACKGROUND_TIMEOUT", { timeoutMs: 2000 });
     await enterOfflineHomeFromLocalData("Timeout verifica sessione 2 secondi");
   }, 2000);
   withTimeout(ensureAuthLocalPersistence(), 3500, "Timeout persistenza auth locale")
@@ -3292,7 +3272,6 @@ if (!auth || firebaseInitError) {
       return false;
     })
     .finally(() => {
-    logStartupDiagnostic("FIREBASE_BACKGROUND_START");
     auth.onAuthStateChanged(async (user) => {
   clearTimeout(authCheckWatchdog);
   if (authStateResolved && currentUser?.persistedOnly && !user) {
@@ -3336,7 +3315,7 @@ if (!auth || firebaseInitError) {
       if (!databaseCheck.valid) {
         console.warn("Sessione salvata non valida: utente non presente in platformUsers.");
         await clearPersistedSession();
-        if (isBackendOnline()) await auth.signOut();
+        await auth.signOut();
         currentUser = null;
         setAuthenticationGateState("required", "Sessione non più valida. Effettua di nuovo il login.");
         hideStartupLoading();
@@ -5090,16 +5069,14 @@ function renderControlCenter() {
   const pending = getControlCenterPendingItems();
   const impiantiCount = Array.from(impiantiByCommessaId.values()).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), currentImpianti.length || 0);
   const todayKey = new Date().toISOString().slice(0, 10);
-  const appOrigin = window.Capacitor?.isNativePlatform?.() ? "file locali Capacitor" : (location.protocol === "file:" ? "file locali" : `URL ${location.origin}`);
-  const swVersion = navigator.serviceWorker?.controller?.scriptURL?.split("/").pop() || "Non attivo";
   const appRows = [
-    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"], ["Versione installata", installedVersion], ["Versione service worker", swVersion], ["Origine app", appOrigin], ["IndexedDB", ("indexedDB" in window) ? `Disponibile v${HERA_IDB_VERSION}` : "Non disponibile"], ["Quantità dati locali", `Commesse ${commesseById.size}, impianti ${impiantiCount}, coda ${pending.length}`], ["Ultima sincronizzazione", localStorage.getItem("heraLastSyncAt") || "Non disponibile"], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? (currentUser.persistedOnly ? "Sessione offline" : "Attivo") : "Scaduto"]
+    ["Stato app", firebaseInitError ? "Attenzione" : "Operativa"], ["Versione installata", installedVersion], ["Ultimo aggiornamento pubblicato", "Verifica disponibile nella sezione aggiornamenti"], ["Ultimo avvio", formatControlCenterDate(performance?.timeOrigin || Date.now())], ["Dispositivo", navigator.userAgent || "Non disponibile"], ["Sistema operativo", navigator.platform || "Non disponibile"], ["Operatore", currentUser?.displayName || currentUser?.email || "Non collegato"], ["UID utente", currentUser?.uid || "-"], ["Ruolo", getControlCenterRoleLabel()], ["Stato login", currentUser ? "Attivo" : "Scaduto"]
   ];
   const cloudRows = [["Firebase Authentication", auth ? "Operativo" : "Errore"], ["Cloud Firestore", db ? "Operativo" : "Errore"], ["Firebase Realtime Database", firebase?.database ? "Operativo" : "Non configurato"], ["Firebase Storage", firebase?.storage ? "Operativo" : "Non configurato"], ["Hosting", "Operativo"], ["Google Drive", driveBridgeState.configured || driveRootFolderId ? "Operativo" : "Non collegato"], ["Servizio notifiche", firebaseMessaging ? "Operativo" : "Non configurato"]];
   const dataRows = ["Commesse", "Impianti", "Squadre", "Ore lavorate", "Segnalazioni", "Note commessa", "Documenti POS", "Mezzi", "Utenti", "Notifiche", "Posizioni operatori"].map((name) => [name, "Ultimo aggiornamento: dati caricati nella sessione corrente"]);
   const pendingExtra = `<div class="control-center-actions"><button class="btn btn-primary" type="button" onclick="syncPendingImpiantoActions(); syncPendingOfflineMutations(); renderControlCenter();">SINCRONIZZA TUTTO</button><button class="btn" type="button" onclick="syncPendingImpiantoActions(); renderControlCenter();">RIPROVA ERRORI</button><button class="btn" type="button">VISUALIZZA DETTAGLI</button>${isAdmin ? '<button class="btn" type="button">ELIMINA OPERAZIONE</button>' : ''}</div><ol class="control-center-list">${pending.map((item) => `<li><strong>${escapeHTML(item.controlType)}</strong><br><span>${escapeHTML(formatControlCenterDate(item.when))} • ${escapeHTML(item.operator || "Operatore")}</span><br><em>${escapeHTML(item.status || "In attesa")}</em></li>`).join("") || "<li>Nessuna operazione in attesa.</li>"}</ol>`;
   const usageRows = [["Utenti registrati", platformUsers.length], ["Utenti attivi oggi", platformUsers.filter((u) => String(u.lastSeenAt || u.lastLoginAt || "").includes(todayKey)).length], ["Utenti online ora", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Dispositivi collegati", platformUsers.length], ["Numero commesse", commesseById.size], ["Numero impianti", impiantiCount], ["Impianti fatti oggi", currentImpianti.filter((i) => String(i.doneAt || "").includes(todayKey)).length], ["Ore inserite oggi", allHoursReports.filter((r) => String(r.date || r.createdAt || "").includes(todayKey)).length], ["Segnalazioni aperte", "Verifica da archivio segnalazioni"], ["Notifiche non confermate", "Verifica da notifiche"], ["Dati offline in attesa", pending.length]];
-  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", heraConnectionManager.state], ["Dettaglio", heraConnectionManager.detail || quality.status], ["Firebase", isBackendOnline() ? "Raggiungibile" : (heraConnectionManager.state === "server-unreachable" ? "Server non raggiungibile" : "Offline")], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "Timeout breve attivo" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: heraConnectionManager.state === "server-unreachable" ? "yellow" : quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
+  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
   const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
   ui.controlCenterContent.innerHTML = [...operatorCards, ...adminCards].join("");
 }
@@ -12414,10 +12391,6 @@ function savePendingImpiantoActions() {
   } catch (error) {
     console.warn("Azioni impianto pending non salvate:", error);
   }
-  pendingImpiantoActions.forEach((action) => {
-    heraCacheSet("offlineQueue", action.id, action, { type: "done", updatedAt: Date.now() });
-    if (action.status !== "completed") heraCacheSet("doneImpianti", action.id, action, { updatedAt: Date.now() });
-  });
 }
 
 function loadPendingOfflineMutations() {
@@ -12470,7 +12443,6 @@ function getOfflineRetryDelayMs(attempts = 0) {
 
 async function syncPendingOfflineMutations() {
   if (isNetworkOffline() || !currentUser) return;
-  logStartupDiagnostic("SYNC_STARTED", { queue: "offlineMutations" });
   const queue = loadPendingOfflineMutations();
   const pending = queue.filter((item) => item.status !== "synced" && (!item.userId || item.userId === currentUser.uid));
   if (!pending.length) return;
@@ -12513,8 +12485,6 @@ async function syncPendingOfflineMutations() {
     }
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
-  logStartupDiagnostic("SYNC_COMPLETED", { queue: "offlineMutations", remaining: loadPendingOfflineMutations().length });
-  try { localStorage.setItem("heraLastSyncAt", new Date().toISOString()); } catch (error) {}
   showSyncProgress([], pending.length, true);
   loadSavedHoursReports?.();
 }
@@ -21083,12 +21053,8 @@ function getPersonaleDisplayName(person) {
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
 // Persistenza Firestore dello stato Fatto/Reset: i campi done*, reset* e Timestamp sono coperti da test statici.
 async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
-  const user = auth.currentUser || currentUser;
-  if (!user) {
-    if (isNetworkOffline()) return;
-    return;
-  }
-  if (isNetworkOffline()) throw new Error("Firebase non raggiungibile: operazione salvata in coda offline.");
+  const user = auth.currentUser;
+  if (!user) return;
   const doneAtDate = options.doneAt instanceof Date ? options.doneAt : new Date();
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(doneAtDate) : null;
 

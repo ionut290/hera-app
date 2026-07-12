@@ -1,8 +1,0 @@
-{
-	"appId": "it.vargacantieri.hera",
-	"appName": "Hera App",
-	"webDir": "www",
-	"server": {
-		"androidScheme": "https"
-	}
-}

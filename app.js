@@ -144,6 +144,10 @@ async function probeBackendReachability({ force = false } = {}) {
       setHeraConnectionState(reachable ? "online" : "offline", { reachable, detail: reachable ? "Backend raggiungibile" : `Backend HTTP ${response.status}` });
       return reachable;
     } catch (error) {
+      if (navigator.onLine !== false) {
+        setHeraConnectionState("online", { reachable: true, detail: "Dispositivo online; verifica backend non conclusiva" });
+        return true;
+      }
       setHeraConnectionState("offline", { reachable: false, detail: "Backend non raggiungibile" });
       return false;
     } finally {
@@ -2356,8 +2360,14 @@ function sleep(ms) {
 function setFirestoreConnectionState(state, detail = "") {
   firestoreNetworkState = state || firestoreNetworkState;
   firestoreCacheState = detail || firestoreCacheState;
+  if (state === "Online" && navigator.onLine !== false) {
+    setHeraConnectionState("online", { reachable: true, detail: detail || "Firestore raggiungibile" });
+  } else if (state === "Offline" && navigator.onLine === false) {
+    setHeraConnectionState("offline", { reachable: false, detail: detail || "Dispositivo offline" });
+  } else {
+    updateConnectivityStatus();
+  }
   heraLog.info(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
-  updateConnectivityStatus();
 }
 
 const browserConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;

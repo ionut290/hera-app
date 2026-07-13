@@ -1,12 +1,4 @@
-const HERA_DEBUG = new URLSearchParams(window.location.search || "").get("debug") === "1" || localStorage.getItem("heraDebug") === "1";
-const heraLog = {
-  debug: (...args) => { if (HERA_DEBUG) console.debug(...args); },
-  info: (...args) => { if (HERA_DEBUG) console.info(...args); },
-  warn: (...args) => console.warn(...args),
-  error: (...args) => console.error(...args)
-};
-performance.mark?.("hera-app-script-start");
-heraLog.info("APP START");
+console.log("APP START");
 
 const firebaseConfig = window.firebaseConfig || {};
 const requiredFirebaseConfigKeys = ["apiKey", "authDomain", "projectId", "appId"];
@@ -36,190 +28,15 @@ try {
     throw new Error("Firebase Auth o Firestore non disponibili nel SDK caricato.");
   }
 
-  performance.mark?.("hera-firebase-init-ready");
-  performance.measure?.("hera-firebase-init", "hera-app-script-start", "hera-firebase-init-ready");
-  heraLog.info("FIREBASE INIT OK", {
+  console.log("FIREBASE INIT OK", {
     appName: firebaseApp.name,
     projectId: firebaseConfig?.projectId || "non impostato",
     sdkVersion: firebase.SDK_VERSION || "non disponibile"
   });
-  heraLog.info("FIREBASE READY");
+  console.log("FIREBASE READY");
 } catch (error) {
   firebaseInitError = error;
   console.error("FIREBASE INIT ERROR", error);
-}
-
-
-const HERA_IDB_VERSION = 4;
-const HERA_IDB_NAME = "hera-app-cache";
-const HERA_MEMORY_CACHE = new Map();
-let heraIdbPromise = null;
-const heraRuntimeMetrics = { firestoreReads: 0, activeListeners: 0, networkRequests: 0, networkErrors: 0 };
-
-function openHeraCacheDb() {
-  if (!("indexedDB" in window)) return Promise.resolve(null);
-  if (heraIdbPromise) return heraIdbPromise;
-  heraIdbPromise = new Promise((resolve) => {
-    const request = indexedDB.open(HERA_IDB_NAME, HERA_IDB_VERSION);
-    request.onupgradeneeded = () => {
-      const idb = request.result;
-      ["kv", "commesse", "impianti", "squadre", "offlineQueue", "weather", "alerts", "whatsappTemplates", "receipts", "session", "notes", "reports", "coordinates", "notifications", "syncState"].forEach((store) => {
-        if (!idb.objectStoreNames.contains(store)) idb.createObjectStore(store, { keyPath: "key" });
-      });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => { heraLog.warn("IndexedDB cache non disponibile:", request.error); resolve(null); };
-  });
-  return heraIdbPromise;
-}
-
-async function heraCacheSet(store, key, value, meta = {}) {
-  HERA_MEMORY_CACHE.set(`${store}:${key}`, value);
-  if (["commesse", "impianti", "squadre", "offlineQueue", "notes", "reports", "coordinates", "notifications", "syncState"].includes(store)) {
-    try { localStorage.setItem("heraLastStructuredCacheUpdate", String(Date.now())); } catch (error) {}
-  }
-  const idb = await openHeraCacheDb();
-  if (!idb) return false;
-  return new Promise((resolve) => {
-    const tx = idb.transaction(store, "readwrite");
-    tx.objectStore(store).put({ key, value, meta, savedAt: Date.now(), cacheVersion: HERA_IDB_VERSION });
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => { heraLog.warn("Scrittura cache IndexedDB non riuscita", store, key, tx.error); resolve(false); };
-  });
-}
-
-async function heraCacheGet(store, key, { maxAgeMs = 0 } = {}) {
-  const memoryKey = `${store}:${key}`;
-  if (HERA_MEMORY_CACHE.has(memoryKey)) return HERA_MEMORY_CACHE.get(memoryKey);
-  const idb = await openHeraCacheDb();
-  if (!idb) return null;
-  return new Promise((resolve) => {
-    const tx = idb.transaction(store, "readonly");
-    const request = tx.objectStore(store).get(key);
-    request.onsuccess = () => {
-      const entry = request.result;
-      if (!entry || entry.cacheVersion !== HERA_IDB_VERSION) return resolve(null);
-      if (maxAgeMs && Date.now() - Number(entry.savedAt || 0) > maxAgeMs) return resolve(null);
-      HERA_MEMORY_CACHE.set(memoryKey, entry.value);
-      resolve(entry.value);
-    };
-    request.onerror = () => resolve(null);
-  });
-}
-
-const HERA_BACKEND_PROBE_TIMEOUT_MS = 4500;
-const HERA_BACKEND_PROBE_INTERVAL_MS = 30000;
-const heraConnectionManager = {
-  state: navigator.onLine === false ? "offline" : "checking",
-  reachable: navigator.onLine !== false,
-  lastProbeAt: 0,
-  lastOnlineAt: 0,
-  lastOfflineAt: navigator.onLine === false ? Date.now() : 0,
-  checking: null,
-  listeners: new Set()
-};
-
-function getBackendProbeUrl() {
-  const projectId = String(firebaseConfig?.projectId || "").trim();
-  if (projectId) return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents?key=${encodeURIComponent(firebaseConfig?.apiKey || "")}&pageSize=1`;
-  return `${window.location.origin}${window.location.pathname || "/"}`;
-}
-
-async function probeBackendReachability({ force = false } = {}) {
-  if (navigator.onLine === false) {
-    setHeraConnectionState("offline", { reachable: false, detail: "Browser offline" });
-    return false;
-  }
-  if (!force && Date.now() - heraConnectionManager.lastProbeAt < HERA_BACKEND_PROBE_INTERVAL_MS) {
-    return heraConnectionManager.reachable;
-  }
-  if (heraConnectionManager.checking) return heraConnectionManager.checking;
-  heraConnectionManager.checking = (async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), HERA_BACKEND_PROBE_TIMEOUT_MS);
-    try {
-      heraConnectionManager.lastProbeAt = Date.now();
-      const response = await fetch(getBackendProbeUrl(), { method: "GET", cache: "no-store", signal: controller.signal });
-      const reachable = response.status < 500;
-      setHeraConnectionState(reachable ? "online" : "offline", { reachable, detail: reachable ? "Backend raggiungibile" : `Backend HTTP ${response.status}` });
-      return reachable;
-    } catch (error) {
-      if (navigator.onLine !== false) {
-        setHeraConnectionState("online", { reachable: true, detail: "Dispositivo online; verifica backend non conclusiva" });
-        return true;
-      }
-      setHeraConnectionState("offline", { reachable: false, detail: "Backend non raggiungibile" });
-      return false;
-    } finally {
-      clearTimeout(timeoutId);
-      heraConnectionManager.checking = null;
-    }
-  })();
-  return heraConnectionManager.checking;
-}
-
-function setHeraConnectionState(state, patch = {}) {
-  const previous = heraConnectionManager.state;
-  heraConnectionManager.state = state;
-  heraConnectionManager.reachable = patch.reachable !== undefined ? Boolean(patch.reachable) : state === "online";
-  heraConnectionManager.detail = patch.detail || heraConnectionManager.detail || "";
-  if (state === "online") heraConnectionManager.lastOnlineAt = Date.now();
-  if (state === "offline") heraConnectionManager.lastOfflineAt = Date.now();
-  if (previous !== state) heraConnectionManager.listeners.forEach((listener) => { try { listener({ ...heraConnectionManager, previous }); } catch (error) { console.warn("Listener connessione non riuscito:", error); } });
-  try { updateConnectivityStatus?.(); } catch (error) { /* UI non ancora pronta durante il bootstrap */ }
-}
-
-function onHeraConnectionChange(listener) {
-  heraConnectionManager.listeners.add(listener);
-  return () => heraConnectionManager.listeners.delete(listener);
-}
-
-function isBackendOnline() {
-  return navigator.onLine !== false && heraConnectionManager.state === "online" && heraConnectionManager.reachable;
-}
-
-setInterval(() => { void probeBackendReachability(); }, HERA_BACKEND_PROBE_INTERVAL_MS);
-window.addEventListener("online", () => { setHeraConnectionState("checking", { reachable: false, detail: "Connessione ripristinata" }); void probeBackendReachability({ force: true }); });
-window.addEventListener("offline", () => setHeraConnectionState("offline", { reachable: false, detail: "Dispositivo offline" }));
-void probeBackendReachability();
-
-function getConnectionInfo() {
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
-  return {
-    online: isBackendOnline(),
-    effectiveType: connection.effectiveType || "unknown",
-    downlink: Number(connection.downlink || 0),
-    saveData: Boolean(connection.saveData)
-  };
-}
-
-function shouldReduceBackgroundData() {
-  const info = getConnectionInfo();
-  return info.saveData || ["slow-2g", "2g", "3g"].includes(String(info.effectiveType));
-}
-
-function trackFirestoreListener(unsubscribe) {
-  if (typeof unsubscribe !== "function") return unsubscribe;
-  heraRuntimeMetrics.activeListeners += 1;
-  let closed = false;
-  return () => {
-    if (closed) return;
-    closed = true;
-    heraRuntimeMetrics.activeListeners = Math.max(0, heraRuntimeMetrics.activeListeners - 1);
-    unsubscribe();
-  };
-}
-
-function runWhenVisible(task, delayMs = 0) {
-  const run = () => setTimeout(task, delayMs);
-  if (!document.hidden) return run();
-  const handler = () => {
-    if (document.hidden) return;
-    document.removeEventListener("visibilitychange", handler);
-    run();
-  };
-  document.addEventListener("visibilitychange", handler);
-  return null;
 }
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
@@ -348,44 +165,6 @@ function applyPersistedSessionPreview(session) {
   return true;
 }
 
-function buildOfflineGuestSession() {
-  return {
-    version: PERSISTED_SESSION_VERSION,
-    uid: "offline-local-user",
-    email: "offline@vargacantieri.local",
-    displayName: "Operatore Offline",
-    lastLoginAt: new Date().toISOString(),
-    offlineOnly: true
-  };
-}
-
-async function enterOfflineHomeFromLocalData(reason = "Avvio offline") {
-  const savedSession = await readPersistedSession() || buildOfflineGuestSession();
-  applyPersistedSessionPreview(savedSession);
-  currentUser = currentUser || {
-    uid: savedSession.uid,
-    email: savedSession.email,
-    displayName: savedSession.displayName || "Operatore Offline",
-    persistedOnly: true,
-    offlineOnly: true
-  };
-  authStateResolved = true;
-  setHeraConnectionState("offline", { reachable: false, detail: reason });
-  setAuthenticationGateState("authenticated");
-  hideStartupLoading();
-  try {
-    await loadStartupCoreCollections();
-  } catch (error) {
-    console.warn("Avvio offline da cache locale non completo:", error);
-  }
-  renderHeaderActivitySummary?.();
-  renderExternalApps?.();
-  renderPendingWhatsappList?.();
-  renderNextActionCard?.();
-  updateConnectivityStatus?.();
-  return true;
-}
-
 async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
   if (!user?.uid || !savedSession || !db) return { valid: true, profile: null };
   const doc = await db.collection("platformUsers").doc(user.uid).get();
@@ -455,7 +234,7 @@ function ensureAuthLocalPersistence() {
 
   authLocalPersistencePromise = auth.setPersistence(localPersistence)
     .then(() => {
-      heraLog.info("AUTH PERSISTENCE LOCAL READY");
+      console.log("AUTH PERSISTENCE LOCAL READY");
       return true;
     })
     .catch((error) => {
@@ -2277,21 +2056,10 @@ ui.notificationDocViewerModal?.addEventListener("click", (event) => {
 });
 window.addEventListener("online", () => {
   setFirestoreConnectionState("Online", "");
-  void probeBackendReachability({ force: true }).then((online) => {
-    if (!online) return;
-    showConnectionRestoredBanner();
-    syncPendingImpiantoActions();
-    syncPendingOfflineMutations();
-  });
+  syncPendingImpiantoActions();
+  syncPendingOfflineMutations();
 });
 window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
-onHeraConnectionChange((info) => {
-  if (info.previous === "offline" && info.state === "online") {
-    showConnectionRestoredBanner();
-    syncPendingImpiantoActions?.();
-    syncPendingOfflineMutations?.();
-  }
-});
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -2371,8 +2139,7 @@ function runAfterFirstRender(callback) {
   window.requestAnimationFrame(() => setTimeout(runner, 0));
 }
 
-function runDeferredStartupTasks(tasks = [], options = {}) {
-  const baseDelayMs = Number(options.baseDelayMs || 0);
+function runDeferredStartupTasks(tasks = []) {
   runAfterFirstRender(() => {
     tasks.forEach((task, index) => {
       setTimeout(() => {
@@ -2381,7 +2148,7 @@ function runDeferredStartupTasks(tasks = [], options = {}) {
         } catch (error) {
           console.error("Errore task avvio differito:", error);
         }
-      }, baseDelayMs + index * (shouldReduceBackgroundData() ? 250 : 75));
+      }, index * 75);
     });
   });
 }
@@ -2409,14 +2176,8 @@ function sleep(ms) {
 function setFirestoreConnectionState(state, detail = "") {
   firestoreNetworkState = state || firestoreNetworkState;
   firestoreCacheState = detail || firestoreCacheState;
-  if (state === "Online" && navigator.onLine !== false) {
-    setHeraConnectionState("online", { reachable: true, detail: detail || "Firestore raggiungibile" });
-  } else if (state === "Offline" && navigator.onLine === false) {
-    setHeraConnectionState("offline", { reachable: false, detail: detail || "Dispositivo offline" });
-  } else {
-    updateConnectivityStatus();
-  }
-  heraLog.info(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
+  console.log(`FIRESTORE ${String(firestoreNetworkState).toUpperCase()}`, detail || "");
+  updateConnectivityStatus();
 }
 
 const browserConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -2497,7 +2258,6 @@ async function runFirestoreGetWithRetry(query, options = {}) {
     try {
       startFirestoreSlowWatch(label);
       const snapshot = await withTimeout(query.get(), timeoutMs, `Timeout ${label}`);
-      heraRuntimeMetrics.firestoreReads += Number(snapshot?.size || 0);
       clearFirestoreSlowWatch();
       if (snapshot?.metadata?.fromCache) {
         setFirestoreConnectionState(navigator.onLine ? "Online" : "Offline", "Dati caricati da cache");
@@ -3191,32 +2951,6 @@ function weatherCodeLabel(weatherCode) {
   return weatherMap[code] || "ℹ️ Condizioni variabili";
 }
 
-
-function suspendNonEssentialBackgroundWork() {
-  stopChatRetentionLoop?.();
-  stopHoursDeadlineAlertLoop?.();
-  if (typeof stopRadarAnimation === "function") stopRadarAnimation();
-  stopPresenceHeartbeat?.();
-  if (unsubscribeOperatorPositions) { unsubscribeOperatorPositions(); unsubscribeOperatorPositions = null; }
-  if (unsubscribeGpsRequests) { unsubscribeGpsRequests(); unsubscribeGpsRequests = null; }
-}
-
-function resumeVisibleWork() {
-  if (!currentUser) return;
-  startPresenceHeartbeat?.();
-  runDeferredStartupTasks([
-    () => subscribeOperatorPositions?.(),
-    () => subscribeGpsRequests?.(),
-    () => syncPendingImpiantoActions?.(),
-    () => syncPendingOfflineMutations?.()
-  ], { baseDelayMs: shouldReduceBackgroundData() ? 1500 : 150 });
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) suspendNonEssentialBackgroundWork();
-  else resumeVisibleWork();
-});
-
 pendingImpiantoActions = loadPendingImpiantoActions();
 renderPendingWhatsappList();
 
@@ -3231,21 +2965,16 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) runWhazzupPendingDoneSafetyCheck();
 });
 
-heraLog.info("AUTH CHECK START");
-performance.mark?.("hera-auth-check-start");
+console.log("AUTH CHECK START");
 
 if (!auth || firebaseInitError) {
   console.error("Errore verifica login Firebase:", firebaseInitError || "Auth non disponibile");
-  if (isNetworkOffline() || firebaseInitError) {
-    void enterOfflineHomeFromLocalData("Firebase non disponibile all'avvio");
-  } else {
-    setAuthenticationGateState("required", "Login non disponibile: configurazione Firebase non caricata correttamente.");
-    authStateResolved = true;
-    currentUser = null;
-    squadreLoadState = { status: "error", message: "Errore caricamento dati" };
-    if (typeof renderSquadre === "function") renderSquadre();
-    hideStartupLoading();
-  }
+  setAuthenticationGateState("required", "Login non disponibile: configurazione Firebase non caricata correttamente.");
+  authStateResolved = true;
+  currentUser = null;
+  squadreLoadState = { status: "error", message: "Errore caricamento dati" };
+  if (typeof renderSquadre === "function") renderSquadre();
+  hideStartupLoading();
 } else {
   setAuthenticationGateState("checking");
   let savedStartupSession = null;
@@ -3255,17 +2984,16 @@ if (!auth || firebaseInitError) {
   });
   if (ui.loginBtn) ui.loginBtn.disabled = true;
   if (ui.user) ui.user.textContent = "Verifica sessione in corso...";
-  const authCheckWatchdog = setTimeout(async () => {
+  const authCheckWatchdog = setTimeout(() => {
     if (authStateResolved) return;
-    const savedSession = savedStartupSession || await readPersistedSession();
-    if (isNetworkOffline() || savedSession) {
-      console.warn("Timeout avvio Firebase: apro la Home con dati locali e continuo in background.");
-      await enterOfflineHomeFromLocalData("Timeout Firebase 2 secondi");
-      return;
-    }
-    console.warn("Timeout verifica sessione Firebase: sblocco comunque la Home in modalità locale.");
-    await enterOfflineHomeFromLocalData("Timeout verifica sessione 2 secondi");
-  }, 2000);
+    console.warn("Timeout verifica sessione Firebase: mostro la schermata di login invece del caricamento infinito.");
+    authStateResolved = true;
+    currentUser = null;
+    setAuthenticationGateState("required", "Verifica sessione lenta o non disponibile. Riprova il login.");
+    squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
+    if (typeof renderSquadre === "function") renderSquadre();
+    hideStartupLoading();
+  }, 8000);
   withTimeout(ensureAuthLocalPersistence(), 3500, "Timeout persistenza auth locale")
     .catch((error) => {
       console.warn("Persistenza auth locale non pronta, continuo comunque la verifica sessione:", error);
@@ -3274,18 +3002,12 @@ if (!auth || firebaseInitError) {
     .finally(() => {
     auth.onAuthStateChanged(async (user) => {
   clearTimeout(authCheckWatchdog);
-  if (authStateResolved && currentUser?.persistedOnly && !user) {
-    console.warn("Firebase Auth ha risposto dopo l'avvio locale: mantengo la Home offline già utilizzabile.");
-    return;
-  }
-  performance.mark?.("hera-auth-ready");
-  performance.measure?.("hera-auth-check", "hera-auth-check-start", "hera-auth-ready");
-  heraLog.info("AUTH READY");
+  console.log("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
   currentUserBanProfile = null;
   const loggedIn = Boolean(user);
-  heraLog.info(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
+  console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
@@ -3492,9 +3214,7 @@ if (!auth || firebaseInitError) {
   syncPendingImpiantoActions();
   fetchWeather();
   renderNextActionCard();
-  performance.mark?.("hera-first-usable-screen");
-  performance.measure?.("hera-time-to-first-usable-screen", "hera-app-script-start", "hera-first-usable-screen");
-  heraLog.info("APP READY");
+  console.log("APP READY");
   hideStartupLoading();
 }, async (error) => {
   clearTimeout(authCheckWatchdog);
@@ -3579,55 +3299,28 @@ function reloadNormalModeData() {
 
 async function loadStartupCoreCollections() {
   if (!currentUser) return;
-  performance.mark?.("hera-local-cache-load-start");
   startupCoreCollectionsLoadState = { status: "loading", message: "Caricamento dati iniziali..." };
   commesseLoadState = { status: "loading", message: "Caricamento commesse..." };
+  personaleLoadState = { status: "loading", message: "Caricamento anagrafica personale..." };
+  mezziLoadState = { status: "loading", message: "Caricamento mezzi..." };
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderCommesseHomeList();
   renderSquadre();
 
-  const cachedCommesse = await heraCacheGet("commesse", "home");
-  if (Array.isArray(cachedCommesse) && cachedCommesse.length) {
-    commesseById = new Map(cachedCommesse.map((commessa) => [commessa.id, commessa]));
-    commesseLoadState = { status: "loaded", message: "" };
-    refreshCommesseDependentUI(false);
-  } else {
-    loadCommesseFromLocalCache();
-  }
-  const cachedSquadre = await heraCacheGet("squadre", getLocalDateKey?.(new Date()) || "today");
-  if (cachedSquadre?.dateKey && Array.isArray(cachedSquadre.rows)) {
-    squadreHistoryByDate.set(cachedSquadre.dateKey, new Map(cachedSquadre.rows.map((row) => [row.commessaId, row])));
-    squadreLoadState = { status: "loaded", message: "" };
-    renderSquadre();
-  }
-  performance.mark?.("hera-local-cache-load-end");
-  performance.measure?.("hera-local-cache-load", "hera-local-cache-load-start", "hera-local-cache-load-end");
-
   try {
-    if (isNetworkOffline()) {
-      startupCoreCollectionsLoadState = { status: "loaded", message: "Dati locali IndexedDB" };
-      commesseLoadState = commesseById.size ? { status: "loaded", message: "Dati locali" } : { status: "empty", message: "Nessuna commessa salvata sul dispositivo." };
-      squadreLoadState = squadreHistoryByDate.size ? { status: "loaded", message: "Giorno operativo salvato sul dispositivo" } : { status: "empty", message: "Squadre non ancora salvate su questo dispositivo." };
-      return;
-    }
+    const personalePromise = subscribePersonale();
     await Promise.all([
+      personalePromise, // anagrafiche personale
+      personalePromise, // qualifiche/corsi salvati sulle anagrafiche
+      personalePromise, // sicurezza salvata sulle anagrafiche
       subscribeSquadre(),
-      subscribeCommesse()
+      subscribeCommesse(),
+      subscribeMezzi()
     ]);
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
-    runDeferredStartupTasks([
-      () => subscribePersonale(),
-      () => subscribeMezzi()
-    ], { baseDelayMs: shouldReduceBackgroundData() ? 2500 : 700 });
   } catch (error) {
-    if (isNetworkOffline()) {
-      startupCoreCollectionsLoadState = { status: "loaded", message: "Dati locali IndexedDB" };
-      commesseLoadState = commesseById.size ? { status: "loaded", message: "Dati locali" } : { status: "empty", message: "Nessuna commessa salvata sul dispositivo." };
-      squadreLoadState = squadreHistoryByDate.size ? { status: "loaded", message: "Giorno operativo salvato sul dispositivo" } : { status: "empty", message: "Squadre non ancora salvate su questo dispositivo." };
-    } else {
-      startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
-      throw error;
-    }
+    startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
+    throw error;
   } finally {
     renderCommesseHomeList();
     renderSquadre();
@@ -10904,7 +10597,6 @@ function subscribeCommesse() {
 
     if (!fromListener) console.log("Numero commesse trovate", snapshot.size);
     saveCommesseLocalCache(receivedCommesse);
-    heraCacheSet("commesse", "home", receivedCommesse, { updatedAt: Date.now() });
     commesseLoadState = receivedCommesse.length
       ? { status: "loaded", message: "" }
       : { status: "empty", message: "Nessuna commessa disponibile" };
@@ -10929,14 +10621,14 @@ function subscribeCommesse() {
       runAfterFirstRender(() => {
         if (!currentUser || unsubscribeCommesse) return;
         try {
-          unsubscribeCommesse = trackFirestoreListener(query.onSnapshot((liveSnapshot) => {
+          unsubscribeCommesse = query.onSnapshot((liveSnapshot) => {
             applyCommesseSnapshot(liveSnapshot, { fromListener: true });
           }, (error) => {
             logFirestoreError("LOAD COMMESSE LISTENER", error);
             loadCommesseFromLocalCache();
             commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
             refreshCommesseDependentUI(false);
-          }));
+          });
         } catch (error) {
           console.error("Errore inizializzazione listener commesse:", error);
         }
@@ -12371,7 +12063,7 @@ function getTargetCommessaName() {
 }
 
 function isNetworkOffline() {
-  return typeof navigator === "undefined" ? false : !isBackendOnline();
+  return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
 function loadPendingImpiantoActions() {
@@ -12413,32 +12105,18 @@ function savePendingOfflineMutations(items) {
 
 function enqueueOfflineMutation(type, payload) {
   const queue = loadPendingOfflineMutations();
-  const operationId = payload?.operationId || `${type}:${currentUser?.uid || "user"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-  const existing = queue.find((entry) => entry.operationId === operationId || entry.id === operationId);
-  if (existing) return existing;
   const item = {
-    key: operationId,
-    id: operationId,
-    operationId,
+    id: `${type}:${currentUser?.uid || "user"}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
     type,
-    payload: { ...payload, operationId },
+    payload,
     userId: currentUser?.uid || "",
     userEmail: currentUser?.email || "",
     createdAt: new Date().toISOString(),
-    status: "pending",
-    attempts: 0,
-    lastError: "",
-    nextAttemptAt: new Date().toISOString()
+    status: "pending"
   };
   queue.push(item);
   savePendingOfflineMutations(queue);
-  heraCacheSet("offlineQueue", operationId, item, { updatedAt: Date.now() });
   return item;
-}
-
-function getOfflineRetryDelayMs(attempts = 0) {
-  const delays = [2000, 5000, 15000, 30000, 60000, 120000];
-  return delays[Math.min(Math.max(0, attempts), delays.length - 1)];
 }
 
 async function syncPendingOfflineMutations() {
@@ -12449,9 +12127,6 @@ async function syncPendingOfflineMutations() {
   for (let index = 0; index < pending.length; index += 1) {
     showSyncProgress(pending.map((item) => ({ impiantoName: getOfflineMutationLabel(item), commessaName: item.payload?.commessaName || "Coda offline" })), index);
     const item = pending[index];
-    if (item.nextAttemptAt && Date.parse(item.nextAttemptAt) > Date.now()) continue;
-    item.status = "syncing";
-    try {
     if (item.type === "hoursReport") {
       const payload = {
         ...item.payload,
@@ -12474,15 +12149,6 @@ async function syncPendingOfflineMutations() {
       else await notesRef.add({ ...payload, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: payload.createdBy || currentUser?.email || "" });
     }
     item.status = "synced";
-    item.lastError = "";
-    } catch (error) {
-      item.attempts = Number(item.attempts || 0) + 1;
-      item.status = "syncFailed";
-      item.lastError = String(error?.message || error || "Errore sincronizzazione").slice(0, 500);
-      item.nextAttemptAt = new Date(Date.now() + getOfflineRetryDelayMs(item.attempts - 1)).toISOString();
-      heraRuntimeMetrics.networkErrors += 1;
-      continue;
-    }
   }
   savePendingOfflineMutations(queue.filter((item) => item.status !== "synced"));
   showSyncProgress([], pending.length, true);
@@ -12709,10 +12375,7 @@ async function syncPendingImpiantoActions() {
       const doneAtDate = action.doneAt ? new Date(action.doneAt) : new Date();
       await setImpiantoDone(action.commessaId, impiantoIds, true, {
         doneAt: doneAtDate,
-        doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore",
-        doneByUid: action.userId || currentUser.uid || "",
-        doneByEmail: action.userEmail || currentUser.email || "",
-        operationId: action.operationId || action.id || ""
+        doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore"
       });
       const exportPayload = {
         commessaId: action.commessaId,
@@ -12731,7 +12394,6 @@ async function syncPendingImpiantoActions() {
       });
       const updatedAction = markPendingActionStatus(action.id, {
         status: "synced",
-        syncState: "synced",
         syncedAt: new Date().toISOString(),
         whatsappStatus: action.whatsappStatus === "sent" ? "sent" : "pending",
         lastError: ""
@@ -12754,7 +12416,7 @@ async function syncPendingImpiantoActions() {
   const alertable = syncedWhatsappActions.filter((action) => !pendingWhatsappAlertShownForSyncIds.has(action.id));
   if (alertable.length) {
     alertable.forEach((action) => pendingWhatsappAlertShownForSyncIds.add(action.id));
-    alert("Impianto sincronizzato.\n\nIl messaggio WhatsApp è pronto. Apri la scheda WhatsApp in attesa per inviarlo, condividere la ricevuta o rimandare a più tardi.");
+    alert("Ci sono messaggi WhatsApp da inviare");
   }
   renderPendingWhatsappList();
   if (!remainingToSync.length) showSyncProgress([], actionsToSync.length, true);
@@ -12766,7 +12428,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   if (completed) {
     ui.syncProgressOverlay.classList.remove("hidden");
     ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
-    ui.syncProgressTitle.textContent = "✅ Tutti i dati sincronizzati";
+    ui.syncProgressTitle.textContent = "✅ Tutto sincronizzato";
     ui.syncProgressDetail.textContent = "Tutte le operazioni offline sono state inviate una alla volta.";
     if (ui.syncProgressList) ui.syncProgressList.innerHTML = "";
     setTimeout(() => {
@@ -12784,7 +12446,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   const safeIndex = Math.min(currentIndex + 1, total);
   ui.syncProgressOverlay.classList.remove("hidden");
   ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
-  ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex} di ${total}`;
+  ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex}/${total}...`;
   const action = actions[currentIndex] || actions[0];
   ui.syncProgressDetail.textContent = `${action.commessaName || "Commessa"} • ${action.impiantoName || "Impianto"}`;
   if (ui.syncProgressList) {
@@ -12861,16 +12523,6 @@ function renderPendingWhatsappList() {
 
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
-  heraCacheGet("impianti", selectedCommessaId).then((cached) => {
-    if (!Array.isArray(cached) || !cached.length || unsubscribeImpianti) return;
-    currentImpianti = applyPendingActionsToImpianti(cached, selectedCommessaId);
-    impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
-    refreshImpiantoWhatsAppTemplateCache(currentImpianti);
-    renderHeaderActivitySummary();
-    updateCommessaDashboard();
-    renderImpianti();
-    renderMap();
-  });
   let previousDoneSignature = null;
   console.log("Query impianti avviata", {
     collectionPath: `commesse/${selectedCommessaId}/impianti`,
@@ -12878,7 +12530,7 @@ function subscribeImpianti() {
   });
 
   try {
-    unsubscribeImpianti = trackFirestoreListener(db
+    unsubscribeImpianti = db
       .collection("commesse")
       .doc(selectedCommessaId)
       .collection("impianti")
@@ -12886,7 +12538,6 @@ function subscribeImpianti() {
         const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         console.log("Numero impianti trovati", { commessaId: selectedCommessaId, count: snapshot.size });
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
-        heraCacheSet("impianti", selectedCommessaId, currentImpianti, { updatedAt: Date.now() });
         refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
         renderHeaderActivitySummary();
@@ -12914,7 +12565,7 @@ function subscribeImpianti() {
       }, (error) => {
         console.error("Errore Firestore caricamento impianti:", error);
         ui.impiantiLista.innerHTML = `<p class='muted'>Errore caricamento impianti: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
-      }));
+      });
   } catch (error) {
     console.error("Errore inizializzazione query impianti:", error);
     ui.impiantiLista.innerHTML = `<p class='muted'>Errore inizializzazione impianti: ${escapeHTML(getFirebaseErrorMessage(error) || "Firestore non disponibile.")}</p>`;
@@ -14011,148 +13662,6 @@ function formatDoneDateTime(doneAt) {
   };
 }
 
-
-function getImpiantoDoneAtValue(impianto) {
-  if (!impianto) return null;
-  return impianto.doneAt || impianto.fattoAt || impianto.completedAt || impianto.dataFatto || impianto.completedDate || impianto.ultimoFattoAt || null;
-}
-
-function formatImpiantoDoneButtonDate(impianto) {
-  const millis = firestoreDateToMillis(getImpiantoDoneAtValue(impianto));
-  if (!millis) return "";
-  const date = new Date(millis);
-  return date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
-}
-
-
-function getImpiantoDoneInfoForNavigation(impianto) {
-  const doneAt = getImpiantoDoneAtValue(impianto);
-  const doneDateTime = formatDoneDateTime(doneAt);
-  const operator = String(
-    impianto?.doneBy
-    || impianto?.operatoreFatto
-    || impianto?.completedBy
-    || impianto?.operator
-    || impianto?.operatore
-    || "Operatore"
-  ).trim() || "Operatore";
-  return {
-    doneAt,
-    date: doneDateTime.date,
-    time: doneDateTime.time,
-    operator
-  };
-}
-
-function showAlreadyDoneNavigationConfirm(impianto) {
-  const doneInfo = getImpiantoDoneInfoForNavigation(impianto);
-
-  if (typeof document === "undefined" || !document.body) {
-    const fallback = window.confirm(`⚠️ Attenzione\n\nQuesto impianto è già stato eseguito.\n\nData: ${doneInfo.date}\nOra: ${doneInfo.time}\nOperatore: ${doneInfo.operator}\n\nPremi OK per navigare comunque, Annulla per non eseguire nessuna azione.`);
-    return Promise.resolve(fallback ? "navigate" : "cancel");
-  }
-
-  const overlay = document.createElement("section");
-  overlay.className = "chat-modal impianto-already-done-modal";
-  overlay.setAttribute("aria-hidden", "false");
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-labelledby", "impianto-already-done-title");
-  overlay.innerHTML = `
-    <div class="chat-modal-content impianto-already-done-card">
-      <div class="impianto-already-done-scroll">
-        <div class="impianto-already-done-heading">
-          <span class="impianto-already-done-warning-icon" aria-hidden="true">⚠️</span>
-          <span class="impianto-already-done-heading-line" aria-hidden="true"></span>
-          <h2 id="impianto-already-done-title">Attenzione</h2>
-        </div>
-        <div class="impianto-already-done-body">
-          <p class="impianto-already-done-message">Questo impianto è già stato eseguito in precedenza.</p>
-          <div class="impianto-already-done-status" role="note">
-            <strong>Stato: ESEGUITO</strong>
-            <span>Vuoi navigare comunque oppure spostarlo nell’elenco “Fatti”?</span>
-          </div>
-          <dl class="impianto-already-done-details">
-            <div class="impianto-already-done-detail-row">
-              <dt><span aria-hidden="true">📅</span><span>Data</span></dt>
-              <dd>${escapeHTML(doneInfo.date)}</dd>
-            </div>
-            <div class="impianto-already-done-detail-row">
-              <dt><span aria-hidden="true">🕒</span><span>Ora</span></dt>
-              <dd>${escapeHTML(doneInfo.time)}</dd>
-            </div>
-            <div class="impianto-already-done-detail-row">
-              <dt><span aria-hidden="true">👷</span><span>Operatore</span></dt>
-              <dd>${escapeHTML(doneInfo.operator)}</dd>
-            </div>
-          </dl>
-          <p class="impianto-already-done-question">Cosa desideri fare?</p>
-        </div>
-        <div class="impianto-already-done-actions">
-          <button type="button" class="impianto-already-done-action impianto-already-done-action-primary" data-already-done-action="navigate">
-            <span class="impianto-already-done-action-icon" aria-hidden="true">🧭</span>
-            <span class="impianto-already-done-action-text"><strong>Naviga comunque</strong><small>Apri la navigazione verso questo impianto</small></span>
-            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
-          </button>
-          <button type="button" class="impianto-already-done-action impianto-already-done-action-secondary" data-already-done-action="move">
-            <span class="impianto-already-done-action-icon" aria-hidden="true">📁</span>
-            <span class="impianto-already-done-action-text"><strong>Sposta nei “Fatti”</strong><small>Sposta questo impianto nell’elenco dei fatti</small></span>
-            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
-          </button>
-          <button type="button" class="impianto-already-done-action impianto-already-done-action-neutral" data-already-done-action="cancel">
-            <span class="impianto-already-done-action-icon" aria-hidden="true">✕</span>
-            <span class="impianto-already-done-action-text"><strong>Annulla</strong><small>Torna indietro senza fare nulla</small></span>
-            <span class="impianto-already-done-action-arrow" aria-hidden="true">›</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  return new Promise((resolve) => {
-    let didChooseAction = false;
-    const cleanup = (action) => {
-      if (didChooseAction) return;
-      didChooseAction = true;
-      overlay.querySelectorAll("[data-already-done-action]").forEach((button) => {
-        button.disabled = true;
-        button.setAttribute("aria-disabled", "true");
-      });
-      overlay.remove();
-      resolve(action);
-    };
-    overlay.querySelectorAll("[data-already-done-action]").forEach((button) => {
-      button.addEventListener("click", () => cleanup(button.dataset.alreadyDoneAction || "cancel"), { once: true });
-    });
-    overlay.querySelector("[data-already-done-action='navigate']")?.focus();
-  });
-}
-
-function moveAlreadyDoneImpiantoToDoneList(impianto) {
-  const ids = getImpiantoDocIds(impianto);
-  if (!ids.length) return;
-  const doneInfo = getImpiantoDoneInfoForNavigation(impianto);
-  updateImpiantoLocalState(ids, {
-    done: true,
-    doneAt: doneInfo.doneAt || impianto.doneAt || null,
-    doneBy: doneInfo.operator
-  });
-  if (selectedCommessaId) {
-    impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
-    heraCacheSet("impianti", selectedCommessaId, currentImpianti, { updatedAt: Date.now() });
-  }
-}
-
-function setFattoButtonCompletedState(btn, impianto) {
-  if (!(btn instanceof HTMLButtonElement)) return;
-  const dateLabel = formatImpiantoDoneButtonDate(impianto);
-  btn.classList.add("is-completed");
-  btn.textContent = dateLabel ? `✅ FATTO ${dateLabel}` : "✅ FATTO";
-  btn.setAttribute("aria-label", dateLabel ? `Fatto il ${dateLabel}` : "Fatto");
-  btn.title = dateLabel ? `Fatto il ${dateLabel}` : "Fatto";
-}
-
 function renderHeaderActivitySummary() {
   if (ui.activeUsersSummary) {
     const activeUsers = platformUsers.filter((user) => {
@@ -14709,39 +14218,19 @@ function renderImpianti() {
     secondaryActionsRow.appendChild(safetyQuickBtn);
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Questo è il pulsante operativo visibile che conserva il flusso attuale Whazzup / Fatto.
-    /* Firma storica mantenuta per il test statico:
-      "whatsapp",
+    if (!impianto.done) {
+      addAction(
+        "whatsapp",
         "✉️",
-        "Whazzup / Fatto"
-    */
-    const fattoActionBtn = createActionIconButton("✉️", "Whazzup / Fatto", async () => {
-      if (impianto.done || fattoActionBtn.classList.contains("is-saving")) return;
-      fattoActionBtn.classList.add("is-saving");
-      fattoActionBtn.disabled = true;
-      fattoActionBtn.textContent = "Salvataggio…";
-      fattoActionBtn.setAttribute("aria-label", "Salvataggio FATTO in corso");
-      try {
-        await handleImpiantoWhatsAppClick(impianto);
-      } finally {
-        const latestImpianto = currentImpianti.find((item) => buildImpiantoKey(item) === impiantoKey) || impianto;
-        fattoActionBtn.classList.remove("is-saving");
-        if (latestImpianto.done) {
-          setFattoButtonCompletedState(fattoActionBtn, latestImpianto);
-        } else {
-          fattoActionBtn.disabled = false;
-          fattoActionBtn.textContent = "✉️";
-          fattoActionBtn.setAttribute("aria-label", "Whazzup / Fatto");
-        }
-      }
-    });
-    fattoActionBtn.dataset.actionKey = "whatsapp";
-    if (impianto.done) {
-      setFattoButtonCompletedState(fattoActionBtn, impianto);
-      fattoActionBtn.disabled = true;
-    } else if (impiantoNextActionHighlightEnabled && "whatsapp" === getCurrentImpiantoNextAction()) {
-      fattoActionBtn.classList.add("next-action-target");
+        "Whazzup / Fatto",
+        async () => {
+          await handleImpiantoWhatsAppClick(impianto);
+        },
+        false,
+        false,
+        primaryActionsRow
+      );
     }
-    primaryActionsRow.appendChild(fattoActionBtn);
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Pulsante nascosto usato dal recovery/safety check per spostare nei Fatti senza cambiare il flusso WhatsApp.
     const hiddenMoveDoneBtn = document.createElement("button");
@@ -14961,69 +14450,23 @@ function formatConnectionLabel(baseState) {
     : "🟢 Online • Connessione disponibile";
 }
 
-function getLocalCacheLastUpdatedLabel() {
-  const candidates = [
-    ...Array.from(HERA_MEMORY_CACHE.keys()).filter((key) => /^(commesse|impianti|squadre|offlineQueue):/.test(key)).map(() => Date.now()),
-    Number(localStorage.getItem("heraLastStructuredCacheUpdate") || 0)
-  ].filter(Boolean);
-  const latest = candidates.length ? Math.max(...candidates) : 0;
-  return latest ? new Date(latest).toLocaleString("it-IT") : "non disponibile";
-}
-
-function getPendingOfflineOperationsCount() {
-  const offlineMutations = loadPendingOfflineMutations().filter((item) => item.status !== "synced").length;
-  const doneActions = (canManageData() ? pendingImpiantoActions : getCurrentUserPendingActions()).filter(isActionWaitingForSync).length;
-  return offlineMutations + doneActions;
-}
-
-
-function showConnectionRestoredBanner() {
-  let banner = document.getElementById("connection-restored-banner");
-  if (!banner) {
-    banner = document.createElement("div");
-    banner.id = "connection-restored-banner";
-    banner.className = "connection-restored-banner";
-    banner.setAttribute("role", "status");
-    banner.setAttribute("aria-live", "polite");
-    document.body.appendChild(banner);
-  }
-  banner.textContent = "🟢 Connessione ripristinata";
-  banner.classList.add("visible");
-  setTimeout(() => banner.classList.remove("visible"), 2600);
-}
-
 function updateConnectivityStatus() {
-  const pendingCount = getPendingOfflineOperationsCount();
-  const connectionState = heraConnectionManager.state;
+  const browserOnline = navigator.onLine;
   const baseState = firestoreNetworkState === "Connessione lenta"
     ? "Connessione lenta"
-    : (connectionState === "online" ? "Online" : (connectionState === "checking" ? "Ripristino" : "Offline"));
-  firestoreNetworkState = baseState === "Ripristino" ? "Online" : baseState;
+    : (browserOnline ? "Online" : "Offline");
+  firestoreNetworkState = baseState;
   const cacheSuffix = firestoreCacheState ? ` • ${firestoreCacheState}` : "";
 
   if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${getOperatorDisplayName()}`;
-  if (ui.connectionIndicator) {
-    if (baseState === "Offline") {
-      ui.connectionIndicator.textContent = pendingCount
-        ? `🔴 Offline • ${pendingCount} operazion${pendingCount === 1 ? "e" : "i"} da sincronizzare`
-        : `🔴 Offline • Dati aggiornati il ${getLocalCacheLastUpdatedLabel()}`;
-    } else if (baseState === "Ripristino") {
-      ui.connectionIndicator.textContent = "🟡 Connessione ripristinata • Sincronizzazione…";
-    } else if (baseState === "Connessione lenta") {
-      ui.connectionIndicator.textContent = "🟡 Connessione lenta • Uso cache locale";
-    } else {
-      ui.connectionIndicator.textContent = pendingCount ? `🟡 Online • Sincronizzazione ${pendingCount} operazioni…` : "🟢 Online • Tutto sincronizzato";
-    }
-  }
+  if (ui.connectionIndicator) ui.connectionIndicator.textContent = formatConnectionLabel(baseState);
   ui.offlineModeIndicator?.classList.toggle("hidden", baseState !== "Offline");
 
   if (!ui.gpsStatus) return;
   if (baseState === "Connessione lenta") {
     ui.gpsStatus.textContent = `Connessione lenta: sblocco la schermata e uso gli ultimi dati disponibili.${cacheSuffix}`;
-  } else if (baseState === "Online") {
+  } else if (browserOnline) {
     ui.gpsStatus.textContent = `Online: modifiche sincronizzate con il cloud (cache offline attiva).${cacheSuffix}`;
-  } else if (baseState === "Ripristino") {
-    ui.gpsStatus.textContent = "Connessione ripristinata: sincronizzazione coda offline in corso…";
   } else {
     ui.gpsStatus.textContent = `Offline: l'app continua con gli ultimi dati disponibili e sincronizza appena torna la rete.${cacheSuffix}`;
   }
@@ -18873,15 +18316,6 @@ async function navigateToImpianto(impianto) {
     return;
   }
 
-  if (isImpiantoDoneState(impianto)) {
-    const alreadyDoneAction = await showAlreadyDoneNavigationConfirm(impianto);
-    if (alreadyDoneAction === "cancel") return;
-    if (alreadyDoneAction === "move") {
-      moveAlreadyDoneImpiantoToDoneList(impianto);
-      return;
-    }
-  }
-
   const canContinueImpiantoAlerts = await confirmImpiantoNavigationAlerts(impianto);
   if (!canContinueImpiantoAlerts) return;
 
@@ -18938,124 +18372,6 @@ async function navigateToImpianto(impianto) {
   }
 }
 
-
-function buildOfflineReceiptFileName(impianto, doneAt = new Date()) {
-  const pad = (value) => String(value).padStart(2, "0");
-  const idSap = String(impianto?.idSap || "impianto").replace(/[^a-z0-9_-]+/gi, "");
-  return `VargaCantieri_${idSap}_${doneAt.getFullYear()}-${pad(doneAt.getMonth() + 1)}-${pad(doneAt.getDate())}_${pad(doneAt.getHours())}-${pad(doneAt.getMinutes())}.png`;
-}
-
-function createOfflineReceiptDataUrl(impianto, options = {}) {
-  const doneAt = options.doneAt instanceof Date ? options.doneAt : new Date();
-  const doneBy = options.doneBy || getCurrentWhatsAppOperatorName();
-  const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 1350;
-  const ctx = canvas.getContext("2d");
-  const drawRoundRect = (x, y, width, height, radius) => {
-    if (typeof ctx.roundRect === "function") return ctx.roundRect(x, y, width, height, radius);
-    const r = Math.min(radius, width / 2, height / 2);
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + width, y, x + width, y + height, r);
-    ctx.arcTo(x + width, y + height, x, y + height, r);
-    ctx.arcTo(x, y + height, x, y, r);
-    ctx.arcTo(x, y, x + width, y, r);
-    return ctx;
-  };
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#16a34a";
-  ctx.beginPath();
-  drawRoundRect(70, 70, 940, 210, 38);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 54px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("✅ IMPIANTO ESEGUITO", 110, 165);
-  ctx.font = "500 30px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Registrato offline • In attesa di sincronizzazione", 112, 225);
-  ctx.strokeStyle = "#d1fae5";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  drawRoundRect(70, 330, 940, 760, 30);
-  ctx.stroke();
-  const rows = [
-    ["Impianto", impianto?.denominazione || "-"],
-    ["ID SAP", impianto?.idSap || "-"],
-    ["Comune", impianto?.comune || "-"],
-    ["Indirizzo", impianto?.indirizzo || "-"],
-    ["Commessa", selectedCommessaName || "Commessa"],
-    ["Data", doneAt.toLocaleDateString("it-IT")],
-    ["Ora", doneAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })],
-    ["Operatore", doneBy],
-    ["Stato", "Registrato offline"]
-  ];
-  let y = 395;
-  rows.forEach(([label, value]) => {
-    ctx.fillStyle = "#64748b";
-    ctx.font = "700 25px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillText(label.toUpperCase(), 120, y);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "600 34px system-ui, -apple-system, Segoe UI, sans-serif";
-    const text = String(value || "-");
-    const clipped = text.length > 43 ? `${text.slice(0, 40)}...` : text;
-    ctx.fillText(clipped, 120, y + 42);
-    y += 82;
-  });
-  ctx.fillStyle = "#f0fdf4";
-  ctx.beginPath();
-  drawRoundRect(120, 1125, 840, 105, 28);
-  ctx.fill();
-  ctx.fillStyle = "#166534";
-  ctx.font = "700 34px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Varga Cantieri", 150, 1178);
-  ctx.font = "500 25px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Ricevuta generata automaticamente offline", 150, 1215);
-  return canvas.toDataURL("image/png");
-}
-
-async function saveOfflineReceipt(impianto, options = {}) {
-  const doneAt = options.doneAt instanceof Date ? options.doneAt : new Date();
-  const fileName = buildOfflineReceiptFileName(impianto, doneAt);
-  const dataUrl = createOfflineReceiptDataUrl(impianto, { ...options, doneAt });
-  const record = { key: options.operationId || fileName, fileName, dataUrl, createdAt: doneAt.toISOString(), impiantoKey: buildImpiantoKey(impianto), commessaId: selectedCommessaId || "" };
-  await heraCacheSet("receipts", record.key, record, { updatedAt: Date.now() });
-  try {
-    const Filesystem = window.Capacitor?.Plugins?.Filesystem;
-    if (Filesystem?.writeFile) {
-      await Filesystem.writeFile({ path: fileName, data: dataUrl.split(",")[1], directory: "DOCUMENTS", recursive: true });
-      record.storageStatus = "Salvata nella memoria privata del dispositivo";
-      return record;
-    }
-  } catch (error) {
-    record.storageStatus = "Memoria privata non disponibile: ricevuta salvata in IndexedDB";
-  }
-  record.storageStatus = record.storageStatus || "Ricevuta salvata in IndexedDB";
-  return record;
-}
-
-function downloadDataUrl(dataUrl, fileName) {
-  const link = document.createElement("a");
-  link.href = dataUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-function showOfflineDoneReceiptPopup({ impianto, doneAt, doneBy, receipt, pendingCount }) {
-  const overlay = document.createElement("div");
-  overlay.className = "offline-done-modal";
-  overlay.innerHTML = `<div class="offline-done-card" role="dialog" aria-modal="true"><h2>Impianto registrato offline</h2><p>L’impianto è stato salvato sul dispositivo e spostato nei Fatti.<br>La sincronizzazione verrà eseguita automaticamente quando tornerà Internet.</p><dl><dt>Impianto</dt><dd>${escapeHTML(impianto?.denominazione || "Impianto")}</dd><dt>Data</dt><dd>${escapeHTML(doneAt.toLocaleDateString("it-IT"))}</dd><dt>Ora</dt><dd>${escapeHTML(doneAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }))}</dd><dt>Operatore</dt><dd>${escapeHTML(doneBy)}</dd><dt>Ricevuta</dt><dd>${escapeHTML(receipt?.storageStatus || "Generata offline")}</dd><dt>Operazioni in attesa</dt><dd>${pendingCount}</dd></dl><div class="offline-done-actions"><button type="button" data-action="view" class="btn btn-primary">Visualizza ricevuta</button><button type="button" data-action="gallery" class="btn">Apri galleria</button><button type="button" data-action="close" class="btn">Chiudi</button></div></div>`;
-  overlay.addEventListener("click", (event) => {
-    const action = event.target?.dataset?.action;
-    if (!action && event.target !== overlay) return;
-    if (action === "view" && receipt?.dataUrl) window.open(receipt.dataUrl, "_blank", "noopener,noreferrer");
-    if (action === "gallery" && receipt?.dataUrl) downloadDataUrl(receipt.dataUrl, receipt.fileName || "ricevuta.png");
-    if (action === "close" || event.target === overlay) overlay.remove();
-  });
-  document.body.appendChild(overlay);
-}
-
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
 // Protegge il flusso attuale: controlli GPS/distanza, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
 async function markImpiantoDone(impianto, options = {}) {
@@ -19090,17 +18406,6 @@ async function markImpiantoDone(impianto, options = {}) {
 
   if (isNetworkOffline()) {
     const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
-    const receipt = await saveOfflineReceipt(impianto, { doneAt: doneAtLocal, doneBy: doneByLocal, operationId: pendingAction.id });
-    pendingAction.receiptFileName = receipt.fileName;
-    pendingAction.receiptStorageStatus = receipt.storageStatus;
-    pendingAction.receiptCacheKey = receipt.key;
-    pendingAction.idSap = impianto.idSap || "";
-    pendingAction.comune = impianto.comune || "";
-    pendingAction.indirizzo = impianto.indirizzo || "";
-    pendingAction.coordinate = { lat: Number(impianto.gpsY), lng: Number(impianto.gpsX) };
-    pendingAction.syncState = "pending";
-    savePendingImpiantoActions();
-    await heraCacheSet("offlineQueue", pendingAction.id, pendingAction, { updatedAt: Date.now(), type: "impiantoDone" });
     expandedImpiantoKey = buildImpiantoKey(impianto);
     updateImpiantoLocalState(ids, {
       done: true,
@@ -19111,10 +18416,7 @@ async function markImpiantoDone(impianto, options = {}) {
       pendingWhatsappStatus: "pending"
     });
     setImpiantiViewMode("done");
-    renderImpianti();
-    renderMap();
-    showOfflineDoneReceiptPopup({ impianto, doneAt: doneAtLocal, doneBy: doneByLocal, receipt, pendingCount: getPendingOfflineOperationsCount() });
-    updateConnectivityStatus();
+    alert("Sei offline: FATTO salvato localmente. WhatsApp resta in attesa e sarà disponibile quando torna internet.");
     return true;
   }
 
@@ -20034,7 +19336,6 @@ function subscribeSquadre() {
       historyForDate.set(row.commessaId, row);
     });
     squadreHistoryByDate.set(selectedDateKey, historyForDate);
-    heraCacheSet("squadre", selectedDateKey, { dateKey: selectedDateKey, rows: Array.from(historyForDate.values()) }, { updatedAt: Date.now() });
     squadreLoadState = { status: "loaded", message: "" };
     console.log("LOAD SQUADRE OK numero:", historyForDate.size);
     renderSquadre();
@@ -21066,8 +20367,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       doneAt,
       doneBy: done ? (options.doneBy || user.displayName || user.email || "Operatore") : "",
       doneByUid: done ? String(options.doneByUid || user.uid || "") : "",
-      doneByEmail: done ? String(options.doneByEmail || user.email || "") : "",
-      operationId: done ? String(options.operationId || "") : ""
+      doneByEmail: done ? String(options.doneByEmail || user.email || "") : ""
     };
     if (done) {
       payload.resetAt = null;
@@ -21228,18 +20528,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-
-  if (isNetworkOffline()) {
-    try {
-      markWhazzupSafetyPressed(impianto, doneAt);
-      upsertWhazzupPendingDoneEntry(impianto, doneAt);
-      await forceMoveImpiantoToFatti(impianto, { source: "whatsapp-offline" });
-    } finally {
-      clearImpiantoWhazzupProcessing(impianto);
-    }
-    return;
-  }
-
   const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
 
   markWhazzupSafetyPressed(impianto, doneAt);
@@ -21249,7 +20537,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   whazzupFeedback.showNow();
   await waitForNextFrame();
 
-  const whazzupProcess = (async () => {
+  void (async () => {
     const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
       .catch((error) => {
         console.error("Errore avvio audit log Whazzup:", error);
@@ -21291,7 +20579,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
       clearImpiantoWhazzupProcessing(impianto);
     }
   })();
-  return whazzupProcess;
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {
@@ -21404,7 +20691,7 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
 async function forceMoveImpiantoToFatti(impianto, options = {}) {
   const moved = await markImpiantoDone(impianto, {
     source: options.source || "whatsapp",
-    requireFirestoreConfirmation: options.source !== "whatsapp-offline"
+    requireFirestoreConfirmation: true
   });
   if (!moved) return false;
   const state = getWhazzupSafetyState(impianto);
@@ -21731,12 +21018,7 @@ async function submitImpiantoReport(event) {
   setTimeout(closeImpiantoReportModal, 200);
 }
 
-let lastKnownGeolocation = null;
-function getCurrentPositionOnce(options = {}) {
-  const maxAgeMs = Number(options.maximumAge ?? 2 * 60 * 1000);
-  if (!options.force && lastKnownGeolocation && Date.now() - lastKnownGeolocation.at <= maxAgeMs) {
-    return Promise.resolve({ lat: lastKnownGeolocation.lat, lng: lastKnownGeolocation.lng });
-  }
+function getCurrentPositionOnce() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("Geolocalizzazione non supportata."));
@@ -21744,16 +21026,13 @@ function getCurrentPositionOnce(options = {}) {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        lastKnownGeolocation = {
+        resolve({
           lat: Number(pos.coords.latitude),
-          lng: Number(pos.coords.longitude),
-          at: Date.now()
-        };
-        heraCacheSet("kv", "lastKnownGeolocation", lastKnownGeolocation, { updatedAt: Date.now() });
-        resolve({ lat: lastKnownGeolocation.lat, lng: lastKnownGeolocation.lng });
+          lng: Number(pos.coords.longitude)
+        });
       },
       (error) => reject(error),
-      { enableHighAccuracy: Boolean(options.enableHighAccuracy), timeout: Number(options.timeout || 10000), maximumAge: maxAgeMs }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   });
 }

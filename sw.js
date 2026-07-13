@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v12";
+const CACHE_NAME = "hera-app-shell-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,14 +6,12 @@ const APP_SHELL = [
   "./app.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
-  "./offline.html",
   "./icons/hera-icon.svg"
 ];
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const OPAQUE_CACHE_WHITELIST = new Set([]);
-const NETWORK_DOCUMENT_TIMEOUT_MS = 3500;
-const MAX_DYNAMIC_CACHE_ENTRIES = 80;
+const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 
 const isDynamicEndpoint = (url) => {
   const dynamicPathPatterns = [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/];
@@ -35,7 +33,6 @@ const shouldHandleRequest = (request, url) => {
 };
 
 const canCacheResponse = (request, response, url) => {
-  if (/tile.openstreetmap.org|tilecache.rainviewer.com|googleapis.com|gstatic.com/.test(url.hostname)) return false;
   if (response.type === "opaque") {
     return OPAQUE_CACHE_WHITELIST.has(url.origin);
   }
@@ -46,13 +43,6 @@ const canCacheResponse = (request, response, url) => {
   return CACHEABLE_DESTINATIONS.has(request.destination);
 };
 
-const trimCache = async () => {
-  const cache = await caches.open(CACHE_NAME);
-  const keys = await cache.keys();
-  if (keys.length <= MAX_DYNAMIC_CACHE_ENTRIES) return;
-  await Promise.all(keys.slice(0, keys.length - MAX_DYNAMIC_CACHE_ENTRIES).map((key) => cache.delete(key)));
-};
-
 const networkFirstForDocument = async (request) => {
   try {
     const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
@@ -60,13 +50,12 @@ const networkFirstForDocument = async (request) => {
     if (canCacheResponse(request, response, requestUrl)) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response.clone());
-      await trimCache();
     }
     return response;
   } catch (error) {
     const cached = await caches.match(request);
     if (cached) return cached;
-    return caches.match("./index.html").then((cachedIndex) => cachedIndex || caches.match("./offline.html"));
+    return caches.match("./index.html");
   }
 };
 
@@ -88,7 +77,6 @@ const staleWhileRevalidateForAsset = async (event) => {
       if (canCacheResponse(request, response, requestUrl)) {
         const cache = await caches.open(CACHE_NAME);
         await cache.put(request, response.clone());
-        await trimCache();
       }
       return response;
     })
@@ -106,7 +94,7 @@ const staleWhileRevalidateForAsset = async (event) => {
     return caches.match("./icons/hera-icon.svg");
   }
 
-  return caches.match("./index.html").then((cachedIndex) => cachedIndex || caches.match("./offline.html"));
+  return caches.match("./index.html");
 };
 
 self.addEventListener("install", (event) => {

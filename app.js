@@ -14020,7 +14020,7 @@ function renderImpianti() {
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
     const showWhazzupRecovery = hasFailedFattoAttemptForImpianto(impianto);
     const forceDoneDistanceAllowed = isForceImpiantoDoneDistanceAllowed(impianto);
-    const forceDoneEnabled = showWhazzupRecovery && forceDoneDistanceAllowed;
+    const forceDoneEnabled = forceDoneDistanceAllowed;
     const waitingForSync = isActionWaitingForSync(pendingAction);
     article.dataset.impiantoKey = impiantoKey;
     article.classList.toggle("is-expanded", detailsVisible);
@@ -14187,9 +14187,9 @@ function renderImpianti() {
       forceDoneBtn.className = "impianto-force-done-btn";
       forceDoneBtn.textContent = "⚡ FORZA";
       forceDoneBtn.setAttribute("aria-label", "Forza chiusura impianto come fatto");
-      forceDoneBtn.title = !showWhazzupRecovery
-        ? FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE
-        : (forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+      forceDoneBtn.title = forceDoneDistanceAllowed
+        ? "Sposta subito questo impianto nei FATTI"
+        : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
       forceDoneBtn.disabled = !forceDoneEnabled;
       forceDoneBtn.classList.toggle("is-enabled", forceDoneEnabled);
       forceDoneBtn.addEventListener("click", async (event) => {
@@ -14260,9 +14260,9 @@ function renderImpianti() {
       });
       forceMoveDoneBtn.classList.add("btn-primary");
       forceMoveDoneBtn.disabled = !forceDoneEnabled;
-      forceMoveDoneBtn.title = !showWhazzupRecovery
-        ? FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE
-        : (forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+      forceMoveDoneBtn.title = forceDoneDistanceAllowed
+        ? "Sposta subito questo impianto nei FATTI"
+        : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
       managementActions.appendChild(forceMoveDoneBtn);
     }
     if (canManageData()) {
@@ -20402,10 +20402,7 @@ function isForceImpiantoDoneDistanceAllowed(impianto) {
 
 function canUseForceImpiantoDone(impianto, options = {}) {
   const notify = options.notify !== false;
-  if (!hasFailedFattoAttemptForImpianto(impianto)) {
-    if (notify) alert(FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE);
-    return false;
-  }
+  if (canManageData()) return true;
   if (isForceImpiantoDoneDistanceAllowed(impianto)) return true;
   if (notify) alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
   return false;

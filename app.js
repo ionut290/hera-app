@@ -20503,6 +20503,12 @@ function createDelayedWhazzupPreparingFeedback(message = "Attendere, sto creando
       clearTimeout(timerId);
       if (!shown) return;
       setTimeout(() => setWhazzupPreparingFeedback(false), minVisibleMs);
+    },
+    hideNow() {
+      clearTimeout(timerId);
+      if (!shown) return;
+      setWhazzupPreparingFeedback(false);
+      shown = false;
     }
   };
 }
@@ -20553,7 +20559,8 @@ async function handleImpiantoWhatsAppClick(impianto) {
         return;
       }
 
-      whazzupFeedback.hide(700);
+      whazzupFeedback.hideNow();
+      await waitForNextFrame();
       const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
       if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 

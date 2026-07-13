@@ -20546,6 +20546,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
     doneAt,
     operatorName: doneBy
   });
+  markImpiantoDoneVisualFallback(impianto);
   if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {

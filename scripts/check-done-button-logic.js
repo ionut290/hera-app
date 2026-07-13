@@ -61,6 +61,15 @@ else {
   requireIncludes(markDone, 'publishGlobalNotificationEvent("impianto-done"', 'Fatto conserva notifica globale impianto-done');
 }
 
+const forceDone = extractFunction('canUseForceImpiantoDone');
+if (!forceDone) fail('funzione canUseForceImpiantoDone presente');
+else {
+  pass('funzione canUseForceImpiantoDone presente');
+  requireIncludes(forceDone, 'if (canManageData()) return true;', 'FORZA consente sempre l’uso agli admin');
+  if (forceDone.includes('hasFailedFattoAttemptForImpianto')) fail('FORZA non deve richiedere un precedente errore FATTO');
+  else pass('FORZA non richiede un precedente errore FATTO');
+}
+
 const setDone = extractFunction('setImpiantoDone');
 if (!setDone) fail('funzione setImpiantoDone presente');
 else {
@@ -78,6 +87,8 @@ const renderArea = source.slice(renderStart >= 0 ? renderStart : source.indexOf(
 requireIncludes(renderArea, '"whatsapp",\n        "✉️",\n        "Whazzup / Fatto"', 'render impianto conserva il pulsante operativo Whazzup / Fatto');
 requireIncludes(renderArea, 'await handleImpiantoWhatsAppClick(impianto);', 'pulsante Whazzup / Fatto conserva handler WhatsApp esistente');
 requireIncludes(renderArea, 'hiddenMoveDoneBtn.dataset.hiddenMoveDoneBtn = "1"', 'render impianto conserva pulsante nascosto di spostamento in Fatti');
+requireIncludes(source, 'const forceDoneEnabled = forceDoneDistanceAllowed', 'FORZA resta attivo senza richiedere un precedente errore FATTO');
+requireIncludes(renderArea, 'Sposta subito questo impianto nei FATTI', 'FORZA mostra che sposta subito nei FATTI');
 requireIncludes(renderArea, 'await markImpiantoDone(impianto, { source: "whatsapp" });', 'pulsante nascosto continua a chiamare markImpiantoDone con source whatsapp');
 
 if (process.exitCode) process.exit(process.exitCode);

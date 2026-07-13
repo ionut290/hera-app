@@ -20513,9 +20513,6 @@ function createDelayedWhazzupPreparingFeedback(message = "Attendere, sto creando
   };
 }
 
-function waitForNextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
 
 function triggerHiddenMoveDoneButton(impianto) {
   const impiantoKey = buildImpiantoKey(impianto);
@@ -20541,10 +20538,26 @@ async function handleImpiantoWhatsAppClick(impianto) {
   updateConnectivityStatus();
 
   whazzupFeedback.showNow();
-  await waitForNextFrame();
+
+  // iOS/Safari consente di aprire schemi esterni (whatsapp://) solo se la
+  // navigazione parte direttamente dal tap dell'utente. Se aspettiamo prima il
+  // salvataggio Firebase/FATTO, il gesto utente scade e l'app resta ferma sul
+  // popup "Preparo Whazzup..." senza aprire WhatsApp. Prepariamo quindi il
+  // testo e apriamo WhatsApp subito; il passaggio a FATTO continua in background.
+  whazzupFeedback.hideNow();
+  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, {
+    doneAt,
+    operatorName: doneBy
+  });
+  if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {
-    const auditLogId = await auditLogWhazzupClick(impianto, { clickedAt: doneAt, fattoEsito: "pending", fattoConfermato: false })
+    const auditLogId = await auditLogWhazzupClick(impianto, {
+      clickedAt: doneAt,
+      whatsappOpened: Boolean(opened),
+      fattoEsito: "pending",
+      fattoConfermato: false
+    })
       .catch((error) => {
         console.error("Errore avvio audit log Whazzup:", error);
         return null;
@@ -20558,11 +20571,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
         await verifyImpiantoDoneBackground(impianto);
         return;
       }
-
-      whazzupFeedback.hideNow();
-      await waitForNextFrame();
-      const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, { doneAt, operatorName: doneBy });
-      if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
       const persisted = await verifyImpiantoDoneBackground(impianto);
       await updateAuditLogWhazzupClick(auditLogId, {

@@ -10798,3 +10798,62 @@ body.worklimate-page-open {
 .contabilita-card h4 { margin: 0; }
 .contabilita-status-row { display: grid; gap: 0.25rem; }
 .contabilita-status-row code { white-space: normal; overflow-wrap: anywhere; }
+
+.contabilita-section-actions {
+  margin-top: 1rem;
+}
+
+.contabilita-file-meta {
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: .8rem;
+}
+
+.contabilita-file-meta p {
+  margin: 0;
+  padding: .65rem;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.contabilita-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  align-items: center;
+}
+
+.contabilita-btn-update {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.contabilita-btn-download {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+}
+
+.contabilita-btn-delete {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+
+.contabilita-atex-row .item-actions {
+  margin-top: .5rem;
+}
+
+@media (max-width: 700px) {
+  .contabilita-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contabilita-action-row .btn,
+  .contabilita-atex-row .item-actions .btn {
+    width: 100%;
+  }
+}

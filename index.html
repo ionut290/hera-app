@@ -694,18 +694,18 @@
             <input id="contabilita-foglio-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods">
             <input id="contabilita-foglio-url" type="url" placeholder="URL Google Fogli (opzionale)">
             <button id="contabilita-save-foglio-btn" class="btn btn-primary" type="button">Salva Foglio Contabile</button>
+            <div id="contabilita-foglio-actions" class="contabilita-section-actions hidden" aria-live="polite"></div>
           </article>
           <article class="contabilita-card">
             <h4>Verbali ATEX</h4>
             <p class="muted">Ogni modello viene analizzato per DATA, ORA e OPERATORE, senza usare coordinate fisse.</p>
             <input id="contabilita-atex-file" type="file" multiple accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods">
             <button id="contabilita-save-atex-btn" class="btn btn-primary" type="button">Aggiungi Verbali ATEX</button>
+            <div id="contabilita-atex-actions" class="contabilita-section-actions hidden" aria-live="polite"></div>
           </article>
         </div>
         <div class="item-actions">
           <button id="contabilita-refresh-btn" class="btn" type="button">Aggiorna stato</button>
-          <button id="contabilita-download-btn" class="btn" type="button">Scarica ultima versione</button>
-          <button id="contabilita-delete-btn" class="btn btn-danger" type="button">Elimina modelli commessa</button>
         </div>
         <div id="contabilita-status" class="simple-list"></div>
         <h4>Impianti non trovati / già compilati</h4>

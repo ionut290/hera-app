@@ -682,7 +682,6 @@ const ui = {
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
   openPanelNotifiche: document.getElementById("open-panel-notifiche"),
   openPanelProgrammazione: document.getElementById("open-panel-programmazione"),
-  openPanelContabilita: document.getElementById("open-panel-contabilita"),
   openPanelBannerGestione: document.getElementById("open-panel-banner-gestione"),
   openPrivateDocsBtn: document.getElementById("open-private-docs-btn"),
   openPrivateDocsUploadBtn: document.getElementById("open-private-docs-upload-btn"),
@@ -706,18 +705,6 @@ const ui = {
   panelInfoUtili: document.getElementById("panel-info-utili"),
   panelNotifiche: document.getElementById("panel-notifiche"),
   panelProgrammazione: document.getElementById("panel-programmazione"),
-  panelContabilita: document.getElementById("panel-contabilita"),
-  contabilitaCommessaSelect: document.getElementById("contabilita-commessa-select"),
-  contabilitaFoglioFile: document.getElementById("contabilita-foglio-file"),
-  contabilitaFoglioUrl: document.getElementById("contabilita-foglio-url"),
-  contabilitaSaveFoglioBtn: document.getElementById("contabilita-save-foglio-btn"),
-  contabilitaAtexFile: document.getElementById("contabilita-atex-file"),
-  contabilitaSaveAtexBtn: document.getElementById("contabilita-save-atex-btn"),
-  contabilitaRefreshBtn: document.getElementById("contabilita-refresh-btn"),
-  contabilitaDownloadBtn: document.getElementById("contabilita-download-btn"),
-  contabilitaDeleteBtn: document.getElementById("contabilita-delete-btn"),
-  contabilitaStatus: document.getElementById("contabilita-status"),
-  contabilitaUnmatchedList: document.getElementById("contabilita-unmatched-list"),
   programmazioneAddBtn: document.getElementById("programmazione-add-btn"),
   programmazioneFilter: document.getElementById("programmazione-filter"),
   programmazioneList: document.getElementById("programmazione-list"),
@@ -1923,13 +1910,6 @@ ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"
 ui.openPanelInfoUtili?.addEventListener("click", () => openManagementPanel("infoUtili"));
 ui.openPanelNotifiche?.addEventListener("click", () => openManagementPanel("notifiche"));
 ui.openPanelProgrammazione?.addEventListener("click", () => openManagementPanel("programmazione"));
-ui.openPanelContabilita?.addEventListener("click", () => openManagementPanel("contabilita"));
-ui.contabilitaCommessaSelect?.addEventListener("change", renderContabilitaPanel);
-ui.contabilitaRefreshBtn?.addEventListener("click", renderContabilitaPanel);
-ui.contabilitaSaveFoglioBtn?.addEventListener("click", saveContabilitaFoglio);
-ui.contabilitaSaveAtexBtn?.addEventListener("click", saveContabilitaAtex);
-ui.contabilitaDeleteBtn?.addEventListener("click", deleteContabilitaModels);
-ui.contabilitaDownloadBtn?.addEventListener("click", downloadContabilitaLatestVersion);
 ui.programmazioneAddBtn?.addEventListener("click", () => {
   if (!canManageData()) return;
   ui.programmaId.value = "";
@@ -3369,7 +3349,7 @@ function updateAdminControls() {
   ui.posAdminCard?.classList.toggle("hidden", !canManage);
   if (ui.posAddToggleBtn) ui.posAddToggleBtn.disabled = !canManage;
   ui.posDocumentForm?.querySelectorAll("input, textarea, select, button").forEach((el) => { el.disabled = !canManage; });
-  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche, ui.openPanelProgrammazione, ui.openPanelContabilita]
+  [ui.openPanelCommesse, ui.openPanelSquadre, ui.openPanelPersonale, ui.openPanelMezzi, ui.openPanelUtenti, ui.openPanelGlobal, ui.openPanelBanner, ui.openPanelBannerGestione, ui.openPanelInfoUtili, ui.openPanelNotifiche, ui.openPanelProgrammazione]
     .forEach((button) => button.classList.toggle("hidden", !canManage));
   ui.programmazioneAddBtn?.classList.toggle("hidden", !canManage);
   ui.openPanelBanner?.classList.toggle("hidden", !auth.currentUser);
@@ -3506,12 +3486,11 @@ function openManagementPanel(panel) {
     banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
     notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" },
-    programmazione: { el: ui.panelProgrammazione, title: "📅 Programmazione" },
-    contabilita: { el: ui.panelContabilita, title: "📊 CONTABILITÀ" }
+    programmazione: { el: ui.panelProgrammazione, title: "📅 Programmazione" }
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione, ui.panelContabilita].forEach((el) => el?.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -3519,7 +3498,6 @@ function openManagementPanel(panel) {
   if (panel === "squadre") setDefaultSquadraCompositionDate({ force: true });
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   if (panel === "notifiche") closeNotificationCalendarView();
-  if (panel === "contabilita") { refreshContabilitaCommessaSelect(); renderContabilitaPanel(); }
   closeSideMenu();
 }
 
@@ -8878,7 +8856,6 @@ async function queueSheetExportForAdmin(payload) {
     commessaId: payload.commessaId || "",
     commessaName: payload.commessaName || "",
     impianto: payload.impianto || {},
-    accountingExecutionId: payload.accountingExecutionId || ""
   });
 }
 
@@ -12405,19 +12382,7 @@ async function syncPendingImpiantoActions() {
         commessaName: action.commessaName || "Commessa",
         impianto: buildPendingActionImpianto(action)
       };
-      try {
-        await updateContabilitaAfterFatto({
-          commessaId: action.commessaId,
-          commessaName: action.commessaName || "Commessa",
-          impianto: buildPendingActionImpianto(action),
-          doneAt: doneAtDate,
-          doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore",
-          executionId: action.id
-        });
-      } catch (error) {
-        console.warn("Aggiornamento Contabilità non completato durante sync FATTO offline.", error);
-      }
-      if (!canManageData()) await queueSheetExportForAdmin({ ...exportPayload, accountingExecutionId: action.id });
+      if (!canManageData()) await queueSheetExportForAdmin(exportPayload);
       else scheduleCommessaSheetSync(action.commessaId, action.commessaName || "Commessa", 200);
       await publishGlobalNotificationEvent("impianto-done", {
         title: "Impianto completato",
@@ -18408,264 +18373,6 @@ async function navigateToImpianto(impianto) {
 }
 
 
-const CONTABILITA_COLLECTION = "contabilita";
-
-function getContabilitaCommessaId() {
-  return String(ui.contabilitaCommessaSelect?.value || selectedCommessaId || "").trim();
-}
-
-function refreshContabilitaCommessaSelect() {
-  if (!ui.contabilitaCommessaSelect) return;
-  const current = getContabilitaCommessaId();
-  const options = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()))
-    .map((commessa) => `<option value="${escapeHTML(commessa.id)}">${escapeHTML(commessa.nome || commessa.name || commessa.id)}</option>`)
-    .join("");
-  ui.contabilitaCommessaSelect.innerHTML = `<option value="">Seleziona commessa</option>${options}`;
-  if (current && commesseById.has(current)) ui.contabilitaCommessaSelect.value = current;
-}
-
-function normalizeAccountingText(value) {
-  return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function accountingCellValue(sheet, address) {
-  const cell = sheet?.[address];
-  return cell ? String(cell.w ?? cell.v ?? "").trim() : "";
-}
-
-function findAccountingColumns(sheet) {
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:Z60");
-  const aliases = {
-    sap: ["id sap", "sap", "codice sap"],
-    denominazione: ["denominazione impianto", "denominazione", "impianto", "nome impianto"],
-    comune: ["comune", "municipio"],
-    data: ["data"],
-    ora: ["ora", "orario"]
-  };
-  let best = { score: 0, row: range.s.r, columns: {} };
-  for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 80); r += 1) {
-    const columns = {};
-    for (let c = range.s.c; c <= range.e.c; c += 1) {
-      const text = normalizeAccountingText(accountingCellValue(sheet, XLSX.utils.encode_cell({ r, c })));
-      Object.entries(aliases).forEach(([key, names]) => {
-        if (columns[key] == null && names.some((name) => text === name || text.includes(name))) columns[key] = c;
-      });
-    }
-    const score = ["sap", "denominazione", "comune", "data", "ora"].filter((key) => columns[key] != null).length;
-    if (score > best.score) best = { score, row: r, columns };
-  }
-  return best;
-}
-
-function findAtexFields(sheet) {
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:Z80");
-  const fields = {};
-  for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 100); r += 1) {
-    for (let c = range.s.c; c <= range.e.c; c += 1) {
-      const label = normalizeAccountingText(accountingCellValue(sheet, XLSX.utils.encode_cell({ r, c })));
-      const key = label === "data" ? "data" : label === "ora" || label === "orario" ? "ora" : label === "operatore" ? "operatore" : "";
-      if (key && !fields[key]) fields[key] = XLSX.utils.encode_cell({ r, c: c + 1 <= range.e.c ? c + 1 : c });
-    }
-  }
-  return fields;
-}
-
-async function fileToArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error("File non leggibile"));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("File non leggibile"));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function analyzeContabilitaWorkbookFromFile(file, type) {
-  const buffer = await fileToArrayBuffer(file);
-  const workbook = XLSX.read(buffer, { type: "array", cellStyles: true, cellDates: true });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  return type === "atex" ? { sheetName, fields: findAtexFields(sheet) } : { sheetName, ...findAccountingColumns(sheet) };
-}
-
-async function getContabilitaDoc(commessaId) {
-  if (!db || !commessaId) return null;
-  const snap = await db.collection(CONTABILITA_COLLECTION).doc(commessaId).get();
-  return snap.exists ? { id: snap.id, ...(snap.data() || {}) } : null;
-}
-
-async function saveContabilitaFoglio() {
-  if (!canManageData()) return;
-  const commessaId = getContabilitaCommessaId();
-  const file = ui.contabilitaFoglioFile?.files?.[0] || null;
-  const googleSheetUrl = String(ui.contabilitaFoglioUrl?.value || "").trim();
-  if (!commessaId || (!file && !googleSheetUrl)) return alert("Seleziona commessa e file o URL Google Fogli.");
-  const analysis = file ? await analyzeContabilitaWorkbookFromFile(file, "foglio") : { googleSheet: true, columns: {}, score: 0 };
-  const originalBase64 = file ? await fileToBase64(file) : "";
-  await db.collection(CONTABILITA_COLLECTION).doc(commessaId).set({
-    commessaId,
-    commessaName: commesseById.get(commessaId)?.nome || "Commessa",
-    foglio: { originalName: file?.name || "Google Fogli", googleSheetUrl, originalBase64, analysis, versions: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: currentUser?.displayName || currentUser?.email || "Admin" },
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-  await renderContabilitaPanel();
-}
-
-async function saveContabilitaAtex() {
-  if (!canManageData()) return;
-  const commessaId = getContabilitaCommessaId();
-  const files = Array.from(ui.contabilitaAtexFile?.files || []);
-  if (!commessaId || !files.length) return alert("Seleziona commessa e almeno un verbale ATEX.");
-  const existing = await getContabilitaDoc(commessaId);
-  const verbali = Array.isArray(existing?.atex) ? existing.atex : [];
-  for (const file of files) {
-    verbali.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, originalName: file.name, originalBase64: await fileToBase64(file), analysis: await analyzeContabilitaWorkbookFromFile(file, "atex"), versions: [], updatedAt: new Date().toISOString(), updatedBy: currentUser?.displayName || currentUser?.email || "Admin" });
-  }
-  await db.collection(CONTABILITA_COLLECTION).doc(commessaId).set({ commessaId, commessaName: commesseById.get(commessaId)?.nome || "Commessa", atex: verbali, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  await renderContabilitaPanel();
-}
-
-function buildContabilitaAnalysisSummary(doc) {
-  const foglio = doc?.foglio;
-  const cols = foglio?.analysis?.columns || {};
-  const atex = Array.isArray(doc?.atex) ? doc.atex : [];
-  return [`Foglio: ${foglio?.originalName || "non allegato"} — colonne rilevate: ID SAP ${cols.sap != null ? "✓" : "-"}, Denominazione ${cols.denominazione != null ? "✓" : "-"}, Comune ${cols.comune != null ? "✓" : "-"}, DATA ${cols.data != null ? "✓" : "-"}, ORA ${cols.ora != null ? "✓" : "-"}.`, `Verbali ATEX: ${atex.length}.`];
-}
-
-async function renderContabilitaPanel() {
-  if (!ui.contabilitaStatus) return;
-  const commessaId = getContabilitaCommessaId();
-  if (!commessaId) { ui.contabilitaStatus.innerHTML = "<p class='muted'>Seleziona una commessa.</p>"; return; }
-  const doc = await getContabilitaDoc(commessaId);
-  ui.contabilitaStatus.innerHTML = buildContabilitaAnalysisSummary(doc).map((row) => `<article class="simple-list-item contabilita-status-row"><p>${escapeHTML(row)}</p></article>`).join("");
-  const issues = Array.isArray(doc?.issues) ? doc.issues.slice(-20).reverse() : [];
-  ui.contabilitaUnmatchedList.innerHTML = issues.map((i) => `<article class="simple-list-item"><strong>${escapeHTML(i.status || "Da verificare")}</strong><p>${escapeHTML(i.impiantoName || "Impianto")} • ${escapeHTML(i.reason || "")}</p><small>${escapeHTML(i.createdAt || "")}</small></article>`).join("") || "<p class='muted'>Nessuna anomalia registrata.</p>";
-}
-
-async function deleteContabilitaModels() {
-  if (!canManageData()) return;
-  const commessaId = getContabilitaCommessaId();
-  if (!commessaId || !window.confirm("Eliminare i modelli Contabilità solo per questa commessa?")) return;
-  await db.collection(CONTABILITA_COLLECTION).doc(commessaId).delete();
-  await renderContabilitaPanel();
-}
-
-function downloadDataUrl(dataUrl, filename) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-async function downloadContabilitaLatestVersion() {
-  const doc = await getContabilitaDoc(getContabilitaCommessaId());
-  const latest = doc?.foglio?.versions?.slice?.(-1)?.[0]?.base64 || doc?.foglio?.originalBase64;
-  if (!latest) return alert("Nessun file scaricabile per questa commessa.");
-  downloadDataUrl(latest, `contabilita-${doc.commessaName || doc.id}.xlsx`);
-}
-
-function findAccountingRow(sheet, analysis, impianto) {
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:Z1000");
-  const cols = analysis?.columns || {};
-  const wantedSap = normalizeAccountingText(impianto.idSap || impianto.sap || impianto.codiceSap || impianto.extraFields?.["ID SAP"] || "");
-  const wantedName = normalizeAccountingText(impianto.denominazione || impianto.nome || "");
-  const wantedComune = normalizeAccountingText(impianto.comune || "");
-  const rows = [];
-  for (let r = (analysis?.row ?? range.s.r) + 1; r <= range.e.r; r += 1) {
-    const sap = cols.sap != null ? normalizeAccountingText(accountingCellValue(sheet, XLSX.utils.encode_cell({ r, c: cols.sap }))) : "";
-    const name = cols.denominazione != null ? normalizeAccountingText(accountingCellValue(sheet, XLSX.utils.encode_cell({ r, c: cols.denominazione }))) : "";
-    const comune = cols.comune != null ? normalizeAccountingText(accountingCellValue(sheet, XLSX.utils.encode_cell({ r, c: cols.comune }))) : "";
-    rows.push({ r, sap, name, comune });
-  }
-  const matchers = [
-    (row) => wantedSap && wantedName && row.sap === wantedSap && row.name === wantedName,
-    (row) => wantedSap && row.sap === wantedSap,
-    (row) => wantedName && wantedComune && row.name === wantedName && row.comune === wantedComune,
-    (row) => wantedName && row.name === wantedName
-  ];
-  for (let i = 0; i < matchers.length; i += 1) {
-    const matches = rows.filter(matchers[i]);
-    if (matches.length === 1) return { row: matches[0].r, strategy: i + 1 };
-    if (matches.length > 1) return { row: null, reason: "Corrispondenza multipla" };
-  }
-  return { row: null, reason: "Impianto non trovato" };
-}
-
-async function updateContabilitaAfterFatto({ commessaId, commessaName, impianto, doneAt, doneBy, executionId }) {
-  if (!db || !commessaId || !impianto) return;
-  const ref = db.collection(CONTABILITA_COLLECTION).doc(commessaId);
-  const execRef = ref.collection("executions").doc(executionId);
-  const execSnap = await execRef.get();
-  if (execSnap.exists) return;
-  await execRef.set({ executionId, commessaId, impiantoKey: buildImpiantoKey(impianto), createdAt: firebase.firestore.FieldValue.serverTimestamp(), doneBy });
-  const doc = await getContabilitaDoc(commessaId);
-  if (!doc?.foglio?.originalBase64 && !Array.isArray(doc?.atex)) return;
-  const dateText = doneAt.toLocaleDateString("it-IT");
-  const timeText = doneAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  const patch = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-  const issues = Array.isArray(doc.issues) ? doc.issues : [];
-  try {
-    if (doc.foglio?.originalBase64) {
-      const source = doc.foglio.versions?.slice?.(-1)?.[0]?.base64 || doc.foglio.originalBase64;
-      const base64 = source.split(",")[1] || source;
-      const wb = XLSX.read(base64, { type: "base64", cellStyles: true, cellDates: true });
-      const sheet = wb.Sheets[doc.foglio.analysis.sheetName || wb.SheetNames[0]];
-      const found = findAccountingRow(sheet, doc.foglio.analysis, impianto);
-      const cols = doc.foglio.analysis.columns || {};
-      if (found.row == null) throw new Error(found.reason || "Riga non certa");
-      const dataAddr = XLSX.utils.encode_cell({ r: found.row, c: cols.data });
-      const oraAddr = XLSX.utils.encode_cell({ r: found.row, c: cols.ora });
-      if (accountingCellValue(sheet, dataAddr) || accountingCellValue(sheet, oraAddr)) throw new Error("Impianto già compilato");
-      sheet[dataAddr] = { ...(sheet[dataAddr] || {}), t: "s", v: dateText, w: dateText };
-      sheet[oraAddr] = { ...(sheet[oraAddr] || {}), t: "s", v: timeText, w: timeText };
-      const out = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
-      const versions = Array.isArray(doc.foglio.versions) ? doc.foglio.versions.slice(-20) : [];
-      versions.push({ base64: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${out}`, createdAt: new Date().toISOString(), operator: doneBy, executionId });
-      patch.foglio = { ...doc.foglio, versions, lastUpdatedAt: new Date().toISOString(), lastUpdatedBy: doneBy };
-    }
-  } catch (error) {
-    issues.push({ status: String(error.message || error).includes("già") ? "Già compilato" : "Impianti non trovati", reason: String(error.message || error), impiantoName: impianto.denominazione || "Impianto", executionId, createdAt: new Date().toISOString() });
-  }
-  const updatedAtex = [];
-  for (const verbale of Array.isArray(doc.atex) ? doc.atex : []) {
-    if (!verbale?.originalBase64) {
-      updatedAtex.push(verbale);
-      continue;
-    }
-    try {
-      const source = verbale.versions?.slice?.(-1)?.[0]?.base64 || verbale.originalBase64;
-      const base64 = source.split(",")[1] || source;
-      const wb = XLSX.read(base64, { type: "base64", cellStyles: true, cellDates: true });
-      const sheet = wb.Sheets[verbale.analysis?.sheetName || wb.SheetNames[0]];
-      const fields = verbale.analysis?.fields || {};
-      [[fields.data, dateText], [fields.ora, timeText], [fields.operatore, doneBy]].forEach(([address, value]) => {
-        if (!address) return;
-        sheet[address] = { ...(sheet[address] || {}), t: "s", v: value, w: value };
-      });
-      const out = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
-      const versions = Array.isArray(verbale.versions) ? verbale.versions.slice(-20) : [];
-      versions.push({ base64: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${out}`, createdAt: new Date().toISOString(), operator: doneBy, executionId });
-      updatedAtex.push({ ...verbale, versions, lastUpdatedAt: new Date().toISOString(), lastUpdatedBy: doneBy });
-    } catch (error) {
-      issues.push({ status: "Verbale ATEX non aggiornato", reason: String(error.message || error), impiantoName: impianto.denominazione || "Impianto", executionId, createdAt: new Date().toISOString() });
-      updatedAtex.push(verbale);
-    }
-  }
-  if (updatedAtex.length) patch.atex = updatedAtex;
-  patch.issues = issues.slice(-200);
-  await ref.set(patch, { merge: true });
-}
-
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
 // Protegge il flusso attuale: controlli GPS/distanza, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
 async function markImpiantoDone(impianto, options = {}) {
@@ -18762,22 +18469,10 @@ async function markImpiantoDone(impianto, options = {}) {
     setImpiantiViewMode("done");
   }
 
-  try {
-    await updateContabilitaAfterFatto({
-      commessaId: selectedCommessaId,
-      commessaName: selectedCommessaName || "Commessa",
-      impianto,
-      doneAt: doneAtLocal,
-      doneBy: doneByLocal,
-      executionId: `${selectedCommessaId}:${buildImpiantoKey(impianto) || ids[0]}:${doneAtLocal.getTime()}`
-    });
-  } catch (error) {
-    console.warn("Aggiornamento Contabilità non completato dopo FATTO; la logica FATTO resta confermata.", error);
-  }
 
   if (!canManageData()) {
     try {
-      await queueSheetExportForAdmin({ ...exportPayload, accountingExecutionId: `${selectedCommessaId}:${buildImpiantoKey(impianto) || ids[0]}:${doneAtLocal.getTime()}` });
+      await queueSheetExportForAdmin(exportPayload);
     } catch (error) {
       console.error("Impianto FATTO ma coda admin non salvata:", error);
     }
@@ -18879,18 +18574,6 @@ async function processAdminSheetExportQueue() {
       const data = doc.data() || {};
       try {
         await syncCommessaDoneImpiantiToDriveSheet(data.commessaId || "", data.commessaName || "Commessa");
-        try {
-          await updateContabilitaAfterFatto({
-            commessaId: data.commessaId || "",
-            commessaName: data.commessaName || "Commessa",
-            impianto: data.impianto || {},
-            doneAt: firestoreDateToDate(data.impianto?.doneAt) || new Date(),
-            doneBy: data.impianto?.doneBy || data.createdBy || "Operatore",
-            executionId: data.accountingExecutionId || doc.id
-          });
-        } catch (accountingError) {
-          console.warn("Aggiornamento Contabilità da coda admin non completato.", accountingError);
-        }
         await doc.ref.set({
           status: "done",
           doneAt: firebase.firestore.FieldValue.serverTimestamp(),

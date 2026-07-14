@@ -50,7 +50,6 @@
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
       <button id="open-panel-notifiche" class="btn menu-title-btn" type="button">Gestione notifiche</button>
       <button id="open-panel-programmazione" class="btn menu-title-btn" type="button">📅 Programmazione</button>
-      <button id="open-panel-contabilita" class="btn menu-title-btn" type="button">📊 CONTABILITÀ</button>
       <button id="open-panel-banner-gestione" class="btn menu-title-btn" type="button">Gestione banner</button>
       <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti personali</button>
       <button id="open-private-docs-upload-btn" class="btn menu-title-btn" type="button">Carica documenti personali</button>
@@ -675,43 +674,6 @@
       </section>
     </div>
 
-    <div id="panel-contabilita" class="management-panel hidden">
-      <section class="contabilita-panel">
-        <div class="section-head">
-          <div>
-            <h3>📊 CONTABILITÀ</h3>
-            <p class="muted">Seleziona una commessa e allega il Foglio Contabile e i Verbali ATEX dedicati. I documenti restano collegati solo alla commessa scelta.</p>
-          </div>
-          <span class="pill">Solo admin</span>
-        </div>
-        <label>Commessa
-          <select id="contabilita-commessa-select"><option value="">Seleziona commessa</option></select>
-        </label>
-        <div class="contabilita-grid">
-          <article class="contabilita-card">
-            <h4>Foglio Contabile</h4>
-            <p class="muted">Supporta Excel (.xlsx/.xls), Google Fogli, CSV e ODS. L'app rileva le colonne e compila solo DATA e ORA.</p>
-            <input id="contabilita-foglio-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods">
-            <input id="contabilita-foglio-url" type="url" placeholder="URL Google Fogli (opzionale)">
-            <button id="contabilita-save-foglio-btn" class="btn btn-primary" type="button">Salva Foglio Contabile</button>
-          </article>
-          <article class="contabilita-card">
-            <h4>Verbali ATEX</h4>
-            <p class="muted">Ogni modello viene analizzato per DATA, ORA e OPERATORE, senza usare coordinate fisse.</p>
-            <input id="contabilita-atex-file" type="file" multiple accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods">
-            <button id="contabilita-save-atex-btn" class="btn btn-primary" type="button">Aggiungi Verbali ATEX</button>
-          </article>
-        </div>
-        <div class="item-actions">
-          <button id="contabilita-refresh-btn" class="btn" type="button">Aggiorna stato</button>
-          <button id="contabilita-download-btn" class="btn" type="button">Scarica ultima versione</button>
-          <button id="contabilita-delete-btn" class="btn btn-danger" type="button">Elimina modelli commessa</button>
-        </div>
-        <div id="contabilita-status" class="simple-list"></div>
-        <h4>Impianti non trovati / già compilati</h4>
-        <div id="contabilita-unmatched-list" class="simple-list"></div>
-      </section>
-    </div>
     <div id="panel-global" class="management-panel hidden">
       <h3>Global (separato dall'app principale)</h3>
       <p class="muted">Le commesse Global sono autonome e non interagiscono con le commesse standard.</p>

@@ -222,6 +222,14 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /contabilita/{commessaId} {
+      allow read, write: if isAdmin();
+
+      match /executions/{executionId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "appNotifications",

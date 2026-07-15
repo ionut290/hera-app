@@ -19682,6 +19682,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   const impiantiValues = parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "");
   const row = document.createElement("div");
   row.className = "squadra-row";
+  row.__squadraRowData = rowData || {};
   row.innerHTML = `
     <div class="squadra-row-head">
       <strong>Squadra ${index}</strong>
@@ -19795,8 +19796,13 @@ function addMultiEntryInput({ container, listId, placeholder, value, sourceValue
   `;
   const input = wrap.querySelector(".squadra-multi-entry-input");
   const removeBtn = wrap.querySelector(".remove-squadra-entry-btn");
-  input.addEventListener("blur", () => {
+  input.addEventListener("blur", async () => {
     input.value = resolveSuggestionValue(input.value, sourceValues);
+    const type = container.classList.contains("squadra-personale-list") ? "operatori" : (container.classList.contains("squadra-mezzi-list") ? "mezzi" : "");
+    if (type && input.value) {
+      const ok = await validateDraftSquadraConflicts(readSquadraRows(), { onlyType: type, onlyValue: input.value });
+      if (!ok) input.value = "";
+    }
   });
   removeBtn.addEventListener("click", () => {
     wrap.remove();
@@ -19843,7 +19849,10 @@ function readSquadraRows() {
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
     orarioFine: String(row.querySelector(".squadra-orario-fine-input")?.value || "").trim(),
-    senzaPausaPranzo: Boolean(row.querySelector(".squadra-senza-pausa-input")?.checked)
+    senzaPausaPranzo: Boolean(row.querySelector(".squadra-senza-pausa-input")?.checked),
+    conflittiConfermati: row.__squadraRowData?.conflittiConfermati || { operatori: [], mezzi: [] },
+    conflittoOperatoreConfermato: Boolean(row.__squadraRowData?.conflittoOperatoreConfermato),
+    conflittoMezzoConfermato: Boolean(row.__squadraRowData?.conflittoMezzoConfermato)
   })).filter(isSquadraRowFilled);
 }
 
@@ -19866,6 +19875,132 @@ function setSquadraRowsFromData(data) {
   renumberSquadraRows();
 }
 
+
+
+function normalizeSquadraConflictKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getSquadraConflictAdminLabel() {
+  return getUserDisplayName(currentUser || {}) || currentUser?.email || currentUser?.uid || "Admin";
+}
+
+function getSquadraName(index) {
+  return `Squadra ${Number(index || 0) + 1}`;
+}
+
+function getSquadraConflictConfirmations(row, type) {
+  return Array.isArray(row?.conflittiConfermati?.[type]) ? row.conflittiConfermati[type] : [];
+}
+
+function findSquadraConflictConfirmation(row, type, value, involvedOccurrences) {
+  const key = normalizeSquadraConflictKey(value);
+  const involvedKeys = (involvedOccurrences || []).map((occ) => `${occ.commessaId || ""}#${occ.squadraIndex}`).sort().join("|");
+  return getSquadraConflictConfirmations(row, type).find((confirmation) => {
+    const savedKey = normalizeSquadraConflictKey(confirmation.operatore || confirmation.mezzo || confirmation.valore || "");
+    const savedInvolved = Array.isArray(confirmation.squadreCoinvolte) ? confirmation.squadreCoinvolte.map((occ) => `${occ.commessaId || ""}#${occ.squadraIndex}`).sort().join("|") : "";
+    return savedKey === key && savedInvolved === involvedKeys;
+  }) || null;
+}
+
+function buildSquadraConflictReport(dateKey, draft = null) {
+  const occurrences = { operatori: new Map(), mezzi: new Map() };
+  const addOccurrence = (type, value, commessaId, commessaNome, row, squadraIndex, source) => {
+    const key = normalizeSquadraConflictKey(value);
+    if (!key) return;
+    if (!occurrences[type].has(key)) occurrences[type].set(key, []);
+    occurrences[type].get(key).push({ type, key, value, commessaId, commessaNome, row, squadraIndex, squadraNome: getSquadraName(squadraIndex), source });
+  };
+  const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
+  storicoDelGiorno.forEach((record, commessaId) => {
+    if (draft?.commessaId && commessaId === draft.commessaId) return;
+    const commessa = commesseById.get(commessaId) || {};
+    const rows = Array.isArray(record.squadre) ? record.squadre : getLegacySquadreRows(record);
+    rows.forEach((row, idx) => {
+      parseMultiEntryValue(row.personale).forEach((value) => addOccurrence("operatori", value, commessaId, record.commessaNome || commessa.nome || "Commessa", row, idx, "saved"));
+      parseMultiEntryValue(row.mezzi).forEach((value) => addOccurrence("mezzi", value, commessaId, record.commessaNome || commessa.nome || "Commessa", row, idx, "saved"));
+    });
+  });
+  if (draft?.commessaId) {
+    const commessa = commesseById.get(draft.commessaId) || {};
+    (draft.rows || []).forEach((row, idx) => {
+      parseMultiEntryValue(row.personale).forEach((value) => addOccurrence("operatori", value, draft.commessaId, draft.commessaNome || commessa.nome || "Commessa", row, idx, "draft"));
+      parseMultiEntryValue(row.mezzi).forEach((value) => addOccurrence("mezzi", value, draft.commessaId, draft.commessaNome || commessa.nome || "Commessa", row, idx, "draft"));
+    });
+  }
+  const conflicts = { operatori: [], mezzi: [] };
+  ["operatori", "mezzi"].forEach((type) => {
+    occurrences[type].forEach((items) => {
+      const uniqueTeams = new Set(items.map((item) => `${item.commessaId}#${item.squadraIndex}#${item.source}`));
+      if (uniqueTeams.size <= 1) return;
+      items.forEach((item) => {
+        conflicts[type].push({ ...item, dateKey, others: items.filter((other) => other !== item), authorized: Boolean(findSquadraConflictConfirmation(item.row, type, item.value, items)) });
+      });
+    });
+  });
+  return conflicts;
+}
+
+function confirmSquadraConflict(type, value, conflict) {
+  const isMezzo = type === "mezzi";
+  const other = conflict?.others?.[0];
+  const dateLabel = formatDateKeyForDisplay(conflict?.dateKey || ui.squadraRiferimento?.value || getActiveSquadreDateKey());
+  const title = isMezzo ? "⚠️ MEZZO GIÀ ASSEGNATO" : "⚠️ OPERATORE GIÀ ASSEGNATO";
+  const message = isMezzo
+    ? `${title}\n\nIl mezzo “${value}” è già assegnato il ${dateLabel} alla squadra “${other?.squadraNome || "Squadra"}” della commessa “${other?.commessaNome || "Commessa"}”.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`
+    : `${title}\n\n${value} è già presente il ${dateLabel} nella squadra “${other?.squadraNome || "Squadra"}” della commessa “${other?.commessaNome || "Commessa"}”.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`;
+  return window.confirm(message);
+}
+
+function applySquadraConflictConfirmations(rows, conflicts) {
+  const now = new Date().toISOString();
+  ["operatori", "mezzi"].forEach((type) => {
+    conflicts[type].forEach((conflict) => {
+      if (conflict.source !== "draft") return;
+      const row = rows[conflict.squadraIndex];
+      if (!row || findSquadraConflictConfirmation(row, type, conflict.value, [conflict, ...conflict.others])) return;
+      row.conflittiConfermati = row.conflittiConfermati || { operatori: [], mezzi: [] };
+      row.conflittiConfermati[type] = Array.isArray(row.conflittiConfermati[type]) ? row.conflittiConfermati[type] : [];
+      row.conflittiConfermati[type].push({
+        valore: conflict.value,
+        [type === "operatori" ? "operatore" : "mezzo"]: conflict.value,
+        confermato: true,
+        confermatoIl: now,
+        confermatoDa: getSquadraConflictAdminLabel(),
+        confermatoDaId: currentUser?.uid || currentUser?.email || "",
+        squadreCoinvolte: [conflict, ...conflict.others].map((item) => ({ commessaId: item.commessaId, commessaNome: item.commessaNome, squadraIndex: item.squadraIndex, squadraNome: item.squadraNome }))
+      });
+    });
+  });
+  rows.forEach((row) => {
+    row.conflittoOperatoreConfermato = Boolean(row.conflittiConfermati?.operatori?.length);
+    row.conflittoMezzoConfermato = Boolean(row.conflittiConfermati?.mezzi?.length);
+  });
+}
+
+async function validateDraftSquadraConflicts(rows, { onlyType = "", onlyValue = "" } = {}) {
+  const dateKey = ui.squadraRiferimento?.value || getActiveSquadreDateKey();
+  const commessaId = ui.squadraCommessa?.value || "";
+  if (!dateKey || !commessaId) return true;
+  const commessaNome = (commesseById.get(commessaId) || {}).nome || "Commessa";
+  const report = buildSquadraConflictReport(dateKey, { commessaId, commessaNome, rows });
+  for (const type of ["operatori", "mezzi"]) {
+    if (onlyType && onlyType !== type) continue;
+    for (const conflict of report[type].filter((item) => item.source === "draft")) {
+      if (onlyValue && normalizeSquadraConflictKey(onlyValue) !== conflict.key) continue;
+      if (conflict.authorized || findSquadraConflictConfirmation(rows[conflict.squadraIndex], type, conflict.value, [conflict, ...conflict.others])) continue;
+      if (!confirmSquadraConflict(type, conflict.value, conflict)) return false;
+      applySquadraConflictConfirmations(rows, { operatori: type === "operatori" ? [conflict] : [], mezzi: type === "mezzi" ? [conflict] : [] });
+    }
+  }
+  return true;
+}
 
 function normalizeSquadraDuplicatePart(value) {
   return String(value || "")
@@ -19932,6 +20067,11 @@ async function saveSquadraComposition(event) {
     const dup = duplicateRows[0];
     setSquadraFeedback("Duplicato bloccato: controlla le squadre indicate.", "error");
     alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
+    return;
+  }
+  const conflictsConfirmed = await validateDraftSquadraConflicts(squadreRows);
+  if (!conflictsConfirmed) {
+    setSquadraFeedback("Salvataggio sospeso: conflitto non autorizzato. Modifica operatori o mezzi oppure conferma con “ASSEGNA COMUNQUE”.", "error");
     return;
   }
   const payload = {
@@ -20200,6 +20340,38 @@ function buildSquadraWarningDetails(commessa, squadRows) {
   return issues;
 }
 
+
+function renderSquadraConflictSummaryMarkup(report, dateKey) {
+  return "";
+}
+
+function renderConflictValueList(rawValue, conflicts, type) {
+  const byKey = new Map(conflicts[type].map((item) => [item.key, item]));
+  const parts = parseMultiEntryValue(rawValue);
+  if (!parts.length) return "-";
+  return parts.map((value) => {
+    const isConflict = byKey.has(normalizeSquadraConflictKey(value));
+    const label = isConflict ? `<span class="squadra-conflict-name">${escapeHTML(value)}</span>` : escapeHTML(value);
+    if (type === "mezzi" && !isConflict) return `<button type="button" class="mezzo-chip-btn" data-mezzo="${escapeHTML(value)}">${escapeHTML(value)}</button>`;
+    return label;
+  }).join(type === "mezzi" ? " " : ", ");
+}
+
+function openSquadreConflictsModal(report, dateKey) {
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  const section = (title, items, isMezzo) => {
+    const unique = items.filter((item, idx, arr) => arr.findIndex((other) => other.key === item.key && other.commessaId === item.commessaId && other.squadraIndex === item.squadraIndex) === idx);
+    return `<section><h3>${title}</h3>${unique.length ? unique.map((item) => `<article class="squadre-conflict-detail"><strong>${escapeHTML(item.value)}</strong>${isMezzo ? `<p>Targa/codice mezzo: ${escapeHTML(item.value)}</p>` : ""}<p>Data: ${escapeHTML(formatDateKeyForDisplay(dateKey))}</p><p>Commessa: ${escapeHTML(item.commessaNome)}</p><p>Squadra: ${escapeHTML(item.squadraNome)}</p><p>Altre squadre: ${escapeHTML(item.others.map((other) => `${other.squadraNome} (${other.commessaNome})`).join(", "))}</p><button type="button" class="btn" data-jump-conflict="${escapeHTML(item.commessaId)}" data-conflict-index="${item.squadraIndex}">VAI ALLA SQUADRA</button></article>`).join("") : `<p class='muted'>Nessun duplicato.</p>`}</section>`;
+  };
+  modal.innerHTML = `<div class="squadre-conflict-modal" role="dialog" aria-modal="true" aria-label="Conflitti squadre"><div class="section-head"><h2>⚠️ Conflitti squadre</h2><button type="button" class="btn" data-close-conflicts>Chiudi</button></div>${section("OPERATORI DUPLICATI", report.operatori, false)}${section("MEZZI DUPLICATI", report.mezzi, true)}</div>`;
+  const close = () => modal.remove();
+  modal.querySelector("[data-close-conflicts]")?.addEventListener("click", close);
+  modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
+  modal.querySelectorAll("[data-jump-conflict]").forEach((btn) => btn.addEventListener("click", () => { close(); openSquadraCompositionEditor(btn.dataset.jumpConflict, dateKey, Number(btn.dataset.conflictIndex) || 0); }));
+  document.body.appendChild(modal);
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
@@ -20234,6 +20406,8 @@ function renderSquadre() {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra trovata</p>";
     return;
   }
+  const conflictReport = buildSquadraConflictReport(selectedDateKey);
+  ui.squadreLista.innerHTML = renderSquadraConflictSummaryMarkup(conflictReport, selectedDateKey);
 
   commesseConSquadre.forEach((commessa) => {
     const item = document.createElement("article");
@@ -20251,7 +20425,12 @@ function renderSquadre() {
         row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      return `<div class="squadra-saved-row" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
+      const rowConflictReport = {
+        operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
+        mezzi: conflictReport.mezzi.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx)
+      };
+      const rowClass = "squadra-saved-row";
+      return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
     const warningMarkup = warningIssues.length

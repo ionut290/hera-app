@@ -10790,3 +10790,9 @@ body.worklimate-page-open {
   .control-center-row { grid-template-columns: 1fr; }
   .control-center-row strong { text-align: left; }
 }
+
+/* I duplicati nella vista Squadre per Commessa devono mostrare solo il nome in rosso. */
+.squadra-conflict-name {
+  color: #b91c1c;
+  font-weight: inherit;
+}

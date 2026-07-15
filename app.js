@@ -20342,10 +20342,7 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 
 
 function renderSquadraConflictSummaryMarkup(report, dateKey) {
-  const operatorKeys = new Set(report.operatori.map((item) => item.key));
-  const mezzoKeys = new Set(report.mezzi.map((item) => item.key));
-  if (!operatorKeys.size && !mezzoKeys.size) return "";
-  return `<section class="squadre-conflict-summary"><h3>⚠️ ATTENZIONE</h3><p>Sono presenti:</p><ul><li>${operatorKeys.size} operatori assegnati a più squadre</li><li>${mezzoKeys.size} mezzo assegnato a più squadre</li></ul><button type="button" class="btn btn-primary" data-open-squadre-conflicts>VISUALIZZA CONFLITTI</button></section>`;
+  return "";
 }
 
 function renderConflictValueList(rawValue, conflicts, type) {
@@ -20356,8 +20353,7 @@ function renderConflictValueList(rawValue, conflicts, type) {
   return parts.map((value) => {
     const conflict = byKey.get(normalizeSquadraConflictKey(value));
     if (!conflict) return type === "mezzi" ? `<button type="button" class="mezzo-chip-btn" data-mezzo="${escapeHTML(value)}">${escapeHTML(value)}</button>` : escapeHTML(value);
-    const badge = conflict.authorized ? "DUPLICATO AUTORIZZATO" : "DUPLICATO";
-    return `<span class="squadra-conflict-chip" title="${escapeHTML(title)}"><span aria-hidden="true">⚠️</span> <strong>${escapeHTML(value)}</strong> <em>${escapeHTML(title)}</em> <b>${badge}</b></span>`;
+    return `<span class="squadra-conflict-name" title="${escapeHTML(title)}">${escapeHTML(value)}</span>`;
   }).join(type === "mezzi" ? " " : ", ");
 }
 
@@ -20434,7 +20430,7 @@ function renderSquadre() {
         operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
         mezzi: conflictReport.mezzi.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx)
       };
-      const rowClass = rowConflictReport.operatori.length || rowConflictReport.mezzi.length ? "squadra-saved-row has-squadra-conflict" : "squadra-saved-row";
+      const rowClass = "squadra-saved-row";
       return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);

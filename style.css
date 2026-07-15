@@ -10808,33 +10808,9 @@ body.worklimate-page-open {
   color: #991b1b;
 }
 
-.squadra-conflict-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  border: 2px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 999px;
-  padding: 5px 9px;
-  margin: 2px 3px 2px 0;
+.squadra-conflict-name {
+  color: #dc2626;
   font-weight: 800;
-}
-
-.squadra-conflict-chip em {
-  font-style: normal;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.squadra-conflict-chip b {
-  background: #dc2626;
-  color: #fff;
-  border-radius: 999px;
-  padding: 2px 7px;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
 }
 
 .squadre-conflict-modal {

@@ -668,6 +668,13 @@ const ui = {
   squadraFeedback: document.getElementById("squadra-feedback"),
   squadreNextAction: document.getElementById("squadre-next-action"),
   squadreLista: document.getElementById("squadre-lista"),
+  squadreImpiantoDetail: document.getElementById("squadre-impianto-detail"),
+  squadreImpiantoDetailTitle: document.getElementById("squadre-impianto-detail-title"),
+  squadreImpiantoDetailCommessa: document.getElementById("squadre-impianto-detail-commessa"),
+  squadreImpiantoDetailBody: document.getElementById("squadre-impianto-detail-body"),
+  squadreImpiantoPositionFeedback: document.getElementById("squadre-impianto-position-feedback"),
+  squadreImpiantoNavigateBtn: document.getElementById("squadre-impianto-navigate-btn"),
+  squadreImpiantoBackBtn: document.getElementById("squadre-impianto-back-btn"),
   toggleCommesseHomeBtn: document.getElementById("toggle-commesse-home-btn"),
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
@@ -14851,8 +14858,8 @@ function clearActionUsed(actionId) {
 }
 
 function getImpiantoNavigationCoordinates(impianto) {
-  const lat = Number(impianto?.gpsY);
-  const lon = Number(impianto?.gpsX);
+  const lat = Number(impianto?.gpsY ?? impianto?.lat ?? impianto?.latitude);
+  const lon = Number(impianto?.gpsX ?? impianto?.lng ?? impianto?.lon ?? impianto?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return { lat, lon };
@@ -14860,8 +14867,10 @@ function getImpiantoNavigationCoordinates(impianto) {
 
 function buildImpiantoMapsUrl(impianto) {
   const coordinates = getImpiantoNavigationCoordinates(impianto);
-  if (!coordinates) return "";
-  return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lon}`;
+  if (coordinates) return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.lat},${coordinates.lon}`;
+  const address = [impianto?.indirizzo || impianto?.descrizioneVia, impianto?.comune]
+    .map((value) => String(value || "").trim()).filter(Boolean).join(", ");
+  return address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}` : "";
 }
 
 
@@ -18642,7 +18651,7 @@ async function navigateToImpianto(impianto) {
   const url = buildImpiantoMapsUrl(impianto);
 
   if (!url) {
-    alert("Coordinate mancanti per questo impianto.");
+    alert("Posizione dell’impianto non disponibile");
     return;
   }
 
@@ -20884,23 +20893,71 @@ function renderSquadre() {
 
 function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {
   const details = Array.isArray(row?.impiantiDettagli) ? row.impiantiDettagli : [];
-  if (!details.length) return `<br><span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
-  const liveById = new Map(getCommessaCachedImpianti(commessaId).map((impianto) => [getSquadraImpiantoId(impianto), impianto]));
-  const assigned = details.filter((impianto) => {
+  const liveImpianti = getCommessaCachedImpianti(commessaId);
+  const liveById = new Map(liveImpianti.map((impianto) => [getSquadraImpiantoId(impianto), impianto]));
+  const legacyAssigned = details.length ? [] : parseMultiEntryValue(row?.impianti || "").map((name) => {
+    const normalizedName = normalizeSquadraConflictKey(name);
+    return liveImpianti.find((impianto) => [impianto.denominazione, impianto.idSap, impianto.codiceHera]
+      .some((value) => normalizeSquadraConflictKey(value) === normalizedName));
+  }).filter(Boolean);
+  const assigned = (details.length ? details : legacyAssigned).filter((impianto) => {
     const live = liveById.get(getSquadraImpiantoId(impianto));
     return !Boolean(live ? live.done : impianto.done);
   });
-  if (!assigned.length) return "";
+  if (!assigned.length) return details.length ? "" : `<br><span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
   return `<br><span class="squadra-impianti-compact"><b>📍</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
 }
 
 function openCommessaImpiantoFromSquadre(commessa, impianto) {
-  const target = getCommessaNavigationTarget(commessa);
-  const impiantoId = getSquadraImpiantoId(impianto);
-  if (!target?.id || !impiantoId) return;
-  selectCommessa(target.id, target.nome || "Commessa", target.codice || "");
-  openImpiantiPage(`&impianto=${encodeURIComponent(impiantoId)}`);
+  if (!commessa || !impianto || !ui.squadreImpiantoDetail) return;
+  const value = (...keys) => keys.map((key) => impianto[key]).find((entry) => String(entry ?? "").trim()) ?? "-";
+  const display = (entry) => Array.isArray(entry) ? entry.filter(Boolean).join(", ") : String(entry ?? "-");
+  const fields = [
+    ["Denominazione impianto", value("denominazione", "nome")],
+    ["ID SAP", value("idSap", "codiceHera")],
+    ["Comune", value("comune")],
+    ["Indirizzo", value("indirizzo", "descrizioneVia")],
+    ["Tipologia", value("tipologiaImpianto", "tipoManutenzione", "tipologia")],
+    ["Lavorazione assegnata", value("lavorazioni", "lavorazioniRichieste", "tipologiaIntervento")],
+    ["Note", value("note", "noteImpianto"), true],
+    ["Stato", impianto.done ? "Fatto" : display(value("stato")) === "in_lavorazione" ? "In lavorazione" : "Da fare"],
+    ["Codice prezzo", value("codicePrezzo", "voceRiferimento")],
+    ["Ditta esecutrice", value("dittaEsecutrice")]
+  ];
+  ui.squadreImpiantoDetailTitle.textContent = display(value("denominazione", "nome"));
+  ui.squadreImpiantoDetailCommessa.textContent = `${commessa.nome || "Commessa"} • ${formatDateKeyForDisplay(getActiveSquadreDateKey())}`;
+  ui.squadreImpiantoDetailBody.innerHTML = fields.map(([label, entry, wide]) => `<div class="squadre-impianto-detail-field${wide ? " squadra-impianto-detail-field--wide" : ""}"><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(display(entry))}</dd></div>`).join("");
+  ui.squadreImpiantoPositionFeedback.classList.add("hidden");
+  ui.squadreImpiantoPositionFeedback.textContent = "";
+  ui.squadreImpiantoNavigateBtn.onclick = () => {
+    const url = buildImpiantoMapsUrl(impianto);
+    if (!url) {
+      ui.squadreImpiantoPositionFeedback.textContent = "Posizione dell’impianto non disponibile";
+      ui.squadreImpiantoPositionFeedback.classList.remove("hidden");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+  ui.squadreImpiantoDetail.classList.remove("hidden");
+  ui.squadreImpiantoDetail.setAttribute("aria-hidden", "false");
+  document.body.classList.add("squadre-impianto-detail-open");
+  ui.squadreImpiantoBackBtn?.focus();
 }
+
+function closeCommessaImpiantoFromSquadre() {
+  if (!ui.squadreImpiantoDetail) return;
+  ui.squadreImpiantoDetail.classList.add("hidden");
+  ui.squadreImpiantoDetail.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("squadre-impianto-detail-open");
+}
+
+ui.squadreImpiantoBackBtn?.addEventListener("click", closeCommessaImpiantoFromSquadre);
+ui.squadreImpiantoDetail?.addEventListener("click", (event) => {
+  if (event.target === ui.squadreImpiantoDetail) closeCommessaImpiantoFromSquadre();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !ui.squadreImpiantoDetail?.classList.contains("hidden")) closeCommessaImpiantoFromSquadre();
+});
 
 function renderMezziButtonsMarkup(rawValue) {
   const parts = String(rawValue || "")

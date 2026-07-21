@@ -1226,6 +1226,54 @@ textarea:focus-visible {
   outline: none;
 }
 
+.squadre-impianto-detail {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  overflow-y: auto;
+  padding: clamp(12px, 4vw, 40px);
+  background: rgba(15, 23, 42, .58);
+}
+body.squadre-impianto-detail-open { overflow: hidden; }
+
+.squadre-impianto-detail-card {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: clamp(18px, 4vw, 32px);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .3);
+}
+
+.squadre-impianto-detail-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.squadre-impianto-detail-head h2,
+.squadre-impianto-detail-head p { margin: 0; }
+.squadre-impianto-detail-eyebrow { color: #15803d; font-size: .76rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.squadre-impianto-back-btn { min-height: 44px; font-weight: 800; }
+.squadre-impianto-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0 0 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--border); }
+.squadre-impianto-detail-field { min-width: 0; padding: 13px 15px; background: #fff; }
+.squadre-impianto-detail-field--wide { grid-column: 1 / -1; }
+.squadre-impianto-detail-field dt { margin-bottom: 4px; color: var(--muted); font-size: .76rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.squadre-impianto-detail-field dd { margin: 0; overflow-wrap: anywhere; font-weight: 650; }
+.squadre-impianto-navigate-btn { width: 100%; min-height: 58px; border: 0; border-radius: 14px; background: #16a34a; color: #fff; font-size: 1.08rem; font-weight: 900; letter-spacing: .06em; box-shadow: 0 8px 20px rgba(22, 163, 74, .28); cursor: pointer; }
+.squadre-impianto-navigate-btn:hover, .squadre-impianto-navigate-btn:focus-visible { background: #15803d; outline: 3px solid rgba(34, 197, 94, .28); outline-offset: 2px; }
+.squadre-impianto-position-feedback { margin: -8px 0 16px; padding: 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-weight: 750; text-align: center; }
+
+@media (max-width: 600px) {
+  .squadre-impianto-detail { padding: 0; background: #f4f7fb; }
+  .squadre-impianto-detail-card { min-height: 100%; border: 0; border-radius: 0; }
+  .squadre-impianto-detail-head { grid-template-columns: 1fr; }
+  .squadre-impianto-back-btn { justify-self: start; }
+  .squadre-impianto-detail-grid { grid-template-columns: 1fr; }
+  .squadre-impianto-detail-field--wide { grid-column: auto; }
+  .squadre-impianto-navigate-btn { position: sticky; bottom: 10px; }
+}
+
 .squadra-row-head {
   display: flex;
   justify-content: space-between;

@@ -206,3 +206,30 @@ Questo comando verifica che `app.js` non abbia errori di sintassi JavaScript blo
 - Aggiungere monitoraggio errori runtime (es. Sentry) per intercettare errori reali utenti.
 - Definire una checklist di release con prova su browser mobile reale + almeno un dispositivo Android.
 - Validare sempre configurazioni Firebase e permessi Android prima del rilascio.
+# Accesso biometrico Android
+
+L'app usa il plugin Capacitor locale `HeraBiometric` **1.0.0**, sviluppato per le API di
+Capacitor 7.2.0 già presenti nel progetto. Il plugin usa `androidx.biometric:biometric:1.1.0`
+e una chiave AES non esportabile di Android Keystore. Nel browser/PWA non viene registrato
+e il login Firebase/Google continua a usare il flusso web esistente.
+
+La biometria è un blocco locale della sessione Firebase persistente: non sostituisce Firebase
+Authentication e non conserva password, token Firebase, impronte o immagini del volto. Il
+logout chiude sempre Firebase; la preferenza biometrica resta disponibile e può essere rimossa
+dalla sezione **Sicurezza**.
+
+Prima di compilare l'APK, verificare che `android/app/google-services.json` appartenga al progetto
+Firebase `hera-app-6cd2b` e contenga il client Android `it.vargacantieri.hera`. Il file non è
+incluso nel repository e va copiato localmente da Firebase Console senza rigenerare o modificare
+la SHA-1 del certificato.
+
+Comandi Android (dopo avere completato/rigenerato, se necessario, il progetto nativo Capacitor):
+
+```sh
+npm install
+npx cap sync android
+npx cap open android
+```
+
+In Android Studio eseguire la sincronizzazione Gradle e provare su un dispositivo reale con
+blocco schermo e almeno un'impronta o volto configurato.

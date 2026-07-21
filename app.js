@@ -14162,7 +14162,7 @@ function hasStraordinario(codicePrezzo) {
 }
 
 function onImpiantoSearchInput(event) {
-  impiantiSearchTerm = String(event.target.value || "").trim().toLowerCase();
+  impiantiSearchTerm = normalizeImpiantoSearchValue(event.target.value).trim();
   renderImpianti();
 }
 
@@ -14267,19 +14267,28 @@ function createPlantMqBox(plant) {
   return box;
 }
 
-function matchesImpiantoSearch(impianto) {
-  if (!impiantiSearchTerm) return true;
+function normalizeImpiantoSearchValue(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("it-IT");
+}
+
+function getImpiantoSearchValues(impianto = {}) {
+  const extraValues = Object.entries(impianto.extraFields || {}).flatMap(([key, value]) => [key, value]);
+  return [impianto.denominazione, impianto.nome, impianto.comune, impianto.indirizzo,
+    impianto.descrizioneVia, impianto.idSap, impianto.codiceHera, impianto.codicePrezzo,
+    impianto.voceRiferimento, impianto.tipologiaImpianto, impianto.tipologiaIntervento,
+    impianto.area, impianto.competenza, ...extraValues];
+}
+
+// Unica logica di ricerca usata sia nella commessa sia nella composizione squadre.
+function matchesImpiantoSearch(impianto, searchTerm = impiantiSearchTerm) {
+  const normalizedTerm = normalizeImpiantoSearchValue(searchTerm).trim();
+  if (!normalizedTerm) return true;
   const markerNumber = getMapMarkerNumberForImpianto(impianto);
   const haystack = [
-    impianto.denominazione,
-    impianto.comune,
-    impianto.indirizzo,
-    impianto.codicePrezzo,
-    impianto.voceRiferimento,
-    impianto.idSap,
+    ...getImpiantoSearchValues(impianto),
     Number.isFinite(markerNumber) ? String(markerNumber) : ""
-  ].map((value) => String(value || "").toLowerCase()).join(" ");
-  return haystack.includes(impiantiSearchTerm);
+  ].map(normalizeImpiantoSearchValue).join(" ");
+  return haystack.includes(normalizedTerm);
 }
 
 function renderBiogasSpecialCard() {
@@ -19888,9 +19897,10 @@ async function autofillSquadraForm() {
   const requestId = ++latestSquadraAutofillRequestId;
   const commessaId = ui.squadraCommessa.value;
   setDefaultSquadraCompositionDate();
+  // Azzera subito la composizione per non conservare impianti della commessa precedente.
+  ui.squadraRows.innerHTML = "";
+  addSquadraRow();
   if (!commessaId) {
-    ui.squadraRows.innerHTML = "";
-    addSquadraRow();
     updateSquadraAutofillHint("");
     return;
   }
@@ -20106,10 +20116,8 @@ function getSquadraImpiantoId(impianto = {}) {
 }
 
 function snapshotSquadraImpianto(impianto = {}) {
-  const snapshot = {};
-  ["denominazione", "comune", "idSap", "codiceHera", "indirizzo", "descrizioneVia", "gpsX", "gpsY", "lat", "lng", "note", "lavorazioni", "tipologiaImpianto", "tipologiaIntervento", "area", "competenza", "dittaEsecutrice"].forEach((key) => {
-    if (impianto[key] !== undefined && impianto[key] !== null) snapshot[key] = impianto[key];
-  });
+  // Mantiene anche codici prezzo, campi extra e ogni altro dato importato.
+  const snapshot = { ...impianto };
   snapshot.impiantoId = getSquadraImpiantoId(impianto);
   return snapshot;
 }
@@ -20129,17 +20137,22 @@ function addSquadraImpiantoSearch(container, trigger) {
   if (!container || container.querySelector(".squadra-impianto-search-wrap")) return;
   const wrap = document.createElement("div");
   wrap.className = "squadra-impianto-search-wrap";
-  wrap.innerHTML = `<input type="search" class="squadra-impianto-search" placeholder="Cerca per denominazione" autocomplete="off" aria-label="Cerca impianto della commessa"><div class="squadra-impianto-suggestions" role="listbox"></div>`;
+  wrap.innerHTML = `<div class="search-box squadra-impianto-search-box"><span aria-hidden="true">🔎</span><input type="search" class="squadra-impianto-search" placeholder="Cerca impianto, comune, indirizzo, codice prezzo..." autocomplete="off" aria-label="Cerca impianto della commessa" aria-expanded="true"></div><div class="squadra-impianto-suggestions" role="listbox"></div>`;
   const input = wrap.querySelector("input");
-  const suggestions = wrap.querySelector("div");
+  const suggestions = wrap.querySelector(".squadra-impianto-suggestions");
   const render = () => {
-    const term = String(input.value || "").trim().toLocaleLowerCase("it-IT");
+    const term = String(input.value || "").trim();
     const selectedIds = new Set(Array.from(container.querySelectorAll(".squadra-impianto-selection")).map((item) => getSquadraImpiantoId(item.__impianto)).filter(Boolean));
     const matches = getCommessaCachedImpianti(ui.squadraCommessa?.value)
       .filter((impianto) => !selectedIds.has(getSquadraImpiantoId(impianto)))
-      .filter((impianto) => !term || String(impianto.denominazione || impianto.nome || "").toLocaleLowerCase("it-IT").startsWith(term))
+      .filter((impianto) => matchesImpiantoSearch(impianto, term))
       .sort((a, b) => String(a.denominazione || a.nome || "").localeCompare(String(b.denominazione || b.nome || ""), "it"));
-    suggestions.innerHTML = matches.length ? matches.map((impianto) => `<button type="button" role="option" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}"><b>${escapeHTML(impianto.denominazione || impianto.nome || "Impianto")}</b><small>${escapeHTML(impianto.comune || "-")} • ID SAP ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}</small></button>`).join("") : `<p class="muted">Nessun impianto della commessa trovato.</p>`;
+    suggestions.innerHTML = matches.length ? matches.map((impianto) => {
+      const address = impianto.indirizzo || impianto.descrizioneVia || "";
+      const code = impianto.idSap ? `ID SAP ${impianto.idSap}` : (impianto.codiceHera ? `Codice Hera ${impianto.codiceHera}` : "");
+      const meta = [impianto.comune, address, code, impianto.codicePrezzo ? `Codice prezzo ${impianto.codicePrezzo}` : ""].filter(Boolean).join(" • ");
+      return `<button type="button" role="option" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}"><b>${escapeHTML(impianto.denominazione || impianto.nome || "Impianto")}</b><small>${escapeHTML(meta || "Dati non disponibili")}</small></button>`;
+    }).join("") : `<p class="muted">Nessun impianto della commessa trovato.</p>`;
     suggestions.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
       const selected = getCommessaCachedImpianti(ui.squadraCommessa?.value).find((impianto) => getSquadraImpiantoId(impianto) === button.dataset.impiantoId);
       if (!selected || selectedIds.has(getSquadraImpiantoId(selected))) return;

@@ -966,6 +966,20 @@ const ui = {
   globalImpiantoDetailsCloseBtn: document.getElementById("global-impianto-details-close-btn"),
   globalImpiantoNavigateBtn: document.getElementById("global-impianto-navigate-btn"),
   globalImpiantoWhatsappBtn: document.getElementById("global-impianto-whatsapp-btn"),
+  globalImpiantoAddToCommessaBtn: document.getElementById("global-impianto-add-to-commessa-btn"),
+  globalImpiantoUsage: document.getElementById("global-impianto-usage"),
+  globalAddModal: document.getElementById("global-add-to-commessa-modal"),
+  globalAddForm: document.getElementById("global-add-form"),
+  globalAddCloseBtn: document.getElementById("global-add-close-btn"),
+  globalAddCancelBtn: document.getElementById("global-add-cancel-btn"),
+  globalAddCommessaSearch: document.getElementById("global-add-commessa-search"),
+  globalAddCommesseOptions: document.getElementById("global-add-commesse-options"),
+  globalAddLavorazione: document.getElementById("global-add-lavorazione"),
+  globalAddNota: document.getElementById("global-add-nota"),
+  globalAddFeedback: document.getElementById("global-add-feedback"),
+  globalAddDuplicate: document.getElementById("global-add-duplicate"),
+  globalAddSuccess: document.getElementById("global-add-success"),
+  globalAddSubmitBtn: document.getElementById("global-add-submit-btn"),
   globalReportModal: document.getElementById("global-report-modal"),
   globalReportCloseBtn: document.getElementById("global-report-close-btn"),
   globalReportForm: document.getElementById("global-report-form"),
@@ -2013,6 +2027,10 @@ ui.globalImpiantoSearch?.addEventListener("input", onGlobalImpiantoSearchInput);
 ui.globalImpiantoSearchForm?.addEventListener("submit", onGlobalImpiantoSearchSubmit);
 ui.globalImpiantoSearch?.addEventListener("focus", renderGlobalImpianti);
 ui.globalImpiantoDetailsCloseBtn?.addEventListener("click", closeGlobalImpiantoModal);
+ui.globalImpiantoAddToCommessaBtn?.addEventListener("click", openGlobalAddToCommessaModal);
+ui.globalAddCloseBtn?.addEventListener("click", closeGlobalAddToCommessaModal);
+ui.globalAddCancelBtn?.addEventListener("click", closeGlobalAddToCommessaModal);
+ui.globalAddForm?.addEventListener("submit", onGlobalAddToCommessaSubmit);
 ui.globalCommesseLista?.addEventListener("click", onGlobalCommesseListClick);
 ui.globalOpenReportBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
 ui.globalImpiantoWhatsappBtn?.addEventListener("click", () => handleOpenGlobalSegnalazioneClick());
@@ -11253,12 +11271,168 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
   if (ui.globalImpiantoWhatsappBtn) {
     ui.globalImpiantoWhatsappBtn.onclick = () => handleOpenGlobalSegnalazioneClick(impianto);
   }
+  loadGlobalImpiantoUsage(impianto);
   ui.globalImpiantoDetails?.classList.remove("hidden");
   if (options.focusOnMap && hasValidGlobalCoordinates(impianto)) {
     globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
   }
   renderGlobalMap();
   renderGlobalImpianti();
+}
+
+function getGlobalSourceId(impianto = selectedGlobalImpianto) {
+  return String(impianto?.id || impianto?.sourceIds?.[0] || buildImpiantoKey(impianto || {})).trim();
+}
+
+function getGlobalAddCommessaLabel(commessa) {
+  return `${commessa?.nome || "Commessa"}${commessa?.codice ? ` — ${commessa.codice}` : ""} [${commessa?.id || ""}]`;
+}
+
+function isOperationalCommessa(commessa) {
+  return !Array.from(commesseById.values()).some((candidate) => String(candidate.parentCommessaId || "") === String(commessa?.id || ""));
+}
+
+function openGlobalAddToCommessaModal() {
+  if (!selectedGlobalImpianto || !ui.globalAddModal) return;
+  ui.globalAddForm?.reset();
+  ui.globalAddForm?.querySelectorAll(".field-invalid").forEach((element) => element.classList.remove("field-invalid"));
+  if (ui.globalAddCommesseOptions) {
+    ui.globalAddCommesseOptions.innerHTML = Array.from(commesseById.values())
+      .filter(isOperationalCommessa)
+      .map((commessa) => `<option value="${escapeHTML(getGlobalAddCommessaLabel(commessa))}"></option>`)
+      .join("");
+  }
+  if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "";
+  ui.globalAddDuplicate?.classList.add("hidden");
+  ui.globalAddSuccess?.classList.add("hidden");
+  if (ui.globalAddSubmitBtn) ui.globalAddSubmitBtn.disabled = false;
+  ui.globalAddModal.classList.remove("hidden");
+  ui.globalAddModal.setAttribute("aria-hidden", "false");
+  setTimeout(() => ui.globalAddCommessaSearch?.focus(), 0);
+}
+
+function closeGlobalAddToCommessaModal() {
+  ui.globalAddModal?.classList.add("hidden");
+  ui.globalAddModal?.setAttribute("aria-hidden", "true");
+}
+
+function findGlobalAddTargetCommessa() {
+  const value = String(ui.globalAddCommessaSearch?.value || "").trim();
+  return Array.from(commesseById.values()).find((commessa) => getGlobalAddCommessaLabel(commessa) === value) || null;
+}
+
+function normalizedCoordinate(value) {
+  const number = Number(String(value ?? "").replace(",", "."));
+  return Number.isFinite(number) ? number.toFixed(6) : "";
+}
+
+function isGlobalImpiantoDuplicate(candidate, globalImpianto, globalId) {
+  const sameSap = String(candidate.idSap || candidate.idSAP || "").trim()
+    && String(candidate.idSap || candidate.idSAP || "").trim() === String(globalImpianto.idSap || globalImpianto.codiceHera || "").trim();
+  const sameGlobal = String(candidate.globalImpiantoId || "").trim() === globalId;
+  const sameCoordinates = normalizedCoordinate(candidate.gpsY) && normalizedCoordinate(candidate.gpsX)
+    && normalizedCoordinate(candidate.gpsY) === normalizedCoordinate(globalImpianto.gpsY)
+    && normalizedCoordinate(candidate.gpsX) === normalizedCoordinate(globalImpianto.gpsX);
+  return Boolean(sameSap || sameGlobal || sameCoordinates);
+}
+
+async function onGlobalAddToCommessaSubmit(event) {
+  event.preventDefault();
+  const commessa = findGlobalAddTargetCommessa();
+  const tipoLavoro = String(ui.globalAddForm?.querySelector('input[name="global-add-tipo-lavoro"]:checked')?.value || "");
+  const lavorazione = String(ui.globalAddLavorazione?.value || "").trim();
+  ui.globalAddForm?.querySelectorAll(".field-invalid").forEach((element) => element.classList.remove("field-invalid"));
+  if (!commessa) ui.globalAddCommessaSearch?.classList.add("field-invalid");
+  if (!tipoLavoro) ui.globalAddForm?.querySelector("fieldset")?.classList.add("field-invalid");
+  if (!lavorazione) ui.globalAddLavorazione?.classList.add("field-invalid");
+  if (!commessa || !tipoLavoro || !lavorazione) {
+    if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "Compila tutti i campi obbligatori evidenziati.";
+    return;
+  }
+  const impianto = selectedGlobalImpianto;
+  const globalId = getGlobalSourceId(impianto);
+  const ref = db.collection("commesse").doc(commessa.id).collection("impianti");
+  ui.globalAddSubmitBtn.disabled = true;
+  if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "Controllo duplicati in corso...";
+  try {
+    const snapshot = await ref.get();
+    const duplicateDoc = snapshot.docs.find((doc) => isGlobalImpiantoDuplicate(doc.data(), impianto, globalId));
+    if (duplicateDoc) {
+      showGlobalAddDuplicate(commessa, duplicateDoc.id, () => saveGlobalImpiantoToCommessa(ref, commessa, impianto, tipoLavoro, lavorazione));
+      return;
+    }
+    await saveGlobalImpiantoToCommessa(ref, commessa, impianto, tipoLavoro, lavorazione);
+  } catch (error) {
+    console.error("Errore aggiunta impianto Global alla commessa:", error);
+    if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = `Impossibile aggiungere l'impianto: ${getFirebaseErrorMessage(error)}`;
+    ui.globalAddSubmitBtn.disabled = false;
+  }
+}
+
+function showGlobalAddDuplicate(commessa, duplicateId, addAnyway) {
+  if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "";
+  ui.globalAddDuplicate.innerHTML = `<b>Questo impianto è già presente nella commessa.</b><div class="item-actions"><button type="button" class="btn" data-open-existing>Apri impianto</button><button type="button" class="btn btn-primary" data-add-anyway>Aggiungi comunque</button></div>`;
+  ui.globalAddDuplicate.classList.remove("hidden");
+  ui.globalAddDuplicate.querySelector("[data-open-existing]")?.addEventListener("click", () => {
+    closeGlobalAddToCommessaModal();
+    window.location.hash = `commessa=${encodeURIComponent(commessa.id)}&impianto=${encodeURIComponent(duplicateId)}`;
+  });
+  ui.globalAddDuplicate.querySelector("[data-add-anyway]")?.addEventListener("click", async () => {
+    ui.globalAddDuplicate.classList.add("hidden");
+    await addAnyway();
+  });
+  ui.globalAddSubmitBtn.disabled = false;
+}
+
+async function saveGlobalImpiantoToCommessa(ref, commessa, impianto, tipoLavoro, lavorazione) {
+  const user = auth.currentUser;
+  const nota = String(ui.globalAddNota?.value || "").trim();
+  const doc = ref.doc();
+  await doc.set({
+    globalImpiantoId: getGlobalSourceId(impianto), globalCommessaId: selectedGlobalCommessaId,
+    commessaId: commessa.id, stato: "da_fare", tipoLavoro, lavorazione, lavorazioniRichieste: lavorazione,
+    nota, noteImpianto: nota, hasNote: Boolean(nota), aggiuntoDa: user?.displayName || user?.email || "Utente",
+    aggiuntoDaUid: user?.uid || "", aggiuntoIl: firebase.firestore.FieldValue.serverTimestamp(),
+    idSAP: impianto.idSap || impianto.codiceHera || "", idSap: impianto.idSap || impianto.codiceHera || "",
+    denominazione: impianto.denominazione || "", tipologia: impianto.tipologiaImpianto || impianto.tipologiaIntervento || "",
+    tipologiaImpianto: impianto.tipologiaImpianto || impianto.tipologiaIntervento || "", comune: impianto.comune || "",
+    area: impianto.area || impianto.competenza || "", via: impianto.descrizioneVia || impianto.indirizzo || "",
+    indirizzo: impianto.descrizioneVia || impianto.indirizzo || "", coordinate: formatGpsLabel(impianto),
+    gpsY: Number(impianto.gpsY) || null, gpsX: Number(impianto.gpsX) || null, dittaEsecutrice: impianto.dittaEsecutrice || "",
+    done: false, doneAt: null, doneBy: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "";
+  ui.globalAddDuplicate?.classList.add("hidden");
+  ui.globalAddSuccess.innerHTML = `<b>Impianto aggiunto correttamente alla commessa.</b><div class="item-actions"><button type="button" class="btn btn-primary" data-open-commessa>Apri commessa</button><button type="button" class="btn" data-close-success>Chiudi</button></div>`;
+  ui.globalAddSuccess.classList.remove("hidden");
+  ui.globalAddSubmitBtn.disabled = true;
+  ui.globalAddSuccess.querySelector("[data-open-commessa]")?.addEventListener("click", () => {
+    closeGlobalAddToCommessaModal();
+    window.location.hash = `commessa=${encodeURIComponent(commessa.id)}&impianto=${encodeURIComponent(doc.id)}`;
+  });
+  ui.globalAddSuccess.querySelector("[data-close-success]")?.addEventListener("click", closeGlobalAddToCommessaModal);
+  loadGlobalImpiantoUsage(impianto);
+}
+
+async function loadGlobalImpiantoUsage(impianto) {
+  if (!ui.globalImpiantoUsage) return;
+  const requestedId = getGlobalSourceId(impianto);
+  ui.globalImpiantoUsage.innerHTML = "<h4>Presente nelle commesse</h4><p class='muted'>Verifica in corso...</p>";
+  try {
+    const results = await Promise.all(Array.from(commesseById.values()).filter(isOperationalCommessa).map(async (commessa) => {
+      const snapshot = await db.collection("commesse").doc(commessa.id).collection("impianti").get();
+      return snapshot.docs.filter((doc) => String(doc.data().globalImpiantoId || "") === requestedId).map((doc) => ({ commessa, id: doc.id, ...doc.data() }));
+    }));
+    if (getGlobalSourceId(selectedGlobalImpianto) !== requestedId) return;
+    const rows = results.flat();
+    ui.globalImpiantoUsage.innerHTML = `<h4>Presente nelle commesse</h4>${rows.length ? rows.map((row) => `<button type="button" class="btn" data-usage-commessa="${escapeHTML(row.commessa.id)}" data-usage-impianto="${escapeHTML(row.id)}"><b>${escapeHTML(row.commessa.nome || "Commessa")}</b><br><small>Stato: ${escapeHTML(row.done ? "Fatto" : row.stato === "in_lavorazione" ? "In lavorazione" : "Da fare")}</small></button>`).join("") : "<p class='muted'>Non ancora utilizzato in alcuna commessa.</p>"}`;
+    ui.globalImpiantoUsage.querySelectorAll("[data-usage-commessa]").forEach((button) => button.addEventListener("click", () => {
+      window.location.hash = `commessa=${encodeURIComponent(button.dataset.usageCommessa)}&impianto=${encodeURIComponent(button.dataset.usageImpianto)}`;
+    }));
+  } catch (error) {
+    console.error("Errore caricamento utilizzi impianto Global:", error);
+    ui.globalImpiantoUsage.innerHTML = "<h4>Presente nelle commesse</h4><p class='muted'>Utilizzi non disponibili.</p>";
+  }
 }
 
 function closeGlobalImpiantoModal() {

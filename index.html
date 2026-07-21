@@ -716,7 +716,9 @@
         <div class="item-actions">
           <button id="global-impianto-navigate-btn" class="btn btn-primary" type="button">Apri Google Maps</button>
           <button id="global-impianto-whatsapp-btn" class="btn" type="button">Segnalazione manutenzione verde</button>
+          <button id="global-impianto-add-to-commessa-btn" class="btn btn-primary" type="button">➕ Aggiungi a commessa</button>
         </div>
+        <div id="global-impianto-usage" class="global-impianto-usage"></div>
       </section>
       <p id="global-map-feedback" class="muted"></p>
     </div>
@@ -1380,6 +1382,40 @@
         <button id="global-report-submit-btn" class="btn btn-primary" type="submit">Crea messaggio WhatsApp</button>
       </form>
       <p id="global-report-feedback" class="muted"></p>
+    </div>
+  </section>
+
+  <section id="global-add-to-commessa-modal" class="chat-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="global-add-title">
+    <div class="chat-modal-content global-add-content">
+      <div class="chat-modal-header">
+        <h2 id="global-add-title">➕ Aggiungi a commessa</h2>
+        <button id="global-add-close-btn" class="btn" type="button">Chiudi</button>
+      </div>
+      <form id="global-add-form" class="resource-form global-add-form" novalidate>
+        <label>Commessa di destinazione <span aria-hidden="true">*</span>
+          <input id="global-add-commessa-search" type="search" list="global-add-commesse-options" placeholder="Cerca e seleziona una commessa" autocomplete="off" required>
+          <datalist id="global-add-commesse-options"></datalist>
+        </label>
+        <fieldset>
+          <legend>Tipo di lavoro <span aria-hidden="true">*</span></legend>
+          <label><input type="radio" name="global-add-tipo-lavoro" value="Ordinario e Straordinario" required> Ordinario e Straordinario</label>
+          <label><input type="radio" name="global-add-tipo-lavoro" value="Solo Ordinario"> Solo Ordinario</label>
+          <label><input type="radio" name="global-add-tipo-lavoro" value="Solo Straordinario"> Solo Straordinario</label>
+        </fieldset>
+        <label>Lavorazione <span aria-hidden="true">*</span>
+          <textarea id="global-add-lavorazione" rows="4" placeholder="Es. Sfalcio, potatura, taglio rovi..." required></textarea>
+        </label>
+        <label>Nota
+          <textarea id="global-add-nota" rows="3" placeholder="Nota facoltativa, visibile nella scheda impianto"></textarea>
+        </label>
+        <p id="global-add-feedback" class="form-feedback" role="alert" aria-live="polite"></p>
+        <div id="global-add-duplicate" class="global-add-message hidden" role="alert"></div>
+        <div id="global-add-success" class="global-add-message success hidden" role="status"></div>
+        <div class="global-add-actions">
+          <button id="global-add-cancel-btn" class="btn" type="button">Annulla</button>
+          <button id="global-add-submit-btn" class="btn btn-primary" type="submit">Aggiungi a impianti da fare</button>
+        </div>
+      </form>
     </div>
   </section>
 

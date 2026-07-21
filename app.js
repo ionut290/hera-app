@@ -4383,11 +4383,18 @@ function setCommessaHash(suffix = "") {
 
 function focusSharedImpiantoFromRoute(impiantoKey) {
   const key = String(impiantoKey || "").trim();
-  if (!key) return;
+  if (!key) return false;
   const impianto = findCurrentImpiantoByKey(key);
-  if (!impianto) return;
+  if (!impianto) return false;
+  const targetViewMode = impianto.done ? "done" : "todo";
+  if (impiantiViewMode !== targetViewMode) setImpiantiViewMode(targetViewMode);
+  if (impiantiSearchTerm) {
+    impiantiSearchTerm = "";
+    if (ui.impiantoSearch) ui.impiantoSearch.value = "";
+  }
   focusImpiantoInList(impianto, true);
   selectImpiantoForMapDetail(impianto);
+  return true;
 }
 
 function applyRoute() {
@@ -12859,6 +12866,13 @@ function subscribeImpianti() {
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
+        const commessaRoute = parseCommessaHash();
+        if (commessaRoute.id === selectedCommessaId && commessaRoute.impianto) {
+          const routedImpianto = findCurrentImpiantoByKey(commessaRoute.impianto);
+          if (routedImpianto && highlightedImpiantoKey !== buildImpiantoKey(routedImpianto)) {
+            window.requestAnimationFrame(() => focusSharedImpiantoFromRoute(commessaRoute.impianto));
+          }
+        }
         renderMap();
         runWhazzupPendingDoneSafetyCheck();
         preloadCommessaWeatherForVisibleImpianti();
@@ -20870,14 +20884,14 @@ function renderSquadre() {
 
 function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {
   const details = Array.isArray(row?.impiantiDettagli) ? row.impiantiDettagli : [];
-  if (!details.length) return `<span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
+  if (!details.length) return `<br><span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
   const liveById = new Map(getCommessaCachedImpianti(commessaId).map((impianto) => [getSquadraImpiantoId(impianto), impianto]));
   const assigned = details.filter((impianto) => {
     const live = liveById.get(getSquadraImpiantoId(impianto));
     return !Boolean(live ? live.done : impianto.done);
   });
   if (!assigned.length) return "";
-  return `<span class="squadra-impianti-compact"><b>📍</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
+  return `<br><span class="squadra-impianti-compact"><b>📍</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
 }
 
 function openCommessaImpiantoFromSquadre(commessa, impianto) {

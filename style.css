@@ -1191,9 +1191,10 @@ textarea:focus-visible {
 .squadra-impianto-suggestions button { display: grid; gap: 2px; text-align: left; }
 .squadra-impianto-selection small,
 .squadra-impianto-suggestions small { color: var(--muted); }
-.squadra-impianto-search-wrap { position: relative; width: min(100%, 420px); }
+.squadra-impianto-search-wrap { position: relative; z-index: 1000; width: min(100%, 520px); }
+.squadra-impianto-search-box { width: 100%; }
 .squadra-impianto-search { width: 100%; margin: 0; }
-.squadra-impianto-suggestions { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 12px 28px rgba(15, 23, 42, .18); }
+.squadra-impianto-suggestions { position: absolute; z-index: 1001; top: calc(100% + 4px); left: 0; right: 0; max-height: min(45vh, 320px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 12px 28px rgba(15, 23, 42, .18); }
 .squadra-impianto-suggestions button { width: 100%; padding: 9px; border: 0; border-radius: 7px; background: transparent; }
 .squadra-impianto-suggestions button:hover,
 .squadra-impianto-suggestions button:focus { background: #eff6ff; }

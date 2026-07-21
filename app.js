@@ -11389,6 +11389,8 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
     ["Coordinate GPS", formatGpsLabel(impianto)],
     ["Ditta esecutrice", impianto.dittaEsecutrice || "-"]
   ];
+  if (impianto.note) details.push(["Note", impianto.note]);
+  if (impianto.lavorazioni) details.push(["Lavorazioni", Array.isArray(impianto.lavorazioni) ? impianto.lavorazioni.join(", ") : impianto.lavorazioni]);
   Object.entries(impianto.extraFields || {}).forEach(([key, value]) => details.push([formatExtraFieldLabel(key), value]));
   const weatherBadge = `<p><b>Meteo:</b> ${buildImpiantoWeatherBadgeMarkup(impianto)}</p>`;
   ui.globalImpiantoDetailsBody.innerHTML = weatherBadge + details
@@ -11413,8 +11415,10 @@ function openGlobalImpiantoDetails(impianto, options = {}) {
   if (options.focusOnMap && hasValidGlobalCoordinates(impianto)) {
     globalMap.setView([impianto.gpsY, impianto.gpsX], Math.max(globalMap.getZoom(), 14), { animate: true });
   }
-  renderGlobalMap();
-  renderGlobalImpianti();
+  if (!options.skipGlobalRender) {
+    renderGlobalMap();
+    renderGlobalImpianti();
+  }
 }
 
 function getGlobalSourceId(impianto = selectedGlobalImpianto) {
@@ -19662,27 +19666,27 @@ function subscribeSquadre() {
 
   const squadreQuery = db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", selectedDateKey);
   console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico where dateKey == data selezionata. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
-  const squadreDataPromise = runFirestoreGetWithRetry(squadreQuery, {
-    label: "LOAD SQUADRE",
-    timeoutMs: 9000,
-    retries: 2,
-    onRetry: (attempt) => {
-      squadreLoadState = { status: "loading", message: `Connessione lenta: ritento caricamento squadre (${attempt}/2)...` };
-      renderSquadre();
-      renderCommesseHomeList();
-    }
-  })
-    .then((snapshot) => {
+  const squadreDataPromise = new Promise((resolve) => {
+    let initialSnapshotReceived = false;
+    unsubscribeSquadreHistory = squadreQuery.onSnapshot((snapshot) => {
       clearSquadreLoadTimeout();
       applySquadreSnapshot(snapshot);
-    })
-    .catch((error) => {
+      if (!initialSnapshotReceived) {
+        initialSnapshotReceived = true;
+        resolve(true);
+      }
+    }, (error) => {
       clearSquadreLoadTimeout();
       logFirestoreError("LOAD SQUADRE", error, { dateKey: selectedDateKey });
       squadreLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento squadre") };
       renderSquadre();
       renderCommesseHomeList();
+      if (!initialSnapshotReceived) {
+        initialSnapshotReceived = true;
+        resolve(false);
+      }
     });
+  });
 
   const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
   const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId), {
@@ -19990,7 +19994,8 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   const orarioParts = getSquadraOrarioParts(rowData);
   const personaleValues = parseMultiEntryValue(rowData.personale);
   const mezziValues = parseMultiEntryValue(rowData.mezzi);
-  const impiantiValues = parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "");
+  const impiantiDetails = Array.isArray(rowData.impiantiDettagli) ? rowData.impiantiDettagli : [];
+  const impiantiValues = impiantiDetails.length ? impiantiDetails : parseMultiEntryValue(rowData.impianti || rowData.impiantiAssegnati || "").map((denominazione) => ({ denominazione, legacy: true }));
   const row = document.createElement("div");
   row.className = "squadra-row";
   row.__squadraRowData = rowData || {};
@@ -20055,21 +20060,13 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
     value,
     sourceValues: mezziRecords.map((m) => m.nId || m.nome)
   });
-  const addImpiantoInput = (value = "") => addMultiEntryInput({
-    container: impiantiList,
-    listId: "",
-    placeholder: "Impianto assegnato",
-    value,
-    sourceValues: []
-  });
-
   (personaleValues.length ? personaleValues : [""]).forEach((value) => addPersonaleInput(value));
   (mezziValues.length ? mezziValues : [""]).forEach((value) => addMezzoInput(value));
-  (impiantiValues.length ? impiantiValues : [""]).forEach((value) => addImpiantoInput(value));
+  impiantiValues.forEach((impianto) => addSquadraImpiantoSelection(impiantiList, impianto));
 
   addPersonaleBtn.addEventListener("click", () => addPersonaleInput(""));
   addMezzoBtn.addEventListener("click", () => addMezzoInput(""));
-  addImpiantoBtn.addEventListener("click", () => addImpiantoInput(""));
+  addImpiantoBtn.addEventListener("click", () => addSquadraImpiantoSearch(impiantiList, addImpiantoBtn));
   removeRowBtn?.addEventListener("click", () => {
     row.remove();
     renumberSquadraRows();
@@ -20078,6 +20075,60 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
   });
   ui.squadraRows.appendChild(row);
   updateAdminControls();
+}
+
+function getSquadraImpiantoId(impianto = {}) {
+  return String(impianto.id || impianto.impiantoId || impianto.sourceIds?.[0] || buildImpiantoKey(impianto) || "").trim();
+}
+
+function snapshotSquadraImpianto(impianto = {}) {
+  const snapshot = {};
+  ["denominazione", "comune", "idSap", "codiceHera", "indirizzo", "descrizioneVia", "gpsX", "gpsY", "lat", "lng", "note", "lavorazioni", "tipologiaImpianto", "tipologiaIntervento", "area", "competenza", "dittaEsecutrice"].forEach((key) => {
+    if (impianto[key] !== undefined && impianto[key] !== null) snapshot[key] = impianto[key];
+  });
+  snapshot.impiantoId = getSquadraImpiantoId(impianto);
+  return snapshot;
+}
+
+function addSquadraImpiantoSelection(container, impianto) {
+  if (!container || !impianto) return;
+  const snapshot = impianto.legacy ? impianto : snapshotSquadraImpianto(impianto);
+  const wrap = document.createElement("div");
+  wrap.className = "squadra-impianto-selection";
+  wrap.__impianto = snapshot;
+  wrap.innerHTML = `<span><b>${escapeHTML(snapshot.denominazione || snapshot.idSap || "Impianto")}</b><small>${escapeHTML(snapshot.comune || "-")} • ID SAP ${escapeHTML(snapshot.idSap || "-")}</small></span><button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi impianto">−</button>`;
+  wrap.querySelector("button")?.addEventListener("click", () => wrap.remove());
+  container.appendChild(wrap);
+}
+
+function addSquadraImpiantoSearch(container, trigger) {
+  if (!container || container.querySelector(".squadra-impianto-search-wrap")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "squadra-impianto-search-wrap";
+  wrap.innerHTML = `<input type="search" class="squadra-impianto-search" placeholder="Cerca per denominazione" autocomplete="off" aria-label="Cerca impianto della commessa"><div class="squadra-impianto-suggestions" role="listbox"></div>`;
+  const input = wrap.querySelector("input");
+  const suggestions = wrap.querySelector("div");
+  const render = () => {
+    const term = String(input.value || "").trim().toLocaleLowerCase("it-IT");
+    const selectedIds = new Set(Array.from(container.querySelectorAll(".squadra-impianto-selection")).map((item) => getSquadraImpiantoId(item.__impianto)).filter(Boolean));
+    const matches = getCommessaCachedImpianti(ui.squadraCommessa?.value)
+      .filter((impianto) => !selectedIds.has(getSquadraImpiantoId(impianto)))
+      .filter((impianto) => !term || String(impianto.denominazione || impianto.nome || "").toLocaleLowerCase("it-IT").startsWith(term))
+      .sort((a, b) => String(a.denominazione || a.nome || "").localeCompare(String(b.denominazione || b.nome || ""), "it"));
+    suggestions.innerHTML = matches.length ? matches.map((impianto) => `<button type="button" role="option" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}"><b>${escapeHTML(impianto.denominazione || impianto.nome || "Impianto")}</b><small>${escapeHTML(impianto.comune || "-")} • ID SAP ${escapeHTML(impianto.idSap || impianto.codiceHera || "-")}</small></button>`).join("") : `<p class="muted">Nessun impianto della commessa trovato.</p>`;
+    suggestions.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
+      const selected = getCommessaCachedImpianti(ui.squadraCommessa?.value).find((impianto) => getSquadraImpiantoId(impianto) === button.dataset.impiantoId);
+      if (!selected || selectedIds.has(getSquadraImpiantoId(selected))) return;
+      addSquadraImpiantoSelection(container, selected);
+      wrap.remove();
+      trigger?.focus();
+    }));
+  };
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", (event) => { if (event.key === "Escape") wrap.remove(); });
+  container.appendChild(wrap);
+  render();
+  input.focus();
 }
 
 function resolveSuggestionValue(rawValue, sourceValues) {
@@ -20143,7 +20194,9 @@ function isSquadraRowFilled(row) {
 }
 
 function readSquadraRows() {
-  return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => ({
+  return Array.from(ui.squadraRows.querySelectorAll(".squadra-row")).map((row) => {
+    const impiantiDettagli = Array.from(row.querySelectorAll(".squadra-impianto-selection")).map((item) => item.__impianto).filter(Boolean);
+    return ({
     caposquadra: String(row.querySelector(".squadra-caposquadra-input")?.value || "").trim(),
     personale: Array.from(row.querySelectorAll(".squadra-personale-list .squadra-multi-entry-input"))
       .map((input) => String(input.value || "").trim())
@@ -20153,10 +20206,8 @@ function readSquadraRows() {
       .map((input) => String(input.value || "").trim())
       .filter(Boolean)
       .join(", "),
-    impianti: Array.from(row.querySelectorAll(".squadra-impianti-list .squadra-multi-entry-input"))
-      .map((input) => String(input.value || "").trim())
-      .filter(Boolean)
-      .join(", "),
+    impianti: impiantiDettagli.map((impianto) => impianto.denominazione || impianto.idSap || "").filter(Boolean).join(", "),
+    impiantiDettagli,
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
     orarioFine: String(row.querySelector(".squadra-orario-fine-input")?.value || "").trim(),
@@ -20164,7 +20215,7 @@ function readSquadraRows() {
     conflittiConfermati: row.__squadraRowData?.conflittiConfermati || { operatori: [], mezzi: [] },
     conflittoOperatoreConfermato: Boolean(row.__squadraRowData?.conflittoOperatoreConfermato),
     conflittoMezzoConfermato: Boolean(row.__squadraRowData?.conflittoMezzoConfermato)
-  })).filter(isSquadraRowFilled);
+  }); }).filter(isSquadraRowFilled);
 }
 
 function getLegacySquadreRows(data) {
@@ -20734,7 +20785,7 @@ function renderSquadre() {
       const details = [
         row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
         orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
-        row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
+        row.impianti ? `<br><b>📍 Impianti:</b> ${renderSquadraImpiantiButtons(row, idx)}` : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
       const rowConflictReport = {
@@ -20783,6 +20834,16 @@ function renderSquadre() {
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
       btn.addEventListener("click", () => openFuelPage(btn.dataset.mezzo || ""));
     });
+    item.querySelectorAll(".squadra-impianto-link").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const row = squadRows[Number(btn.dataset.squadraIndex) || 0] || {};
+        const saved = (row.impiantiDettagli || []).find((impianto) => getSquadraImpiantoId(impianto) === btn.dataset.impiantoId);
+        const live = getCommessaCachedImpianti(commessa.id).find((impianto) => getSquadraImpiantoId(impianto) === btn.dataset.impiantoId);
+        if (saved || live) openGlobalImpiantoDetails({ ...(saved || {}), ...(live || {}) }, { skipGlobalRender: true });
+      });
+    });
     item.querySelector("[data-worklimate-commessa]")?.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -20803,6 +20864,12 @@ function renderSquadre() {
     });
     ui.squadreLista.appendChild(item);
   });
+}
+
+function renderSquadraImpiantiButtons(row, squadraIndex = 0) {
+  const details = Array.isArray(row?.impiantiDettagli) ? row.impiantiDettagli : [];
+  if (!details.length) return escapeHTML(row?.impianti || "-");
+  return details.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join(" ");
 }
 
 function renderMezziButtonsMarkup(rawValue) {

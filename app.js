@@ -12855,6 +12855,7 @@ function subscribeImpianti() {
         currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
         refreshImpiantoWhatsAppTemplateCache(currentImpianti);
         impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
+        renderSquadre();
         renderHeaderActivitySummary();
         updateCommessaDashboard();
         renderImpianti();
@@ -20785,7 +20786,7 @@ function renderSquadre() {
       const details = [
         row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
         orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
-        row.impianti ? `<br><b>📍 Impianti:</b> ${renderSquadraImpiantiButtons(row, idx)}` : "",
+        row.impianti ? renderSquadraImpiantiButtons(row, idx, commessa.id) : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
       const rowConflictReport = {
@@ -20841,7 +20842,8 @@ function renderSquadre() {
         const row = squadRows[Number(btn.dataset.squadraIndex) || 0] || {};
         const saved = (row.impiantiDettagli || []).find((impianto) => getSquadraImpiantoId(impianto) === btn.dataset.impiantoId);
         const live = getCommessaCachedImpianti(commessa.id).find((impianto) => getSquadraImpiantoId(impianto) === btn.dataset.impiantoId);
-        if (saved || live) openGlobalImpiantoDetails({ ...(saved || {}), ...(live || {}) }, { skipGlobalRender: true });
+        const impianto = { ...(saved || {}), ...(live || {}) };
+        if (saved || live) openCommessaImpiantoFromSquadre(commessa, impianto);
       });
     });
     item.querySelector("[data-worklimate-commessa]")?.addEventListener("click", (event) => {
@@ -20866,10 +20868,24 @@ function renderSquadre() {
   });
 }
 
-function renderSquadraImpiantiButtons(row, squadraIndex = 0) {
+function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {
   const details = Array.isArray(row?.impiantiDettagli) ? row.impiantiDettagli : [];
-  if (!details.length) return escapeHTML(row?.impianti || "-");
-  return details.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join(" ");
+  if (!details.length) return `<span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
+  const liveById = new Map(getCommessaCachedImpianti(commessaId).map((impianto) => [getSquadraImpiantoId(impianto), impianto]));
+  const assigned = details.filter((impianto) => {
+    const live = liveById.get(getSquadraImpiantoId(impianto));
+    return !Boolean(live ? live.done : impianto.done);
+  });
+  if (!assigned.length) return "";
+  return `<span class="squadra-impianti-compact"><b>📍</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
+}
+
+function openCommessaImpiantoFromSquadre(commessa, impianto) {
+  const target = getCommessaNavigationTarget(commessa);
+  const impiantoId = getSquadraImpiantoId(impianto);
+  if (!target?.id || !impiantoId) return;
+  selectCommessa(target.id, target.nome || "Commessa", target.codice || "");
+  openImpiantiPage(`&impianto=${encodeURIComponent(impiantoId)}`);
 }
 
 function renderMezziButtonsMarkup(rawValue) {

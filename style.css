@@ -9304,6 +9304,20 @@ body.auth-required .menu-overlay {
   min-width: 220px;
 }
 
+.biometric-dialog {
+  width: min(92vw, 440px);
+  border: 0;
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 35%);
+}
+
+.biometric-dialog::backdrop { background: rgb(15 23 42 / 55%); }
+.biometric-dialog h2 { margin-top: 0; }
+.biometric-security { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border, #d8dee9); }
+.biometric-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-weight: 700; }
+.biometric-switch-row input { width: 1.4rem; height: 1.4rem; }
+
 .startup-loading {
   position: fixed;
   inset: 0;

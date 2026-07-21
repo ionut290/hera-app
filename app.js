@@ -451,6 +451,15 @@ const ui = {
   authPasswordInput: document.getElementById("auth-password-input"),
   authEmailLoginBtn: document.getElementById("auth-email-login-btn"),
   authEmailFeedback: document.getElementById("auth-email-feedback"),
+  biometricOfferDialog: document.getElementById("biometric-offer-dialog"),
+  biometricOfferFeedback: document.getElementById("biometric-offer-feedback"),
+  biometricEnableBtn: document.getElementById("biometric-enable-btn"),
+  biometricNotNowBtn: document.getElementById("biometric-not-now-btn"),
+  biometricSecuritySettings: document.getElementById("biometric-security-settings"),
+  biometricToggle: document.getElementById("biometric-toggle"),
+  biometricSettingsFeedback: document.getElementById("biometric-settings-feedback"),
+  biometricVerifyBtn: document.getElementById("biometric-verify-btn"),
+  biometricDisableBtn: document.getElementById("biometric-disable-btn"),
   loginBtn: document.getElementById("login-btn"),
   switchAccountBtn: document.getElementById("switch-account-btn"),
   logoutBtn: document.getElementById("logout-btn"),
@@ -1740,6 +1749,10 @@ ui.menuCloseBtn?.addEventListener("click", closeSideMenu);
 ui.installAppBtn?.addEventListener("click", handleInstallAppClick);
 ui.menuOverlay?.addEventListener("click", closeSideMenu);
 ui.logoutBtn?.addEventListener("click", logout);
+ui.biometricEnableBtn?.addEventListener("click", () => void enableBiometricAccess());
+ui.biometricToggle?.addEventListener("change", () => void (ui.biometricToggle.checked ? enableBiometricAccess() : disableBiometricAccess()));
+ui.biometricVerifyBtn?.addEventListener("click", () => void verifyBiometricFromSettings());
+ui.biometricDisableBtn?.addEventListener("click", () => void disableBiometricAccess());
 ui.driveConnectBtn?.addEventListener("click", connectGoogleDrive);
 ui.commessaForm?.addEventListener("submit", createCommessa);
 document.getElementById("snow-roads-form")?.addEventListener("submit", addSnowRoadsToSelectedCommessa);
@@ -3068,6 +3081,7 @@ if (!auth || firebaseInitError) {
         await clearPersistedSession();
       }
     }
+    if (!(await requireBiometricAtStartup())) return;
     console.log("USER UID", user.uid);
     logActivity("login_app", "Login app");
     logActivity("apertura_app", "Apertura app");
@@ -3075,6 +3089,10 @@ if (!auth || firebaseInitError) {
     savedStartupSession = null;
   }
   setAuthenticationGateState(loggedIn ? "authenticated" : "required");
+  if (loggedIn) setTimeout(() => {
+    void refreshBiometricSettings();
+    void offerBiometricsAfterGoogleLogin();
+  }, 0);
 
   ui.loginBtn.disabled = loggedIn;
   ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
@@ -8905,6 +8923,114 @@ function isAndroidWebViewRuntime() {
   return capacitorPlatform === "android" || isCapacitorNative || (isAndroidUa && isWebViewUa);
 }
 
+const BIOMETRIC_TITLE = "Accedi a Varga Cantieri";
+const BIOMETRIC_SUBTITLE = "Usa l’impronta digitale o il riconoscimento facciale";
+const BIOMETRIC_UNAVAILABLE = "L’accesso biometrico non è disponibile su questo dispositivo.";
+const BIOMETRIC_NOT_ENROLLED = "Configura prima l’impronta digitale o il riconoscimento facciale nelle impostazioni del telefono.";
+let googleLoginMayOfferBiometrics = false;
+let biometricStartupAttempted = false;
+let biometricGateFailed = false;
+
+function getBiometricPlugin() {
+  if (!isAndroidWebViewRuntime() || !window.Capacitor || typeof window.Capacitor.registerPlugin !== "function") return null;
+  return window.Capacitor.registerPlugin("HeraBiometric");
+}
+
+function biometricErrorMessage(error) {
+  const code = String(error?.code || "");
+  if (code === "none_enrolled") return BIOMETRIC_NOT_ENROLLED;
+  if (code === "not_available") return BIOMETRIC_UNAVAILABLE;
+  if (code === "cancelled" || code === "authentication_failed") return "Verifica biometrica annullata o non riuscita. Accedi con Google.";
+  return String(error?.message || "Verifica biometrica non riuscita.");
+}
+
+async function refreshBiometricSettings() {
+  const plugin = getBiometricPlugin();
+  ui.biometricSecuritySettings?.classList.toggle("hidden", !plugin);
+  if (!plugin) return null;
+  try {
+    const status = await plugin.status();
+    if (ui.biometricToggle) ui.biometricToggle.checked = Boolean(status.enabled);
+    if (ui.biometricVerifyBtn) ui.biometricVerifyBtn.disabled = !status.enabled;
+    if (ui.biometricDisableBtn) ui.biometricDisableBtn.disabled = !status.enabled;
+    if (!status.available && ui.biometricSettingsFeedback) {
+      ui.biometricSettingsFeedback.textContent = status.reason === "none_enrolled" ? BIOMETRIC_NOT_ENROLLED : BIOMETRIC_UNAVAILABLE;
+    }
+    return status;
+  } catch (error) {
+    console.warn("Stato biometria non disponibile:", error);
+    return null;
+  }
+}
+
+async function enableBiometricAccess() {
+  const plugin = getBiometricPlugin();
+  if (!plugin) return;
+  const feedback = ui.biometricOfferDialog?.open ? ui.biometricOfferFeedback : ui.biometricSettingsFeedback;
+  try {
+    if (feedback) feedback.textContent = "Verifica biometrica in corso…";
+    await plugin.enable({ title: BIOMETRIC_TITLE, subtitle: BIOMETRIC_SUBTITLE });
+    if (feedback) feedback.textContent = "Accesso biometrico attivato.";
+    ui.biometricOfferDialog?.close();
+  } catch (error) {
+    if (feedback) feedback.textContent = biometricErrorMessage(error);
+  }
+  await refreshBiometricSettings();
+}
+
+async function disableBiometricAccess() {
+  const plugin = getBiometricPlugin();
+  if (!plugin) return;
+  await plugin.disable();
+  if (ui.biometricSettingsFeedback) ui.biometricSettingsFeedback.textContent = "Accesso biometrico disattivato.";
+  await refreshBiometricSettings();
+}
+
+async function verifyBiometricFromSettings() {
+  const plugin = getBiometricPlugin();
+  if (!plugin) return;
+  try {
+    await plugin.authenticate({ title: BIOMETRIC_TITLE, subtitle: BIOMETRIC_SUBTITLE });
+    if (ui.biometricSettingsFeedback) ui.biometricSettingsFeedback.textContent = "Biometria verificata correttamente.";
+  } catch (error) {
+    if (ui.biometricSettingsFeedback) ui.biometricSettingsFeedback.textContent = biometricErrorMessage(error);
+  }
+  await refreshBiometricSettings();
+}
+
+async function requireBiometricAtStartup() {
+  const plugin = getBiometricPlugin();
+  if (!plugin || biometricStartupAttempted) return true;
+  biometricStartupAttempted = true;
+  const googleFallback = getSessionStorageValue("heraGoogleFallbackApproved") === "true";
+  if (googleFallback) {
+    sessionStorage.removeItem("heraGoogleFallbackApproved");
+    return true;
+  }
+  const status = await plugin.status();
+  if (!status.enabled) return true;
+  try {
+    await plugin.authenticate({ title: BIOMETRIC_TITLE, subtitle: BIOMETRIC_SUBTITLE });
+    return true;
+  } catch (error) {
+    biometricGateFailed = true;
+    currentUser = null;
+    setAuthenticationGateState("required", biometricErrorMessage(error));
+    if (ui.authGateLoginBtn) ui.authGateLoginBtn.textContent = "ACCEDI CON GOOGLE";
+    hideStartupLoading();
+    return false;
+  }
+}
+
+async function offerBiometricsAfterGoogleLogin() {
+  if (!googleLoginMayOfferBiometrics) return;
+  googleLoginMayOfferBiometrics = false;
+  const status = await refreshBiometricSettings();
+  if (status && !status.enabled && ui.biometricOfferDialog && !ui.biometricOfferDialog.open) {
+    ui.biometricOfferDialog.showModal();
+  }
+}
+
 async function loginWithEmailPassword() {
   const email = String(ui.authEmailInput?.value || "").trim();
   const password = String(ui.authPasswordInput?.value || "");
@@ -8933,12 +9059,17 @@ function loginWithGoogle(forceAccountSelection = false) {
   provider.addScope("https://www.googleapis.com/auth/userinfo.email");
   if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
 
+  googleLoginMayOfferBiometrics = true;
   ensureAuthLocalPersistence().then(() => {
     // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
     if (isAndroidWebViewRuntime()) {
       return auth.signInWithPopup(provider).then((result) => {
-        void result;
+        if (biometricGateFailed && result?.user) {
+          setSessionStorageValue("heraGoogleFallbackApproved", "true");
+          window.location.reload();
+        }
       }).catch((error) => {
+        googleLoginMayOfferBiometrics = false;
         console.error("Login Google Android/WebView fallito:", error);
         recoverFirestorePersistence(error);
         alert("Errore login Android/WebView: " + formatLoginError(error));
@@ -8947,17 +9078,22 @@ function loginWithGoogle(forceAccountSelection = false) {
 
     // Flusso web desktop/browser standard: manteniamo comportamento esistente.
     return auth.signInWithPopup(provider).then((result) => {
-      void result;
+      if (biometricGateFailed && result?.user) {
+        setSessionStorageValue("heraGoogleFallbackApproved", "true");
+        window.location.reload();
+      }
     }).catch((error) => {
       if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
         return auth.signInWithRedirect(provider);
       }
       console.error("Errore login:", error);
+      googleLoginMayOfferBiometrics = false;
       recoverFirestorePersistence(error);
       alert("Errore login: " + formatLoginError(error));
       return null;
     });
   }).catch((error) => {
+    googleLoginMayOfferBiometrics = false;
     console.error("Errore preparazione persistenza login:", error);
     alert("Errore preparazione login: " + formatLoginError(error));
   });
@@ -9019,7 +9155,8 @@ async function autoConnectDriveBridge(options = {}) {
 async function logout() {
   resetDriveState();
   await clearPersistedSession();
-  auth.signOut();
+  biometricStartupAttempted = true;
+  await auth.signOut();
 }
 
 

@@ -3584,6 +3584,31 @@ function formatCompletedPlantTimestamp(value) {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("it-IT", { dateStyle: "short", timeStyle: "medium" });
 }
 
+function completedPlantValueIsDone(impianto = {}) {
+  if (impianto.done === true || impianto.fatto === true || impianto.completed === true) return true;
+  return ["true", "1", "fatto", "done", "completed", "completato"].includes(String(impianto.stato || impianto.status || "").trim().toLowerCase());
+}
+
+function buildLocalCompletedPlantInconsistencies() {
+  return currentImpianti.flatMap((impianto) => {
+    const hasOperator = Boolean(String(impianto.doneBy || impianto.doneByUid || impianto.doneByEmail || "").trim());
+    const hasDoneAt = formatCompletedPlantTimestamp(impianto.doneAt) !== "-";
+    if (impianto.done === true || (!completedPlantValueIsDone(impianto) && !hasDoneAt && !hasOperator)) return [];
+    return [{
+      key: buildImpiantoKey(impianto),
+      docIds: [impianto.id, ...(impianto.firebaseDocIds || [])].filter(Boolean).map(String),
+      name: impianto.denominazione || impianto.nome || "Impianto",
+      idSap: impianto.idSap || impianto.idSAP || impianto.codiceSap || "",
+      comune: impianto.comune || "",
+      doneAt: impianto.doneAt || "",
+      doneBy: impianto.doneBy || "",
+      doneByEmail: impianto.doneByEmail || "",
+      currentStatus: "Da fare",
+      cause: "I dati FATTO salvati nell’app non coincidono con la presenza dell’impianto in DA FARE."
+    }];
+  });
+}
+
 function renderCompletedPlantsInconsistencies() {
   if (!ui.completedPlantsList) return;
   ui.completedPlantsList.innerHTML = "";
@@ -3625,13 +3650,18 @@ async function checkCurrentCommessaCompletedPlants() {
     renderCompletedPlantsInconsistencies();
   } catch (error) {
     console.error("Verifica impianti della commessa fallita:", { commessaId: selectedCommessaId, code: error?.code || "unknown" });
-    completedPlantsInconsistencies = [];
-    ui.completedPlantsList.innerHTML = "";
     const errorCode = String(error?.code || "").replace(/^functions\//, "");
-    const message = errorCode === "internal"
-      ? "Il servizio non è riuscito a leggere alcuni dati di questa commessa. Riprova; se il problema continua, contatta l’assistenza indicando la commessa corrente"
-      : (error?.message || "si è verificato un problema con i dati della commessa");
-    ui.completedPlantsFeedback.textContent = `Impossibile completare il controllo: ${message}. Nessun dato è stato modificato.`;
+    if (errorCode === "internal") {
+      completedPlantsInconsistencies = buildLocalCompletedPlantInconsistencies();
+      completedPlantsTotalChecked = currentImpianti.length;
+      completedPlantsSkippedCount = 0;
+      renderCompletedPlantsInconsistencies();
+      if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent += " Controllo completato sui dati già caricati nell’app; nessun dato è stato modificato.";
+    } else {
+      completedPlantsInconsistencies = [];
+      ui.completedPlantsList.innerHTML = "";
+      ui.completedPlantsFeedback.textContent = `Impossibile completare il controllo: ${error?.message || "si è verificato un problema con i dati della commessa"}. Nessun dato è stato modificato.`;
+    }
   } finally { setCompletedPlantsBusy(false); }
 }
 

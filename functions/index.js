@@ -567,7 +567,11 @@ exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (data,
       count: result.items.length,
       skippedCount: result.skippedCount,
       totalChecked: result.totalChecked,
-      commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
+      commessa: {
+        id: safeText(result.commessa.id),
+        name: safeText(commessaData.nome || commessaData.name || result.commessa.id, "Commessa"),
+        code: safeText(commessaData.codice || commessaData.code)
+      },
       items: result.items
     };
   } catch (error) {

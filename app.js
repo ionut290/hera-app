@@ -13999,6 +13999,15 @@ function formatDoneDateTime(doneAt) {
   };
 }
 
+function formatDoneButtonLabel(doneAt) {
+  const millis = firestoreDateToMillis(doneAt);
+  if (!millis) return "⚠️ FATTO";
+  const date = new Date(millis);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `⚠️ ${day}/${month}`;
+}
+
 function renderHeaderActivitySummary() {
   if (ui.activeUsersSummary) {
     const activeUsers = platformUsers.filter((user) => {
@@ -14576,6 +14585,15 @@ function renderImpianti() {
         false,
         primaryActionsRow
       );
+    } else {
+      const completedDoneBtn = document.createElement("button");
+      completedDoneBtn.type = "button";
+      completedDoneBtn.className = "btn action-icon-btn is-completed-done";
+      completedDoneBtn.dataset.actionKey = "whatsapp";
+      completedDoneBtn.dataset.doneLabel = formatDoneButtonLabel(impianto.doneAt);
+      completedDoneBtn.setAttribute("aria-label", completedDoneBtn.dataset.doneLabel);
+      completedDoneBtn.disabled = true;
+      primaryActionsRow.appendChild(completedDoneBtn);
     }
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Pulsante nascosto usato dal recovery/safety check per spostare nei Fatti senza cambiare il flusso WhatsApp.

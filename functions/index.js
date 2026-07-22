@@ -431,9 +431,44 @@ function completedPlantKey(data = {}) {
 }
 
 function timestampMillis(value) {
-  if (value && typeof value.toMillis === "function") return value.toMillis();
-  const parsed = new Date(value || 0).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (value == null || value === "") return 0;
+  try {
+    if (typeof value.toMillis === "function") {
+      const millis = Number(value.toMillis());
+      return Number.isFinite(millis) && millis > 0 ? millis : 0;
+    }
+    if (typeof value.toDate === "function") {
+      const millis = value.toDate().getTime();
+      return Number.isFinite(millis) && millis > 0 ? millis : 0;
+    }
+    if (value instanceof Date) {
+      const millis = value.getTime();
+      return Number.isFinite(millis) && millis > 0 ? millis : 0;
+    }
+    if (typeof value === "object") {
+      const seconds = Number(value.seconds ?? value._seconds);
+      const nanoseconds = Number(value.nanoseconds ?? value._nanoseconds ?? 0);
+      if (Number.isFinite(seconds)) {
+        const millis = (seconds * 1000) + (Number.isFinite(nanoseconds) ? nanoseconds / 1e6 : 0);
+        return Number.isFinite(millis) && millis > 0 ? millis : 0;
+      }
+      return 0;
+    }
+    const numeric = typeof value === "number" ? value : (/^-?\d+(\.\d+)?$/.test(String(value).trim()) ? Number(value) : NaN);
+    if (Number.isFinite(numeric)) {
+      const millis = Math.abs(numeric) < 100000000000 ? numeric * 1000 : numeric;
+      return Number.isFinite(millis) && millis > 0 ? millis : 0;
+    }
+    const millis = Date.parse(String(value));
+    return Number.isFinite(millis) && millis > 0 ? millis : 0;
+  } catch (_error) {
+    return 0;
+  }
+}
+
+function timestampIso(value) {
+  const millis = timestampMillis(value);
+  return millis ? new Date(millis).toISOString() : "";
 }
 
 function hasDoneState(data = {}) {
@@ -445,18 +480,26 @@ function hasDoneState(data = {}) {
 function groupCompletedPlantAnomalies(commessa, docs) {
   const groups = new Map();
   docs.forEach((doc) => {
-    const data = doc.data() || {};
-    const key = completedPlantKey(data);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ ref: doc.ref, id: doc.id, data });
+    try {
+      const data = doc.data() || {};
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("invalid document data");
+      const key = completedPlantKey(data);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ ref: doc.ref, id: doc.id, data });
+    } catch (error) {
+      console.error("Documento impianto non analizzabile", { commessaId: commessa.id, documentId: doc.id, errorCode: error?.code || "invalid-data" });
+    }
   });
   const anomalies = [];
   groups.forEach((records, key) => {
-    if (records.some((record) => hasDoneState(record.data))) return;
     const completion = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
     const doneAtMs = timestampMillis(completion?.data?.doneAt);
     const resetAtMs = Math.max(0, ...records.map((record) => timestampMillis(record.data.resetAt)));
-    if (!completion || !doneAtMs || doneAtMs < resetAtMs) return;
+    // doneAt is written by the existing FATTO flow.  It is reliable evidence only
+    // when valid and not superseded by a later, intentional reset.
+    if (!completion || !doneAtMs || (resetAtMs && doneAtMs <= resetAtMs)) return;
+    const currentlyDone = records.some((record) => hasDoneState(record.data)) && doneAtMs >= resetAtMs;
+    if (currentlyDone) return;
     const data = completion.data;
     anomalies.push({
       key,
@@ -466,12 +509,12 @@ function groupCompletedPlantAnomalies(commessa, docs) {
       name: data.denominazione || data.nome || "Impianto",
       idSap: data.idSap || data.idSAP || data.codiceSap || "",
       comune: data.comune || "",
-      doneAt: data.doneAt.toDate ? data.doneAt.toDate().toISOString() : new Date(data.doneAt).toISOString(),
-      doneBy: data.doneBy || "",
-      doneByUid: data.doneByUid || "",
-      doneByEmail: data.doneByEmail || "",
-      currentStatus: data.stato || data.status || "Da fare",
-      cause: "La registrazione FATTO è presente, ma il flag condiviso done non risulta completato."
+      doneAt: timestampIso(data.doneAt),
+      doneBy: String(data.doneBy || ""),
+      doneByUid: String(data.doneByUid || ""),
+      doneByEmail: String(data.doneByEmail || ""),
+      currentStatus: "Da fare",
+      cause: "È presente una data FATTO valida e non annullata, ma nessun record collegato ha uno stato completato."
     });
   });
   return anomalies;
@@ -479,11 +522,16 @@ function groupCompletedPlantAnomalies(commessa, docs) {
 
 async function findCompletedPlantAnomalies(db) {
   const commesse = await db.collection("commesse").get();
-  const snapshots = await Promise.all(commesse.docs.map(async (commessa) => ({
-    commessa,
-    impianti: await commessa.ref.collection("impianti").get()
-  })));
-  return snapshots.flatMap(({ commessa, impianti }) => groupCompletedPlantAnomalies(commessa, impianti.docs));
+  const anomalies = [];
+  for (const commessa of commesse.docs) {
+    try {
+      const impianti = await commessa.ref.collection("impianti").get();
+      anomalies.push(...groupCompletedPlantAnomalies(commessa, impianti.docs));
+    } catch (error) {
+      console.error("Commessa non analizzabile durante il controllo impianti", { commessaId: commessa.id, documentId: "impianti", errorCode: error?.code || "read-error" });
+    }
+  }
+  return anomalies;
 }
 
 exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (_data, context) => {

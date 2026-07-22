@@ -505,6 +505,7 @@ function groupCompletedPlantAnomalies(commessa, docs) {
       key,
       commessaId: commessa.id,
       commessaName: commessa.data().nome || commessa.data().name || commessa.data().codice || commessa.id,
+      commessaCode: commessa.data().codice || commessa.data().code || "",
       docIds: records.map((record) => record.id),
       name: data.denominazione || data.nome || "Impianto",
       idSap: data.idSap || data.idSAP || data.codiceSap || "",
@@ -520,40 +521,51 @@ function groupCompletedPlantAnomalies(commessa, docs) {
   return anomalies;
 }
 
-async function findCompletedPlantAnomalies(db) {
-  const commesse = await db.collection("commesse").get();
-  const anomalies = [];
-  for (const commessa of commesse.docs) {
-    try {
-      const impianti = await commessa.ref.collection("impianti").get();
-      anomalies.push(...groupCompletedPlantAnomalies(commessa, impianti.docs));
-    } catch (error) {
-      console.error("Commessa non analizzabile durante il controllo impianti", { commessaId: commessa.id, documentId: "impianti", errorCode: error?.code || "read-error" });
-    }
+function validateCommessaId(value) {
+  const commessaId = String(value || "").trim();
+  if (!commessaId || commessaId.length > 200 || commessaId.includes("/")) {
+    throw new functions.https.HttpsError("invalid-argument", "commessaId non valido.");
   }
-  return anomalies;
+  return commessaId;
 }
 
-exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (_data, context) => {
+async function findCompletedPlantAnomalies(db, commessaId) {
+  const commessaRef = db.collection("commesse").doc(validateCommessaId(commessaId));
+  const commessa = await commessaRef.get();
+  if (!commessa.exists) throw new functions.https.HttpsError("not-found", "La commessa selezionata non esiste.");
+  const impianti = await commessaRef.collection("impianti").get();
+  return { items: groupCompletedPlantAnomalies(commessa, impianti.docs), totalChecked: impianti.size, commessa };
+}
+
+exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (data, context) => {
   const db = admin.firestore();
   await assertAdmin(context, db);
-  const items = await findCompletedPlantAnomalies(db);
-  return { count: items.length, items };
+  const result = await findCompletedPlantAnomalies(db, data?.commessaId);
+  const commessaData = result.commessa.data() || {};
+  return {
+    count: result.items.length,
+    totalChecked: result.totalChecked,
+    commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
+    items: result.items
+  };
 });
 
 exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) => {
   const db = admin.firestore();
   await assertAdmin(context, db);
+  const commessaId = validateCommessaId(data?.commessaId);
+  const reason = String(data?.reason || "").trim();
+  if (!reason || reason.length > 500) throw new functions.https.HttpsError("invalid-argument", "La motivazione è obbligatoria (massimo 500 caratteri).");
   const requested = Array.isArray(data?.plants) ? data.plants : [];
   if (!requested.length) throw new functions.https.HttpsError("invalid-argument", "Nessun impianto indicato.");
   if (requested.length > 150) throw new functions.https.HttpsError("resource-exhausted", "Massimo 150 impianti per operazione atomica.");
-  const uniqueRequests = new Map(requested.map((item) => [`${String(item.commessaId || "")}|${String(item.key || "")}`, item]));
-  if (uniqueRequests.size !== requested.length || requested.some((item) => !item.commessaId || !item.key)) {
+  const uniqueRequests = new Map(requested.map((item) => [String(item.key || ""), item]));
+  if (uniqueRequests.size !== requested.length || requested.some((item) => !item.key)) {
     throw new functions.https.HttpsError("invalid-argument", "Elenco impianti non valido o duplicato.");
   }
-  const current = await findCompletedPlantAnomalies(db);
-  const anomalyMap = new Map(current.map((item) => [`${item.commessaId}|${item.key}`, item]));
-  const selected = requested.map((item) => anomalyMap.get(`${item.commessaId}|${item.key}`));
+  const current = await findCompletedPlantAnomalies(db, commessaId);
+  const anomalyMap = new Map(current.items.map((item) => [item.key, item]));
+  const selected = requested.map((item) => anomalyMap.get(String(item.key)));
   if (selected.some((item) => !item)) throw new functions.https.HttpsError("failed-precondition", "Il controllo non è più aggiornato: ripetere la verifica.");
   const writeCount = selected.reduce((sum, item) => sum + item.docIds.length + 1, 0);
   if (writeCount > 450) throw new functions.https.HttpsError("resource-exhausted", "Troppi record collegati per una singola operazione atomica.");
@@ -563,7 +575,7 @@ exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) 
   await db.runTransaction(async (transaction) => {
     const plants = [];
     for (const item of selected) {
-      const refs = item.docIds.map((id) => db.collection("commesse").doc(item.commessaId).collection("impianti").doc(id));
+      const refs = item.docIds.map((id) => db.collection("commesse").doc(commessaId).collection("impianti").doc(id));
       const docs = await Promise.all(refs.map((ref) => transaction.get(ref)));
       if (docs.some((doc) => !doc.exists)) throw new functions.https.HttpsError("failed-precondition", "Un impianto è stato modificato: ripetere la verifica.");
       const records = docs.map((doc) => ({ ref: doc.ref, id: doc.id, data: doc.data() || {} }));
@@ -598,7 +610,8 @@ exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) 
         previousState: item.currentStatus || "Da fare",
         newState: "Fatto",
         originalDoneAt: original.data.doneAt,
-        originalDoneBy: original.data.doneBy || ""
+        originalDoneBy: original.data.doneBy || "",
+        reason
       });
     });
   });

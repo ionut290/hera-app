@@ -199,11 +199,6 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
-    match /completedPlantForceLogs/{logId} {
-      allow read: if isAdmin();
-      allow write: if false;
-    }
-
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
       allow create, update: if validOperatorPositionWrite(userId);

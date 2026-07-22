@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v11";
+const CACHE_NAME = "hera-app-shell-v10";
 const APP_SHELL = [
   "./",
   "./index.html",

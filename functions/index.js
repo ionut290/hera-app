@@ -32,7 +32,7 @@ async function assertAdmin(context, db) {
   }
   const adminEmails = await getAdminEmails(db);
   if (!adminEmails.has(email)) {
-    throw new functions.https.HttpsError("permission-denied", "Solo admin può configurare Drive.");
+    throw new functions.https.HttpsError("permission-denied", "Operazione riservata agli amministratori.");
   }
 }
 
@@ -422,4 +422,137 @@ exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").time
   if (count % 450 !== 0) await batch.commit();
   await db.collection("appConfig").doc("worklimateUpdate").set({ lastRunAt: admin.firestore.FieldValue.serverTimestamp(), count }, { merge: true });
   return null;
+});
+
+function completedPlantKey(data = {}) {
+  const idSap = String(data.idSap || "").trim().toLowerCase();
+  if (idSap) return `sap:${idSap}`;
+  return `name:${String(data.denominazione || "").trim().toLowerCase()}|comune:${String(data.comune || "").trim().toLowerCase()}|indirizzo:${String(data.indirizzo || "").trim().toLowerCase()}`;
+}
+
+function timestampMillis(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasDoneState(data = {}) {
+  if (data.done === true || data.fatto === true || data.completed === true) return true;
+  const state = String(data.stato || data.status || data.done || "").trim().toLowerCase();
+  return ["true", "1", "fatto", "done", "completed", "completato"].includes(state);
+}
+
+function groupCompletedPlantAnomalies(commessa, docs) {
+  const groups = new Map();
+  docs.forEach((doc) => {
+    const data = doc.data() || {};
+    const key = completedPlantKey(data);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ ref: doc.ref, id: doc.id, data });
+  });
+  const anomalies = [];
+  groups.forEach((records, key) => {
+    if (records.some((record) => hasDoneState(record.data))) return;
+    const completion = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
+    const doneAtMs = timestampMillis(completion?.data?.doneAt);
+    const resetAtMs = Math.max(0, ...records.map((record) => timestampMillis(record.data.resetAt)));
+    if (!completion || !doneAtMs || doneAtMs < resetAtMs) return;
+    const data = completion.data;
+    anomalies.push({
+      key,
+      commessaId: commessa.id,
+      commessaName: commessa.data().nome || commessa.data().name || commessa.data().codice || commessa.id,
+      docIds: records.map((record) => record.id),
+      name: data.denominazione || data.nome || "Impianto",
+      idSap: data.idSap || data.idSAP || data.codiceSap || "",
+      comune: data.comune || "",
+      doneAt: data.doneAt.toDate ? data.doneAt.toDate().toISOString() : new Date(data.doneAt).toISOString(),
+      doneBy: data.doneBy || "",
+      doneByUid: data.doneByUid || "",
+      doneByEmail: data.doneByEmail || "",
+      currentStatus: data.stato || data.status || "Da fare",
+      cause: "La registrazione FATTO è presente, ma il flag condiviso done non risulta completato."
+    });
+  });
+  return anomalies;
+}
+
+async function findCompletedPlantAnomalies(db) {
+  const commesse = await db.collection("commesse").get();
+  const snapshots = await Promise.all(commesse.docs.map(async (commessa) => ({
+    commessa,
+    impianti: await commessa.ref.collection("impianti").get()
+  })));
+  return snapshots.flatMap(({ commessa, impianti }) => groupCompletedPlantAnomalies(commessa, impianti.docs));
+}
+
+exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (_data, context) => {
+  const db = admin.firestore();
+  await assertAdmin(context, db);
+  const items = await findCompletedPlantAnomalies(db);
+  return { count: items.length, items };
+});
+
+exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) => {
+  const db = admin.firestore();
+  await assertAdmin(context, db);
+  const requested = Array.isArray(data?.plants) ? data.plants : [];
+  if (!requested.length) throw new functions.https.HttpsError("invalid-argument", "Nessun impianto indicato.");
+  if (requested.length > 150) throw new functions.https.HttpsError("resource-exhausted", "Massimo 150 impianti per operazione atomica.");
+  const uniqueRequests = new Map(requested.map((item) => [`${String(item.commessaId || "")}|${String(item.key || "")}`, item]));
+  if (uniqueRequests.size !== requested.length || requested.some((item) => !item.commessaId || !item.key)) {
+    throw new functions.https.HttpsError("invalid-argument", "Elenco impianti non valido o duplicato.");
+  }
+  const current = await findCompletedPlantAnomalies(db);
+  const anomalyMap = new Map(current.map((item) => [`${item.commessaId}|${item.key}`, item]));
+  const selected = requested.map((item) => anomalyMap.get(`${item.commessaId}|${item.key}`));
+  if (selected.some((item) => !item)) throw new functions.https.HttpsError("failed-precondition", "Il controllo non è più aggiornato: ripetere la verifica.");
+  const writeCount = selected.reduce((sum, item) => sum + item.docIds.length + 1, 0);
+  if (writeCount > 450) throw new functions.https.HttpsError("resource-exhausted", "Troppi record collegati per una singola operazione atomica.");
+
+  const adminEmail = String(context.auth.token.email || "").trim().toLowerCase();
+  const adminName = String(context.auth.token.name || adminEmail || "Amministratore");
+  await db.runTransaction(async (transaction) => {
+    const plants = [];
+    for (const item of selected) {
+      const refs = item.docIds.map((id) => db.collection("commesse").doc(item.commessaId).collection("impianti").doc(id));
+      const docs = await Promise.all(refs.map((ref) => transaction.get(ref)));
+      if (docs.some((doc) => !doc.exists)) throw new functions.https.HttpsError("failed-precondition", "Un impianto è stato modificato: ripetere la verifica.");
+      const records = docs.map((doc) => ({ ref: doc.ref, id: doc.id, data: doc.data() || {} }));
+      const rechecked = groupCompletedPlantAnomalies({ id: item.commessaId, data: () => ({ nome: item.commessaName }) }, records.map((record) => ({ ...record, data: () => record.data })));
+      if (!rechecked.some((entry) => entry.key === item.key)) throw new functions.https.HttpsError("failed-precondition", "Un impianto non è più incongruente: ripetere la verifica.");
+      plants.push({ item, records });
+    }
+    plants.forEach(({ item, records }) => {
+      const original = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
+      records.forEach((record) => transaction.set(record.ref, {
+        done: true,
+        doneAt: original.data.doneAt,
+        doneBy: original.data.doneBy || "",
+        doneByUid: original.data.doneByUid || "",
+        doneByEmail: original.data.doneByEmail || "",
+        resetAt: null,
+        resetBy: "",
+        forcedCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        forcedCompletedBy: adminEmail
+      }, { merge: true }));
+      const logRef = db.collection("completedPlantForceLogs").doc();
+      transaction.create(logRef, {
+        administratorUid: context.auth.uid,
+        administratorEmail: adminEmail,
+        administratorName: adminName,
+        plantKey: item.key,
+        plantId: item.docIds[0],
+        plantName: item.name,
+        commessaId: item.commessaId,
+        commessaName: item.commessaName,
+        forcedAt: admin.firestore.FieldValue.serverTimestamp(),
+        previousState: item.currentStatus || "Da fare",
+        newState: "Fatto",
+        originalDoneAt: original.data.doneAt,
+        originalDoneBy: original.data.doneBy || ""
+      });
+    });
+  });
+  return { updated: selected.length };
 });

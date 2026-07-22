@@ -59,6 +59,7 @@
       <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
       <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
       <button id="open-control-center-btn" class="btn menu-title-btn" type="button">🛠️ Centro di controllo</button>
+      <button id="open-completed-plants-check-btn" class="btn menu-title-btn hidden" type="button">Verifica impianti completati</button>
       <button id="install-app-btn" class="btn menu-title-btn" type="button">Installa app</button>
       <button id="open-book-pdf-btn" class="btn menu-title-btn" type="button">Libro PDF</button>
     </div>
@@ -712,6 +713,19 @@
         </form>
         <p id="snow-roads-feedback" class="muted"></p>
       </section>
+    </div>
+    <div id="panel-completed-plants-check" class="management-panel completed-plants-check hidden">
+      <div class="completed-plants-toolbar">
+        <button id="check-all-completed-plants-btn" class="btn btn-primary" type="button">CONTROLLA TUTTI GLI IMPIANTI</button>
+        <button id="force-all-completed-plants-btn" class="btn btn-danger hidden" type="button">FORZA TUTTI</button>
+        <span id="completed-plants-count" class="pill" aria-live="polite">0 incongruenze</span>
+      </div>
+      <div id="completed-plants-loading" class="completed-plants-loading hidden" role="status" aria-live="polite">
+        <span class="whazzup-preparing-spinner" aria-hidden="true"></span>
+        <strong>Controllo di tutte le commesse in corso...</strong>
+      </div>
+      <p id="completed-plants-feedback" class="muted" role="status" aria-live="polite">Premi “CONTROLLA TUTTI GLI IMPIANTI” per avviare la verifica.</p>
+      <div id="completed-plants-list" class="completed-plants-list"></div>
     </div>
     <div id="panel-global" class="management-panel hidden">
       <h3>Global (separato dall'app principale)</h3>
@@ -1538,7 +1552,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=20260721"></script>
+  <script src="app.js?v=20260722"></script>
   <script src="hours-export-range.js?v=20260619"></script>
 
   <script>

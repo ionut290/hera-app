@@ -714,6 +714,9 @@ const ui = {
   managementCloseBtn: document.getElementById("management-close-btn"),
   panelCommesse: document.getElementById("panel-commesse"),
   panelCompletedPlantsCheck: document.getElementById("panel-completed-plants-check"),
+  completedPlantsCommessaSearch: document.getElementById("completed-plants-commessa-search"),
+  completedPlantsCommesseOptions: document.getElementById("completed-plants-commesse-options"),
+  completedPlantsSelectedCommessa: document.getElementById("completed-plants-selected-commessa"),
   checkAllCompletedPlantsBtn: document.getElementById("check-all-completed-plants-btn"),
   forceAllCompletedPlantsBtn: document.getElementById("force-all-completed-plants-btn"),
   completedPlantsCount: document.getElementById("completed-plants-count"),
@@ -3554,7 +3557,7 @@ function openManagementPanel(panel) {
   if (panel === "squadre") setDefaultSquadraCompositionDate({ force: true });
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   if (panel === "notifiche") closeNotificationCalendarView();
-  if (panel === "completedPlantsCheck") void checkAllCompletedPlants();
+  if (panel === "completedPlantsCheck") resetCompletedPlantsCheck();
   closeSideMenu();
 }
 
@@ -3564,10 +3567,45 @@ function closeManagementPanel() {
 }
 
 let completedPlantsInconsistencies = [];
+let completedPlantsSelectedCommessaId = "";
+let completedPlantsTotalChecked = 0;
+const selectedCompletedPlantKeys = new Set();
+
+function completedPlantsCommessaLabel(commessa) {
+  const name = String(commessa?.nome || commessa?.name || "Commessa").trim();
+  const code = String(commessa?.codice || commessa?.code || "").trim();
+  return code ? `${name} — ${code}` : name;
+}
+
+function resetCompletedPlantsCheck() {
+  completedPlantsInconsistencies = [];
+  completedPlantsTotalChecked = 0;
+  completedPlantsSelectedCommessaId = "";
+  selectedCompletedPlantKeys.clear();
+  if (ui.completedPlantsCommessaSearch) ui.completedPlantsCommessaSearch.value = "";
+  if (ui.completedPlantsCommesseOptions) ui.completedPlantsCommesseOptions.innerHTML = Array.from(commesseById.values()).map((commessa) => `<option value="${escapeHTML(completedPlantsCommessaLabel(commessa))}"></option>`).join("");
+  if (ui.completedPlantsSelectedCommessa) ui.completedPlantsSelectedCommessa.textContent = "Nessuna commessa selezionata.";
+  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = "Seleziona una commessa per avviare la verifica.";
+  renderCompletedPlantsInconsistencies();
+  setCompletedPlantsBusy(false);
+}
+
+ui.completedPlantsCommessaSearch?.addEventListener("input", () => {
+  const value = ui.completedPlantsCommessaSearch.value.trim().toLocaleLowerCase("it");
+  const match = Array.from(commesseById.values()).find((commessa) => completedPlantsCommessaLabel(commessa).toLocaleLowerCase("it") === value);
+  completedPlantsSelectedCommessaId = match?.id || "";
+  completedPlantsInconsistencies = [];
+  completedPlantsTotalChecked = 0;
+  selectedCompletedPlantKeys.clear();
+  if (ui.completedPlantsSelectedCommessa) ui.completedPlantsSelectedCommessa.textContent = match ? `Commessa selezionata: ${completedPlantsCommessaLabel(match)}` : "Nessuna commessa valida selezionata.";
+  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = match ? "Premi “CONTROLLA GLI IMPIANTI” per avviare la verifica." : "Cerca e seleziona una commessa valida.";
+  renderCompletedPlantsInconsistencies();
+  setCompletedPlantsBusy(false);
+});
 
 function setCompletedPlantsBusy(busy) {
   ui.completedPlantsLoading?.classList.toggle("hidden", !busy);
-  if (ui.checkAllCompletedPlantsBtn) ui.checkAllCompletedPlantsBtn.disabled = busy;
+  if (ui.checkAllCompletedPlantsBtn) ui.checkAllCompletedPlantsBtn.disabled = busy || !completedPlantsSelectedCommessaId;
   if (ui.forceAllCompletedPlantsBtn) ui.forceAllCompletedPlantsBtn.disabled = busy;
 }
 
@@ -3579,18 +3617,22 @@ function formatCompletedPlantTimestamp(value) {
 function renderCompletedPlantsInconsistencies() {
   const count = completedPlantsInconsistencies.length;
   if (ui.completedPlantsCount) ui.completedPlantsCount.textContent = `${count} ${count === 1 ? "incongruenza" : "incongruenze"}`;
-  ui.forceAllCompletedPlantsBtn?.classList.toggle("hidden", count === 0);
+  ui.forceAllCompletedPlantsBtn?.classList.toggle("hidden", selectedCompletedPlantKeys.size === 0);
   if (!ui.completedPlantsList) return;
   ui.completedPlantsList.innerHTML = "";
   if (!count) {
-    if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = "Nessuna incongruenza trovata";
+    if (ui.completedPlantsFeedback && completedPlantsTotalChecked) ui.completedPlantsFeedback.textContent = `Totale impianti controllati: ${completedPlantsTotalChecked}. Incongruenze: 0. Nessuna incongruenza trovata nella commessa selezionata.`;
     return;
   }
-  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = `Trovate ${count} incongruenze. Nessun dato è stato modificato.`;
+  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = `Totale impianti controllati: ${completedPlantsTotalChecked}. Incongruenze trovate: ${count}. Nessun dato è stato modificato.`;
   completedPlantsInconsistencies.forEach((item) => {
     const card = document.createElement("article");
     card.className = "card completed-plant-card";
-    card.innerHTML = `<div class="section-head"><h3>${escapeHTML(item.name || "Impianto")}</h3><span class="status">${escapeHTML(item.currentStatus || "Da fare")}</span></div><dl class="completed-plant-details"><div><dt>ID SAP</dt><dd>${escapeHTML(item.idSap || "-")}</dd></div><div><dt>Comune</dt><dd>${escapeHTML(item.comune || "-")}</dd></div><div><dt>Commessa</dt><dd>${escapeHTML(item.commessaName || item.commessaId || "-")}</dd></div><div><dt>FATTO premuto il</dt><dd>${escapeHTML(formatCompletedPlantTimestamp(item.doneAt))}</dd></div><div><dt>Operatore</dt><dd>${escapeHTML(item.doneBy || item.doneByEmail || "-")}</dd></div><div><dt>Causa</dt><dd>${escapeHTML(item.cause || "Non disponibile")}</dd></div></dl>`;
+    card.innerHTML = `<label class="completed-plant-selection"><input type="checkbox" ${selectedCompletedPlantKeys.has(item.key) ? "checked" : ""}> Seleziona</label><div class="section-head"><h3>${escapeHTML(item.name || "Impianto")}</h3><span class="status">${escapeHTML(item.currentStatus || "Da fare")}</span></div><dl class="completed-plant-details"><div><dt>ID SAP</dt><dd>${escapeHTML(item.idSap || "-")}</dd></div><div><dt>Comune</dt><dd>${escapeHTML(item.comune || "-")}</dd></div><div><dt>Commessa</dt><dd>${escapeHTML(item.commessaName || item.commessaId || "-")} (${escapeHTML(item.commessaCode || "codice n/d")})</dd></div><div><dt>FATTO premuto il</dt><dd>${escapeHTML(formatCompletedPlantTimestamp(item.doneAt))}</dd></div><div><dt>Operatore</dt><dd>${escapeHTML(item.doneBy || item.doneByEmail || "-")}</dd></div><div><dt>Causa</dt><dd>${escapeHTML(item.cause || "Non disponibile")}</dd></div></dl>`;
+    card.querySelector("input").addEventListener("change", (event) => {
+      if (event.target.checked) selectedCompletedPlantKeys.add(item.key); else selectedCompletedPlantKeys.delete(item.key);
+      ui.forceAllCompletedPlantsBtn?.classList.toggle("hidden", selectedCompletedPlantKeys.size === 0);
+    });
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn-primary force-completed-plant-btn";
@@ -3602,7 +3644,7 @@ function renderCompletedPlantsInconsistencies() {
 }
 
 async function checkAllCompletedPlants() {
-  if (!canManageData()) return;
+  if (!canManageData() || !completedPlantsSelectedCommessaId) return;
   if (!functions || typeof functions.httpsCallable !== "function") {
     if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = "Errore: servizio di verifica non disponibile. Nessun dato è stato modificato.";
     return;
@@ -3610,8 +3652,10 @@ async function checkAllCompletedPlants() {
   setCompletedPlantsBusy(true);
   if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = "Controllo in corso...";
   try {
-    const response = await functions.httpsCallable("checkCompletedPlantInconsistencies")();
+    const response = await functions.httpsCallable("checkCompletedPlantInconsistencies")({ commessaId: completedPlantsSelectedCommessaId });
     completedPlantsInconsistencies = Array.isArray(response?.data?.items) ? response.data.items : [];
+    completedPlantsTotalChecked = Number(response?.data?.totalChecked || 0);
+    selectedCompletedPlantKeys.clear();
     renderCompletedPlantsInconsistencies();
   } catch (error) {
     console.error("Verifica impianti completati fallita:", error);
@@ -3627,12 +3671,14 @@ async function checkAllCompletedPlants() {
 
 async function forceCompletedPlants(items, sourceButton = null) {
   if (!canManageData() || !items.length) return;
-  const message = items.length > 1 ? `Vuoi spostare definitivamente ${items.length} impianti nell’elenco Impianti fatti? L’operazione multipla sarà atomica.` : "Vuoi spostare definitivamente questo impianto nell’elenco Impianti fatti?";
+  const reason = window.prompt("Indica la motivazione della forzatura:", "Risoluzione incongruenza FATTO / Da fare");
+  if (!reason?.trim()) return;
+  const message = items.length > 1 ? `Confermi la forzatura di ${items.length} impianti nell’elenco Fatti?` : "Confermi la forzatura di questo impianto nell’elenco Fatti?";
   if (!window.confirm(message)) return;
   setCompletedPlantsBusy(true);
   if (sourceButton) sourceButton.disabled = true;
   try {
-    const response = await functions.httpsCallable("forceCompletedPlantsDone")({ plants: items.map((item) => ({ commessaId: item.commessaId, key: item.key })) });
+    const response = await functions.httpsCallable("forceCompletedPlantsDone")({ commessaId: completedPlantsSelectedCommessaId, reason: reason.trim(), plants: items.map((item) => ({ key: item.key })) });
     if (Number(response?.data?.updated || 0) !== items.length) throw new Error("Il server non ha confermato tutte le modifiche");
     await checkAllCompletedPlants();
   } catch (error) {
@@ -3644,7 +3690,7 @@ async function forceCompletedPlants(items, sourceButton = null) {
   }
 }
 
-function forceAllCompletedPlants() { return forceCompletedPlants([...completedPlantsInconsistencies]); }
+function forceAllCompletedPlants() { return forceCompletedPlants(completedPlantsInconsistencies.filter((item) => selectedCompletedPlantKeys.has(item.key))); }
 
 function openMapFullscreenPage() {
   if (!ui.mapFullscreenPage) return;

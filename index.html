@@ -715,16 +715,22 @@
       </section>
     </div>
     <div id="panel-completed-plants-check" class="management-panel completed-plants-check hidden">
+      <div class="completed-plants-commessa-picker">
+        <label for="completed-plants-commessa-search"><strong>Cerca e seleziona una commessa</strong></label>
+        <input id="completed-plants-commessa-search" type="search" list="completed-plants-commesse-options" autocomplete="off" placeholder="Nome o codice commessa">
+        <datalist id="completed-plants-commesse-options"></datalist>
+        <p id="completed-plants-selected-commessa" class="muted">Nessuna commessa selezionata.</p>
+      </div>
       <div class="completed-plants-toolbar">
-        <button id="check-all-completed-plants-btn" class="btn btn-primary" type="button">CONTROLLA TUTTI GLI IMPIANTI</button>
-        <button id="force-all-completed-plants-btn" class="btn btn-danger hidden" type="button">FORZA TUTTI</button>
+        <button id="check-all-completed-plants-btn" class="btn btn-primary" type="button" disabled>CONTROLLA GLI IMPIANTI</button>
+        <button id="force-all-completed-plants-btn" class="btn btn-danger hidden" type="button">FORZA SELEZIONATI</button>
         <span id="completed-plants-count" class="pill" aria-live="polite">0 incongruenze</span>
       </div>
       <div id="completed-plants-loading" class="completed-plants-loading hidden" role="status" aria-live="polite">
         <span class="whazzup-preparing-spinner" aria-hidden="true"></span>
-        <strong>Controllo di tutte le commesse in corso...</strong>
+        <strong>Controllo della commessa selezionata in corso...</strong>
       </div>
-      <p id="completed-plants-feedback" class="muted" role="status" aria-live="polite">Premi “CONTROLLA TUTTI GLI IMPIANTI” per avviare la verifica.</p>
+      <p id="completed-plants-feedback" class="muted" role="status" aria-live="polite">Seleziona una commessa per avviare la verifica.</p>
       <div id="completed-plants-list" class="completed-plants-list"></div>
     </div>
     <div id="panel-global" class="management-panel hidden">

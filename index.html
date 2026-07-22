@@ -335,6 +335,28 @@
       </section>
     </section>
 
+    <section id="user-activity-page" class="hidden" aria-live="polite">
+      <header class="card user-activity-header">
+        <button id="user-activity-back-btn" class="btn" type="button">← Indietro</button>
+        <div>
+          <p class="muted user-activity-eyebrow">Console admin</p>
+          <h1>Attività utente</h1>
+        </div>
+      </header>
+      <p id="user-activity-access-message" class="card muted"></p>
+      <main id="user-activity-admin-content" class="user-activity-content hidden">
+        <section id="user-activity-summary" class="card user-activity-summary"></section>
+        <section class="card user-activity-filter">
+          <label for="user-activity-date"><strong>Data attività</strong></label>
+          <input id="user-activity-date" type="date">
+        </section>
+        <section class="card">
+          <div class="section-head"><h2>Cronologia</h2><span id="user-activity-count" class="pill"></span></div>
+          <div id="user-activity-timeline" class="user-activity-timeline"></div>
+        </section>
+      </main>
+    </section>
+
     <section id="impianti-page" class="hidden">
       <section class="card commessa-dashboard-card">
         <div class="page-head commessa-dashboard-head">

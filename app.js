@@ -804,6 +804,14 @@ const ui = {
   activeUsersFullList: document.getElementById("active-users-full-list"),
   activeUsersUserDetail: document.getElementById("active-users-user-detail"),
   activeUsersLogList: document.getElementById("active-users-log-list"),
+  userActivityPage: document.getElementById("user-activity-page"),
+  userActivityBackBtn: document.getElementById("user-activity-back-btn"),
+  userActivityAccessMessage: document.getElementById("user-activity-access-message"),
+  userActivityAdminContent: document.getElementById("user-activity-admin-content"),
+  userActivitySummary: document.getElementById("user-activity-summary"),
+  userActivityDate: document.getElementById("user-activity-date"),
+  userActivityCount: document.getElementById("user-activity-count"),
+  userActivityTimeline: document.getElementById("user-activity-timeline"),
   lastImpiantoActionSummary: document.getElementById("last-impianto-action-summary"),
   nextActionSummary: document.getElementById("next-action-summary"),
   workBannerHome: document.getElementById("work-banner-home"),
@@ -1094,6 +1102,8 @@ let activeUsersFullListOpen = false;
 let activeUsersLogListOpen = false;
 let selectedActiveUsersCard = "";
 let selectedActiveUsersUserId = "";
+let selectedUserActivityLogs = [];
+let selectedUserActivityUser = null;
 let deniedImpiantoActions = new Set();
 const usedActionKeys = new Set();
 let mediaRecorder = null;
@@ -4422,6 +4432,8 @@ function applyRoute() {
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
   const showActiveUsersDetail = hash === "#dettaglio-utenti-attivi";
+  const userActivityMatch = hash.match(/^#attivita-utente=([^&]+)$/);
+  const showUserActivity = Boolean(userActivityMatch);
   const showSnowService = hash === "#servizio-neve" && canManageData();
   if (hash === "#servizio-neve" && !canManageData()) {
     closeSnowServicePage();
@@ -4441,7 +4453,7 @@ function applyRoute() {
   const showTombiniMap = Boolean(commessaRoute.tombini && selectedCommessaId === commessaIdFromHash && isTombiniEnabledForCurrentCommessa());
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap && !showTombiniMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showActiveUsersDetail || showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showControlCenter || showPrivateDocs || showPos || showHours || showPersonalServices || showSnowService);
+  ui.homePage.classList.toggle("hidden", showActiveUsersDetail || showUserActivity || showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showControlCenter || showPrivateDocs || showPos || showHours || showPersonalServices || showSnowService);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
@@ -4459,7 +4471,9 @@ function applyRoute() {
   ui.posPage?.classList.toggle("hidden", !showPos);
   ui.hoursPage.classList.toggle("hidden", !showHours);
   ui.activeUsersDetailPage?.classList.toggle("hidden", !showActiveUsersDetail);
+  ui.userActivityPage?.classList.toggle("hidden", !showUserActivity);
   if (showActiveUsersDetail) openActiveUsersDetailView(); else activeUsersLoaded = false;
+  if (showUserActivity) openUserActivityView(decodeURIComponent(userActivityMatch[1]));
   document.getElementById("snow-service-page")?.classList.toggle("hidden", !showSnowService);
   document.getElementById("snow-service-page")?.setAttribute("aria-hidden", String(!showSnowService));
   if (showSnowService) renderSnowService();
@@ -28399,7 +28413,7 @@ function buildActiveUsersRows(users = [], logs = activeUsersLogs) {
     const last = userLogs[0] || {};
     const online = Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000;
     const problems = userLogs.filter(isErrorActivity).length;
-    return `<article class="active-users-row is-clickable" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span><span>Ultima azione: ${escapeHTML(last.actionDescription || last.actionType || "-")}</span><span>Commessa: ${escapeHTML(last.commessaName || last.commessaId || "-")}</span><span>Problemi: ${problems}</span></div></article>`;
+    return `<article class="active-users-row is-clickable" role="button" tabindex="0" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}" aria-label="Apri attività di ${escapeHTML(getUserDisplayName(user))}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span><span>Ultima azione: ${escapeHTML(last.actionDescription || last.actionType || "-")}</span><span>Commessa: ${escapeHTML(last.commessaName || last.commessaId || "-")}</span><span>Problemi: ${problems}</span></div></article>`;
   }).join("") || '<p class="muted">Nessun utente.</p>';
 }
 
@@ -28533,12 +28547,78 @@ async function openActiveUsersDetailView() {
   catch (error) { ui.activeUsersLogList.innerHTML = '<p class="muted">Errore caricamento registro azioni.</p>'; console.error("Errore activityLogs:", error); }
 }
 
+function localDateValue(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function userMatchesActivityLog(log, user) {
+  const id = String(user?.id || user?.uid || "");
+  return Boolean((id && String(log.userId || "") === id) || (user?.email && normalizeEmail(log.userEmail) === normalizeEmail(user.email)));
+}
+
+function renderUserActivityView() {
+  if (!selectedUserActivityUser || !ui.userActivitySummary) return;
+  const user = selectedUserActivityUser;
+  const online = Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000;
+  const errors = selectedUserActivityLogs.filter(isErrorActivity).length;
+  const summaryFields = [
+    ["Nome e cognome", getUserDisplayName(user)], ["Email", user.email], ["Ruolo", getUserRole(user)],
+    ["Stato", online ? "🟢 online" : "⚪ offline"], ["Ultima attività", user.lastSeenAt ? formatActivityDate(user.lastSeenAt) : ""],
+    ["Azioni nel giorno", String(selectedUserActivityLogs.length)], ["Errori", String(errors)]
+  ].filter(([, value]) => value !== "" && value != null);
+  ui.userActivitySummary.innerHTML = `<div class="section-head"><h2>${escapeHTML(getUserDisplayName(user))}</h2><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "Online" : "Offline"}</span></div><dl>${summaryFields.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("")}</dl>`;
+  ui.userActivityCount.textContent = `${selectedUserActivityLogs.length} azioni`;
+  ui.userActivityTimeline.innerHTML = selectedUserActivityLogs.map(log => {
+    const error = isErrorActivity(log);
+    const exactTime = new Date(firestoreDateToMillis(log.createdAt)).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const fields = [
+      ["Tipo di azione", log.actionType], ["Commessa", log.commessaName || log.commessaId],
+      ["Impianto", log.impiantoName], ["ID SAP", log.impiantoSap || log.idSap || log.idSAP],
+      ["Dettagli", log.actionDescription || log.detail], ["Esito", error ? "Errore" : "Riuscita"],
+      ["Messaggio tecnico", error ? (log.technicalError || log.error || log.detail) : ""]
+    ].filter(([, value]) => value !== "" && value != null);
+    return `<article class="user-activity-event ${error ? "is-error" : ""}"><time datetime="${new Date(firestoreDateToMillis(log.createdAt)).toISOString()}">${escapeHTML(exactTime)}</time><dl>${fields.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(String(value))}</dd></div>`).join("")}</dl></article>`;
+  }).join("") || '<p class="muted">Nessuna attività registrata in questa data</p>';
+}
+
+async function loadSelectedUserActivity() {
+  if (!canManageData() || !selectedUserActivityUser || !db) return;
+  const dateValue = ui.userActivityDate?.value || localDateValue();
+  const start = new Date(`${dateValue}T00:00:00`);
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  ui.userActivityTimeline.innerHTML = '<p class="muted">Caricamento attività...</p>';
+  const snap = await db.collection("activityLogs").where("createdAt", ">=", start).where("createdAt", "<", end).orderBy("createdAt", "desc").limit(500).get();
+  selectedUserActivityLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(log => userMatchesActivityLog(log, selectedUserActivityUser));
+  renderUserActivityView();
+}
+
+async function openUserActivityView(userId) {
+  const allowed = canManageData();
+  ui.userActivityAccessMessage.textContent = allowed ? "" : "Accesso consentito solo agli amministratori.";
+  ui.userActivityAccessMessage.classList.toggle("hidden", allowed);
+  ui.userActivityAdminContent?.classList.toggle("hidden", !allowed);
+  if (!allowed) return;
+  selectedUserActivityUser = platformUsers.find(user => String(user.id || user.uid || user.email) === String(userId)) || null;
+  if (!selectedUserActivityUser) {
+    ui.userActivityAccessMessage.textContent = "Utente non disponibile.";
+    ui.userActivityAccessMessage.classList.remove("hidden");
+    ui.userActivityAdminContent.classList.add("hidden");
+    return;
+  }
+  if (ui.userActivityDate && !ui.userActivityDate.value) ui.userActivityDate.value = localDateValue();
+  try { await loadSelectedUserActivity(); }
+  catch (error) { ui.userActivityTimeline.innerHTML = '<p class="muted">Errore durante il caricamento delle attività.</p>'; console.error("Errore attività utente:", error); }
+}
+
 ui.activeUsersSummary?.addEventListener("click", () => {
   if (canManageData()) window.location.hash = "#dettaglio-utenti-attivi";
   else alert("Accesso consentito solo agli amministratori.");
 });
 ui.activeUsersSummary?.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && canManageData()) { event.preventDefault(); window.location.hash = "#dettaglio-utenti-attivi"; } });
 ui.activeUsersBackBtn?.addEventListener("click", () => { window.location.hash = ""; });
+ui.userActivityBackBtn?.addEventListener("click", () => { window.location.hash = "#dettaglio-utenti-attivi"; });
+ui.userActivityDate?.addEventListener("change", loadSelectedUserActivity);
 ui.activeUsersRefreshBtn?.addEventListener("click", () => { activeUsersLoaded = false; openActiveUsersDetailView(); });
 ui.activeUsersFilterToggle?.addEventListener("click", () => { activeUsersFilterOpen = !activeUsersFilterOpen; renderActiveUsersDetail(); });
 ui.activeUsersFullToggle?.addEventListener("click", () => { activeUsersFullListOpen = !activeUsersFullListOpen; renderActiveUsersDetail(); });
@@ -28549,12 +28629,14 @@ ui.activeUsersAdminConsole?.addEventListener("click", (event) => {
   if (card) { selectedActiveUsersCard = card.getAttribute("data-active-card") || ""; renderActiveUsersDetail(); return; }
   if (event.target.closest("[data-active-card-close]")) { selectedActiveUsersCard = ""; renderActiveUsersDetail(); return; }
   const userRow = event.target.closest("[data-active-user-id]");
-  if (userRow) { selectedActiveUsersUserId = userRow.getAttribute("data-active-user-id") || ""; renderSelectedActiveUserDetail(); return; }
+  if (userRow) { window.location.hash = `attivita-utente=${encodeURIComponent(userRow.getAttribute("data-active-user-id") || "")}`; return; }
   const logRow = event.target.closest("[data-active-log-key]");
   if (logRow) openActiveLogProblemDetail(window.activeUsersRenderedLogGroupsByKey?.[logRow.getAttribute("data-active-log-key")]);
 });
 ui.activeUsersAdminConsole?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
+  const userRow = event.target.closest("[data-active-user-id]");
+  if (userRow) { event.preventDefault(); window.location.hash = `attivita-utente=${encodeURIComponent(userRow.getAttribute("data-active-user-id") || "")}`; return; }
   const row = event.target.closest("[data-active-log-key]");
   if (!row) return;
   event.preventDefault();

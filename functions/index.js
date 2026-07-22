@@ -477,6 +477,12 @@ function hasDoneState(data = {}) {
   return ["true", "1", "fatto", "done", "completed", "completato"].includes(state);
 }
 
+function hasCompletionEvidence(data = {}) {
+  return hasDoneState(data)
+    || Boolean(timestampMillis(data.doneAt))
+    || Boolean(String(data.doneBy || data.doneByUid || data.doneByEmail || "").trim());
+}
+
 function groupCompletedPlantAnomalies(commessa, docs) {
   const groups = new Map();
   docs.forEach((doc) => {
@@ -492,14 +498,15 @@ function groupCompletedPlantAnomalies(commessa, docs) {
   });
   const anomalies = [];
   groups.forEach((records, key) => {
-    const completion = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
+    const evidence = records.filter((record) => hasCompletionEvidence(record.data));
+    const completion = evidence.reduce((latest, record) => !latest || timestampMillis(record.data.doneAt) > timestampMillis(latest.data.doneAt) ? record : latest, null);
     const doneAtMs = timestampMillis(completion?.data?.doneAt);
     const resetAtMs = Math.max(0, ...records.map((record) => timestampMillis(record.data.resetAt)));
     // doneAt is written by the existing FATTO flow.  It is reliable evidence only
     // when valid and not superseded by a later, intentional reset.
-    if (!completion || !doneAtMs || (resetAtMs && doneAtMs <= resetAtMs)) return;
-    const currentlyDone = records.some((record) => hasDoneState(record.data)) && doneAtMs >= resetAtMs;
-    if (currentlyDone) return;
+    if (!completion || !evidence.length || (doneAtMs && resetAtMs && doneAtMs <= resetAtMs)) return;
+    const stillInTodo = records.some((record) => record.data.done !== true);
+    if (!stillInTodo) return;
     const data = completion.data;
     anomalies.push({
       key,
@@ -515,7 +522,7 @@ function groupCompletedPlantAnomalies(commessa, docs) {
       doneByUid: String(data.doneByUid || ""),
       doneByEmail: String(data.doneByEmail || ""),
       currentStatus: "Da fare",
-      cause: "È presente una data FATTO valida e non annullata, ma nessun record collegato ha uno stato completato."
+      cause: "I dati esistenti registrano FATTO, ma almeno un record collegato è ancora presente in DA FARE."
     });
   });
   return anomalies;
@@ -540,14 +547,21 @@ async function findCompletedPlantAnomalies(db, commessaId) {
 exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (data, context) => {
   const db = admin.firestore();
   await assertAdmin(context, db);
-  const result = await findCompletedPlantAnomalies(db, data?.commessaId);
-  const commessaData = result.commessa.data() || {};
-  return {
-    count: result.items.length,
-    totalChecked: result.totalChecked,
-    commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
-    items: result.items
-  };
+  const commessaId = validateCommessaId(data?.commessaId);
+  try {
+    const result = await findCompletedPlantAnomalies(db, commessaId);
+    const commessaData = result.commessa.data() || {};
+    return {
+      count: result.items.length,
+      totalChecked: result.totalChecked,
+      commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
+      items: result.items
+    };
+  } catch (error) {
+    console.error("Controllo impianti della commessa non completato", { commessaId, documentId: error?.documentId || "unknown", errorCode: error?.code || "unknown" });
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Non è stato possibile controllare questa commessa. Riprova tra poco; nessun dato è stato modificato.");
+  }
 });
 
 exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) => {

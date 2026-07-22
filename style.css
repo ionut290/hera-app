@@ -10942,10 +10942,8 @@ body.worklimate-page-open {
   padding: 18px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
 }
-.completed-plants-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
-.completed-plants-commessa-picker { display: grid; gap: 0.5rem; margin-bottom: 1rem; max-width: 680px; }
-.completed-plants-commessa-picker input { width: 100%; }
-.completed-plant-selection { display: inline-flex; gap: 0.5rem; align-items: center; font-weight: 700; }
+.completed-plants-check-btn { padding-inline: .65rem; white-space: nowrap; }
+.commessa-completed-plants-result { margin: .75rem 0; padding: .75rem; border: 1px solid #bfdbfe; border-radius: 12px; background: #eff6ff; }
 .completed-plants-loading { display: flex; gap: 0.75rem; align-items: center; padding: 1rem; }
 .completed-plants-list { display: grid; gap: 1rem; margin-top: 1rem; }
 .completed-plant-card { margin: 0; }
@@ -10954,3 +10952,8 @@ body.worklimate-page-open {
 .completed-plant-details dt { color: #64748b; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
 .completed-plant-details dd { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
 .force-completed-plant-btn { width: 100%; }
+@media (max-width: 600px) {
+  .impianti-toolbar .view-tabs { gap: .35rem; }
+  .completed-plants-check-btn { padding: .5rem; font-size: .75rem; }
+  .completed-plant-details { grid-template-columns: 1fr; }
+}

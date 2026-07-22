@@ -3617,7 +3617,11 @@ async function checkAllCompletedPlants() {
     console.error("Verifica impianti completati fallita:", error);
     completedPlantsInconsistencies = [];
     renderCompletedPlantsInconsistencies();
-    if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = `Errore durante il controllo: ${error?.message || "riprova più tardi"}. Nessun dato è stato modificato.`;
+    const technicalCode = String(error?.code || "unknown").replace(/^functions\//, "");
+    const readableMessage = technicalCode === "internal"
+      ? "Il servizio non ha potuto completare la verifica. Riprova; se il problema continua, comunica il codice all’assistenza"
+      : (error?.message || "Il servizio di verifica non è al momento disponibile");
+    if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = `Errore durante il controllo: ${readableMessage} (codice tecnico: ${technicalCode}). Nessun dato è stato modificato.`;
   } finally { setCompletedPlantsBusy(false); }
 }
 

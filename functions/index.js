@@ -471,14 +471,33 @@ function timestampIso(value) {
   return millis ? new Date(millis).toISOString() : "";
 }
 
+function safeText(value, fallback = "") {
+  if (value == null) return fallback;
+  try {
+    if (["string", "number", "boolean"].includes(typeof value)) return String(value);
+    return fallback;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
 function hasDoneState(data = {}) {
   if (data.done === true || data.fatto === true || data.completed === true) return true;
   const state = String(data.stato || data.status || data.done || "").trim().toLowerCase();
   return ["true", "1", "fatto", "done", "completed", "completato"].includes(state);
 }
 
+function hasCompletionEvidence(data = {}) {
+  return hasDoneState(data)
+    || Boolean(timestampMillis(data.doneAt))
+    || Boolean(String(data.doneBy || data.doneByUid || data.doneByEmail || "").trim());
+}
+
 function groupCompletedPlantAnomalies(commessa, docs) {
   const groups = new Map();
+  const skippedDocumentIds = [];
+  let commessaData = {};
+  try { commessaData = commessa.data() || {}; } catch (_error) { commessaData = {}; }
   docs.forEach((doc) => {
     try {
       const data = doc.data() || {};
@@ -487,38 +506,36 @@ function groupCompletedPlantAnomalies(commessa, docs) {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ ref: doc.ref, id: doc.id, data });
     } catch (error) {
+      skippedDocumentIds.push(safeText(doc?.id, "unknown"));
       console.error("Documento impianto non analizzabile", { commessaId: commessa.id, documentId: doc.id, errorCode: error?.code || "invalid-data" });
     }
   });
   const anomalies = [];
   groups.forEach((records, key) => {
-    const completion = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
-    const doneAtMs = timestampMillis(completion?.data?.doneAt);
-    const resetAtMs = Math.max(0, ...records.map((record) => timestampMillis(record.data.resetAt)));
-    // doneAt is written by the existing FATTO flow.  It is reliable evidence only
-    // when valid and not superseded by a later, intentional reset.
-    if (!completion || !doneAtMs || (resetAtMs && doneAtMs <= resetAtMs)) return;
-    const currentlyDone = records.some((record) => hasDoneState(record.data)) && doneAtMs >= resetAtMs;
-    if (currentlyDone) return;
-    const data = completion.data;
-    anomalies.push({
-      key,
-      commessaId: commessa.id,
-      commessaName: commessa.data().nome || commessa.data().name || commessa.data().codice || commessa.id,
-      commessaCode: commessa.data().codice || commessa.data().code || "",
-      docIds: records.map((record) => record.id),
-      name: data.denominazione || data.nome || "Impianto",
-      idSap: data.idSap || data.idSAP || data.codiceSap || "",
-      comune: data.comune || "",
-      doneAt: timestampIso(data.doneAt),
-      doneBy: String(data.doneBy || ""),
-      doneByUid: String(data.doneByUid || ""),
-      doneByEmail: String(data.doneByEmail || ""),
-      currentStatus: "Da fare",
-      cause: "È presente una data FATTO valida e non annullata, ma nessun record collegato ha uno stato completato."
-    });
+    try {
+      const evidence = records.filter((record) => hasCompletionEvidence(record.data));
+      const completion = evidence.reduce((latest, record) => !latest || timestampMillis(record.data.doneAt) > timestampMillis(latest.data.doneAt) ? record : latest, null);
+      const doneAtMs = timestampMillis(completion?.data?.doneAt);
+      const resetAtMs = Math.max(0, ...records.map((record) => timestampMillis(record.data.resetAt)));
+      if (!completion || (doneAtMs && resetAtMs && doneAtMs <= resetAtMs)) return;
+      if (!records.some((record) => record.data.done !== true)) return;
+      const data = completion.data;
+      anomalies.push({
+        key: safeText(key), commessaId: commessa.id,
+        commessaName: safeText(commessaData.nome || commessaData.name || commessaData.codice || commessa.id, "Commessa"),
+        commessaCode: safeText(commessaData.codice || commessaData.code),
+        docIds: records.map((record) => safeText(record.id)).filter(Boolean),
+        name: safeText(data.denominazione || data.nome, "Impianto"),
+        idSap: safeText(data.idSap || data.idSAP || data.codiceSap), comune: safeText(data.comune),
+        doneAt: timestampIso(data.doneAt), doneBy: safeText(data.doneBy), doneByUid: safeText(data.doneByUid), doneByEmail: safeText(data.doneByEmail),
+        currentStatus: "Da fare", cause: "I dati esistenti registrano FATTO, ma almeno un record collegato è ancora presente in DA FARE."
+      });
+    } catch (error) {
+      records.forEach((record) => skippedDocumentIds.push(safeText(record.id, "unknown")));
+      console.error("Gruppo impianto non analizzabile", { commessaId: commessa.id, documentId: safeText(records[0]?.id, "unknown"), errorCode: error?.code || "invalid-data" });
+    }
   });
-  return anomalies;
+  return { anomalies, skippedDocumentIds };
 }
 
 function validateCommessaId(value) {
@@ -534,20 +551,30 @@ async function findCompletedPlantAnomalies(db, commessaId) {
   const commessa = await commessaRef.get();
   if (!commessa.exists) throw new functions.https.HttpsError("not-found", "La commessa selezionata non esiste.");
   const impianti = await commessaRef.collection("impianti").get();
-  return { items: groupCompletedPlantAnomalies(commessa, impianti.docs), totalChecked: impianti.size, commessa };
+  const grouped = groupCompletedPlantAnomalies(commessa, impianti.docs);
+  return { items: grouped.anomalies, skippedCount: grouped.skippedDocumentIds.length, totalChecked: impianti.size, commessa };
 }
 
 exports.checkCompletedPlantInconsistencies = functions.https.onCall(async (data, context) => {
-  const db = admin.firestore();
-  await assertAdmin(context, db);
-  const result = await findCompletedPlantAnomalies(db, data?.commessaId);
-  const commessaData = result.commessa.data() || {};
-  return {
-    count: result.items.length,
-    totalChecked: result.totalChecked,
-    commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
-    items: result.items
-  };
+  let commessaId = "non-valido";
+  try {
+    const db = admin.firestore();
+    commessaId = validateCommessaId(data?.commessaId);
+    await assertAdmin(context, db);
+    const result = await findCompletedPlantAnomalies(db, commessaId);
+    const commessaData = result.commessa.data() || {};
+    return {
+      count: result.items.length,
+      skippedCount: result.skippedCount,
+      totalChecked: result.totalChecked,
+      commessa: { id: result.commessa.id, name: commessaData.nome || commessaData.name || result.commessa.id, code: commessaData.codice || commessaData.code || "" },
+      items: result.items
+    };
+  } catch (error) {
+    console.error("Controllo impianti della commessa non completato", { commessaId, documentId: error?.documentId || "unknown", errorCode: error?.code || "unknown" });
+    if (["invalid-argument", "unauthenticated", "permission-denied", "not-found"].includes(error?.code)) throw error;
+    throw new functions.https.HttpsError("internal", "Non è stato possibile controllare questa commessa. Riprova tra poco; nessun dato è stato modificato.");
+  }
 });
 
 exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) => {
@@ -579,12 +606,14 @@ exports.forceCompletedPlantsDone = functions.https.onCall(async (data, context) 
       const docs = await Promise.all(refs.map((ref) => transaction.get(ref)));
       if (docs.some((doc) => !doc.exists)) throw new functions.https.HttpsError("failed-precondition", "Un impianto è stato modificato: ripetere la verifica.");
       const records = docs.map((doc) => ({ ref: doc.ref, id: doc.id, data: doc.data() || {} }));
-      const rechecked = groupCompletedPlantAnomalies({ id: item.commessaId, data: () => ({ nome: item.commessaName }) }, records.map((record) => ({ ...record, data: () => record.data })));
+      const rechecked = groupCompletedPlantAnomalies({ id: item.commessaId, data: () => ({ nome: item.commessaName }) }, records.map((record) => ({ ...record, data: () => record.data }))).anomalies;
       if (!rechecked.some((entry) => entry.key === item.key)) throw new functions.https.HttpsError("failed-precondition", "Un impianto non è più incongruente: ripetere la verifica.");
       plants.push({ item, records });
     }
     plants.forEach(({ item, records }) => {
-      const original = records.reduce((latest, record) => timestampMillis(record.data.doneAt) > timestampMillis(latest?.data?.doneAt) ? record : latest, null);
+      const evidence = records.filter((record) => hasCompletionEvidence(record.data));
+      const original = evidence.reduce((latest, record) => !latest || timestampMillis(record.data.doneAt) > timestampMillis(latest.data.doneAt) ? record : latest, null);
+      if (!original) throw new functions.https.HttpsError("failed-precondition", "I dati FATTO originali non sono più disponibili: ripetere la verifica.");
       records.forEach((record) => transaction.set(record.ref, {
         done: true,
         doneAt: original.data.doneAt,

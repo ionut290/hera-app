@@ -712,11 +712,6 @@ const ui = {
   managementTitle: document.getElementById("management-title"),
   managementCloseBtn: document.getElementById("management-close-btn"),
   panelCommesse: document.getElementById("panel-commesse"),
-  checkCommessaPlantsBtn: document.getElementById("check-commessa-plants-btn"),
-  commessaCompletedPlantsResult: document.getElementById("commessa-completed-plants-result"),
-  completedPlantsLoading: document.getElementById("completed-plants-loading"),
-  completedPlantsFeedback: document.getElementById("completed-plants-feedback"),
-  completedPlantsList: document.getElementById("completed-plants-list"),
   panelSquadre: document.getElementById("panel-squadre"),
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
@@ -1974,7 +1969,6 @@ ui.openPosBtn?.addEventListener("click", openPosPage);
 ui.openSegnalazioniBtn?.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn?.addEventListener("click", openHowtoPage);
 ui.openControlCenterBtn?.addEventListener("click", openControlCenterPage);
-ui.checkCommessaPlantsBtn?.addEventListener("click", checkCurrentCommessaCompletedPlants);
 ui.runControlCheckBtn?.addEventListener("click", runControlCenterCheck);
 ui.backFromControlCenterBtn?.addEventListener("click", closeControlCenterPage);
 ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
@@ -3392,7 +3386,6 @@ function updateAdminControls() {
   ui.operatorPositionsToggleBtn?.classList.add("hidden");
   if (ui.operatorPositionsToggleBtn) ui.operatorPositionsToggleBtn.disabled = true;
   ui.chatClearBtn?.classList.toggle("hidden", !canManage);
-  ui.checkCommessaPlantsBtn?.classList.toggle("hidden", !canManage);
   ui.snowServiceBtn?.classList.toggle("hidden", !canManage);
   if (ui.snowServiceBtn) ui.snowServiceBtn.disabled = !canManage;
   if (ui.chatClearBtn) ui.chatClearBtn.disabled = !canManage;
@@ -3554,96 +3547,6 @@ function openManagementPanel(panel) {
 function closeManagementPanel() {
   ui.managementPage.classList.add("hidden");
   ui.managementPage.setAttribute("aria-hidden", "true");
-}
-
-let completedPlantsInconsistencies = [];
-let completedPlantsTotalChecked = 0;
-let completedPlantsBusy = false;
-
-function resetCommessaCompletedPlantsCheck() {
-  completedPlantsInconsistencies = [];
-  completedPlantsTotalChecked = 0;
-  completedPlantsBusy = false;
-  ui.commessaCompletedPlantsResult?.classList.add("hidden");
-  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = "";
-  if (ui.completedPlantsList) ui.completedPlantsList.innerHTML = "";
-  ui.completedPlantsLoading?.classList.add("hidden");
-  if (ui.checkCommessaPlantsBtn) ui.checkCommessaPlantsBtn.disabled = !selectedCommessaId;
-}
-
-function setCompletedPlantsBusy(busy) {
-  completedPlantsBusy = busy;
-  ui.completedPlantsLoading?.classList.toggle("hidden", !busy);
-  if (ui.checkCommessaPlantsBtn) ui.checkCommessaPlantsBtn.disabled = busy || !selectedCommessaId;
-}
-
-function formatCompletedPlantTimestamp(value) {
-  const date = new Date(value || "");
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("it-IT", { dateStyle: "short", timeStyle: "medium" });
-}
-
-function renderCompletedPlantsInconsistencies() {
-  if (!ui.completedPlantsList) return;
-  ui.completedPlantsList.innerHTML = "";
-  if (!completedPlantsInconsistencies.length) {
-    if (ui.completedPlantsFeedback && completedPlantsTotalChecked) ui.completedPlantsFeedback.textContent = "✅ Tutti gli impianti di questa commessa risultano correttamente sincronizzati.";
-    return;
-  }
-  if (ui.completedPlantsFeedback) ui.completedPlantsFeedback.textContent = `${completedPlantsInconsistencies.length} incongruenze su ${completedPlantsTotalChecked} impianti controllati. Il controllo non ha modificato alcun dato.`;
-  completedPlantsInconsistencies.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = "card completed-plant-card";
-    card.innerHTML = `<div class="section-head"><h3>${escapeHTML(item.name || "Impianto")}</h3><span class="status">Da fare</span></div><dl class="completed-plant-details"><div><dt>ID SAP</dt><dd>${escapeHTML(item.idSap || "-")}</dd></div><div><dt>Comune</dt><dd>${escapeHTML(item.comune || "-")}</dd></div><div><dt>FATTO premuto il</dt><dd>${escapeHTML(formatCompletedPlantTimestamp(item.doneAt))}</dd></div><div><dt>Operatore</dt><dd>${escapeHTML(item.doneBy || item.doneByEmail || "-")}</dd></div><div><dt>Motivo</dt><dd>${escapeHTML(item.cause || "Stato FATTO non sincronizzato")}</dd></div></dl>`;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn btn-primary force-completed-plant-btn";
-    button.textContent = "FORZA IN FATTI";
-    button.addEventListener("click", () => forceCompletedPlant(item, button));
-    card.appendChild(button);
-    ui.completedPlantsList.appendChild(card);
-  });
-}
-
-async function checkCurrentCommessaCompletedPlants() {
-  if (!canManageData() || !selectedCommessaId || completedPlantsBusy) return;
-  ui.commessaCompletedPlantsResult?.classList.remove("hidden");
-  if (!functions || typeof functions.httpsCallable !== "function") {
-    ui.completedPlantsFeedback.textContent = "Il servizio di verifica non è disponibile. Riprova quando sei online.";
-    return;
-  }
-  setCompletedPlantsBusy(true);
-  ui.completedPlantsFeedback.textContent = "Controllo in sola lettura della commessa in corso...";
-  try {
-    const response = await functions.httpsCallable("checkCompletedPlantInconsistencies")({ commessaId: selectedCommessaId });
-    completedPlantsInconsistencies = Array.isArray(response?.data?.items) ? response.data.items : [];
-    completedPlantsTotalChecked = Number(response?.data?.totalChecked || 0);
-    renderCompletedPlantsInconsistencies();
-  } catch (error) {
-    console.error("Verifica impianti della commessa fallita:", { commessaId: selectedCommessaId, code: error?.code || "unknown" });
-    completedPlantsInconsistencies = [];
-    ui.completedPlantsList.innerHTML = "";
-    ui.completedPlantsFeedback.textContent = `Impossibile completare il controllo: ${error?.message || "si è verificato un problema con i dati della commessa"}. Nessun dato è stato modificato.`;
-  } finally { setCompletedPlantsBusy(false); }
-}
-
-async function forceCompletedPlant(item, sourceButton) {
-  if (!canManageData() || !item || completedPlantsBusy) return;
-  if (!window.confirm(`Confermi lo spostamento di “${item.name || "questo impianto"}” in FATTI?`)) return;
-  const reason = window.prompt("Motivo della forzatura:", "Correzione incongruenza FATTO / DA FARE");
-  if (!reason?.trim()) return;
-  setCompletedPlantsBusy(true);
-  sourceButton.disabled = true;
-  try {
-    await functions.httpsCallable("forceCompletedPlantsDone")({ commessaId: selectedCommessaId, reason: reason.trim(), plants: [{ key: item.key }] });
-    const ids = new Set(item.docIds || []);
-    currentImpianti.forEach((plant) => { if (ids.has(String(plant.id || "")) || buildImpiantoKey(plant) === item.key) plant.done = true; });
-    completedPlantsInconsistencies = completedPlantsInconsistencies.filter((entry) => entry.key !== item.key);
-    renderImpianti();
-    renderCompletedPlantsInconsistencies();
-    await checkCurrentCommessaCompletedPlants();
-  } catch (error) {
-    ui.completedPlantsFeedback.textContent = `Correzione non riuscita: ${error?.message || "riprova più tardi"}.`;
-  } finally { setCompletedPlantsBusy(false); }
 }
 
 function openMapFullscreenPage() {
@@ -12400,7 +12303,6 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome, codice = "") {
   selectedCommessaId = id;
   selectedCommessaName = nome;
-  resetCommessaCompletedPlantsCheck();
   setCommessaWeatherRefreshStatus("");
   mainMapViewState.hasUserMoved = false;
   activeNearbyImpiantoContext = null;

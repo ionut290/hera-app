@@ -6011,6 +6011,26 @@ body.squadre-impianto-detail-open { overflow: hidden; }
   border-radius: 12px;
 }
 
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-completed-done,
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-completed-done:disabled {
+  border-color: #f59e0b;
+  background-color: #fbbf24;
+  background-image: none;
+  color: #78350f;
+  cursor: default;
+  filter: none;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-completed-done::after {
+  content: attr(data-done-label);
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
 .impianto-secondary-actions {
   min-height: 22px;
   gap: 6px;

@@ -1173,6 +1173,8 @@ const localSheetMutationAt = new Map();
 let fuelMapInstance = null;
 let fuelStationsLayer = null;
 let selectedFuelMezzo = null;
+let fuelStationsLoadPromise = null;
+let fuelStationsAbortController = null;
 let personalServicesMapInstance = null;
 let personalServicesLayer = null;
 let personalServicesResults = [];
@@ -22859,60 +22861,86 @@ function renderFuelMezzoDetails() {
 }
 
 async function loadNearbyFuelStations() {
-  if (!currentUserPos) {
-    ui.fuelStationsList.innerHTML = "<p class='muted'>Posizione non disponibile. Attiva GPS per vedere i distributori vicini.</p>";
+  if (fuelStationsLoadPromise) return fuelStationsLoadPromise;
+  fuelStationsLoadPromise = runFuelStationsLoad().finally(() => { fuelStationsLoadPromise = null; });
+  return fuelStationsLoadPromise;
+}
+
+async function runFuelStationsLoad() {
+  const fuel = window.HeraFuelStations.normalizeFuel(selectedFuelMezzo?.alimentazione);
+  const fuelLabel = window.HeraFuelStations.FUEL_LABELS[fuel] || String(selectedFuelMezzo?.alimentazione || "carburante").trim().toLowerCase();
+  console.info("[Distributori] carburante normalizzato", { fuel });
+  if (!fuel) {
+    showFuelStationsError("Alimentazione del mezzo non riconosciuta.", true);
+    return;
+  }
+  if (navigator.onLine === false) {
+    showFuelStationsError("Connessione assente. Controlla Internet e riprova.", true);
     return;
   }
   ui.fuelStationsList.innerHTML = "<p class='muted'>Caricamento distributori...</p>";
+  ensureFuelMap();
+  fuelStationsLayer.clearLayers();
   try {
-    const data = await fetchFuelStationsFromOverpass(currentUserPos.lat, currentUserPos.lng);
-    const stations = (data.elements || []).map((item) => {
-      const lat = item.lat || (item.center && item.center.lat);
-      const lon = item.lon || (item.center && item.center.lon);
-      if (!lat || !lon) return null;
-      const brandLabel = detectFuelBrand(item.tags || {});
-      if (!brandLabel) return null;
-      return {
-        id: item.id,
-        name: item.tags.name || item.tags.brand || "Distributore",
-        brand: item.tags.brand || item.tags.operator || brandLabel,
-        brandLabel,
-        lat,
-        lon,
-        distance: haversine(currentUserPos.lat, currentUserPos.lng, lat, lon)
-      };
-    }).filter(Boolean).sort((a, b) => a.distance - b.distance);
+    const position = await requestFreshFuelPosition();
+    currentUserPos = position;
+    console.info("[Distributori] posizione operatore", { lat: position.lat, lng: position.lng, accuracy: position.accuracy });
+    fuelMapInstance.setView([position.lat, position.lng], 11);
+    fuelMapInstance.invalidateSize();
+    let stations = [];
+    for (const radiusKm of [30, 50]) {
+      const data = await fetchFuelStationsFromOverpass(position.lat, position.lng, radiusKm, fuel);
+      stations = window.HeraFuelStations.parseStations(data.elements, fuel, position, haversine);
+      console.info("[Distributori] filtro risultati", { fuel, radiusKm, received: data.elements?.length || 0, compatible: stations.length });
+      if (stations.length) break;
+    }
+    if (!stations.length) {
+      showFuelStationsError(`Nessun distributore di ${fuelLabel} trovato nel raggio di 50 km.`, true);
+      return;
+    }
     renderFuelStations(stations);
   } catch (error) {
-    console.error("Errore caricamento distributori:", error);
-    const retryBtn = createButton("Riprova", () => loadNearbyFuelStations());
-    ui.fuelStationsList.innerHTML = "<p class='muted'>Errore caricamento distributori. Riprova tra pochi secondi.</p>";
-    ui.fuelStationsList.appendChild(retryBtn);
-    if (fuelStationsLayer) fuelStationsLayer.clearLayers();
+    if (error?.name === "AbortError") return;
+    console.error("[Distributori] caricamento non riuscito", { type: error?.fuelErrorType || "service", status: error?.status || null, message: error?.message });
+    const message = error?.fuelErrorType === "location"
+      ? "Posizione non disponibile. Attiva la localizzazione e riprova."
+      : (navigator.onLine === false || error?.fuelErrorType === "network")
+        ? "Connessione assente. Controlla Internet e riprova."
+        : "Servizio distributori temporaneamente non disponibile.";
+    showFuelStationsError(message, true);
   }
 }
 
-function detectFuelBrand(tags) {
-  const brandText = [
-    tags.brand,
-    tags.name,
-    tags.operator,
-    tags["brand:it"]
-  ].filter(Boolean).join(" ").toLowerCase();
-  if (brandText.includes("q8")) return "Q8";
-  if (brandText.includes("eni") || brandText.includes("agip")) return "ENI";
-  return "";
+function showFuelStationsError(message, retry) {
+  if (fuelStationsLayer) fuelStationsLayer.clearLayers();
+  ui.fuelStationsList.innerHTML = `<p class="muted">${escapeHTML(message)}</p>`;
+  if (retry) ui.fuelStationsList.appendChild(createButton("Riprova", () => loadNearbyFuelStations()));
 }
 
-async function fetchFuelStationsFromOverpass(lat, lng) {
-  const query = `
-    [out:json][timeout:25];
-    (
-      node[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
-      way[\"amenity\"=\"fuel\"](around:12000,${lat},${lng});
-    );
-    out center;
-  `;
+async function requestFreshFuelPosition() {
+  if (!navigator.geolocation) throw Object.assign(new Error("Geolocation unsupported"), { fuelErrorType: "location" });
+  try {
+    if (navigator.permissions?.query) {
+      const permission = await navigator.permissions.query({ name: "geolocation" });
+      if (permission.state === "denied") throw Object.assign(new Error("Geolocation denied"), { fuelErrorType: "location" });
+    }
+    if (window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.Geolocation?.requestPermissions) {
+      const permission = await window.Capacitor.Plugins.Geolocation.requestPermissions();
+      if (permission?.location === "denied") throw Object.assign(new Error("Geolocation denied"), { fuelErrorType: "location" });
+    }
+    return await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy || 0 }),
+      (error) => reject(Object.assign(error || new Error("Geolocation unavailable"), { fuelErrorType: "location" })),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    ));
+  } catch (error) {
+    error.fuelErrorType = "location";
+    throw error;
+  }
+}
+
+async function fetchFuelStationsFromOverpass(lat, lng, radiusKm, fuel) {
+  const query = window.HeraFuelStations.buildQuery(lat, lng, radiusKm, fuel);
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter"
@@ -22920,18 +22948,23 @@ async function fetchFuelStationsFromOverpass(lat, lng) {
 
   let lastError = null;
   for (const endpoint of endpoints) {
+    let timeout;
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-      const response = await fetch(endpoint, {
-        method: "POST",
-        body: query,
-        signal: controller.signal
-      });
+      fuelStationsAbortController = new AbortController();
+      timeout = setTimeout(() => fuelStationsAbortController.abort(), 20000);
+      const requestUrl = `${endpoint}?data=${encodeURIComponent(query)}`;
+      console.info("[Distributori] richiesta", { url: endpoint, lat, lng, radiusKm, fuel });
+      const response = await fetch(requestUrl, { method: "GET", headers: { Accept: "application/json" }, signal: fuelStationsAbortController.signal });
       clearTimeout(timeout);
-      if (!response.ok) throw new Error(`Overpass ${response.status}`);
-      return await response.json();
+      console.info("[Distributori] risposta HTTP", { url: endpoint, status: response.status, ok: response.ok });
+      if (!response.ok) throw Object.assign(new Error(`Overpass HTTP ${response.status}`), { status: response.status });
+      const data = await response.json();
+      if (!Array.isArray(data?.elements)) throw new Error("Risposta Overpass non valida");
+      return data;
     } catch (error) {
+      clearTimeout(timeout);
+      if (error?.name === "AbortError") error = Object.assign(new Error("Timeout Overpass"), { status: 408 });
+      if (error instanceof TypeError) error.fuelErrorType = "network";
       lastError = error;
     }
   }
@@ -22953,7 +22986,6 @@ function renderFuelStations(stations) {
   fuelStationsLayer.clearLayers();
   ui.fuelStationsList.innerHTML = "";
   if (!stations.length) {
-    ui.fuelStationsList.innerHTML = "<p class='muted'>Nessun distributore Q8/ENI trovato vicino a te.</p>";
     return;
   }
   const bounds = [];
@@ -22961,11 +22993,11 @@ function renderFuelStations(stations) {
     const marker = L.marker([station.lat, station.lon], {
       icon: createFuelMarkerIcon(station.brandLabel)
     }).addTo(fuelStationsLayer);
-    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.brand)}<br>${formatDistance(station.distance)}`);
-    const navBtn = createButton("Naviga", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lon}`, "_blank"));
+    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}`);
+    const navBtn = createButton("NAVIGA", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${station.lat},${station.lon}`)}`, "_blank", "noopener"));
     const row = document.createElement("div");
     row.className = "simple-list-item";
-    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.brand)} • ${formatDistance(station.distance)}</small></span>`;
+    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}</small></span>`;
     row.appendChild(navBtn);
     ui.fuelStationsList.appendChild(row);
     marker.on("click", () => navBtn.focus());

@@ -91,5 +91,28 @@ requireIncludes(source, 'const forceDoneEnabled = forceDoneDistanceAllowed', 'FO
 requireIncludes(renderArea, 'Sposta subito questo impianto nei FATTI', 'FORZA mostra che sposta subito nei FATTI');
 requireIncludes(renderArea, 'await markImpiantoDone(impianto, { source: "whatsapp" });', 'pulsante nascosto continua a chiamare markImpiantoDone con source whatsapp');
 
+const whatsappHandler = extractFunction('handleImpiantoWhatsAppClick');
+if (!whatsappHandler) fail('funzione handleImpiantoWhatsAppClick presente');
+else {
+  pass('funzione handleImpiantoWhatsAppClick presente');
+  const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto);');
+  const renderIndex = whatsappHandler.indexOf('renderImpianti();');
+  const openWhatsappIndex = whatsappHandler.indexOf('const opened = openWhatsApp(');
+  if (localMoveIndex >= 0 && renderIndex > localMoveIndex && openWhatsappIndex > renderIndex) {
+    pass('Fatto sposta e renderizza l’impianto prima di aprire WhatsApp');
+  } else {
+    fail('Fatto deve spostare e renderizzare l’impianto prima di aprire WhatsApp');
+  }
+  requireIncludes(whatsappHandler, 'forceMoveImpiantoToFatti(impianto, { source: "whatsapp" })', 'Fatto conserva il salvataggio Firebase protetto');
+}
+
+const backgroundSafetyCheck = extractFunction('runWhazzupPendingDoneSafetyCheck');
+if (!backgroundSafetyCheck) fail('funzione runWhazzupPendingDoneSafetyCheck presente');
+else {
+  pass('funzione runWhazzupPendingDoneSafetyCheck presente');
+  requireIncludes(backgroundSafetyCheck, 'if (!persisted && !isNetworkOffline())', 'rientro in app ritenta FATTO solo quando online');
+  requireIncludes(backgroundSafetyCheck, 'await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" })', 'rientro in app completa automaticamente il passaggio nei FATTI');
+}
+
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ Controlli logica pulsante Fatto completati.');

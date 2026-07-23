@@ -23,6 +23,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/fuel-stations-italy",
+        "function": "getFuelStationsItaly"
+      },
+      {
         "source": "/pos",
         "destination": "/index.html"
       }

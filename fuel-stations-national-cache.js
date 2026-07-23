@@ -11,6 +11,35 @@
   const STORE_NAME = "snapshots";
   const SNAPSHOT_KEY = "mimit-italia";
   const ENDPOINT = "/api/fuel-stations-italy";
+  const FIREBASE_FUNCTION_REGION = "us-central1";
+
+  function endpointCandidates() {
+    const endpoints = [ENDPOINT];
+    const projectId = String(root?.firebaseConfig?.projectId || "").trim();
+    if (projectId) endpoints.push(`https://${FIREBASE_FUNCTION_REGION}-${projectId}.cloudfunctions.net/getFuelStationsItaly`);
+    return Array.from(new Set(endpoints));
+  }
+
+  async function fetchSnapshot(signal) {
+    const errors = [];
+    for (const endpoint of endpointCandidates()) {
+      try {
+        const response = await root.fetch(endpoint, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          signal
+        });
+        const contentType = String(response.headers?.get?.("content-type") || "");
+        if (!response.ok) throw Object.assign(new Error(`Archivio distributori HTTP ${response.status}`), { status: response.status });
+        if (!contentType.includes("application/json")) throw new Error("Endpoint distributori non ha restituito JSON");
+        return normalizeSnapshot(await response.json());
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        errors.push(`${endpoint}: ${error?.message || error}`);
+      }
+    }
+    throw new Error(errors.join(" | ") || "Archivio distributori non raggiungibile");
+  }
   const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const MAX_STALE_MS = 7 * 24 * 60 * 60 * 1000;
   let memorySnapshot = null;
@@ -90,13 +119,7 @@
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 45000);
       try {
-        const response = await root.fetch(ENDPOINT, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-          signal: controller.signal
-        });
-        if (!response.ok) throw Object.assign(new Error(`Archivio distributori HTTP ${response.status}`), { status: response.status });
-        const snapshot = normalizeSnapshot(await response.json());
+        const snapshot = await fetchSnapshot(controller.signal);
         if (!snapshot.stations.length) throw new Error("Archivio nazionale distributori vuoto");
         await writeSnapshot(snapshot);
         root?.dispatchEvent?.(new CustomEvent("hera:fuel-national-cache-ready", {
@@ -153,6 +176,8 @@
 
   return {
     ENDPOINT,
+    FIREBASE_FUNCTION_REGION,
+    endpointCandidates,
     CACHE_TTL_MS,
     MAX_STALE_MS,
     snapshotAge,

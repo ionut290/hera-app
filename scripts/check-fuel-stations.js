@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const fuel = require("../fuel-stations-core.js");
+const nationalCache = require("../fuel-stations-national-cache.js");
+const nationalServerCache = require("../functions/fuel-stations-cache.js");
 
 const variants = {
   cng: ["Metano", " CNG ", "GNC", "Mètano + benzina"],
@@ -65,6 +67,35 @@ assert.match(fuel.parseMimitStations(mimitResults, "cng", { lat: 0, lng: 0 }, di
 assert.deepEqual(fuel.parseMimitStations(mimitResults, "lpg", { lat: 0, lng: 0 }, distance).map((x) => x.id), ["mimit-102"]);
 assert.equal(fuel.parseMimitStations(mimitResults, "cng", { lat: 0, lng: 0 }, distance).some((x) => x.id === "mimit-103"), false);
 assert.equal(fuel.parseMimitStations(mimitResults, "cng", { lat: 0, lng: 0 }, distance).some((x) => x.id === "mimit-104"), false);
+
+const nationalAnagrafica = [
+  "Estrazione del 2026-07-23",
+  "idimpianto|Gestore|Bandiera|Tipo Impianto|Nome Impianto|Indirizzo|Comune|Provincia|Latitudine|Longitudine",
+  "201|Gestore Uno|Q8|Stradale|Q8 Roma|Via Roma 1|Roma|RM|41.900|12.500",
+  "202|Gestore Due|Eni|Stradale|Eni Milano|Via Milano 2|Milano|MI|45.464|9.190",
+  "203|Gestore Tre|Indipendente|Stradale|Pompa bianca|Via Napoli 3|Napoli|NA|40.851|14.268",
+  "204|Gestore Quattro|Q8|Stradale|Coordinate errate|Via Zero 4|Roma|RM|0|0"
+].join("\n");
+const nationalPrices = [
+  "Estrazione del 2026-07-23",
+  "idimpianto|descCarburante|prezzo|isSelf|dtComu",
+  "201|Metano|1.499|0|23/07/2026 08:00:00",
+  "201|Benzina|1.899|1|23/07/2026 08:00:00",
+  "202|GPL|0.749|1|23/07/2026 08:10:00",
+  "203|Metano|1.399|1|23/07/2026 08:20:00",
+  "204|Gasolio|1.799|1|23/07/2026 08:30:00"
+].join("\n");
+const nationalSnapshot = nationalServerCache.buildNationalSnapshot(nationalAnagrafica, nationalPrices, 123456);
+assert.equal(nationalSnapshot.updatedAt, 123456);
+assert.equal(nationalSnapshot.extractionDate, "2026-07-23");
+assert.deepEqual(nationalSnapshot.stations.map((station) => station.id), ["201", "202"]);
+assert.deepEqual(nationalSnapshot.stations[0].fuels.map((item) => item.name), ["Metano", "Benzina"]);
+assert.equal(fuel.parseMimitStations(nationalSnapshot.stations, "cng", { lat: 0, lng: 0 }, distance).length, 1);
+assert.equal(nationalServerCache.parseDelimitedTable("idimpianto;descCarburante;prezzo\n1;Gasolio;1,799").rows[0].prezzo, "1,799");
+assert.equal(nationalCache.ENDPOINT, "/api/fuel-stations-italy");
+assert.equal(nationalCache.CACHE_TTL_MS, 24 * 60 * 60 * 1000);
+assert.equal(nationalServerCache.CACHE_TTL_MS, 24 * 60 * 60 * 1000);
+assert.equal(nationalCache.MAX_STALE_MS, 7 * 24 * 60 * 60 * 1000);
 assert.deepEqual(fuel.parseStations(elements, "cng", { lat: 0, lng: 0 }, distance).map((x) => x.id), ["node-1"]);
 assert.deepEqual(fuel.parseStations(elements, "lpg", { lat: 0, lng: 0 }, distance).map((x) => x.id), ["node-2"]);
 assert.deepEqual(fuel.parseStations(elements, "diesel", { lat: 0, lng: 0 }, distance).map((x) => x.id), ["node-3"]);
@@ -78,6 +109,10 @@ assert.equal(fuel.formatAddress(elements[0].tags), "Via Roma 1");
 const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const swSource = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
+const cacheSource = fs.readFileSync(path.join(__dirname, "..", "fuel-stations-national-cache.js"), "utf8");
+const serverCacheSource = fs.readFileSync(path.join(__dirname, "..", "functions", "fuel-stations-cache.js"), "utf8");
+const functionsSource = fs.readFileSync(path.join(__dirname, "..", "functions", "index.js"), "utf8");
+const firebaseSource = fs.readFileSync(path.join(__dirname, "..", "firebase.json"), "utf8");
 assert.match(appSource, /Posizione non disponibile\. Attiva la localizzazione e riprova\./);
 assert.match(appSource, /Connessione assente\. Controlla Internet e riprova\./);
 assert.match(appSource, /Nessun distributore Q8\/ENI che vende \$\{fuelLabel\} trovato nel raggio di \$\{radiusKm\} km\./);
@@ -87,10 +122,24 @@ assert.match(appSource, /if \(ui\.fuelRadius\) ui\.fuelRadius\.value = "5"/);
 assert.match(appSource, /filter\(\(station\) => station\.distance <= radiusKm\)/);
 assert.match(appSource, /fetchFuelStationsFromMimit\(position\.lat, position\.lng, radiusKm\)/);
 assert.match(appSource, /uso la riserva OpenStreetMap/);
-assert.match(indexSource, /fonte ufficiale MIMIT, con riserva OpenStreetMap/);
-assert.match(swSource, /hera-app-shell-v15/);
+assert.match(appSource, /nationalCache\?\.findNearby\(fuel, position, radiusKm, haversine\)/);
+assert.ok(appSource.indexOf("nationalCache?.findNearby") < appSource.indexOf("fetchFuelStationsFromMimit(position.lat"));
+assert.match(appSource, /source: "Archivio MIMIT salvato"/);
+assert.match(indexSource, /archivio nazionale MIMIT salvato/);
+assert.match(indexSource, /fuel-stations-national-cache\.js\?v=20260723/);
+assert.match(cacheSource, /ENDPOINT = "\/api\/fuel-stations-italy"/);
+assert.match(cacheSource, /requestIdleCallback/);
+assert.match(serverCacheSource, /anagrafica_impianti_attivi\.csv/);
+assert.match(serverCacheSource, /prezzo_alle_8\.csv/);
+assert.match(functionsSource, /exports\.getFuelStationsItaly/);
+assert.match(functionsSource, /exports\.refreshFuelStationsItaly/);
+assert.match(functionsSource, /pubsub\.schedule\("30 3 \* \* \*"\)/);
+assert.match(firebaseSource, /"source": "\/api\/fuel-stations-italy"/);
+assert.match(firebaseSource, /"function": "getFuelStationsItaly"/);
+assert.match(swSource, /hera-app-shell-v16/);
+assert.match(swSource, /fuel-stations-national-cache\.js/);
 assert.match(appSource, /class="mezzo-chip-btn squadra-conflict-name"/);
 assert.match(indexSource, /<option value="5" selected>5 km \(predefinito\)<\/option>/);
 assert.match(indexSource, /id="fuel-search-btn"/);
 assert.match(appSource, /google\.com\/maps\/dir\/\?api=1&destination=/);
-console.log("Fuel station normalization, MIMIT API, strict filtering, radii and fallback checks passed.");
+console.log("Fuel station normalization, national MIMIT cache, strict filtering, radii and fallback checks passed.");

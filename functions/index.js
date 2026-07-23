@@ -3,6 +3,7 @@ const functions = require("firebase-functions");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
+const { CACHE_TTL_MS: FUEL_CACHE_TTL_MS, downloadNationalSnapshot } = require("./fuel-stations-cache");
 
 admin.initializeApp();
 
@@ -423,3 +424,97 @@ exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").time
   await db.collection("appConfig").doc("worklimateUpdate").set({ lastRunAt: admin.firestore.FieldValue.serverTimestamp(), count }, { merge: true });
   return null;
 });
+
+
+const FUEL_CACHE_OBJECT = "public-cache/fuel-stations-italy.json";
+let fuelSnapshotMemory = null;
+let fuelSnapshotRefreshPromise = null;
+
+function isFreshFuelSnapshot(snapshot) {
+  return Array.isArray(snapshot?.stations)
+    && snapshot.stations.length > 0
+    && Date.now() - Number(snapshot.updatedAt || 0) < FUEL_CACHE_TTL_MS;
+}
+
+async function readStoredFuelSnapshot() {
+  if (isFreshFuelSnapshot(fuelSnapshotMemory)) return fuelSnapshotMemory;
+  try {
+    const file = admin.storage().bucket().file(FUEL_CACHE_OBJECT);
+    const [exists] = await file.exists();
+    if (!exists) return null;
+    const [buffer] = await file.download();
+    const snapshot = JSON.parse(buffer.toString("utf8"));
+    if (!Array.isArray(snapshot?.stations) || !snapshot.stations.length) return null;
+    fuelSnapshotMemory = snapshot;
+    return snapshot;
+  } catch (error) {
+    console.warn("Archivio distributori su Cloud Storage non leggibile:", error.message || error);
+    return null;
+  }
+}
+
+async function writeStoredFuelSnapshot(snapshot) {
+  try {
+    await admin.storage().bucket().file(FUEL_CACHE_OBJECT).save(JSON.stringify(snapshot), {
+      resumable: false,
+      metadata: {
+        contentType: "application/json",
+        cacheControl: "private,max-age=3600"
+      }
+    });
+  } catch (error) {
+    console.warn("Archivio distributori non salvato su Cloud Storage:", error.message || error);
+  }
+  fuelSnapshotMemory = snapshot;
+  return snapshot;
+}
+
+async function getNationalFuelSnapshot(force = false) {
+  if (fuelSnapshotRefreshPromise) return fuelSnapshotRefreshPromise;
+  const stored = await readStoredFuelSnapshot();
+  if (!force && isFreshFuelSnapshot(stored)) return stored;
+
+  fuelSnapshotRefreshPromise = downloadNationalSnapshot(fetch)
+    .then(writeStoredFuelSnapshot)
+    .finally(() => {
+      fuelSnapshotRefreshPromise = null;
+    });
+  return fuelSnapshotRefreshPromise;
+}
+
+exports.refreshFuelStationsItaly = functions
+  .runWith({ timeoutSeconds: 120, memory: "512MB", maxInstances: 2 })
+  .pubsub.schedule("30 3 * * *")
+  .timeZone("Europe/Rome")
+  .onRun(async () => {
+    const snapshot = await getNationalFuelSnapshot(true);
+    console.info("Archivio distributori MIMIT aggiornato", {
+      stations: snapshot.stations.length,
+      extractionDate: snapshot.extractionDate
+    });
+    return null;
+  });
+
+exports.getFuelStationsItaly = functions
+  .runWith({ timeoutSeconds: 120, memory: "512MB", maxInstances: 5 })
+  .https.onRequest(async (request, response) => {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Cache-Control", "public,max-age=3600,s-maxage=3600,stale-while-revalidate=86400");
+    if (request.method === "OPTIONS") {
+      response.set("Access-Control-Allow-Methods", "GET");
+      response.set("Access-Control-Allow-Headers", "Content-Type");
+      response.status(204).send("");
+      return;
+    }
+    if (request.method !== "GET") {
+      response.status(405).json({ error: "Metodo non consentito" });
+      return;
+    }
+    try {
+      const snapshot = await getNationalFuelSnapshot(false);
+      response.status(200).json(snapshot);
+    } catch (error) {
+      console.error("Archivio distributori MIMIT non disponibile:", error);
+      response.status(503).json({ error: "Archivio distributori temporaneamente non disponibile" });
+    }
+  });

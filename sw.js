@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v15";
+const CACHE_NAME = "hera-app-shell-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./app.js",
   "./fatto-button-immediate.js",
   "./fuel-stations-core.js",
+  "./fuel-stations-national-cache.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icons/hera-icon.svg"

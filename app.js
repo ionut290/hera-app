@@ -21228,6 +21228,12 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
   whazzupFeedback.showNow();
 
+  // Sposta subito lo stato locale nei FATTI e aggiorna l'elenco prima che
+  // WhatsApp mandi Hera in secondo piano. Il salvataggio Firebase continua
+  // nel flusso protetto già esistente qui sotto.
+  markImpiantoDoneVisualFallback(impianto);
+  renderImpianti();
+
   // iOS/Safari consente di aprire schemi esterni (whatsapp://) solo se la
   // navigazione parte direttamente dal tap dell'utente. Se aspettiamo prima il
   // salvataggio Firebase/FATTO, il gesto utente scade e l'app resta ferma sul
@@ -21238,7 +21244,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
     doneAt,
     operatorName: doneBy
   });
-  markImpiantoDoneVisualFallback(impianto);
   if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
 
   void (async () => {
@@ -21421,7 +21426,15 @@ async function runWhazzupPendingDoneSafetyCheck() {
   for (const entry of pendingEntries) {
     const impianto = currentImpianti.find((item) => buildImpiantoKey(item) === entry.impiantoKey)
       || { denominazione: entry.impiantoName, sourceIds: entry.impiantoIds || [], id: entry.impiantoIds?.[0] || "" };
-    const persisted = await isImpiantoPersistedAsDone(impianto);
+    let persisted = await isImpiantoPersistedAsDone(impianto);
+    if (!persisted && !isNetworkOffline()) {
+      try {
+        const retried = await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" });
+        if (retried) persisted = await isImpiantoPersistedAsDone(impianto);
+      } catch (error) {
+        console.error("Errore recupero automatico FATTO al rientro in app:", error);
+      }
+    }
     if (persisted) {
       const state = getWhazzupSafetyState(impianto);
       if (state) {

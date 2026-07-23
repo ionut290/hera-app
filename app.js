@@ -22906,7 +22906,7 @@ async function runFuelStationsLoad() {
   console.info("[Distributori] carburante e raggio", { fuel, radiusKm });
   if (ui.fuelFilterSummary) {
     ui.fuelFilterSummary.textContent = fuel
-      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km.`
+      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km. Fonte preferita: MIMIT Osservaprezzi.`
       : `Alimentazione mezzo non riconosciuta • Raggio ${radiusKm} km`;
   }
   if (!fuel) {
@@ -22929,13 +22929,15 @@ async function runFuelStationsLoad() {
     const initialZoom = radiusKm <= 5 ? 12 : radiusKm <= 10 ? 11 : radiusKm <= 20 ? 10 : 9;
     fuelMapInstance.setView([position.lat, position.lng], initialZoom);
     fuelMapInstance.invalidateSize();
-    const data = await fetchFuelStationsFromOverpass(position.lat, position.lng, radiusKm, fuel);
-    const stations = window.HeraFuelStations.parseStations(data.elements, fuel, position, haversine)
-      .filter((station) => station.distance <= radiusKm);
-    console.info("[Distributori] filtro risultati", { fuel, radiusKm, received: data.elements?.length || 0, compatible: stations.length });
+    const searchResult = await fetchCompatibleFuelStations(position, radiusKm, fuel);
+    const stations = searchResult.stations.filter((station) => station.distance <= radiusKm);
+    console.info("[Distributori] filtro risultati", { fuel, radiusKm, source: searchResult.source, received: searchResult.received, compatible: stations.length });
     if (!stations.length) {
       showFuelStationsError(`Nessun distributore Q8/ENI che vende ${fuelLabel} trovato nel raggio di ${radiusKm} km.`, true);
       return;
+    }
+    if (ui.fuelFilterSummary) {
+      ui.fuelFilterSummary.textContent = `Trovati ${stations.length} distributori che vendono ${fuelLabel}, entro ${radiusKm} km • Fonte: ${searchResult.source}.`;
     }
     renderFuelStations(stations);
   } catch (error) {
@@ -22977,6 +22979,57 @@ async function requestFreshFuelPosition() {
     ));
   } catch (error) {
     error.fuelErrorType = "location";
+    throw error;
+  }
+}
+
+async function fetchCompatibleFuelStations(position, radiusKm, fuel) {
+  if (fuel !== "electric") {
+    try {
+      const data = await fetchFuelStationsFromMimit(position.lat, position.lng, radiusKm);
+      const stations = window.HeraFuelStations.parseMimitStations(data.results, fuel, position, haversine)
+        .filter((station) => station.distance <= radiusKm);
+      if (stations.length) {
+        return { stations, source: "MIMIT Osservaprezzi", received: data.results.length };
+      }
+      console.info("[Distributori] MIMIT senza risultati compatibili, uso la riserva OpenStreetMap", { fuel, radiusKm, received: data.results.length });
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      console.warn("[Distributori] MIMIT non disponibile, uso la riserva OpenStreetMap", { status: error?.status || null, message: error?.message });
+    }
+  }
+
+  const data = await fetchFuelStationsFromOverpass(position.lat, position.lng, radiusKm, fuel);
+  const stations = window.HeraFuelStations.parseStations(data.elements, fuel, position, haversine)
+    .filter((station) => station.distance <= radiusKm)
+    .map((station) => ({ ...station, source: "OpenStreetMap" }));
+  return { stations, source: "OpenStreetMap", received: data.elements?.length || 0 };
+}
+
+async function fetchFuelStationsFromMimit(lat, lng, radiusKm) {
+  let timeout;
+  let timedOut = false;
+  try {
+    fuelStationsAbortController = new AbortController();
+    timeout = setTimeout(() => {
+      timedOut = true;
+      fuelStationsAbortController.abort();
+    }, 12000);
+    const response = await fetch(window.HeraFuelStations.MIMIT_API_URL, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(window.HeraFuelStations.buildMimitRequest(lat, lng, radiusKm)),
+      signal: fuelStationsAbortController.signal
+    });
+    clearTimeout(timeout);
+    console.info("[Distributori] risposta MIMIT", { status: response.status, ok: response.ok, radiusKm });
+    if (!response.ok) throw Object.assign(new Error(`MIMIT HTTP ${response.status}`), { status: response.status });
+    const data = await response.json();
+    if (data?.success === false || !Array.isArray(data?.results)) throw new Error("Risposta MIMIT non valida");
+    return data;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error?.name === "AbortError" && timedOut) throw Object.assign(new Error("Timeout MIMIT"), { status: 408 });
     throw error;
   }
 }
@@ -23035,11 +23088,12 @@ function renderFuelStations(stations) {
     const marker = L.marker([station.lat, station.lon], {
       icon: createFuelMarkerIcon(station.brandLabel)
     }).addTo(fuelStationsLayer);
-    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}`);
+    const sourceLabel = station.source ? `<br>Fonte: ${escapeHTML(station.source)}` : "";
+    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}${sourceLabel}`);
     const navBtn = createButton("NAVIGA", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${station.lat},${station.lon}`)}`, "_blank", "noopener"));
     const row = document.createElement("div");
     row.className = "simple-list-item";
-    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}</small></span>`;
+    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}${sourceLabel}</small></span>`;
     row.appendChild(navBtn);
     ui.fuelStationsList.appendChild(row);
     marker.on("click", () => navBtn.focus());

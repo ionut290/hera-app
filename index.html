@@ -1152,6 +1152,18 @@
     </section>
     <section class="card">
       <h2>Mappa distributori Q8 / ENI</h2>
+      <div class="item-actions fuel-search-controls">
+        <label for="fuel-radius"><b>Raggio ricerca</b></label>
+        <select id="fuel-radius" aria-label="Raggio ricerca distributori">
+          <option value="5" selected>5 km (predefinito)</option>
+          <option value="10">10 km</option>
+          <option value="20">20 km</option>
+          <option value="30">30 km</option>
+          <option value="50">50 km</option>
+        </select>
+        <button id="fuel-search-btn" class="btn" type="button">CERCA</button>
+      </div>
+      <p id="fuel-filter-summary" class="muted" aria-live="polite">Seleziona il raggio: verranno mostrati solo distributori compatibili con il carburante del mezzo.</p>
       <div id="fuel-map"></div>
     </section>
     <section class="card hidden" id="fuel-mezzo-details-card">
@@ -1561,7 +1573,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="fuel-stations-core.js?v=20260723"></script>
-  <script src="app.js?v=20260723b"></script>
+  <script src="app.js?v=20260723c"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>
   <script src="hours-export-range.js?v=20260619"></script>

@@ -125,7 +125,7 @@ assert.match(appSource, /filter\(\(station\) => station\.distance <= radiusKm\)/
 assert.match(appSource, /fetchFuelStationsFromMimit\(position\.lat, position\.lng, radiusKm\)/);
 assert.match(appSource, /uso la riserva OpenStreetMap/);
 assert.match(appSource, /nationalCache\?\.findNearby\(fuel, position, radiusKm, haversine\)/);
-assert.ok(appSource.indexOf("nationalCache?.findNearby") < appSource.indexOf("fetchFuelStationsFromMimit(position.lat"));
+assert.ok(appSource.indexOf("nationalCache.findNearby") < appSource.indexOf("fetchFuelStationsFromMimit(position.lat"));
 assert.match(appSource, /source: "Archivio MIMIT salvato"/);
 assert.match(indexSource, /archivio nazionale MIMIT salvato/);
 assert.match(indexSource, /fuel-stations-national-cache\.js\?v=20260723/);

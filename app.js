@@ -844,6 +844,9 @@ const ui = {
   fuelPageTitle: document.getElementById("fuel-page-title"),
   fuelMap: document.getElementById("fuel-map"),
   fuelStationsList: document.getElementById("fuel-stations-list"),
+  fuelRadius: document.getElementById("fuel-radius"),
+  fuelSearchBtn: document.getElementById("fuel-search-btn"),
+  fuelFilterSummary: document.getElementById("fuel-filter-summary"),
   fuelMezzoDetailsBtn: document.getElementById("fuel-mezzo-details-btn"),
   fuelMezzoDetailsCard: document.getElementById("fuel-mezzo-details-card"),
   fuelMezzoDetails: document.getElementById("fuel-mezzo-details"),
@@ -1996,6 +1999,10 @@ ui.weatherCard?.addEventListener("keydown", (event) => {
 });
 ui.backFromFuelBtn?.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn?.addEventListener("click", toggleFuelMezzoDetails);
+ui.fuelSearchBtn?.addEventListener("click", () => loadNearbyFuelStations({ force: true }));
+ui.fuelRadius?.addEventListener("change", () => {
+  if (!ui.fuelPage?.classList.contains("hidden")) loadNearbyFuelStations({ force: true });
+});
 ui.backFromPersonalServicesBtn?.addEventListener("click", closePersonalServicesPage);
 ui.backFromSegnalazioniBtn?.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn?.addEventListener("click", closeHowtoPage);
@@ -20786,6 +20793,9 @@ function renderConflictValueList(rawValue, conflicts, type) {
   return parts.map((value) => {
     const conflict = byKey.get(normalizeSquadraConflictKey(value));
     if (!conflict) return type === "mezzi" ? `<button type="button" class="mezzo-chip-btn" data-mezzo="${escapeHTML(value)}">${escapeHTML(value)}</button>` : escapeHTML(value);
+    if (type === "mezzi") {
+      return `<button type="button" class="mezzo-chip-btn squadra-conflict-name" data-mezzo="${escapeHTML(value)}" title="${escapeHTML(title)}" aria-label="Apri distributori compatibili per ${escapeHTML(value)}. ${escapeHTML(title)}">${escapeHTML(value)}</button>`;
+    }
     return `<span class="squadra-conflict-name" title="${escapeHTML(title)}">${escapeHTML(value)}</span>`;
   }).join(type === "mezzi" ? " " : ", ");
 }
@@ -22829,6 +22839,7 @@ async function openFuelPage(mezzoLabel) {
   selectedFuelMezzo = getMezzoByLabel(mezzoLabel) || { nId: mezzoLabel, nome: mezzoLabel };
   ui.fuelPageTitle.textContent = `Distributori Q8/ENI • ${selectedFuelMezzo.nId || selectedFuelMezzo.nome || "Mezzo"}`;
   ui.fuelMezzoDetailsCard.classList.add("hidden");
+  if (ui.fuelRadius) ui.fuelRadius.value = "5";
   renderFuelMezzoDetails();
   window.location.hash = `fuel=${encodeURIComponent(selectedFuelMezzo.nId || selectedFuelMezzo.nome || "mezzo")}`;
   applyRoute();
@@ -22873,7 +22884,15 @@ function renderFuelMezzoDetails() {
   });
 }
 
-async function loadNearbyFuelStations() {
+async function loadNearbyFuelStations(options = {}) {
+  if (options.force && fuelStationsLoadPromise) {
+    fuelStationsAbortController?.abort();
+    try {
+      await fuelStationsLoadPromise;
+    } catch (error) {
+      if (error?.name !== "AbortError") console.warn("Ricerca distributori precedente non completata:", error);
+    }
+  }
   if (fuelStationsLoadPromise) return fuelStationsLoadPromise;
   fuelStationsLoadPromise = runFuelStationsLoad().finally(() => { fuelStationsLoadPromise = null; });
   return fuelStationsLoadPromise;
@@ -22882,7 +22901,14 @@ async function loadNearbyFuelStations() {
 async function runFuelStationsLoad() {
   const fuel = window.HeraFuelStations.normalizeFuel(selectedFuelMezzo?.alimentazione);
   const fuelLabel = window.HeraFuelStations.FUEL_LABELS[fuel] || String(selectedFuelMezzo?.alimentazione || "carburante").trim().toLowerCase();
-  console.info("[Distributori] carburante normalizzato", { fuel });
+  const radiusValue = Number(ui.fuelRadius?.value || 5);
+  const radiusKm = Math.min(50, Math.max(5, Number.isFinite(radiusValue) ? radiusValue : 5));
+  console.info("[Distributori] carburante e raggio", { fuel, radiusKm });
+  if (ui.fuelFilterSummary) {
+    ui.fuelFilterSummary.textContent = fuel
+      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km.`
+      : `Alimentazione mezzo non riconosciuta • Raggio ${radiusKm} km`;
+  }
   if (!fuel) {
     showFuelStationsError("Alimentazione del mezzo non riconosciuta.", true);
     return;
@@ -22891,24 +22917,24 @@ async function runFuelStationsLoad() {
     showFuelStationsError("Connessione assente. Controlla Internet e riprova.", true);
     return;
   }
-  ui.fuelStationsList.innerHTML = "<p class='muted'>Caricamento distributori...</p>";
+  ui.fuelStationsList.innerHTML = "<p class='muted'>Caricamento distributori compatibili...</p>";
+  if (ui.fuelSearchBtn) ui.fuelSearchBtn.disabled = true;
+  if (ui.fuelRadius) ui.fuelRadius.disabled = true;
   ensureFuelMap();
   fuelStationsLayer.clearLayers();
   try {
     const position = await requestFreshFuelPosition();
     currentUserPos = position;
     console.info("[Distributori] posizione operatore", { lat: position.lat, lng: position.lng, accuracy: position.accuracy });
-    fuelMapInstance.setView([position.lat, position.lng], 11);
+    const initialZoom = radiusKm <= 5 ? 12 : radiusKm <= 10 ? 11 : radiusKm <= 20 ? 10 : 9;
+    fuelMapInstance.setView([position.lat, position.lng], initialZoom);
     fuelMapInstance.invalidateSize();
-    let stations = [];
-    for (const radiusKm of [30, 50]) {
-      const data = await fetchFuelStationsFromOverpass(position.lat, position.lng, radiusKm, fuel);
-      stations = window.HeraFuelStations.parseStations(data.elements, fuel, position, haversine);
-      console.info("[Distributori] filtro risultati", { fuel, radiusKm, received: data.elements?.length || 0, compatible: stations.length });
-      if (stations.length) break;
-    }
+    const data = await fetchFuelStationsFromOverpass(position.lat, position.lng, radiusKm, fuel);
+    const stations = window.HeraFuelStations.parseStations(data.elements, fuel, position, haversine)
+      .filter((station) => station.distance <= radiusKm);
+    console.info("[Distributori] filtro risultati", { fuel, radiusKm, received: data.elements?.length || 0, compatible: stations.length });
     if (!stations.length) {
-      showFuelStationsError(`Nessun distributore di ${fuelLabel} trovato nel raggio di 50 km.`, true);
+      showFuelStationsError(`Nessun distributore Q8/ENI che vende ${fuelLabel} trovato nel raggio di ${radiusKm} km.`, true);
       return;
     }
     renderFuelStations(stations);
@@ -22921,6 +22947,9 @@ async function runFuelStationsLoad() {
         ? "Connessione assente. Controlla Internet e riprova."
         : "Servizio distributori temporaneamente non disponibile.";
     showFuelStationsError(message, true);
+  } finally {
+    if (ui.fuelSearchBtn) ui.fuelSearchBtn.disabled = false;
+    if (ui.fuelRadius) ui.fuelRadius.disabled = false;
   }
 }
 

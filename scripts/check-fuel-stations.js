@@ -4,6 +4,7 @@ const path = require("node:path");
 const fuel = require("../fuel-stations-core.js");
 const nationalCache = require("../fuel-stations-national-cache.js");
 const nationalServerCache = require("../functions/fuel-stations-cache.js");
+const fuelSearch = require("../fuel-stations-search.js");
 
 const variants = {
   cng: ["Metano", " CNG ", "GNC", "Mètano + benzina"],
@@ -112,6 +113,10 @@ const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const swSource = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
 const cacheSource = fs.readFileSync(path.join(__dirname, "..", "fuel-stations-national-cache.js"), "utf8");
+const searchSource = fs.readFileSync(path.join(__dirname, "..", "fuel-stations-search.js"), "utf8");
+const integrationSource = fs.readFileSync(path.join(__dirname, "..", "fuel-stations-integration.js"), "utf8");
+const netlifyFunctionSource = fs.readFileSync(path.join(__dirname, "..", "netlify", "functions", "fuel-stations.js"), "utf8");
+const netlifyConfigSource = fs.readFileSync(path.join(__dirname, "..", "netlify.toml"), "utf8");
 const serverCacheSource = fs.readFileSync(path.join(__dirname, "..", "functions", "fuel-stations-cache.js"), "utf8");
 const functionsSource = fs.readFileSync(path.join(__dirname, "..", "functions", "index.js"), "utf8");
 const firebaseSource = fs.readFileSync(path.join(__dirname, "..", "firebase.json"), "utf8");
@@ -129,6 +134,8 @@ assert.ok(appSource.indexOf("nationalCache.findNearby") < appSource.indexOf("fet
 assert.match(appSource, /source: "Archivio MIMIT salvato"/);
 assert.match(indexSource, /archivio nazionale MIMIT salvato/);
 assert.match(indexSource, /fuel-stations-national-cache\.js\?v=20260723/);
+assert.match(indexSource, /fuel-stations-search\.js\?v=20260723a/);
+assert.match(indexSource, /fuel-stations-integration\.js\?v=20260723a/);
 assert.match(cacheSource, /ENDPOINT = "\/api\/fuel-stations-italy"/);
 assert.match(cacheSource, /cloudfunctions\.net\/getFuelStationsItaly/);
 assert.match(cacheSource, /content-type/);
@@ -140,8 +147,27 @@ assert.match(functionsSource, /exports\.refreshFuelStationsItaly/);
 assert.match(functionsSource, /pubsub\.schedule\("30 3 \* \* \*"\)/);
 assert.match(firebaseSource, /"source": "\/api\/fuel-stations-italy"/);
 assert.match(firebaseSource, /"function": "getFuelStationsItaly"/);
-assert.match(swSource, /hera-app-shell-v17/);
+assert.match(swSource, /hera-app-shell-v18/);
 assert.match(swSource, /fuel-stations-national-cache\.js/);
+assert.match(swSource, /fuel-stations-search\.js/);
+assert.match(swSource, /fuel-stations-integration\.js/);
+assert.deepEqual(fuelSearch.SAME_ORIGIN_ENDPOINTS, ["/api/fuel-stations/search", "/.netlify/functions/fuel-stations"]);
+assert.equal(fuelSearch.OVERPASS_ENDPOINTS.length, 3);
+assert.equal(fuelSearch.uniqueStations([
+  { lat: 44.5, lon: 11.3, brandLabel: "Q8" },
+  { lat: 44.5, lon: 11.3, brandLabel: "Q8" },
+  { lat: 44.5, lon: 11.3, brandLabel: "ENI" }
+]).length, 2);
+assert.match(searchSource, /searchSameOrigin/);
+assert.match(searchSource, /searchNationalCache/);
+assert.match(searchSource, /searchMimit/);
+assert.match(searchSource, /searchOverpass/);
+assert.match(integrationSource, /HeraFuelStationSearch\.search/);
+assert.match(integrationSource, /Ricerca tramite \$\{escapeHTML\(source\)\}/);
+assert.match(netlifyFunctionSource, /exports\.handler/);
+assert.match(netlifyFunctionSource, /fromMimit/);
+assert.match(netlifyFunctionSource, /fromOverpass/);
+assert.match(netlifyConfigSource, /from = "\/api\/fuel-stations\/search"/);
 assert.match(appSource, /class="mezzo-chip-btn squadra-conflict-name"/);
 assert.match(indexSource, /<option value="5" selected>5 km \(predefinito\)<\/option>/);
 assert.match(indexSource, /id="fuel-search-btn"/);

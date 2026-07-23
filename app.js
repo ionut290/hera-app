@@ -22906,7 +22906,7 @@ async function runFuelStationsLoad() {
   console.info("[Distributori] carburante e raggio", { fuel, radiusKm });
   if (ui.fuelFilterSummary) {
     ui.fuelFilterSummary.textContent = fuel
-      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km. Fonte preferita: MIMIT Osservaprezzi.`
+      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km. Controllo prima l’archivio MIMIT salvato.`
       : `Alimentazione mezzo non riconosciuta • Raggio ${radiusKm} km`;
   }
   if (!fuel) {
@@ -22985,6 +22985,25 @@ async function requestFreshFuelPosition() {
 
 async function fetchCompatibleFuelStations(position, radiusKm, fuel) {
   if (fuel !== "electric") {
+    const nationalCache = window.HeraFuelNationalCache;
+    if (nationalCache?.findNearby) {
+      const cached = await nationalCache.findNearby(fuel, position, radiusKm, haversine);
+      if (cached.stations.length) {
+        console.info("[Distributori] risultati dall’archivio MIMIT nazionale", {
+          fuel,
+          radiusKm,
+          totalCached: cached.totalCached,
+          compatible: cached.stations.length
+        });
+        return {
+          stations: cached.stations,
+          source: "Archivio MIMIT salvato",
+          received: cached.totalCached
+        };
+      }
+      if (!cached.available) nationalCache.refresh?.().catch(() => {});
+    }
+
     try {
       const data = await fetchFuelStationsFromMimit(position.lat, position.lng, radiusKm);
       const stations = window.HeraFuelStations.parseMimitStations(data.results, fuel, position, haversine)

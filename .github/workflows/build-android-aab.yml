@@ -31,7 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -41,7 +40,7 @@ jobs:
           cache: gradle
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Create and sync Android project
         run: |
@@ -52,8 +51,6 @@ jobs:
       - name: Set unique Android version
         shell: bash
         run: |
-          VERSION_CODE=${{ github.run_number }}
-          VERSION_NAME="1.0.${{ github.run_number }}"
           python3 - <<'PY'
           from pathlib import Path
           import os

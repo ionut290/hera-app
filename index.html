@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="identity-card-feature.css?v=20260724a">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260724b">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
 <body class="auth-pending">
@@ -106,10 +106,6 @@
         <div class="logo-head">
           <div class="logo-head-left">
             <button id="user-toggle-btn" class="header-icon-btn" type="button" aria-label="Apri dati utente" aria-expanded="false" aria-controls="user-details-panel">👤</button>
-            <button id="identity-card-btn" class="identity-card-btn" type="button" aria-label="Apri tesserino di riconoscimento">
-              <span aria-hidden="true">🪪</span>
-              <span>TESSERA</span>
-            </button>
           </div>
           <h1>Varga Cantieri</h1>
           <div class="logo-head-actions">
@@ -141,6 +137,25 @@
         <footer class="identity-card-viewer-actions">
           <button id="identity-card-replace-btn" class="btn" type="button">Sostituisci tesserino</button>
         </footer>
+      </section>
+
+      <section id="fuel-pin-viewer" class="fuel-pin-viewer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="fuel-pin-viewer-title">
+        <article class="fuel-pin-card">
+          <header class="fuel-pin-viewer-head">
+            <h2 id="fuel-pin-viewer-title">PIN carburante</h2>
+            <button id="fuel-pin-close-btn" class="identity-card-close-btn" type="button" aria-label="Chiudi PIN carburante">✕</button>
+          </header>
+          <p id="fuel-pin-feedback" class="muted" role="status" aria-live="polite"></p>
+          <p id="fuel-pin-value" class="fuel-pin-value">Dati non disponibili</p>
+          <form id="fuel-pin-form" class="fuel-pin-form">
+            <label for="fuel-pin-input">Inserisci o modifica il tuo PIN</label>
+            <input id="fuel-pin-input" type="text" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="PIN carburante">
+            <div class="fuel-pin-actions">
+              <button id="fuel-pin-save-btn" class="btn btn-primary" type="submit">Salva PIN</button>
+              <button id="fuel-pin-copy-btn" class="btn" type="button">Copia PIN</button>
+            </div>
+          </form>
+        </article>
       </section>
 
       <section id="work-banner-home" class="card work-banner-home hidden" aria-live="polite">
@@ -195,6 +210,17 @@
             </div>
           </div>
         </section>
+      </section>
+
+      <section class="home-quick-access" aria-label="Accessi personali rapidi">
+        <button id="identity-card-btn" class="home-quick-access-btn" type="button" aria-label="Apri tesserino di riconoscimento">
+          <span aria-hidden="true">🪪</span>
+          <span>Tesserino</span>
+        </button>
+        <button id="fuel-pin-btn" class="home-quick-access-btn fuel-pin-btn" type="button" aria-label="Apri PIN carburante">
+          <span aria-hidden="true">⛽</span>
+          <span>PIN carburante</span>
+        </button>
       </section>
 
       <section id="commesse-home-card" class="card hidden" aria-hidden="true">
@@ -1598,7 +1624,7 @@
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
   <script src="app.js?v=20260724a"></script>
-  <script src="identity-card-feature.js?v=20260724a"></script>
+  <script src="identity-card-feature.js?v=20260724b"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>

@@ -93,38 +93,50 @@ jobs:
           import os
           import re
 
-          candidates = [
-              Path("android/app/build.gradle"),
-              Path("android/app/build.gradle.kts"),
-          ]
-          path = next((p for p in candidates if p.exists()), None)
-          if path is None:
-              raise SystemExit("File Gradle dell'app Android non trovato")
+          path = Path("android/app/build.gradle")
+          if not path.exists():
+              raise SystemExit("File android/app/build.gradle non trovato")
 
           text = path.read_text(encoding="utf-8")
           version_code = os.environ["VERSION_CODE"]
           version_name = os.environ["VERSION_NAME"]
           store_file = os.environ["ANDROID_KEYSTORE_PATH"].replace("\\", "\\\\")
-          store_password = os.environ["ANDROID_KEYSTORE_PASSWORD"].replace('"', '\\"')
-          key_alias = os.environ["ANDROID_KEY_ALIAS"].replace('"', '\\"')
-          key_password = os.environ["ANDROID_KEY_PASSWORD"].replace('"', '\\"')
+          store_password = os.environ["ANDROID_KEYSTORE_PASSWORD"].replace("'", "\\'")
+          key_alias = os.environ["ANDROID_KEY_ALIAS"].replace("'", "\\'")
+          key_password = os.environ["ANDROID_KEY_PASSWORD"].replace("'", "\\'")
 
-          if path.suffix == ".kts":
-              text, n1 = re.subn(r"versionCode\s*=\s*\d+", f"versionCode = {version_code}", text, count=1)
-              text, n2 = re.subn(r'versionName\s*=\s*"[^"]+"', f'versionName = "{version_name}"', text, count=1)
-              signing_block = f'''\n    signingConfigs {{\n        create("release") {{\n            storeFile = file("{store_file}")\n            storePassword = "{store_password}"\n            keyAlias = "{key_alias}"\n            keyPassword = "{key_password}"\n        }}\n    }}\n'''
-              text = text.replace("android {", "android {" + signing_block, 1)
-              text = text.replace("buildTypes {", "buildTypes {", 1)
-              text = re.sub(r'(getByName\("release"\)\s*\{)', r'\1\n            signingConfig = signingConfigs.getByName("release")', text, count=1)
-          else:
-              text, n1 = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", text, count=1)
-              text, n2 = re.subn(r'versionName\s+"[^"]+"', f'versionName "{version_name}"', text, count=1)
-              signing_block = f'''\n    signingConfigs {{\n        release {{\n            storeFile file("{store_file}")\n            storePassword "{store_password}"\n            keyAlias "{key_alias}"\n            keyPassword "{key_password}"\n        }}\n    }}\n'''
-              text = text.replace("android {", "android {" + signing_block, 1)
-              text = re.sub(r'(release\s*\{)', r'\1\n            signingConfig signingConfigs.release', text, count=1)
-
+          text, n1 = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", text, count=1)
+          text, n2 = re.subn(r'versionName\s+"[^"]+"', f'versionName "{version_name}"', text, count=1)
           if n1 != 1 or n2 != 1:
               raise SystemExit("Impossibile aggiornare versionCode/versionName")
+
+          signing_block = f'''
+    signingConfigs {{
+        release {{
+            storeFile file('{store_file}')
+            storePassword '{store_password}'
+            keyAlias '{key_alias}'
+            keyPassword '{key_password}'
+        }}
+    }}
+'''
+
+          android_pos = text.find("android {")
+          if android_pos == -1:
+              raise SystemExit("Blocco android non trovato")
+          insert_at = android_pos + len("android {")
+          text = text[:insert_at] + signing_block + text[insert_at:]
+
+          build_types_match = re.search(r"buildTypes\s*\{", text)
+          if not build_types_match:
+              raise SystemExit("Blocco buildTypes non trovato")
+
+          release_match = re.search(r"release\s*\{", text[build_types_match.end():])
+          if not release_match:
+              raise SystemExit("Blocco release non trovato")
+
+          release_start = build_types_match.end() + release_match.end()
+          text = text[:release_start] + "\n            signingConfig signingConfigs.release" + text[release_start:]
 
           path.write_text(text, encoding="utf-8")
           PY

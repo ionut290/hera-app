@@ -47,6 +47,7 @@
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
       <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
+      <button id="open-panel-aziende" class="btn menu-title-btn hidden" type="button">Gestione aziende</button>
       <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
       <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
@@ -85,6 +86,21 @@
       <div class="auth-gate-divider"><span>oppure</span></div>
       <button id="auth-gate-login-btn" class="btn" type="button">Login con Google</button>
       <button id="banned-request-access-btn" class="btn btn-primary banned-request-access-btn hidden" type="button">RICHIEDI ACCESSO</button>
+    </div>
+  </section>
+
+  <section id="company-code-gate" class="auth-gate hidden" aria-live="polite">
+    <div class="auth-gate-card">
+      <div class="auth-gate-logo">🏢</div>
+      <p class="auth-gate-kicker">Varga Cantieri</p>
+      <h1>Inserisci il codice azienda</h1>
+      <p class="muted">Il codice viene richiesto soltanto al primo accesso dei nuovi utenti.</p>
+      <form id="company-code-form" class="auth-email-form" autocomplete="off">
+        <label for="company-code-input">Codice azienda</label>
+        <input id="company-code-input" type="text" maxlength="64" autocapitalize="characters" placeholder="CODICE AZIENDA" required>
+        <button id="company-code-submit" class="btn btn-primary" type="submit">ENTRA NELL’AZIENDA</button>
+        <p id="company-code-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
+      </form>
     </div>
   </section>
 
@@ -1045,6 +1061,18 @@
       <p class="muted">L'operatore invia richiesta via WhatsApp + app. L'admin può accettare o rifiutare.</p>
       <div id="gps-requests-list" class="simple-list"></div>
     </div>
+    <div id="panel-aziende" class="management-panel hidden">
+      <h3>Gestione aziende</h3>
+      <p class="muted">Solo il super amministratore può creare aziende e assegnare il relativo amministratore.</p>
+      <form id="company-form" class="inline-form" autocomplete="off">
+        <input type="text" id="company-name-input" maxlength="120" placeholder="Nome azienda" required>
+        <input type="text" id="company-new-code-input" maxlength="64" placeholder="Codice azienda" required>
+        <input type="email" id="company-admin-email-input" maxlength="160" placeholder="Email amministratore (opzionale)">
+        <button class="btn btn-primary" type="submit">Salva azienda</button>
+      </form>
+      <p id="company-form-feedback" class="muted" role="status" aria-live="polite"></p>
+      <div id="companies-list" class="simple-list"></div>
+    </div>
     <div id="panel-banner" class="management-panel hidden">
       <h3>Banner home operativa</h3>
       <form id="banner-config-form" class="inline-form">
@@ -1750,7 +1778,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260724e"></script>
+  <script src="app.js?v=20260724f"></script>
   <script src="today-summary-interactions.js?v=20260724a"></script>
   <script src="identity-card-feature.js?v=20260724e"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>

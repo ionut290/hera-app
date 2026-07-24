@@ -13,10 +13,10 @@
 
 .home-quick-access {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
-  margin: 16px 0;
-  padding: 7px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 12px 0;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(255,255,255,.94);
@@ -25,37 +25,101 @@
 
 .home-quick-access-btn {
   min-width: 0;
-  min-height: 42px;
-  padding: 8px 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 13px;
-  background: linear-gradient(145deg, #fff, #eff6ff);
+  min-height: 54px;
+  padding: 6px 4px;
+  border: 0;
+  border-right: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: transparent;
   color: #1e3a8a;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 3px;
   font: inherit;
-  font-size: .84rem;
+  font-size: .68rem;
   font-weight: 900;
   cursor: pointer;
 }
 
+.home-quick-access-btn:last-child { border-right: 0; }
+.home-quick-access-btn > span:first-child { font-size: 1.28rem; line-height: 1; }
+.home-quick-access-btn:hover,
+.home-quick-access-btn:focus-visible {
+  border-radius: 11px;
+  background: #eff6ff;
+  outline: none;
+}
+.home-quick-access-btn--warning { color: #92400e; }
+
 .home-quick-access-btn.has-card {
-  border-color: #86efac;
-  background: linear-gradient(145deg, #f0fdf4, #dcfce7);
+  background: #f0fdf4;
   color: #166534;
 }
 
 .home-quick-access-btn.has-pin {
-  border-color: #fbbf24;
-  background: linear-gradient(145deg, #fffbeb, #fef3c7);
+  background: #fffbeb;
   color: #92400e;
 }
 
 .home-quick-access-btn:disabled {
   opacity: .55;
   cursor: not-allowed;
+}
+
+.today-summary-card {
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.today-summary-card h2 {
+  margin: 0 0 9px;
+  font-size: 1.05rem;
+}
+
+.today-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.today-summary-item {
+  min-width: 0;
+  min-height: 66px;
+  padding: 7px 3px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-content: center;
+  column-gap: 5px;
+  cursor: pointer;
+}
+
+.today-summary-item:hover,
+.today-summary-item:focus-visible {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  outline: none;
+}
+
+.today-summary-item.has-alerts {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.today-summary-icon { font-size: 1rem; }
+.today-summary-item strong { font-size: 1.1rem; }
+.today-summary-item > span:last-child {
+  grid-column: 1 / -1;
+  color: #475569;
+  font-size: .68rem;
+  font-weight: 700;
 }
 
 .identity-card-viewer,

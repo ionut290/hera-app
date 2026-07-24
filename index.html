@@ -9,8 +9,8 @@
   <link rel="icon" href="./icons/hera-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="identity-card-feature.css?v=20260724e">
+  <link rel="stylesheet" href="style.css?v=20260724b">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260724f">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
 <body class="auth-pending">
@@ -320,8 +320,34 @@
         </button>
         <button id="fuel-pin-btn" class="home-quick-access-btn fuel-pin-btn" type="button" aria-label="Apri PIN carburante">
           <span aria-hidden="true">⛽</span>
-          <span>PIN carburante</span>
+          <span>PIN</span>
         </button>
+        <button id="home-private-docs-btn" class="home-quick-access-btn" type="button" aria-label="Apri documenti personali">
+          <span aria-hidden="true">📄</span>
+          <span>Documenti</span>
+        </button>
+        <button id="home-segnalazioni-btn" class="home-quick-access-btn home-quick-access-btn--warning" type="button" aria-label="Apri segnalazioni">
+          <span aria-hidden="true">⚠️</span>
+          <span>Segnalazioni</span>
+        </button>
+      </section>
+
+      <section id="today-summary-card" class="card today-summary-card" aria-labelledby="today-summary-title">
+        <h2 id="today-summary-title">Oggi</h2>
+        <div class="today-summary-grid">
+          <button id="today-commesse-btn" class="today-summary-item" type="button" aria-label="Vai alle commesse assegnate oggi">
+            <span class="today-summary-icon" aria-hidden="true">📋</span><strong id="today-commesse-count">0</strong><span>commesse</span>
+          </button>
+          <button id="today-hours-btn" class="today-summary-item" type="button" aria-label="Apri le ore di oggi">
+            <span class="today-summary-icon" aria-hidden="true">🕒</span><strong id="today-hours-count">0</strong><span>ore</span>
+          </button>
+          <button id="today-mezzi-btn" class="today-summary-item" type="button" aria-label="Vai ai mezzi assegnati oggi">
+            <span class="today-summary-icon" aria-hidden="true">🚚</span><strong id="today-mezzi-count">0</strong><span>mezzi</span>
+          </button>
+          <button id="today-alerts-btn" class="today-summary-item" type="button" aria-label="Vai agli avvisi di oggi">
+            <span class="today-summary-icon" aria-hidden="true">⚠️</span><strong id="today-alerts-count">0</strong><span>avvisi</span>
+          </button>
+        </div>
       </section>
 
       <section id="commesse-home-card" class="card hidden" aria-hidden="true">
@@ -334,7 +360,7 @@
         <p id="commessa-attiva" class="muted commessa-active-chip">Seleziona una commessa.</p>
       </section>
 
-      <section class="card squadre-card">
+      <section id="today-squads-section" class="card squadre-card">
         <div class="section-head squadre-section-head">
           <h2>Squadre per commessa</h2>
           <button id="toggle-commesse-home-btn" class="btn squadre-commesse-toggle" type="button" aria-controls="commesse-home-card" aria-expanded="false">Tutte le commesse</button>
@@ -1724,7 +1750,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260724a"></script>
+  <script src="app.js?v=20260724b"></script>
   <script src="identity-card-feature.js?v=20260724e"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>

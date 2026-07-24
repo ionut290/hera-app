@@ -827,6 +827,17 @@ const ui = {
   bannerDisableBtn: document.getElementById("banner-disable-btn"),
   bannerFeedback: document.getElementById("banner-feedback"),
   weatherRisks: document.getElementById("weather-risks"),
+  homePrivateDocsBtn: document.getElementById("home-private-docs-btn"),
+  homeSegnalazioniBtn: document.getElementById("home-segnalazioni-btn"),
+  todayCommesseBtn: document.getElementById("today-commesse-btn"),
+  todayHoursBtn: document.getElementById("today-hours-btn"),
+  todayMezziBtn: document.getElementById("today-mezzi-btn"),
+  todayAlertsBtn: document.getElementById("today-alerts-btn"),
+  todayCommesseCount: document.getElementById("today-commesse-count"),
+  todayHoursCount: document.getElementById("today-hours-count"),
+  todayMezziCount: document.getElementById("today-mezzi-count"),
+  todayAlertsCount: document.getElementById("today-alerts-count"),
+  todaySquadsSection: document.getElementById("today-squads-section"),
   userCard: document.getElementById("user-card"),
   userConnectionBar: document.getElementById("user-connection-bar"),
   profileSummaryDetails: document.getElementById("profile-summary-details"),
@@ -1981,11 +1992,13 @@ ui.ferieForm?.addEventListener("submit", saveFerieCollega);
 ui.ferieCheckBtn?.addEventListener("click", renderFerieDisponibilitaCalendar);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn?.addEventListener("click", openPrivateDocsPage);
+ui.homePrivateDocsBtn?.addEventListener("click", openPrivateDocsPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
 ui.openPersonalServicesBtn?.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn?.addEventListener("click", openHoursPage);
 ui.openPosBtn?.addEventListener("click", openPosPage);
 ui.openSegnalazioniBtn?.addEventListener("click", openSegnalazioniPage);
+ui.homeSegnalazioniBtn?.addEventListener("click", openSegnalazioniPage);
 ui.openHowtoBtn?.addEventListener("click", openHowtoPage);
 ui.openControlCenterBtn?.addEventListener("click", openControlCenterPage);
 ui.runControlCheckBtn?.addEventListener("click", runControlCenterCheck);
@@ -2011,6 +2024,10 @@ ui.weatherExternalDetailBtn?.addEventListener("click", (event) => {
   event.stopPropagation();
   openWeatherExternalDetail();
 });
+ui.todayCommesseBtn?.addEventListener("click", () => ui.todaySquadsSection?.scrollIntoView({ behavior: "smooth", block: "start" }));
+ui.todayHoursBtn?.addEventListener("click", openHoursPage);
+ui.todayMezziBtn?.addEventListener("click", () => ui.todaySquadsSection?.scrollIntoView({ behavior: "smooth", block: "start" }));
+ui.todayAlertsBtn?.addEventListener("click", () => ui.todaySquadsSection?.scrollIntoView({ behavior: "smooth", block: "start" }));
 ui.backFromFuelBtn?.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn?.addEventListener("click", toggleFuelMezzoDetails);
 ui.fuelSearchBtn?.addEventListener("click", () => loadNearbyFuelStations({ force: true }));
@@ -20853,8 +20870,49 @@ function openSquadreConflictsModal(report, dateKey) {
   document.body.appendChild(modal);
 }
 
+function getSquadraWorkedHours(row) {
+  const { start, end } = getSquadraOrarioParts(row);
+  const startMinutes = parseSquadraTimeToMinutes(start);
+  const endMinutes = parseSquadraTimeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return 0;
+  const normalizedEndMinutes = endMinutes >= startMinutes ? endMinutes : endMinutes + 24 * 60;
+  const pausaMinutes = calculateSquadraPausaPranzoMinutes(startMinutes, normalizedEndMinutes, Boolean(row?.senzaPausaPranzo));
+  return Math.max(0, normalizedEndMinutes - startMinutes - pausaMinutes) / 60;
+}
+
+function renderTodaySummary() {
+  if (!ui.todayCommesseCount) return;
+  const assignments = getCurrentUserAssignedCommesseForDate(getTodayDateKey());
+  const uniqueRows = new Set();
+  const mezzi = new Set();
+  let hours = 0;
+  let alerts = 0;
+
+  assignments.forEach((assignment) => {
+    const matchedRows = assignment.matchedRows || [];
+    matchedRows.forEach(({ squadraIndex, row }) => {
+      const rowKey = `${assignment.commessaId}:${squadraIndex}`;
+      if (uniqueRows.has(rowKey)) return;
+      uniqueRows.add(rowKey);
+      hours += getSquadraWorkedHours(row);
+      parseMultiEntryValue(row?.mezzi || "").forEach((mezzo) => {
+        const key = normalizeSquadraMemberIdentity(mezzo);
+        if (key) mezzi.add(key);
+      });
+    });
+    alerts += buildSquadraWarningDetails(assignment.commessa, matchedRows.map((item) => item.row)).length;
+  });
+
+  ui.todayCommesseCount.textContent = String(assignments.length);
+  ui.todayHoursCount.textContent = formatSquadraHours(hours) || "0";
+  ui.todayMezziCount.textContent = String(mezzi.size);
+  ui.todayAlertsCount.textContent = String(alerts);
+  ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
+  renderTodaySummary();
   ui.squadreLista.innerHTML = "";
   if (areStartupCoreCollectionsLoading()) {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;

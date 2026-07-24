@@ -21,13 +21,19 @@
 
     const message = document.getElementById("auth-gate-message");
     if (message) {
-      message.textContent = "Accedi con la tua email e password.";
+      message.textContent = "Inserisci nome, ruolo, email e password per accedere.";
     }
 
+    const profileFields = document.getElementById("auth-profile-fields");
+    if (profileFields) profileFields.classList.remove("hidden");
+
+    const nameInput = document.getElementById("auth-name-input");
+    const roleInput = document.getElementById("auth-role-input");
+    if (nameInput) nameInput.required = true;
+    if (roleInput) roleInput.required = true;
+
     const emailLoginButton = document.getElementById("auth-email-login-btn");
-    if (emailLoginButton) {
-      emailLoginButton.textContent = "Accedi";
-    }
+    if (emailLoginButton) emailLoginButton.textContent = "Accedi";
 
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
     if (googleLoginButton) {
@@ -41,6 +47,80 @@
       divider.hidden = true;
       divider.setAttribute("aria-hidden", "true");
     }
+  }
+
+  async function saveAndroidProfile(user) {
+    if (!isNativeAndroid() || !user) return;
+
+    const nameInput = document.getElementById("auth-name-input");
+    const roleInput = document.getElementById("auth-role-input");
+    const name = String(nameInput && nameInput.value ? nameInput.value : "").trim();
+    const role = String(roleInput && roleInput.value ? roleInput.value : "").trim();
+
+    if (!name || !role) {
+      throw new Error("Inserisci nome e cognome e seleziona il ruolo.");
+    }
+
+    if (user.displayName !== name && typeof user.updateProfile === "function") {
+      await user.updateProfile({ displayName: name });
+    }
+
+    const profile = {
+      uid: user.uid,
+      email: user.email || "",
+      name,
+      displayName: name,
+      role,
+      accessLevel: "full",
+      canAccessAllData: true,
+      updatedAt: new Date().toISOString()
+    };
+
+    localStorage.setItem("varga-user-profile", JSON.stringify(profile));
+    localStorage.setItem("operatorName", name);
+    localStorage.setItem("operatorRole", role);
+
+    try {
+      if (window.firebase && firebase.firestore) {
+        await firebase.firestore().collection("users").doc(user.uid).set(
+          {
+            ...profile,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
+    } catch (error) {
+      console.warn("Profilo salvato solo localmente:", error);
+    }
+  }
+
+  function installAndroidEmailLoginProfileHook() {
+    const form = document.getElementById("auth-email-form");
+    if (!form || form.dataset.androidProfileHook === "1") return;
+    form.dataset.androidProfileHook = "1";
+
+    form.addEventListener("submit", async () => {
+      if (!isNativeAndroid()) return;
+
+      const name = String(document.getElementById("auth-name-input")?.value || "").trim();
+      const role = String(document.getElementById("auth-role-input")?.value || "").trim();
+      if (!name || !role) return;
+
+      const stopAt = Date.now() + 10000;
+      while (Date.now() < stopAt) {
+        const user = window.firebase && firebase.auth ? firebase.auth().currentUser : null;
+        if (user) {
+          try {
+            await saveAndroidProfile(user);
+          } catch (error) {
+            console.error("Salvataggio profilo fallito:", error);
+          }
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }, true);
   }
 
   function getNativeFirebaseAuthentication() {
@@ -121,8 +201,8 @@
 
     if (isNativeAndroid()) {
       configureAndroidEmailPasswordOnly();
-      const emailInput = document.getElementById("auth-email-input");
-      if (emailInput) emailInput.focus();
+      const nameInput = document.getElementById("auth-name-input");
+      if (nameInput) nameInput.focus();
       return;
     }
 
@@ -150,10 +230,15 @@
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", configureAndroidEmailPasswordOnly, { once: true });
-  } else {
+  function initializeAndroidLogin() {
     configureAndroidEmailPasswordOnly();
+    installAndroidEmailLoginProfileHook();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeAndroidLogin, { once: true });
+  } else {
+    initializeAndroidLogin();
   }
 
   document.addEventListener("click", handleGoogleLoginClick, true);

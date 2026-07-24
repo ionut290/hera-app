@@ -9,8 +9,8 @@
   <link rel="icon" href="./icons/hera-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="identity-card-feature.css?v=20260724e">
+  <link rel="stylesheet" href="style.css?v=20260724b">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260724f">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
 <body class="auth-pending">
@@ -116,12 +116,15 @@
             <button id="snow-service-btn" class="snow-service-btn" type="button" aria-label="Apri Servizio Neve">❄️ NEVE</button>
           </div>
         </div>
-        <div id="user-connection-bar" class="user-connection-bar" role="status" aria-live="polite">
+        <div id="user-connection-bar" class="user-connection-bar home-accordion-trigger" role="button" tabindex="0"
+          aria-live="polite" aria-expanded="false" aria-controls="profile-summary-details"
+          aria-label="Apri riepilogo utente">
           <p id="operator-greeting" class="user-connection-greeting">👋 Ciao, Operatore</p>
           <p id="connection-indicator" class="user-connection-indicator">🟢 Online • Connessione in verifica</p>
           <p id="offline-mode-indicator" class="user-connection-offline hidden">📦 Modalità offline attiva</p>
+          <span class="home-accordion-chevron" aria-hidden="true">⌄</span>
         </div>
-        <div class="logo-meta">
+        <div id="profile-summary-details" class="logo-meta home-accordion-content hidden" aria-hidden="true">
           <p id="active-users-summary" class="muted active-users-summary" role="button" tabindex="-1" aria-label="Utenti attivi">Utenti attivi: 0</p>
           <p id="last-impianto-action-summary" class="muted">Ultima azione impianto: -</p>
           <p id="next-action-summary" class="muted">Prossima azione consigliata: caricamento...</p>
@@ -258,15 +261,20 @@
       </section>
 
       <section class="home-top-grid">
-        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+        <section class="card weather-card home-accordion-card" id="weather-card" role="button" tabindex="0"
+          aria-expanded="false" aria-controls="weather-expanded-content" aria-label="Apri meteo operativo">
           <div class="section-head">
             <h2>🌦️ Meteo operativo</h2>
-            <span class="pill">Pioggia/Neve/Nebbia</span>
+            <span class="home-accordion-chevron" aria-hidden="true">⌄</span>
           </div>
           <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
-          <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
-          <div id="weather-risks" class="weather-risks"></div>
-          <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
+          <div id="weather-expanded-content" class="home-accordion-content hidden" aria-hidden="true">
+            <span class="pill weather-types-pill">Pioggia/Neve/Nebbia</span>
+            <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
+            <div id="weather-risks" class="weather-risks"></div>
+            <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
+            <button id="weather-external-detail-btn" class="btn weather-external-detail-btn" type="button">Apri dettagli meteo</button>
+          </div>
         </section>
 
         <section class="card user-card" id="user-card">
@@ -312,8 +320,34 @@
         </button>
         <button id="fuel-pin-btn" class="home-quick-access-btn fuel-pin-btn" type="button" aria-label="Apri PIN carburante">
           <span aria-hidden="true">⛽</span>
-          <span>PIN carburante</span>
+          <span>PIN</span>
         </button>
+        <button id="home-private-docs-btn" class="home-quick-access-btn" type="button" aria-label="Apri documenti personali">
+          <span aria-hidden="true">📄</span>
+          <span>Documenti</span>
+        </button>
+        <button id="home-segnalazioni-btn" class="home-quick-access-btn home-quick-access-btn--warning" type="button" aria-label="Apri segnalazioni">
+          <span aria-hidden="true">⚠️</span>
+          <span>Segnalazioni</span>
+        </button>
+      </section>
+
+      <section id="today-summary-card" class="card today-summary-card" aria-labelledby="today-summary-title">
+        <h2 id="today-summary-title">Oggi</h2>
+        <div class="today-summary-grid">
+          <button id="today-commesse-btn" class="today-summary-item" type="button" aria-label="Vai alle commesse assegnate oggi">
+            <span class="today-summary-icon" aria-hidden="true">📋</span><strong id="today-commesse-count">0</strong><span>commesse</span>
+          </button>
+          <button id="today-hours-btn" class="today-summary-item" type="button" aria-label="Apri le ore di oggi">
+            <span class="today-summary-icon" aria-hidden="true">🕒</span><strong id="today-hours-count">0</strong><span>ore</span>
+          </button>
+          <button id="today-mezzi-btn" class="today-summary-item" type="button" aria-label="Vai ai mezzi assegnati oggi">
+            <span class="today-summary-icon" aria-hidden="true">🚚</span><strong id="today-mezzi-count">0</strong><span>mezzi</span>
+          </button>
+          <button id="today-alerts-btn" class="today-summary-item" type="button" aria-label="Vai agli avvisi di oggi">
+            <span class="today-summary-icon" aria-hidden="true">⚠️</span><strong id="today-alerts-count">0</strong><span>avvisi</span>
+          </button>
+        </div>
       </section>
 
       <section id="commesse-home-card" class="card hidden" aria-hidden="true">
@@ -326,7 +360,7 @@
         <p id="commessa-attiva" class="muted commessa-active-chip">Seleziona una commessa.</p>
       </section>
 
-      <section class="card squadre-card">
+      <section id="today-squads-section" class="card squadre-card">
         <div class="section-head squadre-section-head">
           <h2>Squadre per commessa</h2>
           <button id="toggle-commesse-home-btn" class="btn squadre-commesse-toggle" type="button" aria-controls="commesse-home-card" aria-expanded="false">Tutte le commesse</button>
@@ -1716,7 +1750,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260724a"></script>
+  <script src="app.js?v=20260724b"></script>
   <script src="identity-card-feature.js?v=20260724e"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>

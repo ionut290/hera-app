@@ -147,7 +147,7 @@ assert.match(functionsSource, /exports\.refreshFuelStationsItaly/);
 assert.match(functionsSource, /pubsub\.schedule\("30 3 \* \* \*"\)/);
 assert.match(firebaseSource, /"source": "\/api\/fuel-stations-italy"/);
 assert.match(firebaseSource, /"function": "getFuelStationsItaly"/);
-assert.match(swSource, /hera-app-shell-v18/);
+assert.match(swSource, /hera-app-shell-v21/);
 assert.match(swSource, /fuel-stations-national-cache\.js/);
 assert.match(swSource, /fuel-stations-search\.js/);
 assert.match(swSource, /fuel-stations-integration\.js/);

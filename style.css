@@ -369,6 +369,64 @@ h2 { font-size: 1.05rem; }
   margin-top: 8px;
 }
 
+.home-accordion-trigger {
+  position: relative;
+  cursor: pointer;
+  padding-right: 40px;
+  user-select: none;
+}
+
+.home-accordion-trigger:hover {
+  border-color: #bfdbfe;
+}
+
+.home-accordion-trigger:focus-visible,
+.home-accordion-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.24);
+  outline-offset: 2px;
+}
+
+.home-accordion-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--primary);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.home-accordion-trigger .home-accordion-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.home-accordion-trigger[aria-expanded="true"] .home-accordion-chevron {
+  transform: translateY(-50%) rotate(180deg);
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.home-accordion-card[aria-expanded="true"] .home-accordion-chevron {
+  transform: rotate(180deg);
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.home-accordion-content {
+  animation: home-accordion-open 0.2s ease;
+}
+
+@keyframes home-accordion-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .logo-meta p {
   margin: 2px 0;
   font-size: 0.9rem;
@@ -582,6 +640,31 @@ h2 { font-size: 1.05rem; }
     radial-gradient(circle at 88% 14%, rgba(245, 158, 11, 0.18), transparent 42%),
     radial-gradient(circle at 12% 90%, rgba(14, 165, 233, 0.12), transparent 42%),
     linear-gradient(165deg, #ffffff 0%, #f8fcff 100%);
+}
+
+.weather-card[aria-expanded="false"] {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.weather-card[aria-expanded="false"] .weather-summary {
+  margin: 5px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-card[aria-expanded="true"] .weather-summary {
+  white-space: normal;
+}
+
+.weather-types-pill {
+  margin-top: 8px;
+}
+
+.weather-external-detail-btn {
+  width: 100%;
+  margin-top: 10px;
 }
 
 .user-card {

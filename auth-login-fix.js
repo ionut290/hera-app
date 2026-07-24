@@ -14,6 +14,35 @@
     );
   }
 
+  function configureAndroidEmailPasswordOnly() {
+    if (!isNativeAndroid()) return;
+
+    document.documentElement.classList.add("android-email-password-only");
+
+    const message = document.getElementById("auth-gate-message");
+    if (message) {
+      message.textContent = "Accedi con la tua email e password.";
+    }
+
+    const emailLoginButton = document.getElementById("auth-email-login-btn");
+    if (emailLoginButton) {
+      emailLoginButton.textContent = "Accedi";
+    }
+
+    const googleLoginButton = document.getElementById("auth-gate-login-btn");
+    if (googleLoginButton) {
+      googleLoginButton.hidden = true;
+      googleLoginButton.setAttribute("aria-hidden", "true");
+      googleLoginButton.tabIndex = -1;
+    }
+
+    const divider = document.querySelector(".auth-gate-divider");
+    if (divider) {
+      divider.hidden = true;
+      divider.setAttribute("aria-hidden", "true");
+    }
+  }
+
   function getNativeFirebaseAuthentication() {
     if (!window.Capacitor) return null;
     if (window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) {
@@ -41,6 +70,10 @@
   }
 
   async function signInWithNativeGoogle() {
+    if (isNativeAndroid()) {
+      throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
+    }
+
     const nativeAuth = getNativeFirebaseAuthentication();
     if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") {
       throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
@@ -56,20 +89,16 @@
     return firebase.auth().signInWithCredential(credential);
   }
 
-  // Punto di ingresso unico usato anche da app.js. In questo modo qualsiasi
-  // pulsante o voce di menu usa il login nativo su Android e non può aprire
-  // il popup/redirect Firebase nel browser.
   window.HeraNativeGoogleLogin = signInWithNativeGoogle;
 
-  // app.js viene caricato subito dopo questo file e dichiara la funzione
-  // globale loginWithGoogle. La sostituiamo al termine del task corrente:
-  // così anche le voci di menu che la invocano direttamente passano sempre
-  // dal plugin nativo su Android, mentre sul web resta il popup.
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      return isNativeAndroid()
-        ? signInWithNativeGoogle()
-        : signInWithWebGoogle();
+      if (isNativeAndroid()) {
+        return Promise.reject(
+          new Error("Nell'app Android è disponibile solo l'accesso con email e password.")
+        );
+      }
+      return signInWithWebGoogle();
     };
   });
 
@@ -89,6 +118,14 @@
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+
+    if (isNativeAndroid()) {
+      configureAndroidEmailPasswordOnly();
+      const emailInput = document.getElementById("auth-email-input");
+      if (emailInput) emailInput.focus();
+      return;
+    }
+
     if (loginInProgress) return;
 
     if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
@@ -102,11 +139,7 @@
     button.textContent = "Accesso Google...";
 
     try {
-      if (isNativeAndroid()) {
-        await signInWithNativeGoogle();
-      } else {
-        await signInWithWebGoogle();
-      }
+      await signInWithWebGoogle();
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));
@@ -115,6 +148,12 @@
       button.disabled = false;
       button.textContent = previousText;
     }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", configureAndroidEmailPasswordOnly, { once: true });
+  } else {
+    configureAndroidEmailPasswordOnly();
   }
 
   document.addEventListener("click", handleGoogleLoginClick, true);

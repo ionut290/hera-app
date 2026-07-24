@@ -33,6 +33,14 @@ if (/signInWithRedirect\s*\(/.test(fixSource)) {
   throw new Error("La correzione login contiene signInWithRedirect.");
 }
 
+if (!fixSource.includes("window.loginWithGoogle = function loginWithGoogleFixed()")) {
+  throw new Error("La funzione centrale loginWithGoogle non viene sostituita.");
+}
+
+if (!fixSource.includes("? signInWithNativeGoogle()")) {
+  throw new Error("La funzione centrale non forza il login nativo su Android.");
+}
+
 if (!fixSource.includes("stopImmediatePropagation")) {
   throw new Error("La correzione non intercetta il vecchio gestore login.");
 }

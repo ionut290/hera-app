@@ -56,6 +56,23 @@
     return firebase.auth().signInWithCredential(credential);
   }
 
+  // Punto di ingresso unico usato anche da app.js. In questo modo qualsiasi
+  // pulsante o voce di menu usa il login nativo su Android e non può aprire
+  // il popup/redirect Firebase nel browser.
+  window.HeraNativeGoogleLogin = signInWithNativeGoogle;
+
+  // app.js viene caricato subito dopo questo file e dichiara la funzione
+  // globale loginWithGoogle. La sostituiamo al termine del task corrente:
+  // così anche le voci di menu che la invocano direttamente passano sempre
+  // dal plugin nativo su Android, mentre sul web resta il popup.
+  queueMicrotask(() => {
+    window.loginWithGoogle = function loginWithGoogleFixed() {
+      return isNativeAndroid()
+        ? signInWithNativeGoogle()
+        : signInWithWebGoogle();
+    };
+  });
+
   function signInWithWebGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope("https://www.googleapis.com/auth/userinfo.email");

@@ -40,23 +40,7 @@ try {
 }
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
-const PERSISTED_SESSION_VERSION = 2;
-const DEFAULT_COMPANY_ID = "avola";
-const DEFAULT_COMPANY_NAME = "Avola";
-const TENANT_SCOPED_COLLECTIONS = new Set([
-  "activityLogs", "alertReadConfirmations", "appConfig", "appNotifications", "chatMessages",
-  "commessaResources", "commesse", "globalCommesse", "gpsUpdateRequests", "hoursDeadlineAlerts",
-  "items", "mezzi", "neve_commesse", "neve_ore", "neve_ore_richieste", "neve_squadre",
-  "neve_squadre_storico", "noteCommessa", "notificationEmailQueue", "operatorPositions",
-  "oreApprovalRequests", "oreLocks", "oreReports", "personale", "posDocuments", "privateDocuments",
-  "programmazioni", "safetyContacts", "servizioNeveClienti", "servizioNeveImpostazioni",
-  "servizioNeveMezzi", "servizioNeveOperatori", "servizioNevePercorsi", "servizioNeveSegnalazioni",
-  "sheetExportQueue", "squadre", "squadreCommesse", "squadreStorico", "userAlertAcknowledgements",
-  "userAlerts", "utenti", "weatherAlerts", "worklimateRiskByImpianto"
-]);
-let currentCompany = null;
-let currentCompanyRole = "user";
-let companyGateResolver = null;
+const PERSISTED_SESSION_VERSION = 1;
 
 function getCapacitorPreferencesPlugin() {
   return window.Capacitor
@@ -84,9 +68,6 @@ function buildPersistedSession(user, overrides = {}) {
     isAdmin,
     admin: isAdmin,
     teamId: teamId || null,
-    companyId: String(overrides.companyId || currentCompany?.id || DEFAULT_COMPANY_ID),
-    companyName: String(overrides.companyName || currentCompany?.name || DEFAULT_COMPANY_NAME),
-    companyRole: String(overrides.companyRole || currentCompanyRole || "user"),
     banned: Boolean(overrides.banned),
     bannedReason: overrides.bannedReason || null,
     bannedAt: overrides.bannedAt || null,
@@ -185,9 +166,9 @@ function applyPersistedSessionPreview(session) {
 }
 
 async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
-  if (!user?.uid || !db) return { valid: true, profile: null };
+  if (!user?.uid || !savedSession || !db) return { valid: true, profile: null };
   const doc = await db.collection("platformUsers").doc(user.uid).get();
-  if (!doc.exists) return { valid: true, profile: null, isNewProfile: true };
+  if (!doc.exists) return { valid: false, profile: null };
   const profile = doc.data() || {};
   const normalizedEmail = normalizeEmail(profile.email || user.email);
   const isAdminUser = isBuiltInSuperAdminEmail(normalizedEmail) || adminEmails.has(normalizedEmail);
@@ -712,7 +693,6 @@ const ui = {
   openPanelPersonale: document.getElementById("open-panel-personale"),
   openPanelMezzi: document.getElementById("open-panel-mezzi"),
   openPanelUtenti: document.getElementById("open-panel-utenti"),
-  openPanelAziende: document.getElementById("open-panel-aziende"),
   openPanelGlobal: document.getElementById("open-panel-global"),
   openPanelBanner: document.getElementById("open-panel-banner"),
   openPanelInfoUtili: document.getElementById("open-panel-info-utili"),
@@ -736,7 +716,6 @@ const ui = {
   panelPersonale: document.getElementById("panel-personale"),
   panelMezzi: document.getElementById("panel-mezzi"),
   panelUtenti: document.getElementById("panel-utenti"),
-  panelAziende: document.getElementById("panel-aziende"),
   panelGlobal: document.getElementById("panel-global"),
   panelBanner: document.getElementById("panel-banner"),
   panelInfoUtili: document.getElementById("panel-info-utili"),
@@ -772,17 +751,6 @@ const ui = {
   adminUserForm: document.getElementById("admin-user-form"),
   adminUserEmail: document.getElementById("admin-user-email"),
   adminUsersList: document.getElementById("admin-users-list"),
-  companyCodeGate: document.getElementById("company-code-gate"),
-  companyCodeForm: document.getElementById("company-code-form"),
-  companyCodeInput: document.getElementById("company-code-input"),
-  companyCodeSubmit: document.getElementById("company-code-submit"),
-  companyCodeFeedback: document.getElementById("company-code-feedback"),
-  companyForm: document.getElementById("company-form"),
-  companyNameInput: document.getElementById("company-name-input"),
-  companyNewCodeInput: document.getElementById("company-new-code-input"),
-  companyAdminEmailInput: document.getElementById("company-admin-email-input"),
-  companyFormFeedback: document.getElementById("company-form-feedback"),
-  companiesList: document.getElementById("companies-list"),
   userBanList: document.getElementById("user-ban-list"),
   userPermissionsList: document.getElementById("user-permissions-list"),
   externalAppForm: document.getElementById("external-app-form"),
@@ -2003,9 +1971,6 @@ ui.openPanelSquadre?.addEventListener("click", () => openManagementPanel("squadr
 ui.openPanelPersonale?.addEventListener("click", () => openManagementPanel("personale"));
 ui.openPanelMezzi?.addEventListener("click", () => openManagementPanel("mezzi"));
 ui.openPanelUtenti?.addEventListener("click", () => openManagementPanel("utenti"));
-ui.openPanelAziende?.addEventListener("click", () => openManagementPanel("aziende"));
-ui.companyCodeForm?.addEventListener("submit", handleCompanyCodeSubmit);
-ui.companyForm?.addEventListener("submit", saveCompany);
 ui.openPanelGlobal?.addEventListener("click", () => openManagementPanel("global"));
 ui.openPanelBanner?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPanelInfoUtili?.addEventListener("click", () => openManagementPanel("infoUtili"));
@@ -3186,11 +3151,6 @@ if (!auth || firebaseInitError) {
     try {
       const savedSession = savedStartupSession || await readPersistedSession();
       const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
-      const companyAccessReady = await ensureCompanyAccess(user, databaseCheck);
-      if (!companyAccessReady) {
-        hideStartupLoading();
-        return;
-      }
       if (databaseCheck.banned) {
         currentUserBanProfile = databaseCheck.profile || { email: user.email, displayName: user.displayName };
         await savePersistedSession(user, currentUserBanProfile);
@@ -3518,7 +3478,6 @@ function isPersonaleReadyForSquadraValidation() {
 
 function updateAdminControls() {
   const canManage = canManageData();
-  ui.openPanelAziende?.classList.toggle("hidden", !isCurrentUserSuperAdmin());
   updateDriveConnectVisibility();
   ui.openPosBtn?.classList.remove("hidden");
   if (ui.openPosBtn) ui.openPosBtn.disabled = false;
@@ -3654,11 +3613,7 @@ function refreshApplicationData() {
 }
 
 function openManagementPanel(panel) {
-  if (panel === "aziende" && !isCurrentUserSuperAdmin()) {
-    closeSideMenu();
-    return;
-  }
-  if (panel !== "banner" && panel !== "aziende" && !canManageData()) {
+  if (panel !== "banner" && !canManageData()) {
     closeSideMenu();
     return;
   }
@@ -3668,7 +3623,6 @@ function openManagementPanel(panel) {
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
     utenti: { el: ui.panelUtenti, title: "Gestione utenti" },
-    aziende: { el: ui.panelAziende, title: "Gestione aziende" },
     global: { el: ui.panelGlobal, title: "Global" },
     banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
@@ -3677,7 +3631,7 @@ function openManagementPanel(panel) {
   };
   const target = panelMap[panel];
   if (!target) return;
-  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelAziende, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
+  [ui.panelCommesse, ui.panelSquadre, ui.panelPersonale, ui.panelMezzi, ui.panelUtenti, ui.panelGlobal, ui.panelBanner, ui.panelInfoUtili, ui.panelNotifiche, ui.panelProgrammazione].forEach((el) => el?.classList.add("hidden"));
   target.el.classList.remove("hidden");
   ui.managementTitle.textContent = target.title;
   ui.managementPage.classList.remove("hidden");
@@ -3685,7 +3639,6 @@ function openManagementPanel(panel) {
   if (panel === "squadre") setDefaultSquadraCompositionDate({ force: true });
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   if (panel === "notifiche") closeNotificationCalendarView();
-  if (panel === "aziende") void loadCompanies();
   closeSideMenu();
 }
 
@@ -23098,276 +23051,14 @@ function getImpiantoDocIds(impianto) {
   return impianto.id ? [impianto.id] : [];
 }
 
-function normalizeCompanyCode(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
-}
-
-function slugifyCompanyId(value) {
-  const slug = String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 42);
-  return slug || `azienda-${Date.now().toString(36)}`;
-}
-
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(String(value || ""));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function getCompanyById(companyId) {
-  const normalizedId = String(companyId || DEFAULT_COMPANY_ID).trim() || DEFAULT_COMPANY_ID;
-  const snapshot = await db.collection("companies").doc(normalizedId).get();
-  if (snapshot.exists) return { id: snapshot.id, ...snapshot.data() };
-  if (normalizedId === DEFAULT_COMPANY_ID) {
-    return { id: DEFAULT_COMPANY_ID, name: DEFAULT_COMPANY_NAME, active: true, legacyDefault: true };
-  }
-  return null;
-}
-
-function setCurrentCompany(company, profile = {}) {
-  currentCompany = company || { id: DEFAULT_COMPANY_ID, name: DEFAULT_COMPANY_NAME, active: true };
-  const email = normalizeEmail(currentUser?.email || profile.email || "");
-  const isAssignedAdmin = normalizeEmail(currentCompany.adminEmail || "") === email;
-  currentCompanyRole = isCurrentUserSuperAdmin()
-    ? "super_admin"
-    : (isAssignedAdmin || profile.companyRole === "company_admin" ? "company_admin" : "user");
-  configureTenantCollectionRouting();
-}
-
-function configureTenantCollectionRouting() {
-  if (!db || db.__heraTenantRoutingReady) return;
-  const rootCollection = db.collection.bind(db);
-  Object.defineProperty(db, "__heraRootCollection", { value: rootCollection });
-  db.collection = (collectionName) => {
-    const name = String(collectionName || "");
-    const companyId = String(currentCompany?.id || DEFAULT_COMPANY_ID);
-    if (companyId !== DEFAULT_COMPANY_ID && TENANT_SCOPED_COLLECTIONS.has(name)) {
-      return rootCollection("companies").doc(companyId).collection(name);
-    }
-    return rootCollection(name);
-  };
-  Object.defineProperty(db, "__heraTenantRoutingReady", { value: true });
-}
-
-function showCompanyCodeGate() {
-  setAuthenticationGateState("checking");
-  ui.authGate?.classList.add("hidden");
-  ui.companyCodeGate?.classList.remove("hidden");
-  if (ui.companyCodeFeedback) ui.companyCodeFeedback.textContent = "";
-  if (ui.companyCodeSubmit) ui.companyCodeSubmit.disabled = false;
-  setTimeout(() => ui.companyCodeInput?.focus(), 0);
-  return new Promise((resolve) => {
-    companyGateResolver = resolve;
-  });
-}
-
-function hideCompanyCodeGate() {
-  ui.companyCodeGate?.classList.add("hidden");
-  if (ui.companyCodeForm) ui.companyCodeForm.reset();
-  if (ui.companyCodeFeedback) ui.companyCodeFeedback.textContent = "";
-}
-
-async function handleCompanyCodeSubmit(event) {
-  event.preventDefault();
-  if (!currentUser || !companyGateResolver) return;
-  const code = normalizeCompanyCode(ui.companyCodeInput?.value);
-  if (!code) return;
-  ui.companyCodeSubmit.disabled = true;
-  ui.companyCodeFeedback.textContent = "Verifica codice in corso...";
-  try {
-    const codeHash = await sha256Hex(code);
-    const mappingDoc = await db.collection("companyCodes").doc(codeHash).get();
-    const mapping = mappingDoc.exists ? mappingDoc.data() : null;
-    if (!mapping?.active || !mapping.companyId) throw new Error("Codice azienda non valido o non attivo.");
-    const company = await getCompanyById(mapping.companyId);
-    if (!company?.active) throw new Error("Questa azienda non è attiva.");
-    const role = normalizeEmail(company.adminEmail || "") === normalizeEmail(currentUser.email || "")
-      ? "company_admin"
-      : "user";
-    const profilePatch = {
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      displayName: currentUser.displayName || currentUser.email || "Utente",
-      companyId: company.id,
-      companyName: company.name || "Azienda",
-      companyRole: role,
-      joinCodeHash: codeHash,
-      companyJoinedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    await db.collection("platformUsers").doc(currentUser.uid).set(profilePatch, { merge: true });
-    setCurrentCompany(company, profilePatch);
-    await savePersistedSession(currentUser, profilePatch);
-    hideCompanyCodeGate();
-    const resolve = companyGateResolver;
-    companyGateResolver = null;
-    resolve(true);
-  } catch (error) {
-    console.error("Errore associazione azienda:", error);
-    ui.companyCodeFeedback.textContent = error?.message || "Impossibile verificare il codice azienda.";
-    ui.companyCodeSubmit.disabled = false;
-  }
-}
-
-async function ensureCompanyAccess(user, databaseCheck = {}) {
-  const profile = databaseCheck.profile || null;
-  if (profile?.companyId) {
-    const company = await getCompanyById(profile.companyId);
-    if (!company || company.active === false) {
-      setAuthenticationGateState("required", "L’azienda associata al tuo profilo non è attiva. Contatta l’amministratore.");
-      return false;
-    }
-    setCurrentCompany(company, profile);
-    return true;
-  }
-
-  if (profile || isBuiltInSuperAdminEmail(user?.email)) {
-    const company = await getCompanyById(DEFAULT_COMPANY_ID);
-    const companyRole = isBuiltInSuperAdminEmail(user?.email) ? "super_admin" : "user";
-    const patch = {
-      companyId: DEFAULT_COMPANY_ID,
-      companyName: DEFAULT_COMPANY_NAME,
-      companyRole,
-      legacyCompanyMigration: true,
-      companyMigratedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    if (isBuiltInSuperAdminEmail(user?.email)) {
-      await db.collection("companies").doc(DEFAULT_COMPANY_ID).set({
-        name: DEFAULT_COMPANY_NAME,
-        active: true,
-        legacyDefault: true,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedBy: user.email || ""
-      }, { merge: true });
-    }
-    await db.collection("platformUsers").doc(user.uid).set({
-      uid: user.uid,
-      email: user.email || "",
-      displayName: user.displayName || user.email || "Utente",
-      ...patch
-    }, { merge: true });
-    setCurrentCompany(company, patch);
-    await savePersistedSession(user, patch);
-    return true;
-  }
-
-  return showCompanyCodeGate();
-}
-
-async function saveCompany(event) {
-  event.preventDefault();
-  if (!isCurrentUserSuperAdmin()) return;
-  const name = String(ui.companyNameInput?.value || "").trim();
-  const code = normalizeCompanyCode(ui.companyNewCodeInput?.value);
-  const adminEmail = normalizeEmail(ui.companyAdminEmailInput?.value);
-  if (!name || !code) return;
-  ui.companyFormFeedback.textContent = "Salvataggio azienda...";
-  try {
-    const codeHash = await sha256Hex(code);
-    const existingCode = await db.collection("companyCodes").doc(codeHash).get();
-    const requestedId = name.toLowerCase() === DEFAULT_COMPANY_NAME.toLowerCase()
-      ? DEFAULT_COMPANY_ID
-      : slugifyCompanyId(name);
-    if (existingCode.exists && existingCode.data()?.companyId !== requestedId) {
-      throw new Error("Questo codice è già assegnato a un’altra azienda.");
-    }
-    let companyId = requestedId;
-    const sameId = await db.collection("companies").doc(companyId).get();
-    if (sameId.exists && companyId !== DEFAULT_COMPANY_ID && sameId.data()?.name !== name) {
-      companyId = `${companyId}-${Date.now().toString(36).slice(-4)}`;
-    }
-    const batch = db.batch();
-    batch.set(db.collection("companies").doc(companyId), {
-      name,
-      active: true,
-      adminEmail: adminEmail || "",
-      codeHash,
-      codeHint: `••••${code.slice(-2)}`,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: currentUser.email || "",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    batch.set(db.collection("companyCodes").doc(codeHash), {
-      companyId,
-      active: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: currentUser.email || ""
-    }, { merge: true });
-    await batch.commit();
-
-    if (adminEmail) {
-      const userSnapshot = await db.collection("platformUsers").where("email", "==", adminEmail).limit(1).get();
-      if (!userSnapshot.empty) {
-        await userSnapshot.docs[0].ref.set({
-          companyId,
-          companyName: name,
-          companyRole: "company_admin",
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedBy: currentUser.email || ""
-        }, { merge: true });
-      }
-    }
-    ui.companyForm.reset();
-    ui.companyFormFeedback.textContent = adminEmail
-      ? "Azienda salvata. L’amministratore è stato assegnato se l’email è già registrata."
-      : "Azienda salvata. Puoi assegnare l’amministratore in seguito.";
-    await loadCompanies();
-  } catch (error) {
-    console.error("Errore salvataggio azienda:", error);
-    ui.companyFormFeedback.textContent = error?.message || "Salvataggio azienda non riuscito.";
-  }
-}
-
-async function loadCompanies() {
-  if (!ui.companiesList || !isCurrentUserSuperAdmin()) return;
-  ui.companiesList.innerHTML = "<p class='muted'>Caricamento aziende...</p>";
-  try {
-    const snapshot = await db.collection("companies").orderBy("name").get();
-    const companies = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    ui.companiesList.innerHTML = "";
-    if (!companies.length) {
-      ui.companiesList.innerHTML = "<p class='muted'>Nessuna azienda configurata.</p>";
-      return;
-    }
-    companies.forEach((company) => {
-      const row = document.createElement("div");
-      row.className = "simple-list-item stacked";
-      row.innerHTML = `
-        <strong>${escapeHTML(company.name || company.id)}</strong>
-        <span>${escapeHTML(`Codice: ${company.codeHint || "da impostare"}`)}</span>
-        <span>${escapeHTML(`Amministratore: ${company.adminEmail || "non assegnato"}`)}</span>
-        <small>${company.active === false ? "Azienda sospesa" : "Azienda attiva"}</small>
-      `;
-      ui.companiesList.appendChild(row);
-    });
-  } catch (error) {
-    console.error("Errore caricamento aziende:", error);
-    ui.companiesList.innerHTML = "<p class='muted'>Impossibile caricare le aziende.</p>";
-  }
-}
-
 function isBuiltInSuperAdminEmail(email) {
   const normalized = normalizeEmail(email);
   return BUILT_IN_SUPER_ADMIN_EMAILS.some((adminEmail) => normalizeEmail(adminEmail) === normalized);
 }
 
-function isCurrentUserSuperAdmin() {
-  return isBuiltInSuperAdminEmail(currentUser?.email || "");
-}
-
 function canManageData() {
   const email = normalizeEmail(currentUser?.email || "");
-  if (isBuiltInSuperAdminEmail(email)) return true;
-  if (currentCompanyRole === "company_admin") return true;
-  return String(currentCompany?.id || DEFAULT_COMPANY_ID) === DEFAULT_COMPANY_ID && adminEmails.has(email);
+  return isBuiltInSuperAdminEmail(email) || adminEmails.has(email);
 }
 
 function normalizeEmail(email) {
@@ -25414,9 +25105,6 @@ async function upsertCurrentPlatformUser() {
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
-    companyId: currentCompany?.id || DEFAULT_COMPANY_ID,
-    companyName: currentCompany?.name || DEFAULT_COMPANY_NAME,
-    companyRole: currentCompanyRole || "user",
     isAdmin: isAdminUser,
     ...(isSuperAdmin ? {
       role: "super_admin",
@@ -25478,11 +25166,9 @@ function stopAdminUsersSubscription() {
 function subscribeUsers() {
   stopUsersSubscription();
   if (!currentUser) return;
-  const source = isCurrentUserSuperAdmin()
+  const source = canManageData()
     ? db.collection("platformUsers")
-    : (canManageData()
-      ? db.collection("platformUsers").where("companyId", "==", currentCompany?.id || DEFAULT_COMPANY_ID)
-      : db.collection("platformUsers").where(firebase.firestore.FieldPath.documentId(), "==", currentUser.uid));
+    : db.collection("platformUsers").where(firebase.firestore.FieldPath.documentId(), "==", currentUser.uid);
   const applySnapshot = (snapshot) => {
     platformUsers = snapshot.docs.map((doc) => {
       const data = doc.data() || {};

@@ -7,32 +7,7 @@ service cloud.firestore {
     }
 
     function signedIn() {
-      return activeUser() && (
-        isSuperAdmin()
-        || !exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
-        || !("companyId" in get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data)
-        || get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.companyId == "avola"
-      );
-    }
-
-    function activeUser() {
-      return authPresent() && !isBannedUser();
-    }
-
-    function userCompanyId() {
-      return exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.companyId
-        : null;
-    }
-
-    function belongsToCompany(companyId) {
-      return activeUser() && (isSuperAdmin() || userCompanyId() == companyId);
-    }
-
-    function isCompanyAdmin(companyId) {
-      return belongsToCompany(companyId)
-        && exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
-        && get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.companyRole == "company_admin";
+      return authPresent() && (isAdmin() || !isBannedUser());
     }
 
     function isBannedUser() {
@@ -50,10 +25,6 @@ service cloud.firestore {
             && request.auth.token.email in get(/databases/$(database)/documents/appConfig/adminUsers).data.emails
           )
         );
-    }
-
-    function isSuperAdmin() {
-      return authPresent() && request.auth.token.email in ["ionut29019@gmail.com", "Ionut29019@gmail.com"];
     }
 
     function isSelf(userId) {
@@ -235,31 +206,10 @@ service cloud.firestore {
     }
 
     match /platformUsers/{userId} {
-      allow read: if isSuperAdmin()
-        || isSelf(userId)
-        || (isCompanyAdmin(resource.data.companyId) && resource.data.companyId == userCompanyId());
+      allow read: if isAdmin() || isSelf(userId);
       allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition() && createsNoPermissionFields() && createsNoBanFields());
       allow update: if isAdmin() || (isSelf(userId) && !isBannedUser() && updatesNoInlinePosition() && updatesNoPermissionFields() && updatesNoBanFields());
       allow delete: if isAdmin();
-    }
-
-    match /companies/{companyId} {
-      allow read: if authPresent();
-      allow create, update, delete: if isSuperAdmin();
-
-      match /{collection}/{docId} {
-        allow read, write: if belongsToCompany(companyId);
-
-        match /{document=**} {
-          allow read, write: if belongsToCompany(companyId);
-        }
-      }
-    }
-
-    match /companyCodes/{codeHash} {
-      allow get: if authPresent();
-      allow list: if false;
-      allow create, update, delete: if isSuperAdmin();
     }
 
     match /chatMessages/{messageId} {

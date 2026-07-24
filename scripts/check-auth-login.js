@@ -9,12 +9,24 @@ const workflowSource = fs.readFileSync(
   "utf8"
 );
 
-if (!indexSource.includes('<script src="auth-login-fix.js?v=20260724a"></script>')) {
+if (!indexSource.includes('<script src="auth-login-fix.js?v=20260724b"></script>')) {
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
+if (!fixSource.includes('registerPlugin("FirebaseAuthentication")')) {
+  throw new Error("Il plugin Firebase Authentication non viene registrato.");
+}
+
+if (!fixSource.includes("signInWithGoogle({ skipNativeAuth: true })")) {
+  throw new Error("Il login Google nativo Android non viene avviato.");
+}
+
+if (!fixSource.includes("signInWithCredential(credential)")) {
+  throw new Error("La credenziale Google nativa non viene trasferita a Firebase Web.");
+}
+
 if (!fixSource.includes("signInWithPopup(provider)")) {
-  throw new Error("La correzione login non usa signInWithPopup.");
+  throw new Error("Il login web non mantiene signInWithPopup.");
 }
 
 if (/signInWithRedirect\s*\(/.test(fixSource)) {
@@ -29,4 +41,12 @@ if (!workflowSource.includes("auth-login-fix.js")) {
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-console.log("Google login check passed: direct popup handler included in web and Android builds.");
+if (!workflowSource.includes("ANDROID_GOOGLE_SERVICES_JSON_BASE64")) {
+  throw new Error("Il workflow non ripristina google-services.json.");
+}
+
+if (!workflowSource.includes("rgcfaIncludeGoogle")) {
+  throw new Error("Il workflow non abilita le dipendenze native Google.");
+}
+
+console.log("Google login check passed: native Android and web handlers are configured.");

@@ -5,5 +5,11 @@
   "server": {
     "androidScheme": "https",
     "cleartext": false
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
   }
 }

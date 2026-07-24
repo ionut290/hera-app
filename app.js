@@ -22146,15 +22146,19 @@ function renderMap() {
   clearMap();
 
   const bounds = [];
+  const impiantiBounds = [];
   mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
-  const mapDataSignature = currentImpianti
+  const mapDataSignature = `${selectedCommessaId}::${currentImpianti
     .map((impianto) => `${buildImpiantoKey(impianto)}|${Number(impianto.gpsY) || ""}|${Number(impianto.gpsX) || ""}|${JSON.stringify(getSnowRoadPath(impianto))}|${impianto.done ? "1" : "0"}`)
     .sort()
-    .join(";");
+    .join(";")}`;
   let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
+    const lat = Number(impianto.gpsY);
+    const lng = Number(impianto.gpsX);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) impiantiBounds.push([lat, lng]);
     const snowRoadPath = getSnowRoadPath(impianto);
     addSnowRoadPolylineToLayer(impianto, snowRoadLayer, map);
     addSnowRoadPolylineToLayer(impianto, fullscreenSnowRoadLayer, fullscreenMap);
@@ -22171,9 +22175,9 @@ function renderMap() {
 
   renderOperatorPositionMarkers(bounds);
 
-  const shouldAutoFitToBounds = bounds.length > 0 && (!mainMapViewState.hasUserMoved || mapAutoFitSignature !== mapDataSignature);
+  const shouldAutoFitToBounds = impiantiBounds.length > 0 && (!mainMapViewState.hasUserMoved || mapAutoFitSignature !== mapDataSignature);
   if (shouldAutoFitToBounds) {
-    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+    map.fitBounds(impiantiBounds, { padding: [24, 24], maxZoom: 11, animate: false });
     const center = map.getCenter();
     mainMapViewState.center = [center.lat, center.lng];
     mainMapViewState.zoom = map.getZoom();

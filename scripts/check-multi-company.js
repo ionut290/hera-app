@@ -6,7 +6,10 @@ const html = fs.readFileSync("index.html", "utf8");
 const rules = fs.readFileSync("firestore.rules", "utf8");
 
 assert.match(app, /const DEFAULT_COMPANY_ID = "avola"/);
+assert.match(app, /const MULTI_COMPANY_ROLLOUT_AT = Date\.parse/);
 assert.match(app, /legacyCompanyMigration: true/);
+assert.match(app, /isLegacyUser/);
+assert.match(app, /accesso non bloccato/);
 assert.match(app, /return showCompanyCodeGate\(\)/);
 assert.match(app, /TENANT_SCOPED_COLLECTIONS/);
 assert.match(app, /companyId !== DEFAULT_COMPANY_ID/);
@@ -15,6 +18,7 @@ assert.match(html, /id="company-code-gate"/);
 assert.match(html, /id="open-panel-aziende"/);
 assert.match(html, /id="panel-aziende"/);
 assert.match(rules, /function belongsToCompany\(companyId\)/);
+assert.match(rules, /companyId in \[null, "", "avola", "Avola", "AVOLA"\]/);
 assert.match(rules, /match \/companies\/\{companyId\}/);
 assert.match(rules, /allow list: if false/);
 

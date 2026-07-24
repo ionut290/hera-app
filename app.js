@@ -14691,6 +14691,20 @@ function renderImpianti() {
         false,
         primaryActionsRow
       );
+
+      // Solo stato visivo: se esiste già una data FATTO salvata, mantieni
+      // l'avviso giallo anche quando l'impianto è rimasto per errore nei Da fare.
+      const completionEvidenceButton = primaryActionsRow.querySelector(
+        '.action-icon-btn[data-action-key="whatsapp"]'
+      );
+      if (completionEvidenceButton && firestoreDateToMillis(impianto.doneAt) > 0) {
+        const completionLabel = formatDoneButtonLabel(impianto.doneAt);
+        completionEvidenceButton.textContent = "";
+        completionEvidenceButton.classList.add("is-completed-done", "has-completion-evidence");
+        completionEvidenceButton.dataset.doneLabel = completionLabel;
+        completionEvidenceButton.setAttribute("aria-label", `Già premuto FATTO: ${completionLabel}`);
+        completionEvidenceButton.title = `Già premuto FATTO: ${completionLabel}`;
+      }
     } else {
       const completedDoneBtn = document.createElement("button");
       completedDoneBtn.type = "button";

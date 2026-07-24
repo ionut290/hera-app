@@ -147,19 +147,18 @@ jobs:
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon
 
-      - name: Verify and prepare Android App Bundle
+      - name: Verify official Android App Bundle
         shell: bash
         run: |
           AAB="android/app/build/outputs/bundle/release/app-release.aab"
           test -f "$AAB"
           unzip -t "$AAB"
           jarsigner -verify -verbose -certs "$AAB"
-          cp "$AAB" "VARGA-CANTIERI-${{ github.run_number }}.aab"
 
-      - name: Upload Play Store bundle
+      - name: Upload official Play Store bundle
         uses: actions/upload-artifact@v4
         with:
           name: VARGA-CANTIERI-AAB-${{ github.run_number }}
-          path: VARGA-CANTIERI-${{ github.run_number }}.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30

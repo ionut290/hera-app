@@ -13,16 +13,24 @@ if (!indexSource.includes('<script src="auth-login-fix.js?v=20260724b"></script>
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
-if (!fixSource.includes('registerPlugin("FirebaseAuthentication")')) {
-  throw new Error("Il plugin Firebase Authentication non viene registrato.");
+if (!fixSource.includes("configureAndroidEmailPasswordOnly")) {
+  throw new Error("La modalità Android email/password non viene configurata.");
 }
 
-if (!fixSource.includes("signInWithGoogle({ skipNativeAuth: true })")) {
-  throw new Error("Il login Google nativo Android non viene avviato.");
+if (!fixSource.includes('googleLoginButton.hidden = true')) {
+  throw new Error("Il pulsante Google non viene nascosto su Android.");
 }
 
-if (!fixSource.includes("signInWithCredential(credential)")) {
-  throw new Error("La credenziale Google nativa non viene trasferita a Firebase Web.");
+if (!fixSource.includes('emailLoginButton.textContent = "Accedi"')) {
+  throw new Error("Il pulsante email/password Android non ha il testo corretto.");
+}
+
+if (!fixSource.includes('message.textContent = "Accedi con la tua email e password."')) {
+  throw new Error("Il messaggio login Android non richiede email e password.");
+}
+
+if (!fixSource.includes("Nell'app Android è disponibile solo l'accesso con email e password.")) {
+  throw new Error("Il login Google non è bloccato esplicitamente su Android.");
 }
 
 if (!fixSource.includes("signInWithPopup(provider)")) {
@@ -37,10 +45,6 @@ if (!fixSource.includes("window.loginWithGoogle = function loginWithGoogleFixed(
   throw new Error("La funzione centrale loginWithGoogle non viene sostituita.");
 }
 
-if (!fixSource.includes("? signInWithNativeGoogle()")) {
-  throw new Error("La funzione centrale non forza il login nativo su Android.");
-}
-
 if (!fixSource.includes("stopImmediatePropagation")) {
   throw new Error("La correzione non intercetta il vecchio gestore login.");
 }
@@ -49,12 +53,4 @@ if (!workflowSource.includes("auth-login-fix.js")) {
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-if (!workflowSource.includes("ANDROID_GOOGLE_SERVICES_JSON_BASE64")) {
-  throw new Error("Il workflow non ripristina google-services.json.");
-}
-
-if (!workflowSource.includes("rgcfaIncludeGoogle")) {
-  throw new Error("Il workflow non abilita le dipendenze native Google.");
-}
-
-console.log("Google login check passed: native Android and web handlers are configured.");
+console.log("Login check passed: Android uses email/password only; web keeps Google login.");

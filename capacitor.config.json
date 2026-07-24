@@ -1,7 +1,7 @@
 {
   "appId": "it.vargacantieri.hera",
   "appName": "Hera App",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "url": "https://creative-syrniki-dddbae.netlify.app/",
     "androidScheme": "https",

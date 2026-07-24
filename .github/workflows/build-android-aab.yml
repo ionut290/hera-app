@@ -110,16 +110,16 @@ jobs:
           if n1 != 1 or n2 != 1:
               raise SystemExit("Impossibile aggiornare versionCode/versionName")
 
-          signing_block = f'''
-    signingConfigs {{
-        release {{
-            storeFile file('{store_file}')
-            storePassword '{store_password}'
-            keyAlias '{key_alias}'
-            keyPassword '{key_password}'
-        }}
-    }}
-'''
+          signing_block = """
+              signingConfigs {
+                  release {
+                      storeFile file('%s')
+                      storePassword '%s'
+                      keyAlias '%s'
+                      keyPassword '%s'
+                  }
+              }
+          """ % (store_file, store_password, key_alias, key_password)
 
           android_pos = text.find("android {")
           if android_pos == -1:

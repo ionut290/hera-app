@@ -1,0 +1,28 @@
+.private-docs-file-field {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.private-docs-file-field input[type="file"] {
+  width: 100%;
+}
+
+#private-docs-save-btn:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.private-docs-feedback-success {
+  color: #166534 !important;
+  font-weight: 800;
+}
+
+.private-docs-feedback-error {
+  color: #b91c1c !important;
+  font-weight: 800;
+}

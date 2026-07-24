@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="identity-card-feature.css?v=20260724a">
+  <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
 <body class="auth-pending">
 
@@ -1251,15 +1252,17 @@
       <form id="private-docs-form" class="resource-form">
         <input id="private-docs-name" type="text" placeholder="Denominazione documento (obbligatoria)" required>
         <textarea id="private-docs-note" placeholder="Descrizione / codice / note"></textarea>
-        <input id="private-docs-file" type="file" accept="*/*">
-        <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
-        <label class="checkbox-inline">
-          <input id="private-docs-drive-only" type="checkbox" checked disabled>
-          Salva allegato sul cloud centralizzato amministratore
+        <label class="private-docs-file-field">
+          <strong>Allega un documento o una foto</strong>
+          <input id="private-docs-file" type="file" accept="image/*,.pdf">
+        </label>
+        <label class="private-docs-file-field">
+          <strong>Oppure scatta una foto</strong>
+          <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
         </label>
         <button id="private-docs-save-btn" class="btn btn-primary" type="submit">Salva documento</button>
       </form>
-      <p id="private-docs-feedback" class="muted"></p>
+      <p id="private-docs-feedback" class="muted" role="status" aria-live="polite"></p>
       <div id="private-docs-list" class="simple-list"></div>
     </section>
   </section>
@@ -1590,6 +1593,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
+  <script src="private-documents-v2.js?v=20260724a"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>

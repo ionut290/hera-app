@@ -42,6 +42,25 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Prepare Capacitor web directory
+        shell: bash
+        run: |
+          rm -rf www
+          mkdir -p www
+          cat > www/index.html <<'HTML'
+          <!doctype html>
+          <html lang="it">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>Varga Cantieri</title>
+            </head>
+            <body>
+              <p>Avvio di Varga Cantieri…</p>
+            </body>
+          </html>
+          HTML
+
       - name: Create and sync Android project
         run: |
           rm -rf android
@@ -50,25 +69,38 @@ jobs:
 
       - name: Set unique Android version
         shell: bash
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import os
           import re
 
-          path = Path("android/app/build.gradle")
+          candidates = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          ]
+          path = next((p for p in candidates if p.exists()), None)
+          if path is None:
+              raise SystemExit("File Gradle dell'app Android non trovato")
+
           text = path.read_text(encoding="utf-8")
           version_code = os.environ["VERSION_CODE"]
           version_name = os.environ["VERSION_NAME"]
-          text, n1 = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", text, count=1)
-          text, n2 = re.subn(r'versionName\s+"[^"]+"', f'versionName "{version_name}"', text, count=1)
+
+          if path.suffix == ".kts":
+              text, n1 = re.subn(r"versionCode\s*=\s*\d+", f"versionCode = {version_code}", text, count=1)
+              text, n2 = re.subn(r'versionName\s*=\s*"[^"]+"', f'versionName = "{version_name}"', text, count=1)
+          else:
+              text, n1 = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", text, count=1)
+              text, n2 = re.subn(r'versionName\s+"[^"]+"', f'versionName "{version_name}"', text, count=1)
+
           if n1 != 1 or n2 != 1:
               raise SystemExit("Impossibile aggiornare versionCode/versionName")
           path.write_text(text, encoding="utf-8")
           PY
-        env:
-          VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 1.0.${{ github.run_number }}
 
       - name: Restore upload keystore
         shell: bash

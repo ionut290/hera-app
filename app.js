@@ -12958,6 +12958,40 @@ function renderPendingWhatsappList() {
   });
 }
 
+function getFattoVisualEvidenceDocId(impianto) {
+  const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim();
+  const impiantoKey = buildImpiantoKey(impianto);
+  const source = idSap ? `sap-${idSap}` : `key-${impiantoKey}`;
+  return encodeURIComponent(source || "impianto").slice(0, 240);
+}
+
+async function recordFattoVisualEvidence(impianto, clickedAt, doneBy) {
+  const commessaId = String(selectedCommessaId || "").trim();
+  if (!db || !commessaId || !impianto) return false;
+  const clickedAtDate = clickedAt instanceof Date ? clickedAt : new Date();
+  try {
+    await db
+      .collection("commesse")
+      .doc(commessaId)
+      .collection("fattoVisualEvidence")
+      .doc(getFattoVisualEvidenceDocId(impianto))
+      .set({
+        commessaId,
+        impiantoKey: buildImpiantoKey(impianto),
+        impiantoIdSap: String(impianto?.idSap || impianto?.codiceHera || "").trim(),
+        impiantoNome: String(impianto?.denominazione || "").trim(),
+        clickedAt: firebase.firestore.Timestamp.fromDate(clickedAtDate),
+        clickedAtIso: clickedAtDate.toISOString(),
+        doneBy: String(doneBy || "Operatore"),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Errore salvataggio prova visiva FATTO:", error);
+    return false;
+  }
+}
+
 function getFattoVisualEvidenceAt(impianto) {
   const savedDoneAt = firestoreDateToMillis(impianto?.doneAt);
   const resetAt = firestoreDateToMillis(impianto?.resetAt);
@@ -12985,8 +13019,9 @@ function subscribeFattoVisualEvidence(commessaId) {
   if (!db || !requestedCommessaId) return;
 
   unsubscribeFattoVisualEvidence = db
-    .collection("auditLogsWhazzup")
-    .where("commessaId", "==", requestedCommessaId)
+    .collection("commesse")
+    .doc(requestedCommessaId)
+    .collection("fattoVisualEvidence")
     .limit(500)
     .onSnapshot((snapshot) => {
       if (requestedCommessaId !== selectedCommessaId) return;
@@ -21443,6 +21478,10 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
+
+  // Segnale visivo condiviso e non bloccante: usa una sottoraccolta della commessa
+  // già accessibile agli utenti autenticati, indipendente dal salvataggio FATTO.
+  void recordFattoVisualEvidence(impianto, doneAt, doneBy);
 
   markWhazzupSafetyPressed(impianto, doneAt);
   upsertWhazzupPendingDoneEntry(impianto, doneAt);

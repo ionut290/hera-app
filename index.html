@@ -116,12 +116,15 @@
             <button id="snow-service-btn" class="snow-service-btn" type="button" aria-label="Apri Servizio Neve">❄️ NEVE</button>
           </div>
         </div>
-        <div id="user-connection-bar" class="user-connection-bar" role="status" aria-live="polite">
+        <div id="user-connection-bar" class="user-connection-bar home-accordion-trigger" role="button" tabindex="0"
+          aria-live="polite" aria-expanded="false" aria-controls="profile-summary-details"
+          aria-label="Apri riepilogo utente">
           <p id="operator-greeting" class="user-connection-greeting">👋 Ciao, Operatore</p>
           <p id="connection-indicator" class="user-connection-indicator">🟢 Online • Connessione in verifica</p>
           <p id="offline-mode-indicator" class="user-connection-offline hidden">📦 Modalità offline attiva</p>
+          <span class="home-accordion-chevron" aria-hidden="true">⌄</span>
         </div>
-        <div class="logo-meta">
+        <div id="profile-summary-details" class="logo-meta home-accordion-content hidden" aria-hidden="true">
           <p id="active-users-summary" class="muted active-users-summary" role="button" tabindex="-1" aria-label="Utenti attivi">Utenti attivi: 0</p>
           <p id="last-impianto-action-summary" class="muted">Ultima azione impianto: -</p>
           <p id="next-action-summary" class="muted">Prossima azione consigliata: caricamento...</p>
@@ -258,15 +261,20 @@
       </section>
 
       <section class="home-top-grid">
-        <section class="card weather-card" id="weather-card" role="button" tabindex="0">
+        <section class="card weather-card home-accordion-card" id="weather-card" role="button" tabindex="0"
+          aria-expanded="false" aria-controls="weather-expanded-content" aria-label="Apri meteo operativo">
           <div class="section-head">
             <h2>🌦️ Meteo operativo</h2>
-            <span class="pill">Pioggia/Neve/Nebbia</span>
+            <span class="home-accordion-chevron" aria-hidden="true">⌄</span>
           </div>
           <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
-          <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
-          <div id="weather-risks" class="weather-risks"></div>
-          <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
+          <div id="weather-expanded-content" class="home-accordion-content hidden" aria-hidden="true">
+            <span class="pill weather-types-pill">Pioggia/Neve/Nebbia</span>
+            <pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre>
+            <div id="weather-risks" class="weather-risks"></div>
+            <p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p>
+            <button id="weather-external-detail-btn" class="btn weather-external-detail-btn" type="button">Apri dettagli meteo</button>
+          </div>
         </section>
 
         <section class="card user-card" id="user-card">

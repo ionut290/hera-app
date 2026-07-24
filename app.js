@@ -828,10 +828,14 @@ const ui = {
   bannerFeedback: document.getElementById("banner-feedback"),
   weatherRisks: document.getElementById("weather-risks"),
   userCard: document.getElementById("user-card"),
+  userConnectionBar: document.getElementById("user-connection-bar"),
+  profileSummaryDetails: document.getElementById("profile-summary-details"),
   userToggleBtn: document.getElementById("user-toggle-btn"),
   userDetailsPanel: document.getElementById("user-details-panel"),
   weatherSummary: document.getElementById("weather-summary"),
   weatherDiagnostics: document.getElementById("weather-diagnostics"),
+  weatherExpandedContent: document.getElementById("weather-expanded-content"),
+  weatherExternalDetailBtn: document.getElementById("weather-external-detail-btn"),
   weatherModal: document.getElementById("weather-modal"),
   weatherCloseBtn: document.getElementById("weather-close-btn"),
   weatherDetails: document.getElementById("weather-details"),
@@ -1989,13 +1993,23 @@ ui.backFromControlCenterBtn?.addEventListener("click", closeControlCenterPage);
 ui.openBookPdfBtn?.addEventListener("click", openBookPdf);
 ui.managementCloseBtn?.addEventListener("click", closeManagementPanel);
 ui.userToggleBtn?.addEventListener("click", toggleUserDetailsPanel);
+ui.userConnectionBar?.addEventListener("click", toggleProfileSummary);
+ui.userConnectionBar?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  toggleProfileSummary();
+});
 ui.weatherCloseBtn?.addEventListener("click", closeWeatherModal);
-ui.weatherCard?.addEventListener("click", openWeatherExternalDetail);
+ui.weatherCard?.addEventListener("click", toggleWeatherCard);
 ui.weatherCard?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    openWeatherExternalDetail();
+    toggleWeatherCard();
   }
+});
+ui.weatherExternalDetailBtn?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  openWeatherExternalDetail();
 });
 ui.backFromFuelBtn?.addEventListener("click", closeFuelPage);
 ui.fuelMezzoDetailsBtn?.addEventListener("click", toggleFuelMezzoDetails);
@@ -2428,6 +2442,30 @@ function toggleUserDetailsPanel() {
   const isHidden = ui.userDetailsPanel.classList.contains("hidden");
   ui.userDetailsPanel.classList.toggle("hidden", !isHidden);
   ui.userToggleBtn.setAttribute("aria-expanded", String(isHidden));
+}
+
+function setHomeAccordionState(trigger, content, expanded, labels = {}) {
+  if (!trigger || !content) return;
+  trigger.setAttribute("aria-expanded", String(expanded));
+  trigger.setAttribute("aria-label", expanded ? (labels.close || "Chiudi dettagli") : (labels.open || "Apri dettagli"));
+  content.classList.toggle("hidden", !expanded);
+  content.setAttribute("aria-hidden", String(!expanded));
+}
+
+function toggleProfileSummary() {
+  const expanded = ui.userConnectionBar?.getAttribute("aria-expanded") !== "true";
+  setHomeAccordionState(ui.userConnectionBar, ui.profileSummaryDetails, expanded, {
+    open: "Apri riepilogo utente",
+    close: "Chiudi riepilogo utente"
+  });
+}
+
+function toggleWeatherCard() {
+  const expanded = ui.weatherCard?.getAttribute("aria-expanded") !== "true";
+  setHomeAccordionState(ui.weatherCard, ui.weatherExpandedContent, expanded, {
+    open: "Apri meteo operativo",
+    close: "Chiudi meteo operativo"
+  });
 }
 
 function updateNotificationUi(message, canTest = false) {

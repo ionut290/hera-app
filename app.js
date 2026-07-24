@@ -43,7 +43,6 @@ const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
 const PERSISTED_SESSION_VERSION = 2;
 const DEFAULT_COMPANY_ID = "avola";
 const DEFAULT_COMPANY_NAME = "Avola";
-const MULTI_COMPANY_ROLLOUT_AT = Date.parse("2026-07-24T13:22:55Z");
 const TENANT_SCOPED_COLLECTIONS = new Set([
   "activityLogs", "alertReadConfirmations", "appConfig", "appNotifications", "chatMessages",
   "commessaResources", "commesse", "globalCommesse", "gpsUpdateRequests", "hoursDeadlineAlerts",
@@ -23219,35 +23218,18 @@ async function handleCompanyCodeSubmit(event) {
 
 async function ensureCompanyAccess(user, databaseCheck = {}) {
   const profile = databaseCheck.profile || null;
-  const storedCompanyId = String(profile?.companyId || "").trim();
-  if (storedCompanyId) {
-    const normalizedCompanyId = storedCompanyId.toLowerCase() === DEFAULT_COMPANY_ID
-      ? DEFAULT_COMPANY_ID
-      : storedCompanyId;
-    const company = await getCompanyById(normalizedCompanyId);
+  if (profile?.companyId) {
+    const company = await getCompanyById(profile.companyId);
     if (!company || company.active === false) {
       setAuthenticationGateState("required", "L’azienda associata al tuo profilo non è attiva. Contatta l’amministratore.");
       return false;
     }
     setCurrentCompany(company, profile);
-    if (storedCompanyId !== normalizedCompanyId) {
-      void db.collection("platformUsers").doc(user.uid).set({
-        companyId: normalizedCompanyId,
-        companyName: company.name || DEFAULT_COMPANY_NAME
-      }, { merge: true }).catch((error) => {
-        console.warn("Normalizzazione azienda del profilo rimandata:", error);
-      });
-    }
     return true;
   }
 
-  const createdAt = Date.parse(String(user?.metadata?.creationTime || ""));
-  const isLegacyUser = Boolean(profile)
-    || isBuiltInSuperAdminEmail(user?.email)
-    || (Number.isFinite(createdAt) && createdAt <= MULTI_COMPANY_ROLLOUT_AT);
-
-  if (isLegacyUser) {
-    const company = { id: DEFAULT_COMPANY_ID, name: DEFAULT_COMPANY_NAME, active: true, legacyDefault: true };
+  if (profile || isBuiltInSuperAdminEmail(user?.email)) {
+    const company = await getCompanyById(DEFAULT_COMPANY_ID);
     const companyRole = isBuiltInSuperAdminEmail(user?.email) ? "super_admin" : "user";
     const patch = {
       companyId: DEFAULT_COMPANY_ID,
@@ -23256,35 +23238,24 @@ async function ensureCompanyAccess(user, databaseCheck = {}) {
       legacyCompanyMigration: true,
       companyMigratedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-
-    // L'accesso storico ad Avola non deve dipendere dal successo della migrazione remota.
-    setCurrentCompany(company, patch);
-    try {
-      await savePersistedSession(user, patch);
-    } catch (error) {
-      console.warn("Sessione Avola non salvata localmente; accesso comunque consentito:", error);
-    }
-
-    try {
-      if (isBuiltInSuperAdminEmail(user?.email)) {
-        await db.collection("companies").doc(DEFAULT_COMPANY_ID).set({
-          name: DEFAULT_COMPANY_NAME,
-          active: true,
-          legacyDefault: true,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedBy: user.email || ""
-        }, { merge: true });
-      }
-      await db.collection("platformUsers").doc(user.uid).set({
-        uid: user.uid,
-        email: user.email || "",
-        displayName: user.displayName || user.email || "Utente",
-        ...patch
+    if (isBuiltInSuperAdminEmail(user?.email)) {
+      await db.collection("companies").doc(DEFAULT_COMPANY_ID).set({
+        name: DEFAULT_COMPANY_NAME,
+        active: true,
+        legacyDefault: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: user.email || ""
       }, { merge: true });
-    } catch (error) {
-      console.warn("Migrazione profilo storico ad Avola rimandata; accesso non bloccato:", error);
     }
+    await db.collection("platformUsers").doc(user.uid).set({
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || user.email || "Utente",
+      ...patch
+    }, { merge: true });
+    setCurrentCompany(company, patch);
+    await savePersistedSession(user, patch);
     return true;
   }
 

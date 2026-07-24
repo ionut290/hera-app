@@ -1,0 +1,120 @@
+.logo-head-left {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-head-left .header-icon-btn {
+  position: static;
+  flex: 0 0 34px;
+}
+
+.identity-card-btn {
+  height: 34px;
+  min-width: 76px;
+  padding: 0 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #fff, #eff6ff);
+  color: #1e3a8a;
+  box-shadow: var(--shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: .67rem;
+  font-weight: 900;
+  letter-spacing: .02em;
+  cursor: pointer;
+}
+
+.identity-card-btn.has-card {
+  border-color: #86efac;
+  background: linear-gradient(145deg, #f0fdf4, #dcfce7);
+  color: #166534;
+}
+
+.identity-card-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.identity-card-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  background: #0f172a;
+  color: #fff;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.identity-card-viewer.hidden { display: none; }
+
+.identity-card-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.identity-card-viewer-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.identity-card-close-btn {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.identity-card-viewer-body {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.identity-card-viewer-body img,
+.identity-card-viewer-body iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.identity-card-viewer-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.identity-card-viewer-actions .btn {
+  min-height: 42px;
+  background: #fff;
+}
+
+@media (max-width: 430px) {
+  .identity-card-btn {
+    min-width: 68px;
+    padding-inline: 7px;
+    font-size: .61rem;
+  }
+}

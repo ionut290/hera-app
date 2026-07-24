@@ -2402,12 +2402,34 @@ function normalizePersonaleDocument(doc) {
     cognome: String(data.cognome || ""),
     fullName,
     telefono: String(data.telefono || ""),
-    email: String(data.email || ""),
+    email: normalizeEmail(data.email || ""),
     mansione: String(data.mansione || data.ruolo || ""),
     commesseAbilitate: Array.isArray(data.commesseAbilitate) ? data.commesseAbilitate : [],
     corsi: data.corsi && typeof data.corsi === "object" ? data.corsi : {},
     ...data
   };
+}
+
+function getPersonaleByLoginEmail(email = currentUser?.email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  return personaleRecords.find((person) => normalizeEmail(person?.email) === normalizedEmail) || null;
+}
+
+function getCurrentUserResolvedName(fallback = "Operatore") {
+  const person = getPersonaleByLoginEmail();
+  const personnelName = String(person ? getPersonaleDisplayName(person) : "").trim();
+  return personnelName
+    || String(currentUser?.displayName || "").trim()
+    || String(currentUser?.email || "").trim()
+    || fallback;
+}
+
+function refreshResolvedUserIdentity() {
+  if (!currentUser) return;
+  const resolvedName = getCurrentUserResolvedName("Nome non disponibile");
+  if (ui.userName) ui.userName.textContent = `Nome utente: ${resolvedName}`;
+  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${resolvedName}`;
 }
 
 function normalizeMezzoDocument(doc) {
@@ -6876,7 +6898,13 @@ function normalizeSquadraMemberIdentity(value) {
 
 function getCurrentUserIdentityParts() {
   if (!currentUser) return [];
-  const parts = [currentUser.displayName, currentUser.email];
+  const linkedPerson = getPersonaleByLoginEmail();
+  const parts = [
+    linkedPerson ? getPersonaleDisplayName(linkedPerson) : "",
+    linkedPerson?.email,
+    currentUser.displayName,
+    currentUser.email
+  ];
   const emailLocal = String(currentUser.email || "").split("@")[0] || "";
   if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
   return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
@@ -6977,7 +7005,7 @@ function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
 
 function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
-  return assignment?.matchedName || currentUser?.displayName || currentUser?.email || "Operatore";
+  return assignment?.matchedName || getCurrentUserResolvedName();
 }
 
 function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
@@ -14870,6 +14898,8 @@ function getConnectionMbps() {
 }
 
 function getOperatorDisplayName() {
+  const resolvedPersonnelName = String(getCurrentUserResolvedName("")).trim();
+  if (resolvedPersonnelName) return resolvedPersonnelName;
   const user = auth?.currentUser || currentUser || readLocalPersistedSession();
   const fallbackEmail = String(user?.email || "").trim();
   const rawName = String(user?.displayName || user?.userName || fallbackEmail || "Operatore").trim();
@@ -19464,6 +19494,7 @@ function subscribePersonale() {
     personaleLoadState = { status: "loaded", message: "" };
     console.log("Numero persone trovate", snapshot.size);
     renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+    refreshResolvedUserIdentity();
     updateSquadraHintFromSources();
     updateSuggestionLists();
     renderHoursOperatoriOptions();
@@ -19634,7 +19665,7 @@ function openPersonaleDetail(card, person, editMode = false) {
     <div class="personale-fields-grid">
       <input class="personale-edit-cognome-nome" ${editMode ? "" : "disabled"} value="${escapeHTML(getPersonaleDisplayName(person) || "")}" placeholder="Cognome e nome">
       <input class="personale-edit-tel" ${editMode ? "" : "disabled"} value="${escapeHTML(person.telefono || "")}" placeholder="Telefono">
-      <input class="personale-edit-email" ${editMode ? "" : "disabled"} value="${escapeHTML(person.email || "")}" placeholder="Email">
+      <input class="personale-edit-email" type="email" autocomplete="email" ${editMode ? "" : "disabled"} value="${escapeHTML(person.email || "")}" placeholder="E-mail usata per entrare nell’app" title="Abbina questa e-mail di accesso al nome reale">
       <input class="personale-edit-ruolo" ${editMode ? "" : "disabled"} value="${escapeHTML(person.mansione || person.ruolo || "")}" placeholder="Mansione / ruolo">
       <textarea class="personale-edit-note" ${editMode ? "" : "disabled"} placeholder="Note">${escapeHTML(person.note || "")}</textarea>
     </div>
@@ -19659,10 +19690,11 @@ function openPersonaleDetail(card, person, editMode = false) {
     autosave();
   });
   details.querySelectorAll(".personale-course-has").forEach((cb) => cb.addEventListener("change", autosave));
-  details.querySelectorAll(".personale-edit-cognome-nome, .personale-edit-tel, .personale-edit-email, .personale-edit-ruolo, .personale-edit-note, .personale-commesse-list input[type='checkbox']").forEach((el) => {
+  details.querySelectorAll(".personale-edit-cognome-nome, .personale-edit-tel, .personale-edit-ruolo, .personale-edit-note, .personale-commesse-list input[type='checkbox']").forEach((el) => {
     el.addEventListener("change", autosave);
     el.addEventListener("input", autosave);
   });
+  details.querySelector(".personale-edit-email")?.addEventListener("change", autosave);
   if (editMode) details.querySelector(".personale-save-btn").addEventListener("click", async () => savePersonaleDetail(person.id, details));
 }
 
@@ -19672,6 +19704,13 @@ async function savePersonaleDetail(personId, root) {
   const [cognome, ...nomeParts] = fullName.split(" ");
   const nome = nomeParts.join(" ").trim();
   const allCommesseEnabled = Boolean(root.querySelector(".personale-all-commesse-toggle")?.checked);
+  const email = normalizeEmail(root.querySelector(".personale-edit-email")?.value || "");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  const duplicateEmail = email && personaleRecords.find((person) => person.id !== personId && normalizeEmail(person.email) === email);
+  if (duplicateEmail) {
+    alert(`Questa e-mail è già abbinata a ${getPersonaleDisplayName(duplicateEmail) || "un altro dipendente"}. Ogni e-mail può identificare una sola persona.`);
+    return;
+  }
   const commesseAbilitate = Array.from(root.querySelectorAll(".personale-commesse-list input[type='checkbox']:checked")).map((el) => el.value);
   const corsi = PRIMARY_CORSI.reduce((acc, nomeCorso, idx) => {
     const hasCourse = Boolean(root.querySelector(`.personale-corso-main[data-course-key="${idx}"] .personale-course-has`)?.checked);
@@ -19683,13 +19722,14 @@ async function savePersonaleDetail(personId, root) {
   await db.collection(getPersonaleCollectionName()).doc(personId).set({
     nome, cognome, fullName: `${cognome} ${nome}`.trim(),
     telefono: String(root.querySelector(".personale-edit-tel")?.value || "").trim(),
-    email: String(root.querySelector(".personale-edit-email")?.value || "").trim(),
+    email,
     mansione: String(root.querySelector(".personale-edit-ruolo")?.value || "").trim(),
     note: String(root.querySelector(".personale-edit-note")?.value || "").trim(),
     abilitatoTutteCommesse: allCommesseEnabled,
     commesseAbilitate,
     corsi
   }, { merge: true });
+  refreshResolvedUserIdentity();
 }
 
 function subscribeMezzi() {

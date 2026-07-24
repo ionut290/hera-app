@@ -6,6 +6,30 @@
   const viewerBody = document.getElementById("identity-card-viewer-body");
   const closeButton = document.getElementById("identity-card-close-btn");
   const replaceButton = document.getElementById("identity-card-replace-btn");
+  const identityShareButton = document.getElementById("identity-card-share-btn");
+  const identityStatus = document.getElementById("identity-card-status");
+  const businessPreview = document.getElementById("business-card-preview");
+  const businessPhoto = document.getElementById("business-card-photo");
+  const businessName = document.getElementById("business-card-name");
+  const businessRole = document.getElementById("business-card-role");
+  const businessCompany = document.getElementById("business-card-company");
+  const businessContacts = document.getElementById("business-card-contacts");
+  const businessBio = document.getElementById("business-card-bio");
+  const businessForm = document.getElementById("business-card-form");
+  const businessEditButton = document.getElementById("business-card-edit-btn");
+  const businessCancelButton = document.getElementById("business-card-cancel-btn");
+  const businessShareButton = document.getElementById("business-card-share-btn");
+  const businessSaveButton = document.getElementById("business-card-save-btn");
+  const businessFeedback = document.getElementById("business-card-feedback");
+  const businessInputs = {
+    role: document.getElementById("business-card-role-input"),
+    company: document.getElementById("business-card-company-input"),
+    phone: document.getElementById("business-card-phone-input"),
+    email: document.getElementById("business-card-email-input"),
+    address: document.getElementById("business-card-address-input"),
+    website: document.getElementById("business-card-website-input"),
+    bio: document.getElementById("business-card-bio-input")
+  };
   const pinButton = document.getElementById("fuel-pin-btn");
   const pinViewer = document.getElementById("fuel-pin-viewer");
   const pinClose = document.getElementById("fuel-pin-close-btn");
@@ -23,6 +47,7 @@
   let currentUser = null;
   let identityCard = null;
   let fuelPinDocument = null;
+  let businessCardDocument = null;
   let unsubscribe = null;
 
   const normalizedText = (item) => `${item?.name || ""} ${item?.note || ""}`.toLocaleLowerCase("it-IT");
@@ -31,6 +56,77 @@
     return text.includes("tessera") && (text.includes("riconoscimento") || text.includes("tesserino"));
   };
   const isFuelPin = (item) => normalizedText(item).includes("pin carburante");
+  const isBusinessCard = (item) => normalizedText(item).includes("carta da visita");
+
+  const emptyBusinessCard = () => ({
+    role: "", company: "", phone: "", email: "", address: "", website: "", bio: ""
+  });
+
+  const readBusinessCard = () => {
+    const note = String(businessCardDocument?.note || "").trim();
+    if (!note) return emptyBusinessCard();
+    try {
+      return { ...emptyBusinessCard(), ...JSON.parse(note) };
+    } catch {
+      return emptyBusinessCard();
+    }
+  };
+
+  const fallbackAvatar = () => {
+    const name = String(currentUser?.displayName || currentUser?.email || "U").trim();
+    const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "U";
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="180" height="180" rx="90" fill="#dbeafe"/><text x="90" y="108" text-anchor="middle" font-family="Arial,sans-serif" font-size="64" font-weight="700" fill="#1d4ed8">${initials}</text></svg>`
+    )}`;
+  };
+
+  const setBusinessFeedback = (message) => {
+    if (businessFeedback) businessFeedback.textContent = message;
+  };
+
+  const addBusinessContact = (icon, value) => {
+    if (!businessContacts || !value) return;
+    const item = document.createElement("span");
+    item.className = "business-card-contact";
+    item.textContent = `${icon} ${value}`;
+    businessContacts.appendChild(item);
+  };
+
+  const renderBusinessCard = () => {
+    const data = readBusinessCard();
+    const name = String(currentUser?.displayName || currentUser?.email || "Utente");
+    if (businessPhoto) {
+      businessPhoto.src = currentUser?.photoURL || fallbackAvatar();
+      businessPhoto.onerror = () => { businessPhoto.src = fallbackAvatar(); };
+    }
+    if (businessName) businessName.textContent = name;
+    if (businessRole) businessRole.textContent = data.role || "Aggiungi la tua qualifica";
+    if (businessCompany) businessCompany.textContent = data.company || "Aggiungi l’azienda";
+    if (businessContacts) {
+      businessContacts.innerHTML = "";
+      addBusinessContact("☎", data.phone);
+      addBusinessContact("✉", data.email || currentUser?.email || "");
+      addBusinessContact("⌖", data.address);
+      addBusinessContact("🌐", data.website);
+    }
+    if (businessBio) {
+      businessBio.textContent = data.bio || "";
+      businessBio.hidden = !data.bio;
+    }
+    Object.entries(businessInputs).forEach(([key, input]) => {
+      if (input) input.value = data[key] || (key === "email" ? currentUser?.email || "" : "");
+    });
+    if (businessEditButton) businessEditButton.textContent = businessCardDocument ? "Modifica" : "Compila";
+  };
+
+  const toggleBusinessForm = (visible) => {
+    businessForm?.classList.toggle("hidden", !visible);
+    if (visible) {
+      renderBusinessCard();
+      businessInputs.role?.focus();
+    }
+    setBusinessFeedback("");
+  };
 
   const updateButtons = () => {
     button.disabled = !currentUser;
@@ -45,6 +141,7 @@
     viewer.classList.add("hidden");
     viewer.setAttribute("aria-hidden", "true");
     viewerBody.innerHTML = "";
+    toggleBusinessForm(false);
     document.body.style.overflow = "";
   };
 
@@ -76,28 +173,154 @@
     return fileId ? `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview` : url;
   };
 
-  const openViewer = () => {
-    if (!currentUser) return window.alert("Devi fare login per usare il tesserino di riconoscimento.");
-    if (!identityCard) return openUpload();
+  const renderIdentityCard = () => {
     viewerBody.innerHTML = "";
+    identityStatus?.classList.toggle("ready", Boolean(identityCard));
+    if (identityStatus) identityStatus.textContent = identityCard ? "Disponibile" : "Non inserita";
+    if (identityShareButton) identityShareButton.disabled = !identityCard;
+    if (!identityCard) {
+      const placeholder = document.createElement("button");
+      placeholder.className = "btn";
+      placeholder.type = "button";
+      placeholder.textContent = "＋ Inserisci la tessera di riconoscimento";
+      placeholder.addEventListener("click", openUpload);
+      viewerBody.appendChild(placeholder);
+      return;
+    }
     const fileType = String(identityCard.fileType || "").toLowerCase();
     if (identityCard.fileDataUrl && fileType.startsWith("image/")) {
       const image = document.createElement("img");
       image.src = identityCard.fileDataUrl;
-      image.alt = "Tesserino di riconoscimento";
+      image.alt = "Tessera di riconoscimento";
       viewerBody.appendChild(image);
-    } else {
-      const source = identityCard.fileDataUrl || drivePreviewUrl(identityCard);
-      if (!source) return openUpload();
-      const frame = document.createElement("iframe");
-      frame.src = source;
-      frame.title = "Tesserino di riconoscimento";
-      frame.allow = "fullscreen";
-      viewerBody.appendChild(frame);
+      return;
     }
+    const source = identityCard.fileDataUrl || drivePreviewUrl(identityCard);
+    if (!source) return;
+    const frame = document.createElement("iframe");
+    frame.src = source;
+    frame.title = "Tessera di riconoscimento";
+    frame.allow = "fullscreen";
+    viewerBody.appendChild(frame);
+  };
+
+  const openViewer = () => {
+    if (!currentUser) return window.alert("Devi fare login per usare il tesserino di riconoscimento.");
+    renderIdentityCard();
+    renderBusinessCard();
     viewer.classList.remove("hidden");
     viewer.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+  };
+
+  const saveBusinessCard = async (event) => {
+    event.preventDefault();
+    if (!currentUser || !window.firebase?.firestore) return;
+    const data = Object.fromEntries(
+      Object.entries(businessInputs).map(([key, input]) => [key, String(input?.value || "").trim()])
+    );
+    if (!data.role && !data.company && !data.phone) {
+      return setBusinessFeedback("Inserisci almeno qualifica, azienda o telefono.");
+    }
+    businessSaveButton && (businessSaveButton.disabled = true);
+    setBusinessFeedback("Salvataggio in corso...");
+    try {
+      const documentData = {
+        name: "Carta da visita",
+        note: JSON.stringify(data),
+        fileName: "", fileType: "", fileSize: 0, fileDataUrl: "",
+        driveFileId: "", driveWebViewLink: "",
+        storageMode: "private-firestore",
+        ownerUid: currentUser.uid,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const items = firebase.firestore().collection("privateDocuments").doc(currentUser.uid).collection("items");
+      if (businessCardDocument?.id) {
+        await items.doc(businessCardDocument.id).set(documentData, { merge: true });
+      } else {
+        const created = await items.add({ ...documentData, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        businessCardDocument = { id: created.id, ...documentData };
+      }
+      renderBusinessCard();
+      toggleBusinessForm(false);
+    } catch (error) {
+      console.error("Salvataggio carta da visita non riuscito:", error);
+      setBusinessFeedback("Salvataggio non riuscito. Verifica la connessione e riprova.");
+    } finally {
+      businessSaveButton && (businessSaveButton.disabled = false);
+    }
+  };
+
+  const shareFileOrText = async ({ file, title, text, url }) => {
+    if (navigator.share) {
+      const payload = { title, text };
+      if (file && navigator.canShare?.({ files: [file] })) payload.files = [file];
+      else if (url) payload.url = url;
+      await navigator.share(payload);
+      return true;
+    }
+    const value = [text, url].filter(Boolean).join("\n");
+    await navigator.clipboard.writeText(value);
+    window.alert("Condivisione non disponibile: informazioni copiate.");
+    return true;
+  };
+
+  const shareIdentityCard = async () => {
+    if (!identityCard) return;
+    identityShareButton && (identityShareButton.disabled = true);
+    try {
+      let file = null;
+      if (identityCard.fileDataUrl) {
+        const blob = await fetch(identityCard.fileDataUrl).then((response) => response.blob());
+        const extension = blob.type.includes("pdf") ? "pdf" : (blob.type.split("/")[1] || "jpg");
+        file = new File([blob], `tessera-riconoscimento.${extension}`, { type: blob.type });
+      }
+      const url = file ? "" : String(identityCard.driveWebViewLink || drivePreviewUrl(identityCard) || "");
+      await shareFileOrText({
+        file,
+        title: "Tessera di riconoscimento",
+        text: `Tessera di riconoscimento di ${currentUser?.displayName || currentUser?.email || "utente"}`,
+        url
+      });
+    } catch (error) {
+      if (error?.name !== "AbortError") window.alert("Non è stato possibile condividere la tessera.");
+    } finally {
+      identityShareButton && (identityShareButton.disabled = false);
+    }
+  };
+
+  const shareBusinessCard = async () => {
+    const data = readBusinessCard();
+    if (!businessCardDocument) {
+      toggleBusinessForm(true);
+      return setBusinessFeedback("Compila e salva prima la carta da visita.");
+    }
+    businessShareButton && (businessShareButton.disabled = true);
+    try {
+      let file = null;
+      if (window.html2canvas && businessPreview) {
+        const canvas = await window.html2canvas(businessPreview, {
+          scale: Math.min(3, window.devicePixelRatio || 2),
+          backgroundColor: "#ffffff",
+          useCORS: true
+        });
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", .96));
+        if (blob) file = new File([blob], "carta-da-visita.png", { type: "image/png" });
+      }
+      const text = [
+        currentUser?.displayName || currentUser?.email || "Utente",
+        data.role,
+        data.company,
+        data.phone ? `Tel: ${data.phone}` : "",
+        data.email ? `Email: ${data.email}` : "",
+        data.website
+      ].filter(Boolean).join("\n");
+      await shareFileOrText({ file, title: "Carta da visita", text });
+    } catch (error) {
+      if (error?.name !== "AbortError") window.alert("Non è stato possibile condividere la carta da visita.");
+    } finally {
+      businessShareButton && (businessShareButton.disabled = false);
+    }
   };
 
   const showPinFeedback = (message) => { if (pinFeedback) pinFeedback.textContent = message; };
@@ -222,6 +445,7 @@
     unsubscribe = null;
     identityCard = null;
     fuelPinDocument = null;
+    businessCardDocument = null;
     currentUser = user || null;
     updateButtons();
     if (!user || !window.firebase?.firestore) return;
@@ -231,6 +455,11 @@
         const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         identityCard = items.find(isIdentityCard) || null;
         fuelPinDocument = items.find(isFuelPin) || null;
+        businessCardDocument = items.find(isBusinessCard) || null;
+        if (!viewer.classList.contains("hidden")) {
+          renderIdentityCard();
+          renderBusinessCard();
+        }
         if (!pinViewer?.classList.contains("hidden")) {
           const credentials = readFuelCredentials();
           renderFuelCredentials(credentials);
@@ -242,6 +471,7 @@
         console.error("Caricamento dati personali non riuscito:", error);
         identityCard = null;
         fuelPinDocument = null;
+        businessCardDocument = null;
         updateButtons();
       });
   };
@@ -249,6 +479,11 @@
   button.addEventListener("click", openViewer);
   closeButton?.addEventListener("click", closeViewer);
   replaceButton?.addEventListener("click", openUpload);
+  identityShareButton?.addEventListener("click", shareIdentityCard);
+  businessEditButton?.addEventListener("click", () => toggleBusinessForm(true));
+  businessCancelButton?.addEventListener("click", () => toggleBusinessForm(false));
+  businessForm?.addEventListener("submit", saveBusinessCard);
+  businessShareButton?.addEventListener("click", shareBusinessCard);
   pinButton?.addEventListener("click", openPinViewer);
   pinClose?.addEventListener("click", closePinViewer);
   pinForm?.addEventListener("submit", saveFuelPin);

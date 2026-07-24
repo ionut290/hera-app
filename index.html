@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="identity-card-feature.css?v=20260724d">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260724e">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
 <body class="auth-pending">
@@ -130,13 +130,94 @@
 
       <section id="identity-card-viewer" class="identity-card-viewer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="identity-card-viewer-title">
         <header class="identity-card-viewer-head">
-          <h2 id="identity-card-viewer-title">Tesserino di riconoscimento</h2>
+          <div>
+            <span class="identity-card-viewer-kicker">Profilo professionale</span>
+            <h2 id="identity-card-viewer-title">I tuoi documenti</h2>
+          </div>
           <button id="identity-card-close-btn" class="identity-card-close-btn" type="button" aria-label="Chiudi tesserino">✕</button>
         </header>
-        <div id="identity-card-viewer-body" class="identity-card-viewer-body"></div>
-        <footer class="identity-card-viewer-actions">
-          <button id="identity-card-replace-btn" class="btn" type="button">Sostituisci tesserino</button>
-        </footer>
+        <div class="identity-card-viewer-scroll">
+          <section class="identity-document-section" aria-labelledby="identity-document-title">
+            <div class="identity-document-heading">
+              <div>
+                <span class="identity-document-icon" aria-hidden="true">🪪</span>
+                <div>
+                  <h3 id="identity-document-title">Tessera di riconoscimento</h3>
+                  <p>Documento personale pronto da mostrare o condividere.</p>
+                </div>
+              </div>
+              <span id="identity-card-status" class="identity-document-status">Non inserita</span>
+            </div>
+            <div id="identity-card-viewer-body" class="identity-card-viewer-body"></div>
+            <div class="identity-card-viewer-actions">
+              <button id="identity-card-share-btn" class="btn btn-primary" type="button">↗ Condividi tessera</button>
+              <button id="identity-card-replace-btn" class="btn" type="button">Sostituisci tessera</button>
+            </div>
+          </section>
+
+          <section class="identity-document-section business-card-section" aria-labelledby="business-card-title">
+            <div class="identity-document-heading">
+              <div>
+                <span class="identity-document-icon" aria-hidden="true">👤</span>
+                <div>
+                  <h3 id="business-card-title">Carta da visita</h3>
+                  <p>Compila i tuoi dati una volta: la foto viene presa dal profilo.</p>
+                </div>
+              </div>
+              <button id="business-card-edit-btn" class="identity-card-edit-btn" type="button">Modifica</button>
+            </div>
+
+            <article id="business-card-preview" class="business-card-preview">
+              <div class="business-card-accent"></div>
+              <div class="business-card-main">
+                <img id="business-card-photo" class="business-card-photo" alt="Foto profilo">
+                <div class="business-card-identity">
+                  <span class="business-card-label">CARTA DA VISITA</span>
+                  <h3 id="business-card-name">Nome utente</h3>
+                  <p id="business-card-role">Aggiungi la tua qualifica</p>
+                  <strong id="business-card-company">Aggiungi l’azienda</strong>
+                </div>
+              </div>
+              <div id="business-card-contacts" class="business-card-contacts"></div>
+              <p id="business-card-bio" class="business-card-bio"></p>
+            </article>
+
+            <form id="business-card-form" class="business-card-form hidden">
+              <div class="business-card-form-grid">
+                <label>Qualifica / ruolo
+                  <input id="business-card-role-input" type="text" maxlength="80" placeholder="Es. Giardiniere">
+                </label>
+                <label>Azienda
+                  <input id="business-card-company-input" type="text" maxlength="120" placeholder="Nome azienda">
+                </label>
+                <label>Telefono
+                  <input id="business-card-phone-input" type="tel" maxlength="30" placeholder="+39 ...">
+                </label>
+                <label>E-mail professionale
+                  <input id="business-card-email-input" type="email" maxlength="120" placeholder="nome@azienda.it">
+                </label>
+                <label>Indirizzo
+                  <input id="business-card-address-input" type="text" maxlength="160" placeholder="Città o sede">
+                </label>
+                <label>Sito web
+                  <input id="business-card-website-input" type="url" maxlength="160" placeholder="https://...">
+                </label>
+              </div>
+              <label>Presentazione breve
+                <textarea id="business-card-bio-input" rows="3" maxlength="220" placeholder="Descrivi brevemente il tuo lavoro"></textarea>
+              </label>
+              <p id="business-card-feedback" class="business-card-feedback" role="status" aria-live="polite"></p>
+              <div class="identity-card-viewer-actions">
+                <button id="business-card-save-btn" class="btn btn-primary" type="submit">Salva carta da visita</button>
+                <button id="business-card-cancel-btn" class="btn" type="button">Annulla</button>
+              </div>
+            </form>
+
+            <div class="identity-card-viewer-actions">
+              <button id="business-card-share-btn" class="btn btn-primary" type="button">↗ Condividi carta da visita</button>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="fuel-pin-viewer" class="fuel-pin-viewer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="fuel-pin-viewer-title">
@@ -1636,7 +1717,7 @@
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
   <script src="app.js?v=20260724a"></script>
-  <script src="identity-card-feature.js?v=20260724d"></script>
+  <script src="identity-card-feature.js?v=20260724e"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>

@@ -73,8 +73,11 @@
 
 .identity-card-viewer {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(37, 99, 235, .28), transparent 38%),
+    linear-gradient(160deg, #0f172a, #111827 62%, #172554);
 }
 
 .identity-card-viewer.hidden,
@@ -91,7 +94,17 @@
 .identity-card-viewer-head h2,
 .fuel-pin-viewer-head h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.15rem;
+}
+
+.identity-card-viewer-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: #93c5fd;
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
 .identity-card-close-btn {
@@ -105,12 +118,98 @@
   font-size: 1.15rem;
 }
 
-.identity-card-viewer-body {
+.identity-card-viewer-scroll {
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 2px 2px 18px;
+}
+
+.identity-document-section {
+  width: min(760px, 100%);
+  margin-inline: auto;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, .32);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .98);
+  color: #0f172a;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .2);
+}
+
+.identity-document-heading,
+.identity-document-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.identity-document-heading {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.identity-document-heading h3,
+.identity-document-heading p {
+  margin: 0;
+}
+
+.identity-document-heading h3 { font-size: 1rem; }
+.identity-document-heading p {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: .76rem;
+}
+
+.identity-document-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #eff6ff;
+  font-size: 1.2rem;
+}
+
+.identity-document-status,
+.identity-card-edit-btn {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  font-size: .7rem;
+  font-weight: 900;
+}
+
+.identity-document-status.ready {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.identity-card-edit-btn {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.identity-card-viewer-body {
+  min-height: 230px;
+  height: min(48dvh, 480px);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
 }
 
 .identity-card-viewer-body img,
@@ -126,10 +225,149 @@
 
 .identity-card-viewer-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: center;
+  margin-top: 12px;
 }
 
-.identity-card-viewer-actions .btn { min-height: 42px; background: #fff; }
+.identity-card-viewer-actions .btn {
+  min-height: 42px;
+  flex: 1 1 190px;
+}
+
+.identity-card-viewer-actions .btn:not(.btn-primary) { background: #fff; }
+
+.business-card-preview {
+  position: relative;
+  overflow: hidden;
+  min-height: 245px;
+  padding: 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 93% 8%, rgba(59, 130, 246, .18), transparent 30%),
+    linear-gradient(145deg, #fff, #f8fafc);
+  color: #0f172a;
+  box-shadow: inset 0 0 0 1px #dbeafe, 0 16px 34px rgba(15, 23, 42, .12);
+}
+
+.business-card-accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: linear-gradient(#2563eb, #16a34a);
+}
+
+.business-card-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.business-card-photo {
+  width: 88px;
+  height: 88px;
+  flex: 0 0 88px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #dbeafe;
+  object-fit: cover;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, .22);
+}
+
+.business-card-label {
+  color: #2563eb;
+  font-size: .64rem;
+  font-weight: 950;
+  letter-spacing: .16em;
+}
+
+.business-card-identity h3 {
+  margin: 3px 0 2px;
+  font-size: clamp(1.25rem, 5vw, 1.8rem);
+}
+
+.business-card-identity p,
+.business-card-identity strong {
+  display: block;
+  margin: 0;
+}
+
+.business-card-identity p { color: #475569; }
+.business-card-identity strong {
+  margin-top: 4px;
+  color: #166534;
+}
+
+.business-card-contacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.business-card-contact {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(239, 246, 255, .8);
+  color: #334155;
+  font-size: .76rem;
+  overflow-wrap: anywhere;
+}
+
+.business-card-bio {
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: .78rem;
+  line-height: 1.45;
+}
+
+.business-card-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.business-card-form.hidden { display: none; }
+
+.business-card-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.business-card-form label {
+  display: grid;
+  gap: 5px;
+  color: #334155;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.business-card-form input,
+.business-card-form textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
+.business-card-form textarea { resize: vertical; }
+.business-card-feedback {
+  min-height: 1.2em;
+  margin: 0;
+  color: #475569;
+  font-size: .78rem;
+}
 
 .fuel-pin-viewer {
   display: grid;
@@ -184,6 +422,14 @@
 
 @media (max-width: 430px) {
   .home-quick-access-btn { font-size: .77rem; padding-inline: 7px; }
+  .identity-card-viewer { padding-inline: 8px; }
+  .identity-document-section { padding: 11px; border-radius: 18px; }
+  .identity-document-heading p { display: none; }
+  .identity-card-viewer-body { height: min(43dvh, 390px); }
+  .business-card-preview { padding: 17px 14px 16px 19px; }
+  .business-card-photo { width: 72px; height: 72px; flex-basis: 72px; }
+  .business-card-contacts,
+  .business-card-form-grid { grid-template-columns: 1fr; }
 }
 
 

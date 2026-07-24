@@ -1,9 +1,10 @@
-const CACHE_NAME = "hera-app-shell-v21";
+const CACHE_NAME = "hera-app-shell-v22";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./today-summary-interactions.js",
   "./fatto-button-immediate.js",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",

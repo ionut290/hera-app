@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Verify Android email and password login
+        run: npm run check:auth-login
+
       - name: Prepare Capacitor web directory
         shell: bash
         run: |
@@ -158,7 +161,6 @@ jobs:
 
           release_start = build_types_match.end() + release_match.end()
           text = text[:release_start] + "\n            signingConfig signingConfigs.release" + text[release_start:]
-
           path.write_text(text, encoding="utf-8")
           PY
 

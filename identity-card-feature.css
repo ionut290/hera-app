@@ -241,3 +241,56 @@
   color: #1e3a8a;
   font-weight: 950;
 }
+
+/* Quando i dati carburante sono già salvati mostra soltanto il riepilogo a schermo intero. */
+.fuel-pin-viewer.fuel-pin-summary-only {
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+}
+
+.fuel-pin-summary-only .fuel-pin-card {
+  position: static;
+  width: min(620px, 100%);
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.fuel-pin-summary-only .fuel-pin-viewer-head {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: 14px;
+  z-index: 2;
+}
+
+.fuel-pin-summary-only .fuel-pin-viewer-head h2,
+.fuel-pin-summary-only #fuel-pin-feedback,
+.fuel-pin-summary-only #fuel-pin-form {
+  display: none;
+}
+
+.fuel-pin-summary-only .fuel-credentials-summary {
+  width: 100%;
+  margin: 0;
+  padding: 14px;
+  gap: 14px;
+  border: 2px solid #fbbf24;
+  border-radius: 22px;
+  background: #fffbeb;
+  box-shadow: 0 24px 70px rgba(0,0,0,.35);
+}
+
+.fuel-pin-summary-only .fuel-credential-provider {
+  padding: 18px;
+  gap: 8px;
+  border-radius: 16px;
+  font-size: clamp(1.05rem, 4.8vw, 1.45rem);
+}
+
+.fuel-pin-summary-only .fuel-credential-provider strong {
+  font-size: 1.15em;
+}

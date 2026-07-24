@@ -47,19 +47,22 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          cat > www/index.html <<'HTML'
-          <!doctype html>
-          <html lang="it">
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>Varga Cantieri</title>
-            </head>
-            <body>
-              <p>Avvio di Varga Cantieri…</p>
-            </body>
-          </html>
-          HTML
+          cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
+          cp delete-account.html privacy.html www/
+          cp identity-card-feature.css identity-card-feature.js www/
+          cp private-documents-v2.css private-documents-v2.js www/
+          cp fuel-stations-core.js fuel-stations-integration.js www/
+          cp fuel-stations-national-cache.js fuel-stations-search.js www/
+          cp fatto-button-immediate.js mezzi-alimentazione-fix.js www/
+          cp hours-export-range.js today-summary-interactions.js www/
+          cp -R icons www/icons
+
+          test -s www/index.html
+          test -s www/app.js
+          if grep -q "Avvio di Varga Cantieri" www/index.html; then
+            echo "La directory web contiene ancora la pagina provvisoria"
+            exit 1
+          fi
 
       - name: Create and sync Android project
         run: |

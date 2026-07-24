@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260724a">
 </head>
 <body class="auth-pending">
 
@@ -102,7 +103,13 @@
     <section id="home-page">
       <header class="card logo-card">
         <div class="logo-head">
-          <button id="user-toggle-btn" class="header-icon-btn" type="button" aria-label="Apri dati utente" aria-expanded="false" aria-controls="user-details-panel">👤</button>
+          <div class="logo-head-left">
+            <button id="user-toggle-btn" class="header-icon-btn" type="button" aria-label="Apri dati utente" aria-expanded="false" aria-controls="user-details-panel">👤</button>
+            <button id="identity-card-btn" class="identity-card-btn" type="button" aria-label="Apri tesserino di riconoscimento">
+              <span aria-hidden="true">🪪</span>
+              <span>TESSERA</span>
+            </button>
+          </div>
           <h1>Varga Cantieri</h1>
           <div class="logo-head-actions">
             <div class="logo-head-action-icons">
@@ -123,6 +130,17 @@
           <p id="next-action-summary" class="muted">Prossima azione consigliata: caricamento...</p>
         </div>
       </header>
+
+      <section id="identity-card-viewer" class="identity-card-viewer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="identity-card-viewer-title">
+        <header class="identity-card-viewer-head">
+          <h2 id="identity-card-viewer-title">Tesserino di riconoscimento</h2>
+          <button id="identity-card-close-btn" class="identity-card-close-btn" type="button" aria-label="Chiudi tesserino">✕</button>
+        </header>
+        <div id="identity-card-viewer-body" class="identity-card-viewer-body"></div>
+        <footer class="identity-card-viewer-actions">
+          <button id="identity-card-replace-btn" class="btn" type="button">Sostituisci tesserino</button>
+        </footer>
+      </section>
 
       <section id="work-banner-home" class="card work-banner-home hidden" aria-live="polite">
         <div class="work-banner-track">
@@ -1575,7 +1593,8 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260723f"></script>
+  <script src="app.js?v=20260724a"></script>
+  <script src="identity-card-feature.js?v=20260724a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260723"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>

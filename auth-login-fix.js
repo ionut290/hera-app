@@ -14,23 +14,45 @@
     );
   }
 
+  function ensureAndroidProfileFields() {
+    const form = document.getElementById("auth-email-form");
+    if (!form) return null;
+
+    let wrapper = document.getElementById("auth-profile-fields");
+    if (wrapper) return wrapper;
+
+    wrapper = document.createElement("div");
+    wrapper.id = "auth-profile-fields";
+    wrapper.className = "auth-profile-fields";
+    wrapper.innerHTML = [
+      '<label for="auth-name-input">Nome e cognome</label>',
+      '<input id="auth-name-input" type="text" autocomplete="name" placeholder="Nome e cognome" maxlength="100" required>',
+      '<label for="auth-role-input">Ruolo</label>',
+      '<select id="auth-role-input" required>',
+      '<option value="">Seleziona il ruolo</option>',
+      '<option value="Giardiniere">Giardiniere</option>',
+      '<option value="Operatore">Operatore</option>',
+      '<option value="Caposquadra">Caposquadra</option>',
+      '<option value="Responsabile">Responsabile</option>',
+      '<option value="Magazziniere">Magazziniere</option>',
+      '<option value="Autista">Autista</option>',
+      '<option value="Altro">Altro</option>',
+      '</select>'
+    ].join("");
+
+    const emailLabel = form.querySelector('label[for="auth-email-input"]');
+    form.insertBefore(wrapper, emailLabel || form.firstChild);
+    return wrapper;
+  }
+
   function configureAndroidEmailPasswordOnly() {
     if (!isNativeAndroid()) return;
 
     document.documentElement.classList.add("android-email-password-only");
+    ensureAndroidProfileFields();
 
     const message = document.getElementById("auth-gate-message");
-    if (message) {
-      message.textContent = "Inserisci nome, ruolo, email e password per accedere.";
-    }
-
-    const profileFields = document.getElementById("auth-profile-fields");
-    if (profileFields) profileFields.classList.remove("hidden");
-
-    const nameInput = document.getElementById("auth-name-input");
-    const roleInput = document.getElementById("auth-role-input");
-    if (nameInput) nameInput.required = true;
-    if (roleInput) roleInput.required = true;
+    if (message) message.textContent = "Inserisci nome, ruolo, email e password per accedere.";
 
     const emailLoginButton = document.getElementById("auth-email-login-btn");
     if (emailLoginButton) emailLoginButton.textContent = "Accedi";
@@ -52,14 +74,9 @@
   async function saveAndroidProfile(user) {
     if (!isNativeAndroid() || !user) return;
 
-    const nameInput = document.getElementById("auth-name-input");
-    const roleInput = document.getElementById("auth-role-input");
-    const name = String(nameInput && nameInput.value ? nameInput.value : "").trim();
-    const role = String(roleInput && roleInput.value ? roleInput.value : "").trim();
-
-    if (!name || !role) {
-      throw new Error("Inserisci nome e cognome e seleziona il ruolo.");
-    }
+    const name = String(document.getElementById("auth-name-input")?.value || "").trim();
+    const role = String(document.getElementById("auth-role-input")?.value || "").trim();
+    if (!name || !role) throw new Error("Inserisci nome e cognome e seleziona il ruolo.");
 
     if (user.displayName !== name && typeof user.updateProfile === "function") {
       await user.updateProfile({ displayName: name });
@@ -83,10 +100,7 @@
     try {
       if (window.firebase && firebase.firestore) {
         await firebase.firestore().collection("users").doc(user.uid).set(
-          {
-            ...profile,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          },
+          { ...profile, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
           { merge: true }
         );
       }
@@ -102,7 +116,6 @@
 
     form.addEventListener("submit", async () => {
       if (!isNativeAndroid()) return;
-
       const name = String(document.getElementById("auth-name-input")?.value || "").trim();
       const role = String(document.getElementById("auth-role-input")?.value || "").trim();
       if (!name || !role) return;
@@ -137,34 +150,19 @@
   function formatError(error) {
     const code = String(error && error.code ? error.code : "");
     if (code === "auth/popup-closed-by-user") return "Accesso Google annullato.";
-    if (code === "12501" || code === "16" || code === "auth/cancelled-popup-request") {
-      return "Accesso Google annullato.";
-    }
-    if (code === "10" || code.includes("DEVELOPER_ERROR")) {
-      return "Login Google Android non configurato correttamente. Verifica SHA-1 e google-services.json.";
-    }
-    if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") {
-      return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
-    }
+    if (code === "12501" || code === "16" || code === "auth/cancelled-popup-request") return "Accesso Google annullato.";
+    if (code === "10" || code.includes("DEVELOPER_ERROR")) return "Login Google Android non configurato correttamente. Verifica SHA-1 e google-services.json.";
+    if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
     return String(error && error.message ? error.message : "Accesso Google non riuscito.");
   }
 
   async function signInWithNativeGoogle() {
-    if (isNativeAndroid()) {
-      throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
-    }
-
+    if (isNativeAndroid()) throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
     const nativeAuth = getNativeFirebaseAuthentication();
-    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") {
-      throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
-    }
-
+    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
-    if (!idToken) {
-      throw new Error("Google non ha restituito un token di accesso valido.");
-    }
-
+    if (!idToken) throw new Error("Google non ha restituito un token di accesso valido.");
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     return firebase.auth().signInWithCredential(credential);
   }
@@ -173,11 +171,7 @@
 
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      if (isNativeAndroid()) {
-        return Promise.reject(
-          new Error("Nell'app Android è disponibile solo l'accesso con email e password.")
-        );
-      }
+      if (isNativeAndroid()) return Promise.reject(new Error("Nell'app Android è disponibile solo l'accesso con email e password."));
       return signInWithWebGoogle();
     };
   });
@@ -190,9 +184,7 @@
   }
 
   async function handleGoogleLoginClick(event) {
-    const button = event.target && event.target.closest
-      ? event.target.closest("button")
-      : null;
+    const button = event.target && event.target.closest ? event.target.closest("button") : null;
     if (!button || !LOGIN_BUTTON_IDS.has(button.id)) return;
 
     event.preventDefault();
@@ -201,13 +193,11 @@
 
     if (isNativeAndroid()) {
       configureAndroidEmailPasswordOnly();
-      const nameInput = document.getElementById("auth-name-input");
-      if (nameInput) nameInput.focus();
+      document.getElementById("auth-name-input")?.focus();
       return;
     }
 
     if (loginInProgress) return;
-
     if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
       alert("Login Google non disponibile: configurazione Firebase non caricata.");
       return;

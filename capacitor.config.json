@@ -3,6 +3,8 @@
   "appName": "Hera App",
   "webDir": ".",
   "server": {
-    "androidScheme": "https"
+    "url": "https://creative-syrniki-dddbae.netlify.app/",
+    "androidScheme": "https",
+    "cleartext": false
   }
 }

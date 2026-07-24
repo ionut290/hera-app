@@ -10,7 +10,8 @@
     "android:open": "npx cap open android",
     "check:syntax": "node --check app.js",
     "check:done-button": "node scripts/check-done-button-logic.js",
-    "check:fuel-stations": "node scripts/check-fuel-stations.js"
+    "check:fuel-stations": "node scripts/check-fuel-stations.js",
+    "check:multi-company": "node scripts/check-multi-company.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

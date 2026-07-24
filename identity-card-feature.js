@@ -101,6 +101,11 @@
   };
 
   const showPinFeedback = (message) => { if (pinFeedback) pinFeedback.textContent = message; };
+  const setFuelPinDisplayMode = (hasSavedCredentials) => {
+    pinViewer?.classList.toggle("fuel-pin-summary-only", hasSavedCredentials);
+    if (pinForm) pinForm.hidden = hasSavedCredentials;
+    if (pinFeedback) pinFeedback.hidden = hasSavedCredentials;
+  };
   const emptyFuelCredentials = () => ({ q8DriverCode: "", q8Pin: "", eniliveDriverCode: "", enilivePin: "" });
   const readFuelCredentials = () => {
     const note = String(fuelPinDocument?.note || "").trim();
@@ -138,6 +143,7 @@
     renderFuelCredentials(credentials);
     fillFuelInputs(credentials);
     const available = Object.values(credentials).some(Boolean);
+    setFuelPinDisplayMode(available);
     showPinFeedback(available ? "Dati carburante personali disponibili." : "Inserisci i dati Q8 e/o Enilive.");
     pinViewer?.classList.remove("hidden");
     pinViewer?.setAttribute("aria-hidden", "false");
@@ -174,6 +180,7 @@
       if (fuelPinDocument?.id) await items.doc(fuelPinDocument.id).set(data, { merge: true });
       else await items.add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       renderFuelCredentials(credentials);
+      setFuelPinDisplayMode(true);
       showPinFeedback("Dati carburante salvati correttamente.");
     } catch (error) {
       console.error("Salvataggio PIN carburante non riuscito:", error);
@@ -228,6 +235,7 @@
           const credentials = readFuelCredentials();
           renderFuelCredentials(credentials);
           fillFuelInputs(credentials);
+          setFuelPinDisplayMode(Object.values(credentials).some(Boolean));
         }
         updateButtons();
       }, (error) => {

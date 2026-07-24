@@ -1,0 +1,119 @@
+name: Build Android App Bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.html"
+      - "*.js"
+      - "*.css"
+      - "assets/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - ".github/workflows/build-android-aab.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create and sync Android project
+        run: |
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+
+      - name: Set unique Android version
+        shell: bash
+        run: |
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          path = Path("android/app/build.gradle")
+          text = path.read_text(encoding="utf-8")
+          version_code = os.environ["VERSION_CODE"]
+          version_name = os.environ["VERSION_NAME"]
+          text, n1 = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", text, count=1)
+          text, n2 = re.subn(r'versionName\s+"[^"]+"', f'versionName "{version_name}"', text, count=1)
+          if n1 != 1 or n2 != 1:
+              raise SystemExit("Impossibile aggiornare versionCode/versionName")
+          path.write_text(text, encoding="utf-8")
+          PY
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+
+      - name: Restore upload keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Manca il secret ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/varga-upload.jks"
+
+      - name: Build release bundle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Sign Android App Bundle
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          AAB="android/app/build/outputs/bundle/release/app-release.aab"
+          test -f "$AAB"
+          jarsigner \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            -keystore "$RUNNER_TEMP/varga-upload.jks" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$ANDROID_KEY_PASSWORD" \
+            "$AAB" \
+            "$ANDROID_KEY_ALIAS"
+          jarsigner -verify -verbose -certs "$AAB"
+          cp "$AAB" "VARGA-CANTIERI-${{ github.run_number }}.aab"
+
+      - name: Upload Play Store bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARGA-CANTIERI-AAB-${{ github.run_number }}
+          path: VARGA-CANTIERI-${{ github.run_number }}.aab
+          if-no-files-found: error
+          retention-days: 30

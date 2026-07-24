@@ -1070,6 +1070,8 @@ let selectedCommessaId = "";
 let selectedCommessaName = "";
 let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
+let unsubscribeFattoVisualEvidence = null;
+const fattoVisualEvidenceByImpianto = new Map();
 let unsubscribeCommessaNotes = null;
 const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
@@ -12956,8 +12958,66 @@ function renderPendingWhatsappList() {
   });
 }
 
+function getFattoVisualEvidenceAt(impianto) {
+  const savedDoneAt = firestoreDateToMillis(impianto?.doneAt);
+  const resetAt = firestoreDateToMillis(impianto?.resetAt);
+  const impiantoKey = buildImpiantoKey(impianto);
+  const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
+  const auditAt = Math.max(
+    Number(fattoVisualEvidenceByImpianto.get(`key:${impiantoKey}`) || 0),
+    Number(fattoVisualEvidenceByImpianto.get(`sap:${idSap}`) || 0)
+  );
+  const evidenceAt = Math.max(savedDoneAt, auditAt);
+  return evidenceAt > resetAt ? evidenceAt : 0;
+}
+
+function stopFattoVisualEvidenceSubscription() {
+  if (unsubscribeFattoVisualEvidence) {
+    unsubscribeFattoVisualEvidence();
+    unsubscribeFattoVisualEvidence = null;
+  }
+  fattoVisualEvidenceByImpianto.clear();
+}
+
+function subscribeFattoVisualEvidence(commessaId) {
+  stopFattoVisualEvidenceSubscription();
+  const requestedCommessaId = String(commessaId || "").trim();
+  if (!db || !requestedCommessaId) return;
+
+  unsubscribeFattoVisualEvidence = db
+    .collection("auditLogsWhazzup")
+    .where("commessaId", "==", requestedCommessaId)
+    .limit(500)
+    .onSnapshot((snapshot) => {
+      if (requestedCommessaId !== selectedCommessaId) return;
+      fattoVisualEvidenceByImpianto.clear();
+      snapshot.forEach((doc) => {
+        const log = doc.data() || {};
+        const clickedAt = firestoreDateToMillis(log.createdAt)
+          || firestoreDateToMillis(log.updatedAt)
+          || Date.parse(String(log.clickedAtIso || ""));
+        if (!Number.isFinite(clickedAt) || clickedAt <= 0) return;
+
+        const impiantoKey = String(log.impiantoKey || "").trim();
+        const idSap = String(log.impiantoIdSap || "").trim().toLowerCase();
+        if (impiantoKey) {
+          const mapKey = `key:${impiantoKey}`;
+          fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
+        }
+        if (idSap) {
+          const mapKey = `sap:${idSap}`;
+          fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
+        }
+      });
+      renderImpianti();
+    }, (error) => {
+      console.warn("Prova visiva FATTO condivisa non disponibile:", error);
+    });
+}
+
 function subscribeImpianti() {
   if (!selectedCommessaId) return;
+  subscribeFattoVisualEvidence(selectedCommessaId);
   let previousDoneSignature = null;
   console.log("Query impianti avviata", {
     collectionPath: `commesse/${selectedCommessaId}/impianti`,
@@ -13020,6 +13080,7 @@ function stopImpiantiSubscription() {
     unsubscribeImpianti();
     unsubscribeImpianti = null;
   }
+  stopFattoVisualEvidenceSubscription();
   currentImpianti = [];
   clearImpiantoWhatsAppTemplateCache();
   activeNearbyImpiantoContext = null;
@@ -14697,8 +14758,9 @@ function renderImpianti() {
       const completionEvidenceButton = primaryActionsRow.querySelector(
         '.action-icon-btn[data-action-key="whatsapp"]'
       );
-      if (completionEvidenceButton && firestoreDateToMillis(impianto.doneAt) > 0) {
-        const completionLabel = formatDoneButtonLabel(impianto.doneAt);
+      const completionEvidenceAt = getFattoVisualEvidenceAt(impianto);
+      if (completionEvidenceButton && completionEvidenceAt > 0) {
+        const completionLabel = formatDoneButtonLabel(new Date(completionEvidenceAt));
         completionEvidenceButton.textContent = "";
         completionEvidenceButton.classList.add("is-completed-done", "has-completion-evidence");
         completionEvidenceButton.dataset.doneLabel = completionLabel;

@@ -1,9 +1,8 @@
 {
   "appId": "it.vargacantieri.hera",
-  "appName": "Hera App",
+  "appName": "VARGA CANTIERI",
   "webDir": "www",
   "server": {
-    "url": "https://creative-syrniki-dddbae.netlify.app/",
     "androidScheme": "https",
     "cleartext": false
   }

@@ -1,8 +1,10 @@
 (() => {
   "use strict";
 
-  const FATTO_BUTTON_SELECTOR =
-    '.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]:not(.is-completed-done)';
+  const FATTO_BUTTON_SELECTOR = [
+    '.action-icon-btn[data-action-key="whatsapp"]:not(.is-completed-done)',
+    'button[data-action-key="whatsapp"]:not(.is-completed-done)'
+  ].join(",");
 
   function formatTodayDayMonth() {
     return new Intl.DateTimeFormat("it-IT", {
@@ -12,7 +14,7 @@
   }
 
   function showImmediateFattoState(button) {
-    if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+    if (!(button instanceof HTMLButtonElement)) return;
 
     const dayMonth = formatTodayDayMonth();
     const label = `⚠️ ${dayMonth}`;
@@ -24,17 +26,18 @@
     button.title = `Fatto il ${dayMonth}`;
   }
 
-  document.addEventListener(
-    "click",
-    (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
+  function handleFattoInteraction(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
 
-      const button = target.closest(FATTO_BUTTON_SELECTOR);
-      if (!button) return;
+    const button = target.closest(FATTO_BUTTON_SELECTOR);
+    if (!button) return;
 
-      showImmediateFattoState(button);
-    },
-    { capture: true }
-  );
+    showImmediateFattoState(button);
+  }
+
+  // pointerdown provides the visual feedback before any existing FATTO handler
+  // can disable or re-render the button. click remains as a keyboard fallback.
+  document.addEventListener("pointerdown", handleFattoInteraction, { capture: true });
+  document.addEventListener("click", handleFattoInteraction, { capture: true });
 })();

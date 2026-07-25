@@ -34,6 +34,14 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
 
+      - name: Remove incomplete first-generation function
+        run: >
+          npx --yes firebase-tools@latest functions:delete
+          notifyAllUsersWhenImpiantoDone
+          --region us-central1
+          --project hera-app-6cd2b
+          --force
+
       - name: Deploy notifyAllUsersWhenImpiantoDone
         run: >
           npx --yes firebase-tools@latest deploy

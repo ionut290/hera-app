@@ -128,6 +128,15 @@
         window.dispatchEvent(new CustomEvent("hera:native-notification-opened", { detail: notification }));
       });
 
+      await PushNotifications.createChannel({
+        id: "hera_operational_updates",
+        name: "Aggiornamenti operativi",
+        description: "Notifiche quando un impianto viene segnato come FATTO",
+        importance: 5,
+        visibility: 1,
+        vibration: true
+      });
+
       let permission = await PushNotifications.checkPermissions();
       if (permission.receive === "prompt" || permission.receive === "prompt-with-rationale") {
         permission = await PushNotifications.requestPermissions();
@@ -137,6 +146,19 @@
       localStorage.setItem(NOTIFICATION_KEY, "done");
     } catch (error) {
       console.warn("Notifiche native non configurate:", error);
+    }
+  }
+
+  function persistPushTokenAfterLogin() {
+    try {
+      const auth = window.firebase?.auth?.();
+      if (!auth || typeof auth.onAuthStateChanged !== "function") return;
+      auth.onAuthStateChanged((user) => {
+        const token = localStorage.getItem("heraPushFcmToken");
+        if (user && token) saveNativePushToken(token);
+      });
+    } catch (error) {
+      console.warn("Associazione notifiche Android al login non disponibile:", error);
     }
   }
 
@@ -168,6 +190,7 @@
   installNativeGeolocationBridge();
 
   const start = () => {
+    persistPushTokenAfterLogin();
     refreshNativeLocation();
     configureBackgroundLocation();
     configureNotificationsOnce();

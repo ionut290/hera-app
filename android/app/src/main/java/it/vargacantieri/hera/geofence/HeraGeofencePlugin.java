@@ -11,6 +11,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 @CapacitorPlugin(
         name = "HeraGeofence",
@@ -27,11 +28,48 @@ public class HeraGeofencePlugin extends Plugin {
     public void activate(PluginCall call) {
         HeraGeofenceManager manager = new HeraGeofenceManager(getContext());
 
-        if (!manager.hasRequiredPermissions()) {
-            call.reject("Permessi posizione mancanti (foreground/background).");
+        if (!manager.hasForegroundLocationPermission()) {
+            requestPermissionForAlias("location", call, "foregroundPermissionCallback");
             return;
         }
 
+        if (!manager.hasBackgroundLocationPermission()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                JSObject result = new JSObject();
+                result.put("active", false);
+                result.put("needsBackgroundSettings", true);
+                result.put("message", "Consenti Sempre dalle impostazioni Android per attivare la posizione in background.");
+                call.resolve(result);
+            } else {
+                requestPermissionForAlias("backgroundLocation", call, "backgroundPermissionCallback");
+            }
+            return;
+        }
+
+        activateGeofence(call, manager);
+    }
+
+    @PermissionCallback
+    private void foregroundPermissionCallback(PluginCall call) {
+        HeraGeofenceManager manager = new HeraGeofenceManager(getContext());
+        if (!manager.hasForegroundLocationPermission()) {
+            call.reject("Permesso posizione Android non concesso.");
+            return;
+        }
+        activate(call);
+    }
+
+    @PermissionCallback
+    private void backgroundPermissionCallback(PluginCall call) {
+        HeraGeofenceManager manager = new HeraGeofenceManager(getContext());
+        if (!manager.hasBackgroundLocationPermission()) {
+            call.reject("Permesso posizione in background non concesso.");
+            return;
+        }
+        activateGeofence(call, manager);
+    }
+
+    private void activateGeofence(PluginCall call, HeraGeofenceManager manager) {
         HeraGeofenceNotifier notifier = new HeraGeofenceNotifier(getContext());
         notifier.ensureChannel();
 
@@ -81,7 +119,10 @@ public class HeraGeofencePlugin extends Plugin {
         HeraGeofenceManager manager = new HeraGeofenceManager(getContext());
         JSObject result = new JSObject();
         result.put("active", manager.isActive());
-        result.put("hasLocationPermission", manager.hasRequiredPermissions());
+        result.put("hasLocationPermission", manager.hasForegroundLocationPermission());
+        result.put("hasBackgroundLocationPermission", manager.hasBackgroundLocationPermission());
+        result.put("needsBackgroundSettings", Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !manager.hasBackgroundLocationPermission());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             result.put("needsNotificationPermission", getPermissionState("notifications") != PermissionState.GRANTED);
         } else {

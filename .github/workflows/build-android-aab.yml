@@ -51,6 +51,7 @@ jobs:
           rm -rf www
           mkdir -p www
           cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
+          cp native-android-runtime.js done-button-fix.js www/
           cp delete-account.html privacy.html www/
           cp identity-card-feature.css identity-card-feature.js www/
           cp private-documents-v2.css private-documents-v2.js www/
@@ -62,6 +63,11 @@ jobs:
 
           test -s www/index.html
           test -s www/app.js
+          test -s www/native-android-runtime.js
+          if ! grep -q 'native-android-runtime.js' www/index.html; then
+            echo "index.html non carica native-android-runtime.js"
+            exit 1
+          fi
           if grep -q "Avvio di Varga Cantieri" www/index.html; then
             echo "La directory web contiene ancora la pagina provvisoria"
             exit 1

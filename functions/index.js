@@ -11,6 +11,81 @@ const ADMIN_EMAIL = "ionut29019@gmail.com";
 const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const FCM_BATCH_SIZE = 500;
+const INVALID_FCM_TOKEN_CODES = new Set([
+  "messaging/invalid-registration-token",
+  "messaging/registration-token-not-registered"
+]);
+
+function chunkItems(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
+
+async function removeInvalidPushTokens(db, invalidTokens) {
+  if (!invalidTokens.size) return;
+  const users = await db.collection("platformUsers").where("pushToken", "in", [...invalidTokens].slice(0, 30)).get();
+  const batch = db.batch();
+  users.forEach((user) => batch.update(user.ref, {
+    pushToken: admin.firestore.FieldValue.delete(),
+    pushTokenInvalidatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }));
+  if (!users.empty) await batch.commit();
+}
+
+exports.notifyAllUsersWhenImpiantoDone = functions.firestore
+  .document("appNotifications/{notificationId}")
+  .onCreate(async (snapshot) => {
+    const event = snapshot.data() || {};
+    if (event.eventType !== "impianto-done") return null;
+
+    const db = admin.firestore();
+    const users = await db.collection("platformUsers").get();
+    const tokens = [...new Set(users.docs.map((user) => String(user.data().pushToken || "").trim()).filter(Boolean))];
+    if (!tokens.length) {
+      console.info("Notifica FATTO non inviata: nessun dispositivo Android registrato.", { notificationId: snapshot.id });
+      return null;
+    }
+
+    const invalidTokens = new Set();
+    let successCount = 0;
+    let failureCount = 0;
+    for (const tokenBatch of chunkItems(tokens, FCM_BATCH_SIZE)) {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: tokenBatch,
+        notification: {
+          title: String(event.title || "Impianto completato").slice(0, 120),
+          body: String(event.body || "Un utente ha premuto FATTO su un impianto.").slice(0, 500)
+        },
+        data: {
+          eventType: "impianto-done",
+          notificationId: snapshot.id,
+          commessaId: String(event.commessaId || ""),
+          impiantoKey: String(event.impiantoKey || "")
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "hera_operational_updates",
+            sound: "default",
+            tag: `impianto-done-${snapshot.id}`
+          }
+        }
+      });
+      successCount += response.successCount;
+      failureCount += response.failureCount;
+      response.responses.forEach((result, index) => {
+        if (!result.success && INVALID_FCM_TOKEN_CODES.has(result.error?.code)) invalidTokens.add(tokenBatch[index]);
+      });
+    }
+
+    for (const invalidBatch of chunkItems([...invalidTokens], 30)) {
+      await removeInvalidPushTokens(db, new Set(invalidBatch));
+    }
+    console.info("Notifica Android FATTO inviata.", { notificationId: snapshot.id, successCount, failureCount });
+    return null;
+  });
 
 function normalizeFolderName(value, fallback = "Generale") {
   return String(value || fallback).trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 120) || fallback;

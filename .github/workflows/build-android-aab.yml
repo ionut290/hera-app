@@ -91,13 +91,6 @@ jobs:
           rm -rf android/app/src/main/java
           cp -R "$RUNNER_TEMP/hera-native-android/java" android/app/src/main/java
           cp "$RUNNER_TEMP/hera-native-android/AndroidManifest.xml" android/app/src/main/AndroidManifest.xml
-          # Non sostituire capacitor.build.gradle: Capacitor vi inserisce le dipendenze
-          # dei plugin Geolocation, PushNotifications e Firebase Authentication.
-          # La sostituzione completa rimuoveva tali dipendenze e faceva fallire l'AAB.
-          printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
-          cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
-          grep -q "capacitor-geolocation" android/app/capacitor.build.gradle
-          grep -q "capacitor-push-notifications" android/app/capacitor.build.gradle
           if [ -z "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "Manca il secret ANDROID_GOOGLE_SERVICES_JSON_BASE64"
             exit 1
@@ -113,7 +106,22 @@ jobs:
               text = text.replace("ext {\n", "ext {\n" + marker, 1)
           path.write_text(text, encoding="utf-8")
           PY
+
+          # Eseguire prima l'ultimo sync: Capacitor può rigenerare
+          # capacitor.build.gradle e rimuovere le integrazioni Hera.
           npx cap sync android
+
+          # Aggiungere le dipendenze native solo dopo l'ultimo sync.
+          # Non sostituire il file generato: contiene anche Geolocation,
+          # PushNotifications e Firebase Authentication.
+          printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
+          cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
+
+          # Verifica finale immediatamente prima della configurazione/build.
+          grep -q "capacitor-geolocation" android/app/capacitor.build.gradle
+          grep -q "capacitor-push-notifications" android/app/capacitor.build.gradle
+          grep -q "play-services-location" android/app/capacitor.build.gradle
+          grep -q "androidx.biometric" android/app/capacitor.build.gradle
 
       - name: Restore upload keystore
         shell: bash

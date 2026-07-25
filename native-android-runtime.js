@@ -15,6 +15,7 @@
 
   const Geolocation = plugin("Geolocation");
   const PushNotifications = plugin("PushNotifications");
+  const HeraGeofence = plugin("HeraGeofence");
   const NOTIFICATION_KEY = "hera_notifications_configured_v1";
 
   function normalizeNativePosition(position) {
@@ -97,9 +98,36 @@
     }
   }
 
-  async function configureNotificationsOnce() {
-    if (!PushNotifications || localStorage.getItem(NOTIFICATION_KEY) === "done") return;
+  async function saveNativePushToken(token) {
+    if (!token) return;
+    localStorage.setItem("heraPushFcmToken", token);
+    window.dispatchEvent(new CustomEvent("hera:native-push-token", { detail: { token } }));
+
     try {
+      const user = window.firebase?.auth?.().currentUser;
+      if (!user) return;
+      await window.firebase.firestore().collection("platformUsers").doc(user.uid).set({
+        pushToken: token,
+        pushPlatform: "android-native",
+        pushTokenUpdatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (error) {
+      console.warn("Token push nativo non salvato nel profilo:", error);
+    }
+  }
+
+  async function configureNotificationsOnce() {
+    if (!PushNotifications) return;
+    try {
+      await PushNotifications.removeAllListeners();
+      await PushNotifications.addListener("registration", ({ value }) => saveNativePushToken(value));
+      await PushNotifications.addListener("registrationError", (error) => {
+        console.warn("Registrazione notifiche Android fallita:", error);
+      });
+      await PushNotifications.addListener("pushNotificationActionPerformed", ({ notification }) => {
+        window.dispatchEvent(new CustomEvent("hera:native-notification-opened", { detail: notification }));
+      });
+
       let permission = await PushNotifications.checkPermissions();
       if (permission.receive === "prompt" || permission.receive === "prompt-with-rationale") {
         permission = await PushNotifications.requestPermissions();
@@ -112,8 +140,26 @@
     }
   }
 
+  async function configureBackgroundLocation() {
+    if (!HeraGeofence) return false;
+    try {
+      let status = await HeraGeofence.status();
+      if (status.active) return true;
+
+      await HeraGeofence.requestPermissions({ permissions: ["location"] });
+      // Android 10+ mostra il consenso background separatamente da quello foreground.
+      await HeraGeofence.requestPermissions({ permissions: ["backgroundLocation", "notifications"] });
+      status = await HeraGeofence.activate();
+      return Boolean(status.active);
+    } catch (error) {
+      console.warn("Posizione Android in background non attivata:", error);
+      return false;
+    }
+  }
+
   window.HeraNativeAndroid = {
     refreshLocation: refreshNativeLocation,
+    configureBackgroundLocation,
     configureNotifications: configureNotificationsOnce,
     getLastPosition: () => window.__heraLastNativePosition || null,
     isNative: true
@@ -123,6 +169,7 @@
 
   const start = () => {
     refreshNativeLocation();
+    configureBackgroundLocation();
     configureNotificationsOnce();
   };
 

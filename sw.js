@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v26";
+const CACHE_NAME = "hera-app-shell-v27";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,12 @@ const APP_SHELL = [
   "./app.js",
   "./today-summary-interactions.js",
   "./fatto-button-immediate.js",
+  "./done-button-fix.js",
+  "./native-android-runtime.js",
+  "./auth-login-fix.js",
+  "./password-access-manager.js",
+  "./private-documents-v2.js",
+  "./identity-card-feature.js",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",
   "./fuel-stations-search.js",
@@ -39,19 +45,21 @@ const shouldHandleRequest = (request, url) => {
 };
 
 const canCacheResponse = (request, response, url) => {
-  if (response.type === "opaque") {
-    return OPAQUE_CACHE_WHITELIST.has(url.origin);
-  }
-
+  if (response.type === "opaque") return OPAQUE_CACHE_WHITELIST.has(url.origin);
   if (!response.ok) return false;
   if (hasNoStoreDirective(response.headers)) return false;
-
   return CACHEABLE_DESTINATIONS.has(request.destination);
 };
 
-const networkFirstForDocument = async (request) => {
+const fetchWithTimeout = (request, timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+};
+
+const networkFirst = async (request, timeoutMs = NETWORK_DOCUMENT_TIMEOUT_MS) => {
   try {
-    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
+    const response = await fetchWithTimeout(request, timeoutMs);
     const requestUrl = new URL(request.url);
     if (canCacheResponse(request, response, requestUrl)) {
       const cache = await caches.open(CACHE_NAME);
@@ -61,46 +69,10 @@ const networkFirstForDocument = async (request) => {
   } catch (error) {
     const cached = await caches.match(request);
     if (cached) return cached;
-    return caches.match("./index.html");
+    if (request.destination === "document") return caches.match("./index.html");
+    if (request.destination === "image") return caches.match("./icons/hera-icon.svg");
+    throw error;
   }
-};
-
-const fetchWithTimeout = (request, timeoutMs) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(request, { signal: controller.signal }).finally(() => {
-    clearTimeout(timeoutId);
-  });
-};
-
-const staleWhileRevalidateForAsset = async (event) => {
-  const { request } = event;
-  const cached = await caches.match(request);
-
-  const networkUpdate = fetch(request)
-    .then(async (response) => {
-      const requestUrl = new URL(request.url);
-      if (canCacheResponse(request, response, requestUrl)) {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.put(request, response.clone());
-      }
-      return response;
-    })
-    .catch(() => null);
-
-  if (cached) {
-    event.waitUntil(networkUpdate);
-    return cached;
-  }
-
-  const response = await networkUpdate;
-  if (response) return response;
-
-  if (request.destination === "image") {
-    return caches.match("./icons/hera-icon.svg");
-  }
-
-  return caches.match("./index.html");
 };
 
 self.addEventListener("install", (event) => {
@@ -118,17 +90,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
+  if (!shouldHandleRequest(request, url)) return;
 
-  if (!shouldHandleRequest(request, url)) {
-    return;
-  }
-
-  if (request.destination === "document") {
-    event.respondWith(networkFirstForDocument(request));
-    return;
-  }
-
-  event.respondWith(staleWhileRevalidateForAsset(event));
+  // File applicativi e documenti: rete prima, così un aggiornamento non resta
+  // bloccato da una vecchia copia JavaScript salvata nel telefono.
+  event.respondWith(networkFirst(request));
 });
 
 self.addEventListener("push", (event) => {
@@ -144,9 +110,7 @@ self.addEventListener("push", (event) => {
     icon: payload.icon || "./icons/hera-icon.svg",
     badge: payload.badge || "./icons/hera-icon.svg",
     tag: payload.tag || "hera-push-default",
-    data: {
-      url: payload.url || "./index.html"
-    }
+    data: { url: payload.url || "./index.html" }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -163,15 +127,8 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
+// La sincronizzazione offline non deve produrre una notifica tecnica ogni volta.
 self.addEventListener("sync", (event) => {
   if (event.tag !== "hera-app-background-check") return;
-  event.waitUntil(
-    self.registration.showNotification("Hera App", {
-      body: "Controllo in background completato.",
-      icon: "./icons/hera-icon.svg",
-      badge: "./icons/hera-icon.svg",
-      tag: "hera-background-sync",
-      data: { url: "./index.html" }
-    })
-  );
+  event.waitUntil(Promise.resolve());
 });

@@ -51,7 +51,7 @@ jobs:
           rm -rf www
           mkdir -p www
           cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
-          cp native-android-runtime.js done-button-fix.js www/
+          cp native-android-runtime.js done-button-fix.js password-access-manager.js www/
           cp delete-account.html privacy.html www/
           cp identity-card-feature.css identity-card-feature.js www/
           cp private-documents-v2.css private-documents-v2.js www/
@@ -61,13 +61,19 @@ jobs:
           cp hours-export-range.js today-summary-interactions.js www/
           cp -R icons www/icons
 
-          test -s www/index.html
-          test -s www/app.js
-          test -s www/native-android-runtime.js
-          if ! grep -q 'native-android-runtime.js' www/index.html; then
-            echo "index.html non carica native-android-runtime.js"
+          required_files=(
+            index.html app.js firebase-config.js auth-login-fix.js
+            native-android-runtime.js password-access-manager.js
+            private-documents-v2.js identity-card-feature.js
+          )
+          for file in "${required_files[@]}"; do
+            test -s "www/$file" || { echo "File Android mancante: $file"; exit 1; }
+          done
+
+          grep -q 'native-android-runtime.js' www/firebase-config.js || {
+            echo "firebase-config.js non carica il runtime Android"
             exit 1
-          fi
+          }
           if grep -q "Avvio di Varga Cantieri" www/index.html; then
             echo "La directory web contiene ancora la pagina provvisoria"
             exit 1
@@ -96,6 +102,24 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
           npx cap sync android
+
+          test -d node_modules/@capacitor/geolocation || {
+            echo "Plugin @capacitor/geolocation non installato"
+            exit 1
+          }
+          test -d node_modules/@capacitor/push-notifications || {
+            echo "Plugin @capacitor/push-notifications non installato"
+            exit 1
+          }
+          test -s android/app/src/main/assets/public/native-android-runtime.js || {
+            echo "Runtime posizione non copiato negli asset Android"
+            exit 1
+          }
+          grep -R -q "GeolocationPlugin" android/app/build.gradle android/app/src/main 2>/dev/null || \
+            grep -R -q "capacitor-geolocation" android 2>/dev/null || {
+              echo "Plugin geolocalizzazione non collegato al progetto Android"
+              exit 1
+            }
 
       - name: Restore upload keystore
         shell: bash

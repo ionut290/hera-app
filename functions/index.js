@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
@@ -34,17 +35,23 @@ async function removeInvalidPushTokens(db, invalidTokens) {
   if (!users.empty) await batch.commit();
 }
 
-exports.notifyAllUsersWhenImpiantoDone = functions.region("europe-west1").firestore
-  .document("appNotifications/{notificationId}")
-  .onCreate(async (snapshot) => {
-    const event = snapshot.data() || {};
-    if (event.eventType !== "impianto-done") return null;
+exports.notifyAllUsersWhenImpiantoDone = onDocumentCreated(
+  {
+    document: "appNotifications/{notificationId}",
+    region: "europe-west1"
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return null;
+    const notificationId = event.params.notificationId;
+    const notification = snapshot.data() || {};
+    if (notification.eventType !== "impianto-done") return null;
 
     const db = admin.firestore();
     const users = await db.collection("platformUsers").get();
     const tokens = [...new Set(users.docs.map((user) => String(user.data().pushToken || "").trim()).filter(Boolean))];
     if (!tokens.length) {
-      console.info("Notifica FATTO non inviata: nessun dispositivo Android registrato.", { notificationId: snapshot.id });
+      console.info("Notifica FATTO non inviata: nessun dispositivo Android registrato.", { notificationId });
       return null;
     }
 
@@ -55,21 +62,21 @@ exports.notifyAllUsersWhenImpiantoDone = functions.region("europe-west1").firest
       const response = await admin.messaging().sendEachForMulticast({
         tokens: tokenBatch,
         notification: {
-          title: String(event.title || "Impianto completato").slice(0, 120),
-          body: String(event.body || "Un utente ha premuto FATTO su un impianto.").slice(0, 500)
+          title: String(notification.title || "Impianto completato").slice(0, 120),
+          body: String(notification.body || "Un utente ha premuto FATTO su un impianto.").slice(0, 500)
         },
         data: {
           eventType: "impianto-done",
-          notificationId: snapshot.id,
-          commessaId: String(event.commessaId || ""),
-          impiantoKey: String(event.impiantoKey || "")
+          notificationId,
+          commessaId: String(notification.commessaId || ""),
+          impiantoKey: String(notification.impiantoKey || "")
         },
         android: {
           priority: "high",
           notification: {
             channelId: "hera_operational_updates",
             sound: "default",
-            tag: `impianto-done-${snapshot.id}`
+            tag: `impianto-done-${notificationId}`
           }
         }
       });
@@ -83,9 +90,10 @@ exports.notifyAllUsersWhenImpiantoDone = functions.region("europe-west1").firest
     for (const invalidBatch of chunkItems([...invalidTokens], 30)) {
       await removeInvalidPushTokens(db, new Set(invalidBatch));
     }
-    console.info("Notifica Android FATTO inviata.", { notificationId: snapshot.id, successCount, failureCount });
+    console.info("Notifica Android FATTO inviata.", { notificationId, successCount, failureCount });
     return null;
-  });
+  }
+);
 
 function normalizeFolderName(value, fallback = "Generale") {
   return String(value || fallback).trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 120) || fallback;

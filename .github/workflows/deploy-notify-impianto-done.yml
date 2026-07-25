@@ -40,3 +40,4 @@ jobs:
           --only functions:notifyAllUsersWhenImpiantoDone
           --project hera-app-6cd2b
           --non-interactive
+          --force

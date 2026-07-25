@@ -4,6 +4,118 @@
   const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn"]);
   let loginInProgress = false;
 
+  function normalizeEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  async function ensurePlatformProfileForAuthenticatedUser(user) {
+    if (!user || !user.uid || !window.firebase || typeof firebase.firestore !== "function") return;
+
+    const database = firebase.firestore();
+    const currentRef = database.collection("platformUsers").doc(user.uid);
+    const currentDoc = await currentRef.get();
+    if (currentDoc.exists) return;
+
+    const email = normalizeEmail(user.email);
+    let existingProfile = null;
+
+    if (email) {
+      const exactSnapshot = await database
+        .collection("platformUsers")
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+
+      if (!exactSnapshot.empty) {
+        existingProfile = exactSnapshot.docs[0].data() || null;
+      } else {
+        const originalEmailSnapshot = await database
+          .collection("platformUsers")
+          .where("email", "==", String(user.email || "").trim())
+          .limit(1)
+          .get();
+        if (!originalEmailSnapshot.empty) {
+          existingProfile = originalEmailSnapshot.docs[0].data() || null;
+        }
+      }
+    }
+
+    const safeProfile = existingProfile ? {
+      displayName: existingProfile.displayName || user.displayName || user.email || "Utente",
+      email: user.email || existingProfile.email || "",
+      teamId: existingProfile.teamId || "",
+      role: existingProfile.role || existingProfile.ruolo || "user",
+      ruolo: existingProfile.ruolo || existingProfile.role || "user",
+      isAdmin: Boolean(existingProfile.isAdmin || existingProfile.admin),
+      admin: Boolean(existingProfile.isAdmin || existingProfile.admin),
+      permissions: existingProfile.permissions || {},
+      banned: Boolean(existingProfile.banned),
+      bannedReason: existingProfile.bannedReason || null,
+      bannedAt: existingProfile.bannedAt || null,
+      bannedBy: existingProfile.bannedBy || null
+    } : {
+      displayName: user.displayName || user.email || "Utente",
+      email: user.email || "",
+      teamId: "",
+      role: "user",
+      ruolo: "user",
+      isAdmin: false,
+      admin: false,
+      permissions: {},
+      banned: false
+    };
+
+    await currentRef.set({
+      ...safeProfile,
+      uid: user.uid,
+      authProviders: Array.isArray(user.providerData)
+        ? user.providerData.map((provider) => provider && provider.providerId).filter(Boolean)
+        : [],
+      profileMigratedByEmail: Boolean(existingProfile),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+
+  function installProfileAccessGuard() {
+    if (!window.firebase || typeof firebase.auth !== "function") return;
+    const authInstance = firebase.auth();
+    if (!authInstance || authInstance.__heraEmailAccessGuardInstalled) return;
+
+    const originalOnAuthStateChanged = authInstance.onAuthStateChanged.bind(authInstance);
+    authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile(nextOrObserver, error, completed) {
+      const wrapCallback = (callback) => async (user) => {
+        if (user) {
+          try {
+            await ensurePlatformProfileForAuthenticatedUser(user);
+          } catch (profileError) {
+            console.error("Errore preparazione profilo utente autenticato:", profileError);
+          }
+        }
+        if (typeof callback === "function") return callback(user);
+        return undefined;
+      };
+
+      if (typeof nextOrObserver === "function") {
+        return originalOnAuthStateChanged(wrapCallback(nextOrObserver), error, completed);
+      }
+
+      const observer = nextOrObserver || {};
+      return originalOnAuthStateChanged({
+        next: wrapCallback(observer.next),
+        error: observer.error,
+        complete: observer.complete
+      });
+    };
+
+    Object.defineProperty(authInstance, "__heraEmailAccessGuardInstalled", {
+      value: true,
+      configurable: false,
+      enumerable: false
+    });
+  }
+
   function isNativeAndroid() {
     return Boolean(
       window.Capacitor &&
@@ -149,6 +261,8 @@
       button.textContent = previousText;
     }
   }
+
+  installProfileAccessGuard();
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", configureAndroidEmailPasswordOnly, { once: true });

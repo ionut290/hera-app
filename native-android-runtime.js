@@ -17,6 +17,22 @@
   const PushNotifications = plugin("PushNotifications");
   const NOTIFICATION_KEY = "hera_notifications_configured_v1";
 
+  function normalizeNativePosition(position) {
+    if (!position || !position.coords) return position;
+    return {
+      coords: {
+        latitude: Number(position.coords.latitude),
+        longitude: Number(position.coords.longitude),
+        accuracy: Number(position.coords.accuracy || 0),
+        altitude: position.coords.altitude == null ? null : Number(position.coords.altitude),
+        altitudeAccuracy: position.coords.altitudeAccuracy == null ? null : Number(position.coords.altitudeAccuracy),
+        heading: position.coords.heading == null ? null : Number(position.coords.heading),
+        speed: position.coords.speed == null ? null : Number(position.coords.speed)
+      },
+      timestamp: Number(position.timestamp || Date.now())
+    };
+  }
+
   async function refreshNativeLocation() {
     if (!Geolocation) return null;
     try {
@@ -26,17 +42,58 @@
       }
       if (permission.location !== "granted" && permission.coarseLocation !== "granted") return null;
 
-      const position = await Geolocation.getCurrentPosition({
+      const position = normalizeNativePosition(await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 60000
-      });
+      }));
       window.__heraLastNativePosition = position;
       window.dispatchEvent(new CustomEvent("hera:native-location", { detail: position }));
       return position;
     } catch (error) {
       console.warn("Posizione nativa non disponibile:", error);
       return null;
+    }
+  }
+
+  function installNativeGeolocationBridge() {
+    const original = navigator.geolocation;
+    const successAsync = (callback, value) => {
+      if (typeof callback === "function") setTimeout(() => callback(value), 0);
+    };
+    const errorAsync = (callback, message) => {
+      if (typeof callback !== "function") return;
+      setTimeout(() => callback({ code: 1, message }), 0);
+    };
+
+    const bridge = {
+      getCurrentPosition(success, error) {
+        refreshNativeLocation().then((position) => {
+          if (position) successAsync(success, position);
+          else errorAsync(error, "Permesso posizione Android non concesso o posizione non disponibile.");
+        }).catch(() => errorAsync(error, "Posizione Android non disponibile."));
+      },
+      watchPosition(success, error) {
+        const watchId = Date.now() + Math.floor(Math.random() * 1000);
+        refreshNativeLocation().then((position) => {
+          if (position) successAsync(success, position);
+          else errorAsync(error, "Permesso posizione Android non concesso o posizione non disponibile.");
+        });
+        return watchId;
+      },
+      clearWatch() {}
+    };
+
+    try {
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        enumerable: true,
+        value: bridge
+      });
+    } catch (error) {
+      console.warn("Impossibile sostituire navigator.geolocation; uso bridge compatibile.", error);
+      window.__heraNativeGeolocationBridge = bridge;
+      if (!original) navigator.geolocation = bridge;
     }
   }
 
@@ -58,8 +115,11 @@
   window.HeraNativeAndroid = {
     refreshLocation: refreshNativeLocation,
     configureNotifications: configureNotificationsOnce,
-    getLastPosition: () => window.__heraLastNativePosition || null
+    getLastPosition: () => window.__heraLastNativePosition || null,
+    isNative: true
   };
+
+  installNativeGeolocationBridge();
 
   const start = () => {
     refreshNativeLocation();

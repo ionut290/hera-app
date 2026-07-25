@@ -41,3 +41,13 @@
   document.addEventListener("pointerdown", handleFattoInteraction, { capture: true });
   document.addEventListener("click", handleFattoInteraction, { capture: true });
 })();
+
+(() => {
+  "use strict";
+  if (document.querySelector('script[data-password-access-manager="true"]')) return;
+  const script = document.createElement("script");
+  script.src = `password-access-manager.js?v=20260725a`;
+  script.defer = true;
+  script.dataset.passwordAccessManager = "true";
+  document.head.appendChild(script);
+})();

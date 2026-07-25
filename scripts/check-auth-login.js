@@ -33,6 +33,30 @@ if (!fixSource.includes("Nell'app Android è disponibile solo l'accesso con emai
   throw new Error("Il login Google non è bloccato esplicitamente su Android.");
 }
 
+if (!fixSource.includes("installProfileAccessGuard")) {
+  throw new Error("Il controllo profilo per accesso email/password non viene installato.");
+}
+
+if (!fixSource.includes("ensurePlatformProfileForAuthenticatedUser")) {
+  throw new Error("Il profilo platformUsers non viene preparato prima dell'avvio app.");
+}
+
+if (!fixSource.includes('collection("platformUsers")')) {
+  throw new Error("La correzione non usa la raccolta platformUsers.");
+}
+
+if (!fixSource.includes('where("email", "==", email)')) {
+  throw new Error("La correzione non recupera il profilo esistente tramite email.");
+}
+
+if (!fixSource.includes("profileMigratedByEmail")) {
+  throw new Error("La migrazione del profilo tramite email non viene registrata.");
+}
+
+if (!fixSource.includes("authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile")) {
+  throw new Error("app.js potrebbe controllare il profilo prima della sua preparazione.");
+}
+
 if (!fixSource.includes("signInWithPopup(provider)")) {
   throw new Error("Il login web non mantiene signInWithPopup.");
 }
@@ -53,4 +77,4 @@ if (!workflowSource.includes("auth-login-fix.js")) {
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-console.log("Login check passed: Android uses email/password only; web keeps Google login.");
+console.log("Login check passed: Android email/password inherits the same app profile and permissions.");

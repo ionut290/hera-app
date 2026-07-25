@@ -13,6 +13,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "capacitor.config.json"
+      - "android/**"
       - ".github/workflows/build-android-aab.yml"
 
 permissions:
@@ -78,8 +79,18 @@ jobs:
         env:
           ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
+          # Capacitor rigenera il progetto: conserva prima le integrazioni native Hera.
+          rm -rf "$RUNNER_TEMP/hera-native-android"
+          mkdir -p "$RUNNER_TEMP/hera-native-android"
+          cp -R android/app/src/main/java "$RUNNER_TEMP/hera-native-android/java"
+          cp android/app/src/main/AndroidManifest.xml "$RUNNER_TEMP/hera-native-android/AndroidManifest.xml"
+          cp android/app/capacitor.build.gradle "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle"
           rm -rf android
           npx cap add android
+          rm -rf android/app/src/main/java
+          cp -R "$RUNNER_TEMP/hera-native-android/java" android/app/src/main/java
+          cp "$RUNNER_TEMP/hera-native-android/AndroidManifest.xml" android/app/src/main/AndroidManifest.xml
+          cp "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" android/app/capacitor.build.gradle
           if [ -z "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "Manca il secret ANDROID_GOOGLE_SERVICES_JSON_BASE64"
             exit 1

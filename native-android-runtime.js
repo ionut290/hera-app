@@ -143,14 +143,15 @@
   async function configureBackgroundLocation() {
     if (!HeraGeofence) return false;
     try {
-      let status = await HeraGeofence.status();
-      if (status.active) return true;
-
-      await HeraGeofence.requestPermissions({ permissions: ["location"] });
-      // Android 10+ mostra il consenso background separatamente da quello foreground.
-      await HeraGeofence.requestPermissions({ permissions: ["backgroundLocation", "notifications"] });
-      status = await HeraGeofence.activate();
-      return Boolean(status.active);
+      const status = await HeraGeofence.activate();
+      if (status?.needsBackgroundSettings) {
+        console.warn(status.message || "Autorizzazione posizione in background richiesta dalle impostazioni Android.");
+        window.dispatchEvent(new CustomEvent("hera:background-location-settings-required", {
+          detail: status
+        }));
+        return false;
+      }
+      return Boolean(status?.active);
     } catch (error) {
       console.warn("Posizione Android in background non attivata:", error);
       return false;

@@ -34,7 +34,7 @@ async function removeInvalidPushTokens(db, invalidTokens) {
   if (!users.empty) await batch.commit();
 }
 
-exports.notifyAllUsersWhenImpiantoDone = functions.firestore
+exports.notifyAllUsersWhenImpiantoDone = functions.region("europe-west1").firestore
   .document("appNotifications/{notificationId}")
   .onCreate(async (snapshot) => {
     const event = snapshot.data() || {};

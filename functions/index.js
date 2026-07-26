@@ -25,7 +25,7 @@ exports.registerTester = functions.region("europe-west1").https.onCall(
     const lastName = String(data?.lastName || "").trim().slice(0, 80);
     const displayName = [firstName, lastName].filter(Boolean).join(" ");
 
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new functions.https.HttpsError("invalid-argument", "Indirizzo email non valido.");
     }
     if (!firstName || !lastName) {

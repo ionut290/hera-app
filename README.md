@@ -54,12 +54,14 @@ firebase deploy --only hosting
 - Se un layer non è esposto dal provider o dal piano attivo, l'app mostra “Dato non disponibile” e lascia la mappa navigabile.
 - I tile meteo usano `maxNativeZoom` e `maxZoom` separati: oltre lo zoom nativo il layer viene scalato da Leaflet invece di richiedere tile non supportati.
 
-## Meteo impianti Tomorrow.io
+## Meteo operativo e impianti
 
-- Le card meteo degli impianti nella vista commessa usano Tomorrow.io tramite Cloud Function Firebase, così la chiave non viene esposta nel frontend.
-- Configura la variabile ambiente backend `TOMORROW_API_KEY` prima del deploy delle functions. In alternativa, per compatibilità con Firebase Functions config legacy, puoi impostare `tomorrow.api_key`.
-- Endpoint usato dal backend: Forecast/Timelines Tomorrow.io con `location=<lat>,<lon>`, `timesteps=1h`, `units=metric` e campi `temperature`, `weatherCode`, `precipitationProbability`, `precipitationIntensity`, `rainIntensity`, `windSpeed`, `windDirection`, `windGust`.
-- Se Tomorrow.io non risponde, la vista commessa riusa l'ultimo dato locale salvato e mostra l'orario di aggiornamento.
+- Home, navigazione e card degli impianti usano il proxy Netlify `/api/weather`.
+- Il provider principale è **Open-Meteo Best Match**: seleziona automaticamente il modello disponibile a risoluzione più alta per le coordinate richieste, incluso ItaliaMeteo/ARPAE ICON-2I dove applicabile.
+- Per le decisioni operative vengono richiesti dati ogni 15 minuti su pioggia, rovesci, neve, vento, raffiche, visibilità e condizioni temporalesche, più una previsione oraria di 12 ore.
+- Se Open-Meteo non risponde, il proxy normalizza automaticamente i dati del provider indipendente **MET Norway Locationforecast**. Se anche il proxy non è raggiungibile, web e Android tentano Open-Meteo direttamente.
+- Il proxy usa cache CDN, validazione delle coordinate e timeout per non bloccare l'interfaccia. L'app mantiene inoltre l'ultimo dato locale degli impianti.
+- Per l'uso commerciale configura `OPEN_METEO_API_KEY` nelle variabili ambiente Netlify. Il proxy passerà automaticamente all'endpoint riservato `customer-api.open-meteo.com`, senza esporre la chiave nel frontend.
 
 
 ## Note Firestore

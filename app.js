@@ -15251,6 +15251,9 @@ function normalizeStoredImpiantoWeatherStatus(entry) {
     operationMessage: entry.operationMessage || entry.riskMessage || getImpiantoWeatherOperationMessage({ riskLevel, hasCurrentRain: syntheticState === "pioggia", hasNextHourRain: syntheticState === "pioggia", importantWindKmh: entry.importantWindKmh }),
     stale: Boolean(entry.stale),
     weatherPartial: Boolean(entry.weatherPartial),
+    provider: entry.provider || "",
+    providerUrl: entry.providerUrl || "",
+    modelSelection: entry.modelSelection || "",
     messages: Array.isArray(entry.messages) ? entry.messages : (syntheticState === "ok" ? [] : [description]),
     currentWeather: entry.currentWeather || null,
     forecastSlots: Array.isArray(entry.forecastSlots) ? entry.forecastSlots : [],
@@ -15315,6 +15318,9 @@ function persistImpiantoWeatherCache() {
         operationMessage: entry.operationMessage || entry.riskMessage || "",
         stale: Boolean(entry.stale),
         weatherPartial: Boolean(entry.weatherPartial),
+        provider: entry.provider || "",
+        providerUrl: entry.providerUrl || "",
+        modelSelection: entry.modelSelection || "",
         description: entry.description || entry.badgeLabel || "Meteo temporaneamente non disponibile",
         updatedAt: Number(entry.updatedAt) || Date.now()
       }));
@@ -18350,6 +18356,9 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     importantWindKmh: weatherDetails.importantWindKmh,
     operationMessage: weatherDetails.operationMessage,
     weatherPartial: weatherDetails.weatherPartial,
+    provider: weatherData?.provider || "Open-Meteo Best Match",
+    providerUrl: weatherData?.providerUrl || "https://open-meteo.com/",
+    modelSelection: weatherData?.modelSelection || "best_match",
     messages: [...new Set(alertMessages)].slice(0, 5),
     currentWeather: current,
     forecastSlots: getImpiantoWeatherForecastSlots(weatherData).slice(0, 12),
@@ -18749,16 +18758,23 @@ function buildNavigationWeatherSlots(series, data = null, section = "hourly") {
   return times.map((time, idx) => ({
     time,
     timestamp: new Date(time).getTime(),
+    temperature_2m: series.temperature_2m?.[idx],
+    apparent_temperature: series.apparent_temperature?.[idx],
+    relative_humidity_2m: series.relative_humidity_2m?.[idx],
     precipitation: series.precipitation?.[idx],
     precipitation_probability: series.precipitation_probability?.[idx],
     rain: series.rain?.[idx],
     showers: series.showers?.[idx],
+    snowfall: series.snowfall?.[idx],
     weather_code: series.weather_code?.[idx],
     wind_speed_10m: series.wind_speed_10m?.[idx],
     wind_speed_unit: windSpeedUnit,
     wind_direction_10m: series.wind_direction_10m?.[idx],
     wind_gusts_10m: series.wind_gusts_10m?.[idx],
-    visibility: series.visibility?.[idx]
+    visibility: series.visibility?.[idx],
+    cape: series.cape?.[idx],
+    uv_index: series.uv_index?.[idx],
+    lightning_potential: series.lightning_potential?.[idx]
   })).filter((slot) => Number.isFinite(slot.timestamp));
 }
 
@@ -24116,7 +24132,7 @@ const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
 const WORKLIMATE_FORECAST_URL = "https://app.worklimate.it/ordinanza-caldo-lavoro";
 const WEATHER_PROXY_PATH = "/api/weather";
 const WEATHER_PROXY_PUBLIC_URL = "https://creative-syrniki-dddbae.netlify.app/api/weather";
-const WEATHER_FETCH_TIMEOUT_MS = 12000;
+const WEATHER_FETCH_TIMEOUT_MS = 15000;
 const ALERT_LEVEL_META = {
   green: { rank: 0, emoji: "🟢", className: "alert-green", label: "Nessuna allerta" },
   yellow: { rank: 1, emoji: "🟡", className: "alert-yellow", label: "Allerta Protezione Civile" },
@@ -24153,7 +24169,10 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
     current: "temperature_2m,wind_speed_10m,weather_code",
     hourly: "temperature_2m,precipitation_probability,snowfall,visibility,weather_code,wind_speed_10m",
     forecast_days: "5",
-    timezone: "auto"
+    timezone: "auto",
+    models: "best_match",
+    cell_selection: "land",
+    wind_speed_unit: "kmh"
   };
 
   if (!operational) return baseParams;
@@ -24161,8 +24180,8 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
   return {
     ...baseParams,
     current: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,rain,showers,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
-    minutely_15: "precipitation,weather_code",
-    hourly: "temperature_2m,precipitation_probability,precipitation,rain,showers,snowfall,visibility,weather_code,apparent_temperature,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    minutely_15: "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,lightning_potential",
+    hourly: "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,rain,showers,snowfall,visibility,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape,uv_index",
     forecast_hours: "12",
     forecast_minutely_15: "48",
     forecast_days: "1",
@@ -24199,45 +24218,49 @@ async function fetchWeatherResponse(url, options = {}) {
 async function fetchWeatherForecast(target, options = {}) {
   const params = new URLSearchParams(buildWeatherForecastRequestParams(target, options));
   const directUrl = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
-  let directError = null;
-
-  try {
-    const response = await fetchWeatherResponse(directUrl, options);
-    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
-    const data = await response.json();
-    if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo");
-    return {
-      ...data,
-      provider: "Open-Meteo",
-      requestUrl: directUrl,
-      httpStatus: response.status
-    };
-  } catch (error) {
-    directError = error;
-  }
-
   const proxyParams = new URLSearchParams({
     lat: String(target.lat),
     lon: String(target.lon),
     operational: options.operational ? "1" : "0"
   });
   const proxyUrl = `${getWeatherProxyEndpoint()}?${proxyParams.toString()}`;
+  let proxyError = null;
+
   try {
     const response = await fetchWeatherResponse(proxyUrl, options);
     if (!response.ok) throw new Error(`Proxy meteo HTTP ${response.status}`);
     const data = await response.json();
-    if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo proxy");
+    if (options.operational) validateImpiantoWeatherPayload(data, data.provider || "proxy meteo");
     return {
       ...data,
-      provider: "Open-Meteo proxy",
+      provider: data.provider || "Open-Meteo Best Match",
+      providerUrl: data.providerUrl || "https://open-meteo.com/",
+      modelSelection: data.modelSelection || "best_match",
       requestUrl: proxyUrl,
-      httpStatus: response.status,
-      directError: directError?.message || "Richiesta diretta non disponibile"
+      httpStatus: response.status
     };
-  } catch (proxyError) {
-    const directMessage = directError?.message || "errore diretto sconosciuto";
+  } catch (error) {
+    proxyError = error;
+  }
+
+  try {
+    const response = await fetchWeatherResponse(directUrl, options);
+    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+    const data = await response.json();
+    if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo diretto");
+    return {
+      ...data,
+      provider: "Open-Meteo Best Match (diretto)",
+      providerUrl: "https://open-meteo.com/",
+      modelSelection: "best_match",
+      requestUrl: directUrl,
+      httpStatus: response.status,
+      proxyError: proxyError?.message || "Proxy non disponibile"
+    };
+  } catch (directError) {
     const proxyMessage = proxyError?.message || "errore proxy sconosciuto";
-    throw new Error(`Meteo non disponibile: ${directMessage}; ${proxyMessage}`);
+    const directMessage = directError?.message || "errore diretto sconosciuto";
+    throw new Error(`Meteo non disponibile: ${proxyMessage}; ${directMessage}`);
   }
 }
 
@@ -24266,52 +24289,6 @@ function renderWeatherDiagnostics(diag = {}) {
   ui.weatherDiagnostics.textContent = lines.join("\n");
 }
 
-async function fetchOpenWeatherPrimary(target, options = {}) {
-  const apiKey = getRuntimeEnvValue("VITE_OPENWEATHER_API_KEY") || getRuntimeEnvValue("OPENWEATHER_API_KEY");
-  if (!apiKey) throw new Error("OPENWEATHER_API_KEY mancante");
-  const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
-  url.searchParams.set("lat", String(target.lat));
-  url.searchParams.set("lon", String(target.lon));
-  url.searchParams.set("appid", apiKey);
-  url.searchParams.set("units", "metric");
-  url.searchParams.set("lang", "it");
-  const response = await fetch(url.toString(), { cache: options.cache || "no-store" });
-  if (!response.ok) throw new Error(`OpenWeather HTTP ${response.status}`);
-  const payload = await response.json();
-  const list = Array.isArray(payload?.list) ? payload.list : [];
-  const hourly = list.slice(0, 12);
-  const data = {
-    current: {
-      temperature_2m: hourly[0]?.main?.temp,
-      wind_speed_10m: Number(hourly[0]?.wind?.speed || 0) * 3.6,
-      weather_code: mapOpenWeatherCodeToWmo(hourly[0]?.weather?.[0]?.id)
-    },
-    hourly: {
-      time: hourly.map((it) => new Date((it.dt || 0) * 1000).toISOString()),
-      temperature_2m: hourly.map((it) => it?.main?.temp),
-      precipitation_probability: hourly.map((it) => Math.round(Number(it?.pop || 0) * 100)),
-      snowfall: hourly.map((it) => Number(it?.snow?.["3h"] || 0)),
-      visibility: hourly.map((it) => it?.visibility),
-      weather_code: hourly.map((it) => mapOpenWeatherCodeToWmo(it?.weather?.[0]?.id)),
-      wind_speed_10m: hourly.map((it) => Number(it?.wind?.speed || 0) * 3.6)
-    },
-    provider: "OpenWeather"
-  };
-  return { data, url: url.toString(), httpStatus: response.status };
-}
-
-function mapOpenWeatherCodeToWmo(code) {
-  const c = Number(code);
-  if (!Number.isFinite(c)) return 0;
-  if (c >= 200 && c < 300) return 95;
-  if (c >= 300 && c < 400) return 53;
-  if (c >= 500 && c < 600) return 63;
-  if (c >= 600 && c < 700) return 73;
-  if (c >= 700 && c < 800) return 45;
-  if (c === 800) return 0;
-  return 3;
-}
-
 async function fetchWeather() {
   const target = getWeatherTargetCoordinates();
   currentWeatherTarget = target;
@@ -24322,25 +24299,11 @@ async function fetchWeather() {
     updatedAt: Date.now()
   };
   try {
-    let data;
-    try {
-      const primary = await fetchOpenWeatherPrimary(target);
-      data = primary.data;
-      diagnostics.provider = "OpenWeather";
-      diagnostics.url = primary.url;
-      diagnostics.httpStatus = primary.httpStatus;
-    } catch (primaryError) {
-      const fallback = await fetchWeatherForecast(target);
-      data = fallback;
-      diagnostics.provider = fallback.provider || "Open-Meteo";
-      diagnostics.url = fallback.requestUrl || "-";
-      diagnostics.httpStatus = fallback.httpStatus ?? 200;
-      if (fallback.directError) {
-        diagnostics.error = `Richiesta diretta: ${fallback.directError}`;
-      } else if (primaryError?.message && primaryError.message !== "OPENWEATHER_API_KEY mancante") {
-        diagnostics.error = `OpenWeather: ${primaryError.message}`;
-      }
-    }
+    const data = await fetchWeatherForecast(target);
+    diagnostics.provider = data.provider || "Open-Meteo Best Match";
+    diagnostics.url = data.requestUrl || "-";
+    diagnostics.httpStatus = data.httpStatus ?? 200;
+    if (data.proxyError) diagnostics.error = `Proxy: ${data.proxyError}`;
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);
     ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
@@ -24412,7 +24375,10 @@ async function renderWeatherDetails(data, target) {
     const label = weatherCodeLabel(codes[idx]);
     return `<p><b>${hour}</b> • ${label} • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}% • ❄️ ${Number(snows[idx] || 0).toFixed(1)} mm • 👁️ ${visKm} km</p>`;
   }).join("");
-  ui.weatherDetails.innerHTML = rows || "<p class='muted'>Nessun dato meteo.</p>";
+  const providerName = data.provider || "Open-Meteo Best Match";
+  const providerUrl = data.providerUrl || "https://open-meteo.com/";
+  const attribution = `<p class="muted weather-data-source">Dati: <a href="${escapeHTML(providerUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(providerName)}</a></p>`;
+  ui.weatherDetails.innerHTML = `${rows || "<p class='muted'>Nessun dato meteo.</p>"}${attribution}`;
 }
 
 async function getCivilProtectionAlert(target, forecast = {}) {

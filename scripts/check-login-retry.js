@@ -67,6 +67,18 @@ if (!style.includes(".registration-dialog form")) {
 }
 
 for (const expected of [
+  "google-github-actions/setup-gcloud@v3",
+  "gcloud functions add-iam-policy-binding registerTester",
+  "--member=allUsers",
+  "--role=roles/cloudfunctions.invoker",
+  "--region=europe-west1"
+]) {
+  if (!workflow.includes(expected)) {
+    throw new Error(`Workflow IAM registrazione incompleto: ${expected}`);
+  }
+}
+
+for (const expected of [
   '.runWith({ invoker: "public" })',
   "password.length < 10",
   "mustChangePassword: false",

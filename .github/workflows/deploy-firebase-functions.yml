@@ -54,7 +54,12 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
-      - name: Deploy Cloud Functions
+      - name: Deploy notification Cloud Functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: firebase deploy --only functions --project hera-app-6cd2b --non-interactive --force
+        run: >-
+          firebase deploy
+          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment
+          --project hera-app-6cd2b
+          --non-interactive
+          --force

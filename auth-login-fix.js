@@ -20,23 +20,30 @@
     let existingProfile = null;
 
     if (email) {
-      const exactSnapshot = await database
-        .collection("platformUsers")
-        .where("email", "==", email)
-        .limit(1)
-        .get();
-
-      if (!exactSnapshot.empty) {
-        existingProfile = exactSnapshot.docs[0].data() || null;
-      } else {
-        const originalEmailSnapshot = await database
+      try {
+        const exactSnapshot = await database
           .collection("platformUsers")
-          .where("email", "==", String(user.email || "").trim())
+          .where("email", "==", email)
           .limit(1)
           .get();
-        if (!originalEmailSnapshot.empty) {
-          existingProfile = originalEmailSnapshot.docs[0].data() || null;
+
+        if (!exactSnapshot.empty) {
+          existingProfile = exactSnapshot.docs[0].data() || null;
+        } else {
+          const originalEmailSnapshot = await database
+            .collection("platformUsers")
+            .where("email", "==", String(user.email || "").trim())
+            .limit(1)
+            .get();
+          if (!originalEmailSnapshot.empty) {
+            existingProfile = originalEmailSnapshot.docs[0].data() || null;
+          }
         }
+      } catch (lookupError) {
+        console.warn(
+          "Profilo precedente non leggibile: creo un profilo utente standard.",
+          lookupError
+        );
       }
     }
 
@@ -61,8 +68,7 @@
       ruolo: "user",
       isAdmin: false,
       admin: false,
-      permissions: {},
-      banned: false
+      permissions: {}
     };
 
     await currentRef.set({

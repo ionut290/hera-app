@@ -1,6 +1,8 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
@@ -17,6 +19,55 @@ const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
 ]);
+const TESTER_TEMP_PASSWORD = defineSecret("TESTER_TEMP_PASSWORD");
+
+exports.registerTester = onCall(
+  {
+    region: "europe-west1",
+    secrets: [TESTER_TEMP_PASSWORD],
+    enforceAppCheck: false
+  },
+  async (request) => {
+    const email = String(request.data?.email || "").trim().toLowerCase();
+    const password = String(request.data?.temporaryPassword || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "Indirizzo email non valido.");
+    }
+    if (password !== TESTER_TEMP_PASSWORD.value()) {
+      throw new HttpsError("permission-denied", "Password temporanea non valida.");
+    }
+
+    try {
+      await admin.auth().getUserByEmail(email);
+      throw new HttpsError("already-exists", "Account già esistente.");
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      if (error.code !== "auth/user-not-found") throw error;
+    }
+
+    const user = await admin.auth().createUser({
+      email,
+      password,
+      emailVerified: false,
+      disabled: false
+    });
+    await admin.firestore().collection("platformUsers").doc(user.uid).set({
+      uid: user.uid,
+      email,
+      displayName: email.split("@")[0],
+      role: "user",
+      ruolo: "user",
+      isAdmin: false,
+      admin: false,
+      banned: false,
+      mustChangePassword: true,
+      selfRegistered: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return { created: true };
+  }
+);
 
 function chunkItems(items, size) {
   const chunks = [];

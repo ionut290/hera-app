@@ -19,6 +19,9 @@
     if (code === "auth/network-request-failed") {
       return "Connessione non disponibile. Controlla internet e riprova.";
     }
+    if (code === "auth/email-not-verified") {
+      return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
+    }
     return "Accesso non riuscito. Controlla email e password e riprova.";
   }
 
@@ -35,6 +38,33 @@
       submit: document.getElementById("registration-submit-btn"),
       cancel: document.getElementById("registration-cancel-btn")
     };
+  }
+
+  async function createSelfRegisteredProfile(user, details) {
+    if (!user?.uid || typeof firebase.firestore !== "function") {
+      throw new Error("Profilo Firebase non disponibile.");
+    }
+
+    const displayName = [details.firstName, details.lastName].filter(Boolean).join(" ");
+    await firebase.firestore().collection("platformUsers").doc(user.uid).set({
+      uid: user.uid,
+      email: details.email,
+      displayName,
+      firstName: details.firstName,
+      lastName: details.lastName,
+      teamId: "",
+      role: "user",
+      ruolo: "user",
+      isAdmin: false,
+      admin: false,
+      permissions: {},
+      mustChangePassword: false,
+      selfRegistered: true,
+      authProviders: ["password"],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
   }
 
   function closeRegistrationDialog() {
@@ -103,35 +133,53 @@
         elements.submit.disabled = true;
         elements.feedback.textContent = "Creazione account in corso...";
 
+        let createdUser = null;
         try {
-          const registerTester = firebase.app().functions("europe-west1").httpsCallable("registerTester");
-          await registerTester({
-            email,
-            temporaryPassword: chosenPassword,
-            firstName,
-            lastName
+          const auth = firebase.auth();
+          const credential = await auth.createUserWithEmailAndPassword(email, chosenPassword);
+          createdUser = credential.user;
+          await createdUser.updateProfile({
+            displayName: [firstName, lastName].filter(Boolean).join(" ")
           });
+          await createdUser.sendEmailVerification();
+          await createSelfRegisteredProfile(createdUser, { email, firstName, lastName });
+          try {
+            await auth.signOut();
+          } catch (signOutError) {
+            console.warn("Uscita dopo registrazione non riuscita:", signOutError);
+          }
           cleanup();
           closeRegistrationDialog();
-          resolve({ password: chosenPassword });
+          resolve({ verificationRequired: true });
         } catch (error) {
           registrationPending = true;
+          if (createdUser?.uid && firebase.auth().currentUser?.uid === createdUser.uid) {
+            try {
+              await createdUser.delete();
+            } catch (cleanupError) {
+              console.error("Pulizia account incompleto fallita:", cleanupError);
+              try {
+                await firebase.auth().signOut();
+              } catch (signOutError) {
+                console.error("Uscita dopo registrazione fallita:", signOutError);
+              }
+            }
+          }
+
           const code = String(error?.code || "").toLowerCase();
           const message = String(error?.message || "");
-          if (code.includes("already-exists")) {
+          if (code.includes("email-already-in-use")) {
             elements.feedback.textContent = "Questa email ha già un account. Torna al login e controlla la password.";
-          } else if (code.includes("invalid-argument")) {
+          } else if (code.includes("weak-password")) {
+            elements.feedback.textContent = `La password deve contenere almeno ${MIN_REGISTRATION_PASSWORD_LENGTH} caratteri.`;
+          } else if (code.includes("operation-not-allowed")) {
+            elements.feedback.textContent = "La registrazione con email non è abilitata. Contatta l’amministratore.";
+          } else if (code.includes("network-request-failed")) {
+            elements.feedback.textContent = "Connessione non disponibile. Controlla internet e riprova.";
+          } else {
             elements.feedback.textContent = message && message.toLowerCase() !== "internal"
               ? message
-              : "Controlla i dati inseriti e riprova.";
-          } else if (code.includes("permission-denied")) {
-            elements.feedback.textContent = "Creazione account non autorizzata. Contatta l’amministratore.";
-          } else if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
-            elements.feedback.textContent = "Servizio momentaneamente non disponibile. Controlla internet e riprova.";
-          } else if (code.includes("internal") || message.toLowerCase() === "internal") {
-            elements.feedback.textContent = "Creazione account non riuscita. Riprova tra poco.";
-          } else {
-            elements.feedback.textContent = message || "Creazione account non riuscita. Riprova.";
+              : "Creazione account non riuscita. Riprova tra poco.";
           }
         } finally {
           elements.submit.disabled = false;
@@ -165,9 +213,10 @@
       const auth = firebase.auth();
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       const registration = await openRegistrationDialog(email, password);
-      await auth.signInWithEmailAndPassword(email, registration.password);
       if (passwordInput) passwordInput.value = "";
-      if (feedback) feedback.textContent = "Account creato. Accesso completato.";
+      if (registration.verificationRequired && feedback) {
+        feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
+      }
     } catch (error) {
       if (feedback) {
         feedback.textContent = error?.message === "Creazione account annullata."
@@ -207,16 +256,24 @@
     try {
       const auth = firebase.auth();
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-      let loginPassword = password;
       try {
-        await auth.signInWithEmailAndPassword(email, loginPassword);
+        const credential = await auth.signInWithEmailAndPassword(email, password);
+        if (credential.user && credential.user.emailVerified === false) {
+          await auth.signOut();
+          const verificationError = new Error("Email non verificata.");
+          verificationError.code = "auth/email-not-verified";
+          throw verificationError;
+        }
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
         if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
         if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
         const registration = await openRegistrationDialog(email, password);
-        loginPassword = registration.password;
-        await auth.signInWithEmailAndPassword(email, loginPassword);
+        if (passwordInput) passwordInput.value = "";
+        if (registration.verificationRequired && feedback) {
+          feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
+        }
+        return;
       }
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";

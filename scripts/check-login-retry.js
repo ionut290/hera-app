@@ -4,17 +4,19 @@ const html = fs.readFileSync("index.html", "utf8");
 const script = fs.readFileSync("login-retry-fix.js", "utf8");
 const style = fs.readFileSync("login-retry-fix.css", "utf8");
 const functionsSource = fs.readFileSync("functions/index.js", "utf8");
-const workflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
+const androidWorkflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
+const deployWorkflow = fs.readFileSync(".github/workflows/deploy-register-tester.yml", "utf8");
 
-if (!script.includes('/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/')) {
+if (!script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
   throw new Error("La validazione email non accetta indirizzi standard.");
 }
-if (script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
+if (script.includes('/^[^\\\\\\\\s@]+@[^\\\\\\\\s@]+\\\\\\\\.[^\\\\\\\\s@]+$/')) {
   throw new Error("La validazione email contiene escape duplicati.");
 }
 
 for (const expected of [
   "Email o password non corretta.",
+  "Email non ancora verificata.",
   "event.stopImmediatePropagation()",
   "loginButton.disabled = false",
   'loginButton.textContent = "Entra"',
@@ -32,23 +34,32 @@ for (const expected of [
 }
 
 for (const expected of [
-  'functions("europe-west1").httpsCallable("registerTester")',
-  "temporaryPassword: chosenPassword",
-  "firstName",
-  "lastName"
+  "createUserWithEmailAndPassword(email, chosenPassword)",
+  "createdUser.sendEmailVerification()",
+  "createSelfRegisteredProfile(createdUser",
+  'collection("platformUsers").doc(user.uid).set',
+  "verificationRequired: true",
+  "auth.signOut()",
+  "role: \"user\"",
+  "isAdmin: false",
+  "selfRegistered: true"
 ]) {
-  if (!script.includes(expected)) throw new Error(`Auto-registrazione mancante: ${expected}`);
+  if (!script.includes(expected)) throw new Error(`Registrazione Firebase client mancante: ${expected}`);
+}
+if (script.includes('httpsCallable("registerTester")')) {
+  throw new Error("Il client dipende ancora dalla Cloud Function privata registerTester.");
 }
 
 for (const expected of [
   'id="auth-create-account-btn"',
-  '>CREA NUOVO ACCOUNT</button>',
+  ">CREA NUOVO ACCOUNT</button>",
   'id="registration-dialog"',
   'id="registration-first-name"',
   'id="registration-last-name"',
   'id="registration-password-confirm"',
   'minlength="10" autocomplete="new-password"',
-  'login-retry-fix.js?v=20260726e'
+  "ti invieremo un’email per verificare il nuovo account",
+  "login-retry-fix.js?v=20260726f"
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }
@@ -59,34 +70,24 @@ if (!style.includes("overflow-wrap: anywhere") || !style.includes("max-width: 10
 
 for (const asset of ["login-retry-fix.js", "login-retry-fix.css"]) {
   if (!html.includes(asset)) throw new Error(`${asset} non caricato da index.html.`);
-  if (!workflow.includes(asset)) throw new Error(`${asset} non incluso nell'AAB.`);
+  if (!androidWorkflow.includes(asset)) throw new Error(`${asset} non incluso nell'AAB.`);
 }
 
 if (!style.includes(".registration-dialog form")) {
   throw new Error("Stile finestra registrazione mancante.");
 }
 
-for (const expected of [
-  "google-github-actions/setup-gcloud@v3",
+if (!deployWorkflow.includes("firebase deploy --only functions:registerTester")) {
+  throw new Error("Deploy della funzione legacy non configurato.");
+}
+for (const forbidden of [
+  "google-github-actions/setup-gcloud",
   "gcloud functions add-iam-policy-binding registerTester",
   "--member=allUsers",
-  "--role=roles/cloudfunctions.invoker",
-  "--region=europe-west1"
+  "roles/cloudfunctions.invoker"
 ]) {
-  if (!workflow.includes(expected)) {
-    throw new Error(`Workflow IAM registrazione incompleto: ${expected}`);
-  }
-}
-
-for (const expected of [
-  '.runWith({ invoker: "public" })',
-  "password.length < 10",
-  "mustChangePassword: false",
-  "selfRegistered: true",
-  "Creazione account non riuscita. Riprova tra poco."
-]) {
-  if (!functionsSource.includes(expected)) {
-    throw new Error(`Backend registrazione incompleto: ${expected}`);
+  if (deployWorkflow.includes(forbidden)) {
+    throw new Error(`Permesso pubblico legacy ancora presente nel workflow: ${forbidden}`);
   }
 }
 
@@ -96,8 +97,21 @@ if (registerTesterStart < 0 || registerTesterEnd < 0) {
   throw new Error("Funzione registerTester non trovata.");
 }
 const registerTesterSource = functionsSource.slice(registerTesterStart, registerTesterEnd);
+for (const expected of [
+  "password.length < 10",
+  "mustChangePassword: false",
+  "selfRegistered: true",
+  "Creazione account non riuscita. Riprova tra poco."
+]) {
+  if (!registerTesterSource.includes(expected)) {
+    throw new Error(`Backend registrazione legacy incompleto: ${expected}`);
+  }
+}
+if (registerTesterSource.includes('invoker: "public"')) {
+  throw new Error("La funzione legacy registerTester non deve essere pubblica.");
+}
 if (registerTesterSource.includes("functions.config().tester")) {
   throw new Error("La registrazione dipende ancora dalla vecchia password temporanea condivisa.");
 }
 
-console.log("Login retry and new-user registration check passed.");
+console.log("Login retry and Firebase client registration check passed.");

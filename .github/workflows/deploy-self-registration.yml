@@ -1,11 +1,10 @@
-name: Deploy tester self-registration
+name: Deploy Firestore rules
 
 on:
   push:
     branches:
       - main
     paths:
-      - "functions/index.js"
       - "firestore.rules"
       - ".github/workflows/deploy-self-registration.yml"
   workflow_dispatch:
@@ -15,31 +14,26 @@ permissions:
 
 jobs:
   deploy:
+    name: Deploy verified-user access rules
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - working-directory: functions
-        run: npm install --no-audit --no-fund
-      - uses: google-github-actions/auth@v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
-      - name: Store temporary tester password hash
-        env:
-          TESTER_TEMP_PASSWORD: ${{ secrets.TESTER_TEMP_PASSWORD }}
-        run: |
-          npx --yes firebase-tools@latest experiments:enable legacyRuntimeConfigCommands
-          PASSWORD_HASH="$(printf '%s' "$TESTER_TEMP_PASSWORD" | sha256sum | cut -d' ' -f1)"
-          npx --yes firebase-tools@latest functions:config:set \
-            tester.password_hash="$PASSWORD_HASH" \
-            --project hera-app-6cd2b
-      - name: Deploy registration and verified-email rules
+
+      - name: Deploy Firestore rules
         run: >
           npx --yes firebase-tools@latest deploy
-          --only functions:registerTester,firestore:rules
+          --only firestore:rules
           --project hera-app-6cd2b
           --non-interactive
-          --force

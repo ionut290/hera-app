@@ -5,6 +5,13 @@ const script = fs.readFileSync("login-retry-fix.js", "utf8");
 const style = fs.readFileSync("login-retry-fix.css", "utf8");
 const workflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
 
+if (!script.includes('/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/')) {
+  throw new Error("La validazione email non accetta indirizzi standard.");
+}
+if (script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
+  throw new Error("La validazione email contiene escape duplicati.");
+}
+
 for (const expected of [
   "Email o password non corretta.",
   "event.stopImmediatePropagation()",
@@ -37,7 +44,7 @@ for (const expected of [
   'id="registration-first-name"',
   'id="registration-last-name"',
   'id="registration-password-confirm"',
-  'login-retry-fix.js?v=20260726c'
+  'login-retry-fix.js?v=20260726d'
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }

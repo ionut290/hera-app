@@ -67,6 +67,7 @@ if (!style.includes(".registration-dialog form")) {
 }
 
 for (const expected of [
+  '.runWith({ invoker: "public" })',
   "password.length < 10",
   "mustChangePassword: false",
   "selfRegistered: true",

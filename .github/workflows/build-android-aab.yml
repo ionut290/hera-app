@@ -47,6 +47,7 @@ jobs:
         run: |
           npm run check:auth-login
           npm run check:first-login-password
+          npm run check:login-retry
 
       - name: Prepare Capacitor web directory
         shell: bash
@@ -55,6 +56,7 @@ jobs:
           mkdir -p www
           cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
           cp first-login-password.css first-login-password.js www/
+          cp login-retry-fix.css login-retry-fix.js www/
           cp native-android-runtime.js done-button-fix.js www/
           cp delete-account.html privacy.html www/
           cp identity-card-feature.css identity-card-feature.js www/
@@ -70,6 +72,8 @@ jobs:
           test -s www/native-android-runtime.js
           test -s www/first-login-password.js
           test -s www/first-login-password.css
+          test -s www/login-retry-fix.js
+          test -s www/login-retry-fix.css
           if ! grep -q 'native-android-runtime.js' www/index.html; then
             echo "index.html non carica native-android-runtime.js"
             exit 1

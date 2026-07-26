@@ -4,6 +4,7 @@
   const MIN_PASSWORD_LENGTH = 10;
   let pendingUser = null;
   let saving = false;
+  let passwordResetPending = false;
 
   function elements() {
     return {
@@ -127,30 +128,101 @@
     }
   }
 
-  async function requestTemporaryPassword() {
+  function getPasswordResetContinueUrl() {
+    const nativeAndroid = Boolean(
+      window.Capacitor
+      && typeof window.Capacitor.isNativePlatform === "function"
+      && window.Capacitor.isNativePlatform()
+    );
+    const baseUrl = nativeAndroid
+      ? "https://creative-syrniki-dddbae.netlify.app/"
+      : window.location.href;
+    const continueUrl = new URL(baseUrl);
+    continueUrl.search = "";
+    continueUrl.hash = "";
+    continueUrl.searchParams.set("passwordReset", "complete");
+    return continueUrl.toString();
+  }
+
+  async function sendPasswordResetInstructions(email) {
+    const auth = firebase.auth();
+    auth.languageCode = "it";
+    try {
+      await auth.sendPasswordResetEmail(email, {
+        url: getPasswordResetContinueUrl(),
+        handleCodeInApp: false
+      });
+    } catch (error) {
+      const code = String(error?.code || "").toLowerCase();
+      if (!["auth/unauthorized-continue-uri", "auth/invalid-continue-uri"].includes(code)) {
+        throw error;
+      }
+      console.warn("URL di ritorno reset non autorizzato, invio senza continue URL:", error);
+      await auth.sendPasswordResetEmail(email);
+    }
+  }
+
+  function showPasswordResetReturnNotice() {
+    let currentUrl = null;
+    try {
+      currentUrl = new URL(window.location.href);
+    } catch (_error) {
+      return;
+    }
+    if (currentUrl.searchParams.get("passwordReset") !== "complete") return;
+
+    const loginFeedback = document.getElementById("auth-email-feedback");
+    if (loginFeedback) {
+      loginFeedback.textContent = "Password aggiornata. Inserisci email e nuova password per accedere.";
+    }
+    currentUrl.searchParams.delete("passwordReset");
+    const cleanUrl = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+    if (window.history && typeof window.history.replaceState === "function") {
+      window.history.replaceState({}, document.title, cleanUrl || "/");
+    }
+  }
+
+  async function requestPasswordReset() {
     const emailInput = document.getElementById("auth-email-input");
     const requestButton = document.getElementById("auth-request-password-btn");
+    const loginFeedback = document.getElementById("auth-email-feedback");
     const email = String(emailInput?.value || "").trim().toLowerCase();
-    const genericMessage = "Se l’indirizzo è autorizzato, riceverai un’email per impostare la password.";
+    const genericMessage = "Se esiste un account con questa email, riceverai il link per reimpostare la password. Controlla anche Spam.";
 
+    if (passwordResetPending) return;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      const loginFeedback = document.getElementById("auth-email-feedback");
       if (loginFeedback) loginFeedback.textContent = "Inserisci prima un indirizzo email valido.";
       emailInput?.focus();
       return;
     }
 
-    if (requestButton) requestButton.disabled = true;
-    const loginFeedback = document.getElementById("auth-email-feedback");
-    if (loginFeedback) loginFeedback.textContent = "Invio delle istruzioni...";
+    passwordResetPending = true;
+    const originalButtonText = requestButton?.textContent || "PASSWORD DIMENTICATA?";
+    if (requestButton) {
+      requestButton.disabled = true;
+      requestButton.textContent = "INVIO EMAIL...";
+    }
+    if (loginFeedback) loginFeedback.textContent = "Invio del link per reimpostare la password...";
+
     try {
-      await firebase.auth().sendPasswordResetEmail(email);
+      await sendPasswordResetInstructions(email);
       if (loginFeedback) loginFeedback.textContent = genericMessage;
     } catch (error) {
-      console.error("Richiesta password fallita:", error);
-      if (loginFeedback) loginFeedback.textContent = genericMessage;
+      console.error("Richiesta reset password fallita:", error);
+      const code = String(error?.code || "").toLowerCase();
+      if (code === "auth/network-request-failed") {
+        if (loginFeedback) loginFeedback.textContent = "Connessione non disponibile. Controlla Internet e riprova.";
+      } else if (code === "auth/too-many-requests") {
+        if (loginFeedback) loginFeedback.textContent = "Troppe richieste. Attendi qualche minuto e riprova.";
+      } else {
+        if (loginFeedback) loginFeedback.textContent = genericMessage;
+      }
     } finally {
-      if (requestButton) requestButton.disabled = false;
+      passwordResetPending = false;
+      if (requestButton) {
+        requestButton.disabled = false;
+        requestButton.textContent = originalButtonText;
+      }
     }
   }
 
@@ -159,8 +231,9 @@
     if (!dialog || !form || !window.firebase || typeof firebase.auth !== "function") return;
     dialog.addEventListener("cancel", (event) => event.preventDefault());
     form.addEventListener("submit", saveNewPassword);
+    showPasswordResetReturnNotice();
     document.getElementById("auth-request-password-btn")
-      ?.addEventListener("click", requestTemporaryPassword);
+      ?.addEventListener("click", requestPasswordReset);
     firebase.auth().onAuthStateChanged(handleAuthenticatedUser);
   }
 

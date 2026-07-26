@@ -8,6 +8,8 @@ const interactions = fs.readFileSync("today-summary-interactions.js", "utf8");
 const notifications = fs.readFileSync("functions/user-notifications.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
+const layout = fs.readFileSync("squadre-restyle.css", "utf8");
+const androidWorkflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
 
 assert.match(app, /const subscribedDateKeys = \[\.\.\.new Set\(\[selectedDateKey, todayDateKey\]/);
 assert.match(app, /where\("dateKey", "in", subscribedDateKeys\)/);
@@ -29,7 +31,14 @@ assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
 assert.match(index, /today-summary-interactions\.js\?v=20260726b/);
-assert.match(serviceWorker, /hera-app-shell-v32/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260726b/);
+assert.match(index, /squadre-restyle\.css\?v=20260726b/);
+assert.match(serviceWorker, /hera-app-shell-v34/);
+assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260726c/);
+assert.match(serviceWorker, /squadre-restyle\.css\?v=20260726b/);
+assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);
+assert.match(layout, /#today-summary-card \.today-summary-item\s*\{[\s\S]*?min-height: 54px;[\s\S]*?padding: 6px 4px;/);
+assert.match(androidWorkflow, /cp squadre-restyle\.css www\//);
+assert.match(androidWorkflow, /test -s www\/squadre-restyle\.css/);
 
 console.log("Today summary and team alert checks passed.");

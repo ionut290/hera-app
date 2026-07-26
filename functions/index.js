@@ -17,7 +17,10 @@ const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
 ]);
-exports.registerTester = functions.region("europe-west1").https.onCall(
+exports.registerTester = functions
+  .region("europe-west1")
+  .runWith({ invoker: "public" })
+  .https.onCall(
   async (data) => {
     const email = String(data?.email || "").trim().toLowerCase();
     const password = String(data?.temporaryPassword || "");

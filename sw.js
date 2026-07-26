@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v27";
+const CACHE_NAME = "hera-app-shell-v28";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,7 +12,11 @@ const APP_SHELL = [
   "./fuel-stations-integration.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
-  "./icons/hera-icon.svg"
+  "./icons/varga-cantieri-32.png",
+  "./icons/varga-cantieri-180.png",
+  "./icons/varga-cantieri-192.png",
+  "./icons/varga-cantieri-512.png",
+  "./icons/varga-cantieri-maskable-512.png"
 ];
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
@@ -97,7 +101,7 @@ const staleWhileRevalidateForAsset = async (event) => {
   if (response) return response;
 
   if (request.destination === "image") {
-    return caches.match("./icons/hera-icon.svg");
+    return caches.match("./icons/varga-cantieri-192.png");
   }
 
   return caches.match("./index.html");
@@ -141,8 +145,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Hera App";
   const options = {
     body: payload.body || "Nuovo aggiornamento disponibile.",
-    icon: payload.icon || "./icons/hera-icon.svg",
-    badge: payload.badge || "./icons/hera-icon.svg",
+    icon: payload.icon || "./icons/varga-cantieri-192.png",
+    badge: payload.badge || "./icons/varga-cantieri-192.png",
     tag: payload.tag || "hera-push-default",
     data: {
       url: payload.url || "./index.html"
@@ -168,8 +172,8 @@ self.addEventListener("sync", (event) => {
   event.waitUntil(
     self.registration.showNotification("Hera App", {
       body: "Controllo in background completato.",
-      icon: "./icons/hera-icon.svg",
-      badge: "./icons/hera-icon.svg",
+      icon: "./icons/varga-cantieri-192.png",
+      badge: "./icons/varga-cantieri-192.png",
       tag: "hera-background-sync",
       data: { url: "./index.html" }
     })

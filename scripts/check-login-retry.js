@@ -3,6 +3,7 @@ const fs = require("fs");
 const html = fs.readFileSync("index.html", "utf8");
 const script = fs.readFileSync("login-retry-fix.js", "utf8");
 const style = fs.readFileSync("login-retry-fix.css", "utf8");
+const functionsSource = fs.readFileSync("functions/index.js", "utf8");
 const workflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
 
 if (!script.includes('/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/')) {
@@ -23,7 +24,9 @@ for (const expected of [
   'getElementById("auth-create-account-btn")',
   'getElementById("registration-dialog")',
   "firstName",
-  "lastName"
+  "lastName",
+  "MIN_REGISTRATION_PASSWORD_LENGTH = 10",
+  "Creazione account non riuscita. Riprova tra poco."
 ]) {
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
 }
@@ -44,7 +47,8 @@ for (const expected of [
   'id="registration-first-name"',
   'id="registration-last-name"',
   'id="registration-password-confirm"',
-  'login-retry-fix.js?v=20260726d'
+  'minlength="10" autocomplete="new-password"',
+  'login-retry-fix.js?v=20260726e'
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }
@@ -60,6 +64,27 @@ for (const asset of ["login-retry-fix.js", "login-retry-fix.css"]) {
 
 if (!style.includes(".registration-dialog form")) {
   throw new Error("Stile finestra registrazione mancante.");
+}
+
+for (const expected of [
+  "password.length < 10",
+  "mustChangePassword: false",
+  "selfRegistered: true",
+  "Creazione account non riuscita. Riprova tra poco."
+]) {
+  if (!functionsSource.includes(expected)) {
+    throw new Error(`Backend registrazione incompleto: ${expected}`);
+  }
+}
+
+const registerTesterStart = functionsSource.indexOf("exports.registerTester");
+const registerTesterEnd = functionsSource.indexOf("function chunkItems", registerTesterStart);
+if (registerTesterStart < 0 || registerTesterEnd < 0) {
+  throw new Error("Funzione registerTester non trovata.");
+}
+const registerTesterSource = functionsSource.slice(registerTesterStart, registerTesterEnd);
+if (registerTesterSource.includes("functions.config().tester")) {
+  throw new Error("La registrazione dipende ancora dalla vecchia password temporanea condivisa.");
 }
 
 console.log("Login retry and new-user registration check passed.");

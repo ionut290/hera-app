@@ -68,4 +68,13 @@
       console.error("Impossibile controllare l'alimentazione dei mezzi", error);
     });
   });
+
+  // Carica il miglioramento grafico direttamente nelle schede delle squadre della schermata Oggi.
+  if (!document.querySelector('script[data-squadre-mezzi-pictograms]')) {
+    const script = document.createElement("script");
+    script.src = "./squadre-mezzi-pictograms.js?v=20260727a";
+    script.defer = true;
+    script.dataset.squadreMezziPictograms = "1";
+    document.head.appendChild(script);
+  }
 })();

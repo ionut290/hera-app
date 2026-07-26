@@ -1,0 +1,34 @@
+.auth-gate {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.auth-gate-card,
+.auth-email-form {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.auth-email-form input,
+.auth-email-form .btn {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.auth-email-feedback {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 480px) {
+  .auth-gate {
+    padding: 14px;
+  }
+
+  .auth-gate-card {
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+}

@@ -126,32 +126,37 @@
     );
   }
 
-  function configureAndroidEmailPasswordOnly() {
-    if (!isNativeAndroid()) return;
+  function configurePlatformLoginOptions() {
+    const nativeAndroid = isNativeAndroid();
+    const webGoogleEnabled = !nativeAndroid;
 
-    document.documentElement.classList.add("android-email-password-only");
+    document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
 
     const message = document.getElementById("auth-gate-message");
     if (message) {
-      message.textContent = "Accedi con la tua email e password.";
+      message.textContent = nativeAndroid
+        ? "Accedi con la tua email e password."
+        : "Accedi con Google oppure con la tua email e password.";
     }
 
     const emailLoginButton = document.getElementById("auth-email-login-btn");
     if (emailLoginButton) {
-      emailLoginButton.textContent = "Accedi";
+      emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra";
     }
 
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
     if (googleLoginButton) {
-      googleLoginButton.hidden = true;
-      googleLoginButton.setAttribute("aria-hidden", "true");
-      googleLoginButton.tabIndex = -1;
+      googleLoginButton.hidden = !webGoogleEnabled;
+      googleLoginButton.tabIndex = webGoogleEnabled ? 0 : -1;
+      if (webGoogleEnabled) googleLoginButton.removeAttribute("aria-hidden");
+      else googleLoginButton.setAttribute("aria-hidden", "true");
     }
 
     const divider = document.querySelector(".auth-gate-divider");
     if (divider) {
-      divider.hidden = true;
-      divider.setAttribute("aria-hidden", "true");
+      divider.hidden = !webGoogleEnabled;
+      if (webGoogleEnabled) divider.removeAttribute("aria-hidden");
+      else divider.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -232,7 +237,7 @@
     event.stopImmediatePropagation();
 
     if (isNativeAndroid()) {
-      configureAndroidEmailPasswordOnly();
+      configurePlatformLoginOptions();
       const emailInput = document.getElementById("auth-email-input");
       if (emailInput) emailInput.focus();
       return;
@@ -265,9 +270,9 @@
   installProfileAccessGuard();
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", configureAndroidEmailPasswordOnly, { once: true });
+    document.addEventListener("DOMContentLoaded", configurePlatformLoginOptions, { once: true });
   } else {
-    configureAndroidEmailPasswordOnly();
+    configurePlatformLoginOptions();
   }
 
   document.addEventListener("click", handleGoogleLoginClick, true);

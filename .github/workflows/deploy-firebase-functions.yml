@@ -31,12 +31,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: functions/package-lock.json
 
       - name: Install function dependencies
         working-directory: functions
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Validate notification functions
         run: node -e "require('./functions/index.js'); console.log('Functions loaded successfully')"

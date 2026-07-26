@@ -1,11 +1,11 @@
-const CACHE_NAME = "hera-app-shell-v32";
+const CACHE_NAME = "hera-app-shell-v33";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260726-splash1",
   "./app.js?v=20260726-fatto1",
   "./native-android-runtime.js?v=20260726-fatto1",
-  "./today-summary-interactions.js?v=20260726b",
+  "./today-summary-interactions.js?v=20260726c",
   "./fatto-button-immediate.js?v=20260726-fatto1",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",

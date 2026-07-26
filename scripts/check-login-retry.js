@@ -15,6 +15,13 @@ for (const expected of [
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
 }
 
+for (const expected of [
+  'functions("europe-west1").httpsCallable("registerTester")',
+  "temporaryPassword: password"
+]) {
+  if (!script.includes(expected)) throw new Error(`Auto-registrazione mancante: ${expected}`);
+}
+
 if (!style.includes("overflow-wrap: anywhere") || !style.includes("max-width: 100vw")) {
   throw new Error("Layout mobile login non protetto.");
 }

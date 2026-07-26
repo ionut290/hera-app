@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="./icons/hera-icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css?v=20260724b">
+  <link rel="stylesheet" href="first-login-password.css?v=20260726a">
   <link rel="stylesheet" href="identity-card-feature.css?v=20260724f">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
 </head>
@@ -73,13 +74,14 @@
       <div class="auth-gate-logo">👤</div>
       <p class="auth-gate-kicker">Varga Cantieri</p>
       <h1>Login richiesto</h1>
-      <p id="auth-gate-message" class="muted">Accedi con il tuo account Google oppure con le credenziali amministratore.</p>
+      <p id="auth-gate-message" class="muted">Accedi con la tua email e password.</p>
       <form id="auth-email-form" class="auth-email-form" autocomplete="on">
         <label for="auth-email-input">Email</label>
         <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
         <label for="auth-password-input">Password</label>
         <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
-        <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra come superadmin</button>
+        <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
+        <button id="auth-request-password-btn" class="btn" type="button">Richiedi password temporanea</button>
         <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
       </form>
       <div class="auth-gate-divider"><span>oppure</span></div>
@@ -97,6 +99,19 @@
         <button id="biometric-enable-btn" class="btn btn-primary" type="button">ATTIVA</button>
         <button id="biometric-not-now-btn" class="btn" value="cancel">NON ORA</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="first-password-dialog" class="biometric-dialog first-password-dialog">
+    <form id="first-password-form">
+      <h2>Cambia la password</h2>
+      <p>Per proteggere il tuo account devi scegliere una nuova password personale prima di entrare.</p>
+      <label for="first-password-input">Nuova password</label>
+      <input id="first-password-input" type="password" minlength="10" autocomplete="new-password" required>
+      <label for="first-password-confirm-input">Conferma password</label>
+      <input id="first-password-confirm-input" type="password" minlength="10" autocomplete="new-password" required>
+      <p id="first-password-feedback" class="muted" role="status" aria-live="polite"></p>
+      <button id="first-password-save-btn" class="btn btn-primary" type="submit">SALVA E CONTINUA</button>
     </form>
   </dialog>
 
@@ -1748,6 +1763,7 @@
   <script src="firebase-config.js"></script>
   <script src="native-android-runtime.js?v=20260725a"></script>
   <script src="auth-login-fix.js?v=20260724b"></script>
+  <script src="first-login-password.js?v=20260726a"></script>
   <script src="private-documents-v2.js?v=20260724a"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>

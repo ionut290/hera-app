@@ -41,6 +41,11 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
 
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: hera-app-6cd2b
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -57,3 +62,12 @@ jobs:
 
       - name: Deploy registerTester
         run: firebase deploy --only functions:registerTester --project hera-app-6cd2b --non-interactive
+
+      - name: Allow app invocation
+        run: |
+          gcloud functions add-iam-policy-binding registerTester \
+            --region=europe-west1 \
+            --member=allUsers \
+            --role=roles/cloudfunctions.invoker \
+            --project=hera-app-6cd2b \
+            --quiet

@@ -93,7 +93,6 @@ jobs:
           ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           set -euo pipefail
-          # Capacitor rigenera il progetto: conserva prima le integrazioni native Hera.
           rm -rf "$RUNNER_TEMP/hera-native-android"
           mkdir -p "$RUNNER_TEMP/hera-native-android"
           cp -R android/app/src/main/java "$RUNNER_TEMP/hera-native-android/java"
@@ -104,9 +103,6 @@ jobs:
           rm -rf android/app/src/main/java
           cp -R "$RUNNER_TEMP/hera-native-android/java" android/app/src/main/java
           cp "$RUNNER_TEMP/hera-native-android/AndroidManifest.xml" android/app/src/main/AndroidManifest.xml
-          # Non sostituire capacitor.build.gradle: Capacitor vi inserisce le dipendenze
-          # dei plugin Geolocation, PushNotifications e Firebase Authentication.
-          # La sostituzione completa rimuoveva tali dipendenze e faceva fallire l'AAB.
           printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
           cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
           grep -q "capacitor-geolocation" android/app/capacitor.build.gradle
@@ -127,12 +123,8 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
 
-          # Eseguire prima l'ultimo sync: Capacitor può rigenerare
-          # capacitor.build.gradle e rimuovere le integrazioni Hera.
           npx cap sync android
 
-          # Ripristinare l'icona ufficiale VARGA CANTIERI dopo la rigenerazione
-          # del progetto Android, sostituendo le icone predefinite di Capacitor.
           find android/app/src/main/res -type f -name "splash.png" -delete
           cp -R android-resources/res/. android/app/src/main/res/
           mkdir -p android/app/src/main/res/drawable-xhdpi
@@ -145,17 +137,42 @@ jobs:
           test -s android/app/src/main/res/drawable-xhdpi/splash_logo.png
           test -s android/app/src/main/res/values-v31/styles.xml
 
-          # Aggiungere le dipendenze native solo dopo l'ultimo sync.
-          # Non sostituire il file generato: contiene anche Geolocation,
-          # PushNotifications e Firebase Authentication.
           printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
           cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
 
-          # Verifica finale immediatamente prima della configurazione/build.
           grep -q "capacitor-geolocation" android/app/capacitor.build.gradle
           grep -q "capacitor-push-notifications" android/app/capacitor.build.gradle
           grep -q "play-services-location" android/app/capacitor.build.gradle
           grep -q "androidx.biometric" android/app/capacitor.build.gradle
+
+      - name: Enforce Play target API 36
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("android/variables.gradle")
+          if not path.exists():
+              raise SystemExit("File android/variables.gradle non trovato")
+
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "compileSdkVersion": "36",
+              "targetSdkVersion": "36",
+          }
+
+          for key, value in replacements.items():
+              pattern = rf"(^\s*{re.escape(key)}\s*=\s*)\d+"
+              text, count = re.subn(pattern, rf"\g<1>{value}", text, count=1, flags=re.MULTILINE)
+              if count != 1:
+                  raise SystemExit(f"Impossibile aggiornare {key} in android/variables.gradle")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          grep -Eq '^\s*compileSdkVersion\s*=\s*36' android/variables.gradle
+          grep -Eq '^\s*targetSdkVersion\s*=\s*36' android/variables.gradle
 
       - name: Restore upload keystore
         shell: bash

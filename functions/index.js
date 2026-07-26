@@ -24,19 +24,18 @@ exports.registerTester = functions.region("europe-west1").https.onCall(
     const firstName = String(data?.firstName || "").trim().slice(0, 80);
     const lastName = String(data?.lastName || "").trim().slice(0, 80);
     const displayName = [firstName, lastName].filter(Boolean).join(" ");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
       throw new functions.https.HttpsError("invalid-argument", "Indirizzo email non valido.");
     }
     if (!firstName || !lastName) {
       throw new functions.https.HttpsError("invalid-argument", "Nome e cognome sono obbligatori.");
     }
-    const configuredHash = String(functions.config().tester?.password_hash || "");
-    const suppliedHash = crypto.createHash("sha256").update(password).digest("hex");
-    if (
-      configuredHash.length !== suppliedHash.length
-      || !crypto.timingSafeEqual(Buffer.from(configuredHash), Buffer.from(suppliedHash))
-    ) {
-      throw new functions.https.HttpsError("permission-denied", "Password temporanea non valida.");
+    if (password.length < 10) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "La password deve contenere almeno 10 caratteri."
+      );
     }
 
     try {
@@ -44,33 +43,76 @@ exports.registerTester = functions.region("europe-west1").https.onCall(
       throw new functions.https.HttpsError("already-exists", "Account già esistente.");
     } catch (error) {
       if (error instanceof functions.https.HttpsError) throw error;
-      if (error.code !== "auth/user-not-found") throw error;
+      if (error.code !== "auth/user-not-found") {
+        console.error("Verifica account per registrazione fallita.", {
+          code: error?.code || "",
+          message: error?.message || ""
+        });
+        throw new functions.https.HttpsError(
+          "internal",
+          "Impossibile verificare l’indirizzo email. Riprova tra poco."
+        );
+      }
     }
 
-    const user = await admin.auth().createUser({
-      email,
-      password,
-      displayName,
-      emailVerified: false,
-      disabled: false
-    });
-    await admin.firestore().collection("platformUsers").doc(user.uid).set({
-      uid: user.uid,
-      email,
-      displayName,
-      firstName,
-      lastName,
-      role: "user",
-      ruolo: "user",
-      isAdmin: false,
-      admin: false,
-      banned: false,
-      mustChangePassword: true,
-      selfRegistered: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    return { created: true };
+    let user = null;
+    try {
+      user = await admin.auth().createUser({
+        email,
+        password,
+        displayName,
+        emailVerified: false,
+        disabled: false
+      });
+      await admin.firestore().collection("platformUsers").doc(user.uid).set({
+        uid: user.uid,
+        email,
+        displayName,
+        firstName,
+        lastName,
+        role: "user",
+        ruolo: "user",
+        isAdmin: false,
+        admin: false,
+        banned: false,
+        mustChangePassword: false,
+        selfRegistered: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { created: true };
+    } catch (error) {
+      if (error?.code === "auth/email-already-exists") {
+        throw new functions.https.HttpsError("already-exists", "Account già esistente.");
+      }
+      if (["auth/invalid-password", "auth/weak-password"].includes(error?.code)) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "La password deve contenere almeno 10 caratteri."
+        );
+      }
+
+      if (user?.uid) {
+        try {
+          await admin.auth().deleteUser(user.uid);
+        } catch (cleanupError) {
+          console.error("Pulizia account incompleto fallita.", {
+            uid: user.uid,
+            code: cleanupError?.code || "",
+            message: cleanupError?.message || ""
+          });
+        }
+      }
+
+      console.error("Creazione account fallita.", {
+        code: error?.code || "",
+        message: error?.message || ""
+      });
+      throw new functions.https.HttpsError(
+        "internal",
+        "Creazione account non riuscita. Riprova tra poco."
+      );
+    }
   }
 );
 

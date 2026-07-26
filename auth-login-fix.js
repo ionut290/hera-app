@@ -84,6 +84,18 @@
     }, { merge: true });
   }
 
+  function requiresEmailVerification(user) {
+    return Boolean(user?.email && user.emailVerified === false);
+  }
+
+  function showEmailVerificationRequired() {
+    const message = "Prima di accedere ai dati, apri l’email di verifica e conferma il tuo indirizzo.";
+    const gateMessage = document.getElementById("auth-gate-message");
+    const feedback = document.getElementById("auth-email-feedback");
+    if (gateMessage) gateMessage.textContent = message;
+    if (feedback) feedback.textContent = message;
+  }
+
   function installProfileAccessGuard() {
     if (!window.firebase || typeof firebase.auth !== "function") return;
     const authInstance = firebase.auth();
@@ -92,6 +104,7 @@
     const originalOnAuthStateChanged = authInstance.onAuthStateChanged.bind(authInstance);
     authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile(nextOrObserver, error, completed) {
       const wrapCallback = (callback) => async (user) => {
+        const emailVerificationRequired = requiresEmailVerification(user);
         if (user) {
           try {
             await ensurePlatformProfileForAuthenticatedUser(user);
@@ -99,8 +112,16 @@
             console.error("Errore preparazione profilo utente autenticato:", profileError);
           }
         }
-        if (typeof callback === "function") return callback(user);
-        return undefined;
+
+        const effectiveUser = emailVerificationRequired ? null : user;
+        if (emailVerificationRequired) window.__heraEmailVerificationRequired = true;
+        else if (user) window.__heraEmailVerificationRequired = false;
+
+        const result = typeof callback === "function"
+          ? await callback(effectiveUser)
+          : undefined;
+        if (emailVerificationRequired) showEmailVerificationRequired();
+        return result;
       };
 
       if (typeof nextOrObserver === "function") {

@@ -9,7 +9,7 @@ const workflowSource = fs.readFileSync(
   "utf8"
 );
 
-if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726d"></script>')) {
+if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726e"></script>')) {
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
@@ -82,6 +82,18 @@ if (fixSource.includes("banned: false")) {
 
 if (!fixSource.includes("authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile")) {
   throw new Error("app.js potrebbe controllare il profilo prima della sua preparazione.");
+}
+
+for (const expected of [
+  "requiresEmailVerification",
+  "user.emailVerified === false",
+  "effectiveUser = emailVerificationRequired ? null : user",
+  "showEmailVerificationRequired",
+  "Prima di accedere ai dati, apri l’email di verifica"
+]) {
+  if (!fixSource.includes(expected)) {
+    throw new Error(`Il caricamento dati non attende la verifica email: ${expected}`);
+  }
 }
 
 if (!fixSource.includes("signInWithPopup(provider)")) {

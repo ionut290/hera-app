@@ -58,6 +58,16 @@
     }
   }
 
+  async function clearForcedPasswordFlag(user) {
+    await user.reload();
+    await user.getIdToken(true);
+    await firebase.firestore().collection("platformUsers").doc(user.uid).set({
+      mustChangePassword: false,
+      passwordChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+
   async function saveNewPassword(event) {
     event.preventDefault();
     if (saving || !pendingUser) return;
@@ -80,11 +90,18 @@
     setFeedback("Salvataggio della nuova password...");
     try {
       await pendingUser.updatePassword(nextPassword);
-      await firebase.firestore().collection("platformUsers").doc(pendingUser.uid).set({
-        mustChangePassword: false,
-        passwordChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+
+      try {
+        await clearForcedPasswordFlag(pendingUser);
+      } catch (profileError) {
+        console.error("Password aggiornata, ma aggiornamento profilo Firestore fallito:", profileError);
+        if (profileError?.code === "permission-denied" || profileError?.code === "firestore/permission-denied") {
+          setFeedback("Password salvata. Aggiornamento del profilo non riuscito: riprova ad accedere.");
+        } else {
+          setFeedback("Password salvata. Alcuni dati del profilo non sono stati aggiornati.");
+        }
+      }
+
       if (!pendingUser.emailVerified) {
         await pendingUser.sendEmailVerification();
         setFeedback("Password salvata. Controlla la tua email e verifica l’indirizzo prima di accedere.");
@@ -131,7 +148,6 @@
       if (loginFeedback) loginFeedback.textContent = genericMessage;
     } catch (error) {
       console.error("Richiesta password fallita:", error);
-      // Messaggio intenzionalmente generico: non rivela se un indirizzo è registrato.
       if (loginFeedback) loginFeedback.textContent = genericMessage;
     } finally {
       if (requestButton) requestButton.disabled = false;

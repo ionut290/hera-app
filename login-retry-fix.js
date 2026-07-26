@@ -47,7 +47,15 @@
     try {
       const auth = firebase.auth();
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-      await auth.signInWithEmailAndPassword(email, password);
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (loginError) {
+        const code = String(loginError?.code || "").toLowerCase();
+        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
+        const registerTester = firebase.app().functions("europe-west1").httpsCallable("registerTester");
+        await registerTester({ email, temporaryPassword: password });
+        await auth.signInWithEmailAndPassword(email, password);
+      }
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
     } catch (error) {

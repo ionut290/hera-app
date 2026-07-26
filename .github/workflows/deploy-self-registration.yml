@@ -1,0 +1,43 @@
+name: Deploy tester self-registration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "functions/index.js"
+      - "firestore.rules"
+      - ".github/workflows/deploy-self-registration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: functions
+        run: npm install --no-audit --no-fund
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - name: Store temporary tester password
+        env:
+          TESTER_TEMP_PASSWORD: ${{ secrets.TESTER_TEMP_PASSWORD }}
+        run: |
+          printf '%s' "$TESTER_TEMP_PASSWORD" |
+            npx --yes firebase-tools@latest functions:secrets:set TESTER_TEMP_PASSWORD \
+              --project hera-app-6cd2b --data-file=- --force
+      - name: Deploy registration and verified-email rules
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --only functions:registerTester,firestore:rules
+          --project hera-app-6cd2b
+          --non-interactive
+          --force

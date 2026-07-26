@@ -18,6 +18,7 @@ for (const expected of [
   "updatePassword(nextPassword)",
   "passwordChangedAt",
   "sendPasswordResetEmail(email)",
+  "sendEmailVerification()",
   'dialog.addEventListener("cancel", (event) => event.preventDefault())'
 ]) {
   if (!client.includes(expected)) throw new Error(`Controllo client mancante: ${expected}`);

@@ -89,6 +89,39 @@
     });
   }
 
+  function getVehicleIcon(vehicle) {
+    const code = String(vehicle || "").trim().toUpperCase();
+    if (code.startsWith("MA")) return { icon: "🏗️", label: "Escavatore" };
+    if (code.startsWith("A")) return { icon: "🚛", label: "Camion" };
+    if (code.startsWith("T")) return { icon: "🚜", label: "Trattore grande" };
+    if (code.startsWith("R")) return { icon: "🚜", label: "Trattorino" };
+    return { icon: "🛠️", label: "Attrezzatura" };
+  }
+
+  function renderVehicleBadge(vehicle) {
+    const value = String(vehicle || "").trim();
+    const meta = getVehicleIcon(value);
+    return `<span class="today-vehicle-badge" title="${escapeHTML(meta.label)}" aria-label="${escapeHTML(`${meta.label} ${value}`)}"><span class="today-vehicle-icon" aria-hidden="true">${meta.icon}</span><span>${escapeHTML(value)}</span></span>`;
+  }
+
+  function installTodayVehicleStyle() {
+    if (document.getElementById("today-vehicle-icons-style")) return;
+    const style = document.createElement("style");
+    style.id = "today-vehicle-icons-style";
+    style.textContent = `
+      .today-vehicles-modal .confirm-modal-card{padding:14px;max-width:520px}
+      .today-vehicles-modal h2{font-size:1.05rem;margin:0 0 10px}
+      .today-vehicles-modal h3{font-size:.9rem;margin:10px 0 5px}
+      .today-vehicle-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:4px 0}
+      .today-vehicle-team{font-size:.76rem;font-weight:700;color:#475569;margin-right:2px}
+      .today-vehicle-badge{display:inline-flex;align-items:center;gap:2px;min-height:20px;padding:1px 5px;border:1px solid #d8e0ea;border-radius:7px;background:#f8fafc;color:#172033;font-size:.72rem;font-weight:700;line-height:1;white-space:nowrap}
+      .today-vehicle-icon{font-size:.78rem;line-height:1;transform:translateY(-.5px)}
+      .today-vehicles-modal .confirm-modal-actions{margin-top:10px}
+      @media(max-width:480px){.today-vehicles-modal .confirm-modal-card{padding:12px}.today-vehicle-badge{font-size:.68rem;padding:1px 4px}.today-vehicle-icon{font-size:.74rem}}
+    `;
+    document.head.appendChild(style);
+  }
+
   function openAssignedVehicles() {
     const assignments = getAssignments();
     if (!assignments.length) {
@@ -106,16 +139,17 @@
       alert("Oggi non risultano mezzi assegnati alla tua squadra.");
       return;
     }
+    installTodayVehicleStyle();
     const overlay = document.createElement("div");
-    overlay.className = "confirm-modal";
+    overlay.className = "confirm-modal today-vehicles-modal";
     overlay.innerHTML = `
       <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-label="Mezzi assegnati oggi">
-        <h2>🚚 Mezzi assegnati oggi</h2>
+        <h2>Mezzi assegnati oggi</h2>
         ${groups.map(({ assignment, rows }) => `
           <section>
             <h3>${escapeHTML(assignment.commessaName || "Commessa")}</h3>
             ${rows.map(({ squadraLabel, vehicles }) => `
-              <p><b>${escapeHTML(squadraLabel)}:</b> ${vehicles.map((vehicle) => escapeHTML(vehicle)).join(", ")}</p>
+              <div class="today-vehicle-row"><span class="today-vehicle-team">${escapeHTML(squadraLabel)}</span>${vehicles.map(renderVehicleBadge).join("")}</div>
             `).join("")}
           </section>`).join("")}
         <div class="confirm-modal-actions">
@@ -195,9 +229,6 @@
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);
   };
 
-  // Selettore mezzi stabile su browser mobile e WebView Android.
-  // Sostituisce il popup nativo del datalist, che può finire dietro la tastiera
-  // o fuori dallo schermo, con una finestra scorrevole e ricercabile.
   function installVehiclePickerFix() {
     if (document.getElementById("vehicle-picker-fix-style")) return;
     const style = document.createElement("style");
@@ -281,5 +312,6 @@
     }, true);
   }
 
+  installTodayVehicleStyle();
   installVehiclePickerFix();
 })();

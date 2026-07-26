@@ -14,7 +14,7 @@ service cloud.firestore {
     function isBannedUser() {
       return authPresent()
         && exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
-        && get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.banned == true;
+        && get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.get("banned", false) == true;
     }
 
     function isAdmin() {

@@ -103,9 +103,10 @@
       <label for="registration-last-name">Cognome</label>
       <input id="registration-last-name" type="text" autocomplete="family-name" maxlength="80" required>
       <label for="registration-password">Password</label>
-      <input id="registration-password" type="password" autocomplete="new-password" required>
+      <input id="registration-password" type="password" minlength="10" autocomplete="new-password" required>
+      <small class="muted">Almeno 10 caratteri.</small>
       <label for="registration-password-confirm">Conferma password</label>
-      <input id="registration-password-confirm" type="password" autocomplete="new-password" required>
+      <input id="registration-password-confirm" type="password" minlength="10" autocomplete="new-password" required>
       <p id="registration-feedback" class="muted" role="status" aria-live="polite"></p>
       <div class="actions-row">
         <button id="registration-cancel-btn" class="btn" type="button">ANNULLA</button>
@@ -1788,7 +1789,7 @@
   <script src="native-android-runtime.js?v=20260725a"></script>
   <script src="auth-login-fix.js?v=20260724b"></script>
   <script src="first-login-password.js?v=20260726a"></script>
-  <script src="login-retry-fix.js?v=20260726d"></script>
+  <script src="login-retry-fix.js?v=20260726e"></script>
   <script src="private-documents-v2.js?v=20260724a"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>

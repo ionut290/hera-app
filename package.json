@@ -16,6 +16,7 @@
     "check:android-done-push": "node scripts/check-android-done-push.js",
     "check:fuel-stations": "node scripts/check-fuel-stations.js",
     "check:startup-splash": "node scripts/check-startup-splash.js",
+    "check:today-summary": "node scripts/check-today-summary.js",
     "check:weather": "node scripts/check-weather.js"
   },
   "devDependencies": {

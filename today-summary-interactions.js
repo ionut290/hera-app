@@ -3,37 +3,34 @@
 (() => {
   const getAssignments = () => getCurrentUserAssignedCommesseForDate(getTodayDateKey());
 
-  function getRecordedHours(dateKey, assignments = getCurrentUserAssignedCommesseForDate(dateKey)) {
-    if (!currentUser || !dateKey || !hoursReportsLoaded) return 0;
-    const assignedCommesse = new Set(assignments.map((assignment) => String(assignment.commessaId || "")));
-    const identities = getCurrentUserIdentityParts();
-    const currentUid = String(currentUser.uid || "").trim();
+  function getPlannedHours(assignments = getAssignments()) {
+    const uniqueRows = new Set();
     let total = 0;
-
-    allHoursReports.forEach((report) => {
-      if (normalizeHoursReportDateKey(report?.date) !== dateKey) return;
-      (Array.isArray(report?.entries) ? report.entries : []).forEach((entry) => {
-        if (!assignedCommesse.has(String(entry?.commessaId || ""))) return;
-        (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
-          const rowUserId = String(row?.utenteId || row?.userId || row?.uid || row?.operatoreId || "").trim();
-          const matchesUser = (currentUid && rowUserId === currentUid)
-            || doSquadraMemberAndUserMatch(row?.operatore || row?.nome || row?.name || "", identities);
-          const value = Number(row?.ore || 0);
-          if (matchesUser && Number.isFinite(value) && value > 0) total += value;
-        });
+    assignments.forEach((assignment) => {
+      (assignment.matchedRows || []).forEach(({ squadraIndex, row }) => {
+        const rowKey = `${assignment.commessaId}:${squadraIndex}`;
+        if (uniqueRows.has(rowKey)) return;
+        uniqueRows.add(rowKey);
+        total += getSquadraWorkedHours(row);
       });
     });
     return total;
   }
 
   function getAlertGroups(assignments = getAssignments()) {
-    return assignments.map((assignment) => ({
-      assignment,
-      issues: buildSquadraWarningDetails(
+    return assignments.map((assignment) => {
+      const matchedRows = assignment.matchedRows || [];
+      const assignedAlerts = matchedRows
+        .map(({ squadraLabel, row }) => String(row?.avviso || "").trim()
+          ? `⚠️ ${squadraLabel}: ${String(row.avviso).trim()}`
+          : "")
+        .filter(Boolean);
+      const safetyAlerts = buildSquadraWarningDetails(
         assignment.commessa,
-        (assignment.matchedRows || []).map((item) => item.row)
-      )
-    })).filter((group) => group.issues.length);
+        matchedRows.map((item) => item.row)
+      );
+      return { assignment, issues: [...assignedAlerts, ...safetyAlerts] };
+    }).filter((group) => group.issues.length);
   }
 
   function openChoice({ title, description, assignments, actionLabel, onSelect }) {
@@ -92,6 +89,45 @@
     });
   }
 
+  function openAssignedVehicles() {
+    const assignments = getAssignments();
+    if (!assignments.length) {
+      alert("Oggi non risulti assegnato a nessuna commessa.");
+      return;
+    }
+    const groups = assignments.map((assignment) => ({
+      assignment,
+      rows: (assignment.matchedRows || []).map(({ squadraLabel, row }) => ({
+        squadraLabel,
+        vehicles: parseMultiEntryValue(row?.mezzi || "")
+      })).filter((item) => item.vehicles.length)
+    })).filter((group) => group.rows.length);
+    if (!groups.length) {
+      alert("Oggi non risultano mezzi assegnati alla tua squadra.");
+      return;
+    }
+    const overlay = document.createElement("div");
+    overlay.className = "confirm-modal";
+    overlay.innerHTML = `
+      <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-label="Mezzi assegnati oggi">
+        <h2>🚚 Mezzi assegnati oggi</h2>
+        ${groups.map(({ assignment, rows }) => `
+          <section>
+            <h3>${escapeHTML(assignment.commessaName || "Commessa")}</h3>
+            ${rows.map(({ squadraLabel, vehicles }) => `
+              <p><b>${escapeHTML(squadraLabel)}:</b> ${vehicles.map((vehicle) => escapeHTML(vehicle)).join(", ")}</p>
+            `).join("")}
+          </section>`).join("")}
+        <div class="confirm-modal-actions">
+          <button type="button" class="btn btn-primary" data-today-vehicles-close>Chiudi</button>
+        </div>
+      </div>`;
+    const close = () => overlay.remove();
+    overlay.querySelector("[data-today-vehicles-close]")?.addEventListener("click", close);
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+    document.body.appendChild(overlay);
+  }
+
   function openAlerts() {
     const groups = getAlertGroups();
     if (!groups.length) {
@@ -129,6 +165,7 @@
 
   replaceSummaryButton("todayCommesseBtn", openAssignedCommessa);
   replaceSummaryButton("todayHoursBtn", openAssignedHours);
+  replaceSummaryButton("todayMezziBtn", openAssignedVehicles);
   replaceSummaryButton("todayAlertsBtn", openAlerts);
 
   renderTodaySummary = function renderInteractiveTodaySummary() {
@@ -152,7 +189,7 @@
 
     const alerts = getAlertGroups(assignments).reduce((sum, group) => sum + group.issues.length, 0);
     ui.todayCommesseCount.textContent = String(assignments.length);
-    ui.todayHoursCount.textContent = formatSquadraHours(getRecordedHours(dateKey, assignments)) || "0";
+    ui.todayHoursCount.textContent = formatSquadraHours(getPlannedHours(assignments)) || "0";
     ui.todayMezziCount.textContent = String(mezzi.size);
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);

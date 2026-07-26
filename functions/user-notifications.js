@@ -208,22 +208,44 @@ exports.notifyAndroidHoursInserted = onDocumentCreated(
 function extractSquadraOperators(documentData) {
   const values = new Set();
   (Array.isArray(documentData?.squadre) ? documentData.squadre : []).forEach((row) => {
-    [row.caposquadra, row.caposquadraEmail, row.caposquadraUid].forEach((value) => {
-      if (String(value || "").trim()) values.add(String(value).trim());
-    });
-    const personnel = row.personale || row.operatori || row.operators || [];
-    if (Array.isArray(personnel)) {
-      personnel.forEach((value) => {
-        const label = typeof value === "object"
-          ? value.uid || value.email || value.displayName || value.nome
-          : value;
-        if (String(label || "").trim()) values.add(String(label).trim());
-      });
-    } else {
-      String(personnel || "").split(/[;,\n|]+/).map((value) => value.trim()).filter(Boolean).forEach((value) => values.add(value));
-    }
+    extractSquadraRowOperators(row).forEach((value) => values.add(value));
   });
   return values;
+}
+
+function extractSquadraRowOperators(row = {}) {
+  const values = new Set();
+  [row.caposquadra, row.caposquadraEmail, row.caposquadraUid].forEach((value) => {
+    if (String(value || "").trim()) values.add(String(value).trim());
+  });
+  const personnel = row.personale || row.operatori || row.operators || [];
+  if (Array.isArray(personnel)) {
+    personnel.forEach((value) => {
+      const label = typeof value === "object"
+        ? value.uid || value.email || value.displayName || value.nome
+        : value;
+      if (String(label || "").trim()) values.add(String(label).trim());
+    });
+  } else {
+    String(personnel || "").split(/[;,\n|]+/).map((value) => value.trim()).filter(Boolean).forEach((value) => values.add(value));
+  }
+  return values;
+}
+
+function extractChangedSquadraAlerts(before, after) {
+  const beforeRows = Array.isArray(before?.squadre) ? before.squadre : [];
+  const afterRows = Array.isArray(after?.squadre) ? after.squadre : [];
+  const sameDate = String(before?.riferimentoData || before?.dateKey || "") === String(after?.riferimentoData || after?.dateKey || "");
+  return afterRows.map((row, index) => {
+    const alertText = String(row?.avviso || "").trim();
+    const previousAlertText = String(beforeRows[index]?.avviso || "").trim();
+    if (!alertText || (sameDate && normalize(alertText) === normalize(previousAlertText))) return null;
+    return {
+      index,
+      alertText,
+      operators: [...extractSquadraRowOperators(row)]
+    };
+  }).filter(Boolean);
 }
 
 exports.notifyAndroidSquadraAssignment = onDocumentWritten(
@@ -236,20 +258,37 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
     const beforeOperators = extractSquadraOperators(before);
     const afterOperators = extractSquadraOperators(after);
     const added = [...afterOperators].filter((operator) => ![...beforeOperators].some((oldValue) => normalize(oldValue) === normalize(operator)));
-    if (!added.length) return null;
+    const changedAlerts = extractChangedSquadraAlerts(before, after);
+    if (!added.length && !changedAlerts.length) return null;
 
     const users = await loadPushUsers();
     const commessaName = String(after.commessaNome || "Commessa");
-    const date = String(after.riferimentoData || "");
+    const date = String(after.riferimentoData || after.dateKey || "");
     for (const user of users) {
-      if (!added.some((operator) => userMatches(user, operator))) continue;
-      await sendToUsers([user], {
-        title: "👷 Aggiunto a una squadra",
-        body: `Sei stato aggiunto alla squadra di ${commessaName}${date ? ` per il ${date}` : ""}.`,
-        eventType: "squadra-assigned",
-        data: { commessaId: event.params.commessaId, date },
-        tag: `squadra-${event.params.commessaId}-${date}-${user.uid}`
-      });
+      if (added.some((operator) => userMatches(user, operator))) {
+        await sendToUsers([user], {
+          title: "👷 Aggiunto a una squadra",
+          body: `Sei stato aggiunto alla squadra di ${commessaName}${date ? ` per il ${date}` : ""}.`,
+          eventType: "squadra-assigned",
+          data: { commessaId: event.params.commessaId, date },
+          tag: `squadra-${event.params.commessaId}-${date}-${user.uid}`
+        });
+      }
+      for (const squadAlert of changedAlerts) {
+        if (!squadAlert.operators.some((operator) => userMatches(user, operator))) continue;
+        await sendToUsers([user], {
+          title: "⚠️ Avviso squadra",
+          body: `${commessaName}${date ? ` • ${date}` : ""}: ${squadAlert.alertText}`,
+          eventType: "squadra-alert",
+          data: {
+            commessaId: event.params.commessaId,
+            date,
+            squadraIndex: squadAlert.index + 1,
+            alertText: squadAlert.alertText
+          },
+          tag: `squadra-alert-${event.params.commessaId}-${date}-${squadAlert.index + 1}-${user.uid}`
+        });
+      }
     }
     return null;
   }

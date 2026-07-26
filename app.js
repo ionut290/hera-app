@@ -6900,14 +6900,28 @@ function normalizeSquadraMemberIdentity(value) {
 
 function getCurrentUserIdentityParts() {
   if (!currentUser) return [];
-  const linkedPerson = getPersonaleByLoginEmail();
+  const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser.uid || ""));
+  return getPlatformUserIdentityParts(currentProfile || currentUser);
+}
+
+function getPlatformUserIdentityParts(user) {
+  if (!user) return [];
+  const userEmail = String(user.email || "").trim();
+  const linkedPerson = userEmail
+    ? personaleRecords.find((person) => normalizeEmail(person?.email) === normalizeEmail(userEmail))
+    : null;
   const parts = [
     linkedPerson ? getPersonaleDisplayName(linkedPerson) : "",
     linkedPerson?.email,
-    currentUser.displayName,
-    currentUser.email
+    user.id,
+    user.uid,
+    user.displayName,
+    user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "",
+    user.userName,
+    user.nome,
+    userEmail
   ];
-  const emailLocal = String(currentUser.email || "").split("@")[0] || "";
+  const emailLocal = userEmail.split("@")[0] || "";
   if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
   return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
 }
@@ -6938,7 +6952,10 @@ function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
   const identities = getCurrentUserIdentityParts();
   for (let index = 0; index < squadRows.length; index += 1) {
-    const personale = parseMultiEntryValue(squadRows[index]?.personale || "");
+    const personale = [
+      ...parseMultiEntryValue(squadRows[index]?.personale || ""),
+      ...parseMultiEntryValue(squadRows[index]?.caposquadra || "")
+    ];
     const matchedName = personale.find((name) => doSquadraMemberAndUserMatch(name, identities));
     if (matchedName) {
       return {
@@ -19914,25 +19931,31 @@ function subscribeSquadre() {
 
   stopSquadreSubscription();
   const selectedDateKey = getActiveSquadreDateKey();
+  const todayDateKey = getTodayDateKey();
+  const subscribedDateKeys = [...new Set([selectedDateKey, todayDateKey].filter(Boolean))];
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
   console.log("LOAD SQUADRE START", {
     collections: [getSquadreHistoryCollectionName(), isSnowServiceContext() ? "appConfig/neveSquadreView" : "appConfig/squadreView"],
-    dateKey: selectedDateKey,
+    dateKeys: subscribedDateKeys,
     uid: currentUser.uid
   });
 
   const applySquadreSnapshot = (snapshot) => {
-    const historyForDate = new Map();
+    const historyByDate = new Map(subscribedDateKeys.map((dateKey) => [dateKey, new Map()]));
     snapshot.forEach((doc) => {
       const row = normalizeSquadraStoricoDocument(doc, selectedDateKey);
       if (!row.commessaId) return;
-      historyForDate.set(row.commessaId, row);
+      const rowDateKey = row.dateKey || selectedDateKey;
+      if (!historyByDate.has(rowDateKey)) historyByDate.set(rowDateKey, new Map());
+      historyByDate.get(rowDateKey).set(row.commessaId, row);
     });
-    squadreHistoryByDate.set(selectedDateKey, historyForDate);
+    historyByDate.forEach((historyForDate, dateKey) => {
+      squadreHistoryByDate.set(dateKey, historyForDate);
+    });
     squadreLoadState = { status: "loaded", message: "" };
-    console.log("LOAD SQUADRE OK numero:", historyForDate.size);
+    console.log("LOAD SQUADRE OK numero:", snapshot.size, "date:", subscribedDateKeys);
     renderSquadre();
     updateCommessaDashboard();
     renderCommesseHomeList();
@@ -19944,8 +19967,10 @@ function subscribeSquadre() {
     checkAndSendHoursDeadlineAlerts();
   };
 
-  const squadreQuery = db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", selectedDateKey);
-  console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico where dateKey == data selezionata. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
+  const squadreQuery = subscribedDateKeys.length === 1
+    ? db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", subscribedDateKeys[0])
+    : db.collection(getSquadreHistoryCollectionName()).where("dateKey", "in", subscribedDateKeys);
+  console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico per data selezionata e data odierna. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
   const squadreDataPromise = new Promise((resolve) => {
     let initialSnapshotReceived = false;
     unsubscribeSquadreHistory = squadreQuery.onSnapshot((snapshot) => {
@@ -19957,7 +19982,7 @@ function subscribeSquadre() {
       }
     }, (error) => {
       clearSquadreLoadTimeout();
-      logFirestoreError("LOAD SQUADRE", error, { dateKey: selectedDateKey });
+      logFirestoreError("LOAD SQUADRE", error, { dateKeys: subscribedDateKeys });
       squadreLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento squadre") };
       renderSquadre();
       renderCommesseHomeList();
@@ -20270,7 +20295,7 @@ function formatSquadraOrario(row) {
   return `${start} - ${end} = ${formatSquadraHours(workedMinutes / 60)} h${suffix}`;
 }
 
-function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", orarioFine: "", senzaPausaPranzo: false, impianti: "" }) {
+function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", avviso: "", orario: "", orarioFine: "", senzaPausaPranzo: false, impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
   const orarioParts = getSquadraOrarioParts(rowData);
   const personaleValues = parseMultiEntryValue(rowData.personale);
@@ -20317,6 +20342,10 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
     </div>
     <label class="squadra-note-field">Note
       <textarea class="squadra-note-input" rows="2" placeholder="Note squadra">${escapeHTML(rowData.note || "")}</textarea>
+    </label>
+    <label class="squadra-avviso-field">⚠️ Avviso per questa squadra
+      <textarea class="squadra-avviso-input" rows="3" placeholder="Scrivi un avviso: gli operatori della squadra riceveranno una notifica">${escapeHTML(rowData.avviso || "")}</textarea>
+      <small>Un avviso nuovo o modificato viene mostrato agli operatori assegnati e inviato come notifica.</small>
     </label>
   `;
   const personaleList = row.querySelector(".squadra-personale-list");
@@ -20474,7 +20503,7 @@ function updateEmptySquadraRowsHint() {
 }
 
 function isSquadraRowFilled(row) {
-  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario || row?.orarioFine);
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.avviso || row?.orario || row?.orarioFine);
 }
 
 function readSquadraRows() {
@@ -20493,6 +20522,7 @@ function readSquadraRows() {
     impianti: impiantiDettagli.map((impianto) => impianto.denominazione || impianto.idSap || "").filter(Boolean).join(", "),
     impiantiDettagli,
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
+    avviso: String(row.querySelector(".squadra-avviso-input")?.value || "").trim(),
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
     orarioFine: String(row.querySelector(".squadra-orario-fine-input")?.value || "").trim(),
     senzaPausaPranzo: Boolean(row.querySelector(".squadra-senza-pausa-input")?.checked),
@@ -20683,6 +20713,58 @@ function findDuplicateSquadraRows(rows) {
   return duplicates;
 }
 
+function getSquadraRowMemberNames(row) {
+  return [...new Set([
+    ...parseMultiEntryValue(row?.caposquadra || ""),
+    ...parseMultiEntryValue(row?.personale || "")
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function getSquadraAlertTargetUserIds(row) {
+  const memberNames = getSquadraRowMemberNames(row);
+  return platformUsers
+    .filter((user) => memberNames.some((memberName) => doSquadraMemberAndUserMatch(memberName, getPlatformUserIdentityParts(user))))
+    .map((user) => String(user.id || user.uid || "").trim())
+    .filter(Boolean);
+}
+
+async function createSquadraAlertsForChangedRows({ commessaId, commessaNome, dateKey, previousRows, nextRows }) {
+  const createdDateKey = getDateKeyFromLocalDate(new Date());
+  const changedAlerts = nextRows.map((row, index) => {
+    const avviso = String(row?.avviso || "").trim();
+    const previousAvviso = String(previousRows[index]?.avviso || "").trim();
+    return avviso && normalizeSquadraMemberIdentity(avviso) !== normalizeSquadraMemberIdentity(previousAvviso)
+      ? { row, index, avviso }
+      : null;
+  }).filter(Boolean);
+
+  await Promise.all(changedAlerts.map(({ row, index, avviso }) => {
+    const targetMemberNames = getSquadraRowMemberNames(row);
+    const targetUserIds = getSquadraAlertTargetUserIds(row);
+    return db.collection("userAlerts").add({
+      title: "⚠️ Avviso squadra",
+      message: `${commessaNome} • Squadra ${index + 1} • ${formatDateKeyForDisplay(dateKey)}\n\n${avviso}`,
+      alertText: avviso,
+      source: "squadra-avviso",
+      commessaId,
+      commessaNome,
+      squadraIndex: index + 1,
+      targetMemberNames,
+      targetUserIds,
+      sendToAllRegistered: false,
+      attachments: [],
+      scheduledDateKey: dateKey,
+      createdDateKey,
+      status: "active",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser?.email || currentUser?.uid || "admin",
+      acknowledgedUsers: 0
+    });
+  }));
+
+  return changedAlerts.length;
+}
+
 async function saveSquadraComposition(event) {
   event.preventDefault();
   setSquadraFeedback("Salvataggio composizione in corso...", "info");
@@ -20730,12 +20812,14 @@ async function saveSquadraComposition(event) {
   };
   const currentRef = db.collection(getSquadreCurrentCollectionName()).doc(commessaId);
   const historyRef = db.collection(getSquadreHistoryCollectionName()).doc(`${dateKey}__${commessaId}`);
+  let previousRows = [];
   try {
     await db.runTransaction(async (transaction) => {
       const historySnap = await transaction.get(historyRef);
       const currentRows = historySnap.exists
         ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
         : [];
+      previousRows = currentRows;
       const mergedRows = squadreRows;
       const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
       if (transactionDuplicates.length) {
@@ -20762,7 +20846,20 @@ async function saveSquadraComposition(event) {
   }
   renderCommesseHomeList();
   renderSquadre();
-  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).`, "success");
+  let alertsCreated = 0;
+  try {
+    alertsCreated = await createSquadraAlertsForChangedRows({
+      commessaId,
+      commessaNome: payload.commessaNome,
+      dateKey,
+      previousRows,
+      nextRows: squadreRows
+    });
+  } catch (error) {
+    console.error("Errore creazione notifica avviso squadra:", error);
+  }
+  const notificationFeedback = alertsCreated ? ` ${alertsCreated} avvis${alertsCreated === 1 ? "o inviato" : "i inviati"} agli operatori.` : "";
+  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).${notificationFeedback}`, "success");
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -21114,7 +21211,8 @@ function renderSquadre() {
         row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
         orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
         row.impianti ? renderSquadraImpiantiButtons(row, idx, commessa.id) : "",
-        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : "",
+        row.avviso ? `<br><span class="squadra-saved-alert"><b>⚠️ Avviso:</b> ${escapeHTML(row.avviso)}</span>` : ""
       ].join("");
       const rowConflictReport = {
         operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
@@ -25266,6 +25364,7 @@ function subscribeUsers() {
     renderExternalApps();
     renderImpianti();
     renderMap();
+    renderTodaySummary();
     if (currentUser && currentProfile) {
       void savePersistedSession(currentUser, {
         ...currentProfile,
@@ -26040,6 +26139,14 @@ function getNotificationRecipientUserIds(alertItem) {
   return [];
 }
 
+function isNotificationForCurrentUser(alertItem) {
+  if (!alertItem || !currentUser) return false;
+  if (alertItem.sendToAllRegistered) return true;
+  if (getNotificationRecipientUserIds(alertItem).includes(currentUser.uid)) return true;
+  const memberNames = Array.isArray(alertItem.targetMemberNames) ? alertItem.targetMemberNames : [];
+  return memberNames.some((memberName) => doSquadraMemberAndUserMatch(memberName));
+}
+
 function formatNotificationRecipientsLabel(alertItem) {
   if (alertItem?.sendToAllRegistered) return "Destinatari: tutti gli utenti registrati";
   const ids = getNotificationRecipientUserIds(alertItem);
@@ -26291,23 +26398,24 @@ function subscribeUserAlerts() {
         userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         renderNotificationsList();
         renderNotificationCalendar();
+        renderTodaySummary();
       }, (error) => {
         console.error("Errore caricamento notifiche admin:", error);
       });
     return;
   }
   unsubscribeUserAlerts = db.collection("userAlerts")
-    .limit(30)
+    .orderBy("createdAt", "desc")
+    .limit(100)
     .onSnapshot((snapshot) => {
       const todayKey = getDateKeyFromLocalDate(new Date());
       userAlerts = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
         .filter((item) => {
-          const userTargets = getNotificationRecipientUserIds(item);
-          const belongsToUser = item.sendToAllRegistered || userTargets.includes(currentUser.uid);
+          const belongsToUser = isNotificationForCurrentUser(item);
           if (!belongsToUser) return false;
           const dateKey = String(item.scheduledDateKey || "").trim();
-          return !dateKey || dateKey <= todayKey;
+          return item.source === "squadra-avviso" || !dateKey || dateKey <= todayKey;
         })
         .sort((a, b) => {
           const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
@@ -26315,6 +26423,7 @@ function subscribeUserAlerts() {
           return bMs - aMs;
         });
       maybeShowUserAlert();
+      renderTodaySummary();
     }, (error) => {
       console.error("Errore caricamento notifiche utente:", error);
     });

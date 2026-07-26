@@ -4560,6 +4560,38 @@ body.squadre-impianto-detail-open { overflow: hidden; }
   resize: vertical;
 }
 
+.squadra-avviso-field {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #78350f;
+  font-weight: 800;
+}
+
+.squadra-avviso-field textarea {
+  width: 100%;
+  resize: vertical;
+  border-color: #fbbf24;
+  background: #fff;
+}
+
+.squadra-avviso-field small {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.squadra-saved-alert {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #78350f;
+}
+
 .squadra-impianti-list {
   display: flex;
   align-items: center;

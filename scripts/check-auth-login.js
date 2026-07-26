@@ -9,16 +9,24 @@ const workflowSource = fs.readFileSync(
   "utf8"
 );
 
-if (!indexSource.includes('<script src="auth-login-fix.js?v=20260724b"></script>')) {
+if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726c"></script>')) {
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
-if (!fixSource.includes("configureAndroidEmailPasswordOnly")) {
-  throw new Error("La modalità Android email/password non viene configurata.");
+if (!fixSource.includes("configurePlatformLoginOptions")) {
+  throw new Error("Le opzioni login non vengono configurate in base alla piattaforma.");
 }
 
-if (!fixSource.includes('googleLoginButton.hidden = true')) {
-  throw new Error("Il pulsante Google non viene nascosto su Android.");
+if (!fixSource.includes('googleLoginButton.hidden = !webGoogleEnabled')) {
+  throw new Error("La visibilità del pulsante Google non dipende correttamente dalla piattaforma.");
+}
+
+if (!fixSource.includes('divider.hidden = !webGoogleEnabled')) {
+  throw new Error("Il separatore Google non viene ripristinato sul web.");
+}
+
+if (!fixSource.includes('Accedi con Google oppure con la tua email e password.')) {
+  throw new Error("Il login web non comunica chiaramente l’accesso Google.");
 }
 
 if (!fixSource.includes('emailLoginButton.textContent = "Accedi"')) {
@@ -77,4 +85,4 @@ if (!workflowSource.includes("auth-login-fix.js")) {
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-console.log("Login check passed: Android email/password inherits the same app profile and permissions.");
+console.log("Login check passed: web keeps Google; Android remains email/password-only.");

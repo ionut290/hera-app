@@ -65,6 +65,7 @@ jobs:
           cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
           cp first-login-password.css first-login-password.js www/
           cp login-retry-fix.css login-retry-fix.js www/
+          cp squadre-restyle.css www/
           cp native-android-runtime.js done-button-fix.js www/
           cp delete-account.html privacy.html www/
           cp identity-card-feature.css identity-card-feature.js www/
@@ -82,6 +83,7 @@ jobs:
           test -s www/first-login-password.css
           test -s www/login-retry-fix.js
           test -s www/login-retry-fix.css
+          test -s www/squadre-restyle.css
           if ! grep -q 'native-android-runtime.js' www/index.html; then
             echo "index.html non carica native-android-runtime.js"
             exit 1

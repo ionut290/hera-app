@@ -85,7 +85,16 @@
         passwordChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      closeDialog();
+      if (!pendingUser.emailVerified) {
+        await pendingUser.sendEmailVerification();
+        setFeedback("Password salvata. Controlla la tua email e verifica l’indirizzo prima di accedere.");
+        window.setTimeout(async () => {
+          await firebase.auth().signOut();
+          closeDialog();
+        }, 2500);
+      } else {
+        closeDialog();
+      }
     } catch (error) {
       console.error("Cambio password iniziale fallito:", error);
       if (error?.code === "auth/requires-recent-login") {

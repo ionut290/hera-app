@@ -9521,9 +9521,16 @@ body.auth-required .menu-overlay {
   z-index: 9999;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef3fa 100%);
-  color: var(--text);
+  overflow: hidden;
+  padding:
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at 50% 46%, rgb(245 158 11 / 24%) 0%, rgb(17 18 20 / 0%) 42%),
+    linear-gradient(180deg, #17191c 0%, #090a0c 100%);
+  color: #fff;
 }
 
 .startup-loading.hidden {
@@ -9531,20 +9538,70 @@ body.auth-required .menu-overlay {
 }
 
 .startup-loading-card {
-  display: grid;
-  gap: 8px;
-  min-width: min(280px, 100%);
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3vh, 32px);
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: center;
 }
 
-.startup-loading-card span {
-  color: var(--muted);
-  font-size: 0.95rem;
+.startup-loading-logo {
+  display: block;
+  width: min(90vw, 820px);
+  width: min(90vw, 72dvh, 820px);
+  height: auto;
+  border-radius: 24%;
+  filter: drop-shadow(0 26px 48px rgb(0 0 0 / 50%));
+  animation: startup-logo-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.startup-loading-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgb(255 255 255 / 82%);
+  font-size: clamp(0.95rem, 2.5vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.startup-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgb(255 255 255 / 28%);
+  border-top-color: #fbbf24;
+  border-radius: 50%;
+  animation: startup-spinner 760ms linear infinite;
+}
+
+@keyframes startup-logo-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes startup-spinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-loading-logo,
+  .startup-loading-spinner {
+    animation: none;
+  }
 }
 
 

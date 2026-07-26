@@ -49,6 +49,7 @@ jobs:
           npm run check:auth-login
           npm run check:first-login-password
           npm run check:login-retry
+          npm run check:startup-splash
           npm run check:weather
 
       - name: Prepare Capacitor web directory
@@ -131,11 +132,17 @@ jobs:
 
           # Ripristinare l'icona ufficiale VARGA CANTIERI dopo la rigenerazione
           # del progetto Android, sostituendo le icone predefinite di Capacitor.
+          find android/app/src/main/res -type f -name "splash.png" -delete
           cp -R android-resources/res/. android/app/src/main/res/
+          mkdir -p android/app/src/main/res/drawable-xhdpi
+          cp icons/varga-cantieri-512.png android/app/src/main/res/drawable-xhdpi/splash_logo.png
           test -s android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
           test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          test -s android/app/src/main/res/drawable/splash.xml
+          test -s android/app/src/main/res/drawable-xhdpi/splash_logo.png
+          test -s android/app/src/main/res/values-v31/styles.xml
 
           # Aggiungere le dipendenze native solo dopo l'ultimo sync.
           # Non sostituire il file generato: contiene anche Geolocation,

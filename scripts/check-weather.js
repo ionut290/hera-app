@@ -63,7 +63,7 @@ async function run() {
   assert.match(app, /WEATHER_PROXY_PUBLIC_URL/);
   assert.match(app, /Open-Meteo proxy/);
   assert.match(index, /app\.js\?v=20260726-weather1/);
-  assert.match(serviceWorker, /hera-app-shell-v28/);
+  assert.match(serviceWorker, /hera-app-shell-v29/);
   assert.match(serviceWorker, /app\.js\?v=20260726-weather1/);
   assert.match(netlify, /from = "\/api\/weather"/);
 

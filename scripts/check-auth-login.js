@@ -9,12 +9,36 @@ const workflowSource = fs.readFileSync(
   "utf8"
 );
 
+const rulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+const rulesDeployWorkflowSource = fs.readFileSync(
+  path.join(root, ".github", "workflows", "deploy-self-registration.yml"),
+  "utf8"
+);
+
 if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726e"></script>')) {
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
 if (!fixSource.includes("configurePlatformLoginOptions")) {
   throw new Error("Le opzioni login non vengono configurate in base alla piattaforma.");
+}
+
+if (!rulesSource.includes('.data.get("banned", false) == true')) {
+  throw new Error("Le regole negano i dati quando il nuovo profilo non contiene banned.");
+}
+
+if (rulesSource.includes(".data.banned == true")) {
+  throw new Error("Le regole leggono ancora direttamente il campo banned opzionale.");
+}
+
+if (!rulesDeployWorkflowSource.includes("--only firestore:rules")) {
+  throw new Error("Il workflow non distribuisce le regole Firestore.");
+}
+
+for (const obsolete of ["TESTER_TEMP_PASSWORD", "functions:registerTester"]) {
+  if (rulesDeployWorkflowSource.includes(obsolete)) {
+    throw new Error(`Il deploy regole dipende ancora dalla registrazione legacy: ${obsolete}`);
+  }
 }
 
 if (!fixSource.includes('googleLoginButton.hidden = !webGoogleEnabled')) {

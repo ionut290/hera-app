@@ -1,0 +1,284 @@
+/* Restyling grafico della sezione "Squadre per commessa".
+   Nessuna regola funzionale viene modificata: il file agisce solo su layout,
+   spaziature, colori, bordi, pulsanti e leggibilita. */
+
+#today-squads-section.squadre-card {
+  --squadre-green: #16a34a;
+  --squadre-green-dark: #15803d;
+  --squadre-green-soft: #ecfdf3;
+  --squadre-blue: #2563eb;
+  --squadre-blue-soft: #eff6ff;
+  --squadre-ink: #142033;
+  --squadre-muted: #64748b;
+  --squadre-line: #dbe5ef;
+  --squadre-panel: #ffffff;
+  --squadre-panel-soft: #f8fbff;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid #d9e5e1;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(34, 197, 94, 0.08), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #fbfefd 100%);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.09);
+}
+
+#today-squads-section .squadre-section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+#today-squads-section .squadre-section-head h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 4vw, 1.7rem);
+  line-height: 1.1;
+  color: var(--squadre-ink);
+  letter-spacing: -0.025em;
+}
+
+#today-squads-section .squadre-commesse-toggle,
+#today-squads-section .squadre-auto-btn {
+  min-height: 42px;
+  border-radius: 999px;
+  padding: 0 16px;
+  border: 1px solid #cddbd7;
+  background: rgba(255, 255, 255, 0.95);
+  color: #16352c;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+#today-squads-section .squadre-commesse-toggle.active {
+  border-color: #86efac;
+  background: var(--squadre-green-soft);
+  color: var(--squadre-green-dark);
+}
+
+#today-squads-section .squadre-status-pill {
+  min-height: 36px;
+  padding: 0 14px;
+  background: #dcfce7;
+  color: #14743d;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.12);
+}
+
+#today-squads-section .squadre-filter-controls {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+#today-squads-section .squadre-filter-controls input[type="date"] {
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid #ceded8;
+  background: #ffffff;
+  color: #17352d;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+#today-squads-section .squadre-lista {
+  display: grid;
+  gap: 16px;
+}
+
+/* Ogni blocco commessa generato dall'app diventa una card moderna,
+   senza dipendere da nomi classe troppo specifici. */
+#today-squads-section .squadre-lista > * {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px !important;
+  border: 1px solid #d8e4ef !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,251,255,0.98) 100%) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07) !important;
+}
+
+#today-squads-section .squadre-lista > *::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  border-radius: 22px 0 0 22px;
+  background: linear-gradient(180deg, #2563eb 0%, #4f46e5 100%);
+  pointer-events: none;
+}
+
+#today-squads-section .squadre-lista > *:nth-child(even)::before {
+  background: linear-gradient(180deg, #16a34a 0%, #10b981 100%);
+}
+
+#today-squads-section .squadre-lista > * > * {
+  min-width: 0;
+}
+
+#today-squads-section .squadre-lista h3,
+#today-squads-section .squadre-lista h4,
+#today-squads-section .squadre-lista strong {
+  color: #17352d;
+}
+
+#today-squads-section .squadre-lista h3,
+#today-squads-section .squadre-lista h4 {
+  letter-spacing: -0.015em;
+}
+
+#today-squads-section .squadre-lista p {
+  line-height: 1.45;
+}
+
+#today-squads-section .squadre-lista .btn,
+#today-squads-section .squadre-lista button {
+  min-height: 40px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+#today-squads-section .squadre-lista .btn-primary {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  border-color: #159447;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.22);
+}
+
+#today-squads-section .squadre-lista .pill,
+#today-squads-section .squadre-lista [class*="badge"],
+#today-squads-section .squadre-lista [class*="chip"] {
+  border-radius: 999px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  font-weight: 800;
+}
+
+#today-squads-section .squadre-lista [class*="warning"],
+#today-squads-section .squadre-lista [class*="alert"] {
+  border-color: #fbbf24;
+  background: #fffbeb;
+  color: #a16207;
+}
+
+#today-squads-section .squadre-lista ul,
+#today-squads-section .squadre-lista ol {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+#today-squads-section .squadre-lista li {
+  line-height: 1.45;
+}
+
+/* Migliora la leggibilita delle righe interne delle squadre mantenendo
+   intatti gli elementi, gli ID e tutti gli event listener esistenti. */
+#today-squads-section .squadre-lista article,
+#today-squads-section .squadre-lista section,
+#today-squads-section .squadre-lista [class*="team"],
+#today-squads-section .squadre-lista [class*="squadra"] {
+  border-radius: 18px;
+}
+
+#today-squads-section .squadre-lista article article,
+#today-squads-section .squadre-lista section section,
+#today-squads-section .squadre-lista [class*="team-row"],
+#today-squads-section .squadre-lista [class*="squadra-row"] {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid #e3eaf1;
+  padding: 13px;
+}
+
+#today-summary-card.today-summary-card {
+  border-radius: 24px;
+  padding: 18px;
+  border-color: #dbe5ef;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+}
+
+#today-summary-card .today-summary-grid {
+  gap: 12px;
+}
+
+#today-summary-card .today-summary-item {
+  min-height: 112px;
+  border-radius: 20px;
+  border: 1px solid #d9e3ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+#today-summary-card .today-summary-item:active {
+  transform: scale(0.98);
+}
+
+#today-summary-card .today-summary-item strong {
+  font-size: 1.55rem;
+  color: #172033;
+}
+
+#today-summary-card .today-summary-item span:last-child {
+  font-weight: 800;
+  color: #475569;
+}
+
+@media (max-width: 720px) {
+  #today-squads-section.squadre-card {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  #today-squads-section .squadre-section-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #today-squads-section .squadre-status-pill {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  #today-squads-section .squadre-commesse-toggle {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #today-squads-section .squadre-lista > * {
+    border-radius: 20px !important;
+  }
+
+  #today-summary-card .today-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #today-summary-card .today-summary-item {
+    min-height: 96px;
+  }
+}
+
+@media (max-width: 390px) {
+  #today-squads-section .squadre-section-head h2 {
+    font-size: 1.08rem;
+  }
+
+  #today-squads-section .squadre-commesse-toggle,
+  #today-squads-section .squadre-status-pill {
+    font-size: 0.72rem;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #today-squads-section *,
+  #today-summary-card * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

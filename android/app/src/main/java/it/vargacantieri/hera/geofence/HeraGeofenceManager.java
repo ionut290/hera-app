@@ -44,13 +44,19 @@ public class HeraGeofenceManager {
         return preferences.getBoolean(HeraGeofenceConstants.PREF_ACTIVE, false);
     }
 
-    public boolean hasRequiredPermissions() {
-        boolean fineLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+    public boolean hasForegroundLocationPermission() {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
-        boolean backgroundLocation = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+    }
+
+    public boolean hasBackgroundLocationPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
                 || ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
-        return fineLocation && backgroundLocation;
+    }
+
+    public boolean hasRequiredPermissions() {
+        return hasForegroundLocationPermission() && hasBackgroundLocationPermission();
     }
 
     public void registerGeofence(GeofenceRegistrationCallback callback) {

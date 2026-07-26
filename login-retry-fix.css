@@ -32,3 +32,23 @@
     border-radius: 18px;
   }
 }
+
+
+.registration-dialog form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.registration-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.registration-dialog .actions-row {
+  margin-top: 0.5rem;
+}
+
+.registration-dialog #registration-feedback {
+  min-height: 1.25rem;
+  overflow-wrap: anywhere;
+}

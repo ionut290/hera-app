@@ -21,8 +21,14 @@ exports.registerTester = functions.region("europe-west1").https.onCall(
   async (data) => {
     const email = String(data?.email || "").trim().toLowerCase();
     const password = String(data?.temporaryPassword || "");
+    const firstName = String(data?.firstName || "").trim().slice(0, 80);
+    const lastName = String(data?.lastName || "").trim().slice(0, 80);
+    const displayName = [firstName, lastName].filter(Boolean).join(" ");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new functions.https.HttpsError("invalid-argument", "Indirizzo email non valido.");
+    }
+    if (!firstName || !lastName) {
+      throw new functions.https.HttpsError("invalid-argument", "Nome e cognome sono obbligatori.");
     }
     const configuredHash = String(functions.config().tester?.password_hash || "");
     const suppliedHash = crypto.createHash("sha256").update(password).digest("hex");
@@ -44,13 +50,16 @@ exports.registerTester = functions.region("europe-west1").https.onCall(
     const user = await admin.auth().createUser({
       email,
       password,
+      displayName,
       emailVerified: false,
       disabled: false
     });
     await admin.firestore().collection("platformUsers").doc(user.uid).set({
       uid: user.uid,
       email,
-      displayName: email.split("@")[0],
+      displayName,
+      firstName,
+      lastName,
       role: "user",
       ruolo: "user",
       isAdmin: false,

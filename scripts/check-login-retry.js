@@ -10,16 +10,32 @@ for (const expected of [
   "event.stopImmediatePropagation()",
   "loginButton.disabled = false",
   'loginButton.textContent = "Entra"',
-  "window.scrollTo({ left: 0"
+  "window.scrollTo({ left: 0",
+  "openRegistrationDialog",
+  'getElementById("registration-dialog")',
+  "firstName",
+  "lastName"
 ]) {
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
 }
 
 for (const expected of [
   'functions("europe-west1").httpsCallable("registerTester")',
-  "temporaryPassword: password"
+  "temporaryPassword: chosenPassword",
+  "firstName",
+  "lastName"
 ]) {
   if (!script.includes(expected)) throw new Error(`Auto-registrazione mancante: ${expected}`);
+}
+
+for (const expected of [
+  'id="registration-dialog"',
+  'id="registration-first-name"',
+  'id="registration-last-name"',
+  'id="registration-password-confirm"',
+  'login-retry-fix.js?v=20260726b'
+]) {
+  if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }
 
 if (!style.includes("overflow-wrap: anywhere") || !style.includes("max-width: 100vw")) {
@@ -31,4 +47,8 @@ for (const asset of ["login-retry-fix.js", "login-retry-fix.css"]) {
   if (!workflow.includes(asset)) throw new Error(`${asset} non incluso nell'AAB.`);
 }
 
-console.log("Login retry check passed.");
+if (!style.includes(".registration-dialog form")) {
+  throw new Error("Stile finestra registrazione mancante.");
+}
+
+console.log("Login retry and new-user registration check passed.");

@@ -46,7 +46,6 @@
     }
 
     const displayName = [details.firstName, details.lastName].filter(Boolean).join(" ");
-    await user.updateProfile({ displayName });
     await firebase.firestore().collection("platformUsers").doc(user.uid).set({
       uid: user.uid,
       email: details.email,

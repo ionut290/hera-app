@@ -120,6 +120,88 @@ async function assertAdmin(context, db) {
   }
 }
 
+function generateTemporaryPassword() {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%";
+  const all = upper + lower + digits + symbols;
+  const required = [
+    upper[crypto.randomInt(upper.length)],
+    lower[crypto.randomInt(lower.length)],
+    digits[crypto.randomInt(digits.length)],
+    symbols[crypto.randomInt(symbols.length)]
+  ];
+  while (required.length < 16) required.push(all[crypto.randomInt(all.length)]);
+  for (let index = required.length - 1; index > 0; index -= 1) {
+    const swapIndex = crypto.randomInt(index + 1);
+    [required[index], required[swapIndex]] = [required[swapIndex], required[index]];
+  }
+  return required.join("");
+}
+
+exports.createTesterAccounts = functions.https.onCall(async (data, context) => {
+  const db = admin.firestore();
+  await assertAdmin(context, db);
+
+  const emails = [...new Set(
+    (Array.isArray(data?.emails) ? data.emails : [])
+      .map((email) => String(email || "").trim().toLowerCase())
+      .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+  )];
+  if (!emails.length || emails.length > 100) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Inserisci da 1 a 100 indirizzi email validi."
+    );
+  }
+
+  const credentials = [];
+  for (const email of emails) {
+    const temporaryPassword = generateTemporaryPassword();
+    let user;
+    let created = false;
+    try {
+      user = await admin.auth().getUserByEmail(email);
+      user = await admin.auth().updateUser(user.uid, {
+        password: temporaryPassword,
+        disabled: false
+      });
+    } catch (error) {
+      if (error.code !== "auth/user-not-found") throw error;
+      user = await admin.auth().createUser({
+        email,
+        password: temporaryPassword,
+        emailVerified: false,
+        disabled: false
+      });
+      created = true;
+    }
+
+    await db.collection("platformUsers").doc(user.uid).set({
+      uid: user.uid,
+      email,
+      displayName: user.displayName || email.split("@")[0],
+      role: "user",
+      ruolo: "user",
+      isAdmin: false,
+      admin: false,
+      banned: false,
+      mustChangePassword: true,
+      temporaryPasswordIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(created ? { createdAt: admin.firestore.FieldValue.serverTimestamp() } : {})
+    }, { merge: true });
+
+    credentials.push({ email, temporaryPassword, created });
+  }
+
+  return {
+    credentials,
+    warning: "Le password temporanee sono mostrate una sola volta. Consegnale separatamente a ciascun utente."
+  };
+});
+
 async function buildDriveClient(db) {
   const secretSnapshot = await db.collection("appConfig").doc("driveAdminSecret").get();
   const secret = secretSnapshot.exists ? secretSnapshot.data() : null;

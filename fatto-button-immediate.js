@@ -36,9 +36,9 @@
     showImmediateFattoState(button);
   }
 
-  // pointerdown provides the visual feedback before any existing FATTO handler
-  // can disable or re-render the button. click remains as a keyboard fallback.
-  document.addEventListener("pointerdown", handleFattoInteraction, { capture: true });
+  // pointerup evita falsi FATTO quando il dito parte dal pulsante ma il gesto
+  // viene annullato o diventa uno scorrimento. click resta il fallback tastiera.
+  document.addEventListener("pointerup", handleFattoInteraction, { capture: true });
   document.addEventListener("click", handleFattoInteraction, { capture: true });
 })();
 

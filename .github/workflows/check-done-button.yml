@@ -1,0 +1,43 @@
+name: Check FATTO and Whazzup
+
+on:
+  pull_request:
+    paths:
+      - "app.js"
+      - "native-android-runtime.js"
+      - "fatto-button-immediate.js"
+      - "done-button-fix.js"
+      - "scripts/check-done-button-*.js"
+      - "scripts/check-android-done-push.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/check-done-button.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify FATTO and Whazzup
+        run: |
+          npm run check:syntax
+          npm run check:done-button
+          npm run check:done-button-behavior
+          npm run check:android-done-push

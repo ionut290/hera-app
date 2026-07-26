@@ -48,8 +48,8 @@ if (!markDone) fail('funzione markImpiantoDone presente');
 else {
   pass('funzione markImpiantoDone presente');
   requireIncludes(markDone, 'canManageData()', 'Fatto mantiene il controllo permessi/admin');
-  requireIncludes(markDone, 'currentUserPos', 'Fatto mantiene il controllo GPS per operatori');
-  requireIncludes(markDone, 'distanceKm > 4', 'Fatto mantiene il limite distanza 4 km');
+  requireIncludes(markDone, 'getCachedFattoPositionDecision(impianto)', 'Fatto mantiene il controllo GPS recente e distanza per operatori');
+  requireIncludes(markDone, 'notifyFattoPositionDenied(positionDecision)', 'Fatto blocca con messaggio una posizione non valida');
   requireIncludes(markDone, 'isNetworkOffline()', 'Fatto mantiene il ramo offline');
   requireIncludes(markDone, 'upsertPendingDoneAction', 'Fatto offline conserva azione pending WhatsApp');
   requireIncludes(markDone, 'setImpiantoDone(selectedCommessaId, ids, true', 'Fatto salva su Firebase con stato true');
@@ -65,7 +65,7 @@ const forceDone = extractFunction('canUseForceImpiantoDone');
 if (!forceDone) fail('funzione canUseForceImpiantoDone presente');
 else {
   pass('funzione canUseForceImpiantoDone presente');
-  requireIncludes(forceDone, 'if (canManageData()) return true;', 'FORZA consente sempre l’uso agli admin');
+  requireIncludes(forceDone, 'getCachedFattoPositionDecision(impianto)', 'FORZA usa lo stesso controllo posizione di FATTO');
   if (forceDone.includes('hasFailedFattoAttemptForImpianto')) fail('FORZA non deve richiedere un precedente errore FATTO');
   else pass('FORZA non richiede un precedente errore FATTO');
 }
@@ -80,6 +80,9 @@ else {
   requireIncludes(setDone, 'doneByEmail: done ? String(options.doneByEmail || user.email || "") : ""', 'setImpiantoDone conserva doneByEmail');
   requireIncludes(setDone, 'payload.resetAt = null', 'setImpiantoDone pulisce resetAt quando Fatto');
   requireIncludes(setDone, 'payload.resetBy = ""', 'setImpiantoDone pulisce resetBy quando Fatto');
+  requireIncludes(setDone, 'const batch = db.batch()', 'setImpiantoDone usa una scrittura atomica');
+  requireIncludes(setDone, 'await batch.commit()', 'setImpiantoDone conferma il batch atomico');
+  requireIncludes(setDone, 'throw new Error("Sessione scaduta', 'setImpiantoDone non simula successo senza login');
 }
 
 const renderStart = source.indexOf('Questo è il pulsante operativo visibile');
@@ -95,16 +98,23 @@ const whatsappHandler = extractFunction('handleImpiantoWhatsAppClick');
 if (!whatsappHandler) fail('funzione handleImpiantoWhatsAppClick presente');
 else {
   pass('funzione handleImpiantoWhatsAppClick presente');
-  const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto);');
-  const renderIndex = whatsappHandler.indexOf('renderImpianti();');
+  const validationIndex = whatsappHandler.indexOf('getCachedFattoPositionDecision(impianto)');
+  const evidenceIndex = whatsappHandler.indexOf('recordFattoVisualEvidence(impianto, doneAt, doneBy)');
+  const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
+  const renderIndex = whatsappHandler.indexOf('renderImpianti();', localMoveIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = openWhatsApp(');
-  if (localMoveIndex >= 0 && renderIndex > localMoveIndex && openWhatsappIndex > renderIndex) {
-    pass('Fatto sposta e renderizza l’impianto prima di aprire WhatsApp');
+  if (validationIndex >= 0 && evidenceIndex > validationIndex && localMoveIndex > evidenceIndex && renderIndex > localMoveIndex && openWhatsappIndex > renderIndex) {
+    pass('Fatto valida GPS, registra la prova, sposta e renderizza prima di aprire WhatsApp');
   } else {
-    fail('Fatto deve spostare e renderizzare l’impianto prima di aprire WhatsApp');
+    fail('Fatto deve validare GPS prima della prova visiva e aprire WhatsApp dopo il render');
   }
-  requireIncludes(whatsappHandler, 'forceMoveImpiantoToFatti(impianto, { source: "whatsapp" })', 'Fatto conserva il salvataggio Firebase protetto');
+  requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');
+  requireIncludes(whatsappHandler, 'skipLocationCheck: true', 'Fatto non ripete il controllo GPS già superato');
+  requireIncludes(whatsappHandler, 'queued_offline', 'Fatto registra l’esito accodato offline');
 }
+
+const persistedCheck = extractFunction('isImpiantoPersistedAsDone');
+requireIncludes(persistedCheck, 'snapshots.every(', 'verifica FATTO richiede tutti i documenti raggruppati');
 
 const backgroundSafetyCheck = extractFunction('runWhazzupPendingDoneSafetyCheck');
 if (!backgroundSafetyCheck) fail('funzione runWhazzupPendingDoneSafetyCheck presente');

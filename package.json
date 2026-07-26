@@ -13,6 +13,7 @@
     "check:first-login-password": "node scripts/check-first-login-password.js",
     "check:login-retry": "node scripts/check-login-retry.js",
     "check:done-button": "node scripts/check-done-button-logic.js",
+    "check:done-button-behavior": "node scripts/check-done-button-behavior.js",
     "check:android-done-push": "node scripts/check-android-done-push.js",
     "check:fuel-stations": "node scripts/check-fuel-stations.js",
     "check:startup-splash": "node scripts/check-startup-splash.js",

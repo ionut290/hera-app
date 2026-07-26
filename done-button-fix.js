@@ -45,9 +45,9 @@
     document.head.appendChild(script);
   }
 
-  // pointerdown provides the visual feedback before any existing FATTO handler
-  // can disable or re-render the button. click remains as a keyboard fallback.
-  document.addEventListener("pointerdown", handleFattoInteraction, { capture: true });
+  // pointerup evita falsi FATTO quando il gesto viene annullato o diventa scroll.
+  // click resta il fallback per tastiera e tecnologie assistive.
+  document.addEventListener("pointerup", handleFattoInteraction, { capture: true });
   document.addEventListener("click", handleFattoInteraction, { capture: true });
   loadNativeAndroidRuntime();
 })();

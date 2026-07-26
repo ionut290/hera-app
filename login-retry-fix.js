@@ -134,6 +134,41 @@
     });
   }
 
+  async function startRegistrationFromLogin() {
+    const emailInput = document.getElementById("auth-email-input");
+    const passwordInput = document.getElementById("auth-password-input");
+    const createButton = document.getElementById("auth-create-account-btn");
+    const feedback = document.getElementById("auth-email-feedback");
+    const email = String(emailInput?.value || "").trim().toLowerCase();
+    const password = String(passwordInput?.value || "");
+
+    if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      if (feedback) feedback.textContent = "Inserisci prima un indirizzo email valido.";
+      emailInput?.focus();
+      return;
+    }
+
+    if (createButton) createButton.disabled = true;
+    if (feedback) feedback.textContent = "Compila i dati per creare il nuovo account.";
+
+    try {
+      const auth = firebase.auth();
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const registration = await openRegistrationDialog(email, password);
+      await auth.signInWithEmailAndPassword(email, registration.password);
+      if (passwordInput) passwordInput.value = "";
+      if (feedback) feedback.textContent = "Account creato. Accesso completato.";
+    } catch (error) {
+      if (feedback) {
+        feedback.textContent = error?.message === "Creazione account annullata."
+          ? "Creazione account annullata."
+          : friendlyLoginError(error);
+      }
+    } finally {
+      if (createButton) createButton.disabled = false;
+    }
+  }
+
   async function handleLogin(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || form.id !== "auth-email-form") return;
@@ -197,6 +232,8 @@
 
   function initialize() {
     document.addEventListener("submit", handleLogin, true);
+    document.getElementById("auth-create-account-btn")
+      ?.addEventListener("click", startRegistrationFromLogin);
   }
 
   if (document.readyState === "loading") {

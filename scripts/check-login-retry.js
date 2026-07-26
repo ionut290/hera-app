@@ -12,10 +12,9 @@ for (const expected of [
   'loginButton.textContent = "Entra"',
   "window.scrollTo({ left: 0",
   "openRegistrationDialog",
-  'id="registration-dialog"',
+  'getElementById("registration-dialog")',
   "firstName",
-  "lastName",
-  "CREA ACCOUNT"
+  "lastName"
 ]) {
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
 }

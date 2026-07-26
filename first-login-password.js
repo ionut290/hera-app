@@ -2,6 +2,8 @@
   "use strict";
 
   const MIN_PASSWORD_LENGTH = 10;
+  const PASSWORD_RESET_COOLDOWN_MS = 5 * 60 * 1000;
+  const PASSWORD_RESET_STORAGE_KEY = "vargaCantieriPasswordResetLastRequest";
   let pendingUser = null;
   let saving = false;
   let passwordResetPending = false;
@@ -182,6 +184,30 @@
     }
   }
 
+  function maskEmail(email) {
+    const [localPart, domain] = String(email || "").split("@");
+    if (!localPart || !domain) return email;
+    const visibleStart = localPart.slice(0, Math.min(2, localPart.length));
+    return `${visibleStart}${"•".repeat(Math.max(3, localPart.length - visibleStart.length))}@${domain}`;
+  }
+
+  function getPasswordResetRemainingMs() {
+    try {
+      const lastRequest = Number(window.localStorage.getItem(PASSWORD_RESET_STORAGE_KEY) || 0);
+      return Math.max(0, PASSWORD_RESET_COOLDOWN_MS - (Date.now() - lastRequest));
+    } catch (_error) {
+      return 0;
+    }
+  }
+
+  function rememberPasswordResetRequest() {
+    try {
+      window.localStorage.setItem(PASSWORD_RESET_STORAGE_KEY, String(Date.now()));
+    } catch (_error) {
+      // localStorage non disponibile: il blocco Firebase contro gli abusi resta comunque attivo.
+    }
+  }
+
   async function requestPasswordReset() {
     const emailInput = document.getElementById("auth-email-input");
     const requestButton = document.getElementById("auth-request-password-btn");
@@ -196,6 +222,21 @@
       return;
     }
 
+    const remainingMs = getPasswordResetRemainingMs();
+    if (remainingMs > 0) {
+      const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+      if (loginFeedback) loginFeedback.textContent = `Hai già richiesto un link. Attendi circa ${remainingMinutes} minut${remainingMinutes === 1 ? "o" : "i"} prima di riprovare.`;
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Vuoi davvero ricevere un’email per cambiare la password dell’account ${maskEmail(email)}?\n\nSe non sei tu a richiederlo, premi Annulla.`
+    );
+    if (!confirmed) {
+      if (loginFeedback) loginFeedback.textContent = "Richiesta annullata. Nessuna email è stata inviata.";
+      return;
+    }
+
     passwordResetPending = true;
     const originalButtonText = requestButton?.textContent || "PASSWORD DIMENTICATA?";
     if (requestButton) {
@@ -206,7 +247,8 @@
 
     try {
       await sendPasswordResetInstructions(email);
-      if (loginFeedback) loginFeedback.textContent = genericMessage;
+      rememberPasswordResetRequest();
+      if (loginFeedback) loginFeedback.textContent = `${genericMessage} Per sicurezza, una nuova richiesta sarà disponibile tra 5 minuti.`;
     } catch (error) {
       console.error("Richiesta reset password fallita:", error);
       const code = String(error?.code || "").toLowerCase();

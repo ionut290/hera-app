@@ -12,6 +12,8 @@ for (const expected of [
   'loginButton.textContent = "Entra"',
   "window.scrollTo({ left: 0",
   "openRegistrationDialog",
+  "startRegistrationFromLogin",
+  'getElementById("auth-create-account-btn")',
   'getElementById("registration-dialog")',
   "firstName",
   "lastName"
@@ -29,11 +31,13 @@ for (const expected of [
 }
 
 for (const expected of [
+  'id="auth-create-account-btn"',
+  '>CREA NUOVO ACCOUNT</button>',
   'id="registration-dialog"',
   'id="registration-first-name"',
   'id="registration-last-name"',
   'id="registration-password-confirm"',
-  'login-retry-fix.js?v=20260726b'
+  'login-retry-fix.js?v=20260726c'
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }

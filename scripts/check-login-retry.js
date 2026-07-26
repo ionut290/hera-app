@@ -7,10 +7,10 @@ const functionsSource = fs.readFileSync("functions/index.js", "utf8");
 const androidWorkflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
 const deployWorkflow = fs.readFileSync(".github/workflows/deploy-register-tester.yml", "utf8");
 
-if (!script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
+if (!script.includes('/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/')) {
   throw new Error("La validazione email non accetta indirizzi standard.");
 }
-if (script.includes('/^[^\\\\\\\\s@]+@[^\\\\\\\\s@]+\\\\\\\\.[^\\\\\\\\s@]+$/')) {
+if (script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
   throw new Error("La validazione email contiene escape duplicati.");
 }
 

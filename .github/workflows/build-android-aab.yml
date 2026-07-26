@@ -44,7 +44,9 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Verify Android email and password login
-        run: npm run check:auth-login
+        run: |
+          npm run check:auth-login
+          npm run check:first-login-password
 
       - name: Prepare Capacitor web directory
         shell: bash
@@ -52,6 +54,7 @@ jobs:
           rm -rf www
           mkdir -p www
           cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
+          cp first-login-password.css first-login-password.js www/
           cp native-android-runtime.js done-button-fix.js www/
           cp delete-account.html privacy.html www/
           cp identity-card-feature.css identity-card-feature.js www/
@@ -65,6 +68,8 @@ jobs:
           test -s www/index.html
           test -s www/app.js
           test -s www/native-android-runtime.js
+          test -s www/first-login-password.js
+          test -s www/first-login-password.css
           if ! grep -q 'native-android-runtime.js' www/index.html; then
             echo "index.html non carica native-android-runtime.js"
             exit 1

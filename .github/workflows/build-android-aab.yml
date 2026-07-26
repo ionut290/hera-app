@@ -43,11 +43,12 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Verify Android email and password login
+      - name: Verify Android runtime
         run: |
           npm run check:auth-login
           npm run check:first-login-password
           npm run check:login-retry
+          npm run check:weather
 
       - name: Prepare Capacitor web directory
         shell: bash

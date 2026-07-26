@@ -24016,6 +24016,9 @@ const CIVIL_PROTECTION_ALERT_PAGE = "https://mappe.protezionecivile.gov.it/it/ma
 const CIVIL_PROTECTION_GITHUB_API = "https://api.github.com/repos/pcm-dpc/DPC-Bollettini-Criticita-Idrogeologica-Idraulica/contents/files/xml?ref=master";
 const METEO_3B_BASE_URL = "https://www.3bmeteo.com/meteo/italia";
 const WORKLIMATE_FORECAST_URL = "https://app.worklimate.it/ordinanza-caldo-lavoro";
+const WEATHER_PROXY_PATH = "/api/weather";
+const WEATHER_PROXY_PUBLIC_URL = "https://creative-syrniki-dddbae.netlify.app/api/weather";
+const WEATHER_FETCH_TIMEOUT_MS = 12000;
 const ALERT_LEVEL_META = {
   green: { rank: 0, emoji: "🟢", className: "alert-green", label: "Nessuna allerta" },
   yellow: { rank: 1, emoji: "🟡", className: "alert-yellow", label: "Allerta Protezione Civile" },
@@ -24069,13 +24072,75 @@ function buildWeatherForecastRequestParams(target, { operational = false } = {})
   };
 }
 
+function getWeatherProxyEndpoint() {
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  const isNative = Boolean(globalThis.Capacitor?.isNativePlatform?.())
+    || protocol === "capacitor:"
+    || protocol === "ionic:"
+    || (protocol === "https:" && (hostname === "localhost" || hostname === "127.0.0.1"));
+  return isNative ? WEATHER_PROXY_PUBLIC_URL : WEATHER_PROXY_PATH;
+}
+
+async function fetchWeatherResponse(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), WEATHER_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      cache: options.cache || "no-store",
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Timeout servizio meteo");
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchWeatherForecast(target, options = {}) {
   const params = new URLSearchParams(buildWeatherForecastRequestParams(target, options));
-  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: options.cache || "no-store" });
-  if (!response.ok) throw new Error("meteo non disponibile");
-  const data = await response.json();
-  if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo");
-  return { ...data, provider: "Open-Meteo" };
+  const directUrl = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+  let directError = null;
+
+  try {
+    const response = await fetchWeatherResponse(directUrl, options);
+    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+    const data = await response.json();
+    if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo");
+    return {
+      ...data,
+      provider: "Open-Meteo",
+      requestUrl: directUrl,
+      httpStatus: response.status
+    };
+  } catch (error) {
+    directError = error;
+  }
+
+  const proxyParams = new URLSearchParams({
+    lat: String(target.lat),
+    lon: String(target.lon),
+    operational: options.operational ? "1" : "0"
+  });
+  const proxyUrl = `${getWeatherProxyEndpoint()}?${proxyParams.toString()}`;
+  try {
+    const response = await fetchWeatherResponse(proxyUrl, options);
+    if (!response.ok) throw new Error(`Proxy meteo HTTP ${response.status}`);
+    const data = await response.json();
+    if (options.operational) validateImpiantoWeatherPayload(data, "Open-Meteo proxy");
+    return {
+      ...data,
+      provider: "Open-Meteo proxy",
+      requestUrl: proxyUrl,
+      httpStatus: response.status,
+      directError: directError?.message || "Richiesta diretta non disponibile"
+    };
+  } catch (proxyError) {
+    const directMessage = directError?.message || "errore diretto sconosciuto";
+    const proxyMessage = proxyError?.message || "errore proxy sconosciuto";
+    throw new Error(`Meteo non disponibile: ${directMessage}; ${proxyMessage}`);
+  }
 }
 
 function isWeatherDiagnosticEnabled() {
@@ -24167,13 +24232,16 @@ async function fetchWeather() {
       diagnostics.url = primary.url;
       diagnostics.httpStatus = primary.httpStatus;
     } catch (primaryError) {
-      diagnostics.provider = "OpenWeather → Open-Meteo fallback";
-      diagnostics.error = primaryError?.message || "errore provider primario";
-      const params = new URLSearchParams(buildWeatherForecastRequestParams(target));
-      diagnostics.url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
       const fallback = await fetchWeatherForecast(target);
       data = fallback;
-      diagnostics.httpStatus = 200;
+      diagnostics.provider = fallback.provider || "Open-Meteo";
+      diagnostics.url = fallback.requestUrl || "-";
+      diagnostics.httpStatus = fallback.httpStatus ?? 200;
+      if (fallback.directError) {
+        diagnostics.error = `Richiesta diretta: ${fallback.directError}`;
+      } else if (primaryError?.message && primaryError.message !== "OPENWEATHER_API_KEY mancante") {
+        diagnostics.error = `OpenWeather: ${primaryError.message}`;
+      }
     }
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);

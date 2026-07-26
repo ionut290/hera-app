@@ -1,8 +1,6 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
@@ -19,29 +17,27 @@ const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
 ]);
-const TESTER_TEMP_PASSWORD = defineSecret("TESTER_TEMP_PASSWORD");
-
-exports.registerTester = onCall(
-  {
-    region: "europe-west1",
-    secrets: [TESTER_TEMP_PASSWORD],
-    enforceAppCheck: false
-  },
-  async (request) => {
-    const email = String(request.data?.email || "").trim().toLowerCase();
-    const password = String(request.data?.temporaryPassword || "");
+exports.registerTester = functions.region("europe-west1").https.onCall(
+  async (data) => {
+    const email = String(data?.email || "").trim().toLowerCase();
+    const password = String(data?.temporaryPassword || "");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new HttpsError("invalid-argument", "Indirizzo email non valido.");
+      throw new functions.https.HttpsError("invalid-argument", "Indirizzo email non valido.");
     }
-    if (password !== TESTER_TEMP_PASSWORD.value()) {
-      throw new HttpsError("permission-denied", "Password temporanea non valida.");
+    const configuredHash = String(functions.config().tester?.password_hash || "");
+    const suppliedHash = crypto.createHash("sha256").update(password).digest("hex");
+    if (
+      configuredHash.length !== suppliedHash.length
+      || !crypto.timingSafeEqual(Buffer.from(configuredHash), Buffer.from(suppliedHash))
+    ) {
+      throw new functions.https.HttpsError("permission-denied", "Password temporanea non valida.");
     }
 
     try {
       await admin.auth().getUserByEmail(email);
-      throw new HttpsError("already-exists", "Account già esistente.");
+      throw new functions.https.HttpsError("already-exists", "Account già esistente.");
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
+      if (error instanceof functions.https.HttpsError) throw error;
       if (error.code !== "auth/user-not-found") throw error;
     }
 

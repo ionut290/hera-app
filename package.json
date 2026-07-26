@@ -14,7 +14,8 @@
     "check:login-retry": "node scripts/check-login-retry.js",
     "check:done-button": "node scripts/check-done-button-logic.js",
     "check:android-done-push": "node scripts/check-android-done-push.js",
-    "check:fuel-stations": "node scripts/check-fuel-stations.js"
+    "check:fuel-stations": "node scripts/check-fuel-stations.js",
+    "check:weather": "node scripts/check-weather.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

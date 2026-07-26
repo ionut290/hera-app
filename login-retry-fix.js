@@ -1,6 +1,7 @@
 (function installLoginRetryFix() {
   "use strict";
 
+  const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
   let registrationPending = false;
 
   function friendlyLoginError(error) {
@@ -89,8 +90,8 @@
           elements.feedback.textContent = "Inserisci nome e cognome.";
           return;
         }
-        if (!chosenPassword) {
-          elements.feedback.textContent = "Inserisci la password.";
+        if (chosenPassword.length < MIN_REGISTRATION_PASSWORD_LENGTH) {
+          elements.feedback.textContent = `La password deve contenere almeno ${MIN_REGISTRATION_PASSWORD_LENGTH} caratteri.`;
           return;
         }
         if (chosenPassword !== confirmation) {
@@ -116,12 +117,21 @@
         } catch (error) {
           registrationPending = true;
           const code = String(error?.code || "").toLowerCase();
+          const message = String(error?.message || "");
           if (code.includes("already-exists")) {
             elements.feedback.textContent = "Questa email ha già un account. Torna al login e controlla la password.";
+          } else if (code.includes("invalid-argument")) {
+            elements.feedback.textContent = message && message.toLowerCase() !== "internal"
+              ? message
+              : "Controlla i dati inseriti e riprova.";
           } else if (code.includes("permission-denied")) {
-            elements.feedback.textContent = "Password di registrazione non valida. Chiedi la password temporanea all’amministratore.";
+            elements.feedback.textContent = "Creazione account non autorizzata. Contatta l’amministratore.";
+          } else if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
+            elements.feedback.textContent = "Servizio momentaneamente non disponibile. Controlla internet e riprova.";
+          } else if (code.includes("internal") || message.toLowerCase() === "internal") {
+            elements.feedback.textContent = "Creazione account non riuscita. Riprova tra poco.";
           } else {
-            elements.feedback.textContent = error?.message || "Creazione account non riuscita.";
+            elements.feedback.textContent = message || "Creazione account non riuscita. Riprova.";
           }
         } finally {
           elements.submit.disabled = false;

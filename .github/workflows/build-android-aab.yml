@@ -14,6 +14,7 @@ on:
       - "package-lock.json"
       - "capacitor.config.json"
       - "android/**"
+      - "android-resources/**"
       - ".github/workflows/build-android-aab.yml"
 
 permissions:
@@ -127,6 +128,14 @@ jobs:
           # Eseguire prima l'ultimo sync: Capacitor può rigenerare
           # capacitor.build.gradle e rimuovere le integrazioni Hera.
           npx cap sync android
+
+          # Ripristinare l'icona ufficiale VARGA CANTIERI dopo la rigenerazione
+          # del progetto Android, sostituendo le icone predefinite di Capacitor.
+          cp -R android-resources/res/. android/app/src/main/res/
+          test -s android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
+          test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
           # Aggiungere le dipendenze native solo dopo l'ultimo sync.
           # Non sostituire il file generato: contiene anche Geolocation,

@@ -142,7 +142,7 @@
     const email = String(emailInput?.value || "").trim().toLowerCase();
     const password = String(passwordInput?.value || "");
 
-    if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       if (feedback) feedback.textContent = "Inserisci prima un indirizzo email valido.";
       emailInput?.focus();
       return;

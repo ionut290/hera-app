@@ -53,11 +53,14 @@ if (!fixSource.includes('Accedi con Google oppure con la tua email e password.')
   throw new Error("Il login web non comunica chiaramente l’accesso Google.");
 }
 
-if (!fixSource.includes('emailLoginButton.textContent = "Accedi"')) {
-  throw new Error("Il pulsante email/password Android non ha il testo corretto.");
+if (!fixSource.includes('emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra"')) {
+  throw new Error("Il pulsante email/password non cambia testo correttamente in base alla piattaforma.");
 }
 
-if (!fixSource.includes('message.textContent = "Accedi con la tua email e password."')) {
+if (
+  !fixSource.includes("message.textContent = nativeAndroid")
+  || !fixSource.includes('"Accedi con la tua email e password."')
+) {
   throw new Error("Il messaggio login Android non richiede email e password.");
 }
 

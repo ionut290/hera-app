@@ -9,7 +9,7 @@ const workflowSource = fs.readFileSync(
   "utf8"
 );
 
-if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726c"></script>')) {
+if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726d"></script>')) {
   throw new Error("auth-login-fix.js non viene caricato da index.html.");
 }
 
@@ -59,6 +59,25 @@ if (!fixSource.includes('where("email", "==", email)')) {
 
 if (!fixSource.includes("profileMigratedByEmail")) {
   throw new Error("La migrazione del profilo tramite email non viene registrata.");
+}
+
+if (!fixSource.includes("catch (lookupError)")) {
+  throw new Error("La ricerca del profilo per email può ancora bloccare il primo accesso.");
+}
+
+for (const expected of [
+  'role: "user"',
+  'ruolo: "user"',
+  "isAdmin: false",
+  "admin: false"
+]) {
+  if (!fixSource.includes(expected)) {
+    throw new Error(`Il profilo automatico non è un utente normale: ${expected}`);
+  }
+}
+
+if (fixSource.includes("banned: false")) {
+  throw new Error("Il profilo automatico contiene un campo vietato dalle regole Firestore.");
 }
 
 if (!fixSource.includes("authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile")) {

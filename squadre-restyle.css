@@ -223,6 +223,31 @@
   transform: scale(0.98);
 }
 
+/* Uniforma tutte le icone della finestra Oggi alle icone della barra superiore. */
+#today-summary-card .today-summary-item > span:first-child,
+#today-summary-card .today-summary-item .icon,
+#today-summary-card .today-summary-item [class*="icon"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 22px;
+  line-height: 1;
+  flex: 0 0 28px;
+}
+
+#today-summary-card .today-summary-item img,
+#today-summary-card .today-summary-item svg {
+  width: 22px;
+  height: 22px;
+  max-width: 22px;
+  max-height: 22px;
+  object-fit: contain;
+}
+
 #today-summary-card .today-summary-item strong {
   font-size: 1.3rem;
   line-height: 1;

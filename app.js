@@ -1077,6 +1077,7 @@ const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
 let unsubscribeHoursApprovals = null;
 let currentUserPos = null;
+const FATTO_POSITION_MAX_AGE_MS = 60 * 1000;
 let currentWeatherTarget = { lat: 44.4949, lon: 11.3426 };
 let selectedWeatherLocation = null;
 let currentHomeWeatherForecast = null;
@@ -2150,6 +2151,13 @@ window.addEventListener("online", () => {
   syncPendingOfflineMutations();
 });
 window.addEventListener("offline", () => { setFirestoreConnectionState("Offline", "Dati caricati da cache"); });
+window.addEventListener("hera:native-location", (event) => {
+  const nativePosition = event?.detail;
+  if (!nativePosition?.coords) return;
+  latestGeolocationCoords = nativePosition.coords;
+  updateCurrentUserPosition(nativePosition.coords, nativePosition.timestamp);
+  if (ui.gpsStatus) ui.gpsStatus.textContent = "Posizione Android aggiornata.";
+});
 window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
@@ -12520,6 +12528,46 @@ function isNetworkOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+function buildTrackedUserPosition(coords, timestamp = Date.now()) {
+  if (!coords) return null;
+  const lat = Number(coords.latitude ?? coords.lat);
+  const lng = Number(coords.longitude ?? coords.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const positionTimestamp = Number(timestamp);
+  return {
+    lat,
+    lng,
+    accuracy: Number(coords.accuracy || 0),
+    timestamp: Number.isFinite(positionTimestamp) && positionTimestamp > 0 ? positionTimestamp : Date.now()
+  };
+}
+
+function updateCurrentUserPosition(coords, timestamp = Date.now(), options = {}) {
+  const nextPosition = buildTrackedUserPosition(coords, timestamp);
+  if (!nextPosition) return null;
+  currentUserPos = nextPosition;
+  if (options.render !== false) {
+    renderImpianti();
+    renderMap();
+  }
+  return nextPosition;
+}
+
+function clearCurrentUserPosition() {
+  currentUserPos = null;
+}
+
+function isCurrentUserPositionFresh(maxAgeMs = FATTO_POSITION_MAX_AGE_MS) {
+  const timestamp = Number(currentUserPos?.timestamp || 0);
+  return Boolean(
+    currentUserPos
+    && Number.isFinite(currentUserPos.lat)
+    && Number.isFinite(currentUserPos.lng)
+    && timestamp > 0
+    && Date.now() - timestamp <= maxAgeMs
+  );
+}
+
 function loadPendingImpiantoActions() {
   try {
     const raw = localStorage.getItem(PENDING_IMPIANTO_ACTIONS_KEY);
@@ -12665,6 +12713,16 @@ function clearWhazzupPendingDoneEntry(impianto) {
   saveWhazzupPendingDoneEntries(nextEntries);
 }
 
+function removePendingDoneActionsForImpianto(commessaId, impianto) {
+  const beforeCount = pendingImpiantoActions.length;
+  pendingImpiantoActions = pendingImpiantoActions.filter((action) => (
+    !doesPendingActionMatchImpianto(action, commessaId, impianto)
+  ));
+  if (pendingImpiantoActions.length === beforeCount) return;
+  savePendingImpiantoActions();
+  renderPendingWhatsappList();
+}
+
 function getCurrentUserPendingActions() {
   const uid = currentUser?.uid || "";
   if (!uid) return [];
@@ -12684,7 +12742,7 @@ function getPendingWhatsappActions() {
 }
 
 function isActionWaitingForSync(action) {
-  return ["pending", "syncing", "syncFailed"].includes(String(action?.status || "pending"));
+  return Boolean(action) && ["pending", "syncing", "syncFailed"].includes(String(action.status || "pending"));
 }
 
 function doesPendingActionMatchImpianto(action, commessaId, impianto) {
@@ -12831,10 +12889,13 @@ async function syncPendingImpiantoActions() {
         doneAt: doneAtDate,
         doneBy: action.doneBy || currentUser.displayName || currentUser.email || "Operatore"
       });
+      const actionImpianto = buildPendingActionImpianto(action);
+      const persisted = await isImpiantoPersistedAsDone(actionImpianto, action.commessaId);
+      if (!persisted) throw new Error("Verifica completa documenti FATTO non riuscita.");
       const exportPayload = {
         commessaId: action.commessaId,
         commessaName: action.commessaName || "Commessa",
-        impianto: buildPendingActionImpianto(action)
+        impianto: actionImpianto
       };
       if (!canManageData()) await queueSheetExportForAdmin(exportPayload);
       else scheduleCommessaSheetSync(action.commessaId, action.commessaName || "Commessa", 200);
@@ -12849,10 +12910,18 @@ async function syncPendingImpiantoActions() {
       const updatedAction = markPendingActionStatus(action.id, {
         status: "synced",
         syncedAt: new Date().toISOString(),
-        whatsappStatus: action.whatsappStatus === "sent" ? "sent" : "pending",
+        whatsappStatus: action.whatsappStatus || "pending",
         lastError: ""
       });
       if (updatedAction && updatedAction.whatsappStatus !== "sent") syncedWhatsappActions.push(updatedAction);
+      if (action.commessaId === selectedCommessaId) {
+        clearWhazzupPendingDoneEntry(actionImpianto);
+        const safetyState = getWhazzupSafetyState(actionImpianto);
+        if (safetyState) {
+          safetyState.whazzupPremuto = false;
+          safetyState.needsManualMove = false;
+        }
+      }
     } catch (error) {
       console.error("Sincronizzazione pendingAction FATTO non riuscita:", error);
       markPendingActionStatus(action.id, {
@@ -13924,6 +13993,7 @@ function combineImpiantiForView(impianti) {
       grouped.set(key, {
         ...item,
         done: doneAtMs >= resetAtMs && isImpiantoDoneState(item),
+        _hasDoneState: isImpiantoDoneState(item),
         doneAt: item.doneAt || null,
         doneBy: doneAtMs >= resetAtMs ? (item.doneBy || "") : "",
         resetAt: item.resetAt || null,
@@ -13955,6 +14025,7 @@ function combineImpiantiForView(impianti) {
     existing.hasExtraWork = Boolean(existing.hasExtraWork || item.hasExtraWork) || existing.hasStraordinario;
     existing.tipoManutenzione = classifyTipoManutenzione(existing.codicePrezzo);
     const itemDone = isImpiantoDoneState(item);
+    existing._hasDoneState = Boolean(existing._hasDoneState || itemDone);
     const existingDoneAtMs = firestoreDateToMillis(existing.doneAt);
     const itemDoneAtMs = firestoreDateToMillis(item.doneAt);
     const existingResetAtMs = firestoreDateToMillis(existing.resetAt);
@@ -13972,7 +14043,7 @@ function combineImpiantiForView(impianti) {
     }
     const latestDoneMs = firestoreDateToMillis(existing.doneAt);
     const latestResetMs = firestoreDateToMillis(existing.resetAt);
-    existing.done = latestDoneMs >= latestResetMs;
+    existing.done = Boolean(existing._hasDoneState) && latestDoneMs >= latestResetMs;
     if (!existing.done) {
       existing.doneBy = "";
     }
@@ -13988,7 +14059,7 @@ function combineImpiantiForView(impianti) {
     if (existing.gpsX == null && item.gpsX != null) existing.gpsX = item.gpsX;
   });
 
-  return Array.from(grouped.values());
+  return Array.from(grouped.values()).map(({ _hasDoneState, ...item }) => item);
 }
 
 function buildImpiantoKey(row) {
@@ -14703,9 +14774,12 @@ function renderImpianti() {
         moveBtn.disabled = !forceDoneEnabled;
         moveBtn.title = forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
         moveBtn.addEventListener("click", async () => {
-          if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
           moveBtn.disabled = true;
-          await forceMarkDone(impianto);
+          try {
+            await forceMarkDone(impianto);
+          } finally {
+            moveBtn.disabled = !canUseForceImpiantoDone(impianto, { notify: false });
+          }
         });
       }
       details.appendChild(warningBox);
@@ -14769,7 +14843,6 @@ function renderImpianti() {
       forceDoneBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
         forceDoneBtn.disabled = true;
         try {
           await forceMarkDone(impianto);
@@ -14848,7 +14921,6 @@ function renderImpianti() {
     if (canUseImpiantoAction("delete")) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
     if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
-        if (!canUseForceImpiantoDone(impianto, { notify: true })) return;
         forceMoveDoneBtn.disabled = true;
         try {
           await forceMarkDone(impianto);
@@ -18996,14 +19068,10 @@ async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!canManageData()) {
-    if (!currentUserPos) {
-      alert("Per segnare FATTO devi attivare la posizione GPS.");
-      return false;
-    }
-    const distanceKm = distanceFromUser(impianto);
-    if (!Number.isFinite(distanceKm) || distanceKm > 4) {
-      alert("Puoi segnare FATTO solo entro 4 km dall'impianto.");
+  if (!canManageData() && options?.skipLocationCheck !== true) {
+    const positionDecision = getCachedFattoPositionDecision(impianto);
+    if (!positionDecision.allowed) {
+      notifyFattoPositionDenied(positionDecision);
       return false;
     }
   }
@@ -19012,8 +19080,8 @@ async function markImpiantoDone(impianto, options = {}) {
     commessaName: selectedCommessaName || "Commessa",
     impianto
   };
-  const doneAtLocal = new Date();
-  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const doneAtLocal = options?.doneAt instanceof Date ? options.doneAt : new Date();
+  const doneByLocal = options?.doneBy || auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const requireFirestoreConfirmation = options?.requireFirestoreConfirmation === true;
   trackLocalSheetMutation(selectedCommessaId);
 
@@ -19034,7 +19102,9 @@ async function markImpiantoDone(impianto, options = {}) {
       pendingWhatsappStatus: "pending"
     });
     setImpiantiViewMode("done");
-    alert("Sei offline: FATTO salvato localmente. WhatsApp resta in attesa e sarà disponibile quando torna internet.");
+    alert(source === "whatsapp"
+      ? "Sei offline: FATTO salvato localmente. Whazzup è stato preparato e Firebase si sincronizzerà automaticamente quando torna Internet."
+      : "Sei offline: FATTO salvato localmente. Firebase e WhatsApp saranno disponibili quando torna Internet.");
     return true;
   }
 
@@ -19062,7 +19132,15 @@ async function markImpiantoDone(impianto, options = {}) {
         return false;
       }
       const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
-      updateImpiantoLocalState(ids, { pendingActionId: pendingAction.id, pendingActionStatus: "pending", pendingWhatsappStatus: "pending" });
+      updateImpiantoLocalState(ids, {
+        done: true,
+        doneAt: doneAtLocal,
+        doneBy: doneByLocal,
+        pendingActionId: pendingAction.id,
+        pendingActionStatus: "pending",
+        pendingWhatsappStatus: "pending"
+      });
+      setImpiantiViewMode("done");
       return true;
     }
     const retrySucceeded = await retrySetImpiantoDone(selectedCommessaId, ids, true, {
@@ -19073,6 +19151,19 @@ async function markImpiantoDone(impianto, options = {}) {
     });
     if (!retrySucceeded) {
       console.error("Aggiornamento stato FATTO fallito anche dopo i tentativi di retry.", { commessaId: selectedCommessaId, impiantoIds: ids });
+      if (!requireFirestoreConfirmation) {
+        const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+        updateImpiantoLocalState(ids, {
+          done: true,
+          doneAt: doneAtLocal,
+          doneBy: doneByLocal,
+          pendingActionId: pendingAction.id,
+          pendingActionStatus: "pending",
+          pendingWhatsappStatus: "pending"
+        });
+        setImpiantiViewMode("done");
+        return true;
+      }
       return false;
     }
     updateImpiantoLocalState(ids, {
@@ -19094,7 +19185,7 @@ async function markImpiantoDone(impianto, options = {}) {
     }
     await publishGlobalNotificationEvent("impianto-done", {
       title: "Impianto completato",
-      body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : "FATTO"} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+      body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : (source === "force" ? "FORZA" : "FATTO")} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
       commessaId: selectedCommessaId,
       commessaName: selectedCommessaName || "Commessa",
       impiantoName: impianto.denominazione || "Impianto",
@@ -19106,7 +19197,7 @@ async function markImpiantoDone(impianto, options = {}) {
   scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
   await publishGlobalNotificationEvent("impianto-done", {
     title: "Impianto completato",
-    body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : "FATTO"} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+    body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : (source === "force" ? "FORZA" : "FATTO")} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
     commessaId: selectedCommessaId,
     commessaName: selectedCommessaName || "Commessa",
     impiantoName: impianto.denominazione || "Impianto",
@@ -19117,11 +19208,11 @@ async function markImpiantoDone(impianto, options = {}) {
 
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
 // Fallback visuale usato dal flusso WhatsApp/Fatto: non cambiare senza aggiornare i test dedicati.
-function markImpiantoDoneVisualFallback(impianto) {
+function markImpiantoDoneVisualFallback(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!ids.length) return;
-  const doneAtLocal = new Date();
-  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  const doneAtLocal = options.doneAt instanceof Date ? options.doneAt : new Date();
+  const doneByLocal = options.doneBy || auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   expandedImpiantoKey = buildImpiantoKey(impianto);
   updateImpiantoLocalState(ids, { done: true, doneAt: doneAtLocal, doneBy: doneByLocal });
   setImpiantiViewMode("done");
@@ -19219,10 +19310,23 @@ async function resetImpianto(impianto) {
   if (!selectedCommessaId || !ids.length) return;
   if (!canUseImpiantoAction("reset")) {
     alert("Non hai il permesso per usare reset.");
-    return;
+    return false;
+  }
+  if (isNetworkOffline()) {
+    alert("Per eseguire il reset serve una connessione Internet. Riprova quando sei online.");
+    return false;
   }
   const resetAtLocal = new Date();
   const resetByLocal = currentUser?.displayName || currentUser?.email || "Operatore";
+  const resetSaved = await retrySetImpiantoDone(selectedCommessaId, ids, false, {
+    resetAt: resetAtLocal,
+    resetBy: resetByLocal
+  });
+  if (!resetSaved) {
+    alert("Reset non salvato. Lo stato FATTO è rimasto invariato; riprova.");
+    return false;
+  }
+
   clearImpiantoWhazzupProcessing(impianto, selectedCommessaId);
   const safetyState = getWhazzupSafetyState(impianto);
   if (safetyState) {
@@ -19230,6 +19334,7 @@ async function resetImpianto(impianto) {
     safetyState.needsManualMove = false;
   }
   clearWhazzupPendingDoneEntry(impianto);
+  removePendingDoneActionsForImpianto(selectedCommessaId, impianto);
   trackLocalSheetMutation(selectedCommessaId);
   updateImpiantoLocalState(ids, {
     done: false,
@@ -19243,7 +19348,6 @@ async function resetImpianto(impianto) {
     pendingActionStatus: "",
     pendingWhatsappStatus: ""
   });
-  await setImpiantoDone(selectedCommessaId, ids, false, { resetAt: resetAtLocal, resetBy: resetByLocal });
   const impiantoKey = buildImpiantoKey(impianto);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:navigate`);
   clearActionUsed(`${selectedCommessaId}:${impiantoKey}:done`);
@@ -19252,6 +19356,7 @@ async function resetImpianto(impianto) {
   updateConnectivityStatus();
   renderImpianti();
   scheduleCommessaSheetSync(selectedCommessaId, selectedCommessaName, 250);
+  return true;
 }
 
 async function deleteImpianto(impianto) {
@@ -21418,13 +21523,17 @@ function getPersonaleDisplayName(person) {
 // Persistenza Firestore dello stato Fatto/Reset: i campi done*, reset* e Timestamp sono coperti da test statici.
 async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const user = auth.currentUser;
-  if (!user) return;
+  if (!user) throw new Error("Sessione scaduta: esegui nuovamente il login.");
   const doneAtDate = options.doneAt instanceof Date ? options.doneAt : new Date();
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(doneAtDate) : null;
 
   if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
+  const uniqueImpiantoIds = [...new Set((Array.isArray(impiantoIds) ? impiantoIds : []).filter(Boolean))];
+  if (!uniqueImpiantoIds.length) throw new Error("Nessun impianto disponibile per l'aggiornamento.");
+  if (uniqueImpiantoIds.length > 500) throw new Error("Troppi documenti impianto per un singolo aggiornamento atomico.");
   const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
-  await Promise.all(impiantoIds.map((impiantoId) => {
+  const batch = db.batch();
+  uniqueImpiantoIds.forEach((impiantoId) => {
     const payload = {
       done,
       doneAt,
@@ -21443,12 +21552,72 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       payload.navigateAt = null;
       payload.navigatedBy = "";
     }
-    return ref.doc(impiantoId).set(payload, { merge: true });
-  }));
+    batch.set(ref.doc(impiantoId), payload, { merge: true });
+  });
+  await batch.commit();
 }
 
-const FORCE_IMPIANTO_DONE_NOT_READY_MESSAGE = "⚠️ Prima premi FATTO. Usa FORZA solo se l’impianto rimane in DA FARE.";
 const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "L’impianto risulta ancora nell’elenco ‘Da fare’. Se hai già eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
+
+function getCachedFattoPositionDecision(impianto) {
+  if (canManageData()) return { allowed: true, reason: "admin", distanceKm: 0 };
+  if (!currentUserPos) return { allowed: false, reason: "missing", distanceKm: null };
+  if (!isCurrentUserPositionFresh()) return { allowed: false, reason: "stale", distanceKm: null };
+  const distanceKm = distanceFromUser(impianto);
+  if (!Number.isFinite(distanceKm) || distanceKm > 4) {
+    return { allowed: false, reason: "distance", distanceKm };
+  }
+  return { allowed: true, reason: "ok", distanceKm };
+}
+
+function notifyFattoPositionDenied(decision) {
+  if (decision?.reason === "distance") {
+    alert("Puoi segnare FATTO e aprire Whazzup solo entro 4 km dall'impianto.");
+    return;
+  }
+  if (decision?.reason === "stale") {
+    alert("La posizione GPS non è aggiornata. Attiva la posizione e riprova.");
+    return;
+  }
+  alert("Per segnare FATTO e aprire Whazzup devi attivare la posizione GPS.");
+}
+
+async function refreshFattoPositionDecision(impianto) {
+  if (canManageData()) return { allowed: true, reason: "admin", distanceKm: 0 };
+  try {
+    const position = await getCurrentPositionOnce();
+    updateCurrentUserPosition(position, position.timestamp, { render: false });
+    return getCachedFattoPositionDecision(impianto);
+  } catch (error) {
+    console.warn("Posizione aggiornata FATTO non disponibile:", error);
+    clearCurrentUserPosition();
+    return { allowed: false, reason: "missing", distanceKm: null };
+  }
+}
+
+function openDeferredWhatsAppTargetWindow() {
+  if (window.Capacitor?.isNativePlatform?.()) return null;
+  try {
+    const targetWindow = window.open("about:blank", "_blank");
+    if (targetWindow?.document?.body) {
+      targetWindow.document.title = "Preparazione Whazzup";
+      targetWindow.document.body.textContent = "Verifica posizione in corso…";
+    }
+    return targetWindow;
+  } catch (error) {
+    console.warn("Finestra Whazzup differita non disponibile:", error);
+    return null;
+  }
+}
+
+function closeDeferredWhatsAppTargetWindow(targetWindow) {
+  if (!targetWindow || targetWindow.closed) return;
+  try {
+    targetWindow.close();
+  } catch (error) {
+    console.warn("Chiusura finestra Whazzup differita non riuscita:", error);
+  }
+}
 
 function hasFailedFattoAttemptForImpianto(impianto) {
   if (impianto?.done) return false;
@@ -21457,65 +21626,43 @@ function hasFailedFattoAttemptForImpianto(impianto) {
 }
 
 function isForceImpiantoDoneDistanceAllowed(impianto) {
-  if (canManageData()) return true;
-  if (!currentUserPos) return false;
-  const distanceKm = distanceFromUser(impianto);
-  return Number.isFinite(distanceKm) && distanceKm <= 4;
+  return getCachedFattoPositionDecision(impianto).allowed;
 }
 
 function canUseForceImpiantoDone(impianto, options = {}) {
   const notify = options.notify !== false;
-  if (canManageData()) return true;
-  if (isForceImpiantoDoneDistanceAllowed(impianto)) return true;
-  if (notify) alert("⚠️ Sei troppo lontano dall’impianto per forzare la chiusura");
+  const decision = getCachedFattoPositionDecision(impianto);
+  if (decision.allowed) return true;
+  if (notify) notifyFattoPositionDenied(decision);
   return false;
 }
 
 async function forceMarkDone(impianto) {
-  if (!canUseForceImpiantoDone(impianto, { notify: true })) return false;
-
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
-
-  const doneAtLocal = new Date();
-  const doneByLocal = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-  const doneByUid = auth.currentUser?.uid || "";
-  const doneByEmail = auth.currentUser?.email || "";
-  const payload = {
-    done: true,
-    doneAt: doneAtLocal,
-    doneBy: doneByLocal,
-    doneByUid,
-    doneByEmail
-  };
-
-  try {
-    if (!isNetworkOffline()) {
-      await setImpiantoDone(selectedCommessaId, ids, true, {
-        doneAt: doneAtLocal,
-        doneBy: doneByLocal,
-        doneByUid,
-        doneByEmail
-      });
-    }
-  } catch (error) {
-    console.error("Forzatura FATTO non salvata su Firebase al primo tentativo:", error);
-    const retrySucceeded = await retrySetImpiantoDone(selectedCommessaId, ids, true, {
-      doneAt: doneAtLocal,
-      doneBy: doneByLocal,
-      doneByUid,
-      doneByEmail
-    });
-    if (!retrySucceeded) return false;
+  let positionDecision = getCachedFattoPositionDecision(impianto);
+  if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
+    positionDecision = await refreshFattoPositionDecision(impianto);
+  }
+  if (!positionDecision.allowed) {
+    notifyFattoPositionDenied(positionDecision);
+    renderImpianti();
+    return false;
   }
 
-  updateImpiantoLocalState(ids, payload);
+  const moved = await markImpiantoDone(impianto, {
+    source: "force",
+    skipLocationCheck: true
+  });
+  if (!moved) return false;
+  const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+  const waitingForSync = isActionWaitingForSync(pendingAction);
   const state = getWhazzupSafetyState(impianto);
-  if (state) {
+  if (state && !waitingForSync) {
     state.needsManualMove = false;
     state.whazzupPremuto = false;
   }
-  clearWhazzupPendingDoneEntry(impianto);
+  if (!waitingForSync) clearWhazzupPendingDoneEntry(impianto);
   expandedImpiantoKey = buildImpiantoKey(impianto);
   setImpiantiViewMode("done");
   renderImpianti();
@@ -21523,16 +21670,9 @@ async function forceMarkDone(impianto) {
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {
-  if (!currentUserPos) {
-    if (notify) alert("Per inviare WhatsApp devi attivare la posizione GPS.");
-    return false;
-  }
-  const distanceKm = distanceFromUser(impianto);
-  if (!Number.isFinite(distanceKm) || distanceKm > 4) {
-    if (notify) alert("Puoi inviare WhatsApp solo entro 4 km dall'impianto.");
-    return false;
-  }
-  return true;
+  const decision = getCachedFattoPositionDecision(impianto);
+  if (!decision.allowed && notify) notifyFattoPositionDenied(decision);
+  return decision.allowed;
 }
 
 function triggerImpiantoWhatsAppAction(impianto, options = {}) {
@@ -21583,18 +21723,37 @@ function triggerHiddenMoveDoneButton(impianto) {
 }
 
 async function handleImpiantoWhatsAppClick(impianto) {
-  if (!impianto) return;
+  if (!impianto) return false;
+  if (!auth.currentUser) {
+    alert("Sessione scaduta: esegui nuovamente il login.");
+    renderImpianti();
+    return false;
+  }
 
   const processingKey = getWhazzupProcessingKey(impianto);
-  if (processingKey && isImpiantoWhazzupProcessing(impianto)) return;
+  if (processingKey && isImpiantoWhazzupProcessing(impianto)) return false;
   if (processingKey) whazzupProcessingByImpianto.add(processingKey);
+
+  let deferredWhatsAppTarget = null;
+  let positionDecision = getCachedFattoPositionDecision(impianto);
+  if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
+    deferredWhatsAppTarget = openDeferredWhatsAppTargetWindow();
+    positionDecision = await refreshFattoPositionDecision(impianto);
+  }
+  if (!positionDecision.allowed) {
+    closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+    notifyFattoPositionDenied(positionDecision);
+    clearImpiantoWhazzupProcessing(impianto);
+    renderImpianti();
+    return false;
+  }
 
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
 
-  // Segnale visivo condiviso e non bloccante: usa una sottoraccolta della commessa
-  // già accessibile agli utenti autenticati, indipendente dal salvataggio FATTO.
+  // La prova visiva viene creata solo dopo il controllo GPS/distanza.
+  // Resta visibile anche quando un errore remoto richiede il recupero manuale.
   void recordFattoVisualEvidence(impianto, doneAt, doneBy);
 
   markWhazzupSafetyPressed(impianto, doneAt);
@@ -21606,7 +21765,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   // Sposta subito lo stato locale nei FATTI e aggiorna l'elenco prima che
   // WhatsApp mandi Hera in secondo piano. Il salvataggio Firebase continua
   // nel flusso protetto già esistente qui sotto.
-  markImpiantoDoneVisualFallback(impianto);
+  markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
   renderImpianti();
 
   // iOS/Safari consente di aprire schemi esterni (whatsapp://) solo se la
@@ -21617,9 +21776,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
   whazzupFeedback.hideNow();
   const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, {
     doneAt,
-    operatorName: doneBy
+    operatorName: doneBy,
+    ...(deferredWhatsAppTarget ? { targetWindow: deferredWhatsAppTarget } : {})
   });
-  if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
+  if (!opened) {
+    closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+    alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
+  }
 
   void (async () => {
     const auditLogId = await auditLogWhazzupClick(impianto, {
@@ -21635,10 +21798,33 @@ async function handleImpiantoWhatsAppClick(impianto) {
 
     try {
       console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
-      const doneMarked = await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" });
+      const doneMarked = await forceMoveImpiantoToFatti(impianto, {
+        source: "whatsapp",
+        requireFirestoreConfirmation: false,
+        skipLocationCheck: true,
+        doneAt,
+        doneBy
+      });
       if (!doneMarked) {
         await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
-        await verifyImpiantoDoneBackground(impianto);
+        await markImpiantoDoneRecoveryRequired(impianto, "Salvataggio FATTO non riuscito.");
+        return;
+      }
+
+      const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+      if (isActionWaitingForSync(pendingAction)) {
+        if (opened) {
+          markPendingActionStatus(pendingAction.id, {
+            whatsappStatus: "whatsappOpened",
+            whatsappOpenedAt: new Date().toISOString()
+          });
+        }
+        await updateAuditLogWhazzupClick(auditLogId, {
+          fattoEsito: "queued_offline",
+          fattoConfermato: false
+        });
+        updateConnectivityStatus();
+        renderImpianti();
         return;
       }
 
@@ -21647,7 +21833,10 @@ async function handleImpiantoWhatsAppClick(impianto) {
         fattoEsito: persisted ? "persisted" : "verify_failed",
         fattoConfermato: Boolean(persisted)
       });
-      if (!persisted) return;
+      if (!persisted) {
+        await markImpiantoDoneRecoveryRequired(impianto, "Verifica Firebase FATTO non confermata.");
+        return;
+      }
 
       updateConnectivityStatus();
       renderImpianti();
@@ -21658,12 +21847,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
         fattoConfermato: false,
         errorMessage: String(error?.message || error || "Errore sconosciuto")
       });
-      await verifyImpiantoDoneBackground(impianto);
+      await markImpiantoDoneRecoveryRequired(impianto, String(error?.message || error || "Errore sconosciuto"));
     } finally {
       whazzupFeedback.hide(0);
       clearImpiantoWhazzupProcessing(impianto);
     }
   })();
+  return true;
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {
@@ -21773,18 +21963,48 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
   renderImpianti();
 }
 
+async function markImpiantoDoneRecoveryRequired(impianto, reason = "") {
+  const ids = getImpiantoDocIds(impianto);
+  if (ids.length) {
+    updateImpiantoLocalState(ids, {
+      done: false,
+      doneAt: null,
+      doneBy: "",
+      pendingActionId: "",
+      pendingActionStatus: "",
+      pendingWhatsappStatus: ""
+    });
+  }
+  markWhazzupSafetyPressed(impianto);
+  const state = getWhazzupSafetyState(impianto);
+  if (state) state.needsManualMove = true;
+  setImpiantiViewMode("todo");
+  if (ui.gpsStatus) ui.gpsStatus.textContent = FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE;
+  renderImpianti();
+  try {
+    await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
+  } catch (error) {
+    console.error("Errore notifica recupero FATTO agli admin:", error);
+  }
+}
+
 async function forceMoveImpiantoToFatti(impianto, options = {}) {
   const moved = await markImpiantoDone(impianto, {
     source: options.source || "whatsapp",
-    requireFirestoreConfirmation: true
+    requireFirestoreConfirmation: options.requireFirestoreConfirmation !== false,
+    skipLocationCheck: options.skipLocationCheck === true,
+    doneAt: options.doneAt,
+    doneBy: options.doneBy
   });
   if (!moved) return false;
+  const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+  const waitingForSync = isActionWaitingForSync(pendingAction);
   const state = getWhazzupSafetyState(impianto);
-  if (state) {
+  if (state && !waitingForSync) {
     state.needsManualMove = false;
     state.whazzupPremuto = false;
   }
-  clearWhazzupPendingDoneEntry(impianto);
+  if (!waitingForSync) clearWhazzupPendingDoneEntry(impianto);
   setImpiantiViewMode("done");
   renderImpianti();
   return true;
@@ -21828,14 +22048,14 @@ async function runWhazzupPendingDoneSafetyCheck() {
   renderImpianti();
 }
 
-async function isImpiantoPersistedAsDone(impianto) {
-  const commessaId = String(selectedCommessaId || "").trim();
+async function isImpiantoPersistedAsDone(impianto, commessaIdOverride = selectedCommessaId) {
+  const commessaId = String(commessaIdOverride || "").trim();
   const impiantoIds = getImpiantoDocIds(impianto).filter(Boolean);
   if (!commessaId || !impiantoIds.length) return false;
   try {
     const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
     const snapshots = await Promise.all(impiantoIds.map((impiantoId) => ref.doc(impiantoId).get()));
-    return snapshots.some((snap) => snap.exists && isImpiantoDoneState(snap.data() || {}));
+    return snapshots.every((snap) => snap.exists && isImpiantoDoneState(snap.data() || {}));
   } catch (error) {
     console.error("Errore verifica persistenza FATTO:", error);
     return false;
@@ -22121,7 +22341,9 @@ function getCurrentPositionOnce() {
       (pos) => {
         resolve({
           lat: Number(pos.coords.latitude),
-          lng: Number(pos.coords.longitude)
+          lng: Number(pos.coords.longitude),
+          accuracy: Number(pos.coords.accuracy || 0),
+          timestamp: Number(pos.timestamp || Date.now())
         });
       },
       (error) => reject(error),
@@ -22760,12 +22982,16 @@ async function syncLocationAvailability() {
   try {
     detectLocationClientInfo();
     if (!navigator.geolocation) {
+      clearCurrentUserPosition();
       updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
       return;
     }
     if (navigator.permissions?.query) {
       const status = await navigator.permissions.query({ name: "geolocation" });
-      if (status.state === "denied") updateLocationWarningState({ permission: "denied", enabled: false, mode: "blocked" });
+      if (status.state === "denied") {
+        clearCurrentUserPosition();
+        updateLocationWarningState({ permission: "denied", enabled: false, mode: "blocked" });
+      }
       else if (status.state === "prompt") updateLocationWarningState({ permission: "prompt", enabled: false, mode: "prompt" });
       else updateLocationWarningState({ permission: "granted", mode: "prompt" });
       status.onchange = () => { void syncLocationAvailability(); };
@@ -22774,12 +23000,14 @@ async function syncLocationAvailability() {
       navigator.geolocation.getCurrentPosition(() => {
         updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
       }, (error) => {
+        clearCurrentUserPosition();
         const denied = error?.code === 1;
         updateLocationWarningState({ permission: denied ? "denied" : "prompt", enabled: false, mode: denied ? "blocked" : "prompt" });
       }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     }
   } catch (error) {
     console.warn("Verifica disponibilità posizione non riuscita:", error);
+    clearCurrentUserPosition();
     updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
   }
 }
@@ -22795,13 +23023,14 @@ async function requestLocationEnableFlow(options = {}) {
       await window.Capacitor.Plugins.Geolocation.requestPermissions();
     }
     navigator.geolocation.getCurrentPosition((pos) => {
-      currentUserPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy || 0 };
+      updateCurrentUserPosition(pos.coords, pos.timestamp, { render: false });
       ensureUserLocationMarker(map, [pos.coords.latitude, pos.coords.longitude]);
       ensureUserLocationMarker(fullscreenMap, [pos.coords.latitude, pos.coords.longitude]);
       updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
       fullscreenMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
     }, async (error) => {
+      clearCurrentUserPosition();
       const denied = error?.code === 1;
       const blockedLike = denied || error?.code === 2 || error?.code === 3 || options.forceRetry;
       updateLocationWarningState({ enabled: false, permission: denied ? "denied" : locationPermission, mode: blockedLike ? "blocked" : "prompt" });
@@ -23293,7 +23522,7 @@ async function runFuelStationsLoad() {
   fuelStationsLayer.clearLayers();
   try {
     const position = await requestFreshFuelPosition();
-    currentUserPos = position;
+    updateCurrentUserPosition(position, position.timestamp || Date.now(), { render: false });
     console.info("[Distributori] posizione operatore", { lat: position.lat, lng: position.lng, accuracy: position.accuracy });
     const initialZoom = radiusKm <= 5 ? 12 : radiusKm <= 10 ? 11 : radiusKm <= 20 ? 10 : 9;
     fuelMapInstance.setView([position.lat, position.lng], initialZoom);
@@ -23974,11 +24203,7 @@ function initGeolocation(options = {}) {
 
   const onPosition = (pos) => {
     latestGeolocationCoords = pos.coords;
-    currentUserPos = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      accuracy: pos.coords.accuracy || 0
-    };
+    updateCurrentUserPosition(pos.coords, pos.timestamp, { render: false });
     publishCurrentOperatorPosition(pos.coords, { force: Boolean(options.forcePublishCurrent) });
     options.forcePublishCurrent = false;
     evaluateTimbraturaReminders();
@@ -23994,6 +24219,7 @@ function initGeolocation(options = {}) {
     onPosition(pos);
     fetchWeather();
   }, () => {
+    clearCurrentUserPosition();
     ui.gpsStatus.textContent = "Posizione non disponibile";
     updateLocationWarningState({ enabled: false, mode: locationPermission === "denied" ? "blocked" : "prompt" });
     fetchWeather();
@@ -24003,6 +24229,7 @@ function initGeolocation(options = {}) {
   });
 
   geolocationWatchId = navigator.geolocation.watchPosition(onPosition, () => {
+    clearCurrentUserPosition();
     ui.gpsStatus.textContent = "Posizione non disponibile";
     updateLocationWarningState({ enabled: false, mode: locationPermission === "denied" ? "blocked" : "prompt" });
   }, {

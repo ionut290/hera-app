@@ -29,7 +29,7 @@ assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
 assert.match(index, /today-summary-interactions\.js\?v=20260726b/);
-assert.match(serviceWorker, /hera-app-shell-v31/);
+assert.match(serviceWorker, /hera-app-shell-v32/);
 assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260726b/);
 
 console.log("Today summary and team alert checks passed.");

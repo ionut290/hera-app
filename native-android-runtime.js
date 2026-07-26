@@ -17,6 +17,8 @@
   const PushNotifications = plugin("PushNotifications");
   const HeraGeofence = plugin("HeraGeofence");
   const NOTIFICATION_KEY = "hera_notifications_configured_v1";
+  const nativeLocationWatchers = new Map();
+  let nativeLocationWatchCounter = 0;
 
   function normalizeNativePosition(position) {
     if (!position || !position.coords) return position;
@@ -34,6 +36,14 @@
     };
   }
 
+  function publishNativePosition(position) {
+    const normalized = normalizeNativePosition(position);
+    if (!normalized?.coords) return null;
+    window.__heraLastNativePosition = normalized;
+    window.dispatchEvent(new CustomEvent("hera:native-location", { detail: normalized }));
+    return normalized;
+  }
+
   async function refreshNativeLocation() {
     if (!Geolocation) return null;
     try {
@@ -43,13 +53,11 @@
       }
       if (permission.location !== "granted" && permission.coarseLocation !== "granted") return null;
 
-      const position = normalizeNativePosition(await Geolocation.getCurrentPosition({
+      const position = publishNativePosition(await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 60000
+        maximumAge: 0
       }));
-      window.__heraLastNativePosition = position;
-      window.dispatchEvent(new CustomEvent("hera:native-location", { detail: position }));
       return position;
     } catch (error) {
       console.warn("Posizione nativa non disponibile:", error);
@@ -74,15 +82,66 @@
           else errorAsync(error, "Permesso posizione Android non concesso o posizione non disponibile.");
         }).catch(() => errorAsync(error, "Posizione Android non disponibile."));
       },
-      watchPosition(success, error) {
-        const watchId = Date.now() + Math.floor(Math.random() * 1000);
-        refreshNativeLocation().then((position) => {
-          if (position) successAsync(success, position);
-          else errorAsync(error, "Permesso posizione Android non concesso o posizione non disponibile.");
+      watchPosition(success, error, options = {}) {
+        const watchId = ++nativeLocationWatchCounter;
+        const watcher = { nativeId: null, cancelled: false, fallbackTimer: null };
+        nativeLocationWatchers.set(watchId, watcher);
+
+        if (!Geolocation || typeof Geolocation.watchPosition !== "function") {
+          const refresh = () => refreshNativeLocation().then((position) => {
+            if (position) successAsync(success, position);
+            else errorAsync(error, "Posizione Android non disponibile.");
+          });
+          refresh();
+          watcher.fallbackTimer = setInterval(refresh, 15000);
+          return watchId;
+        }
+
+        const startNativeWatch = async () => {
+          const initialPosition = await refreshNativeLocation();
+          const activeBeforeStart = nativeLocationWatchers.get(watchId);
+          if (!activeBeforeStart || activeBeforeStart.cancelled) return null;
+          if (!initialPosition) throw new Error("Permesso posizione Android non concesso o posizione non disponibile.");
+          successAsync(success, initialPosition);
+          return Geolocation.watchPosition({
+            enableHighAccuracy: options.enableHighAccuracy !== false,
+            timeout: Number(options.timeout || 15000),
+            maximumAge: Math.min(Number(options.maximumAge || 0), 10000)
+          }, (position, watchError) => {
+            const activeWatcher = nativeLocationWatchers.get(watchId);
+            if (!activeWatcher || activeWatcher.cancelled) return;
+            if (watchError || !position) {
+              errorAsync(error, watchError?.message || "Posizione Android non disponibile.");
+              return;
+            }
+            const normalized = publishNativePosition(position);
+            if (normalized) successAsync(success, normalized);
+          });
+        };
+
+        Promise.resolve(startNativeWatch()).then((nativeId) => {
+          const activeWatcher = nativeLocationWatchers.get(watchId);
+          if (!activeWatcher || activeWatcher.cancelled) {
+            if (nativeId != null) Geolocation.clearWatch({ id: nativeId }).catch(() => {});
+            return;
+          }
+          activeWatcher.nativeId = nativeId;
+        }).catch((watchError) => {
+          nativeLocationWatchers.delete(watchId);
+          errorAsync(error, watchError?.message || "Posizione Android non disponibile.");
         });
         return watchId;
       },
-      clearWatch() {}
+      clearWatch(watchId) {
+        const watcher = nativeLocationWatchers.get(watchId);
+        if (!watcher) return;
+        watcher.cancelled = true;
+        if (watcher.fallbackTimer) clearInterval(watcher.fallbackTimer);
+        if (watcher.nativeId != null && Geolocation?.clearWatch) {
+          Geolocation.clearWatch({ id: watcher.nativeId }).catch(() => {});
+        }
+        nativeLocationWatchers.delete(watchId);
+      }
     };
 
     try {

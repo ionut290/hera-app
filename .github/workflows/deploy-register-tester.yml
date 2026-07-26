@@ -29,17 +29,17 @@ jobs:
 
       - name: Validate Firebase credentials
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
         run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::Repository secret FIREBASE_SERVICE_ACCOUNT is missing."
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B" ]; then
+            echo "::error::Repository secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B is missing."
             exit 1
           fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

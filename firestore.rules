@@ -161,6 +161,30 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /calendarEvents/{eventId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.startDate is string
+        && request.resource.data.endDate is string
+        && request.resource.data.title is string
+        && request.resource.data.type in [
+          "ferie",
+          "permesso",
+          "malattia",
+          "intervento",
+          "riunione",
+          "formazione",
+          "scadenza",
+          "altro"
+        ];
+      allow update: if signedIn()
+        && (isAdmin() || resource.data.createdByUid == request.auth.uid)
+        && request.resource.data.createdByUid == resource.data.createdByUid;
+      allow delete: if signedIn()
+        && (isAdmin() || resource.data.createdByUid == request.auth.uid);
+    }
+
     match /posDocuments/{docId} {
       allow read: if resource.data.active == true || signedIn();
       allow create, update, delete: if isAdmin();

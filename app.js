@@ -827,7 +827,7 @@ const ui = {
   bannerDisableBtn: document.getElementById("banner-disable-btn"),
   bannerFeedback: document.getElementById("banner-feedback"),
   weatherRisks: document.getElementById("weather-risks"),
-  homePrivateDocsBtn: document.getElementById("home-private-docs-btn"),
+  homeCalendarBtn: document.getElementById("home-calendar-btn"),
   homeSegnalazioniBtn: document.getElementById("home-segnalazioni-btn"),
   todayCommesseBtn: document.getElementById("today-commesse-btn"),
   todayHoursBtn: document.getElementById("today-hours-btn"),
@@ -881,6 +881,40 @@ const ui = {
   howtoFaqList: document.getElementById("howto-faq-list"),
   privateDocsPage: document.getElementById("private-docs-page"),
   backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
+  calendarPage: document.getElementById("calendar-page"),
+  backFromCalendarBtn: document.getElementById("back-from-calendar-btn"),
+  calendarNewEventBtn: document.getElementById("calendar-new-event-btn"),
+  calendarPrevBtn: document.getElementById("calendar-prev-btn"),
+  calendarTodayBtn: document.getElementById("calendar-today-btn"),
+  calendarNextBtn: document.getElementById("calendar-next-btn"),
+  calendarMonthTitle: document.getElementById("calendar-month-title"),
+  calendarGrid: document.getElementById("calendar-grid"),
+  calendarFeedback: document.getElementById("calendar-feedback"),
+  calendarSelectedDayTitle: document.getElementById("calendar-selected-day-title"),
+  calendarSelectedDaySummary: document.getElementById("calendar-selected-day-summary"),
+  calendarAddSelectedDayBtn: document.getElementById("calendar-add-selected-day-btn"),
+  calendarDayEvents: document.getElementById("calendar-day-events"),
+  calendarEventDialog: document.getElementById("calendar-event-dialog"),
+  calendarEventForm: document.getElementById("calendar-event-form"),
+  calendarEventFormTitle: document.getElementById("calendar-event-form-title"),
+  calendarEventId: document.getElementById("calendar-event-id"),
+  calendarEventType: document.getElementById("calendar-event-type"),
+  calendarEventTitle: document.getElementById("calendar-event-title"),
+  calendarEventStartDate: document.getElementById("calendar-event-start-date"),
+  calendarEventEndDate: document.getElementById("calendar-event-end-date"),
+  calendarEventAllDay: document.getElementById("calendar-event-all-day"),
+  calendarEventTimeFields: document.getElementById("calendar-event-time-fields"),
+  calendarEventStartTime: document.getElementById("calendar-event-start-time"),
+  calendarEventEndTime: document.getElementById("calendar-event-end-time"),
+  calendarEventWorksite: document.getElementById("calendar-event-worksite"),
+  calendarEventLocation: document.getElementById("calendar-event-location"),
+  calendarEventParticipants: document.getElementById("calendar-event-participants"),
+  calendarEventDescription: document.getElementById("calendar-event-description"),
+  calendarEventLink: document.getElementById("calendar-event-link"),
+  calendarEventFormFeedback: document.getElementById("calendar-event-form-feedback"),
+  calendarEventCloseBtn: document.getElementById("calendar-event-close-btn"),
+  calendarEventCancelBtn: document.getElementById("calendar-event-cancel-btn"),
+  calendarEventSaveBtn: document.getElementById("calendar-event-save-btn"),
   hoursPage: document.getElementById("hours-page"),
   backFromHoursBtn: document.getElementById("back-from-hours-btn"),
   posPage: document.getElementById("pos-page"),
@@ -1099,6 +1133,10 @@ let unsubscribeOperatorPositions = null;
 let unsubscribeAdminUsers = null;
 let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
+let unsubscribeCalendarEvents = null;
+let calendarEvents = [];
+let calendarVisibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calendarSelectedDate = formatCalendarDateKey(new Date());
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
@@ -1995,7 +2033,7 @@ ui.ferieForm?.addEventListener("submit", saveFerieCollega);
 ui.ferieCheckBtn?.addEventListener("click", renderFerieDisponibilitaCalendar);
 ui.openPanelBannerGestione?.addEventListener("click", () => openManagementPanel("banner"));
 ui.openPrivateDocsBtn?.addEventListener("click", openPrivateDocsPage);
-ui.homePrivateDocsBtn?.addEventListener("click", openPrivateDocsPage);
+ui.homeCalendarBtn?.addEventListener("click", openCalendarPage);
 ui.openPrivateDocsUploadBtn?.addEventListener("click", openPrivateDocsUploadPage);
 ui.openPersonalServicesBtn?.addEventListener("click", openPersonalServicesPage);
 ui.openHoursBtn?.addEventListener("click", openHoursPage);
@@ -2041,6 +2079,16 @@ ui.backFromPersonalServicesBtn?.addEventListener("click", closePersonalServicesP
 ui.backFromSegnalazioniBtn?.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn?.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn?.addEventListener("click", closePrivateDocsPage);
+ui.backFromCalendarBtn?.addEventListener("click", closeCalendarPage);
+ui.calendarNewEventBtn?.addEventListener("click", () => openCalendarEventForm(calendarSelectedDate));
+ui.calendarAddSelectedDayBtn?.addEventListener("click", () => openCalendarEventForm(calendarSelectedDate));
+ui.calendarPrevBtn?.addEventListener("click", () => changeCalendarMonth(-1));
+ui.calendarTodayBtn?.addEventListener("click", showCalendarToday);
+ui.calendarNextBtn?.addEventListener("click", () => changeCalendarMonth(1));
+ui.calendarEventAllDay?.addEventListener("change", syncCalendarTimeFields);
+ui.calendarEventCloseBtn?.addEventListener("click", closeCalendarEventForm);
+ui.calendarEventCancelBtn?.addEventListener("click", closeCalendarEventForm);
+ui.calendarEventForm?.addEventListener("submit", saveCalendarEvent);
 ui.backFromHoursBtn?.addEventListener("click", closeHoursPage);
 ui.backFromPosBtn?.addEventListener("click", closePosPage);
 ui.posAddToggleBtn?.addEventListener("click", () => openPosDocumentForm());
@@ -3240,6 +3288,7 @@ if (!auth || firebaseInitError) {
   stopGlobalCommesseSubscription();
   stopGlobalImpiantiSubscription();
   stopPrivateDocsSubscription();
+  stopCalendarEventsSubscription();
   stopPosDocumentsSubscription();
   stopGpsRequestsSubscription();
   stopGlobalNotificationsSubscription();
@@ -3277,6 +3326,7 @@ if (!auth || firebaseInitError) {
   selectedGlobalCommessaId = "";
   resourceRecords = [];
   privateDocsRecords = [];
+  calendarEvents = [];
   posDocuments = [];
   gpsUpdateRequests = [];
   operatorPositions = [];
@@ -4524,6 +4574,7 @@ function applyRoute() {
   const showHowto = hash === "#howto";
   const showControlCenter = hash === "#centro-controllo";
   const showPrivateDocs = hash === "#documenti";
+  const showCalendar = hash === "#calendario";
   const showPos = hash === "#pos" || (window.location.pathname === "/pos" && !hash);
   const personalServiceMatch = hash.match(/^#servizi-personali(?:=([a-z]+))?$/);
   const showHours = hash === "#ore";
@@ -4549,7 +4600,7 @@ function applyRoute() {
   const showTombiniMap = Boolean(commessaRoute.tombini && selectedCommessaId === commessaIdFromHash && isTombiniEnabledForCurrentCommessa());
   const showImpianti = Boolean(commessaIdFromHash && selectedCommessaId === commessaIdFromHash && !showNotesPage && !showWeatherDetail && !showWeatherAlertSafety && !showAtexProcedure && !showImpiantoSafety && !showCapitolatoOperativo && !showBiogasMap && !showTombiniMap);
   const showResourceViewer = Boolean(showImpianti && resourceTypeFromHash);
-  ui.homePage.classList.toggle("hidden", showActiveUsersDetail || showUserActivity || showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showControlCenter || showPrivateDocs || showPos || showHours || showPersonalServices || showSnowService);
+  ui.homePage.classList.toggle("hidden", showActiveUsersDetail || showUserActivity || showImpianti || showNotesPage || showWeatherDetail || showWeatherAlertSafety || showAtexProcedure || showImpiantoSafety || showCapitolatoOperativo || showBiogasMap || showTombiniMap || showFuel || showSegnalazioni || showHowto || showControlCenter || showPrivateDocs || showCalendar || showPos || showHours || showPersonalServices || showSnowService);
   ui.impiantiPage.classList.toggle("hidden", !showImpianti || isMapFullscreenPageOpen);
   ui.weatherAlertSafetyPage?.classList.toggle("hidden", !showWeatherAlertSafety);
   ui.impiantoWeatherDetailPage?.classList.toggle("hidden", !showWeatherDetail);
@@ -4564,6 +4615,7 @@ function applyRoute() {
   ui.howtoPage.classList.toggle("hidden", !showHowto);
   ui.controlCenterPage?.classList.toggle("hidden", !showControlCenter);
   ui.privateDocsPage.classList.toggle("hidden", !showPrivateDocs);
+  ui.calendarPage?.classList.toggle("hidden", !showCalendar);
   ui.posPage?.classList.toggle("hidden", !showPos);
   ui.hoursPage.classList.toggle("hidden", !showHours);
   ui.activeUsersDetailPage?.classList.toggle("hidden", !showActiveUsersDetail);
@@ -4624,6 +4676,10 @@ function applyRoute() {
   if (showHowto) renderHowtoFaq();
   if (showControlCenter) renderControlCenter();
   if (showPrivateDocs) renderPrivateDocsList();
+  if (showCalendar) {
+    subscribeCalendarEvents();
+    renderCalendar();
+  }
   if (showPos) renderPosDocuments();
   if (showFuel) {
     setTimeout(() => {
@@ -5015,6 +5071,365 @@ function openPrivateDocsUploadPage() {
 function closePrivateDocsPage() {
   window.location.hash = "";
   applyRoute();
+}
+
+const CALENDAR_EVENT_TYPES = {
+  ferie: { label: "Ferie", icon: "🏖️" },
+  permesso: { label: "Permesso", icon: "🕒" },
+  malattia: { label: "Malattia", icon: "🤒" },
+  intervento: { label: "Programmazione intervento", icon: "🛠️" },
+  riunione: { label: "Riunione", icon: "👥" },
+  formazione: { label: "Formazione", icon: "🎓" },
+  scadenza: { label: "Scadenza", icon: "⏰" },
+  altro: { label: "Altro", icon: "📌" }
+};
+
+function formatCalendarDateKey(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseCalendarDateKey(dateKey) {
+  const match = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatCalendarLongDate(dateKey) {
+  const date = parseCalendarDateKey(dateKey);
+  return date
+    ? new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date)
+    : "Data non disponibile";
+}
+
+function openCalendarPage() {
+  if (!currentUser) {
+    alert("Devi fare login per aprire il calendario condiviso.");
+    return;
+  }
+  window.location.hash = "calendario";
+  applyRoute();
+  closeSideMenu();
+}
+
+function closeCalendarPage() {
+  closeCalendarEventForm();
+  window.location.hash = "";
+  applyRoute();
+}
+
+function subscribeCalendarEvents() {
+  if (!currentUser || !db || unsubscribeCalendarEvents) return;
+  if (ui.calendarFeedback) ui.calendarFeedback.textContent = "Caricamento eventi...";
+  unsubscribeCalendarEvents = db.collection("calendarEvents").onSnapshot((snapshot) => {
+    calendarEvents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (ui.calendarFeedback) {
+      ui.calendarFeedback.textContent = calendarEvents.length
+        ? `${calendarEvents.length} ${calendarEvents.length === 1 ? "evento condiviso" : "eventi condivisi"}`
+        : "Nessun evento inserito.";
+    }
+    renderCalendar();
+  }, (error) => {
+    console.error("Errore caricamento calendario condiviso:", error);
+    if (ui.calendarFeedback) ui.calendarFeedback.textContent = "Impossibile caricare gli eventi. Verifica la connessione e i permessi.";
+  });
+}
+
+function stopCalendarEventsSubscription() {
+  if (unsubscribeCalendarEvents) {
+    unsubscribeCalendarEvents();
+    unsubscribeCalendarEvents = null;
+  }
+}
+
+function calendarEventIncludesDate(event, dateKey) {
+  const start = String(event.startDate || "");
+  const end = String(event.endDate || start);
+  return Boolean(dateKey && start && start <= dateKey && dateKey <= end);
+}
+
+function getCalendarEventsForDate(dateKey) {
+  return calendarEvents
+    .filter((event) => calendarEventIncludesDate(event, dateKey))
+    .sort((a, b) => {
+      const aTime = a.allDay === false ? String(a.startTime || "23:59") : "00:00";
+      const bTime = b.allDay === false ? String(b.startTime || "23:59") : "00:00";
+      return aTime.localeCompare(bTime) || String(a.title || "").localeCompare(String(b.title || ""), "it");
+    });
+}
+
+function renderCalendar() {
+  if (!ui.calendarGrid || !ui.calendarMonthTitle) return;
+  const year = calendarVisibleMonth.getFullYear();
+  const month = calendarVisibleMonth.getMonth();
+  ui.calendarMonthTitle.textContent = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(calendarVisibleMonth);
+  const firstDay = new Date(year, month, 1, 12);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(year, month, 1 - mondayOffset, 12);
+  const todayKey = formatCalendarDateKey(new Date());
+  const cells = [];
+
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    const dateKey = formatCalendarDateKey(date);
+    const events = getCalendarEventsForDate(dateKey);
+    const typeDots = [...new Set(events.map((event) => String(event.type || "altro")))]
+      .slice(0, 3)
+      .map((type) => `<span class="calendar-type-dot calendar-type-${escapeHTML(type)}"></span>`)
+      .join("");
+    const classes = [
+      "calendar-day",
+      date.getMonth() === month ? "" : "is-outside",
+      dateKey === todayKey ? "is-today" : "",
+      dateKey === calendarSelectedDate ? "is-selected" : "",
+      events.length ? "has-events" : ""
+    ].filter(Boolean).join(" ");
+    const eventLabel = events.length ? `${events.length} ${events.length === 1 ? "evento" : "eventi"}` : "nessun evento";
+    cells.push(`
+      <button class="${classes}" type="button" role="gridcell" data-calendar-date="${dateKey}" aria-label="${escapeHTML(formatCalendarLongDate(dateKey))}, ${eventLabel}">
+        <span class="calendar-day-number">${date.getDate()}</span>
+        ${events.length ? `<span class="calendar-event-count">${events.length}</span>` : ""}
+        <span class="calendar-type-dots">${typeDots}</span>
+      </button>
+    `);
+  }
+
+  ui.calendarGrid.innerHTML = cells.join("");
+  ui.calendarGrid.querySelectorAll("[data-calendar-date]").forEach((button) => {
+    button.addEventListener("click", () => selectCalendarDate(button.dataset.calendarDate || ""));
+  });
+  renderCalendarSelectedDay();
+}
+
+function selectCalendarDate(dateKey) {
+  const date = parseCalendarDateKey(dateKey);
+  if (!date) return;
+  calendarSelectedDate = dateKey;
+  if (date.getMonth() !== calendarVisibleMonth.getMonth() || date.getFullYear() !== calendarVisibleMonth.getFullYear()) {
+    calendarVisibleMonth = new Date(date.getFullYear(), date.getMonth(), 1, 12);
+  }
+  renderCalendar();
+}
+
+function changeCalendarMonth(offset) {
+  calendarVisibleMonth = new Date(calendarVisibleMonth.getFullYear(), calendarVisibleMonth.getMonth() + Number(offset || 0), 1, 12);
+  calendarSelectedDate = formatCalendarDateKey(calendarVisibleMonth);
+  renderCalendar();
+}
+
+function showCalendarToday() {
+  const today = new Date();
+  calendarVisibleMonth = new Date(today.getFullYear(), today.getMonth(), 1, 12);
+  calendarSelectedDate = formatCalendarDateKey(today);
+  renderCalendar();
+}
+
+function canModifyCalendarEvent(event) {
+  return Boolean(currentUser && (canManageData() || String(event?.createdByUid || "") === String(currentUser.uid || "")));
+}
+
+function formatCalendarEventPeriod(event) {
+  const allDay = event.allDay !== false;
+  const startDate = String(event.startDate || "");
+  const endDate = String(event.endDate || startDate);
+  if (allDay) return startDate === endDate ? "Tutto il giorno" : `Dal ${startDate} al ${endDate}`;
+  const time = [event.startTime, event.endTime].filter(Boolean).join("–");
+  return startDate === endDate ? (time || "Orario da definire") : `Dal ${startDate} al ${endDate}${time ? ` • ${time}` : ""}`;
+}
+
+function renderCalendarSelectedDay() {
+  if (!ui.calendarDayEvents) return;
+  const events = getCalendarEventsForDate(calendarSelectedDate);
+  if (ui.calendarSelectedDayTitle) ui.calendarSelectedDayTitle.textContent = formatCalendarLongDate(calendarSelectedDate);
+  if (ui.calendarSelectedDaySummary) {
+    ui.calendarSelectedDaySummary.textContent = events.length
+      ? `${events.length} ${events.length === 1 ? "evento programmato" : "eventi programmati"}`
+      : "Nessun evento in questo giorno";
+  }
+  if (!events.length) {
+    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>🗓️</span><p>Nessun evento. Premi “Aggiungi” per inserirne uno.</p></div>";
+    return;
+  }
+  ui.calendarDayEvents.innerHTML = events.map((event) => {
+    const type = CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro;
+    const mayModify = canModifyCalendarEvent(event);
+    const safeLink = /^https?:\/\//i.test(String(event.link || "")) ? String(event.link) : "";
+    const detailRows = [
+      event.worksite ? `<p><strong>Commessa / impianto:</strong> ${escapeHTML(event.worksite)}</p>` : "",
+      event.location ? `<p><strong>Luogo:</strong> ${escapeHTML(event.location)}</p>` : "",
+      event.participants ? `<p><strong>Persone:</strong> ${escapeHTML(event.participants)}</p>` : "",
+      event.description ? `<p class="calendar-event-description">${escapeHTML(event.description)}</p>` : "",
+      safeLink ? `<p><a class="btn calendar-link-btn" href="${escapeHTML(safeLink)}" target="_blank" rel="noopener noreferrer">🔗 Apri link</a></p>` : ""
+    ].join("");
+    return `
+      <article class="calendar-event-card calendar-type-border-${escapeHTML(event.type || "altro")}">
+        <div class="calendar-event-heading">
+          <span class="calendar-event-icon" aria-hidden="true">${type.icon}</span>
+          <div>
+            <span class="calendar-event-type">${escapeHTML(type.label)}</span>
+            <h3>${escapeHTML(event.title || "Evento")}</h3>
+            <p class="calendar-event-period">${escapeHTML(formatCalendarEventPeriod(event))}</p>
+          </div>
+        </div>
+        <div class="calendar-event-details">${detailRows}</div>
+        <div class="calendar-event-footer">
+          <span>Inserito da <strong>${escapeHTML(event.createdByName || event.createdByEmail || "Utente")}</strong></span>
+          ${mayModify ? `
+            <span class="calendar-event-actions">
+              <button class="btn" type="button" data-calendar-edit="${escapeHTML(event.id)}">Modifica</button>
+              <button class="btn btn-danger" type="button" data-calendar-delete="${escapeHTML(event.id)}">Elimina</button>
+            </span>
+          ` : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+  ui.calendarDayEvents.querySelectorAll("[data-calendar-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const event = calendarEvents.find((item) => item.id === button.dataset.calendarEdit);
+      if (event) openCalendarEventForm(event.startDate, event);
+    });
+  });
+  ui.calendarDayEvents.querySelectorAll("[data-calendar-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteCalendarEvent(button.dataset.calendarDelete || ""));
+  });
+}
+
+function syncCalendarTimeFields() {
+  const allDay = Boolean(ui.calendarEventAllDay?.checked);
+  ui.calendarEventTimeFields?.classList.toggle("hidden", allDay);
+  if (ui.calendarEventStartTime) ui.calendarEventStartTime.required = !allDay;
+  if (ui.calendarEventEndTime) ui.calendarEventEndTime.required = false;
+}
+
+function openCalendarEventForm(dateKey = calendarSelectedDate, event = null) {
+  if (!currentUser) return;
+  const fallbackDate = parseCalendarDateKey(dateKey) ? dateKey : formatCalendarDateKey(new Date());
+  ui.calendarEventForm?.reset();
+  ui.calendarEventId.value = event?.id || "";
+  ui.calendarEventFormTitle.textContent = event ? "Modifica evento" : "Nuovo evento";
+  ui.calendarEventType.value = event?.type || "ferie";
+  ui.calendarEventTitle.value = event?.title || "";
+  ui.calendarEventStartDate.value = event?.startDate || fallbackDate;
+  ui.calendarEventEndDate.value = event?.endDate || event?.startDate || fallbackDate;
+  ui.calendarEventAllDay.checked = event?.allDay !== false;
+  ui.calendarEventStartTime.value = event?.startTime || "";
+  ui.calendarEventEndTime.value = event?.endTime || "";
+  ui.calendarEventWorksite.value = event?.worksite || "";
+  ui.calendarEventLocation.value = event?.location || "";
+  ui.calendarEventParticipants.value = event?.participants || "";
+  ui.calendarEventDescription.value = event?.description || "";
+  ui.calendarEventLink.value = event?.link || "";
+  ui.calendarEventFormFeedback.textContent = "";
+  syncCalendarTimeFields();
+  if (typeof ui.calendarEventDialog.showModal === "function") ui.calendarEventDialog.showModal();
+  else ui.calendarEventDialog.setAttribute("open", "");
+  setTimeout(() => ui.calendarEventTitle?.focus(), 50);
+}
+
+function closeCalendarEventForm() {
+  if (!ui.calendarEventDialog) return;
+  if (typeof ui.calendarEventDialog.close === "function" && ui.calendarEventDialog.open) ui.calendarEventDialog.close();
+  else ui.calendarEventDialog.removeAttribute("open");
+}
+
+function getCalendarAuthorName() {
+  const profile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser?.uid || ""));
+  return String(profile?.displayName || profile?.nome || currentUser?.displayName || currentUser?.email || "Utente").trim();
+}
+
+async function saveCalendarEvent(event) {
+  event.preventDefault();
+  if (!currentUser || !db) return;
+  const eventId = String(ui.calendarEventId.value || "").trim();
+  const existing = calendarEvents.find((item) => item.id === eventId);
+  if (existing && !canModifyCalendarEvent(existing)) {
+    ui.calendarEventFormFeedback.textContent = "Non puoi modificare un evento inserito da un altro utente.";
+    return;
+  }
+  const startDate = String(ui.calendarEventStartDate.value || "");
+  const endDate = String(ui.calendarEventEndDate.value || startDate);
+  const allDay = Boolean(ui.calendarEventAllDay.checked);
+  const startTime = allDay ? "" : String(ui.calendarEventStartTime.value || "");
+  const endTime = allDay ? "" : String(ui.calendarEventEndTime.value || "");
+  if (!startDate || !endDate || endDate < startDate) {
+    ui.calendarEventFormFeedback.textContent = "Controlla le date: la data finale non può precedere quella iniziale.";
+    return;
+  }
+  if (!allDay && !startTime) {
+    ui.calendarEventFormFeedback.textContent = "Inserisci almeno l'ora di inizio.";
+    return;
+  }
+  if (!allDay && startDate === endDate && endTime && endTime < startTime) {
+    ui.calendarEventFormFeedback.textContent = "L'ora finale non può precedere quella iniziale.";
+    return;
+  }
+  const payload = {
+    type: String(ui.calendarEventType.value || "altro"),
+    title: String(ui.calendarEventTitle.value || "").trim(),
+    startDate,
+    endDate,
+    allDay,
+    startTime,
+    endTime,
+    worksite: String(ui.calendarEventWorksite.value || "").trim(),
+    location: String(ui.calendarEventLocation.value || "").trim(),
+    participants: String(ui.calendarEventParticipants.value || "").trim(),
+    description: String(ui.calendarEventDescription.value || "").trim(),
+    link: String(ui.calendarEventLink.value || "").trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedByUid: currentUser.uid || "",
+    updatedByEmail: currentUser.email || ""
+  };
+  if (!payload.title) {
+    ui.calendarEventFormFeedback.textContent = "Inserisci il titolo dell'evento.";
+    return;
+  }
+  ui.calendarEventSaveBtn.disabled = true;
+  ui.calendarEventFormFeedback.textContent = "Salvataggio...";
+  try {
+    if (eventId) {
+      await db.collection("calendarEvents").doc(eventId).set(payload, { merge: true });
+    } else {
+      await db.collection("calendarEvents").add({
+        ...payload,
+        createdByUid: currentUser.uid || "",
+        createdByEmail: currentUser.email || "",
+        createdByName: getCalendarAuthorName(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    calendarSelectedDate = startDate;
+    const savedDate = parseCalendarDateKey(startDate);
+    if (savedDate) calendarVisibleMonth = new Date(savedDate.getFullYear(), savedDate.getMonth(), 1, 12);
+    closeCalendarEventForm();
+  } catch (error) {
+    console.error("Salvataggio evento calendario non riuscito:", error);
+    ui.calendarEventFormFeedback.textContent = error?.message || "Errore durante il salvataggio dell'evento.";
+  } finally {
+    ui.calendarEventSaveBtn.disabled = false;
+  }
+}
+
+async function deleteCalendarEvent(eventId) {
+  const event = calendarEvents.find((item) => item.id === eventId);
+  if (!event || !canModifyCalendarEvent(event)) {
+    alert("Può eliminare questo evento solo chi lo ha inserito o un amministratore.");
+    return;
+  }
+  if (!window.confirm(`Eliminare l'evento “${event.title || "Evento"}”?`)) return;
+  try {
+    await db.collection("calendarEvents").doc(eventId).delete();
+  } catch (error) {
+    console.error("Eliminazione evento calendario non riuscita:", error);
+    alert(error?.message || "Impossibile eliminare l'evento.");
+  }
 }
 
 function initHoursPage() {
@@ -29046,6 +29461,7 @@ function getCurrentViewName() {
   if (hash === "ore") return "Gestione ore";
   if (hash === "segnalazioni") return "Segnalazioni";
   if (hash === "documenti") return "Documenti";
+  if (hash === "calendario") return "Calendario condiviso";
   return hash || "Home";
 }
 

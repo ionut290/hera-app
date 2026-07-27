@@ -119,7 +119,7 @@ async function run() {
   assert.match(weatherProxy, /MET Norway fallback/);
   assert.doesNotMatch(app, /fetchOpenWeatherPrimary/);
   assert.match(index, /app\.js\?v=20260726-fatto1/);
-  assert.match(serviceWorker, /hera-app-shell-v34/);
+  assert.match(serviceWorker, /hera-app-shell-v35/);
   assert.match(serviceWorker, /app\.js\?v=20260726-fatto1/);
   assert.match(netlify, /from = "\/api\/weather"/);
 

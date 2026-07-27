@@ -5,6 +5,7 @@ const script = fs.readFileSync("login-retry-fix.js", "utf8");
 const style = fs.readFileSync("login-retry-fix.css", "utf8");
 const functionsSource = fs.readFileSync("functions/index.js", "utf8");
 const androidWorkflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
+const capacitorBundle = fs.readFileSync("scripts/prepare-capacitor-web.js", "utf8");
 const deployWorkflow = fs.readFileSync(".github/workflows/deploy-register-tester.yml", "utf8");
 
 if (!script.includes('/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/')) {
@@ -70,7 +71,9 @@ if (!style.includes("overflow-wrap: anywhere") || !style.includes("max-width: 10
 
 for (const asset of ["login-retry-fix.js", "login-retry-fix.css"]) {
   if (!html.includes(asset)) throw new Error(`${asset} non caricato da index.html.`);
-  if (!androidWorkflow.includes(asset)) throw new Error(`${asset} non incluso nell'AAB.`);
+  if (!androidWorkflow.includes("npm run android:aab:prepare") || !capacitorBundle.includes(`"${asset}"`)) {
+    throw new Error(`${asset} non incluso nell'AAB.`);
+  }
 }
 
 if (!style.includes(".registration-dialog form")) {

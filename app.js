@@ -436,6 +436,7 @@ window.alert = (message) => {
 
 const ui = {
   refreshAppBtn: document.getElementById("refresh-app-btn"),
+  updateAppBtn: document.getElementById("update-app-btn"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
   installAppBtn: document.getElementById("install-app-btn"),
@@ -1834,6 +1835,7 @@ ui.authEmailForm?.addEventListener("submit", (event) => {
 });
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
+ui.updateAppBtn?.addEventListener("click", openApplicationUpdate);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
 ui.menuCloseBtn?.addEventListener("click", closeSideMenu);
 ui.installAppBtn?.addEventListener("click", handleInstallAppClick);
@@ -3687,6 +3689,37 @@ function refreshApplicationData() {
   const refreshUrl = new URL(window.location.href);
   refreshUrl.searchParams.set("refreshTs", String(Date.now()));
   window.location.replace(refreshUrl.toString());
+}
+
+const ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
+async function openApplicationUpdate() {
+  const isAndroid = Boolean(
+    window.Capacitor?.isNativePlatform?.()
+    && window.Capacitor?.getPlatform?.() === "android"
+  );
+
+  if (ui.updateAppBtn) {
+    ui.updateAppBtn.disabled = true;
+    ui.updateAppBtn.setAttribute("aria-label", isAndroid
+      ? "Apertura aggiornamento nel Play Store"
+      : "Aggiornamento della versione web in corso");
+  }
+
+  if (isAndroid) {
+    window.location.assign(ANDROID_PLAY_STORE_URL);
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.();
+    await registration?.update?.();
+  } catch (error) {
+    console.warn("Controllo aggiornamento web non riuscito: ricarico la pagina corrente.", error);
+  }
+
+  // Rimane sull'origine Netlify già aperta: il redirect a un dominio fisso poteva
+  // perdere la sessione e lasciare la Web App ferma sulla schermata di avvio.
+  window.location.reload();
 }
 
 function openManagementPanel(panel) {

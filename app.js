@@ -993,6 +993,7 @@ const ui = {
   segnalazionePresaVisione: document.getElementById("segnalazione-presa-visione"),
   segnalazioneFirmaTec: document.getElementById("segnalazione-firma-tec"),
   segnalazioneFirmaPreposto: document.getElementById("segnalazione-firma-preposto"),
+  segnalazioneGeneraPdfBtn: document.getElementById("segnalazione-genera-pdf-btn"),
   segnalazioneShareWhatsappBtn: document.getElementById("segnalazione-share-whatsapp-btn"),
   segnalazioneShareEmailBtn: document.getElementById("segnalazione-share-email-btn"),
   segnalazioneFeedback: document.getElementById("segnalazione-feedback"),
@@ -9505,48 +9506,181 @@ async function generateSegnalazionePdf(event) {
     ui.segnalazioneFeedback.textContent = "Generatore PDF non disponibile.";
     return;
   }
-  if (!window.html2canvas) {
-    ui.segnalazioneFeedback.textContent = "Motore di acquisizione modulo non disponibile.";
-    return;
-  }
 
-  const { jsPDF } = window.jspdf;
-  const sheetNode = document.querySelector(".segnalazione-sheet");
-  if (!sheetNode) {
-    ui.segnalazioneFeedback.textContent = "Modulo segnalazione non trovato.";
-    return;
+  const generateButton = ui.segnalazioneGeneraPdfBtn;
+  const originalButtonText = generateButton?.textContent || "Genera PDF";
+  if (generateButton) {
+    generateButton.disabled = true;
+    generateButton.textContent = "Generazione…";
   }
-  const canvas = await window.html2canvas(sheetNode, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff"
-  });
-  const imageData = canvas.toDataURL("image/png");
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 5;
-  const maxWidth = pageWidth - margin * 2;
-  const maxHeight = pageHeight - margin * 2;
-  const imageRatio = canvas.width / canvas.height;
-  let renderWidth = maxWidth;
-  let renderHeight = renderWidth / imageRatio;
-  if (renderHeight > maxHeight) {
-    renderHeight = maxHeight;
-    renderWidth = renderHeight * imageRatio;
+  ui.segnalazioneShareWhatsappBtn.disabled = true;
+  ui.segnalazioneShareEmailBtn.disabled = true;
+  ui.segnalazioneFeedback.textContent = "Creazione del PDF in corso…";
+  lastSegnalazionePdfBlob = null;
+  lastSegnalazionePdfName = "";
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentWidth = pageWidth - margin * 2;
+    const footerLimit = pageHeight - 18;
+    const lineHeight = 5;
+    let y = margin;
+
+    doc.setProperties({
+      title: "Scheda segnalazione",
+      subject: `Segnalazione del ${data.data} - ${data.cantiere}`,
+      author: data.preposto,
+      creator: "Hera App",
+      keywords: "segnalazione, sicurezza, preposto"
+    });
+
+    const drawTextLogo = () => {
+      doc.setFont("times", "bolditalic");
+      doc.setTextColor(34, 34, 34);
+      doc.setFontSize(16);
+      doc.text("avola", margin + 16, y + 10, { align: "center" });
+      doc.setFontSize(11);
+      doc.text("coop", margin + 16, y + 15, { align: "center" });
+    };
+
+    const drawHeader = (continuation = false) => {
+      const headerHeight = continuation ? 20 : 29;
+      doc.setDrawColor(35, 35, 35);
+      doc.setLineWidth(0.45);
+      doc.rect(margin, y, contentWidth, headerHeight);
+      doc.line(margin + 34, y, margin + 34, y + headerHeight);
+      doc.line(pageWidth - margin - 34, y, pageWidth - margin - 34, y + headerHeight);
+      drawTextLogo();
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 20, 20);
+      doc.setFontSize(continuation ? 13 : 16);
+      doc.text("SCHEDA SEGNALAZIONE", pageWidth / 2, y + (continuation ? 9 : 11), { align: "center" });
+      doc.setFontSize(9);
+      doc.text(continuation ? "Continuazione descrizione" : "a cura del PREPOSTO", pageWidth / 2, y + (continuation ? 14 : 18), { align: "center" });
+      doc.setFontSize(10);
+      doc.text("SSP", pageWidth - margin - 17, y + 7, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text("Data Rev. 20/03/2025", pageWidth - margin - 17, y + 13, { align: "center" });
+      doc.text("Rev. 04", pageWidth - margin - 17, y + 17, { align: "center" });
+      y += headerHeight + 5;
+    };
+
+    const addPage = (continuation = true) => {
+      doc.addPage("a4", "portrait");
+      y = margin;
+      drawHeader(continuation);
+    };
+
+    const ensureSpace = (height, continuation = true) => {
+      if (y + height > footerLimit) addPage(continuation);
+    };
+
+    const drawFieldRow = (fields) => {
+      const height = 13;
+      ensureSpace(height + 3);
+      const fieldWidth = contentWidth / fields.length;
+      fields.forEach(([label, value], index) => {
+        const x = margin + index * fieldWidth;
+        doc.rect(x, y, fieldWidth, height);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(label, x + 2, y + 4.5);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        const valueLines = doc.splitTextToSize(value || "—", fieldWidth - 4);
+        doc.text(valueLines.slice(0, 2), x + 2, y + 9);
+      });
+      y += height;
+    };
+
+    drawHeader();
+    drawFieldRow([["Preposto segnalatore", data.preposto]]);
+    drawFieldRow([["Data", data.data], ["Ora", data.ora], ["Cantiere", data.cantiere]]);
+
+    ensureSpace(34);
+    doc.rect(margin, y, contentWidth, 31);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("SEGNALAZIONE DI:", margin + 3, y + 6);
+    const typeOptions = ["Comportamento pericoloso", "Situazione pericolosa", "Quasi infortunio", "Infortunio"];
+    typeOptions.forEach((type, index) => {
+      const optionY = y + 12 + index * 4.5;
+      doc.rect(margin + 4, optionY - 2.8, 3, 3);
+      if (data.tipi.includes(type)) {
+        doc.setLineWidth(0.65);
+        doc.line(margin + 4.5, optionY - 1.2, margin + 5.5, optionY);
+        doc.line(margin + 5.5, optionY, margin + 7.5, optionY - 3.5);
+        doc.setLineWidth(0.45);
+      }
+      doc.setFont("helvetica", data.tipi.includes(type) ? "bold" : "normal");
+      doc.setFontSize(8.5);
+      doc.text(type.toUpperCase(), margin + 10, optionY);
+    });
+    y += 36;
+
+    const descriptionLines = doc.splitTextToSize(data.descrizione, contentWidth - 8);
+    let lineIndex = 0;
+    while (lineIndex < descriptionLines.length) {
+      ensureSpace(18);
+      const availableLines = Math.max(1, Math.floor((footerLimit - y - 13) / lineHeight));
+      const pageLines = descriptionLines.slice(lineIndex, lineIndex + availableLines);
+      const boxHeight = 11 + pageLines.length * lineHeight;
+      doc.rect(margin, y, contentWidth, boxHeight);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(lineIndex ? "DESCRIZIONE DELL'ACCADUTO (continua):" : "DESCRIZIONE DELL'ACCADUTO (cosa è successo):", margin + 3, y + 6);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.text(pageLines, margin + 4, y + 12);
+      y += boxHeight + 5;
+      lineIndex += pageLines.length;
+      if (lineIndex < descriptionLines.length) addPage(true);
+    }
+
+    ensureSpace(31);
+    drawFieldRow([["Data", data.data], ["Firma PREPOSTO", data.firmaPreposto]]);
+    drawFieldRow([["Presa visione TEC", data.presaVisioneTec || ""], ["Firma TEC", data.firmaTec || ""]]);
+
+    const totalPages = doc.getNumberOfPages();
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      doc.setPage(pageNumber);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(90, 90, 90);
+      doc.text(`Pagina ${pageNumber} di ${totalPages}`, pageWidth - margin, pageHeight - 9, { align: "right" });
+      doc.text(`Cantiere: ${data.cantiere} · Data: ${data.data} · Ora: ${data.ora}`, margin, pageHeight - 9);
+    }
+
+    const safeDate = data.data.replace(/[^\d]/g, "-");
+    const pdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;
+    const pdfBlob = doc.output("blob");
+    const signature = new TextDecoder("ascii").decode((await pdfBlob.arrayBuffer()).slice(0, 5));
+    if (pdfBlob.type !== "application/pdf" || signature !== "%PDF-") {
+      throw new Error("Il documento generato non è un PDF valido.");
+    }
+
+    lastSegnalazionePdfName = pdfName;
+    lastSegnalazionePdfBlob = pdfBlob;
+    doc.save(lastSegnalazionePdfName);
+    ui.segnalazioneShareWhatsappBtn.disabled = false;
+    ui.segnalazioneShareEmailBtn.disabled = false;
+    ui.segnalazioneFeedback.textContent = "PDF creato. Ora puoi condividerlo con WhatsApp o Email.";
+  } catch (error) {
+    console.error("Errore generazione scheda segnalazione PDF:", error);
+    lastSegnalazionePdfBlob = null;
+    lastSegnalazionePdfName = "";
+    ui.segnalazioneFeedback.textContent = "Impossibile generare il PDF. Riprova tra poco.";
+  } finally {
+    if (generateButton) {
+      generateButton.disabled = false;
+      generateButton.textContent = originalButtonText;
+    }
   }
-  const x = (pageWidth - renderWidth) / 2;
-  const y = (pageHeight - renderHeight) / 2;
-  doc.addImage(imageData, "PNG", x, y, renderWidth, renderHeight, undefined, "FAST");
-
-  const safeDate = data.data.replace(/[^\d]/g, "-");
-  lastSegnalazionePdfName = `scheda-segnalazione-${safeDate || "oggi"}.pdf`;
-  lastSegnalazionePdfBlob = doc.output("blob");
-  doc.save(lastSegnalazionePdfName);
-
-  ui.segnalazioneShareWhatsappBtn.disabled = false;
-  ui.segnalazioneShareEmailBtn.disabled = false;
-  ui.segnalazioneFeedback.textContent = "PDF creato. Ora puoi condividerlo con WhatsApp o Email.";
 }
 
 async function shareSegnalazione(channel) {

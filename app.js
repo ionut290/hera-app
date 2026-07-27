@@ -1098,11 +1098,6 @@ const ui = {
   notificationCalendarMonthLabel: document.getElementById("notification-calendar-month-label"),
   notificationCalendarGrid: document.getElementById("notification-calendar-grid"),
   notificationDayDetail: document.getElementById("notification-day-detail"),
-  userAlertModal: document.getElementById("user-alert-modal"),
-  userAlertText: document.getElementById("user-alert-text"),
-  userAlertAttachments: document.getElementById("user-alert-attachments"),
-  userAlertOkBtn: document.getElementById("user-alert-ok-btn"),
-  userAlertLaterBtn: document.getElementById("user-alert-later-btn"),
   notificationDocViewerModal: document.getElementById("notification-doc-viewer-modal"),
   notificationDocViewerTitle: document.getElementById("notification-doc-viewer-title"),
   notificationDocViewerCloseBtn: document.getElementById("notification-doc-viewer-close-btn"),
@@ -1354,7 +1349,6 @@ let drawnAreaRedoStack = [];
 let isDrawingStrokeActive = false;
 let globalImpiantiFiltered = [];
 let userAlerts = [];
-let activeUserAlert = null;
 let notificationUploadAbortController = null;
 let notificationUploadInProgress = false;
 let notificationCalendarCursor = new Date();
@@ -2206,8 +2200,6 @@ ui.enableNotificationsBtn?.addEventListener("click", async () => {
   await enablePushNotifications({ auto: false });
 });
 ui.testNotificationBtn?.addEventListener("click", sendTestNotification);
-ui.userAlertOkBtn?.addEventListener("click", acknowledgeActiveUserAlert);
-ui.userAlertLaterBtn?.addEventListener("click", postponeActiveUserAlert);
 ui.notificationDocViewerCloseBtn?.addEventListener("click", closeNotificationDocumentViewer);
 ui.notificationDocViewerModal?.addEventListener("click", (event) => {
   if (event.target === ui.notificationDocViewerModal) closeNotificationDocumentViewer();
@@ -3426,7 +3418,6 @@ if (!auth || firebaseInitError) {
     if (ui.squadraCommessa) ui.squadraCommessa.innerHTML = "<option value=''>Login richiesto</option>";
     stopPresenceHeartbeat();
     applyWorkBannerConfig({ text: "", enabled: false, speed: null });
-    closeUserAlertModal();
   }
   renderHeaderActivitySummary();
   renderExternalApps();
@@ -3694,7 +3685,7 @@ function refreshApplicationData() {
 const ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
 const NETLIFY_APP_URL = "https://creative-syrniki-dddbae.netlify.app/";
 
-function openApplicationUpdate() {
+async function openApplicationUpdate() {
   const isAndroid = Boolean(
     window.Capacitor?.isNativePlatform?.()
     && window.Capacitor?.getPlatform?.() === "android"
@@ -3708,13 +3699,25 @@ function openApplicationUpdate() {
   }
 
   if (isAndroid) {
-    window.location.assign(ANDROID_PLAY_STORE_URL);
+    // _system keeps the Play Store outside the Capacitor WebView, preventing the
+    // app from replacing its own page and becoming stuck on the splash screen.
+    const storeWindow = window.open(ANDROID_PLAY_STORE_URL, "_system", "noopener,noreferrer");
+    if (!storeWindow) window.location.href = ANDROID_PLAY_STORE_URL;
     return;
   }
 
-  const updateUrl = new URL(NETLIFY_APP_URL);
-  updateUrl.searchParams.set("update", String(Date.now()));
-  window.location.assign(updateUrl.toString());
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.();
+    await registration?.update?.();
+    if (ui.updateAppBtn) {
+      ui.updateAppBtn.disabled = false;
+      ui.updateAppBtn.title = "Aggiornamento controllato. Le novità saranno attive alla prossima apertura.";
+      ui.updateAppBtn.setAttribute("aria-label", "App aggiornata; riapri l'app per applicare le novità");
+    }
+  } catch (error) {
+    console.warn("Controllo aggiornamenti non riuscito:", error);
+    if (ui.updateAppBtn) ui.updateAppBtn.disabled = false;
+  }
 }
 
 function openManagementPanel(panel) {
@@ -27106,26 +27109,6 @@ function getNotificationPrimaryDateKey(item) {
   return String(item?.scheduledDateKey || item?.createdDateKey || "").trim();
 }
 
-function renderActiveUserAlertAttachments() {
-  if (!ui.userAlertAttachments) return;
-  const attachments = Array.isArray(activeUserAlert?.attachments) ? activeUserAlert.attachments : [];
-  if (!attachments.length) {
-    ui.userAlertAttachments.innerHTML = "<p class='muted'>Nessun documento allegato.</p>";
-    return;
-  }
-  ui.userAlertAttachments.innerHTML = "";
-  attachments.forEach((attachment) => {
-    const row = document.createElement("div");
-    row.className = "simple-list-item";
-    const label = document.createElement("span");
-    label.textContent = `📎 ${attachment.name || "Documento"}`;
-    row.appendChild(label);
-    const openBtn = createButton("Apri", () => openNotificationDocumentViewer(attachment.url || "", attachment.name || "Documento"));
-    row.appendChild(openBtn);
-    ui.userAlertAttachments.appendChild(row);
-  });
-}
-
 function buildNotificationEmailPayload(targetUser, message, notificationId) {
   const recipientEmail = String(targetUser?.email || "").trim();
   const appUrl = `${window.location.origin}${window.location.pathname}#home`;
@@ -27361,6 +27344,7 @@ function subscribeUserAlerts() {
         .filter((item) => {
           const belongsToUser = isNotificationForCurrentUser(item);
           if (!belongsToUser) return false;
+          if (Boolean(item?.dismissedByUserIds?.[currentUser.uid])) return false;
           const dateKey = String(item.scheduledDateKey || "").trim();
           return ["squadra-avviso", "calendar-absence"].includes(item.source) || !dateKey || dateKey <= todayKey;
         })
@@ -27369,7 +27353,13 @@ function subscribeUserAlerts() {
           const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
           return bMs - aMs;
         });
-      maybeShowUserAlert();
+      window.HeraNotificationReader?.archive?.(userAlerts.map((item) => ({
+        id: item.id,
+        title: item.title || "Avviso importante",
+        body: item.message || "",
+        destination: "home",
+        receivedAt: item.createdAt?.toMillis?.() || Date.now()
+      })));
       renderTodaySummary();
     }, (error) => {
       console.error("Errore caricamento notifiche utente:", error);
@@ -27382,87 +27372,7 @@ function stopUserAlertsSubscription() {
     unsubscribeUserAlerts = null;
   }
   userAlerts = [];
-  activeUserAlert = null;
   renderNotificationsList();
-}
-
-function maybeShowUserAlert() {
-  if (!currentUser || canManageData()) return;
-  const firstPending = userAlerts.find((alertItem) => !Boolean(alertItem?.ackByUserIds?.[currentUser.uid]));
-  if (!firstPending) {
-    closeUserAlertModal();
-    return;
-  }
-  closeSideMenu();
-  closeManagementPanel();
-  activeUserAlert = firstPending;
-  if (ui.userAlertText) ui.userAlertText.textContent = `${firstPending.title ? `${firstPending.title}\n\n` : ""}${firstPending.message || ""}`;
-  renderActiveUserAlertAttachments();
-  ui.userAlertModal?.classList.remove("hidden");
-  ui.userAlertModal?.setAttribute("aria-hidden", "false");
-}
-
-function closeUserAlertModal() {
-  if (ui.userAlertAttachments) ui.userAlertAttachments.innerHTML = "";
-  ui.userAlertModal?.classList.add("hidden");
-  ui.userAlertModal?.setAttribute("aria-hidden", "true");
-}
-
-async function acknowledgeActiveUserAlert() {
-  if (!currentUser || !activeUserAlert?.id) return;
-  const acknowledgementId = `${activeUserAlert.id}__${currentUser.uid}`;
-  const acknowledgementRef = db.collection("userAlertAcknowledgements").doc(acknowledgementId);
-  const existing = await acknowledgementRef.get();
-  if (existing.exists) {
-    activeUserAlert = null;
-    closeUserAlertModal();
-    return;
-  }
-  const now = new Date();
-  await acknowledgementRef.set({
-    notificationId: activeUserAlert.id,
-    userId: currentUser.uid || "",
-    userName: currentUser.displayName || currentUser.email || "Utente",
-    acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    acknowledgedDateKey: getDateKeyFromLocalDate(now)
-  }, { merge: true });
-  await db.collection("userAlerts").doc(activeUserAlert.id).set({
-    [`ackByUserIds.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp(),
-    lastAcknowledgedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-  await sendNotificationAckToAdmins(activeUserAlert, now);
-  activeUserAlert = null;
-  closeUserAlertModal();
-}
-
-async function sendNotificationAckToAdmins(alertItem, ackDate = new Date()) {
-  const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
-  if (!adminUsers.length) return;
-  const whenLabel = ackDate.toLocaleString("it-IT");
-  const text = `✅ NOTIFICA CONFERMATA\nL’utente ${currentUser?.displayName || currentUser?.email || "Utente"} ha premuto “OK, HO CAPITO”\nNotifica: ${alertItem?.title || "Notifica"}\nData/Ora: ${whenLabel}`;
-  await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
-    type: "text",
-    text,
-    recipientId: adminUser.id,
-    senderId: currentUser?.uid || "system",
-    senderName: "Sistema notifiche",
-    senderEmail: currentUser?.email || "",
-    kind: "system",
-    metadata: {
-      type: "notification_ack",
-      notificationId: alertItem?.id || "",
-      notificationTitle: alertItem?.title || "",
-      acknowledgedByUserId: currentUser?.uid || "",
-      acknowledgedByUserName: currentUser?.displayName || currentUser?.email || "Utente",
-      acknowledgedAt: ackDate.toISOString()
-    },
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  })));
-}
-
-function postponeActiveUserAlert() {
-  activeUserAlert = null;
-  closeUserAlertModal();
 }
 
 function openNotificationCalendarView() {

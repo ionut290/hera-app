@@ -48,6 +48,7 @@ jobs:
         run: |
           npm run check:syntax
           npm run check:app-update
+          npm run check:notifications
           npm run check:auth-login
           npm run check:first-login-password
           npm run check:login-retry
@@ -60,35 +61,9 @@ jobs:
           npm run check:calendar
 
       - name: Prepare Capacitor web directory
-        shell: bash
         run: |
-          rm -rf www
-          mkdir -p www
-          cp index.html style.css app.js firebase-config.js auth-login-fix.js notification-session-enhancements.js manifest.webmanifest sw.js www/
-          cp first-login-password.css first-login-password.js www/
-          cp login-retry-fix.css login-retry-fix.js www/
-          cp squadre-restyle.css www/
-          cp calendar-feature.css www/
-          cp native-android-runtime.js done-button-fix.js www/
-          cp delete-account.html privacy.html www/
-          cp identity-card-feature.css identity-card-feature.js www/
-          cp private-documents-v2.css private-documents-v2.js www/
-          cp fuel-stations-core.js fuel-stations-integration.js www/
-          cp fuel-stations-national-cache.js fuel-stations-search.js www/
-          cp fatto-button-immediate.js mezzi-alimentazione-fix.js www/
-          cp hours-export-range.js today-summary-interactions.js www/
-          cp -R icons www/icons
-
-          test -s www/index.html
-          test -s www/app.js
-          test -s www/native-android-runtime.js
-          test -s www/notification-session-enhancements.js
-          test -s www/first-login-password.js
-          test -s www/first-login-password.css
-          test -s www/login-retry-fix.js
-          test -s www/login-retry-fix.css
-          test -s www/squadre-restyle.css
-          test -s www/calendar-feature.css
+          npm run android:aab:prepare
+          test -s www/update-app-feature.js
           if ! grep -q 'native-android-runtime.js' www/index.html; then
             echo "index.html non carica native-android-runtime.js"
             exit 1

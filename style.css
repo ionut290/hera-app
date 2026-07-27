@@ -479,18 +479,19 @@ h2 { font-size: 1.05rem; }
 }
 
 .update-app-btn {
-  height: 34px;
+  width: 30px;
+  height: 30px;
   min-width: 0;
   border: 1px solid #cfe0da;
   border-radius: 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f3f8f6 100%);
   color: #184c3d;
-  padding: 0 8px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-size: 0.72rem;
+  font-size: 0.95rem;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -498,30 +499,23 @@ h2 { font-size: 1.05rem; }
   box-shadow: var(--shadow);
 }
 
+.update-app-btn span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .update-app-btn:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.24);
   outline-offset: 2px;
 }
 
-@media (max-width: 390px) {
-  .update-app-btn {
-    width: 34px;
-    padding: 0;
-    font-size: 1rem;
-  }
-
-  .update-app-btn span:last-child {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-}
 
 .logo-head .menu-toggle-btn {
   right: 0;
@@ -3185,27 +3179,7 @@ body.squadre-impianto-detail-open { overflow: hidden; }
 
 
 
-.user-alert-content {
-  width: min(560px, 96vw);
-  height: auto;
-  max-height: min(420px, 92dvh);
-  margin: auto;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.35);
-}
 
-.user-alert-body {
-  background: #fff;
-  min-height: 120px;
-}
-
-.user-alert-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 
 .notification-doc-viewer-frame {
   width: 100%;

@@ -8,6 +8,10 @@ const workflowSource = fs.readFileSync(
   path.join(root, ".github", "workflows", "build-android-aab.yml"),
   "utf8"
 );
+const capacitorBundleSource = fs.readFileSync(
+  path.join(root, "scripts", "prepare-capacitor-web.js"),
+  "utf8"
+);
 
 const rulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 const rulesDeployWorkflowSource = fs.readFileSync(
@@ -139,7 +143,10 @@ if (!fixSource.includes("stopImmediatePropagation")) {
   throw new Error("La correzione non intercetta il vecchio gestore login.");
 }
 
-if (!workflowSource.includes("auth-login-fix.js")) {
+if (
+  !workflowSource.includes("npm run android:aab:prepare")
+  || !capacitorBundleSource.includes('"auth-login-fix.js"')
+) {
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 

@@ -13,8 +13,8 @@
   <link rel="stylesheet" href="style.css?v=20260727-update2">
   <link rel="stylesheet" href="first-login-password.css?v=20260726a">
   <link rel="stylesheet" href="login-retry-fix.css?v=20260726a">
-  <link rel="stylesheet" href="identity-card-feature.css?v=20260724f">
-  <link rel="stylesheet" href="private-documents-v2.css?v=20260724a">
+  <link rel="stylesheet" href="identity-card-feature.css?v=20260727a">
+  <link rel="stylesheet" href="private-documents-v2.css?v=20260727a">
   <link rel="stylesheet" href="squadre-restyle.css?v=20260726b">
   <link rel="stylesheet" href="calendar-feature.css?v=20260727a">
 </head>
@@ -1450,24 +1450,49 @@
     <section class="card">
       <div class="item-actions">
         <button id="private-docs-preset-pin-btn" class="btn" type="button">+ PIN carburante</button>
-        <button id="private-docs-preset-tessera-btn" class="btn" type="button">+ Tessera riconoscimento</button>
+        <button id="private-docs-preset-tessera-btn" class="btn" type="button">📷 Tessera riconoscimento</button>
       </div>
       <form id="private-docs-form" class="resource-form">
         <input id="private-docs-name" type="text" placeholder="Denominazione documento (obbligatoria)" required>
         <textarea id="private-docs-note" placeholder="Descrizione / codice / note"></textarea>
-        <label class="private-docs-file-field">
+        <label id="private-docs-generic-file-field" class="private-docs-file-field">
           <strong>Allega un documento o una foto</strong>
           <input id="private-docs-file" type="file" accept="image/*,.pdf">
         </label>
-        <label class="private-docs-file-field">
+        <label id="private-docs-generic-camera-field" class="private-docs-file-field">
           <strong>Oppure scatta una foto</strong>
           <input id="private-docs-camera" type="file" accept="image/*" capture="environment">
         </label>
+        <section id="identity-capture-flow" class="identity-capture-flow hidden" aria-labelledby="identity-capture-title">
+          <div class="identity-capture-heading">
+            <div><strong id="identity-capture-title">Fotografa la tessera</strong><small>Appoggiala in piano e includi tutti e quattro i bordi.</small></div>
+            <button id="identity-capture-cancel" class="btn" type="button">Annulla</button>
+          </div>
+          <div id="identity-camera-stage" class="identity-camera-stage">
+            <video id="identity-camera-video" playsinline muted aria-label="Anteprima fotocamera posteriore"></video>
+            <div class="identity-camera-guide" aria-hidden="true"></div>
+          </div>
+          <input id="identity-camera-input" class="visually-hidden" type="file" accept="image/*" capture="environment">
+          <div class="identity-capture-actions">
+            <button id="identity-camera-start" class="btn" type="button">Avvia fotocamera</button>
+            <button id="identity-camera-snap" class="btn btn-primary" type="button" disabled>Scatta foto</button>
+            <button id="identity-camera-fallback" class="btn" type="button">Scegli/scatta dal dispositivo</button>
+          </div>
+          <p id="identity-camera-help" class="muted">La foto viene acquisita alla risoluzione originale.</p>
+        </section>
         <button id="private-docs-save-btn" class="btn btn-primary" type="submit">Salva documento</button>
       </form>
       <p id="private-docs-feedback" class="muted" role="status" aria-live="polite"></p>
       <div id="private-docs-list" class="simple-list"></div>
     </section>
+  </section>
+
+  <section id="identity-crop-dialog" class="identity-crop-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="identity-crop-title">
+    <header><div><strong id="identity-crop-title">Ritaglia la tessera</strong><small>Trascina i quattro punti sui bordi del documento.</small></div><button id="identity-crop-close" type="button" aria-label="Chiudi ritaglio">✕</button></header>
+    <div id="identity-crop-workspace" class="identity-crop-workspace"><canvas id="identity-crop-canvas"></canvas><div id="identity-crop-handles" aria-label="Bordi regolabili"></div></div>
+    <p id="identity-crop-confidence" role="status"></p>
+    <div class="identity-crop-preview-wrap"><button id="identity-preview-zoom" type="button" aria-label="Ingrandisci anteprima"><img id="identity-crop-preview" alt="Anteprima della tessera elaborata"></button></div>
+    <footer><button id="identity-crop-retry" class="btn" type="button">Riprova</button><button id="identity-crop-use" class="btn btn-primary" type="button">Usa foto</button></footer>
   </section>
 
   <section id="calendar-page" class="hidden">
@@ -1927,13 +1952,13 @@
   <script src="auth-login-fix.js?v=20260726e"></script>
   <script src="first-login-password.js?v=20260726b"></script>
   <script src="login-retry-fix.js?v=20260726f"></script>
-  <script src="private-documents-v2.js?v=20260724a"></script>
+  <script src="private-documents-v2.js?v=20260727a"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
   <script src="app.js?v=20260727-update2"></script>
   <script src="today-summary-interactions.js?v=20260726b"></script>
-  <script src="identity-card-feature.js?v=20260724e"></script>
+  <script src="identity-card-feature.js?v=20260727a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260727-fatto2"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>

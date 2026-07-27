@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const loader = fs.readFileSync("firebase-config.js", "utf8");
+const loader = fs.readFileSync("hours-export-range.js", "utf8");
 const feature = fs.readFileSync("update-app-feature.js", "utf8");
 const capacitor = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
 

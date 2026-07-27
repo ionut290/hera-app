@@ -14914,8 +14914,8 @@ function formatDoneButtonLabel(doneAt) {
   if (!millis) return "⚠️ FATTO";
   const date = new Date(millis);
   const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `⚠️ ${day}/${month}`;
+  const month = new Intl.DateTimeFormat("it-IT", { month: "long" }).format(date).toUpperCase();
+  return `⚠️ FATTO DAL ${day} ${month}`;
 }
 
 function renderHeaderActivitySummary() {
@@ -22437,8 +22437,31 @@ function triggerHiddenMoveDoneButton(impianto) {
   if (hiddenBtn instanceof HTMLButtonElement) hiddenBtn.click();
 }
 
+function cacheFattoVisualEvidence(impianto, clickedAt) {
+  const millis = (clickedAt instanceof Date ? clickedAt : new Date(clickedAt)).getTime();
+  const impiantoKey = buildImpiantoKey(impianto);
+  const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
+  if (impiantoKey) fattoVisualEvidenceByImpianto.set(`key:${impiantoKey}`, millis);
+  if (idSap) fattoVisualEvidenceByImpianto.set(`sap:${idSap}`, millis);
+}
+
+function setImpiantoFattoSavingState(impianto, saving) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  if (!impiantoKey || !ui.impiantiLista) return;
+  ui.impiantiLista.querySelectorAll('.action-icon-btn[data-action-key="whatsapp"]').forEach((button) => {
+    const card = button.closest("[data-impianto-key]");
+    if (card?.dataset?.impiantoKey !== impiantoKey) return;
+    button.disabled = saving;
+    button.classList.toggle("is-saving-done", saving);
+    if (saving) {
+      button.textContent = "Salvataggio…";
+      button.setAttribute("aria-label", "Salvataggio stato FATTO in corso");
+    }
+  });
+}
+
 async function handleImpiantoWhatsAppClick(impianto) {
-  if (!impianto) return false;
+  if (!impianto || impianto.done) return false;
   if (!auth.currentUser) {
     alert("Sessione scaduta: esegui nuovamente il login.");
     renderImpianti();
@@ -22446,129 +22469,115 @@ async function handleImpiantoWhatsAppClick(impianto) {
   }
 
   const processingKey = getWhazzupProcessingKey(impianto);
-  if (processingKey && isImpiantoWhazzupProcessing(impianto)) return false;
-  if (processingKey) whazzupProcessingByImpianto.add(processingKey);
+  if (!processingKey || isImpiantoWhazzupProcessing(impianto)) return false;
+  whazzupProcessingByImpianto.add(processingKey);
+  setImpiantoFattoSavingState(impianto, true);
 
-  let deferredWhatsAppTarget = null;
-  let positionDecision = getCachedFattoPositionDecision(impianto);
-  if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
-    deferredWhatsAppTarget = openDeferredWhatsAppTargetWindow();
-    positionDecision = await refreshFattoPositionDecision(impianto);
-  }
-  if (!positionDecision.allowed) {
-    closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
-    notifyFattoPositionDenied(positionDecision);
-    clearImpiantoWhazzupProcessing(impianto);
-    renderImpianti();
-    return false;
-  }
-
+  // Riserva subito una scheda web dal gesto utente: dopo l'attesa del salvataggio
+  // i popup browser verrebbero altrimenti bloccati. Su Capacitor ritorna null.
+  let deferredWhatsAppTarget = openDeferredWhatsAppTargetWindow();
+  let whatsappOpened = false;
   const doneAt = new Date();
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-  const whazzupFeedback = createDelayedWhazzupPreparingFeedback();
 
-  // La prova visiva viene creata solo dopo il controllo GPS/distanza.
-  // Resta visibile anche quando un errore remoto richiede il recupero manuale.
-  void recordFattoVisualEvidence(impianto, doneAt, doneBy);
+  try {
+    let positionDecision = getCachedFattoPositionDecision(impianto);
+    if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
+      positionDecision = await refreshFattoPositionDecision(impianto);
+    }
+    if (!positionDecision.allowed) {
+      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+      notifyFattoPositionDenied(positionDecision);
+      return false;
+    }
 
-  markWhazzupSafetyPressed(impianto, doneAt);
-  upsertWhazzupPendingDoneEntry(impianto, doneAt);
-  updateConnectivityStatus();
+    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
+    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
+    const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
+    if (!evidenceSaved && !isNetworkOffline()) {
+      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+      await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
+      return false;
+    }
 
-  whazzupFeedback.showNow();
+    cacheFattoVisualEvidence(impianto, doneAt);
+    markWhazzupSafetyPressed(impianto, doneAt);
+    upsertWhazzupPendingDoneEntry(impianto, doneAt);
+    renderImpianti();
 
-  // Sposta subito lo stato locale nei FATTI e aggiorna l'elenco prima che
-  // WhatsApp mandi Hera in secondo piano. Il salvataggio Firebase continua
-  // nel flusso protetto già esistente qui sotto.
-  markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-  renderImpianti();
+    // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
+    const opened = openWhatsApp({ ...impianto, doneAt, doneBy }, {
+      doneAt,
+      operatorName: doneBy,
+      ...(deferredWhatsAppTarget ? { targetWindow: deferredWhatsAppTarget } : {})
+    });
+    whatsappOpened = Boolean(opened);
+    if (!whatsappOpened) {
+      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+      alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
+    }
 
-  // iOS/Safari consente di aprire schemi esterni (whatsapp://) solo se la
-  // navigazione parte direttamente dal tap dell'utente. Se aspettiamo prima il
-  // salvataggio Firebase/FATTO, il gesto utente scade e l'app resta ferma sul
-  // popup "Preparo Whazzup..." senza aprire WhatsApp. Prepariamo quindi il
-  // testo e apriamo WhatsApp subito; il passaggio a FATTO continua in background.
-  whazzupFeedback.hideNow();
-  const opened = openWhatsApp({ ...impianto, done: true, doneAt, doneBy }, {
-    doneAt,
-    operatorName: doneBy,
-    ...(deferredWhatsAppTarget ? { targetWindow: deferredWhatsAppTarget } : {})
-  });
-  if (!opened) {
-    closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
-    alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
-  }
+    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
+    // l'utente torna indietro senza inviare il messaggio.
+    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
+    setImpiantiViewMode("done");
+    renderImpianti();
 
-  void (async () => {
     const auditLogId = await auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,
-      whatsappOpened: Boolean(opened),
+      whatsappOpened,
       fattoEsito: "pending",
       fattoConfermato: false
-    })
-      .catch((error) => {
-        console.error("Errore avvio audit log Whazzup:", error);
-        return null;
+    }).catch((error) => {
+      console.error("Errore avvio audit log Whazzup:", error);
+      return null;
+    });
+
+    const doneMarked = await forceMoveImpiantoToFatti(impianto, {
+      source: "whatsapp",
+      requireFirestoreConfirmation: false,
+      skipLocationCheck: true,
+      doneAt,
+      doneBy
+    });
+    if (!doneMarked) {
+      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
+      await markImpiantoDoneRecoveryRequired(impianto, "Salvataggio FATTO non riuscito.");
+      return false;
+    }
+
+    const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
+    if (isActionWaitingForSync(pendingAction)) {
+      if (whatsappOpened) markPendingActionStatus(pendingAction.id, {
+        whatsappStatus: "whatsappOpened",
+        whatsappOpenedAt: new Date().toISOString()
       });
-
-    try {
-      console.debug("[WHAZZUP->FATTO] Avvio salvataggio", { commessaId: selectedCommessaId, impiantoKey: buildImpiantoKey(impianto) });
-      const doneMarked = await forceMoveImpiantoToFatti(impianto, {
-        source: "whatsapp",
-        requireFirestoreConfirmation: false,
-        skipLocationCheck: true,
-        doneAt,
-        doneBy
-      });
-      if (!doneMarked) {
-        await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
-        await markImpiantoDoneRecoveryRequired(impianto, "Salvataggio FATTO non riuscito.");
-        return;
-      }
-
-      const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
-      if (isActionWaitingForSync(pendingAction)) {
-        if (opened) {
-          markPendingActionStatus(pendingAction.id, {
-            whatsappStatus: "whatsappOpened",
-            whatsappOpenedAt: new Date().toISOString()
-          });
-        }
-        await updateAuditLogWhazzupClick(auditLogId, {
-          fattoEsito: "queued_offline",
-          fattoConfermato: false
-        });
-        updateConnectivityStatus();
-        renderImpianti();
-        return;
-      }
-
-      const persisted = await verifyImpiantoDoneBackground(impianto);
-      await updateAuditLogWhazzupClick(auditLogId, {
-        fattoEsito: persisted ? "persisted" : "verify_failed",
-        fattoConfermato: Boolean(persisted)
-      });
-      if (!persisted) {
-        await markImpiantoDoneRecoveryRequired(impianto, "Verifica Firebase FATTO non confermata.");
-        return;
-      }
-
+      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "queued_offline", fattoConfermato: false });
       updateConnectivityStatus();
       renderImpianti();
-    } catch (error) {
-      console.error("Errore processo FATTO:", error);
-      await updateAuditLogWhazzupClick(auditLogId, {
-        fattoEsito: "save_exception",
-        fattoConfermato: false,
-        errorMessage: String(error?.message || error || "Errore sconosciuto")
-      });
-      await markImpiantoDoneRecoveryRequired(impianto, String(error?.message || error || "Errore sconosciuto"));
-    } finally {
-      whazzupFeedback.hide(0);
-      clearImpiantoWhazzupProcessing(impianto);
+      return true;
     }
-  })();
-  return true;
+
+    const persisted = await verifyImpiantoDoneBackground(impianto);
+    await updateAuditLogWhazzupClick(auditLogId, {
+      fattoEsito: persisted ? "persisted" : "verify_failed",
+      fattoConfermato: Boolean(persisted)
+    });
+    if (!persisted) {
+      await markImpiantoDoneRecoveryRequired(impianto, "Verifica Firebase FATTO non confermata.");
+      return false;
+    }
+    updateConnectivityStatus();
+    renderImpianti();
+    return true;
+  } catch (error) {
+    console.error("Errore processo FATTO:", error);
+    await markImpiantoDoneRecoveryRequired(impianto, String(error?.message || error || "Errore sconosciuto"));
+    return false;
+  } finally {
+    clearImpiantoWhazzupProcessing(impianto);
+    setImpiantoFattoSavingState(impianto, false);
+  }
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {
@@ -22868,9 +22877,10 @@ function buildImpiantoWhatsAppTemplate(impianto) {
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const operatorName = getCurrentWhatsAppOperatorName();
   const date = getDeviceWhatsAppDateLabel();
-  const title = isOnlyOrdinaria
-    ? "✅ MANUTENZIONE ORDINARIA ESEGUITA"
-    : "✅ MANUTENZIONE ORDINARIA + STRAORDINARIA ESEGUITA";
+  const title = "🟢 IMPIANTO FATTO";
+  const workLabel = isOnlyOrdinaria
+    ? "Manutenzione ordinaria eseguita"
+    : "Manutenzione ordinaria + straordinaria eseguita";
   const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || "-";
   const linkedNotes = getCommessaNoteLinkedNotes(impianto);
   const noteLines = [
@@ -22881,7 +22891,8 @@ function buildImpiantoWhatsAppTemplate(impianto) {
     ] : [])
   ].filter(Boolean);
   return [
-    `${title} - Report operativo`,
+    title,
+    `✅ Attività: ${workLabel}`,
     `🆔 ID SAP: ${impianto.idSap || "-"}`,
     `🏗️ Impianto: ${impianto.denominazione || "-"}`,
     `📍 Comune: ${impianto.comune || "-"}`,

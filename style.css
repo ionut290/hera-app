@@ -6127,6 +6127,18 @@ body.squadre-impianto-detail-open { overflow: hidden; }
   border-radius: 12px;
 }
 
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-saving-done,
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-saving-done:disabled {
+  width: auto;
+  min-width: 118px;
+  padding: 0 12px;
+  background: #64748b;
+  border-color: #475569;
+  color: #fff;
+  opacity: 1;
+  cursor: wait;
+}
+
 .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-completed-done,
 .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].is-completed-done:disabled {
   border-color: #f59e0b;

@@ -436,6 +436,7 @@ window.alert = (message) => {
 
 const ui = {
   refreshAppBtn: document.getElementById("refresh-app-btn"),
+  updateAppBtn: document.getElementById("update-app-btn"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
   installAppBtn: document.getElementById("install-app-btn"),
@@ -1834,6 +1835,7 @@ ui.authEmailForm?.addEventListener("submit", (event) => {
 });
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
+ui.updateAppBtn?.addEventListener("click", openApplicationUpdate);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
 ui.menuCloseBtn?.addEventListener("click", closeSideMenu);
 ui.installAppBtn?.addEventListener("click", handleInstallAppClick);
@@ -3687,6 +3689,32 @@ function refreshApplicationData() {
   const refreshUrl = new URL(window.location.href);
   refreshUrl.searchParams.set("refreshTs", String(Date.now()));
   window.location.replace(refreshUrl.toString());
+}
+
+const ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
+const NETLIFY_APP_URL = "https://creative-syrniki-dddbae.netlify.app/";
+
+function openApplicationUpdate() {
+  const isAndroid = Boolean(
+    window.Capacitor?.isNativePlatform?.()
+    && window.Capacitor?.getPlatform?.() === "android"
+  );
+
+  if (ui.updateAppBtn) {
+    ui.updateAppBtn.disabled = true;
+    ui.updateAppBtn.setAttribute("aria-label", isAndroid
+      ? "Apertura aggiornamento nel Play Store"
+      : "Apertura aggiornamento da Netlify");
+  }
+
+  if (isAndroid) {
+    window.location.assign(ANDROID_PLAY_STORE_URL);
+    return;
+  }
+
+  const updateUrl = new URL(NETLIFY_APP_URL);
+  updateUrl.searchParams.set("update", String(Date.now()));
+  window.location.assign(updateUrl.toString());
 }
 
 function openManagementPanel(panel) {

@@ -683,3 +683,13 @@ async function heraExportHoursRangeWorkbook(options = {}) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initHoursRangeExportExtension);
   else initHoursRangeExportExtension();
 })();
+
+// Carica separatamente il controllo aggiornamenti per evitare modifiche ai file
+// principali dell'app e ridurre i conflitti durante gli aggiornamenti del branch.
+(function loadAppUpdateFeature() {
+  if (document.querySelector('script[data-hera-app-update="true"]')) return;
+  const script = document.createElement("script");
+  script.src = "update-app-feature.js?v=20260727a";
+  script.dataset.heraAppUpdate = "true";
+  document.head.appendChild(script);
+})();

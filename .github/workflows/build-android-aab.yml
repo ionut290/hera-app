@@ -9,7 +9,10 @@ on:
       - "*.html"
       - "*.js"
       - "*.css"
+      - "*.webmanifest"
       - "assets/**"
+      - "icons/**"
+      - "functions/**"
       - "package.json"
       - "package-lock.json"
       - "capacitor.config.json"
@@ -55,6 +58,7 @@ jobs:
           npm run check:done-button
           npm run check:done-button-behavior
           npm run check:android-done-push
+          npm run check:fuel-stations
           npm run check:startup-splash
           npm run check:today-summary
           npm run check:weather

@@ -118,9 +118,10 @@ async function run() {
   assert.match(app, /Open-Meteo Best Match/);
   assert.match(weatherProxy, /MET Norway fallback/);
   assert.doesNotMatch(app, /fetchOpenWeatherPrimary/);
-  assert.match(index, /app\.js\?v=20260727-fatto2/);
-  assert.match(serviceWorker, /hera-app-shell-v36/);
-  assert.match(serviceWorker, /app\.js\?v=20260727-fatto2/);
+  const appAsset = index.match(/app\.js\?v=[^"']+/)?.[0];
+  assert.ok(appAsset, "index.html deve caricare app.js con una versione cache-busting");
+  assert.match(serviceWorker, /hera-app-shell-v\d+/);
+  assert.ok(serviceWorker.includes(`./${appAsset}`), "Il Service Worker deve precaricare la stessa versione di app.js usata da index.html");
   assert.match(netlify, /from = "\/api\/weather"/);
 
   console.log("Weather fallback checks passed.");

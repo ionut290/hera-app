@@ -59,7 +59,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: >-
           firebase deploy
-          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment
+          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:notifyAdminsCalendarEventsTomorrow
           --project hera-app-6cd2b
           --non-interactive
           --force

@@ -906,8 +906,17 @@ const ui = {
   calendarEventTimeFields: document.getElementById("calendar-event-time-fields"),
   calendarEventStartTime: document.getElementById("calendar-event-start-time"),
   calendarEventEndTime: document.getElementById("calendar-event-end-time"),
-  calendarEventWorksite: document.getElementById("calendar-event-worksite"),
+  calendarEventCommessa: document.getElementById("calendar-event-commessa"),
+  calendarEventCustomCommessaField: document.getElementById("calendar-event-custom-commessa-field"),
+  calendarEventCustomCommessa: document.getElementById("calendar-event-custom-commessa"),
+  calendarEventImpianto: document.getElementById("calendar-event-impianto"),
+  calendarEventCustomImpiantoField: document.getElementById("calendar-event-custom-impianto-field"),
+  calendarEventCustomImpianto: document.getElementById("calendar-event-custom-impianto"),
   calendarEventLocation: document.getElementById("calendar-event-location"),
+  calendarParticipantsPicker: document.getElementById("calendar-participants-picker"),
+  calendarParticipantsChips: document.getElementById("calendar-participants-chips"),
+  calendarParticipantsSearch: document.getElementById("calendar-participants-search"),
+  calendarParticipantsSuggestions: document.getElementById("calendar-participants-suggestions"),
   calendarEventParticipants: document.getElementById("calendar-event-participants"),
   calendarEventDescription: document.getElementById("calendar-event-description"),
   calendarEventLink: document.getElementById("calendar-event-link"),
@@ -1135,6 +1144,9 @@ let unsubscribeResources = null;
 let unsubscribePrivateDocs = null;
 let unsubscribeCalendarEvents = null;
 let calendarEvents = [];
+let calendarSelectedParticipants = [];
+const confirmedSquadraAbsenceAssignments = new Set();
+const calendarAbsenceCache = new Map();
 let calendarVisibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let calendarSelectedDate = formatCalendarDateKey(new Date());
 let unsubscribeGpsRequests = null;
@@ -2086,6 +2098,11 @@ ui.calendarPrevBtn?.addEventListener("click", () => changeCalendarMonth(-1));
 ui.calendarTodayBtn?.addEventListener("click", showCalendarToday);
 ui.calendarNextBtn?.addEventListener("click", () => changeCalendarMonth(1));
 ui.calendarEventAllDay?.addEventListener("change", syncCalendarTimeFields);
+ui.calendarEventCommessa?.addEventListener("change", handleCalendarCommessaChange);
+ui.calendarEventImpianto?.addEventListener("change", handleCalendarImpiantoChange);
+ui.calendarParticipantsSearch?.addEventListener("input", renderCalendarParticipantSuggestions);
+ui.calendarParticipantsSearch?.addEventListener("focus", renderCalendarParticipantSuggestions);
+ui.calendarParticipantsSearch?.addEventListener("keydown", handleCalendarParticipantSearchKeydown);
 ui.calendarEventCloseBtn?.addEventListener("click", closeCalendarEventForm);
 ui.calendarEventCancelBtn?.addEventListener("click", closeCalendarEventForm);
 ui.calendarEventForm?.addEventListener("submit", saveCalendarEvent);
@@ -3327,6 +3344,8 @@ if (!auth || firebaseInitError) {
   resourceRecords = [];
   privateDocsRecords = [];
   calendarEvents = [];
+  calendarAbsenceCache.clear();
+  confirmedSquadraAbsenceAssignments.clear();
   posDocuments = [];
   gpsUpdateRequests = [];
   operatorPositions = [];
@@ -5128,6 +5147,7 @@ function subscribeCalendarEvents() {
   if (ui.calendarFeedback) ui.calendarFeedback.textContent = "Caricamento eventi...";
   unsubscribeCalendarEvents = db.collection("calendarEvents").onSnapshot((snapshot) => {
     calendarEvents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    calendarAbsenceCache.clear();
     if (ui.calendarFeedback) {
       ui.calendarFeedback.textContent = calendarEvents.length
         ? `${calendarEvents.length} ${calendarEvents.length === 1 ? "evento condiviso" : "eventi condivisi"}`
@@ -5308,6 +5328,158 @@ function syncCalendarTimeFields() {
   if (ui.calendarEventEndTime) ui.calendarEventEndTime.required = false;
 }
 
+function getCalendarParticipantSnapshot(person = null, freeName = "") {
+  const name = String(person ? getPersonaleDisplayName(person) : freeName).trim();
+  return {
+    id: String(person?.id || "").trim(),
+    name,
+    email: String(person?.email || "").trim(),
+    freeText: !person
+  };
+}
+
+function addCalendarParticipant(person = null, freeName = "") {
+  const participant = getCalendarParticipantSnapshot(person, freeName);
+  if (!participant.name) return;
+  const key = normalizeSquadraMemberIdentity(participant.id || participant.email || participant.name);
+  if (calendarSelectedParticipants.some((item) => normalizeSquadraMemberIdentity(item.id || item.email || item.name) === key)) return;
+  calendarSelectedParticipants.push(participant);
+  renderCalendarParticipantPicker();
+}
+
+function removeCalendarParticipant(index) {
+  calendarSelectedParticipants.splice(index, 1);
+  renderCalendarParticipantPicker();
+}
+
+function renderCalendarParticipantPicker() {
+  if (!ui.calendarParticipantsChips || !ui.calendarEventParticipants) return;
+  ui.calendarParticipantsChips.innerHTML = calendarSelectedParticipants.map((participant, index) => `
+    <span class="calendar-participant-chip">
+      <span>${escapeHTML(participant.name)}</span>
+      <button type="button" data-calendar-participant-remove="${index}" aria-label="Rimuovi ${escapeHTML(participant.name)}">×</button>
+    </span>
+  `).join("");
+  ui.calendarParticipantsChips.querySelectorAll("[data-calendar-participant-remove]").forEach((button) => {
+    button.addEventListener("click", () => removeCalendarParticipant(Number(button.dataset.calendarParticipantRemove)));
+  });
+  ui.calendarEventParticipants.value = calendarSelectedParticipants.map((participant) => participant.name).join(", ");
+}
+
+function renderCalendarParticipantSuggestions() {
+  if (!ui.calendarParticipantsSuggestions || !ui.calendarParticipantsSearch) return;
+  const query = normalizeSquadraMemberIdentity(ui.calendarParticipantsSearch.value);
+  const selectedKeys = new Set(calendarSelectedParticipants.map((item) => normalizeSquadraMemberIdentity(item.id || item.email || item.name)));
+  const matches = personaleRecords
+    .filter((person) => {
+      const key = normalizeSquadraMemberIdentity(person.id || person.email || getPersonaleDisplayName(person));
+      if (selectedKeys.has(key)) return false;
+      return !query || normalizeSquadraMemberIdentity(`${getPersonaleDisplayName(person)} ${person.email || ""}`).includes(query);
+    })
+    .slice(0, 8);
+  const freeValue = String(ui.calendarParticipantsSearch.value || "").trim();
+  ui.calendarParticipantsSuggestions.innerHTML = [
+    ...matches.map((person) => `<button type="button" role="option" data-calendar-person-id="${escapeHTML(person.id)}"><strong>${escapeHTML(getPersonaleDisplayName(person))}</strong>${person.email ? `<small>${escapeHTML(person.email)}</small>` : ""}</button>`),
+    freeValue && !matches.some((person) => normalizeSquadraMemberIdentity(getPersonaleDisplayName(person)) === normalizeSquadraMemberIdentity(freeValue))
+      ? `<button type="button" role="option" data-calendar-free-person="${escapeHTML(freeValue)}">＋ Usa nome libero: <strong>${escapeHTML(freeValue)}</strong></button>`
+      : ""
+  ].join("");
+  ui.calendarParticipantsSuggestions.classList.toggle("hidden", !matches.length && !freeValue);
+  ui.calendarParticipantsSuggestions.querySelectorAll("[data-calendar-person-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const person = personaleRecords.find((item) => item.id === button.dataset.calendarPersonId);
+      if (person) addCalendarParticipant(person);
+      ui.calendarParticipantsSearch.value = "";
+      renderCalendarParticipantSuggestions();
+      ui.calendarParticipantsSearch.focus();
+    });
+  });
+  ui.calendarParticipantsSuggestions.querySelectorAll("[data-calendar-free-person]").forEach((button) => {
+    button.addEventListener("click", () => {
+      addCalendarParticipant(null, button.dataset.calendarFreePerson || "");
+      ui.calendarParticipantsSearch.value = "";
+      renderCalendarParticipantSuggestions();
+      ui.calendarParticipantsSearch.focus();
+    });
+  });
+}
+
+function handleCalendarParticipantSearchKeydown(event) {
+  if (event.key === "Escape") {
+    ui.calendarParticipantsSuggestions?.classList.add("hidden");
+    return;
+  }
+  if (event.key !== "Enter" && event.key !== ",") return;
+  event.preventDefault();
+  const freeValue = String(ui.calendarParticipantsSearch?.value || "").trim();
+  if (!freeValue) return;
+  const exactPerson = personaleRecords.find((person) => normalizeSquadraMemberIdentity(getPersonaleDisplayName(person)) === normalizeSquadraMemberIdentity(freeValue));
+  addCalendarParticipant(exactPerson || null, exactPerson ? "" : freeValue);
+  ui.calendarParticipantsSearch.value = "";
+  renderCalendarParticipantSuggestions();
+}
+
+function populateCalendarCommesse(selectedId = "", customName = "") {
+  if (!ui.calendarEventCommessa) return;
+  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values()));
+  ui.calendarEventCommessa.innerHTML = [
+    '<option value="">Nessuna commessa</option>',
+    ...commesse.map((commessa) => `<option value="${escapeHTML(commessa.id)}">${escapeHTML(getCommessaDisplayName(commessa))}</option>`),
+    '<option value="__custom">＋ Scrivi una commessa non presente</option>'
+  ].join("");
+  if (selectedId && commesseById.has(selectedId)) ui.calendarEventCommessa.value = selectedId;
+  else if (customName) ui.calendarEventCommessa.value = "__custom";
+  else ui.calendarEventCommessa.value = "";
+  ui.calendarEventCustomCommessa.value = customName || "";
+  ui.calendarEventCustomCommessaField?.classList.toggle("hidden", ui.calendarEventCommessa.value !== "__custom");
+}
+
+function getCalendarImpiantoDisplayName(impianto = {}) {
+  return String(impianto.denominazione || impianto.nome || impianto.idSap || "Impianto").trim();
+}
+
+function getCalendarImpiantoLocation(impianto = {}) {
+  return [impianto.indirizzo || impianto.descrizioneVia, impianto.comune].map((value) => String(value || "").trim()).filter(Boolean).join(", ");
+}
+
+function populateCalendarImpianti(commessaId = "", selectedId = "", customName = "") {
+  if (!ui.calendarEventImpianto) return;
+  const impianti = commessaId ? getCommessaCachedImpianti(commessaId) : [];
+  ui.calendarEventImpianto.innerHTML = [
+    '<option value="">Nessun impianto</option>',
+    ...impianti.map((impianto) => `<option value="${escapeHTML(getSquadraImpiantoId(impianto))}">${escapeHTML(getCalendarImpiantoDisplayName(impianto))}</option>`),
+    '<option value="__custom">＋ Scrivi un impianto non presente</option>'
+  ].join("");
+  const hasCustomCommessa = ui.calendarEventCommessa?.value === "__custom";
+  ui.calendarEventImpianto.disabled = !commessaId && !customName && !hasCustomCommessa;
+  if (selectedId && impianti.some((impianto) => getSquadraImpiantoId(impianto) === selectedId)) ui.calendarEventImpianto.value = selectedId;
+  else if (customName) ui.calendarEventImpianto.value = "__custom";
+  else ui.calendarEventImpianto.value = "";
+  ui.calendarEventCustomImpianto.value = customName || "";
+  ui.calendarEventCustomImpiantoField?.classList.toggle("hidden", ui.calendarEventImpianto.value !== "__custom");
+}
+
+function handleCalendarCommessaChange() {
+  const commessaId = String(ui.calendarEventCommessa?.value || "");
+  const isCustom = commessaId === "__custom";
+  ui.calendarEventCustomCommessaField?.classList.toggle("hidden", !isCustom);
+  if (!isCustom) ui.calendarEventCustomCommessa.value = "";
+  populateCalendarImpianti(isCustom ? "" : commessaId);
+}
+
+function handleCalendarImpiantoChange() {
+  const commessaId = String(ui.calendarEventCommessa?.value || "");
+  const impiantoId = String(ui.calendarEventImpianto?.value || "");
+  const isCustom = impiantoId === "__custom";
+  ui.calendarEventCustomImpiantoField?.classList.toggle("hidden", !isCustom);
+  if (!isCustom) ui.calendarEventCustomImpianto.value = "";
+  const impianto = getCommessaCachedImpianti(commessaId).find((item) => getSquadraImpiantoId(item) === impiantoId);
+  if (impianto && ui.calendarEventLocation) {
+    const location = getCalendarImpiantoLocation(impianto);
+    if (location) ui.calendarEventLocation.value = location;
+  }
+}
+
 function openCalendarEventForm(dateKey = calendarSelectedDate, event = null) {
   if (!currentUser) return;
   const fallbackDate = parseCalendarDateKey(dateKey) ? dateKey : formatCalendarDateKey(new Date());
@@ -5321,9 +5493,26 @@ function openCalendarEventForm(dateKey = calendarSelectedDate, event = null) {
   ui.calendarEventAllDay.checked = event?.allDay !== false;
   ui.calendarEventStartTime.value = event?.startTime || "";
   ui.calendarEventEndTime.value = event?.endTime || "";
-  ui.calendarEventWorksite.value = event?.worksite || "";
+  const initialCommessaId = event?.commessaId || (!event ? selectedCommessaId : "");
+  populateCalendarCommesse(initialCommessaId, event?.customCommessa || (!event?.commessaId ? event?.commessaName || event?.worksite || "" : ""));
+  populateCalendarImpianti(initialCommessaId, event?.impiantoId || "", event?.customImpianto || (!event?.impiantoId ? event?.impiantoName || "" : ""));
   ui.calendarEventLocation.value = event?.location || "";
-  ui.calendarEventParticipants.value = event?.participants || "";
+  calendarSelectedParticipants = Array.isArray(event?.participantSnapshots)
+    ? event.participantSnapshots.map((participant) => ({
+      id: String(participant?.id || ""),
+      name: String(participant?.name || ""),
+      email: String(participant?.email || ""),
+      freeText: Boolean(participant?.freeText)
+    })).filter((participant) => participant.name)
+    : parseMultiEntryValue(event?.participants || "").map((name) => getCalendarParticipantSnapshot(null, name));
+  if (!event && !calendarSelectedParticipants.length) {
+    const currentPerson = getPersonaleByLoginEmail();
+    addCalendarParticipant(currentPerson, currentPerson ? "" : getCurrentUserResolvedName("Utente"));
+  } else {
+    renderCalendarParticipantPicker();
+  }
+  if (ui.calendarParticipantsSearch) ui.calendarParticipantsSearch.value = "";
+  ui.calendarParticipantsSuggestions?.classList.add("hidden");
   ui.calendarEventDescription.value = event?.description || "";
   ui.calendarEventLink.value = event?.link || "";
   ui.calendarEventFormFeedback.textContent = "";
@@ -5370,27 +5559,43 @@ async function saveCalendarEvent(event) {
     ui.calendarEventFormFeedback.textContent = "L'ora finale non può precedere quella iniziale.";
     return;
   }
+  const commessaSelection = String(ui.calendarEventCommessa.value || "");
+  const customCommessa = commessaSelection === "__custom" ? String(ui.calendarEventCustomCommessa.value || "").trim() : "";
+  const commessa = commessaSelection && commessaSelection !== "__custom" ? commesseById.get(commessaSelection) : null;
+  const impiantoSelection = String(ui.calendarEventImpianto.value || "");
+  const customImpianto = impiantoSelection === "__custom" ? String(ui.calendarEventCustomImpianto.value || "").trim() : "";
+  const impianto = commessa
+    ? getCommessaCachedImpianti(commessa.id).find((item) => getSquadraImpiantoId(item) === impiantoSelection)
+    : null;
+  const eventType = String(ui.calendarEventType.value || "altro");
+  const generatedTitle = `${CALENDAR_EVENT_TYPES[eventType]?.label || "Evento"}${calendarSelectedParticipants[0]?.name ? ` • ${calendarSelectedParticipants[0].name}` : ""}`;
   const payload = {
-    type: String(ui.calendarEventType.value || "altro"),
-    title: String(ui.calendarEventTitle.value || "").trim(),
+    type: eventType,
+    title: String(ui.calendarEventTitle.value || "").trim() || generatedTitle,
+    titleWasGenerated: !String(ui.calendarEventTitle.value || "").trim(),
     startDate,
     endDate,
     allDay,
     startTime,
     endTime,
-    worksite: String(ui.calendarEventWorksite.value || "").trim(),
+    commessaId: commessa?.id || "",
+    commessaName: String(commessa?.nome || customCommessa || "").trim(),
+    customCommessa,
+    impiantoId: impianto ? getSquadraImpiantoId(impianto) : "",
+    impiantoName: String(impianto ? getCalendarImpiantoDisplayName(impianto) : customImpianto).trim(),
+    customImpianto,
+    worksite: [commessa?.nome || customCommessa, impianto ? getCalendarImpiantoDisplayName(impianto) : customImpianto].filter(Boolean).join(" • "),
     location: String(ui.calendarEventLocation.value || "").trim(),
-    participants: String(ui.calendarEventParticipants.value || "").trim(),
+    participants: calendarSelectedParticipants.map((participant) => participant.name).join(", "),
+    participantIds: calendarSelectedParticipants.map((participant) => participant.id).filter(Boolean),
+    participantEmails: calendarSelectedParticipants.map((participant) => participant.email).filter(Boolean),
+    participantSnapshots: calendarSelectedParticipants,
     description: String(ui.calendarEventDescription.value || "").trim(),
     link: String(ui.calendarEventLink.value || "").trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedByUid: currentUser.uid || "",
     updatedByEmail: currentUser.email || ""
   };
-  if (!payload.title) {
-    ui.calendarEventFormFeedback.textContent = "Inserisci il titolo dell'evento.";
-    return;
-  }
   ui.calendarEventSaveBtn.disabled = true;
   ui.calendarEventFormFeedback.textContent = "Salvataggio...";
   try {
@@ -20883,6 +21088,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
       <textarea class="squadra-avviso-input" rows="3" placeholder="Scrivi un avviso: gli operatori della squadra riceveranno una notifica">${escapeHTML(rowData.avviso || "")}</textarea>
       <small>Un avviso nuovo o modificato viene mostrato agli operatori assegnati e inviato come notifica.</small>
     </label>
+    ${rowData.avvisoAutomaticoAssenze ? `<div class="squadra-automatic-absence-warning"><b>Avviso automatico calendario</b><br>${escapeHTML(rowData.avvisoAutomaticoAssenze)}</div>` : ""}
   `;
   const personaleList = row.querySelector(".squadra-personale-list");
   const mezziList = row.querySelector(".squadra-mezzi-list");
@@ -21011,6 +21217,13 @@ function addMultiEntryInput({ container, listId, placeholder, value, sourceValue
     input.value = resolveSuggestionValue(input.value, sourceValues);
     const type = container.classList.contains("squadra-personale-list") ? "operatori" : (container.classList.contains("squadra-mezzi-list") ? "mezzi" : "");
     if (type && input.value) {
+      if (type === "operatori") {
+        const available = await validateSquadraOperatorAvailability(input.value, ui.squadraRiferimento?.value || getActiveSquadreDateKey());
+        if (!available) {
+          input.value = "";
+          return;
+        }
+      }
       const ok = await validateDraftSquadraConflicts(readSquadraRows(), { onlyType: type, onlyValue: input.value });
       if (!ok) input.value = "";
     }
@@ -21059,6 +21272,8 @@ function readSquadraRows() {
     impiantiDettagli,
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
     avviso: String(row.querySelector(".squadra-avviso-input")?.value || "").trim(),
+    avvisoAutomaticoAssenze: String(row.__squadraRowData?.avvisoAutomaticoAssenze || "").trim(),
+    calendarAbsenceEventIds: Array.isArray(row.__squadraRowData?.calendarAbsenceEventIds) ? row.__squadraRowData.calendarAbsenceEventIds : [],
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
     orarioFine: String(row.querySelector(".squadra-orario-fine-input")?.value || "").trim(),
     senzaPausaPranzo: Boolean(row.querySelector(".squadra-senza-pausa-input")?.checked),
@@ -21105,6 +21320,85 @@ function getSquadraConflictAdminLabel() {
 
 function getSquadraName(index) {
   return `Squadra ${Number(index || 0) + 1}`;
+}
+
+const CALENDAR_ABSENCE_TYPES = new Set(["ferie", "permesso", "malattia"]);
+
+async function getCalendarAbsencesForDate(dateKey, { force = false } = {}) {
+  const key = String(dateKey || "").trim();
+  if (!key || !db) return [];
+  const cached = calendarAbsenceCache.get(key);
+  if (!force && cached && Date.now() - cached.loadedAt < 60 * 1000) return cached.items;
+  try {
+    const snapshot = await db.collection("calendarEvents").where("startDate", "<=", key).get();
+    const items = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((event) => CALENDAR_ABSENCE_TYPES.has(String(event.type || "")) && String(event.endDate || event.startDate || "") >= key);
+    calendarAbsenceCache.set(key, { loadedAt: Date.now(), items });
+    return items;
+  } catch (error) {
+    console.warn("Controllo assenze calendario non disponibile:", error);
+    return [];
+  }
+}
+
+function getCalendarAbsenceParticipantNames(event = {}) {
+  const snapshots = Array.isArray(event.participantSnapshots)
+    ? event.participantSnapshots.map((participant) => participant?.name || participant?.email || participant?.id)
+    : [];
+  return [...new Set([
+    ...snapshots,
+    ...parseMultiEntryValue(event.participants || ""),
+    ...(Array.isArray(event.participantEmails) ? event.participantEmails : []),
+    ...(Array.isArray(event.participantIds) ? event.participantIds : [])
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function calendarAbsenceMatchesOperator(event, operatorName) {
+  const operatorKey = normalizeSquadraMemberIdentity(operatorName);
+  if (!operatorKey) return false;
+  return getCalendarAbsenceParticipantNames(event).some((participant) => {
+    const participantKey = normalizeSquadraMemberIdentity(participant);
+    if (!participantKey) return false;
+    return participantKey === operatorKey || participantKey.includes(operatorKey) || operatorKey.includes(participantKey);
+  });
+}
+
+function formatCalendarAbsenceWarning(event, operatorName, dateKey) {
+  const type = CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro;
+  return `⛔ ${operatorName} assente: ${type.label} il ${formatDateKeyForDisplay(dateKey)}`;
+}
+
+async function validateSquadraOperatorAvailability(operatorName, dateKey) {
+  const absences = (await getCalendarAbsencesForDate(dateKey)).filter((event) => calendarAbsenceMatchesOperator(event, operatorName));
+  if (!absences.length) return true;
+  const assignmentKey = `${dateKey}|${normalizeSquadraMemberIdentity(operatorName)}|${absences.map((event) => event.id).sort().join(",")}`;
+  if (confirmedSquadraAbsenceAssignments.has(assignmentKey)) return true;
+  const warnings = absences.map((event) => formatCalendarAbsenceWarning(event, operatorName, dateKey)).join("\n");
+  const assignAnyway = window.confirm(`⚠️ OPERATORE ASSENTE\n\n${warnings}\n\nVuoi inserirlo comunque nella squadra?\n\nOK = INSERISCI COMUNQUE\nAnnulla = NON INSERIRE`);
+  if (assignAnyway) confirmedSquadraAbsenceAssignments.add(assignmentKey);
+  return assignAnyway;
+}
+
+async function applyCalendarAbsenceWarningsToSquadraRows(rows, dateKey) {
+  const absences = await getCalendarAbsencesForDate(dateKey, { force: true });
+  for (const row of rows) {
+    const members = getSquadraRowMemberNames(row);
+    const warnings = [];
+    const eventIds = [];
+    for (const member of members) {
+      const matching = absences.filter((event) => calendarAbsenceMatchesOperator(event, member));
+      for (const event of matching) {
+        const available = await validateSquadraOperatorAvailability(member, dateKey);
+        if (!available) return false;
+        warnings.push(formatCalendarAbsenceWarning(event, member, dateKey));
+        eventIds.push(event.id);
+      }
+    }
+    row.avvisoAutomaticoAssenze = [...new Set(warnings)].join("\n");
+    row.calendarAbsenceEventIds = [...new Set(eventIds)];
+  }
+  return true;
 }
 
 function getSquadraConflictConfirmations(row, type) {
@@ -21267,8 +21561,8 @@ function getSquadraAlertTargetUserIds(row) {
 async function createSquadraAlertsForChangedRows({ commessaId, commessaNome, dateKey, previousRows, nextRows }) {
   const createdDateKey = getDateKeyFromLocalDate(new Date());
   const changedAlerts = nextRows.map((row, index) => {
-    const avviso = String(row?.avviso || "").trim();
-    const previousAvviso = String(previousRows[index]?.avviso || "").trim();
+    const avviso = [row?.avviso, row?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
+    const previousAvviso = [previousRows[index]?.avviso, previousRows[index]?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
     return avviso && normalizeSquadraMemberIdentity(avviso) !== normalizeSquadraMemberIdentity(previousAvviso)
       ? { row, index, avviso }
       : null;
@@ -21324,6 +21618,11 @@ async function saveSquadraComposition(event) {
   const squadreRows = readSquadraRows();
   if (!squadreRows.length) {
     await deleteSquadraCompositionForDate(commessaId, dateKey);
+    return;
+  }
+  const absenceAssignmentsConfirmed = await applyCalendarAbsenceWarningsToSquadraRows(squadreRows, dateKey);
+  if (!absenceAssignmentsConfirmed) {
+    setSquadraFeedback("Salvataggio sospeso: rimuovi l'operatore assente oppure scegli “INSERISCI COMUNQUE”.", "error");
     return;
   }
   const duplicateRows = findDuplicateSquadraRows(squadreRows);
@@ -21748,7 +22047,8 @@ function renderSquadre() {
         orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
         row.impianti ? renderSquadraImpiantiButtons(row, idx, commessa.id) : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : "",
-        row.avviso ? `<br><span class="squadra-saved-alert"><b>⚠️ Avviso:</b> ${escapeHTML(row.avviso)}</span>` : ""
+        row.avviso ? `<br><span class="squadra-saved-alert"><b>⚠️ Avviso:</b> ${escapeHTML(row.avviso)}</span>` : "",
+        row.avvisoAutomaticoAssenze ? `<br><span class="squadra-saved-alert squadra-automatic-absence-warning"><b>⛔ Assenza calendario:</b> ${escapeHTML(row.avvisoAutomaticoAssenze)}</span>` : ""
       ].join("");
       const rowConflictReport = {
         operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
@@ -27023,7 +27323,7 @@ function subscribeUserAlerts() {
           const belongsToUser = isNotificationForCurrentUser(item);
           if (!belongsToUser) return false;
           const dateKey = String(item.scheduledDateKey || "").trim();
-          return item.source === "squadra-avviso" || !dateKey || dateKey <= todayKey;
+          return ["squadra-avviso", "calendar-absence"].includes(item.source) || !dateKey || dateKey <= todayKey;
         })
         .sort((a, b) => {
           const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;

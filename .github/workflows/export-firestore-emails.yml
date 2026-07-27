@@ -1,0 +1,35 @@
+name: Esporta email Firebase
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica repository
+        uses: actions/checkout@v4
+
+      - name: Configura Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installa Firebase Admin
+        run: npm install --no-save firebase-admin
+
+      - name: Estrai email da Firebase Authentication e Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: node scripts/export-firestore-emails.js
+
+      - name: Carica CSV pronto per Google Play Console
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-play-testers
+          path: exports/google-play-testers.csv
+          if-no-files-found: error
+          retention-days: 30

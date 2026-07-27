@@ -49,6 +49,11 @@
   let fuelPinDocument = null;
   let businessCardDocument = null;
   let unsubscribe = null;
+  let bodyOverflowBeforeViewer = "";
+  let fullscreenImage = null;
+  let imageScale = 1;
+  let imageOffset = { x: 0, y: 0 };
+  let dragStart = null;
 
   const normalizedText = (item) => `${item?.name || ""} ${item?.note || ""}`.toLocaleLowerCase("it-IT");
   const isIdentityCard = (item) => {
@@ -138,11 +143,55 @@
   };
 
   const closeViewer = () => {
+    closeFullscreenImage(false);
     viewer.classList.add("hidden");
     viewer.setAttribute("aria-hidden", "true");
     viewerBody.innerHTML = "";
     toggleBusinessForm(false);
-    document.body.style.overflow = "";
+    document.body.style.overflow = bodyOverflowBeforeViewer;
+  };
+
+  const applyImageTransform = () => {
+    const image = fullscreenImage?.querySelector("img");
+    if (image) image.style.transform = `translate3d(${imageOffset.x}px, ${imageOffset.y}px, 0) scale(${imageScale})`;
+    const status = fullscreenImage?.querySelector(".identity-fullscreen-zoom-status");
+    if (status) status.textContent = `${Math.round(imageScale * 100)}%`;
+  };
+
+  function closeFullscreenImage(useHistory = true) {
+    if (!fullscreenImage) return;
+    fullscreenImage.remove();
+    fullscreenImage = null;
+    viewer.classList.remove("identity-image-open");
+    if (useHistory && history.state?.identityCardFullscreen) history.back();
+  }
+
+  const openFullscreenImage = (source, alt) => {
+    if (fullscreenImage) return;
+    imageScale = 1; imageOffset = { x: 0, y: 0 };
+    fullscreenImage = document.createElement("section");
+    fullscreenImage.className = "identity-image-fullscreen";
+    fullscreenImage.setAttribute("role", "dialog");
+    fullscreenImage.setAttribute("aria-modal", "true");
+    fullscreenImage.setAttribute("aria-label", "Tessera a schermo intero");
+    fullscreenImage.innerHTML = `<header><span class="identity-fullscreen-zoom-status">100%</span><div><button type="button" data-zoom="out" aria-label="Riduci">−</button><button type="button" data-zoom="reset" aria-label="Ripristina zoom">1:1</button><button type="button" data-zoom="in" aria-label="Ingrandisci">＋</button><button type="button" data-close aria-label="Chiudi schermo intero">✕</button></div></header><div class="identity-image-pan"><img alt=""></div>`;
+    const image = fullscreenImage.querySelector("img"); image.src = source; image.alt = alt;
+    const pan = fullscreenImage.querySelector(".identity-image-pan");
+    fullscreenImage.querySelector("[data-close]").addEventListener("click", () => closeFullscreenImage());
+    fullscreenImage.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-zoom]")?.dataset.zoom;
+      if (!action) return;
+      if (action === "reset") { imageScale = 1; imageOffset = { x: 0, y: 0 }; }
+      else imageScale = Math.max(1, Math.min(5, imageScale + (action === "in" ? .5 : -.5)));
+      applyImageTransform();
+    });
+    pan.addEventListener("wheel", (event) => { event.preventDefault(); imageScale = Math.max(1, Math.min(5, imageScale + (event.deltaY < 0 ? .25 : -.25))); applyImageTransform(); }, { passive: false });
+    pan.addEventListener("pointerdown", (event) => { dragStart = { x: event.clientX - imageOffset.x, y: event.clientY - imageOffset.y }; pan.setPointerCapture(event.pointerId); });
+    pan.addEventListener("pointermove", (event) => { if (!dragStart || imageScale === 1) return; imageOffset = { x: event.clientX - dragStart.x, y: event.clientY - dragStart.y }; applyImageTransform(); });
+    pan.addEventListener("pointerup", () => { dragStart = null; });
+    viewer.appendChild(fullscreenImage); viewer.classList.add("identity-image-open");
+    history.pushState({ ...(history.state || {}), identityCardFullscreen: true }, "");
+    fullscreenImage.querySelector("[data-close]").focus();
   };
 
   const closePinViewer = () => {
@@ -192,7 +241,13 @@
       const image = document.createElement("img");
       image.src = identityCard.fileDataUrl;
       image.alt = "Tessera di riconoscimento";
-      viewerBody.appendChild(image);
+      const enlarge = document.createElement("button");
+      enlarge.type = "button";
+      enlarge.className = "identity-card-enlarge";
+      enlarge.setAttribute("aria-label", "Apri la tessera a schermo intero con zoom");
+      enlarge.appendChild(image);
+      enlarge.addEventListener("click", () => openFullscreenImage(image.src, image.alt));
+      viewerBody.appendChild(enlarge);
       return;
     }
     const source = identityCard.fileDataUrl || drivePreviewUrl(identityCard);
@@ -210,6 +265,7 @@
     renderBusinessCard();
     viewer.classList.remove("hidden");
     viewer.setAttribute("aria-hidden", "false");
+    bodyOverflowBeforeViewer = document.body.style.overflow;
     document.body.style.overflow = "hidden";
   };
 
@@ -492,8 +548,16 @@
   pinViewer?.addEventListener("click", (event) => { if (event.target === pinViewer) closePinViewer(); });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!viewer.classList.contains("hidden")) closeViewer();
+    if (fullscreenImage) closeFullscreenImage();
+    else if (!viewer.classList.contains("hidden")) closeViewer();
     if (!pinViewer?.classList.contains("hidden")) closePinViewer();
+  });
+  window.addEventListener("popstate", () => {
+    if (fullscreenImage) closeFullscreenImage(false);
+  });
+  window.addEventListener("orientationchange", () => {
+    imageOffset = { x: 0, y: 0 };
+    applyImageTransform();
   });
 
   updateButtons();

@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 
 const CHANNEL_ID = "hera_operational_updates";
 const FCM_BATCH_SIZE = 500;
+const CALENDAR_ABSENCE_TYPES = new Set(["ferie", "permesso", "malattia"]);
 const BUILT_IN_ADMIN_EMAILS = new Set(["ionut29019@gmail.com"]);
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
@@ -41,11 +42,52 @@ function getTomorrowRomeDateKey(date = new Date()) {
 
 function getCalendarEventParticipants(calendarEvent = {}) {
   const snapshots = Array.isArray(calendarEvent.participantSnapshots) ? calendarEvent.participantSnapshots : [];
-  const snapshotNames = snapshots.map((participant) => String(participant?.name || participant?.email || "").trim()).filter(Boolean);
+  const snapshotNames = snapshots.flatMap((participant) => [participant?.id, participant?.uid, participant?.name, participant?.email]);
   const legacyNames = Array.isArray(calendarEvent.participantNames)
     ? calendarEvent.participantNames
     : String(calendarEvent.participants || "").split(/[,;\n]+/);
-  return [...new Set([...snapshotNames, ...legacyNames.map((value) => String(value || "").trim()).filter(Boolean)])];
+  return [...new Set([
+    ...snapshotNames,
+    ...(Array.isArray(calendarEvent.participantIds) ? calendarEvent.participantIds : []),
+    ...(Array.isArray(calendarEvent.participantEmails) ? calendarEvent.participantEmails : []),
+    ...legacyNames
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function normalizePerson(value) {
+  return String(value || "").trim().toLocaleLowerCase("it-IT").replace(/\s+/g, " ");
+}
+
+function getSquadraOperators(squadData = {}) {
+  const operators = [];
+  for (const row of Array.isArray(squadData.squadre) ? squadData.squadre : []) {
+    operators.push(row?.caposquadra, row?.caposquadraEmail, row?.caposquadraUid);
+    const personnel = row?.personale || row?.operatori || row?.operators || [];
+    if (Array.isArray(personnel)) {
+      for (const person of personnel) {
+        if (person && typeof person === "object") {
+          operators.push(person.uid, person.id, person.email, person.displayName, person.nome);
+        } else {
+          operators.push(person);
+        }
+      }
+    } else {
+      operators.push(...String(personnel || "").split(/[;,\n|]+/));
+    }
+  }
+  return [...new Set(operators.map(normalizePerson).filter(Boolean))];
+}
+
+function absenceEventHasSquadraAssignment(calendarEvent, squadDocuments) {
+  if (!CALENDAR_ABSENCE_TYPES.has(String(calendarEvent?.type || "").trim().toLowerCase())) return true;
+  const participants = getCalendarEventParticipants(calendarEvent).map(normalizePerson).filter(Boolean);
+  if (!participants.length) return false;
+  return squadDocuments.some((squadData) => {
+    const operators = getSquadraOperators(squadData);
+    return participants.some((participant) => operators.some((operator) => (
+      participant === operator || participant.includes(operator) || operator.includes(participant)
+    )));
+  });
 }
 
 function formatEventType(calendarEvent = {}) {
@@ -157,11 +199,19 @@ async function run() {
     return;
   }
   const admins = await loadAdminUsers(db);
+  const hasAbsenceEvents = events.docs.some((eventDoc) => CALENDAR_ABSENCE_TYPES.has(String(eventDoc.data()?.type || "").trim().toLowerCase()));
+  const squadDocuments = hasAbsenceEvents
+    ? (await db.collection("squadreStorico").where("dateKey", "==", tomorrowKey).get()).docs.map((doc) => doc.data() || {})
+    : [];
   let notifiedEvents = 0;
 
   for (const eventDoc of events.docs) {
     const calendarEvent = eventDoc.data() || {};
     if (String(calendarEvent.adminReminderDateKey || "") === tomorrowKey) continue;
+    if (!absenceEventHasSquadraAssignment(calendarEvent, squadDocuments)) {
+      console.log(`Promemoria assenza ignorato per ${eventDoc.id}: nessun partecipante assegnato a una squadra il ${tomorrowKey}.`);
+      continue;
+    }
     const people = getCalendarEventParticipants(calendarEvent).slice(0, 4).join(", ");
     const body = [
       String(calendarEvent.title || formatEventType(calendarEvent)),
@@ -204,5 +254,6 @@ if (require.main === module) {
 module.exports = {
   getRomeDateParts,
   getTomorrowRomeDateKey,
+  absenceEventHasSquadraAssignment,
   run
 };

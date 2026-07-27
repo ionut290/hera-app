@@ -2,7 +2,9 @@
 
 Il workflow `.github/workflows/build-android-aab.yml` crea automaticamente un file `.aab` firmato senza richiedere Android Studio.
 
-Il bundle include automaticamente tutti gli asset web dell'app, compresi il lettore delle notifiche e il flusso di aggiornamento Android. Prima della compilazione il workflow esegue anche i relativi controlli automatici.
+Il bundle include automaticamente tutti gli asset web dell'app, compresi il lettore delle notifiche e il flusso di aggiornamento Android. Prima della compilazione il workflow rigenera sempre la directory `www`, sincronizza Capacitor ed esegue i controlli automatici: non è quindi necessario copiare manualmente i file web nel progetto Android.
+
+Ogni modifica agli asset dell'app (JavaScript, HTML, CSS, web manifest, icone e funzioni di notifica) avvia una nuova compilazione su `main`. Il workflow può inoltre essere avviato manualmente per creare immediatamente un AAB aggiornato.
 
 ## Secret GitHub obbligatori
 

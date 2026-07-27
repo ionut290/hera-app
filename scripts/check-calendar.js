@@ -33,6 +33,7 @@ const checks = [
   ["Le squadre controllano gli operatori assenti", app.includes("validateSquadraOperatorAvailability") && app.includes("avvisoAutomaticoAssenze")],
   ["La funzione crea avvisi squadra dalle assenze", notifications.includes("syncCalendarAbsenceSquadraAlerts") && notifications.includes("calendar-absence")],
   ["L'admin riceve il promemoria un giorno prima", reminderRunner.includes("getTomorrowRomeDateKey") && reminderRunner.includes("calendar-admin-reminder")],
+  ["Le assenze notificano solo operatori assegnati a una squadra", reminderRunner.includes("absenceEventHasSquadraAssignment") && reminderRunner.includes('db.collection("squadreStorico").where("dateKey", "==", tomorrowKey)')],
   ["Il promemoria parte alle 07:05 italiane", reminderWorkflow.includes('cron: "5 5 * * *"') && reminderWorkflow.includes('cron: "5 6 * * *"') && reminderRunner.includes('romeParts.hour !== "07"')],
   ["Le funzioni Cloud restano nel deploy senza lo scheduler IAM", deployWorkflow.includes("functions:syncCalendarAbsenceSquadraAlerts") && !deployWorkflow.includes("functions:notifyAdminsCalendarEventsTomorrow")]
 ];

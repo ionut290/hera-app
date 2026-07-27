@@ -1,0 +1,82 @@
+name: Export Firebase Users
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-users:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase Admin SDK
+        run: npm install --no-save firebase-admin
+
+      - name: Export Firebase Authentication users to CSV
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const admin = require('firebase-admin');
+
+          const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+          if (!raw) {
+            throw new Error('Secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B non configurato.');
+          }
+
+          let serviceAccount;
+          try {
+            serviceAccount = JSON.parse(raw);
+          } catch (error) {
+            throw new Error('Il secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B non contiene un JSON valido.');
+          }
+
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+          });
+
+          const emails = new Set();
+
+          async function collectUsers(pageToken) {
+            const result = await admin.auth().listUsers(1000, pageToken);
+            for (const user of result.users) {
+              if (user.email && user.email.trim()) {
+                emails.add(user.email.trim().toLowerCase());
+              }
+            }
+            if (result.pageToken) {
+              await collectUsers(result.pageToken);
+            }
+          }
+
+          (async () => {
+            await collectUsers();
+            const sortedEmails = [...emails].sort((a, b) => a.localeCompare(b));
+            const csv = ['email', ...sortedEmails.map(email => `"${email.replace(/"/g, '""')}"`)].join('\n') + '\n';
+            fs.mkdirSync('firebase-export', { recursive: true });
+            fs.writeFileSync('firebase-export/tester-google-play.csv', csv, 'utf8');
+            console.log(`Esportati ${sortedEmails.length} indirizzi email unici.`);
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tester-google-play
+          path: firebase-export/tester-google-play.csv
+          if-no-files-found: error
+          retention-days: 7

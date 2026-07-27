@@ -1,27 +1,29 @@
-name: Deploy Firebase Functions
+name: Calendar Admin Reminders
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "functions/**"
-      - "firebase.json"
-      - ".firebaserc"
-      - ".github/workflows/deploy-firebase-functions.yml"
+    inputs:
+      dry_run:
+        description: "Verifica accesso e ricerca eventi senza inviare notifiche"
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    # 07:05 in Italia: 05:05 UTC con ora legale, 06:05 UTC con ora solare.
+    - cron: "5 5 * * *"
+    - cron: "5 6 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-firebase-functions
+  group: calendar-admin-reminders
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -36,12 +38,6 @@ jobs:
         working-directory: functions
         run: npm install --no-audit --no-fund
 
-      - name: Validate notification functions
-        run: node -e "require('./functions/index.js'); console.log('Functions loaded successfully')"
-
-      - name: Install Firebase CLI
-        run: npm install --global firebase-tools
-
       - name: Write Firebase service account
         shell: bash
         env:
@@ -54,12 +50,8 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
-      - name: Deploy notification Cloud Functions
+      - name: Notify admins about tomorrow calendar events
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: >-
-          firebase deploy
-          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts
-          --project hera-app-6cd2b
-          --non-interactive
-          --force
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        run: node functions/run-calendar-admin-reminders.js

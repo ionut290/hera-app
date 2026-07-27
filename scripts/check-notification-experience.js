@@ -5,6 +5,12 @@ const reader = fs.readFileSync("notification-session-enhancements.js", "utf8");
 const userNotifications = fs.readFileSync("functions/user-notifications.js", "utf8");
 const doneNotifications = fs.readFileSync("functions/index.js", "utf8");
 
+const mergeConflictMarker = /^(?:<<<<<<<|=======|>>>>>>>)(?: .*)?$/m;
+assert.doesNotMatch(app, mergeConflictMarker);
+assert.doesNotMatch(reader, mergeConflictMarker);
+assert.doesNotMatch(userNotifications, mergeConflictMarker);
+assert.doesNotMatch(doneNotifications, mergeConflictMarker);
+
 assert.match(app, /dismissedByUserIds\.\$\{currentUser\.uid\}/);
 assert.match(app, /Boolean\(item\?\.dismissedByUserIds\?\.\[currentUser\.uid\]\)/);
 assert.match(app, /HeraNotificationReader\?\.archive/);

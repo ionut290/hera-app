@@ -2,7 +2,6 @@
 
 const admin = require("firebase-admin");
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const REGION = "europe-west1";
 const CHANNEL_ID = "hera_operational_updates";
@@ -11,7 +10,6 @@ const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
 ]);
-const BUILT_IN_ADMIN_EMAILS = new Set(["ionut29019@gmail.com"]);
 const CALENDAR_ABSENCE_TYPES = new Set(["ferie", "permesso", "malattia"]);
 
 function normalize(value) {
@@ -443,71 +441,6 @@ exports.syncCalendarAbsenceSquadraAlerts = onDocumentWritten(
     const before = event.data?.before?.exists ? event.data.before.data() || {} : null;
     const after = event.data?.after?.exists ? event.data.after.data() || {} : null;
     await syncCalendarEventAcrossSquads(event.params.eventId, before, after);
-    return null;
-  }
-);
-
-async function loadAdminPushUsers() {
-  const db = getDb();
-  const [users, configSnap] = await Promise.all([
-    loadPushUsers(),
-    db.collection("appConfig").doc("adminUsers").get()
-  ]);
-  const configured = configSnap.exists && Array.isArray(configSnap.data()?.emails) ? configSnap.data().emails : [];
-  const adminEmails = new Set([...BUILT_IN_ADMIN_EMAILS, ...configured.map((email) => String(email || "").trim().toLowerCase())]);
-  return users.filter((user) => adminEmails.has(String(user.email || "").trim().toLowerCase()));
-}
-
-exports.notifyAdminsCalendarEventsTomorrow = onSchedule(
-  { schedule: "0 7 * * *", timeZone: "Europe/Rome", region: REGION },
-  async () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowKey = [
-      tomorrow.getFullYear(),
-      String(tomorrow.getMonth() + 1).padStart(2, "0"),
-      String(tomorrow.getDate()).padStart(2, "0")
-    ].join("-");
-    const db = getDb();
-    const events = await db.collection("calendarEvents").where("startDate", "==", tomorrowKey).get();
-    if (events.empty) return null;
-    const admins = await loadAdminPushUsers();
-
-    for (const eventDoc of events.docs) {
-      const calendarEvent = eventDoc.data() || {};
-      if (String(calendarEvent.adminReminderDateKey || "") === tomorrowKey) continue;
-      const people = getCalendarEventParticipants(calendarEvent).slice(0, 4).join(", ");
-      const body = [
-        String(calendarEvent.title || formatAbsenceLabel(calendarEvent) || "Evento calendario"),
-        people,
-        calendarEvent.commessaName || calendarEvent.worksite || "",
-        calendarEvent.impiantoName || "",
-        calendarEvent.location || ""
-      ].filter(Boolean).join(" • ");
-      await sendToUsers(admins, {
-        title: "📅 Evento in calendario domani",
-        body,
-        eventType: "calendar-admin-reminder",
-        data: { eventId: eventDoc.id, startDate: tomorrowKey },
-        tag: `calendar-admin-${eventDoc.id}-${tomorrowKey}`
-      });
-      await db.collection("userAlerts").doc(`calendar-admin-${eventDoc.id}-${tomorrowKey}`).set({
-        title: "📅 Evento in calendario domani",
-        message: body,
-        source: "calendar-admin-reminder",
-        calendarEventId: eventDoc.id,
-        scheduledDateKey: tomorrowKey,
-        sendToAdmins: true,
-        status: "active",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdBy: "calendar-system"
-      }, { merge: true });
-      await eventDoc.ref.set({
-        adminReminderDateKey: tomorrowKey,
-        adminReminderSentAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    }
     return null;
   }
 );

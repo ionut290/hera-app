@@ -10,6 +10,8 @@ const css = read("calendar-feature.css");
 const androidWorkflow = read(".github/workflows/build-android-aab.yml");
 const notifications = read("functions/user-notifications.js");
 const deployWorkflow = read(".github/workflows/deploy-firebase-functions.yml");
+const reminderRunner = read("functions/run-calendar-admin-reminders.js");
+const reminderWorkflow = read(".github/workflows/calendar-admin-reminders.yml");
 
 const checks = [
   ["La home apre il calendario", html.includes('id="home-calendar-btn"') && !html.includes('id="home-private-docs-btn"')],
@@ -29,8 +31,9 @@ const checks = [
   ["Il titolo può essere generato automaticamente", app.includes("titleWasGenerated") && !/id="calendar-event-title"[^>]*required/.test(html)],
   ["Le squadre controllano gli operatori assenti", app.includes("validateSquadraOperatorAvailability") && app.includes("avvisoAutomaticoAssenze")],
   ["La funzione crea avvisi squadra dalle assenze", notifications.includes("syncCalendarAbsenceSquadraAlerts") && notifications.includes("calendar-absence")],
-  ["L'admin riceve il promemoria un giorno prima", notifications.includes("notifyAdminsCalendarEventsTomorrow") && notifications.includes('schedule: "0 7 * * *"')],
-  ["Le nuove funzioni sono incluse nel deploy", deployWorkflow.includes("functions:syncCalendarAbsenceSquadraAlerts") && deployWorkflow.includes("functions:notifyAdminsCalendarEventsTomorrow")]
+  ["L'admin riceve il promemoria un giorno prima", reminderRunner.includes("getTomorrowRomeDateKey") && reminderRunner.includes("calendar-admin-reminder")],
+  ["Il promemoria parte alle 07:05 italiane", reminderWorkflow.includes('cron: "5 5 * * *"') && reminderWorkflow.includes('cron: "5 6 * * *"') && reminderRunner.includes('romeParts.hour !== "07"')],
+  ["Le funzioni Cloud restano nel deploy senza lo scheduler IAM", deployWorkflow.includes("functions:syncCalendarAbsenceSquadraAlerts") && !deployWorkflow.includes("functions:notifyAdminsCalendarEventsTomorrow")]
 ];
 
 const failed = checks.filter(([, ok]) => !ok);

@@ -12,6 +12,7 @@ window.firebaseConfig = {
 if (document.readyState === "loading") {
   document.write('<script src="native-android-runtime.js?v=20260725c"><\/script>');
   document.write('<script src="notification-session-enhancements.js?v=20260727a"><\/script>');
+  document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
     const nativeRuntimeScript = document.createElement("script");
@@ -24,5 +25,11 @@ if (document.readyState === "loading") {
     enhancementScript.src = "notification-session-enhancements.js?v=20260727a";
     enhancementScript.dataset.heraNotificationSession = "true";
     document.head.appendChild(enhancementScript);
+  }
+  if (!document.querySelector('script[data-hera-app-update="true"]')) {
+    const updateScript = document.createElement("script");
+    updateScript.src = "update-app-feature.js?v=20260727a";
+    updateScript.dataset.heraAppUpdate = "true";
+    document.head.appendChild(updateScript);
   }
 }

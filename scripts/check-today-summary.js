@@ -32,7 +32,7 @@ assert.match(notifications, /squadAlert\.operators\.some/);
 
 assert.match(index, /today-summary-interactions\.js\?v=20260726b/);
 assert.match(index, /squadre-restyle\.css\?v=20260726b/);
-assert.match(serviceWorker, /hera-app-shell-v\d+/);
+assert.match(serviceWorker, /hera-app-shell-v36/);
 assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260726c/);
 assert.match(serviceWorker, /squadre-restyle\.css\?v=20260726b/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);

@@ -2,6 +2,7 @@
 
 const admin = require("firebase-admin");
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const REGION = "europe-west1";
 const CHANNEL_ID = "hera_operational_updates";
@@ -10,6 +11,8 @@ const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
 ]);
+const BUILT_IN_ADMIN_EMAILS = new Set(["ionut29019@gmail.com"]);
+const CALENDAR_ABSENCE_TYPES = new Set(["ferie", "permesso", "malattia"]);
 
 function normalize(value) {
   return String(value || "")
@@ -237,8 +240,8 @@ function extractChangedSquadraAlerts(before, after) {
   const afterRows = Array.isArray(after?.squadre) ? after.squadre : [];
   const sameDate = String(before?.riferimentoData || before?.dateKey || "") === String(after?.riferimentoData || after?.dateKey || "");
   return afterRows.map((row, index) => {
-    const alertText = String(row?.avviso || "").trim();
-    const previousAlertText = String(beforeRows[index]?.avviso || "").trim();
+    const alertText = [row?.avviso, row?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
+    const previousAlertText = [beforeRows[index]?.avviso, beforeRows[index]?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
     if (!alertText || (sameDate && normalize(alertText) === normalize(previousAlertText))) return null;
     return {
       index,
@@ -289,6 +292,221 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
           tag: `squadra-alert-${event.params.commessaId}-${date}-${squadAlert.index + 1}-${user.uid}`
         });
       }
+    }
+    return null;
+  }
+);
+
+function getCalendarEventParticipants(calendarEvent = {}) {
+  const snapshots = Array.isArray(calendarEvent.participantSnapshots)
+    ? calendarEvent.participantSnapshots.map((participant) => participant?.name || participant?.email || participant?.id)
+    : [];
+  const textParticipants = String(calendarEvent.participants || "").split(/[;,\n|]+/);
+  return [...new Set([
+    ...snapshots,
+    ...textParticipants,
+    ...(Array.isArray(calendarEvent.participantIds) ? calendarEvent.participantIds : []),
+    ...(Array.isArray(calendarEvent.participantEmails) ? calendarEvent.participantEmails : [])
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function calendarEventMatchesOperator(calendarEvent, operator) {
+  const operatorKey = normalize(operator);
+  if (!operatorKey) return false;
+  return getCalendarEventParticipants(calendarEvent).some((participant) => {
+    const participantKey = normalize(participant);
+    return participantKey && (participantKey === operatorKey || participantKey.includes(operatorKey) || operatorKey.includes(participantKey));
+  });
+}
+
+function enumerateDateKeys(startDate, endDate) {
+  const start = new Date(`${String(startDate || "")}T12:00:00`);
+  const end = new Date(`${String(endDate || startDate || "")}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+  const result = [];
+  for (const cursor = new Date(start); cursor <= end && result.length < 370; cursor.setDate(cursor.getDate() + 1)) {
+    result.push([
+      cursor.getFullYear(),
+      String(cursor.getMonth() + 1).padStart(2, "0"),
+      String(cursor.getDate()).padStart(2, "0")
+    ].join("-"));
+  }
+  return result;
+}
+
+function formatAbsenceLabel(calendarEvent = {}) {
+  return {
+    ferie: "Ferie",
+    permesso: "Permesso",
+    malattia: "Malattia"
+  }[calendarEvent.type] || "Assenza";
+}
+
+function buildAutomaticAbsenceText(calendarEvent, operatorNames, dateKey) {
+  return [...new Set(operatorNames)].map((name) => `⛔ ${name} assente: ${formatAbsenceLabel(calendarEvent)} il ${dateKey}`).join("\n");
+}
+
+async function syncCalendarEventAcrossSquads(eventId, before, after) {
+  const beforeDates = enumerateDateKeys(before?.startDate, before?.endDate);
+  const afterIsAbsence = Boolean(after && CALENDAR_ABSENCE_TYPES.has(String(after.type || "")));
+  const afterDates = afterIsAbsence ? enumerateDateKeys(after.startDate, after.endDate) : [];
+  const affectedDates = [...new Set([...beforeDates, ...afterDates])];
+  if (!affectedDates.length) return;
+  const db = getDb();
+  const existingAlerts = await db.collection("userAlerts").where("calendarEventId", "==", eventId).get();
+  const deleteBatch = db.batch();
+  let deleteCount = 0;
+  existingAlerts.forEach((doc) => {
+    if (String(doc.data()?.source || "") !== "calendar-absence") return;
+    deleteBatch.delete(doc.ref);
+    deleteCount += 1;
+  });
+  if (deleteCount) await deleteBatch.commit();
+
+  for (const dateBatch of chunk(affectedDates, 10)) {
+    const snapshot = await db.collection("squadreStorico").where("dateKey", "in", dateBatch).get();
+    for (const squadDoc of snapshot.docs) {
+      const squadData = squadDoc.data() || {};
+      const dateKey = String(squadData.dateKey || squadData.riferimentoData || "");
+      const rows = Array.isArray(squadData.squadre) ? squadData.squadre : [];
+      let changed = false;
+      const matchedRows = [];
+      const nextRows = rows.map((row, index) => {
+        const previousAlerts = Array.isArray(row.calendarAbsenceAlerts) ? row.calendarAbsenceAlerts : [];
+        const nextAlerts = previousAlerts.filter((alert) => String(alert?.eventId || "") !== eventId);
+        const operators = [...extractSquadraRowOperators(row)];
+        const matchingOperators = afterIsAbsence && afterDates.includes(dateKey)
+          ? operators.filter((operator) => calendarEventMatchesOperator(after, operator))
+          : [];
+        if (matchingOperators.length) {
+          const text = buildAutomaticAbsenceText(after, matchingOperators, dateKey);
+          nextAlerts.push({
+            eventId,
+            text,
+            operatorNames: matchingOperators,
+            type: String(after.type || ""),
+            startDate: String(after.startDate || ""),
+            endDate: String(after.endDate || "")
+          });
+          matchedRows.push({ index, text, row, matchingOperators });
+        }
+        const avvisoAutomaticoAssenze = nextAlerts.map((alert) => String(alert?.text || "").trim()).filter(Boolean).join("\n");
+        if (normalize(avvisoAutomaticoAssenze) !== normalize(row.avvisoAutomaticoAssenze || "") || nextAlerts.length !== previousAlerts.length) changed = true;
+        return { ...row, calendarAbsenceAlerts: nextAlerts, avvisoAutomaticoAssenze };
+      });
+      if (!changed) continue;
+
+      await squadDoc.ref.set({
+        squadre: nextRows,
+        calendarAbsenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      const commessaId = String(squadData.commessaId || "");
+      if (commessaId) {
+        const currentRef = db.collection("squadreCommesse").doc(commessaId);
+        const currentSnap = await currentRef.get();
+        const currentData = currentSnap.exists ? currentSnap.data() || {} : {};
+        if (String(currentData.riferimentoData || currentData.dateKey || "") === dateKey) {
+          await currentRef.set({
+            squadre: nextRows,
+            calendarAbsenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+      }
+
+      for (const match of matchedRows) {
+        const alertId = `calendar-absence-${eventId}-${squadDoc.id}-${match.index + 1}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 500);
+        await db.collection("userAlerts").doc(alertId).set({
+          title: "⛔ Operatore assente nella squadra",
+          message: `${squadData.commessaNome || "Commessa"} • Squadra ${match.index + 1} • ${dateKey}\n\n${match.text}`,
+          alertText: match.text,
+          source: "calendar-absence",
+          calendarEventId: eventId,
+          commessaId,
+          commessaNome: squadData.commessaNome || "Commessa",
+          squadraIndex: match.index + 1,
+          targetMemberNames: [...extractSquadraRowOperators(match.row)],
+          scheduledDateKey: dateKey,
+          createdDateKey: new Date().toISOString().slice(0, 10),
+          status: "active",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdBy: "calendar-system"
+        }, { merge: true });
+      }
+    }
+  }
+}
+
+exports.syncCalendarAbsenceSquadraAlerts = onDocumentWritten(
+  { document: "calendarEvents/{eventId}", region: REGION },
+  async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() || {} : null;
+    const after = event.data?.after?.exists ? event.data.after.data() || {} : null;
+    await syncCalendarEventAcrossSquads(event.params.eventId, before, after);
+    return null;
+  }
+);
+
+async function loadAdminPushUsers() {
+  const db = getDb();
+  const [users, configSnap] = await Promise.all([
+    loadPushUsers(),
+    db.collection("appConfig").doc("adminUsers").get()
+  ]);
+  const configured = configSnap.exists && Array.isArray(configSnap.data()?.emails) ? configSnap.data().emails : [];
+  const adminEmails = new Set([...BUILT_IN_ADMIN_EMAILS, ...configured.map((email) => String(email || "").trim().toLowerCase())]);
+  return users.filter((user) => adminEmails.has(String(user.email || "").trim().toLowerCase()));
+}
+
+exports.notifyAdminsCalendarEventsTomorrow = onSchedule(
+  { schedule: "0 7 * * *", timeZone: "Europe/Rome", region: REGION },
+  async () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = [
+      tomorrow.getFullYear(),
+      String(tomorrow.getMonth() + 1).padStart(2, "0"),
+      String(tomorrow.getDate()).padStart(2, "0")
+    ].join("-");
+    const db = getDb();
+    const events = await db.collection("calendarEvents").where("startDate", "==", tomorrowKey).get();
+    if (events.empty) return null;
+    const admins = await loadAdminPushUsers();
+
+    for (const eventDoc of events.docs) {
+      const calendarEvent = eventDoc.data() || {};
+      if (String(calendarEvent.adminReminderDateKey || "") === tomorrowKey) continue;
+      const people = getCalendarEventParticipants(calendarEvent).slice(0, 4).join(", ");
+      const body = [
+        String(calendarEvent.title || formatAbsenceLabel(calendarEvent) || "Evento calendario"),
+        people,
+        calendarEvent.commessaName || calendarEvent.worksite || "",
+        calendarEvent.impiantoName || "",
+        calendarEvent.location || ""
+      ].filter(Boolean).join(" • ");
+      await sendToUsers(admins, {
+        title: "📅 Evento in calendario domani",
+        body,
+        eventType: "calendar-admin-reminder",
+        data: { eventId: eventDoc.id, startDate: tomorrowKey },
+        tag: `calendar-admin-${eventDoc.id}-${tomorrowKey}`
+      });
+      await db.collection("userAlerts").doc(`calendar-admin-${eventDoc.id}-${tomorrowKey}`).set({
+        title: "📅 Evento in calendario domani",
+        message: body,
+        source: "calendar-admin-reminder",
+        calendarEventId: eventDoc.id,
+        scheduledDateKey: tomorrowKey,
+        sendToAdmins: true,
+        status: "active",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: "calendar-system"
+      }, { merge: true });
+      await eventDoc.ref.set({
+        adminReminderDateKey: tomorrowKey,
+        adminReminderSentAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     }
     return null;
   }

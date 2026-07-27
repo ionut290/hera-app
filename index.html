@@ -1523,7 +1523,7 @@
           </select>
         </label>
         <label>Titolo
-          <input id="calendar-event-title" type="text" maxlength="160" placeholder="Titolo dell'evento" required>
+          <input id="calendar-event-title" type="text" maxlength="160" placeholder="Facoltativo: se vuoto viene creato automaticamente">
         </label>
         <div class="calendar-form-grid">
           <label>Data inizio
@@ -1545,14 +1545,37 @@
             <input id="calendar-event-end-time" type="time">
           </label>
         </div>
-        <label>Commessa / impianto
-          <input id="calendar-event-worksite" type="text" maxlength="180" placeholder="Commessa, impianto o attività">
-        </label>
+        <div class="calendar-form-grid">
+          <label>Commessa
+            <select id="calendar-event-commessa">
+              <option value="">Nessuna commessa</option>
+            </select>
+          </label>
+          <label id="calendar-event-custom-commessa-field" class="hidden">Commessa non presente
+            <input id="calendar-event-custom-commessa" type="text" maxlength="180" placeholder="Scrivi liberamente la commessa">
+          </label>
+        </div>
+        <div class="calendar-form-grid">
+          <label>Impianto
+            <select id="calendar-event-impianto" disabled>
+              <option value="">Nessun impianto</option>
+            </select>
+          </label>
+          <label id="calendar-event-custom-impianto-field" class="hidden">Impianto non presente
+            <input id="calendar-event-custom-impianto" type="text" maxlength="180" placeholder="Scrivi liberamente l'impianto">
+          </label>
+        </div>
         <label>Luogo
           <input id="calendar-event-location" type="text" maxlength="240" placeholder="Indirizzo o luogo">
         </label>
         <label>Persone coinvolte
-          <input id="calendar-event-participants" type="text" maxlength="500" placeholder="Nomi degli operatori o della squadra">
+          <div id="calendar-participants-picker" class="calendar-participants-picker">
+            <div id="calendar-participants-chips" class="calendar-participants-chips"></div>
+            <input id="calendar-participants-search" type="search" autocomplete="off" placeholder="Cerca nell'elenco personale o scrivi un nome">
+            <div id="calendar-participants-suggestions" class="calendar-participants-suggestions hidden" role="listbox"></div>
+          </div>
+          <input id="calendar-event-participants" type="hidden">
+          <small>Il tuo nome viene inserito automaticamente. Puoi rimuoverlo, scegliere altre persone o scrivere un nome libero.</small>
         </label>
         <label>Descrizione e informazioni
           <textarea id="calendar-event-description" rows="4" maxlength="3000" placeholder="Note, istruzioni, contatti e tutte le informazioni utili"></textarea>

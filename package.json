@@ -19,7 +19,8 @@
     "check:startup-splash": "node scripts/check-startup-splash.js",
     "check:today-summary": "node scripts/check-today-summary.js",
     "check:weather": "node scripts/check-weather.js",
-    "check:calendar": "node scripts/check-calendar.js"
+    "check:calendar": "node scripts/check-calendar.js",
+    "export:testers": "node scripts/export-firestore-emails.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

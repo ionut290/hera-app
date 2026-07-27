@@ -23,7 +23,7 @@ function isValidEmail(value) {
 
 async function collectFromFirestore(db) {
   const emails = new Set();
-  const collectionNames = ['users', 'utenti', 'operators', 'operatori', 'personale'];
+  const collectionNames = ['users', 'utenti', 'profiles'];
 
   for (const collectionName of collectionNames) {
     try {

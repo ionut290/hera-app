@@ -2,6 +2,8 @@
 
 Il workflow `.github/workflows/build-android-aab.yml` crea automaticamente un file `.aab` firmato senza richiedere Android Studio.
 
+Il bundle include automaticamente tutti gli asset web dell'app, compresi il lettore delle notifiche e il flusso di aggiornamento Android. Prima della compilazione il workflow esegue anche i relativi controlli automatici.
+
 ## Secret GitHub obbligatori
 
 Nel repository aprire:
@@ -25,6 +27,8 @@ I valori sono contenuti nel file `GITHUB-SECRETS.txt` consegnato separatamente i
 4. Attendere il completamento verde.
 5. Aprire l'esecuzione e scaricare l'artefatto `VARGA-CANTIERI-AAB-...`.
 6. Estrarre il file `.aab` e caricarlo nella release di test interno della Play Console.
+
+Il file prodotto si trova nell'artefatto con nome `VARGA-CANTIERI-AAB-<numero build>` ed è già firmato per Google Play.
 
 ## Importante
 

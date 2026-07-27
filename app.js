@@ -3694,7 +3694,7 @@ function refreshApplicationData() {
 const ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
 const NETLIFY_APP_URL = "https://creative-syrniki-dddbae.netlify.app/";
 
-function openApplicationUpdate() {
+async function openApplicationUpdate() {
   const isAndroid = Boolean(
     window.Capacitor?.isNativePlatform?.()
     && window.Capacitor?.getPlatform?.() === "android"
@@ -3708,13 +3708,25 @@ function openApplicationUpdate() {
   }
 
   if (isAndroid) {
-    window.location.assign(ANDROID_PLAY_STORE_URL);
+    // _system keeps the Play Store outside the Capacitor WebView, preventing the
+    // app from replacing its own page and becoming stuck on the splash screen.
+    const storeWindow = window.open(ANDROID_PLAY_STORE_URL, "_system", "noopener,noreferrer");
+    if (!storeWindow) window.location.href = ANDROID_PLAY_STORE_URL;
     return;
   }
 
-  const updateUrl = new URL(NETLIFY_APP_URL);
-  updateUrl.searchParams.set("update", String(Date.now()));
-  window.location.assign(updateUrl.toString());
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.();
+    await registration?.update?.();
+    if (ui.updateAppBtn) {
+      ui.updateAppBtn.disabled = false;
+      ui.updateAppBtn.title = "Aggiornamento controllato. Le novità saranno attive alla prossima apertura.";
+      ui.updateAppBtn.setAttribute("aria-label", "App aggiornata; riapri l'app per applicare le novità");
+    }
+  } catch (error) {
+    console.warn("Controllo aggiornamenti non riuscito:", error);
+    if (ui.updateAppBtn) ui.updateAppBtn.disabled = false;
+  }
 }
 
 function openManagementPanel(panel) {
@@ -27361,6 +27373,7 @@ function subscribeUserAlerts() {
         .filter((item) => {
           const belongsToUser = isNotificationForCurrentUser(item);
           if (!belongsToUser) return false;
+          if (Boolean(item?.dismissedByUserIds?.[currentUser.uid])) return false;
           const dateKey = String(item.scheduledDateKey || "").trim();
           return ["squadra-avviso", "calendar-absence"].includes(item.source) || !dateKey || dateKey <= todayKey;
         })
@@ -27369,6 +27382,13 @@ function subscribeUserAlerts() {
           const bMs = b?.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
           return bMs - aMs;
         });
+      window.HeraNotificationReader?.archive?.(userAlerts.map((item) => ({
+        id: item.id,
+        title: item.title || "Avviso importante",
+        body: item.message || "",
+        destination: "home",
+        receivedAt: item.createdAt?.toMillis?.() || Date.now()
+      })));
       maybeShowUserAlert();
       renderTodaySummary();
     }, (error) => {
@@ -27413,24 +27433,22 @@ async function acknowledgeActiveUserAlert() {
   const acknowledgementId = `${activeUserAlert.id}__${currentUser.uid}`;
   const acknowledgementRef = db.collection("userAlertAcknowledgements").doc(acknowledgementId);
   const existing = await acknowledgementRef.get();
-  if (existing.exists) {
-    activeUserAlert = null;
-    closeUserAlertModal();
-    return;
-  }
   const now = new Date();
-  await acknowledgementRef.set({
-    notificationId: activeUserAlert.id,
-    userId: currentUser.uid || "",
-    userName: currentUser.displayName || currentUser.email || "Utente",
-    acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    acknowledgedDateKey: getDateKeyFromLocalDate(now)
-  }, { merge: true });
+  if (!existing.exists) {
+    await acknowledgementRef.set({
+      notificationId: activeUserAlert.id,
+      userId: currentUser.uid || "",
+      userName: currentUser.displayName || currentUser.email || "Utente",
+      acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      acknowledgedDateKey: getDateKeyFromLocalDate(now)
+    }, { merge: true });
+  }
   await db.collection("userAlerts").doc(activeUserAlert.id).set({
     [`ackByUserIds.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp(),
+    [`dismissedByUserIds.${currentUser.uid}`]: firebase.firestore.FieldValue.serverTimestamp(),
     lastAcknowledgedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
-  await sendNotificationAckToAdmins(activeUserAlert, now);
+  if (!existing.exists) await sendNotificationAckToAdmins(activeUserAlert, now);
   activeUserAlert = null;
   closeUserAlertModal();
 }

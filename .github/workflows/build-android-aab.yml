@@ -63,6 +63,7 @@ jobs:
           npm run check:today-summary
           npm run check:weather
           npm run check:calendar
+          npm run check:segnalazione-pdf
 
       - name: Prepare Capacitor web directory
         run: |

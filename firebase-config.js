@@ -11,7 +11,7 @@ window.firebaseConfig = {
 // Capacitor Geolocation e non il rilevamento posizione del browser Chrome.
 if (document.readyState === "loading") {
   document.write('<script src="native-android-runtime.js?v=20260725c"><\/script>');
-  document.write('<script src="notification-session-enhancements.js?v=20260727a"><\/script>');
+  document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
@@ -22,7 +22,7 @@ if (document.readyState === "loading") {
   }
   if (!document.querySelector('script[data-hera-notification-session="true"]')) {
     const enhancementScript = document.createElement("script");
-    enhancementScript.src = "notification-session-enhancements.js?v=20260727a";
+    enhancementScript.src = "notification-session-enhancements.js?v=20260727b";
     enhancementScript.dataset.heraNotificationSession = "true";
     document.head.appendChild(enhancementScript);
   }

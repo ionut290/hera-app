@@ -2,6 +2,8 @@
   "use strict";
 
   const LAST_NOTIFICATION_KEY = "hera_last_received_notification_v1";
+  const NOTIFICATION_HISTORY_KEY = "hera_notification_history_v1";
+  const MAX_HISTORY_ITEMS = 100;
 
   function isNativeAndroid() {
     return Boolean(
@@ -27,17 +29,36 @@
     return {
       id: String(raw?.id || data.notificationId || data.id || Date.now()),
       title: String(raw?.title || raw?.notification?.title || data.title || "Varga Cantieri"),
-      body: String(raw?.body || raw?.notification?.body || data.body || "Hai ricevuto una nuova notifica."),
+      body: String(data.fullMessage || raw?.fullMessage || raw?.body || raw?.notification?.body || data.body || "Hai ricevuto una nuova notifica."),
       destination: String(data.destination || data.page || data.route || data.url || "home"),
       receivedAt: Date.now(),
       data
     };
   }
 
-  function saveNotification(notification) {
+  function loadHistory() {
     try {
-      localStorage.setItem(LAST_NOTIFICATION_KEY, JSON.stringify(notification));
-    } catch (_) {}
+      const rows = JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || "[]");
+      return Array.isArray(rows) ? rows : [];
+    } catch (_) { return []; }
+  }
+
+  function archiveNotifications(rows) {
+    const merged = new Map(loadHistory().map((item) => [String(item.id), item]));
+    (Array.isArray(rows) ? rows : [rows]).filter(Boolean).forEach((raw) => {
+      const item = normalizeNotification(raw);
+      merged.set(item.id, { ...merged.get(item.id), ...item });
+    });
+    const history = [...merged.values()]
+      .sort((a, b) => Number(b.receivedAt || 0) - Number(a.receivedAt || 0))
+      .slice(0, MAX_HISTORY_ITEMS);
+    try { localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history)); } catch (_) {}
+    return history;
+  }
+
+  function saveNotification(notification) {
+    try { localStorage.setItem(LAST_NOTIFICATION_KEY, JSON.stringify(notification)); } catch (_) {}
+    archiveNotifications(notification);
   }
 
   function ensureDialog() {
@@ -57,12 +78,41 @@
           <p id="received-notification-body" style="white-space:pre-wrap;line-height:1.5;margin:0"></p>
         </div>
         <footer style="display:flex;gap:10px;justify-content:flex-end;padding:14px 20px 20px;flex-wrap:wrap">
-          <button id="received-notification-close" class="btn" value="cancel" type="submit">LEGGI E CHIUDI</button>
+          <button id="received-notification-close" class="btn" value="cancel" type="submit">CHIUDI</button>
           <button id="received-notification-open" class="btn btn-primary" value="default" type="button">APRI NELL’APP</button>
         </footer>
       </form>`;
     document.body.appendChild(dialog);
+    const inboxButton = document.createElement("button");
+    inboxButton.id = "notification-inbox-btn";
+    inboxButton.type = "button";
+    inboxButton.className = "header-icon-btn";
+    inboxButton.title = "Leggi tutte le notifiche";
+    inboxButton.setAttribute("aria-label", "Leggi tutte le notifiche");
+    inboxButton.textContent = "🔔";
+    inboxButton.addEventListener("click", showNotificationInbox);
+    document.querySelector(".logo-head-action-icons")?.prepend(inboxButton);
     return dialog;
+  }
+
+  function showNotificationInbox() {
+    const history = loadHistory();
+    const dialog = ensureDialog();
+    dialog.querySelector("#received-notification-title").textContent = "Tutte le notifiche";
+    const body = dialog.querySelector("#received-notification-body");
+    body.replaceChildren();
+    if (!history.length) body.textContent = "Non ci sono ancora notifiche.";
+    history.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn";
+      button.style.cssText = "display:block;width:100%;text-align:left;margin:0 0 8px;white-space:normal";
+      button.textContent = `${item.title} — ${item.body}`;
+      button.addEventListener("click", () => showNotificationReader(item));
+      body.appendChild(button);
+    });
+    dialog.querySelector("#received-notification-open").hidden = true;
+    if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
   }
 
   function openDestination(notification) {
@@ -92,6 +142,7 @@
     dialog.querySelector("#received-notification-title").textContent = notification.title;
     dialog.querySelector("#received-notification-body").textContent = notification.body;
     const openButton = dialog.querySelector("#received-notification-open");
+    openButton.hidden = false;
     openButton.onclick = () => {
       dialog.close();
       openDestination(notification);
@@ -138,6 +189,7 @@
   }
 
   function start() {
+    ensureDialog();
     enablePersistentFirebaseSession();
     installAndroidNotificationListeners();
     installWebNotificationListeners();
@@ -145,6 +197,8 @@
 
   window.HeraNotificationReader = {
     show: showNotificationReader,
+    archive: archiveNotifications,
+    showAll: showNotificationInbox,
     openLast() {
       try {
         const saved = JSON.parse(localStorage.getItem(LAST_NOTIFICATION_KEY) || "null");

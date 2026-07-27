@@ -196,9 +196,13 @@ exports.notifyAndroidHoursInserted = onDocumentCreated(
       const commesse = [...new Set(matchingRows.map((row) => row.commessaName).filter(Boolean))];
       await sendToUsers([user], {
         title: "⏱️ Ore inserite",
-        body: `${total.toLocaleString("it-IT")} ore inserite per il ${String(report.date || "giorno indicato")}${commesse.length ? ` • ${commesse.slice(0, 2).join(", ")}` : ""}`,
+        body: `${String(report.createdByName || report.createdBy || report.authorName || "Varga")} ti ha segnato ${total.toLocaleString("it-IT")} ore${commesse.length ? ` in ${commesse.join(", ")}` : ""} per il ${String(report.date || "giorno indicato")}.`,
         eventType: "hours-inserted",
-        data: { reportId: event.params.reportId, date: report.date || "" },
+        data: {
+          reportId: event.params.reportId,
+          date: report.date || "",
+          fullMessage: `${String(report.createdByName || report.createdBy || report.authorName || "Varga")} ti ha segnato ${total.toLocaleString("it-IT")} ore${commesse.length ? ` in ${commesse.join(", ")}` : ""} per il ${String(report.date || "giorno indicato")}.`
+        },
         tag: `hours-${event.params.reportId}-${user.uid}`
       });
     }

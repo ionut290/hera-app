@@ -1,4 +1,4 @@
-name: Esporta email Firebase
+name: Export Firebase Emails
 
 on:
   workflow_dispatch:
@@ -25,6 +25,9 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
         run: node scripts/export-firestore-emails.js
+
+      - name: Verifica CSV generato
+        run: test -f exports/google-play-testers.csv
 
       - name: Carica CSV pronto per Google Play Console
         uses: actions/upload-artifact@v4

@@ -118,9 +118,9 @@ async function run() {
   assert.match(app, /Open-Meteo Best Match/);
   assert.match(weatherProxy, /MET Norway fallback/);
   assert.doesNotMatch(app, /fetchOpenWeatherPrimary/);
-  assert.match(index, /app\.js\?v=20260726-fatto1/);
-  assert.match(serviceWorker, /hera-app-shell-v35/);
-  assert.match(serviceWorker, /app\.js\?v=20260726-fatto1/);
+  assert.match(index, /app\.js\?v=20260727-fatto2/);
+  assert.match(serviceWorker, /hera-app-shell-v36/);
+  assert.match(serviceWorker, /app\.js\?v=20260727-fatto2/);
   assert.match(netlify, /from = "\/api\/weather"/);
 
   console.log("Weather fallback checks passed.");

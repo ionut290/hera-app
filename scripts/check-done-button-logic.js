@@ -100,14 +100,16 @@ else {
   pass('funzione handleImpiantoWhatsAppClick presente');
   const validationIndex = whatsappHandler.indexOf('getCachedFattoPositionDecision(impianto)');
   const evidenceIndex = whatsappHandler.indexOf('recordFattoVisualEvidence(impianto, doneAt, doneBy)');
-  const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
-  const renderIndex = whatsappHandler.indexOf('renderImpianti();', localMoveIndex);
+  const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = openWhatsApp(');
-  if (validationIndex >= 0 && evidenceIndex > validationIndex && localMoveIndex > evidenceIndex && renderIndex > localMoveIndex && openWhatsappIndex > renderIndex) {
-    pass('Fatto valida GPS, registra la prova, sposta e renderizza prima di aprire WhatsApp');
+  const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
+  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
+    pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');
   } else {
-    fail('Fatto deve validare GPS prima della prova visiva e aprire WhatsApp dopo il render');
+    fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
   }
+  requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
+  requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');
   requireIncludes(whatsappHandler, 'skipLocationCheck: true', 'Fatto non ripete il controllo GPS già superato');
   requireIncludes(whatsappHandler, 'queued_offline', 'Fatto registra l’esito accodato offline');

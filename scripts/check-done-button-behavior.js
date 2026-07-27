@@ -134,6 +134,16 @@ async function main() {
     "GPS e distanza devono essere verificati prima della prova visiva"
   );
   assert.match(whatsappHandler, /const opened = openWhatsApp\(/);
+  assert.ok(
+    whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)")
+      < whatsappHandler.indexOf("const opened = openWhatsApp("),
+    "Lo stato FATTO deve essere salvato prima di WhatsApp"
+  );
+  assert.ok(
+    whatsappHandler.indexOf("const opened = openWhatsApp(")
+      < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
+    "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
+  );
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);
 
@@ -144,9 +154,11 @@ async function main() {
     isImpiantoWhazzupProcessing: () => false,
     whazzupProcessingByImpianto: new Set(),
     getCachedFattoPositionDecision: () => ({ allowed: false, reason: "distance" }),
+    openDeferredWhatsAppTargetWindow: () => null,
     closeDeferredWhatsAppTargetWindow: () => {},
     notifyFattoPositionDenied: () => {},
     clearImpiantoWhazzupProcessing: () => {},
+    setImpiantoFattoSavingState: () => {},
     renderImpianti: () => {},
     recordFattoVisualEvidence: () => { deniedEvidenceWrites += 1; }
   });
@@ -158,8 +170,8 @@ async function main() {
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);
   assert.doesNotMatch(forceHandler, /if\s*\(!isNetworkOffline\(\)\)/);
 
-  assert.match(immediateSource, /addEventListener\("pointerup"/);
-  assert.doesNotMatch(immediateSource, /addEventListener\("pointerdown"/);
+  assert.doesNotMatch(immediateSource, /addEventListener\("pointerup"/);
+  assert.doesNotMatch(immediateSource, /addEventListener\("click"/);
   assert.match(nativeSource, /Geolocation\.watchPosition/);
   assert.match(nativeSource, /Geolocation\.clearWatch/);
   assert.match(nativeSource, /window\.dispatchEvent\(new CustomEvent\("hera:native-location"/);

@@ -47,6 +47,7 @@ jobs:
       - name: Verify Android runtime
         run: |
           npm run check:syntax
+          npm run check:app-update
           npm run check:auth-login
           npm run check:first-login-password
           npm run check:login-retry

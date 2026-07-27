@@ -19,7 +19,7 @@ assert.match(index, /icons\/varga-cantieri-512\.png/);
 assert.match(index, /style\.css\?v=20260726-splash1/);
 assert.match(styles, /\.startup-loading\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;/);
 assert.match(styles, /\.startup-loading-logo\s*\{[\s\S]*width:\s*min\(90vw,\s*72dvh,\s*820px\);/);
-assert.match(serviceWorker, /hera-app-shell-v34/);
+assert.match(serviceWorker, /hera-app-shell-v35/);
 assert.match(serviceWorker, /style\.css\?v=20260726-splash1/);
 assert.equal(manifest.background_color, "#111214");
 assert.equal(manifest.theme_color, "#111214");

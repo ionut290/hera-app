@@ -167,7 +167,8 @@ exports.notifyAllUsersWhenImpiantoDone = onDocumentCreated(
           eventType: "impianto-done",
           notificationId,
           commessaId: String(notification.commessaId || ""),
-          impiantoKey: String(notification.impiantoKey || "")
+          impiantoKey: String(notification.impiantoKey || ""),
+          fullMessage: String(notification.body || "Un utente ha premuto FATTO su un impianto.").slice(0, 1000)
         },
         android: {
           priority: "high",

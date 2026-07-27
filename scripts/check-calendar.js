@@ -8,6 +8,7 @@ const html = read("index.html");
 const rules = read("firestore.rules");
 const css = read("calendar-feature.css");
 const androidWorkflow = read(".github/workflows/build-android-aab.yml");
+const capacitorBundle = read("scripts/prepare-capacitor-web.js");
 const notifications = read("functions/user-notifications.js");
 const deployWorkflow = read(".github/workflows/deploy-firebase-functions.yml");
 const reminderRunner = read("functions/run-calendar-admin-reminders.js");
@@ -23,7 +24,7 @@ const checks = [
   ["Le regole consentono lettura condivisa", rules.includes("match /calendarEvents/{eventId}") && rules.includes("allow read: if signedIn();")],
   ["Le regole proteggono la cancellazione", rules.includes("resource.data.createdByUid == request.auth.uid")],
   ["Lo stile mobile del calendario esiste", css.includes("@media (max-width: 600px)") && css.includes(".calendar-grid")],
-  ["Android include lo stile del calendario", androidWorkflow.includes("cp calendar-feature.css www/") && androidWorkflow.includes("test -s www/calendar-feature.css")],
+  ["Android include lo stile del calendario", androidWorkflow.includes("npm run android:aab:prepare") && capacitorBundle.includes('"calendar-feature.css"')],
   ["Il partecipante corrente viene proposto automaticamente", app.includes("getCurrentUserResolvedName") && app.includes("addCalendarParticipant")],
   ["I partecipanti vengono scelti dal personale o scritti liberamente", app.includes("calendarSelectedParticipants") && app.includes("data-calendar-free-person")],
   ["Commessa e impianto usano gli elenchi dell'app", app.includes("populateCalendarCommesse") && app.includes("populateCalendarImpianti")],

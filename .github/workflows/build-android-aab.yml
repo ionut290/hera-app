@@ -63,7 +63,7 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          cp index.html style.css app.js firebase-config.js auth-login-fix.js manifest.webmanifest sw.js www/
+          cp index.html style.css app.js firebase-config.js auth-login-fix.js notification-session-enhancements.js manifest.webmanifest sw.js www/
           cp first-login-password.css first-login-password.js www/
           cp login-retry-fix.css login-retry-fix.js www/
           cp squadre-restyle.css www/
@@ -81,6 +81,7 @@ jobs:
           test -s www/index.html
           test -s www/app.js
           test -s www/native-android-runtime.js
+          test -s www/notification-session-enhancements.js
           test -s www/first-login-password.js
           test -s www/first-login-password.css
           test -s www/login-retry-fix.js
@@ -112,10 +113,6 @@ jobs:
           rm -rf android/app/src/main/java
           cp -R "$RUNNER_TEMP/hera-native-android/java" android/app/src/main/java
           cp "$RUNNER_TEMP/hera-native-android/AndroidManifest.xml" android/app/src/main/AndroidManifest.xml
-          printf '\n// Integrazioni native Hera\n' >> android/app/capacitor.build.gradle
-          cat "$RUNNER_TEMP/hera-native-android/capacitor.build.gradle" >> android/app/capacitor.build.gradle
-          grep -q "capacitor-geolocation" android/app/capacitor.build.gradle
-          grep -q "capacitor-push-notifications" android/app/capacitor.build.gradle
           if [ -z "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "Manca il secret ANDROID_GOOGLE_SERVICES_JSON_BASE64"
             exit 1

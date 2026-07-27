@@ -23,7 +23,7 @@
     "check:today-summary": "node scripts/check-today-summary.js",
     "check:weather": "node scripts/check-weather.js",
     "check:calendar": "node scripts/check-calendar.js",
-    "check:identity-card": "node scripts/check-identity-card-capture.js",
+    "check:segnalazione-pdf": "node scripts/check-segnalazione-pdf.js",
     "export:testers": "node scripts/export-firestore-emails.js"
   },
   "devDependencies": {

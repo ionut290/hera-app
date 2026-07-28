@@ -15565,8 +15565,8 @@ function renderImpianti() {
     const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
     const whazzupSafetyState = getWhazzupSafetyState(impianto);
     const showWhazzupRecovery = hasFailedFattoAttemptForImpianto(impianto);
-    const forceDoneDistanceAllowed = isForceImpiantoDoneDistanceAllowed(impianto);
-    const forceDoneEnabled = forceDoneDistanceAllowed;
+    const forceDoneCoordinatesValid = isForceImpiantoDoneCoordinatesValid(impianto);
+    const forceDoneEnabled = forceDoneCoordinatesValid;
     const waitingForSync = isActionWaitingForSync(pendingAction);
     article.dataset.impiantoKey = impiantoKey;
     article.classList.toggle("is-expanded", detailsVisible);
@@ -15673,7 +15673,7 @@ function renderImpianti() {
       const moveBtn = warningBox.querySelector("button");
       if (moveBtn) {
         moveBtn.disabled = !forceDoneEnabled;
-        moveBtn.title = forceDoneDistanceAllowed ? "Sposta solo questo impianto nei FATTI" : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
+        moveBtn.title = forceDoneCoordinatesValid ? "Sposta solo questo impianto nei FATTI" : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
         moveBtn.addEventListener("click", async () => {
           moveBtn.disabled = true;
           try {
@@ -15736,9 +15736,9 @@ function renderImpianti() {
       forceDoneBtn.className = "impianto-force-done-btn";
       forceDoneBtn.textContent = "⚡ FORZA";
       forceDoneBtn.setAttribute("aria-label", "Forza chiusura impianto come fatto");
-      forceDoneBtn.title = forceDoneDistanceAllowed
+      forceDoneBtn.title = forceDoneCoordinatesValid
         ? "Sposta subito questo impianto nei FATTI"
-        : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
+        : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
       forceDoneBtn.disabled = !forceDoneEnabled;
       forceDoneBtn.classList.toggle("is-enabled", forceDoneEnabled);
       forceDoneBtn.addEventListener("click", async (event) => {
@@ -15831,9 +15831,9 @@ function renderImpianti() {
       });
       forceMoveDoneBtn.classList.add("btn-primary");
       forceMoveDoneBtn.disabled = !forceDoneEnabled;
-      forceMoveDoneBtn.title = forceDoneDistanceAllowed
+      forceMoveDoneBtn.title = forceDoneCoordinatesValid
         ? "Sposta subito questo impianto nei FATTI"
-        : "⚠️ Sei troppo lontano dall’impianto per forzare la chiusura";
+        : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
       managementActions.appendChild(forceMoveDoneBtn);
     }
     if (canManageData()) {
@@ -19964,15 +19964,15 @@ async function navigateToImpianto(impianto) {
 }
 
 // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
-// Protegge il flusso attuale: controlli GPS/distanza, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
+// Protegge il flusso attuale: validazione coordinate della scheda impianto, salvataggio Firebase, fallback offline, lista Fatti, WhatsApp/export/notifiche.
 async function markImpiantoDone(impianto, options = {}) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
   const source = String(options?.source || "").trim().toLowerCase();
-  if (!canManageData() && options?.skipLocationCheck !== true) {
-    const positionDecision = getCachedFattoPositionDecision(impianto);
-    if (!positionDecision.allowed) {
-      notifyFattoPositionDenied(positionDecision);
+  if (options?.skipImpiantoCoordinatesValidation !== true) {
+    const coordinatesValidation = validateImpiantoCoordinates(impianto);
+    if (!coordinatesValidation.valid) {
+      notifyInvalidImpiantoCoordinates();
       return false;
     }
   }
@@ -22563,40 +22563,28 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
 
 const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "L’impianto risulta ancora nell’elenco ‘Da fare’. Se hai già eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
 
-function getCachedFattoPositionDecision(impianto) {
-  if (canManageData()) return { allowed: true, reason: "admin", distanceKm: 0 };
-  if (!currentUserPos) return { allowed: false, reason: "missing", distanceKm: null };
-  if (!isCurrentUserPositionFresh()) return { allowed: false, reason: "stale", distanceKm: null };
-  const distanceKm = distanceFromUser(impianto);
-  if (!Number.isFinite(distanceKm) || distanceKm > 4) {
-    return { allowed: false, reason: "distance", distanceKm };
-  }
-  return { allowed: true, reason: "ok", distanceKm };
+function validateImpiantoCoordinates(impianto) {
+  const rawLatitude = impianto?.gpsY;
+  const rawLongitude = impianto?.gpsX;
+  const latitude = Number(rawLatitude);
+  const longitude = Number(rawLongitude);
+  const valid = rawLatitude !== null
+    && rawLatitude !== undefined
+    && String(rawLatitude).trim() !== ""
+    && rawLongitude !== null
+    && rawLongitude !== undefined
+    && String(rawLongitude).trim() !== ""
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180;
+  return { valid, latitude, longitude };
 }
 
-function notifyFattoPositionDenied(decision) {
-  if (decision?.reason === "distance") {
-    alert("Puoi segnare FATTO e aprire Whazzup solo entro 4 km dall'impianto.");
-    return;
-  }
-  if (decision?.reason === "stale") {
-    alert("La posizione GPS non è aggiornata. Attiva la posizione e riprova.");
-    return;
-  }
-  alert("Per segnare FATTO e aprire Whazzup devi attivare la posizione GPS.");
-}
-
-async function refreshFattoPositionDecision(impianto) {
-  if (canManageData()) return { allowed: true, reason: "admin", distanceKm: 0 };
-  try {
-    const position = await getCurrentPositionOnce();
-    updateCurrentUserPosition(position, position.timestamp, { render: false });
-    return getCachedFattoPositionDecision(impianto);
-  } catch (error) {
-    console.warn("Posizione aggiornata FATTO non disponibile:", error);
-    clearCurrentUserPosition();
-    return { allowed: false, reason: "missing", distanceKm: null };
-  }
+function notifyInvalidImpiantoCoordinates() {
+  alert("La posizione nella scheda impianto è mancante o non valida. Correggila nella scheda impianto prima di segnare FATTO.");
 }
 
 function openDeferredWhatsAppTargetWindow() {
@@ -22605,7 +22593,7 @@ function openDeferredWhatsAppTargetWindow() {
     const targetWindow = window.open("about:blank", "_blank");
     if (targetWindow?.document?.body) {
       targetWindow.document.title = "Preparazione Whazzup";
-      targetWindow.document.body.textContent = "Verifica posizione in corso…";
+      targetWindow.document.body.textContent = "Preparazione messaggio in corso…";
     }
     return targetWindow;
   } catch (error) {
@@ -22629,34 +22617,27 @@ function hasFailedFattoAttemptForImpianto(impianto) {
   return Boolean(safetyState?.whazzupPremuto && safetyState?.needsManualMove);
 }
 
-function isForceImpiantoDoneDistanceAllowed(impianto) {
-  return getCachedFattoPositionDecision(impianto).allowed;
+function isForceImpiantoDoneCoordinatesValid(impianto) {
+  return validateImpiantoCoordinates(impianto).valid;
 }
 
 function canUseForceImpiantoDone(impianto, options = {}) {
-  const notify = options.notify !== false;
-  const decision = getCachedFattoPositionDecision(impianto);
-  if (decision.allowed) return true;
-  if (notify) notifyFattoPositionDenied(decision);
-  return false;
+  const valid = validateImpiantoCoordinates(impianto).valid;
+  if (!valid && options.notify !== false) notifyInvalidImpiantoCoordinates();
+  return valid;
 }
 
 async function forceMarkDone(impianto) {
   const ids = getImpiantoDocIds(impianto);
   if (!selectedCommessaId || !ids.length) return false;
-  let positionDecision = getCachedFattoPositionDecision(impianto);
-  if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
-    positionDecision = await refreshFattoPositionDecision(impianto);
-  }
-  if (!positionDecision.allowed) {
-    notifyFattoPositionDenied(positionDecision);
+  if (!canUseForceImpiantoDone(impianto)) {
     renderImpianti();
     return false;
   }
 
   const moved = await markImpiantoDone(impianto, {
     source: "force",
-    skipLocationCheck: true
+    skipImpiantoCoordinatesValidation: true
   });
   if (!moved) return false;
   const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
@@ -22674,9 +22655,9 @@ async function forceMarkDone(impianto) {
 }
 
 function canTriggerImpiantoWhatsApp(impianto, notify = true) {
-  const decision = getCachedFattoPositionDecision(impianto);
-  if (!decision.allowed && notify) notifyFattoPositionDenied(decision);
-  return decision.allowed;
+  const valid = validateImpiantoCoordinates(impianto).valid;
+  if (!valid && notify) notifyInvalidImpiantoCoordinates();
+  return valid;
 }
 
 function triggerImpiantoWhatsAppAction(impianto, options = {}) {
@@ -22757,6 +22738,11 @@ async function handleImpiantoWhatsAppClick(impianto) {
     return false;
   }
 
+  if (!validateImpiantoCoordinates(impianto).valid) {
+    notifyInvalidImpiantoCoordinates();
+    return false;
+  }
+
   const processingKey = getWhazzupProcessingKey(impianto);
   if (!processingKey || isImpiantoWhazzupProcessing(impianto)) return false;
   whazzupProcessingByImpianto.add(processingKey);
@@ -22770,16 +22756,6 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    let positionDecision = getCachedFattoPositionDecision(impianto);
-    if (!positionDecision.allowed && ["missing", "stale"].includes(positionDecision.reason)) {
-      positionDecision = await refreshFattoPositionDecision(impianto);
-    }
-    if (!positionDecision.allowed) {
-      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
-      notifyFattoPositionDenied(positionDecision);
-      return false;
-    }
-
     // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
     // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
     const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
@@ -22825,7 +22801,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
     const doneMarked = await forceMoveImpiantoToFatti(impianto, {
       source: "whatsapp",
       requireFirestoreConfirmation: false,
-      skipLocationCheck: true,
+      skipImpiantoCoordinatesValidation: true,
       doneAt,
       doneBy
     });
@@ -23005,7 +22981,7 @@ async function forceMoveImpiantoToFatti(impianto, options = {}) {
   const moved = await markImpiantoDone(impianto, {
     source: options.source || "whatsapp",
     requireFirestoreConfirmation: options.requireFirestoreConfirmation !== false,
-    skipLocationCheck: options.skipLocationCheck === true,
+    skipImpiantoCoordinatesValidation: options.skipImpiantoCoordinatesValidation === true,
     doneAt: options.doneAt,
     doneBy: options.doneBy
   });

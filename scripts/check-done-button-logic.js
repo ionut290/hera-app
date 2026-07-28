@@ -47,9 +47,8 @@ const markDone = extractFunction('markImpiantoDone');
 if (!markDone) fail('funzione markImpiantoDone presente');
 else {
   pass('funzione markImpiantoDone presente');
-  requireIncludes(markDone, 'canManageData()', 'Fatto mantiene il controllo permessi/admin');
-  requireIncludes(markDone, 'getCachedFattoPositionDecision(impianto)', 'Fatto mantiene il controllo GPS recente e distanza per operatori');
-  requireIncludes(markDone, 'notifyFattoPositionDenied(positionDecision)', 'Fatto blocca con messaggio una posizione non valida');
+  requireIncludes(markDone, 'validateImpiantoCoordinates(impianto)', 'Fatto valida le coordinate salvate nella scheda impianto');
+  requireIncludes(markDone, 'notifyInvalidImpiantoCoordinates()', 'Fatto blocca con un messaggio le coordinate impianto non valide');
   requireIncludes(markDone, 'isNetworkOffline()', 'Fatto mantiene il ramo offline');
   requireIncludes(markDone, 'upsertPendingDoneAction', 'Fatto offline conserva azione pending WhatsApp');
   requireIncludes(markDone, 'setImpiantoDone(selectedCommessaId, ids, true', 'Fatto salva su Firebase con stato true');
@@ -65,7 +64,7 @@ const forceDone = extractFunction('canUseForceImpiantoDone');
 if (!forceDone) fail('funzione canUseForceImpiantoDone presente');
 else {
   pass('funzione canUseForceImpiantoDone presente');
-  requireIncludes(forceDone, 'getCachedFattoPositionDecision(impianto)', 'FORZA usa lo stesso controllo posizione di FATTO');
+  requireIncludes(forceDone, 'validateImpiantoCoordinates(impianto)', 'FORZA usa la stessa validazione coordinate di FATTO');
   if (forceDone.includes('hasFailedFattoAttemptForImpianto')) fail('FORZA non deve richiedere un precedente errore FATTO');
   else pass('FORZA non richiede un precedente errore FATTO');
 }
@@ -90,7 +89,7 @@ const renderArea = source.slice(renderStart >= 0 ? renderStart : source.indexOf(
 requireIncludes(renderArea, '"whatsapp",\n        "✉️",\n        "Whazzup / Fatto"', 'render impianto conserva il pulsante operativo Whazzup / Fatto');
 requireIncludes(renderArea, 'await handleImpiantoWhatsAppClick(impianto);', 'pulsante Whazzup / Fatto conserva handler WhatsApp esistente');
 requireIncludes(renderArea, 'hiddenMoveDoneBtn.dataset.hiddenMoveDoneBtn = "1"', 'render impianto conserva pulsante nascosto di spostamento in Fatti');
-requireIncludes(source, 'const forceDoneEnabled = forceDoneDistanceAllowed', 'FORZA resta attivo senza richiedere un precedente errore FATTO');
+requireIncludes(source, 'const forceDoneEnabled = forceDoneCoordinatesValid', 'FORZA dipende dalla validità delle coordinate impianto');
 requireIncludes(renderArea, 'Sposta subito questo impianto nei FATTI', 'FORZA mostra che sposta subito nei FATTI');
 requireIncludes(renderArea, 'await markImpiantoDone(impianto, { source: "whatsapp" });', 'pulsante nascosto continua a chiamare markImpiantoDone con source whatsapp');
 
@@ -98,7 +97,12 @@ const whatsappHandler = extractFunction('handleImpiantoWhatsAppClick');
 if (!whatsappHandler) fail('funzione handleImpiantoWhatsAppClick presente');
 else {
   pass('funzione handleImpiantoWhatsAppClick presente');
-  const validationIndex = whatsappHandler.indexOf('getCachedFattoPositionDecision(impianto)');
+  if (/getCachedFattoPositionDecision|refreshFattoPositionDecision|getCurrentPositionOnce|currentUserPos|distanceFromUser/.test(whatsappHandler)) {
+    fail('Fatto non usa posizione o distanza dell’operatore per autorizzare il flusso');
+  } else {
+    pass('Fatto non usa posizione o distanza dell’operatore per autorizzare il flusso');
+  }
+  const validationIndex = whatsappHandler.indexOf('validateImpiantoCoordinates(impianto)');
   const evidenceIndex = whatsappHandler.indexOf('recordFattoVisualEvidence(impianto, doneAt, doneBy)');
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = openWhatsApp(');
@@ -111,7 +115,7 @@ else {
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');
-  requireIncludes(whatsappHandler, 'skipLocationCheck: true', 'Fatto non ripete il controllo GPS già superato');
+  requireIncludes(whatsappHandler, 'skipImpiantoCoordinatesValidation: true', 'Fatto non ripete la validazione coordinate già superata');
   requireIncludes(whatsappHandler, 'queued_offline', 'Fatto registra l’esito accodato offline');
 }
 

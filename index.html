@@ -590,6 +590,16 @@
             <p id="commessa-focus-code" class="commessa-focus-code muted"></p>
           </div>
           <div class="commessa-header-actions commessa-tools-bar" aria-label="Azioni commessa">
+            <div id="commessa-produced-widget" class="commessa-produced-widget" hidden>
+              <button id="commessa-produced-toggle" class="commessa-produced-toggle" type="button" aria-expanded="false" aria-controls="commessa-produced-popover">
+                <span class="commessa-produced-label">PRODOTTO</span>
+                <strong id="commessa-produced-value">0,00&nbsp;€</strong>
+              </button>
+              <div id="commessa-produced-popover" class="commessa-produced-popover" role="tooltip" aria-hidden="true">
+                <strong>PRODOTTO FINORA</strong>
+                <span>Somma in euro delle lavorazioni completate in questa commessa.</span>
+              </div>
+            </div>
             <button id="map-fullscreen-btn" class="btn map-fullscreen-btn commessa-action-btn commessa-action-btn--map" type="button" aria-label="Apri mappa a schermo intero" title="Mappa a schermo intero"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v14M15 6v14"/></svg></span><span class="commessa-action-label">Mappa</span></button>
             <button id="operator-positions-toggle-btn" class="btn hidden commessa-action-btn commessa-action-btn--pin" type="button" aria-pressed="true" title="Posizione squadre"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><span class="commessa-action-label">Pos.</span></button>
             <button id="commessa-notes-toggle-btn" class="btn commessa-notes-toggle-btn commessa-action-btn commessa-action-btn--note" type="button" aria-controls="commessa-notes-page" title="Note"><span class="commessa-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19h4l10-10-4-4L5 15v4Z"/><path d="m13.5 6.5 4 4"/></svg></span><span class="commessa-action-label">Note</span></button>
@@ -1969,6 +1979,7 @@
   <script src="coordinate-repair.js?v=20260728a"></script>
   <script src="inrete-work-items-v2.js?v=20260728b"></script>
   <script src="accounting-v2.js?v=20260728e"></script>
+  <script src="commessa-produced-widget.js?v=20260728a"></script>
   <script src="accounting-view-guard.js?v=20260728a"></script>
   <script src="operational-import-repair.js?v=20260728a"></script>
   <script src="today-summary-interactions.js?v=20260728f"></script>

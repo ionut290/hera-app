@@ -13523,6 +13523,7 @@ function downloadVCard(name, phone) {
 function selectCommessa(id, nome, codice = "") {
   selectedCommessaId = id;
   selectedCommessaName = nome;
+  window.CommessaProducedWidget?.select(id);
   setCommessaWeatherRefreshStatus("");
   mainMapViewState.hasUserMoved = false;
   activeNearbyImpiantoContext = null;

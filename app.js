@@ -11798,6 +11798,7 @@ function subscribeCommesse() {
     refreshCommesseDependentUI(Boolean(currentUser));
     tryAutoOpenAssignedCommessaAtStartup();
     renderNextActionCard();
+    renderTodaySummary();
   };
 
   console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "createdAt desc", mode: "getDocs initial" });
@@ -11822,6 +11823,7 @@ function subscribeCommesse() {
             loadCommesseFromLocalCache();
             commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
             refreshCommesseDependentUI(false);
+            renderTodaySummary();
           });
         } catch (error) {
           console.error("Errore inizializzazione listener commesse:", error);
@@ -11834,6 +11836,7 @@ function subscribeCommesse() {
       loadCommesseFromLocalCache();
       commesseLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento commesse") };
       refreshCommesseDependentUI(false);
+      renderTodaySummary();
     });
 }
 
@@ -20640,6 +20643,7 @@ function subscribePersonale() {
     console.log("Numero persone trovate", snapshot.size);
     renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
     refreshResolvedUserIdentity();
+    renderTodaySummary();
     updateSquadraHintFromSources();
     updateSuggestionLists();
     renderHoursOperatoriOptions();
@@ -20653,6 +20657,7 @@ function subscribePersonale() {
           logFirestoreError("LOAD PERSONALE LISTENER", error);
           personaleLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento personale") };
           renderSquadre();
+          renderTodaySummary();
           ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
           ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
         });
@@ -20664,6 +20669,7 @@ function subscribePersonale() {
       logFirestoreError("LOAD PERSONALE", error);
       personaleLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento personale") };
       renderSquadre();
+      renderTodaySummary();
       ui.personaleLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento personale"))}</p><button id='personale-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
       ui.personaleLista.querySelector("#personale-retry-btn")?.addEventListener("click", subscribePersonale);
     });
@@ -20889,6 +20895,7 @@ function subscribeMezzi() {
   const applySnapshot = (snapshot) => {
     mezziRecords = snapshot.docs.map(normalizeMezzoDocument);
     mezziLoadState = { status: "loaded", message: "" };
+    renderTodaySummary();
     console.log("Numero mezzi trovati", snapshot.size);
     renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
     updateSquadraHintFromSources();
@@ -20901,6 +20908,7 @@ function subscribeMezzi() {
         unsubscribeMezzi = query.onSnapshot(applySnapshot, (error) => {
           logFirestoreError("LOAD MEZZI LISTENER", error);
           mezziLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento mezzi") };
+          renderTodaySummary();
           ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
           ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
         });
@@ -20911,6 +20919,7 @@ function subscribeMezzi() {
     .catch((error) => {
       logFirestoreError("LOAD MEZZI", error);
       mezziLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento mezzi") };
+      renderTodaySummary();
       ui.mezziLista.innerHTML = `<p class='muted'>${escapeHTML(getReadableFirestoreError(error, "Errore caricamento mezzi"))}</p><button id='mezzi-retry-btn' class='btn btn-primary' type='button'>Riprova</button>`;
       ui.mezziLista.querySelector("#mezzi-retry-btn")?.addEventListener("click", subscribeMezzi);
     });
@@ -20972,6 +20981,7 @@ function subscribeSquadre() {
       squadreHistoryByDate.set(dateKey, historyForDate);
     });
     squadreLoadState = { status: "loaded", message: "" };
+    renderTodaySummary();
     console.log("LOAD SQUADRE OK numero:", snapshot.size, "date:", subscribedDateKeys);
     renderSquadre();
     updateCommessaDashboard();
@@ -21003,6 +21013,7 @@ function subscribeSquadre() {
       squadreLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento squadre") };
       renderSquadre();
       renderCommesseHomeList();
+      renderTodaySummary();
       if (!initialSnapshotReceived) {
         initialSnapshotReceived = true;
         resolve(false);

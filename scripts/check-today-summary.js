@@ -12,6 +12,35 @@ const layout = fs.readFileSync("squadre-restyle.css", "utf8");
 const androidWorkflow = fs.readFileSync(".github/workflows/build-android-aab.yml", "utf8");
 const capacitorBundle = fs.readFileSync("scripts/prepare-capacitor-web.js", "utf8");
 
+function sourceBetween(startMarker, endMarker) {
+  const start = app.indexOf(startMarker);
+  const end = app.indexOf(endMarker, start + startMarker.length);
+  assert.notEqual(start, -1, `Missing source marker: ${startMarker}`);
+  assert.notEqual(end, -1, `Missing source marker: ${endMarker}`);
+  return app.slice(start, end);
+}
+
+const subscribeCommesseSource = sourceBetween("function subscribeCommesse()", "function stopCommesseSubscription()");
+const subscribePersonaleSource = sourceBetween("function subscribePersonale()", "const DEFAULT_COMMESSE_ABILITAZIONI");
+const subscribeMezziSource = sourceBetween("function subscribeMezzi()", "function clearSquadreLoadTimeout()");
+const subscribeSquadreSource = sourceBetween("function subscribeSquadre()", "function stopSquadreSubscription()");
+
+// Each collection must refresh the summary both when data arrives and when loading fails.
+assert.match(subscribeCommesseSource, /const applyCommesseSnapshot[\s\S]*?renderNextActionCard\(\);\s*renderTodaySummary\(\);/);
+assert.match(subscribeCommesseSource, /query\.onSnapshot[\s\S]*?\(error\) => \{[\s\S]*?commesseLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+assert.match(subscribeCommesseSource, /\.catch\(\(error\) => \{[\s\S]*?commesseLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+
+assert.match(subscribePersonaleSource, /const applySnapshot[\s\S]*?refreshResolvedUserIdentity\(\);\s*renderTodaySummary\(\);/);
+assert.match(subscribePersonaleSource, /query\.onSnapshot\(applySnapshot, \(error\) => \{[\s\S]*?personaleLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+assert.match(subscribePersonaleSource, /\.catch\(\(error\) => \{[\s\S]*?personaleLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+
+assert.match(subscribeMezziSource, /const applySnapshot[\s\S]*?mezziLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
+assert.match(subscribeMezziSource, /query\.onSnapshot\(applySnapshot, \(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+assert.match(subscribeMezziSource, /\.catch\(\(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+
+assert.match(subscribeSquadreSource, /const applySquadreSnapshot[\s\S]*?squadreHistoryByDate\.set[\s\S]*?squadreLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
+assert.match(subscribeSquadreSource, /squadreQuery\.onSnapshot[\s\S]*?\(error\) => \{[\s\S]*?squadreLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
+
 assert.match(app, /const subscribedDateKeys = \[\.\.\.new Set\(\[selectedDateKey, todayDateKey\]/);
 assert.match(app, /where\("dateKey", "in", subscribedDateKeys\)/);
 assert.match(app, /class="squadra-avviso-input"/);

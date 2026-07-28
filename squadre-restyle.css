@@ -279,11 +279,44 @@
   color: #172033;
 }
 
+#today-summary-card #today-commesse-count,
+#today-summary-card #today-mezzi-count {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: clamp(0.58rem, 1.55vw, 0.78rem);
+  line-height: 1.05;
+  text-overflow: ellipsis;
+}
+
 #today-summary-card .today-summary-item span:last-child {
   font-size: 0.68rem;
   line-height: 1.1;
   font-weight: 800;
   color: #475569;
+}
+
+#today-summary-card .today-summary-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: clamp(0.5rem, 1.45vw, 0.68rem);
+  line-height: 1.05;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+#today-summary-card .today-summary-copy small {
+  overflow: hidden;
+  font-size: 0.76em;
+  font-weight: 600;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+}
+
+#today-summary-card .today-summary-item:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 @media (max-width: 720px) {

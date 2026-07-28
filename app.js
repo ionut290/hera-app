@@ -7909,7 +7909,11 @@ function createAddHoursButton(commessa, dateValue = "") {
 }
 
 function getTodayDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("it-IT", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function buildSquadraDateCorrectionWhatsappUrl({ commessaName, squadraDate, todayDate, operatorName }) {
@@ -9282,6 +9286,7 @@ async function finalizeHoursReport(event) {
       ui.hoursFeedback.textContent = "Offline: ore salvate nella coda di sincronizzazione. Verranno inviate appena torna internet.";
       setHoursFinalizeLocked(true);
       renderHoursSummary();
+      renderTodaySummary();
       return;
     }
 
@@ -9308,6 +9313,7 @@ async function finalizeHoursReport(event) {
     }
     setHoursFinalizeLocked(true);
     renderHoursSummary();
+    renderTodaySummary();
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);
@@ -14039,7 +14045,11 @@ function stopCommessaNotesSubscription() {
 }
 
 function getTodayDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("it-IT", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function toggleCommessaNoteForm() {

@@ -43,11 +43,18 @@ assert.match(subscribeSquadreSource, /squadreQuery\.onSnapshot[\s\S]*?\(error\) 
 
 assert.match(app, /const subscribedDateKeys = \[\.\.\.new Set\(\[selectedDateKey, todayDateKey\]/);
 assert.match(app, /where\("dateKey", "in", subscribedDateKeys\)/);
-assert.match(app, /class="squadra-avviso-input"/);
-assert.match(app, /avviso: String\(row\.querySelector\("\.squadra-avviso-input"\)/);
-assert.match(app, /createSquadraAlertsForChangedRows/);
-assert.match(app, /source: "squadra-avviso"/);
-assert.match(app, /targetMemberNames/);
+assert.doesNotMatch(app, /squadra-avviso-input|createSquadraAlertsForChangedRows|source: "squadra-avviso"|row(?:\?\.|\.)avviso\b|alertsCreated/);
+assert.doesNotMatch(interactions, /assignedAlerts|row(?:\?\.|\.)avviso\b/);
+assert.doesNotMatch(notifications, /extractChangedSquadraAlerts|row(?:\?\.|\.)avviso\b|eventType: "squadra-alert"|title: "⚠️ Avviso squadra"/);
+assert.match(app, /legacySquadraAlertSource[\s\S]*?filter\(\(item\) => item\.source !== legacySquadraAlertSource\)/);
+assert.match(app, /if \(item\.source === legacySquadraAlertSource\) return false;/);
+assert.match(app, /avvisoAutomaticoAssenze/);
+assert.match(app, /calendarAbsenceEventIds/);
+assert.match(app, /function buildSquadraWarningDetails/);
+assert.match(app, /function isPersonAbilitataForCommessa/);
+assert.match(app, /hasRequiredPersonaleCourse|hasRequiredCourse/);
+assert.match(interactions, /const issues = buildSquadraWarningDetails/);
+assert.match(notifications, /source: "calendar-absence"/);
 assert.match(app, /function findCurrentUserSquadreForDate/);
 assert.match(app, /function getSquadrePerCommessaForDate/);
 assert.match(app, /candidate\.uids[\s\S]*candidate\.personaleIds[\s\S]*candidate\.emails[\s\S]*candidate\.names/);
@@ -73,10 +80,8 @@ assert.match(interactions, /doSquadraMemberAndUserMatch\(row\?\.operatore/);
 assert.match(interactions, /openHoursPageForCommessa\(assignments\[0\]\.commessaId/);
 assert.match(interactions, /isNotificationForCurrentUser\(alertItem\)/);
 
-assert.match(notifications, /function extractChangedSquadraAlerts/);
-assert.match(notifications, /eventType: "squadra-alert"/);
-assert.match(notifications, /title: "⚠️ Avviso squadra"/);
-assert.match(notifications, /squadAlert\.operators\.some/);
+assert.match(notifications, /title: "👷 Aggiunto a una squadra"/);
+assert.match(notifications, /avvisoAutomaticoAssenze/);
 
 assert.match(index, /today-summary-interactions\.js\?v=20260728f/);
 assert.match(index, /id="today-commesse-action">APRI/);

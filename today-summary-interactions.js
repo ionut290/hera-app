@@ -24,16 +24,11 @@
   function getAlertGroups(assignments = getAssignments()) {
     return assignments.map((assignment) => {
       const matchedRows = assignment.matchedRows || [];
-      const assignedAlerts = matchedRows
-        .map(({ squadraLabel, row }) => String(row?.avviso || "").trim()
-          ? `⚠️ ${squadraLabel}: ${String(row.avviso).trim()}`
-          : "")
-        .filter(Boolean);
-      const safetyAlerts = buildSquadraWarningDetails(
+      const issues = buildSquadraWarningDetails(
         assignment.commessa,
         matchedRows.map((item) => item.row)
       );
-      return { assignment, issues: [...assignedAlerts, ...safetyAlerts] };
+      return { assignment, issues };
     }).filter((group) => group.issues.length);
   }
 

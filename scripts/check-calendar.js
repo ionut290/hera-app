@@ -17,6 +17,11 @@ const reminderWorkflow = read(".github/workflows/calendar-admin-reminders.yml");
 const checks = [
   ["La home apre il calendario", html.includes('id="home-calendar-btn"') && !html.includes('id="home-private-docs-btn"')],
   ["La view calendario esiste", html.includes('id="calendar-page"') && html.includes('id="calendar-grid"')],
+  ["La scelta iniziale separa ore personali e calendario condiviso", html.includes('id="calendar-choice-hours-btn"') && html.includes('id="calendar-choice-shared-btn"')],
+  ["Le modalità restano accessibili come schede", html.includes('id="calendar-hours-tab"') && html.includes('id="calendar-shared-tab"') && app.includes('setCalendarMode("hours")')],
+  ["Il calendario personale filtra le righe per utente", app.includes("getPersonalHoursRowsForDate") && app.includes("doesSquadraMemberMatchCurrentUser")],
+  ["Le ore personali sono formattate in ore e minuti", app.includes("function formatPersonalHours") && app.includes('padStart(2, "0")')],
+  ["Il calendario personale si aggiorna con i report ore", app.includes('calendarMode === "hours"') && app.includes("hoursReportsLoaded")],
   ["Il form include i tipi richiesti", ["ferie", "permesso", "malattia", "intervento"].every((type) => html.includes(`value="${type}"`))],
   ["Il calendario usa Firestore in tempo reale", app.includes('db.collection("calendarEvents").onSnapshot')],
   ["Il giorno mostra il conteggio eventi", app.includes("calendar-event-count") && app.includes("getCalendarEventsForDate")],

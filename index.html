@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="identity-card-feature.css?v=20260727a">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260727a">
   <link rel="stylesheet" href="squadre-restyle.css?v=20260728c">
-  <link rel="stylesheet" href="calendar-feature.css?v=20260727a">
+  <link rel="stylesheet" href="calendar-feature.css?v=20260728b">
 </head>
 <body class="auth-pending">
 
@@ -372,7 +372,7 @@
           <span aria-hidden="true">⛽</span>
           <span>PIN</span>
         </button>
-        <button id="home-calendar-btn" class="home-quick-access-btn" type="button" aria-label="Apri calendario condiviso">
+        <button id="home-calendar-btn" class="home-quick-access-btn" type="button" aria-label="Apri scelta calendario">
           <span aria-hidden="true">🗓️</span>
           <span>Calendario</span>
         </button>
@@ -1496,18 +1496,39 @@
   </section>
 
   <section id="calendar-page" class="hidden">
-    <section class="card calendar-hero-card">
-      <div class="page-head">
-        <button id="back-from-calendar-btn" class="btn" type="button">← Torna</button>
-        <div class="calendar-page-title">
-          <h2>🗓️ Calendario condiviso</h2>
-          <p class="muted">Ferie, permessi, malattie, interventi e altre informazioni visibili a tutti gli utenti.</p>
-        </div>
-        <button id="calendar-new-event-btn" class="btn btn-primary" type="button">＋ Nuovo evento</button>
+    <section id="calendar-choice-card" class="card calendar-choice-card">
+      <button id="calendar-choice-back-btn" class="btn calendar-choice-back" type="button">← Indietro</button>
+      <div class="calendar-choice-heading">
+        <span aria-hidden="true">🗓️</span>
+        <h2>Scegli il calendario</h2>
+        <p class="muted">Consulta le tue ore lavorate oppure gli eventi condivisi.</p>
+      </div>
+      <div class="calendar-choice-actions">
+        <button id="calendar-choice-hours-btn" class="calendar-choice-btn" type="button">
+          <span aria-hidden="true">🕒</span><strong>LE MIE ORE</strong><small>Riepilogo mensile personale</small>
+        </button>
+        <button id="calendar-choice-shared-btn" class="calendar-choice-btn" type="button">
+          <span aria-hidden="true">👥</span><strong>CALENDARIO CONDIVISO</strong><small>Eventi, ferie e assenze</small>
+        </button>
       </div>
     </section>
 
-    <section class="card calendar-card">
+    <section id="calendar-hero-card" class="card calendar-hero-card hidden">
+      <div class="page-head">
+        <button id="back-from-calendar-btn" class="btn" type="button">← Indietro</button>
+        <div class="calendar-page-title">
+          <h2 id="calendar-page-heading">🗓️ Calendario</h2>
+          <p id="calendar-page-description" class="muted"></p>
+        </div>
+        <button id="calendar-new-event-btn" class="btn btn-primary" type="button">＋ Nuovo evento</button>
+      </div>
+      <div class="calendar-mode-tabs" role="tablist" aria-label="Modalità calendario">
+        <button id="calendar-hours-tab" class="calendar-mode-tab" type="button" role="tab">Le mie ore</button>
+        <button id="calendar-shared-tab" class="calendar-mode-tab" type="button" role="tab">Calendario condiviso</button>
+      </div>
+    </section>
+
+    <section id="calendar-main-card" class="card calendar-card hidden">
       <div class="calendar-toolbar">
         <button id="calendar-prev-btn" class="btn calendar-nav-btn" type="button" aria-label="Mese precedente">‹</button>
         <button id="calendar-today-btn" class="btn" type="button">Oggi</button>
@@ -1521,7 +1542,7 @@
       <p id="calendar-feedback" class="muted" role="status" aria-live="polite">Caricamento eventi...</p>
     </section>
 
-    <section class="card calendar-day-card">
+    <section id="calendar-day-card" class="card calendar-day-card hidden">
       <div class="section-head">
         <div>
           <h2 id="calendar-selected-day-title">Eventi del giorno</h2>
@@ -1956,7 +1977,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260728-today4"></script>
+  <script src="app.js?v=20260728-calendar1"></script>
   <script src="today-summary-interactions.js?v=20260728f"></script>
   <script src="identity-card-feature.js?v=20260727a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>

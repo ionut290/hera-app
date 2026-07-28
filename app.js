@@ -883,6 +883,17 @@ const ui = {
   privateDocsPage: document.getElementById("private-docs-page"),
   backFromPrivateDocsBtn: document.getElementById("back-from-private-docs-btn"),
   calendarPage: document.getElementById("calendar-page"),
+  calendarChoiceCard: document.getElementById("calendar-choice-card"),
+  calendarChoiceBackBtn: document.getElementById("calendar-choice-back-btn"),
+  calendarChoiceHoursBtn: document.getElementById("calendar-choice-hours-btn"),
+  calendarChoiceSharedBtn: document.getElementById("calendar-choice-shared-btn"),
+  calendarHeroCard: document.getElementById("calendar-hero-card"),
+  calendarMainCard: document.getElementById("calendar-main-card"),
+  calendarDayCard: document.getElementById("calendar-day-card"),
+  calendarPageHeading: document.getElementById("calendar-page-heading"),
+  calendarPageDescription: document.getElementById("calendar-page-description"),
+  calendarHoursTab: document.getElementById("calendar-hours-tab"),
+  calendarSharedTab: document.getElementById("calendar-shared-tab"),
   backFromCalendarBtn: document.getElementById("back-from-calendar-btn"),
   calendarNewEventBtn: document.getElementById("calendar-new-event-btn"),
   calendarPrevBtn: document.getElementById("calendar-prev-btn"),
@@ -1151,6 +1162,7 @@ const confirmedSquadraAbsenceAssignments = new Set();
 const calendarAbsenceCache = new Map();
 let calendarVisibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let calendarSelectedDate = formatCalendarDateKey(new Date());
+let calendarMode = "choice";
 let unsubscribeGpsRequests = null;
 let unsubscribeGlobalNotifications = null;
 let unsubscribeWorkBanner = null;
@@ -2095,6 +2107,11 @@ ui.backFromSegnalazioniBtn?.addEventListener("click", closeSegnalazioniPage);
 ui.backFromHowtoBtn?.addEventListener("click", closeHowtoPage);
 ui.backFromPrivateDocsBtn?.addEventListener("click", closePrivateDocsPage);
 ui.backFromCalendarBtn?.addEventListener("click", closeCalendarPage);
+ui.calendarChoiceBackBtn?.addEventListener("click", closeCalendarPage);
+ui.calendarChoiceHoursBtn?.addEventListener("click", () => setCalendarMode("hours"));
+ui.calendarChoiceSharedBtn?.addEventListener("click", () => setCalendarMode("shared"));
+ui.calendarHoursTab?.addEventListener("click", () => setCalendarMode("hours"));
+ui.calendarSharedTab?.addEventListener("click", () => setCalendarMode("shared"));
 ui.calendarNewEventBtn?.addEventListener("click", () => openCalendarEventForm(calendarSelectedDate));
 ui.calendarAddSelectedDayBtn?.addEventListener("click", () => openCalendarEventForm(calendarSelectedDate));
 ui.calendarPrevBtn?.addEventListener("click", () => changeCalendarMonth(-1));
@@ -5169,9 +5186,10 @@ function formatCalendarLongDate(dateKey) {
 
 function openCalendarPage() {
   if (!currentUser) {
-    alert("Devi fare login per aprire il calendario condiviso.");
+    alert("Devi fare login per aprire il calendario.");
     return;
   }
+  calendarMode = "choice";
   window.location.hash = "calendario";
   applyRoute();
   closeSideMenu();
@@ -5179,8 +5197,66 @@ function openCalendarPage() {
 
 function closeCalendarPage() {
   closeCalendarEventForm();
+  calendarMode = "choice";
   window.location.hash = "";
   applyRoute();
+}
+
+function setCalendarMode(mode) {
+  if (mode !== "hours" && mode !== "shared") return;
+  calendarMode = mode;
+  renderCalendarMode();
+  renderCalendar();
+}
+
+function renderCalendarMode() {
+  const isChoice = calendarMode === "choice";
+  const isHours = calendarMode === "hours";
+  ui.calendarChoiceCard?.classList.toggle("hidden", !isChoice);
+  ui.calendarHeroCard?.classList.toggle("hidden", isChoice);
+  ui.calendarMainCard?.classList.toggle("hidden", isChoice);
+  ui.calendarDayCard?.classList.toggle("hidden", isChoice);
+  ui.calendarNewEventBtn?.classList.toggle("hidden", isHours);
+  ui.calendarAddSelectedDayBtn?.classList.toggle("hidden", isHours);
+  ui.calendarHoursTab?.classList.toggle("is-active", isHours);
+  ui.calendarSharedTab?.classList.toggle("is-active", calendarMode === "shared");
+  ui.calendarHoursTab?.setAttribute("aria-selected", String(isHours));
+  ui.calendarSharedTab?.setAttribute("aria-selected", String(calendarMode === "shared"));
+  if (ui.calendarPageHeading) ui.calendarPageHeading.textContent = isHours ? "🕒 Le mie ore" : "🗓️ Calendario condiviso";
+  if (ui.calendarPageDescription) {
+    ui.calendarPageDescription.textContent = isHours
+      ? "Ore lavorate personali recuperate dalla Gestione ore."
+      : "Ferie, permessi, malattie, interventi e altre informazioni visibili a tutti gli utenti.";
+  }
+  if (ui.calendarGrid) ui.calendarGrid.setAttribute("aria-label", isHours ? "Calendario mensile delle mie ore" : "Calendario mensile condiviso");
+}
+
+function getPersonalHoursRowsForDate(dateKey) {
+  if (!currentUser || !dateKey) return [];
+  const identity = getCurrentUserSquadraIdentity();
+  const rows = [];
+  allHoursReports.forEach((report) => {
+    if (normalizeHoursReportDateKey(report.date) !== dateKey) return;
+    (Array.isArray(report.entries) ? report.entries : []).forEach((entry) => {
+      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
+        const operatorId = String(row.operatoreId || row.personaleId || "").replace(/^utente:/, "");
+        const matches = doesSquadraMemberMatchCurrentUser({
+          id: operatorId,
+          uid: row.uid || row.userId || "",
+          email: row.email || "",
+          name: row.operatore || row.nome || row.name || ""
+        }, identity);
+        const hours = Number(row.ore || 0);
+        if (matches && Number.isFinite(hours) && hours > 0) rows.push({ report, entry, row, hours });
+      });
+    });
+  });
+  return rows;
+}
+
+function formatPersonalHours(hours) {
+  const minutes = Math.round(Number(hours || 0) * 60);
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 function subscribeCalendarEvents() {
@@ -5225,6 +5301,12 @@ function getCalendarEventsForDate(dateKey) {
 }
 
 function renderCalendar() {
+  renderCalendarMode();
+  if (calendarMode === "choice") return;
+  if (calendarMode === "hours") {
+    renderPersonalHoursCalendar();
+    return;
+  }
   if (!ui.calendarGrid || !ui.calendarMonthTitle) return;
   const year = calendarVisibleMonth.getFullYear();
   const month = calendarVisibleMonth.getMonth();
@@ -5266,6 +5348,74 @@ function renderCalendar() {
     button.addEventListener("click", () => selectCalendarDate(button.dataset.calendarDate || ""));
   });
   renderCalendarSelectedDay();
+}
+
+function renderPersonalHoursCalendar() {
+  if (!ui.calendarGrid || !ui.calendarMonthTitle) return;
+  const year = calendarVisibleMonth.getFullYear();
+  const month = calendarVisibleMonth.getMonth();
+  ui.calendarMonthTitle.textContent = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(calendarVisibleMonth);
+  const firstDay = new Date(year, month, 1, 12);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(year, month, 1 - mondayOffset, 12);
+  const todayKey = formatCalendarDateKey(new Date());
+  const cells = [];
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    const dateKey = formatCalendarDateKey(date);
+    const total = getPersonalHoursRowsForDate(dateKey).reduce((sum, item) => sum + item.hours, 0);
+    const classes = [
+      "calendar-day", "personal-hours-day",
+      date.getMonth() === month ? "" : "is-outside",
+      dateKey === todayKey ? "is-today" : "",
+      dateKey === calendarSelectedDate ? "is-selected" : "",
+      total > 0 ? "has-hours" : ""
+    ].filter(Boolean).join(" ");
+    const hoursLabel = total > 0 ? `${formatPersonalHours(total)} ore` : "nessuna ora";
+    cells.push(`
+      <button class="${classes}" type="button" role="gridcell" data-calendar-date="${dateKey}" aria-label="${escapeHTML(formatCalendarLongDate(dateKey))}, ${hoursLabel}">
+        <span class="calendar-day-number">${date.getDate()}</span>
+        ${total > 0 ? `<span class="calendar-personal-hours">${formatPersonalHours(total)} <small>ore</small></span>` : ""}
+      </button>
+    `);
+  }
+  ui.calendarGrid.innerHTML = cells.join("");
+  ui.calendarGrid.querySelectorAll("[data-calendar-date]").forEach((button) => {
+    button.addEventListener("click", () => selectCalendarDate(button.dataset.calendarDate || ""));
+  });
+  if (ui.calendarFeedback) {
+    ui.calendarFeedback.textContent = hoursReportsLoaded
+      ? "Sono mostrate esclusivamente le ore dell’operatore connesso."
+      : "Caricamento delle ore personali...";
+  }
+  renderPersonalHoursSelectedDay();
+}
+
+function renderPersonalHoursSelectedDay() {
+  if (!ui.calendarDayEvents) return;
+  const rows = getPersonalHoursRowsForDate(calendarSelectedDate);
+  const total = rows.reduce((sum, item) => sum + item.hours, 0);
+  if (ui.calendarSelectedDayTitle) ui.calendarSelectedDayTitle.textContent = formatCalendarLongDate(calendarSelectedDate);
+  if (ui.calendarSelectedDaySummary) {
+    ui.calendarSelectedDaySummary.textContent = total > 0
+      ? `Totale personale: ${formatPersonalHours(total)} ore`
+      : "Nessuna ora personale inserita";
+  }
+  if (!rows.length) {
+    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>🕒</span><p>Non risultano ore personali per questa giornata.</p></div>";
+    return;
+  }
+  ui.calendarDayEvents.innerHTML = rows.map(({ entry, row, hours }) => `
+    <article class="calendar-event-card personal-hours-detail">
+      <div class="calendar-event-heading">
+        <span class="calendar-event-icon" aria-hidden="true">🕒</span>
+        <div><h3>${escapeHTML(entry.commessaName || commesseById.get(entry.commessaId)?.nome || "Ore lavorate")}</h3>
+        <p>${formatPersonalHours(hours)} ore</p></div>
+      </div>
+      ${entry.note ? `<p class="calendar-event-description">${escapeHTML(entry.note)}</p>` : ""}
+    </article>
+  `).join("");
 }
 
 function selectCalendarDate(dateKey) {
@@ -9379,6 +9529,7 @@ async function finalizeHoursReport(event) {
       setHoursFinalizeLocked(true);
       renderHoursSummary();
       renderTodaySummary();
+      if (calendarMode === "hours") renderCalendar();
       return;
     }
 
@@ -9394,6 +9545,7 @@ async function finalizeHoursReport(event) {
     await notifyAdminsHoursInsertedNoApproval(reportRef.id, payload);
 
     allHoursReports.unshift({ id: reportRef.id, ...payload, createdAt: new Date() });
+    if (calendarMode === "hours") renderCalendar();
     setHoursFinalizeButtonText("saved");
     ui.hoursFeedback.textContent = `Ore salvate automaticamente con successo (report ${reportRef.id}). Non serve conferma dell'amministratore.`;
     const quickCards = Array.from(ui.hoursCommesseList.querySelectorAll(".hours-commessa-card[data-quick-team-hours='true']"));
@@ -10832,6 +10984,7 @@ function subscribeHoursStats() {
       allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursReportsLoaded = true;
       renderTodaySummary();
+      if (!ui.calendarPage?.classList.contains("hidden") && calendarMode === "hours") renderCalendar();
       recalculateCommessaWorkSummaries();
       renderParentCommessaOverview();
       renderSquadre();

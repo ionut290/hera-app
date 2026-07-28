@@ -12557,7 +12557,7 @@ function renderGlobalMap() {
       `Ditta esecutrice: ${escapeHTML(ditta)}`,
       `<button type="button" class="btn btn-small" data-global-marker-details="${escapeHTML(impiantoKey)}">Dettagli</button>`
     ].join("<br>");
-    const marker = L.marker([impianto.gpsY, impianto.gpsX], {
+    const marker = L.marker(coordinates, {
       icon: L.divIcon({
         className: "global-map-pin-wrapper",
         html: `<span class="global-map-pin ${isSelected ? "is-selected" : ""}" style="--global-marker-color:${escapeHTML(markerColor)}">${escapeHTML(ditta)}</span>`,
@@ -23858,6 +23858,19 @@ function buildImpiantoMarkerBadge(impianto) {
   return `<span class="marker-pin-badge" aria-hidden="true"><span class="marker-pin ${markerClass}"><span class="marker-pin-number">${markerNumber}</span></span></span>`;
 }
 
+function parseImpiantoMapCoordinate(value, min, max) {
+  if (value == null || String(value).trim() === "") return null;
+  const coordinate = Number(String(value).trim().replace(",", "."));
+  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max || coordinate === 0) return null;
+  return coordinate;
+}
+
+function getImpiantoMapCoordinates(impianto) {
+  const lat = parseImpiantoMapCoordinate(impianto?.gpsY, -90, 90);
+  const lng = parseImpiantoMapCoordinate(impianto?.gpsX, -180, 180);
+  return lat == null || lng == null ? null : [lat, lng];
+}
+
 function focusImpiantoByMapNumber(rawNumber, targetMap = map) {
   const markerNumber = Number.parseInt(String(rawNumber || "").trim(), 10);
   if (!Number.isFinite(markerNumber) || markerNumber < 1) {
@@ -23865,14 +23878,15 @@ function focusImpiantoByMapNumber(rawNumber, targetMap = map) {
     return;
   }
   const match = currentImpianti.find((impianto) => getMapMarkerNumberForImpianto(impianto) === markerNumber);
-  if (!match || match.gpsY == null || match.gpsX == null) {
+  const coordinates = getImpiantoMapCoordinates(match);
+  if (!match || !coordinates) {
     alert("Numero impianto non trovato");
     return;
   }
   const key = buildImpiantoKey(match);
   const markerMap = targetMap === fullscreenMap ? fullscreenImpiantoMarkerByKey : impiantoMarkerByKey;
   const marker = markerMap.get(key);
-  targetMap.setView([match.gpsY, match.gpsX], Math.max(targetMap.getZoom(), 15), { animate: true });
+  targetMap.setView(coordinates, Math.max(targetMap.getZoom(), 15), { animate: true });
   if (marker?.openPopup) marker.openPopup();
   selectImpiantoForMapDetail(match);
 }
@@ -23884,16 +23898,18 @@ function renderMap() {
   const impiantiBounds = [];
   mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
   const mapDataSignature = `${selectedCommessaId}::${currentImpianti
-    .map((impianto) => `${buildImpiantoKey(impianto)}|${Number(impianto.gpsY) || ""}|${Number(impianto.gpsX) || ""}|${JSON.stringify(getSnowRoadPath(impianto))}|${impianto.done ? "1" : "0"}`)
+    .map((impianto) => {
+      const coordinates = getImpiantoMapCoordinates(impianto);
+      return `${buildImpiantoKey(impianto)}|${coordinates?.[0] ?? ""}|${coordinates?.[1] ?? ""}`;
+    })
     .sort()
     .join(";")}`;
   let markerForActiveFullscreenPopup = null;
 
   currentImpianti.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
-    const lat = Number(impianto.gpsY);
-    const lng = Number(impianto.gpsX);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) impiantiBounds.push([lat, lng]);
+    const coordinates = getImpiantoMapCoordinates(impianto);
+    if (coordinates) impiantiBounds.push(coordinates);
     const snowRoadPath = getSnowRoadPath(impianto);
     addSnowRoadPolylineToLayer(impianto, snowRoadLayer, map);
     addSnowRoadPolylineToLayer(impianto, fullscreenSnowRoadLayer, fullscreenMap);
@@ -23903,7 +23919,7 @@ function renderMap() {
     const fullscreenMarker = addImpiantoMarkerToMapLayer(impianto, fullscreenMarkerLayer, fullscreenMap);
     if (fullscreenMarker) {
       if (impiantoKey) fullscreenImpiantoMarkerByKey.set(impiantoKey, fullscreenMarker);
-      bounds.push([impianto.gpsY, impianto.gpsX]);
+      bounds.push(coordinates);
       if (impiantoKey && impiantoKey === selectedFullscreenImpiantoId) markerForActiveFullscreenPopup = fullscreenMarker;
     }
   });
@@ -23983,7 +23999,8 @@ async function autoCompletePassedSnowRoads() {
 }
 
 function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
-  if (impianto.gpsY == null || impianto.gpsX == null) return null;
+  const coordinates = getImpiantoMapCoordinates(impianto);
+  if (!coordinates) return null;
 
   const markerClass = getMarkerClass(impianto);
   const markerSequence = mapMarkerSequenceByKey.get(buildImpiantoKey(impianto));

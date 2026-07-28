@@ -16,6 +16,7 @@ const checks=[
  ['migrazione INRETE disponibile',js.includes('migrateInreteCommesseToWorkItemsV2')],
  ['import formati',html.includes('accept=".xlsx,.xls,.csv,.ods"')],
  ['sincronizzazione operativa',js.includes('synchronizeOperationalModel')&&js.includes('collection("impianti")')],
+ ['autoriparazione importazioni incomplete',js.includes('needsOperationalRepair')&&js.includes('autoRepairing')&&js.includes('load({autoRepair:false})')],
  ['riparazione idempotente',js.includes('repairImportedMatrixPlants')&&js.includes('migrationSourceId')&&js.includes('stableId')],
  ['batch sotto limite Firestore',js.includes('i+=400')&&js.includes('commitOperations')],
  ['contatori commessa',js.includes('impiantiFattiCount')&&js.includes('workItemsDaFareCount')],

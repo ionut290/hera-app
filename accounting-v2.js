@@ -19,7 +19,12 @@
   const server=()=>firebase.firestore.FieldValue.serverTimestamp();
   const actor=()=>({updatedAt:server(),updatedBy:currentUser?.uid||"",updatedByName:getOperatorDisplayName()});
 
-  async function load(){
+  function needsOperationalRepair(){
+    if(!state.work.length)return false;
+    const operationalIds=new Set(state.operationalPlants.map(p=>String(p.physicalPlantId||p.id||"")).filter(Boolean));
+    return state.work.some(w=>!String(w.impiantoId||"").trim()||!operationalIds.has(String(w.impiantoId)));
+  }
+  async function load(options={}){
     const [ps,ws,prices,operational]=await Promise.all([commRef().collection("impiantiFisici").get(),commRef().collection("lavorazioni").get(),commRef().collection("prezziario").get(),commRef().collection("impianti").get()]);
     state.plants=ps.docs.map(d=>({id:d.id,...d.data()})); state.work=ws.docs.map(d=>({id:d.id,...d.data()})); state.prices=prices.docs.map(d=>({id:d.id,...d.data()})); state.operationalPlants=operational.docs.map(d=>({id:d.id,...d.data()})); state.priceMap=core.buildPriceMap(state.prices);
     if(!state.work.length){ // compatibilità: i documenti storici restano immutati e sono solo adattati in memoria
@@ -29,6 +34,20 @@
     }
     // Risoluzione Firebase/JavaScript: la UI non legge mai risultati dalle formule xlsx.
     state.work=state.work.map(w=>core.enrichWorkItem(w,state.priceMap,state.commessa.percentualeRibassoGenerale));
+    if(options.autoRepair!==false&&needsOperationalRepair()&&!state.autoRepairing){
+      state.autoRepairing=true;
+      try{
+        const report=await synchronizeOperationalModel({debug:true});
+        console.info(`[PlantRepair] autoriparazione completata commessaId=${state.commessa.id} impianti=${report.contatoreFinale}`);
+        return await load({autoRepair:false});
+      }catch(error){
+        console.error("Autoriparazione collegamento impianti non riuscita:",error);
+        const feedback=document.querySelector("#import-feedback");
+        if(feedback)feedback.textContent=`Impianti importati, ma il collegamento con mappa ed elenco non è completo: ${error.message||error}. Premi “Ripara collegamento impianti”.`;
+      }finally{
+        state.autoRepairing=false;
+      }
+    }
     render();
   }
   const clean=(v)=>String(v??"").trim().replace(/\s+/g," ");
@@ -55,7 +74,7 @@
     const done=state.work.filter(w=>w.stato==="FATTO").length,todo=state.work.filter(w=>w.stato==="DA FARE").length;
     document.querySelector("#impianti-management-title").textContent="Gestione impianti e contabilità";
     document.querySelector("#impianti-management-meta").textContent=`${state.commessa.nome||"Commessa"} • Cod. ${state.commessa.codice||"—"}`;
-    document.querySelector("#repair-imported-plants-btn")?.classList.toggle("hidden",!state.work.length||(state.operationalPlants.length>0&&state.work.every(w=>w.impiantoId)));
+    document.querySelector("#repair-imported-plants-btn")?.classList.toggle("hidden",!needsOperationalRepair());
     document.querySelector("#impianti-management-stats").innerHTML=`<span><b>${state.work.length}</b> righe</span><span class="is-done"><b>${done}</b> fatte</span><span><b>${todo}</b> da fare</span><span><b>${money.format(subtotal())}</b> Subtotale lavorazioni fatte</span>`;
     const head=document.querySelector("#impianti-management-thead");head.innerHTML=`<tr>${columns.map(([f,l])=>`<th data-v2-sort="${f}">${esc(l)}${state.sort===f?(state.direction>0?" ↑":" ↓"):""}</th>`).join("")}<th>Azioni</th></tr>`;
     const rows=filtered(),pages=Math.max(1,Math.ceil(rows.length/100));state.page=Math.min(state.page,pages);document.querySelector("#impianti-management-tbody").innerHTML=rows.slice((state.page-1)*100,state.page*100).map(rowHtml).join("")||`<tr><td colspan="22" class="sheet-empty">Nessuna lavorazione trovata.</td></tr>`;

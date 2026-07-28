@@ -24,7 +24,7 @@
         await loadScript("inrete-work-items-v2.js?v=20260728b");
       }
       if (!window.AccountingV2) {
-        await loadScript("accounting-v2.js?v=20260728d");
+        await loadScript("accounting-v2.js?v=20260728e");
       }
       if (!window.InreteWorkItemsV2 || !window.AccountingV2) {
         throw new Error("La vista contabile non è disponibile.");

@@ -26,6 +26,6 @@ const checks=[
  ['riparazione idempotente',js.includes('repairImportedMatrixPlants')&&js.includes('migrationSourceId')&&js.includes('stableId')],
  ['batch sotto limite Firestore',js.includes('i+=400')&&js.includes('commitOperations')],
  ['contatori commessa',js.includes('impiantiFattiCount')&&js.includes('workItemsDaFareCount')],
- ['coordinate validate',js.includes('coordinate=(value,min,max)')&&js.includes('gpsY:coordinate')],
+ ['coordinate validate',js.includes('coordinate=(value,min,max)')&&js.includes('coordinateTools.diagnose')&&js.includes('gpsY:gps.valid?gps.latitude:null')],
  ['pulsante riparazione',html.includes('repair-imported-plants-btn')&&html.includes('Ripara collegamento impianti')]
 ];let failed=false;for(const [name,ok] of checks){console.log(`${ok?'✅':'❌'} ${name}`);failed||=!ok;}if(failed)process.exit(1);

@@ -14767,6 +14767,23 @@ async function importPendingRows() {
     const mergedPotaturaSiepiM = row.potaturaSiepiM != null ? row.potaturaSiepiM : (existing.potaturaSiepiM ?? null);
     const mergedExtraFields = mergeExtraFields(existing.extraFields, row.extraFields);
     const extraFieldsChanged = JSON.stringify(mergedExtraFields || {}) !== JSON.stringify(existing.extraFields || {});
+    const hasImportedCoordinates = Boolean(String(row.coordinateLatitudineOriginale || "").trim() || String(row.coordinateLongitudineOriginale || "").trim());
+    const coordinatePatch = hasImportedCoordinates ? {
+      gpsY: row.gpsY ?? null,
+      gpsX: row.gpsX ?? null,
+      coordinateStatus: row.coordinateStatus || "MISSING",
+      coordinateIssue: row.coordinateIssue || "",
+      coordinateLatitudineOriginale: row.coordinateLatitudineOriginale || "",
+      coordinateLongitudineOriginale: row.coordinateLongitudineOriginale || ""
+    } : {};
+    const coordinateChanged = hasImportedCoordinates && (
+      coordinatePatch.gpsY !== (existing.gpsY ?? null)
+      || coordinatePatch.gpsX !== (existing.gpsX ?? null)
+      || coordinatePatch.coordinateStatus !== String(existing.coordinateStatus || "")
+      || coordinatePatch.coordinateIssue !== String(existing.coordinateIssue || "")
+      || coordinatePatch.coordinateLatitudineOriginale !== String(existing.coordinateLatitudineOriginale || "")
+      || coordinatePatch.coordinateLongitudineOriginale !== String(existing.coordinateLongitudineOriginale || "")
+    );
     const changed = mergedCodicePrezzo !== String(existing.codicePrezzo || "")
       || mergedVoceRiferimento !== String(existing.voceRiferimento || "")
       || mergedTipologiaIntervento !== String(existing.tipologiaIntervento || "")
@@ -14777,7 +14794,8 @@ async function importPendingRows() {
       || mergedSfalciMq !== (existing.sfalciMq ?? null)
       || mergedSfalciVerdiMq !== (existing.sfalciVerdiMq ?? null)
       || mergedPotaturaSiepiM !== (existing.potaturaSiepiM ?? null)
-      || extraFieldsChanged;
+      || extraFieldsChanged
+      || coordinateChanged;
     if (!changed) return;
     rowsToUpdate.push({
       id: existing.id,
@@ -14791,7 +14809,8 @@ async function importPendingRows() {
       sfalciMq: mergedSfalciMq,
       sfalciVerdiMq: mergedSfalciVerdiMq,
       potaturaSiepiM: mergedPotaturaSiepiM,
-      extraFields: mergedExtraFields
+      extraFields: mergedExtraFields,
+      ...coordinatePatch
     });
     existing.codicePrezzo = mergedCodicePrezzo;
     existing.voceRiferimento = mergedVoceRiferimento;
@@ -14803,6 +14822,7 @@ async function importPendingRows() {
     existing.sfalciMq = mergedSfalciMq;
     existing.sfalciVerdiMq = mergedSfalciVerdiMq;
     existing.potaturaSiepiM = mergedPotaturaSiepiM;
+    Object.assign(existing, coordinatePatch);
   });
 
   const operations = [
@@ -14840,6 +14860,14 @@ async function importPendingRows() {
           sfalciVerdiMq: row.sfalciVerdiMq ?? null,
           potaturaSiepiM: row.potaturaSiepiM ?? null,
           extraFields: row.extraFields || {},
+          ...(Object.prototype.hasOwnProperty.call(row, "coordinateStatus") ? {
+            gpsY: row.gpsY ?? null,
+            gpsX: row.gpsX ?? null,
+            coordinateStatus: row.coordinateStatus,
+            coordinateIssue: row.coordinateIssue || "",
+            coordinateLatitudineOriginale: row.coordinateLatitudineOriginale || "",
+            coordinateLongitudineOriginale: row.coordinateLongitudineOriginale || ""
+          } : {}),
           hasOrdinario: hasOrdinario(row.codicePrezzo),
           hasStraordinario: hasStraordinario(row.codicePrezzo),
           tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo)
@@ -14984,6 +15012,17 @@ function normalizeRow(row) {
   const coordinatesEntry = getValueWithMatchedKey(keys, ["coordinate", "coord"]);
   if (coordinatesEntry.key) consumedKeys.add(coordinatesEntry.key);
   const coordinatePair = parseCoordinatePair(coordinatesEntry.value);
+  const coordinateRawY = gpsYEntry.value || coordinatesEntry.value;
+  const coordinateRawX = gpsXEntry.value;
+  const coordinateDiagnosis = window.HeraCoordinateRepair?.diagnose(coordinateRawY, coordinateRawX) || {
+    valid: coordinatePair.lat != null && coordinatePair.lon != null,
+    latitude: parseCoordinate(gpsYEntry.value) ?? coordinatePair.lat,
+    longitude: parseCoordinate(gpsXEntry.value) ?? coordinatePair.lon,
+    status: coordinatePair.lat != null && coordinatePair.lon != null ? "VALID" : "MISSING",
+    message: "",
+    rawLatitude: String(coordinateRawY || ""),
+    rawLongitude: String(coordinateRawX || "")
+  };
 
   const extraFields = {};
   Object.entries(keys).forEach(([key, value]) => {
@@ -15015,8 +15054,12 @@ function normalizeRow(row) {
     frequenzaAnnua: getValue(keys, ["frequenzaannuaminimasfalcieopotaturasiepin", "frequenzaindicativanvolteanno"]),
     tipologiaIntervento: getValue(keys, ["tipologiadisfalciointervento", "lavorazionirichieste", "tipoimpianto"]) || tipologiaImpiantoEntry.value,
     lavorazioniRichieste: getValue(keys, ["lavorazionirichieste", "tipologiadisfalciointervento"]),
-    gpsY: parseCoordinate(gpsYEntry.value) ?? coordinatePair.lat,
-    gpsX: parseCoordinate(gpsXEntry.value) ?? coordinatePair.lon,
+    gpsY: coordinateDiagnosis.valid ? coordinateDiagnosis.latitude : null,
+    gpsX: coordinateDiagnosis.valid ? coordinateDiagnosis.longitude : null,
+    coordinateStatus: coordinateDiagnosis.status,
+    coordinateIssue: coordinateDiagnosis.message,
+    coordinateLatitudineOriginale: coordinateDiagnosis.rawLatitude,
+    coordinateLongitudineOriginale: coordinateDiagnosis.rawLongitude,
     extraFields
   };
 }

@@ -22663,12 +22663,25 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   if (!user) throw new Error("Sessione scaduta: esegui nuovamente il login.");
   const doneAtDate = options.doneAt instanceof Date ? options.doneAt : new Date();
   const doneAt = done ? firebase.firestore.Timestamp.fromDate(doneAtDate) : null;
+  const execution = globalThis.InreteWorkItemsV2?.executionFields(doneAtDate) || {
+    dataEsecuzione: doneAtDate.toISOString().slice(0, 10),
+    oraEsecuzione: doneAtDate.toTimeString().slice(0, 5)
+  };
 
   if (!commessaId) throw new Error("Commessa non selezionata per aggiornamento stato impianto.");
   const uniqueImpiantoIds = [...new Set((Array.isArray(impiantoIds) ? impiantoIds : []).filter(Boolean))];
   if (!uniqueImpiantoIds.length) throw new Error("Nessun impianto disponibile per l'aggiornamento.");
   if (uniqueImpiantoIds.length > 500) throw new Error("Troppi documenti impianto per un singolo aggiornamento atomico.");
   const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
+  const commessaRef = db.collection(getCommesseCollectionName()).doc(commessaId);
+  const workRef = commessaRef.collection("lavorazioni");
+  const workDocs = [];
+  for (let index = 0; index < uniqueImpiantoIds.length; index += 30) {
+    const snapshot = await workRef.where("impiantoId", "in", uniqueImpiantoIds.slice(index, index + 30)).get();
+    snapshot.docs.forEach((doc) => workDocs.push(doc));
+  }
+  const physicalPlantIds = [...new Set(workDocs.map((doc) => doc.data()?.impiantoId).filter(Boolean))];
+  if (uniqueImpiantoIds.length + workDocs.length + physicalPlantIds.length > 500) throw new Error("Troppe lavorazioni per un singolo aggiornamento atomico.");
   const batch = db.batch();
   uniqueImpiantoIds.forEach((impiantoId) => {
     const payload = {
@@ -22678,6 +22691,12 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       doneByUid: done ? String(options.doneByUid || user.uid || "") : "",
       doneByEmail: done ? String(options.doneByEmail || user.email || "") : ""
     };
+    Object.assign(payload, done ? {
+      stato: "FATTO",
+      dataEsecuzione: execution.dataEsecuzione,
+      oraEsecuzione: execution.oraEsecuzione,
+      operatore: options.doneBy || user.displayName || user.email || "Operatore"
+    } : {stato:"DA FARE",dataEsecuzione:"",oraEsecuzione:"",operatore:""});
     if (done) {
       payload.resetAt = null;
       payload.resetBy = "";
@@ -22691,6 +22710,11 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
     }
     batch.set(ref.doc(impiantoId), payload, { merge: true });
   });
+  workDocs.forEach((doc) => batch.set(doc.ref, done ? {
+    stato:"FATTO", dataEsecuzione:execution.dataEsecuzione, oraEsecuzione:execution.oraEsecuzione,
+    operatoreNome:options.doneBy || user.displayName || user.email || "Operatore", operatoreUid:String(options.doneByUid || user.uid || ""), doneAt
+  } : {stato:"DA FARE",dataEsecuzione:"",oraEsecuzione:"",operatoreNome:"",operatoreUid:"",doneAt:null}, {merge:true}));
+  physicalPlantIds.forEach((impiantoId) => batch.set(commessaRef.collection("impiantiFisici").doc(impiantoId), {stato:done?"FATTO":"DA FARE",updatedAt:firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}));
   await batch.commit();
 }
 

@@ -12,5 +12,11 @@ assert.deepEqual(core.splitLegacyValues('A11 | A12; A11,\n A1'),['A11','A12','A1
 assert(core.isInreteCommessa({categoria:'gas INRETE'})); assert(!core.isInreteCommessa({nome:'HERA Bologna'}));
 assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'FATTO'}]),'FATTO');
 assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'DA FARE'}]),'PARZIALMENTE FATTO');
+const split=core.adaptLegacyPlantToWorkItems({id:'i1',codicePrezzo:'A11 | A12',quantitaPerCodice:'2 | 3',done:true,doneAt:new Date(2026,6,28,14,5),doneBy:'Mario'});
+assert.equal(split.length,2); assert.equal(split[0].codiceVocePrezzo,'A11'); assert.equal(split[1].quantita,3);
+assert.equal(split[0].dataEsecuzione,'2026-07-28'); assert.equal(split[0].oraEsecuzione,'14:05'); assert.equal(split[0].operatoreNome,'Mario');
+const ambiguous=core.adaptLegacyPlantToWorkItems({id:'i2',codicePrezzo:'A11;A12',quantita:5});
+assert.equal(ambiguous[0].quantita,null); assert.equal(ambiguous[0].quantityVerificationRequired,true);
 console.log('✅ calcoli prezzi, AC, quantità italiana e subtotale FATTO');
 console.log('✅ split codici, riconoscimento INRETE e stati impianto');
+console.log('✅ adattamento impianti storici multi-codice e data/ora FATTO');

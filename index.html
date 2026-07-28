@@ -878,7 +878,11 @@
       <button id="management-close-btn" class="btn" type="button">Chiudi</button>
     </div>
     <div id="panel-commesse" class="management-panel hidden">
-      <button id="open-organize-commesse-btn" class="btn btn-primary" type="button">Organizza commesse</button>
+      <header class="commesse-management-head">
+        <div><p class="management-eyebrow">AMMINISTRAZIONE</p><h2>Gestione commesse</h2><p class="muted">Cerca, apri e organizza le commesse da un unico spazio.</p></div>
+        <div class="commesse-management-actions"><button id="open-new-commessa-btn" class="btn btn-primary" type="button">+ Nuova commessa</button><button id="open-organize-commesse-btn" class="btn" type="button">Organizza commesse</button></div>
+      </header>
+      <label class="commesse-management-search"><span aria-hidden="true">⌕</span><input id="commesse-management-search" type="search" placeholder="Cerca per nome o codice…" autocomplete="off"><span class="sr-only">Cerca commesse</span></label>
       <section id="organize-commesse-screen" class="organize-commesse-screen hidden" aria-hidden="true">
         <div class="section-head">
           <div>
@@ -907,46 +911,23 @@
           <p id="organize-commesse-feedback" class="muted"></p>
         </form>
       </section>
-      <form id="commessa-form" class="inline-form">
-        <input type="text" id="commessa-name" placeholder="Nuova commessa" required>
-        <input type="text" id="commessa-code" placeholder="Codice commessa">
-        <label for="commessa-type" class="sr-only">Tipo commessa</label>
-        <select id="commessa-type" class="hidden" aria-label="Tipo commessa">
-          <option value="main">Commessa principale</option>
-        </select>
-        <label for="commessa-parent" class="sr-only">Commessa padre</label>
-        <select id="commessa-parent" class="hidden" aria-label="Commessa padre">
-          <option value="">Commessa padre</option>
-        </select>
-        <button class="btn btn-primary" type="submit">Aggiungi commessa</button>
-      </form>
-      <h3>Tutte commesse</h3>
-      <div id="commesse-manage-list" class="simple-list"></div>
-      <h3>Seleziona commessa per aggiunta impianti</h3>
-      <div class="inline-form">
-        <select id="commessa-target-select">
-          <option value="">Usa commessa selezionata in home</option>
-        </select>
-      </div>
-      <h3>Import impianti (Excel, CSV, ODS, HTML, TXT)</h3>
-      <div class="inline-form">
-        <input id="excel-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.fods,.html,.htm,.txt">
-        <button id="import-btn" class="btn" type="button" disabled>Importa impianti</button>
-      </div>
-      <div class="inline-form">
-        <input id="sheet-url" type="url" placeholder="URL Google Sheet (opzionale)">
-        <button id="sheet-url-import-btn" class="btn" type="button">Carica da Google Sheet</button>
-      </div>
-      <p id="import-feedback" class="muted"></p>
-      <h3>Aggiungi impianto manualmente (senza cancellare i precedenti)</h3>
-      <form id="manual-impianto-form" class="inline-form">
-        <input type="text" id="manual-impianto-denominazione" placeholder="Denominazione impianto" required>
-        <input type="text" id="manual-impianto-comune" placeholder="Comune">
-        <input type="text" id="manual-impianto-indirizzo" placeholder="Indirizzo">
-        <input type="text" id="manual-impianto-codice" placeholder="Codice prezzo">
-        <button id="manual-impianto-submit" class="btn btn-primary" type="submit">Aggiungi impianto</button>
-      </form>
-      <p id="manual-impianto-feedback" class="muted"></p>
+      <section id="new-commessa-modal" class="management-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="new-commessa-title">
+        <form id="commessa-form" class="management-dialog-card">
+          <div class="management-dialog-head"><div><p class="management-eyebrow">NUOVA COMMESSA</p><h3 id="new-commessa-title">Crea una nuova commessa</h3></div><button id="close-new-commessa-btn" class="btn" type="button" aria-label="Chiudi">✕</button></div>
+          <label>Nome commessa<input type="text" id="commessa-name" placeholder="Es. HERA Discariche" required></label>
+          <label>Codice commessa<input type="text" id="commessa-code" placeholder="Es. 28018"></label>
+          <select id="commessa-type" class="hidden" aria-label="Tipo commessa"><option value="main">Commessa principale</option></select>
+          <select id="commessa-parent" class="hidden" aria-label="Commessa padre"><option value="">Commessa padre</option></select>
+          <div class="management-dialog-actions"><button id="cancel-new-commessa-btn" class="btn" type="button">Annulla</button><button class="btn btn-primary" type="submit">Crea commessa</button></div>
+        </form>
+      </section>
+      <div id="commesse-manage-list" class="commesse-manage-grid"></div>
+      <section id="impianti-management-screen" class="impianti-management-screen hidden" aria-hidden="true">
+        <header class="impianti-management-head"><button id="close-impianti-management-btn" class="btn" type="button">← Commesse</button><div><p class="management-eyebrow">GESTIONE IMPIANTI</p><h2 id="impianti-management-title">Gestione impianti</h2><p id="impianti-management-meta" class="muted"></p></div><button id="export-all-impianti-btn" class="btn" type="button">Esporta stato impianti</button></header>
+        <select id="commessa-target-select" class="hidden" aria-label="Commessa selezionata"><option value="">Usa commessa selezionata in home</option></select>
+        <section class="import-mode-card import-mode-primary"><div class="import-mode-icon">X</div><div class="import-mode-copy"><p class="management-eyebrow">MODALITÀ PRINCIPALE</p><h3>Importa da Excel</h3><p class="muted">Usa il modello ufficiale per un'importazione precisa e controllata.</p></div><div class="import-mode-actions"><button id="download-excel-template-btn" class="btn" type="button">Scarica modello Excel</button><label class="btn file-picker-btn">Seleziona file<input id="excel-file" type="file" accept=".xlsx,.xls,.csv,.ods"></label><button id="import-btn" class="btn btn-primary" type="button" disabled>Importa impianti</button></div><p id="import-feedback" class="muted"></p></section>
+        <details class="import-mode-card"><summary><span>▦</span><strong>Importa da Google Sheet</strong><small>Apri</small></summary><div class="import-mode-details inline-form"><input id="sheet-url" type="url" placeholder="URL Google Sheet"><button id="sheet-url-import-btn" class="btn" type="button">Carica da Google Sheet</button></div></details>
+        <details class="import-mode-card"><summary><span>＋</span><strong>Inserisci impianto manualmente</strong><small>Apri</small></summary><form id="manual-impianto-form" class="inline-form import-mode-details"><input type="text" id="manual-impianto-denominazione" placeholder="Denominazione impianto" required><input type="text" id="manual-impianto-comune" placeholder="Comune"><input type="text" id="manual-impianto-indirizzo" placeholder="Indirizzo"><input type="text" id="manual-impianto-codice" placeholder="Codice prezzo"><button id="manual-impianto-submit" class="btn btn-primary" type="submit">Aggiungi impianto</button></form><p id="manual-impianto-feedback" class="muted"></p></details>
       <section id="snow-roads-section" class="snow-only-management">
         <h3>Vie neve da pulire</h3>
         <p class="muted">Disponibile solo in Servizio Neve: incolla una via per riga. Vengono salvate nella commessa neve selezionata come cantieri indipendenti.</p>
@@ -955,6 +936,7 @@
           <button class="btn btn-primary" type="submit">Aggiungi vie neve</button>
         </form>
         <p id="snow-roads-feedback" class="muted"></p>
+      </section>
       </section>
     </div>
     <div id="panel-global" class="management-panel hidden">

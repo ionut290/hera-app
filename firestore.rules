@@ -65,6 +65,11 @@ service cloud.firestore {
       }
     }
 
+    // Il report contiene dati storici degli operatori ed è solo amministrativo.
+    match /inreteMigrationAudit/{migrationId} {
+      allow read, write: if isAdmin();
+    }
+
     match /squadre/{squadraId} {
       allow read: if signedIn();
       allow write: if isAdmin();

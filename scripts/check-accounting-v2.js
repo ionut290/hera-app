@@ -14,5 +14,11 @@ const checks=[
  ['compatibilità legacy',js.includes('compatibilità: i documenti storici restano immutati')],
  ['calcolo UI indipendente da Excel',js.includes('la UI non legge mai risultati dalle formule xlsx')],
  ['migrazione INRETE disponibile',js.includes('migrateInreteCommesseToWorkItemsV2')],
- ['import formati',html.includes('accept=".xlsx,.xls,.csv,.ods"')]
+ ['import formati',html.includes('accept=".xlsx,.xls,.csv,.ods"')],
+ ['sincronizzazione operativa',js.includes('synchronizeOperationalModel')&&js.includes('collection("impianti")')],
+ ['riparazione idempotente',js.includes('repairImportedMatrixPlants')&&js.includes('migrationSourceId')&&js.includes('stableId')],
+ ['batch sotto limite Firestore',js.includes('i+=400')&&js.includes('commitOperations')],
+ ['contatori commessa',js.includes('impiantiFattiCount')&&js.includes('workItemsDaFareCount')],
+ ['coordinate validate',js.includes('coordinate=(value,min,max)')&&js.includes('gpsY:coordinate')],
+ ['pulsante riparazione',html.includes('repair-imported-plants-btn')&&html.includes('Ripara collegamento impianti')]
 ];let failed=false;for(const [name,ok] of checks){console.log(`${ok?'✅':'❌'} ${name}`);failed||=!ok;}if(failed)process.exit(1);

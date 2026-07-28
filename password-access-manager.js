@@ -5,7 +5,14 @@
   const PANEL_ID = "password-access-manager-panel";
 
   function getAuth() {
-    return window.firebase && typeof firebase.auth === "function" ? firebase.auth() : null;
+    if (!window.firebase || typeof firebase.auth !== "function") return null;
+    if (!Array.isArray(firebase.apps) || firebase.apps.length === 0) return null;
+    try {
+      return firebase.auth();
+    } catch (error) {
+      console.warn("Firebase Auth non ancora inizializzato; il gestore password attenderà.", error);
+      return null;
+    }
   }
 
   function hasProvider(user, providerId) {

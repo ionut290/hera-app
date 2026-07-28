@@ -1,0 +1,16 @@
+const assert=require('assert');
+const core=require('../inrete-work-items-v2.js');
+const prices=[{id:'p1',codiceVoce:' B4/a ',unitaMisura:'M2',prezzoBase:'80,00',percentualeRibasso:'0,01'},{id:'p2',codiceVoce:'A12',unitaMisura:'AC',prezzoBase:25}];
+assert.equal(core.normalizePriceCode(' B4/A '),'B4/A');
+assert.equal(core.resolvePriceItem(prices,'b4/A').id,'p1');
+let a=core.enrichWorkItem({codiceVocePrezzo:'B4/A',quantita:'2,5',stato:'fatto'},prices,.2);
+assert.equal(a.unitaMisura,'M2'); assert.equal(a.prezzoBase,80); assert.equal(a.percentualeRibasso,.01); assert.equal(a.prezzoRibassato,79.2); assert.equal(a.totale,198);
+const ac=core.enrichWorkItem({codiceVocePrezzo:'A12',quantita:null,stato:'FATTO'},prices,0); assert.equal(ac.totale,25);
+const missing=core.enrichWorkItem({codiceVocePrezzo:'NOPE',quantita:4,stato:'FATTO'},prices,0); assert.equal(missing.totale,null); assert.equal(missing.economicStatus,'DA_VERIFICARE');
+assert.equal(core.calculateCompletedSubtotal([a,ac,missing,{stato:'DA FARE',totale:1000}]),223);
+assert.deepEqual(core.splitLegacyValues('A11 | A12; A11,\n A1'),['A11','A12','A1']);
+assert(core.isInreteCommessa({categoria:'gas INRETE'})); assert(!core.isInreteCommessa({nome:'HERA Bologna'}));
+assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'FATTO'}]),'FATTO');
+assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'DA FARE'}]),'PARZIALMENTE FATTO');
+console.log('✅ calcoli prezzi, AC, quantità italiana e subtotale FATTO');
+console.log('✅ split codici, riconoscimento INRETE e stati impianto');

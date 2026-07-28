@@ -24,17 +24,24 @@ assert.match(interactions, /function getPlannedHours/);
 assert.match(interactions, /getSquadraWorkedHours\(row\)/);
 assert.doesNotMatch(interactions, /getRecordedHours/);
 assert.match(interactions, /replaceSummaryButton\("todayMezziBtn", openAssignedVehicles\)/);
-assert.match(interactions, /row\?\.avviso/);
+assert.match(interactions, /getUnreadPersonalAlerts/);
+assert.match(interactions, /hasCurrentUserInsertedHours/);
+assert.match(interactions, /openHoursPageForCommessa\(assignments\[0\]\.commessaId/);
+assert.match(interactions, /isNotificationForCurrentUser\(alertItem\)/);
 
 assert.match(notifications, /function extractChangedSquadraAlerts/);
 assert.match(notifications, /eventType: "squadra-alert"/);
 assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
-assert.match(index, /today-summary-interactions\.js\?v=20260726b/);
+assert.match(index, /today-summary-interactions\.js\?v=20260728a/);
+assert.match(index, />📂<\/span><strong id="today-commesse-count">0<\/strong><span>Apri commessa<\/span>/);
+assert.match(index, />Inserisci ore<\/span>/);
+assert.match(index, />I tuoi mezzi<\/span>/);
+assert.match(index, />I tuoi avvisi<\/span>/);
 assert.match(index, /squadre-restyle\.css\?v=20260726b/);
 assert.match(serviceWorker, /hera-app-shell-v\d+/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260726c/);
+assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728a/);
 assert.match(serviceWorker, /squadre-restyle\.css\?v=20260726b/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);

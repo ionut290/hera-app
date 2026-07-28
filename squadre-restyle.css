@@ -241,6 +241,11 @@
 
 #today-summary-card .today-summary-item:active {
   transform: scale(0.98);
+  background: #f1f5f9;
+}
+
+#today-summary-card .today-summary-item.is-complete strong {
+  color: #15803d;
 }
 
 /* Uniforma tutte le icone della finestra Oggi alle icone della barra superiore. */

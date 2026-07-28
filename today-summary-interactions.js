@@ -80,13 +80,12 @@
   }
 
   function openAssignedHours() {
-    openChoice({
-      title: "Inserisci ore di oggi",
-      description: "Scegli la commessa: potrai inserire le ore soltanto per la squadra di cui fai parte.",
-      assignments: getAssignments(),
-      actionLabel: "Inserisci ore",
-      onSelect: (assignment) => openHoursPageForCommessa(assignment.commessaId, getTodayDateKey())
-    });
+    const assignments = getAssignments();
+    if (assignments.length === 1) {
+      openHoursPageForCommessa(assignments[0].commessaId, getTodayDateKey());
+      return;
+    }
+    openHoursPage();
   }
 
   function getVehicleIcon(vehicle) {
@@ -163,29 +162,35 @@
   }
 
   function openAlerts() {
-    const groups = getAlertGroups();
-    if (!groups.length) {
-      alert("✅ Nessun avviso per le squadre a cui sei assegnato oggi.");
+    const unreadAlerts = getUnreadPersonalAlerts();
+    if (!unreadAlerts.length) {
+      alert("✅ Non hai nuovi avvisi personali.");
       return;
     }
-    const overlay = document.createElement("div");
-    overlay.className = "confirm-modal";
-    overlay.innerHTML = `
-      <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-label="Avvisi di oggi">
-        <h2>⚠️ Avvisi di oggi</h2>
-        ${groups.map(({ assignment, issues }) => `
-          <section>
-            <h3>${escapeHTML(assignment.commessaName || "Commessa")}</h3>
-            <ul>${issues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul>
-          </section>`).join("")}
-        <div class="confirm-modal-actions">
-          <button type="button" class="btn btn-primary" data-today-alerts-close>Chiudi</button>
-        </div>
-      </div>`;
-    const close = () => overlay.remove();
-    overlay.querySelector("[data-today-alerts-close]")?.addEventListener("click", close);
-    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
-    document.body.appendChild(overlay);
+    activeUserAlert = unreadAlerts[0];
+    if (ui.userAlertText) ui.userAlertText.textContent = `${activeUserAlert.title ? `${activeUserAlert.title}\n\n` : ""}${activeUserAlert.message || ""}`;
+    renderActiveUserAlertAttachments();
+    ui.userAlertModal?.classList.remove("hidden");
+    ui.userAlertModal?.setAttribute("aria-hidden", "false");
+  }
+
+  function getUnreadPersonalAlerts() {
+    if (!currentUser) return [];
+    return userAlerts.filter((alertItem) =>
+      isNotificationForCurrentUser(alertItem)
+      && !Boolean(alertItem?.ackByUserIds?.[currentUser.uid])
+      && !Boolean(alertItem?.dismissedByUserIds?.[currentUser.uid])
+    );
+  }
+
+  function hasCurrentUserInsertedHours(assignments) {
+    if (!assignments.length) return false;
+    return assignments.every((assignment) => {
+      const completed = getCompletedHoursParticipantsForCommessaDate(assignment.commessaId, getTodayDateKey());
+      return Array.from(completed.values()).some((participant) =>
+        doSquadraMemberAndUserMatch(participant.operatore || "")
+      );
+    });
   }
 
   function replaceSummaryButton(key, handler) {
@@ -221,9 +226,15 @@
       });
     });
 
-    const alerts = getAlertGroups(assignments).reduce((sum, group) => sum + group.issues.length, 0);
+    const alerts = getUnreadPersonalAlerts().length;
+    const plannedHours = getPlannedHours(assignments);
+    const hoursInserted = hasCurrentUserInsertedHours(assignments);
     ui.todayCommesseCount.textContent = String(assignments.length);
-    ui.todayHoursCount.textContent = formatSquadraHours(getPlannedHours(assignments)) || "0";
+    ui.todayHoursCount.textContent = `${formatSquadraHours(plannedHours) || "0"} h${hoursInserted ? " ✓" : ""}`;
+    ui.todayHoursBtn?.classList.toggle("is-complete", hoursInserted);
+    ui.todayHoursBtn?.setAttribute("aria-label", hoursInserted
+      ? `Ore inserite. ${formatSquadraHours(plannedHours) || "0"} ore previste oggi`
+      : `Inserisci ore. ${formatSquadraHours(plannedHours) || "0"} ore previste oggi`);
     ui.todayMezziCount.textContent = String(mezzi.size);
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);

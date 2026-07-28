@@ -8,7 +8,7 @@ const APP_SHELL = [
   "./app.js?v=20260727-update2",
   "./native-android-runtime.js?v=20260726-fatto1",
   "./notification-session-enhancements.js?v=20260727b",
-  "./today-summary-interactions.js?v=20260726c",
+  "./today-summary-interactions.js?v=20260728a",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",

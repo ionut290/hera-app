@@ -129,10 +129,11 @@ async function main() {
 
   const whatsappHandler = extractFunction("handleImpiantoWhatsAppClick");
   assert.ok(
-    whatsappHandler.indexOf("getCachedFattoPositionDecision(impianto)")
+    whatsappHandler.indexOf("validateImpiantoCoordinates(impianto)")
       < whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)"),
-    "GPS e distanza devono essere verificati prima della prova visiva"
+    "Le coordinate impianto devono essere validate prima della prova visiva"
   );
+  assert.doesNotMatch(whatsappHandler, /getCachedFattoPositionDecision|refreshFattoPositionDecision|getCurrentPositionOnce|currentUserPos|distanceFromUser/);
   assert.match(whatsappHandler, /const opened = openWhatsApp\(/);
   assert.ok(
     whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)")
@@ -147,24 +148,58 @@ async function main() {
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);
 
-  let deniedEvidenceWrites = 0;
-  const deniedContext = createContext({
-    auth: { currentUser: { uid: "u1" } },
+  const coordinatesContext = createContext();
+  loadFunctions(coordinatesContext, ["validateImpiantoCoordinates"]);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: "44.50", gpsX: "11.34" }).valid, true);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: "", gpsX: "11.34" }).valid, false);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsX: "11.34" }).valid, false);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: "nord", gpsX: "est" }).valid, false);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: 91, gpsX: 11 }).valid, false);
+  assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: 44, gpsX: -181 }).valid, false);
+
+  let evidenceWrites = 0;
+  let whatsappOpens = 0;
+  let doneMoves = 0;
+  const flowContext = createContext({
+    auth: { currentUser: { uid: "u1", displayName: "Operatore" } },
+    selectedCommessaId: "c1",
+    validateImpiantoCoordinates: coordinatesContext.validateImpiantoCoordinates,
+    notifyInvalidImpiantoCoordinates: () => {},
     getWhazzupProcessingKey: () => "c1:sap:100",
     isImpiantoWhazzupProcessing: () => false,
     whazzupProcessingByImpianto: new Set(),
-    getCachedFattoPositionDecision: () => ({ allowed: false, reason: "distance" }),
     openDeferredWhatsAppTargetWindow: () => null,
     closeDeferredWhatsAppTargetWindow: () => {},
-    notifyFattoPositionDenied: () => {},
     clearImpiantoWhazzupProcessing: () => {},
     setImpiantoFattoSavingState: () => {},
+    isNetworkOffline: () => false,
+    recordFattoVisualEvidence: async () => { evidenceWrites += 1; return true; },
+    cacheFattoVisualEvidence: () => {},
+    markWhazzupSafetyPressed: () => {},
+    upsertWhazzupPendingDoneEntry: () => {},
     renderImpianti: () => {},
-    recordFattoVisualEvidence: () => { deniedEvidenceWrites += 1; }
+    openWhatsApp: () => { whatsappOpens += 1; return true; },
+    markImpiantoDoneVisualFallback: () => {},
+    setImpiantiViewMode: () => {},
+    auditLogWhazzupClick: async () => null,
+    forceMoveImpiantoToFatti: async () => { doneMoves += 1; return true; },
+    updateAuditLogWhazzupClick: async () => {},
+    getPendingActionForImpianto: () => ({ status: "pending" }),
+    isActionWaitingForSync: () => true,
+    markPendingActionStatus: () => {},
+    updateConnectivityStatus: () => {},
+    markImpiantoDoneRecoveryRequired: async () => {},
+    alert: () => {}
   });
-  vm.runInContext(whatsappHandler, deniedContext);
-  assert.equal(await deniedContext.handleImpiantoWhatsAppClick({ id: "a" }), false);
-  assert.equal(deniedEvidenceWrites, 0, "Un FATTO oltre 4 km non deve creare prova visiva");
+  vm.runInContext(whatsappHandler, flowContext);
+  assert.equal(await flowContext.handleImpiantoWhatsAppClick({ id: "a", gpsY: "44.50", gpsX: "11.34" }), true);
+  assert.equal(evidenceWrites, 1, "Coordinate valide conservano il salvataggio FATTO");
+  assert.equal(whatsappOpens, 1, "Coordinate valide conservano l’apertura WhatsApp");
+  assert.equal(doneMoves, 1, "Coordinate valide conservano il trasferimento nei FATTI");
+
+  assert.equal(await flowContext.handleImpiantoWhatsAppClick({ id: "b", gpsY: "", gpsX: "11.34" }), false);
+  assert.equal(evidenceWrites, 1, "Coordinate mancanti bloccano prima del salvataggio FATTO");
+  assert.equal(whatsappOpens, 1, "Coordinate mancanti bloccano prima di WhatsApp");
 
   const forceHandler = extractFunction("forceMarkDone");
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);

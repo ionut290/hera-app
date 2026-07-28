@@ -1,14 +1,14 @@
-const CACHE_NAME = "hera-app-shell-v39";
+const CACHE_NAME = "hera-app-shell-v40";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260727-update2",
   "./calendar-feature.css?v=20260727a",
-  "./squadre-restyle.css?v=20260728b",
+  "./squadre-restyle.css?v=20260728c",
   "./app.js?v=20260728-today",
   "./native-android-runtime.js?v=20260726-fatto1",
   "./notification-session-enhancements.js?v=20260727b",
-  "./today-summary-interactions.js?v=20260728b",
+  "./today-summary-interactions.js?v=20260728c",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",

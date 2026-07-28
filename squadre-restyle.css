@@ -281,11 +281,10 @@
 
 #today-summary-card #today-commesse-count,
 #today-summary-card #today-mezzi-count {
-  overflow: hidden;
   max-width: 100%;
   font-size: clamp(0.58rem, 1.55vw, 0.78rem);
   line-height: 1.05;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 #today-summary-card .today-summary-item span:last-child {
@@ -307,11 +306,10 @@
 }
 
 #today-summary-card .today-summary-copy small {
-  overflow: hidden;
   font-size: 0.76em;
   font-weight: 600;
   line-height: 1.05;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 #today-summary-card .today-summary-item:disabled {

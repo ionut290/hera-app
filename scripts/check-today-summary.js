@@ -43,7 +43,7 @@ assert.match(notifications, /eventType: "squadra-alert"/);
 assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
-assert.match(index, /today-summary-interactions\.js\?v=20260728e/);
+assert.match(index, /today-summary-interactions\.js\?v=20260728f/);
 assert.match(index, /id="today-commesse-action">APRI/);
 assert.doesNotMatch(index, /Nessuna commessa assegnata|Apri la tua commessa/);
 assert.match(index, />Inserisci ore<\/span>/);
@@ -52,7 +52,7 @@ assert.doesNotMatch(index, /Nessun mezzo assegnato|I tuoi mezzi|Visualizza i mez
 assert.match(index, />I tuoi avvisi<\/span>/);
 assert.match(index, /squadre-restyle\.css\?v=20260728c/);
 assert.match(serviceWorker, /hera-app-shell-v\d+/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728e/);
+assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728f/);
 assert.match(serviceWorker, /squadre-restyle\.css\?v=20260728c/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);
@@ -61,8 +61,26 @@ assert.doesNotMatch(layout, /#today-summary-card #today-commesse-count,[\s\S]*?t
 assert.match(interactions, /commessaNames\.join\(" • "\)/);
 assert.match(interactions, /\[\.\.\.mezzi\.values\(\)\]\.join\(" • "\)/);
 assert.match(interactions, /getNotificationPrimaryDateKey\(alertItem\) === dateKey/);
-assert.match(interactions, /getActiveSquadreDateKey\(\) \|\| getTodayDateKey\(\)/);
+assert.match(interactions, /const getSummaryDateKey = \(\) => getTodayDateKey\(\);/);
+assert.doesNotMatch(interactions, /getActiveSquadreDateKey\(/);
 assert.match(interactions, /findCurrentUserSquadreForDate\(getSummaryDateKey\(\)\)/);
+assert.match(interactions, /function openAssignedCommessa\(\) \{[\s\S]*?assignments: getAssignments\(\)/);
+assert.match(interactions, /function openAssignedHours\(\) \{[\s\S]*?const assignments = getAssignments\(\);[\s\S]*?openHoursPageForCommessa\(assignments\[0\]\.commessaId, getSummaryDateKey\(\)\)/);
+assert.match(interactions, /function openAssignedVehicles\(\) \{[\s\S]*?const assignments = getAssignments\(\);/);
+assert.match(interactions, /function getUnreadPersonalAlerts\(dateKey = getSummaryDateKey\(\)\)/);
+assert.match(interactions, /function renderInteractiveTodaySummary\(\) \{[\s\S]*?const dateKey = getSummaryDateKey\(\);[\s\S]*?findCurrentUserSquadreForDate\(dateKey\)/);
+const summaryDateExpression = interactions.match(/const getSummaryDateKey = \(\) => ([^;]+);/)?.[1];
+assert.ok(summaryDateExpression, "getSummaryDateKey must be defined");
+const evaluateSummaryDate = Function(
+  "getTodayDateKey",
+  "getActiveSquadreDateKey",
+  `return (${summaryDateExpression});`
+);
+assert.equal(
+  evaluateSummaryDate(() => "2026-07-28", () => "2026-07-27"),
+  "2026-07-28",
+  "the today card must ignore a different active squadre date"
+);
 assert.match(interactions, /assignedStart === null \? "--:--" : formatHoursMinutes\(assignedStart\)/);
 assert.match(app, /function getSquadraRowMembers/);
 assert.match(app, /row\.personale, row\.operatori, row\.caposquadra/);

@@ -1,6 +1,9 @@
 "use strict";
 
 (() => {
+  const ROME_TIME_ZONE = "Europe/Rome";
+  let todayHoursInterval = null;
+
   const getAssignments = () => getCurrentUserAssignedCommesseForDate(getTodayDateKey());
 
   function getPlannedHours(assignments = getAssignments()) {
@@ -183,14 +186,75 @@
     );
   }
 
-  function hasCurrentUserInsertedHours(assignments) {
-    if (!assignments.length) return false;
-    return assignments.every((assignment) => {
-      const completed = getCompletedHoursParticipantsForCommessaDate(assignment.commessaId, getTodayDateKey());
-      return Array.from(completed.values()).some((participant) =>
-        doSquadraMemberAndUserMatch(participant.operatore || "")
-      );
+  function getCurrentUserSavedHours(assignments, dateKey) {
+    const assignedRows = new Map(assignments.map((assignment) => [
+      String(assignment.commessaId),
+      new Set((assignment.matchedRows || []).map(({ squadraIndex }) => String(squadraIndex)))
+    ]));
+    let total = 0;
+    let found = false;
+    const sources = [
+      ...allHoursReports,
+      ...allHoursApprovalRequests.filter((request) => String(request.status || "").trim() !== "rejected")
+    ];
+    sources.forEach((record) => {
+      if (String(record?.date || "").trim() !== dateKey) return;
+      (Array.isArray(record?.entries) ? record.entries : []).forEach((entry) => {
+        const teamIndexes = assignedRows.get(String(entry?.commessaId || ""));
+        if (!teamIndexes) return;
+        (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+          const rowTeam = String(row?.squadraIndex || entry?.squadraIndex || "").trim();
+          if (rowTeam && !teamIndexes.has(rowTeam)) return;
+          if (!doSquadraMemberAndUserMatch(row?.operatore || "")) return;
+          const hours = Number(row?.ore);
+          if (!Number.isFinite(hours) || hours <= 0) return;
+          found = true;
+          total += hours;
+        });
+      });
     });
+    return { found, minutes: Math.max(0, Math.round(total * 60)) };
+  }
+
+  function formatHoursMinutes(minutes) {
+    const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+    return `${String(Math.floor(safeMinutes / 60)).padStart(2, "0")}:${String(safeMinutes % 60).padStart(2, "0")}`;
+  }
+
+  function getRomeClockMinutes(now = new Date()) {
+    const parts = new Intl.DateTimeFormat("it-IT", {
+      timeZone: ROME_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).formatToParts(now);
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return Number(values.hour) * 60 + Number(values.minute);
+  }
+
+  function getAssignedStartMinutes(assignments) {
+    const starts = assignments.flatMap((assignment) => (assignment.matchedRows || [])
+      .map(({ row }) => parseSquadraTimeToMinutes(getSquadraOrarioParts(row).start))
+      .filter((value) => value !== null));
+    return starts.length ? Math.min(...starts) : null;
+  }
+
+  function getLiveWorkedMinutes(assignments) {
+    const start = getAssignedStartMinutes(assignments);
+    if (start === null) return null;
+    const elapsed = Math.max(0, getRomeClockMinutes() - start);
+    return elapsed > 8 * 60 ? elapsed - 60 : elapsed;
+  }
+
+  function stopTodayHoursCounter() {
+    if (todayHoursInterval !== null) window.clearInterval(todayHoursInterval);
+    todayHoursInterval = null;
+  }
+
+  function syncTodayHoursCounter(shouldRun) {
+    if (!shouldRun) {
+      stopTodayHoursCounter();
+      return;
+    }
+    if (todayHoursInterval !== null) return;
+    todayHoursInterval = window.setInterval(() => renderTodaySummary(), 60 * 1000);
   }
 
   function replaceSummaryButton(key, handler) {
@@ -227,18 +291,34 @@
     });
 
     const alerts = getUnreadPersonalAlerts().length;
-    const plannedHours = getPlannedHours(assignments);
-    const hoursInserted = hasCurrentUserInsertedHours(assignments);
-    ui.todayCommesseCount.textContent = String(assignments.length);
-    ui.todayHoursCount.textContent = `${formatSquadraHours(plannedHours) || "0"} h${hoursInserted ? " ✓" : ""}`;
+    const savedHours = getCurrentUserSavedHours(assignments, dateKey);
+    const liveMinutes = savedHours.found ? savedHours.minutes : getLiveWorkedMinutes(assignments);
+    const hoursText = liveMinutes === null ? "--:--" : formatHoursMinutes(liveMinutes);
+    const commessaNames = assignments.map(({ commessaName }) => commessaName).filter(Boolean);
+    ui.todayCommesseCount.textContent = assignments.length
+      ? (assignments.length === 1 ? commessaNames[0] : `${assignments.length} commesse assegnate`)
+      : "Nessuna commessa assegnata";
+    document.getElementById("today-commesse-name")?.replaceChildren(document.createTextNode(
+      assignments.length === 1 ? commessaNames[0] : (assignments.length > 1 ? commessaNames.join(", ") : "Nessuna commessa assegnata")
+    ));
+    ui.todayCommesseBtn.disabled = assignments.length === 0;
+    ui.todayHoursCount.textContent = hoursText;
+    const hoursInserted = savedHours.found;
     ui.todayHoursBtn?.classList.toggle("is-complete", hoursInserted);
     ui.todayHoursBtn?.setAttribute("aria-label", hoursInserted
-      ? `Ore inserite. ${formatSquadraHours(plannedHours) || "0"} ore previste oggi`
-      : `Inserisci ore. ${formatSquadraHours(plannedHours) || "0"} ore previste oggi`);
-    ui.todayMezziCount.textContent = String(mezzi.size);
+      ? `Ore inserite oggi: ${hoursText}. Premi per visualizzarle o modificarle`
+      : `Inserisci ore. Tempo lavorato oggi: ${hoursText}`);
+    syncTodayHoursCounter(!hoursInserted && getAssignedStartMinutes(assignments) !== null);
+    ui.todayMezziCount.textContent = mezzi.size
+      ? `${mezzi.size} ${mezzi.size === 1 ? "mezzo assegnato" : "mezzi assegnati"}`
+      : "Nessun mezzo assegnato";
+    ui.todayMezziBtn.disabled = mezzi.size === 0;
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);
   };
+
+  window.addEventListener("pagehide", stopTodayHoursCounter);
+  window.addEventListener("pageshow", () => renderTodaySummary());
 
   function installVehiclePickerFix() {
     if (document.getElementById("vehicle-picker-fix-style")) return;

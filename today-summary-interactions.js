@@ -5,7 +5,7 @@
   let todayHoursInterval = null;
 
   const getSummaryDateKey = () => getActiveSquadreDateKey() || getTodayDateKey();
-  const getAssignments = () => getCurrentUserAssignedCommesseForDate(getSummaryDateKey());
+  const getAssignments = () => findCurrentUserSquadreForDate(getSummaryDateKey());
 
   function getPlannedHours(assignments = getAssignments()) {
     const uniqueRows = new Set();
@@ -275,8 +275,11 @@
 
   renderTodaySummary = function renderInteractiveTodaySummary() {
     if (!ui.todayCommesseCount) return;
+    if (!currentUser || areStartupCoreCollectionsLoading()
+      || personaleLoadState.status === "loading" || squadreLoadState.status === "loading"
+      || commesseLoadState.status === "loading" || mezziLoadState.status === "loading") return;
     const dateKey = getSummaryDateKey();
-    const assignments = getCurrentUserAssignedCommesseForDate(dateKey);
+    const assignments = findCurrentUserSquadreForDate(dateKey);
     const mezzi = new Map();
     const uniqueRows = new Set();
 
@@ -294,8 +297,10 @@
 
     const alerts = getUnreadPersonalAlerts().length;
     const savedHours = getCurrentUserSavedHours(assignments, dateKey);
-    const liveMinutes = savedHours.found ? savedHours.minutes : getLiveWorkedMinutes(assignments);
-    const hoursText = liveMinutes === null ? "--:--" : formatHoursMinutes(liveMinutes);
+    const assignedStart = getAssignedStartMinutes(assignments);
+    const hoursText = savedHours.found
+      ? formatHoursMinutes(savedHours.minutes)
+      : assignedStart === null ? "--:--" : formatHoursMinutes(assignedStart);
     const commessaNames = [...new Set(assignments.map(({ commessaName }) => String(commessaName || "").trim()).filter(Boolean))];
     const commessaAction = document.getElementById("today-commesse-action");
     if (commessaAction) commessaAction.textContent = assignments.length ? "APRI" : "NESSUNA COMMESSA";
@@ -306,8 +311,8 @@
     ui.todayHoursBtn?.classList.toggle("is-complete", hoursInserted);
     ui.todayHoursBtn?.setAttribute("aria-label", hoursInserted
       ? `Ore inserite oggi: ${hoursText}. Premi per visualizzarle o modificarle`
-      : `Inserisci ore. Tempo lavorato oggi: ${hoursText}`);
-    syncTodayHoursCounter(!hoursInserted && getAssignedStartMinutes(assignments) !== null);
+      : `Inserisci ore. Inizio squadra: ${hoursText}`);
+    syncTodayHoursCounter(false);
     const mezziAction = document.getElementById("today-mezzi-action");
     if (mezziAction) mezziAction.textContent = mezzi.size ? "ELENCO MEZZI" : "NESSUN MEZZO";
     ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join(" • ") : "";

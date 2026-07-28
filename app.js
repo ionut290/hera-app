@@ -10831,6 +10831,7 @@ function subscribeHoursStats() {
     unsubscribeHoursStats = db.collection(getOreReportsCollectionName()).onSnapshot((snapshot) => {
       allHoursReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursReportsLoaded = true;
+      renderTodaySummary();
       recalculateCommessaWorkSummaries();
       renderParentCommessaOverview();
       renderSquadre();
@@ -10841,6 +10842,7 @@ function subscribeHoursStats() {
     unsubscribeHoursApprovals = db.collection(getOreApprovalRequestsCollectionName()).onSnapshot((snapshot) => {
       allHoursApprovalRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       hoursApprovalsLoaded = true;
+      renderTodaySummary();
       hoursApprovalRequests = allHoursApprovalRequests;
       renderHoursApprovalRequests();
       renderSquadre();

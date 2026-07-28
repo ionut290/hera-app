@@ -49,6 +49,7 @@ jobs:
 
       - name: Verify Android runtime
         run: |
+          npm run sync:service-worker-assets
           npm run check:syntax
           npm run check:app-update
           npm run check:notifications

@@ -9,6 +9,7 @@
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
     "android:aab:prepare": "node scripts/prepare-capacitor-web.js",
+    "sync:service-worker-assets": "node scripts/sync-service-worker-assets.js",
     "check:syntax": "node --check app.js",
     "check:app-update": "node scripts/check-app-update.js",
     "check:notifications": "node scripts/check-notification-experience.js",

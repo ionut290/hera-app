@@ -1,5 +1,5 @@
 const fs=require('fs');
-const js=fs.readFileSync('accounting-v2.js','utf8');const core=fs.readFileSync('inrete-work-items-v2.js','utf8');const html=fs.readFileSync('index.html','utf8');const repair=fs.readFileSync('operational-import-repair.js','utf8');
+const js=fs.readFileSync('accounting-v2.js','utf8');const core=fs.readFileSync('inrete-work-items-v2.js','utf8');const html=fs.readFileSync('index.html','utf8');const repair=fs.readFileSync('operational-import-repair.js','utf8');const guard=fs.readFileSync('accounting-view-guard.js','utf8');const sw=fs.readFileSync('sw.js','utf8');
 const checks=[
  ['titolo gestione',html.includes('Gestione impianti e contabilità')],
  ['22 colonne',js.includes('"Totali"')&&js.includes('"Voce di Riferimento Elenco Prezzi"')],
@@ -18,6 +18,8 @@ const checks=[
  ['sincronizzazione operativa',js.includes('synchronizeOperationalModel')&&js.includes('collection("impianti")')],
  ['autoriparazione importazioni incomplete',js.includes('needsOperationalRepair')&&js.includes('autoRepairing')&&js.includes('load({autoRepair:false})')],
  ['autoriparazione dal caricamento app',repair.includes('repairCommessa')&&repair.includes('workByPlantId')&&repair.includes('repairImportedInretePlants')],
+ ['vista contabile stabile',guard.includes('ensureAccountingView')&&guard.includes('window.AccountingV2.open')&&!guard.includes('renderImpiantiManagementTable')],
+ ['motore INRETE disponibile offline',sw.includes('./inrete-work-items-v2.js?v=20260728b')&&sw.includes('./accounting-view-guard.js?v=20260728a')],
  ['riparazione idempotente',js.includes('repairImportedMatrixPlants')&&js.includes('migrationSourceId')&&js.includes('stableId')],
  ['batch sotto limite Firestore',js.includes('i+=400')&&js.includes('commitOperations')],
  ['contatori commessa',js.includes('impiantiFattiCount')&&js.includes('workItemsDaFareCount')],

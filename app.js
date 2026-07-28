@@ -1499,7 +1499,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-commesse": {
     rispostaBreve: "Da qui gestisci commesse e impianti (aggiunta, import Excel e gestione lista).",
     passi: [
-      "Apri il menu (⋮) e premi “Aggiungi commesse”.",
+      "Apri il menu (⋮) e premi “Gestione commesse”.",
       "Inserisci il nome commessa oppure seleziona una commessa per import/aggiunte impianto.",
       "Usa i form della pagina per completare l'operazione."
     ],
@@ -1867,6 +1867,17 @@ document.getElementById("commesse-management-search")?.addEventListener("input",
 document.getElementById("close-impianti-management-btn")?.addEventListener("click", closeImpiantiManagement);
 document.getElementById("download-excel-template-btn")?.addEventListener("click", downloadOfficialImpiantiTemplate);
 document.getElementById("export-all-impianti-btn")?.addEventListener("click", exportAllImpiantiStatus);
+document.getElementById("add-management-impianto-btn")?.addEventListener("click", addManagementImpianto);
+document.getElementById("toggle-import-impianti-btn")?.addEventListener("click", () => document.getElementById("impianti-import-card")?.classList.toggle("hidden"));
+document.getElementById("clear-impianti-management-search")?.addEventListener("click", () => { const input = document.getElementById("impianti-management-search"); if (input) input.value = ""; managementPage = 1; renderImpiantiManagementTable(); });
+document.getElementById("impianti-management-search")?.addEventListener("input", () => { clearTimeout(managementSearchTimer); managementSearchTimer = setTimeout(() => { managementPage = 1; renderImpiantiManagementTable(); }, 250); });
+["impianti-status-filter", "impianti-comune-filter", "impianti-tipologia-filter", "impianti-operatore-filter"].forEach((id) => document.getElementById(id)?.addEventListener("change", () => { managementPage = 1; renderImpiantiManagementTable(); }));
+document.getElementById("impianti-management-thead")?.addEventListener("click", (event) => { const header = event.target.closest("[data-sort]"); if (header?.dataset.sort) { managementSort = managementSort.field === header.dataset.sort ? { field: header.dataset.sort, direction: -managementSort.direction } : { field: header.dataset.sort, direction: 1 }; renderImpiantiManagementTable(); } });
+document.getElementById("impianti-management-thead")?.addEventListener("change", (event) => { if (!event.target.matches("[data-select-all]")) return; document.querySelectorAll("#impianti-management-tbody [data-plant-id]").forEach((row) => event.target.checked ? managementSelectedIds.add(row.dataset.plantId) : managementSelectedIds.delete(row.dataset.plantId)); renderImpiantiManagementTable(); });
+document.getElementById("impianti-management-tbody")?.addEventListener("change", (event) => { if (!event.target.matches("[data-select-row]")) return; const id = event.target.closest("[data-plant-id]")?.dataset.plantId; if (event.target.checked) managementSelectedIds.add(id); else managementSelectedIds.delete(id); updateManagementBulkBar(); });
+document.getElementById("impianti-management-tbody")?.addEventListener("click", (event) => { const button = event.target.closest("[data-row-action]"); if (!button) return; const row = button.closest("[data-plant-id]"); if (button.dataset.rowAction === "edit") { managementEditingId = row.dataset.plantId; renderImpiantiManagementTable(); } else if (button.dataset.rowAction === "cancel") { managementEditingId = ""; renderImpiantiManagementTable(); } else if (button.dataset.rowAction === "save") void saveManagementPlantRow(row); });
+document.getElementById("impianti-management-pagination")?.addEventListener("click", (event) => { const button = event.target.closest("[data-page]"); if (button && !button.disabled) { managementPage = Number(button.dataset.page); renderImpiantiManagementTable(); } });
+document.getElementById("impianti-bulk-actions")?.addEventListener("click", (event) => { const button = event.target.closest("[data-bulk]"); if (button) void runManagementBulkAction(button.dataset.bulk); });
 document.getElementById("snow-roads-form")?.addEventListener("submit", addSnowRoadsToSelectedCommessa);
 ui.commessaType?.addEventListener("change", updateCommessaParentField);
 ui.openOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(true));
@@ -3760,7 +3771,7 @@ function openManagementPanel(panel) {
     return;
   }
   const panelMap = {
-    commesse: { el: ui.panelCommesse, title: "Aggiungi commesse" },
+    commesse: { el: ui.panelCommesse, title: "Gestione commesse" },
     squadre: { el: ui.panelSquadre, title: "Composizione squadre" },
     personale: { el: ui.panelPersonale, title: "Personale" },
     mezzi: { el: ui.panelMezzi, title: "Mezzi" },
@@ -10979,6 +10990,7 @@ function subscribeStatsForCommesse() {
       recalculateCommessaWorkSummaries();
       renderCommesseHomeList();
       renderCommesseManagementList();
+      if (managementCommessaId === commessaId) renderImpiantiManagementTable();
       const commessa = commesseById.get(commessaId);
       if (snapshot.empty && commessa && Number(commessa.excelModelVersion || 0) < 2 && canManageData()) {
         db.collection(getCommesseCollectionName()).doc(commessaId).set({
@@ -28019,6 +28031,115 @@ const OFFICIAL_IMPIANTI_COLUMNS = [
   "Data esecuzione", "Ora esecuzione", "Operatore", "Note"
 ];
 
+const MANAGEMENT_IMPIANTI_COLUMNS = [
+  ["numeroProgressivo", "N."], ["idSap", "ID SAP"], ["denominazione", "Denominazione impianto"],
+  ["tipologiaImpianto", "Tipologia impianto"], ["comune", "Comune"], ["indirizzo", "Indirizzo"],
+  ["gpsY", "Latitudine"], ["gpsX", "Longitudine"], ["codicePrezzo", "Codice prezzo"],
+  ["area", "Area / Competenza"], ["dittaEsecutrice", "Ditta esecutrice"], ["dataEsecuzione", "Data esecuzione"],
+  ["oraEsecuzione", "Ora esecuzione"], ["operatore", "Operatore"], ["note", "Note"], ["stato", "Stato"]
+];
+const MANAGEMENT_SORTABLE_FIELDS = new Set(["numeroProgressivo", "idSap", "denominazione", "comune", "dataEsecuzione", "operatore", "stato"]);
+const MANAGEMENT_STATUSES = ["DA FARE", "FATTO", "IN LAVORAZIONE", "SOSPESO", "DA VERIFICARE"];
+let managementCommessaId = "";
+let managementSearchTimer = null;
+let managementSort = { field: "numeroProgressivo", direction: 1 };
+let managementPage = 1;
+let managementEditingId = "";
+let managementSavingId = "";
+const managementSelectedIds = new Set();
+
+function normalizeManagementSearch(value) {
+  return String(value || "").trim().toLocaleLowerCase("it").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function getManagementPlantStatus(plant) {
+  return plant.done ? "FATTO" : (String(plant.stato || "DA FARE").trim().toUpperCase() || "DA FARE");
+}
+
+function getManagementExecution(plant) {
+  const parts = plant.doneAt ? formatRomeDoneParts(plant.doneAt) : { date: "", time: "" };
+  return { date: plant.dataEsecuzione || parts.date, time: plant.oraEsecuzione || parts.time, operator: plant.operatore || plant.doneBy || "" };
+}
+
+function hasValidManagementCoordinates(plant) {
+  const lat = Number(plant.gpsY), lng = Number(plant.gpsX);
+  return String(plant.gpsY ?? "").trim() !== "" && String(plant.gpsX ?? "").trim() !== "" && Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+function getManagementSearchRank(plant, query) {
+  if (!query) return 0;
+  const execution = getManagementExecution(plant);
+  const values = [plant.denominazione, plant.idSap, plant.comune, plant.codicePrezzo, plant.tipologiaImpianto, plant.indirizzo, plant.area, plant.dittaEsecutrice, execution.operator, plant.note || plant.noteImpianto].map(normalizeManagementSearch);
+  if (values[0].startsWith(query)) return 1;
+  if (values[1].startsWith(query)) return 2;
+  if (values[2].startsWith(query)) return 3;
+  if (values[3].startsWith(query)) return 4;
+  if (values[0].includes(query)) return 5;
+  return values.some((value) => value.includes(query)) ? 6 : Infinity;
+}
+
+function managementFieldValue(plant, field) {
+  const execution = getManagementExecution(plant);
+  if (field === "stato") return getManagementPlantStatus(plant);
+  if (field === "dataEsecuzione") return execution.date;
+  if (field === "oraEsecuzione") return execution.time;
+  if (field === "operatore") return execution.operator;
+  if (field === "note") return plant.note || plant.noteImpianto || "";
+  return plant[field] ?? "";
+}
+
+function populateManagementFilter(id, label, values) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = `<option value="">${label}</option>` + [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it")).map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+}
+
+function renderImpiantiManagementTable() {
+  const tbody = document.getElementById("impianti-management-tbody");
+  const thead = document.getElementById("impianti-management-thead");
+  if (!tbody || !thead || !managementCommessaId) return;
+  const all = getCommessaCachedImpianti(managementCommessaId);
+  const query = normalizeManagementSearch(document.getElementById("impianti-management-search")?.value);
+  const statusFilter = document.getElementById("impianti-status-filter")?.value || "all";
+  const comune = document.getElementById("impianti-comune-filter")?.value || "";
+  const tipologia = document.getElementById("impianti-tipologia-filter")?.value || "";
+  const operatore = document.getElementById("impianti-operatore-filter")?.value || "";
+  populateManagementFilter("impianti-comune-filter", "Comune", all.map((p) => String(p.comune || "")));
+  populateManagementFilter("impianti-tipologia-filter", "Tipologia", all.map((p) => String(p.tipologiaImpianto || "")));
+  populateManagementFilter("impianti-operatore-filter", "Operatore", all.map((p) => getManagementExecution(p).operator));
+  const matchesStatus = (plant) => statusFilter === "all"
+    || (statusFilter === "done" && plant.done) || (statusFilter === "todo" && !plant.done)
+    || (statusFilter === "with-coordinates" && hasValidManagementCoordinates(plant))
+    || (statusFilter === "without-coordinates" && !hasValidManagementCoordinates(plant))
+    || (statusFilter === "errors" && (!String(plant.denominazione || "").trim() || ((String(plant.gpsY ?? "").trim() || String(plant.gpsX ?? "").trim()) && !hasValidManagementCoordinates(plant))));
+  const filtered = all.map((plant) => ({ plant, rank: getManagementSearchRank(plant, query) })).filter(({ plant, rank }) => rank < Infinity && matchesStatus(plant) && (!comune || plant.comune === comune) && (!tipologia || plant.tipologiaImpianto === tipologia) && (!operatore || getManagementExecution(plant).operator === operatore));
+  filtered.sort((a, b) => (query && a.rank !== b.rank ? a.rank - b.rank : managementSort.direction * String(managementFieldValue(a.plant, managementSort.field)).localeCompare(String(managementFieldValue(b.plant, managementSort.field)), "it", { numeric: true })));
+  const done = all.filter((plant) => plant.done).length;
+  document.getElementById("impianti-management-stats").innerHTML = `<span><b>${all.length}</b> impianti</span><span class="is-done"><b>${done}</b> fatti</span><span><b>${all.length - done}</b> da fare</span>`;
+  thead.innerHTML = `<tr><th class="sheet-select"><input type="checkbox" data-select-all aria-label="Seleziona tutti"></th>${MANAGEMENT_IMPIANTI_COLUMNS.map(([field, label]) => `<th data-sort="${MANAGEMENT_SORTABLE_FIELDS.has(field) ? field : ""}" class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${label}${managementSort.field === field ? (managementSort.direction > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}<th>Azioni</th></tr>`;
+  const pageSize = 100, pages = Math.max(1, Math.ceil(filtered.length / pageSize)); managementPage = Math.min(managementPage, pages);
+  const pageRows = filtered.slice((managementPage - 1) * pageSize, managementPage * pageSize);
+  if (!pageRows.length) tbody.innerHTML = `<tr><td colspan="18" class="sheet-empty">Nessun impianto trovato.</td></tr>`;
+  else tbody.innerHTML = pageRows.map(({ plant }) => renderManagementPlantRow(plant)).join("");
+  document.getElementById("impianti-management-pagination").innerHTML = pages > 1 ? `<button class="btn" data-page="${managementPage - 1}" ${managementPage === 1 ? "disabled" : ""}>←</button><span>Pagina ${managementPage} di ${pages} · ${filtered.length} risultati</span><button class="btn" data-page="${managementPage + 1}" ${managementPage === pages ? "disabled" : ""}>→</button>` : `<span>${filtered.length} risultati</span>`;
+  updateManagementBulkBar();
+}
+
+function renderManagementPlantRow(plant) {
+  const editing = managementEditingId === plant.id, saving = managementSavingId === plant.id;
+  const editableFields = new Set(MANAGEMENT_IMPIANTI_COLUMNS.slice(1).map(([field]) => field));
+  const cells = MANAGEMENT_IMPIANTI_COLUMNS.map(([field]) => {
+    const value = managementFieldValue(plant, field);
+    if (!editing || !editableFields.has(field)) return `<td class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${field === "stato" ? `<span class="plant-status status-${normalizeManagementSearch(value).replace(/\s+/g, "-")}">${escapeHTML(value)}</span>` : escapeHTML(value || (field === "numeroProgressivo" ? "—" : ""))}</td>`;
+    if (field === "stato") return `<td><select data-field="stato">${MANAGEMENT_STATUSES.map((status) => `<option ${status === value ? "selected" : ""}>${status}</option>`).join("")}</select></td>`;
+    const type = field === "dataEsecuzione" ? "date" : field === "oraEsecuzione" ? "time" : "text";
+    return `<td><input data-field="${field}" type="${type}" value="${escapeHTML(value)}" ${saving ? "disabled" : ""}></td>`;
+  }).join("");
+  return `<tr data-plant-id="${escapeHTML(plant.id)}" class="${editing ? "is-editing" : ""}"><td class="sheet-select"><input type="checkbox" data-select-row ${managementSelectedIds.has(plant.id) ? "checked" : ""} aria-label="Seleziona impianto"></td>${cells}<td class="sheet-actions">${editing ? `<button class="btn btn-primary" data-row-action="save" ${saving ? "disabled" : ""}>${saving ? "Salvataggio…" : "Salva"}</button><button class="btn" data-row-action="cancel" ${saving ? "disabled" : ""}>Annulla</button><p class="row-feedback" role="alert"></p>` : (canManageData() ? `<button class="btn" data-row-action="edit">✏️ Modifica</button>` : "")}</td></tr>`;
+}
+
 function openNewCommessaDialog() {
   const modal = document.getElementById("new-commessa-modal");
   modal?.classList.remove("hidden");
@@ -28041,11 +28162,16 @@ function openImpiantiManagement(commessa) {
   screen?.classList.remove("hidden");
   screen?.setAttribute("aria-hidden", "false");
   if (ui.commessaTargetSelect) ui.commessaTargetSelect.value = commessa.id;
+  managementCommessaId = commessa.id;
+  managementPage = 1;
+  managementEditingId = "";
+  managementSelectedIds.clear();
   const total = Number(getCommessaStats(commessa.id).total || 0);
   const title = document.getElementById("impianti-management-title");
   const meta = document.getElementById("impianti-management-meta");
   if (title) title.textContent = commessa.nome || "Gestione impianti";
   if (meta) meta.textContent = `Cod. ${commessa.codice || "—"} • ${total} ${total === 1 ? "impianto" : "impianti"}`;
+  renderImpiantiManagementTable();
   screen?.scrollIntoView({ block: "start" });
 }
 
@@ -28056,6 +28182,92 @@ function closeImpiantiManagement() {
   document.getElementById("commesse-manage-list")?.classList.remove("hidden");
   document.querySelector(".commesse-management-head")?.classList.remove("hidden");
   document.querySelector(".commesse-management-search")?.classList.remove("hidden");
+  managementCommessaId = "";
+}
+
+function validateManagementPlant(patch, plantId, number) {
+  if (!patch.denominazione) return `Impianto n. ${number || "—"}: denominazione obbligatoria.`;
+  const hasLat = String(patch.gpsY ?? "").trim() !== "", hasLng = String(patch.gpsX ?? "").trim() !== "";
+  if (hasLat !== hasLng || ((hasLat || hasLng) && !hasValidManagementCoordinates(patch))) return `Impianto n. ${number || "—"}: coordinate non valide.`;
+  if (patch.idSap) {
+    const duplicate = getCommessaCachedImpianti(managementCommessaId).find((item) => item.id !== plantId && normalizeManagementSearch(item.idSap) === normalizeManagementSearch(patch.idSap));
+    if (duplicate) return `Impianto n. ${number || "—"}: ID SAP già utilizzato dall'impianto n. ${duplicate.numeroProgressivo || "—"}.`;
+  }
+  return "";
+}
+
+async function saveManagementPlantRow(row) {
+  if (!canManageData() || managementSavingId) return;
+  const plantId = row.dataset.plantId;
+  const original = getCommessaCachedImpianti(managementCommessaId).find((plant) => plant.id === plantId);
+  if (!original) return;
+  const patch = {};
+  row.querySelectorAll("[data-field]").forEach((input) => { patch[input.dataset.field] = String(input.value || "").trim(); });
+  patch.gpsY = patch.gpsY === "" ? null : Number(String(patch.gpsY).replace(",", "."));
+  patch.gpsX = patch.gpsX === "" ? null : Number(String(patch.gpsX).replace(",", "."));
+  const error = validateManagementPlant(patch, plantId, original.numeroProgressivo);
+  if (error) { row.querySelector(".row-feedback").textContent = error; return; }
+  managementSavingId = plantId; renderImpiantiManagementTable();
+  try {
+    const nextDone = patch.stato === "FATTO";
+    if (nextDone !== Boolean(original.done)) await setImpiantoDone(managementCommessaId, getImpiantoDocIds(original), nextDone, { doneBy: patch.operatore || getOperatorDisplayName() });
+    const payload = {
+      idSap: patch.idSap, denominazione: patch.denominazione, tipologiaImpianto: patch.tipologiaImpianto,
+      comune: patch.comune, indirizzo: patch.indirizzo, gpsY: patch.gpsY, gpsX: patch.gpsX,
+      codicePrezzo: patch.codicePrezzo, area: patch.area, dittaEsecutrice: patch.dittaEsecutrice,
+      dataEsecuzione: patch.dataEsecuzione, oraEsecuzione: patch.oraEsecuzione, operatore: patch.operatore,
+      note: patch.note, noteImpianto: patch.note, stato: patch.stato, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedByUid: currentUser?.uid || "", updatedByName: getOperatorDisplayName()
+    };
+    await db.collection(getCommesseCollectionName()).doc(managementCommessaId).collection("impianti").doc(plantId).set(payload, { merge: true });
+    invalidateImpiantoWhatsAppTemplate(getImpiantoDocIds(original));
+    managementEditingId = "";
+  } catch (errorSave) {
+    console.error("Salvataggio impianto dalla tabella fallito:", errorSave);
+    const feedback = document.querySelector(`[data-plant-id="${CSS.escape(plantId)}"] .row-feedback`);
+    if (feedback) feedback.textContent = errorSave.message || "Salvataggio non riuscito. Riprova.";
+  } finally { managementSavingId = ""; renderImpiantiManagementTable(); }
+}
+
+async function addManagementImpianto() {
+  if (!canManageData() || !managementCommessaId) return;
+  const denominazione = String(window.prompt("Denominazione impianto:", "") || "").trim();
+  if (!denominazione) return;
+  const idSap = String(window.prompt("ID SAP (opzionale):", "") || "").trim();
+  const all = getCommessaCachedImpianti(managementCommessaId);
+  const commessa = commesseById.get(managementCommessaId) || {};
+  const legacy = all.length > 0 && Number(commessa.excelModelVersion || 0) < 2;
+  const numeroProgressivo = legacy ? null : Math.max(0, ...all.map((plant) => Number(plant.numeroProgressivo || 0))) + 1;
+  const payload = { denominazione, idSap, tipologiaImpianto: "", comune: "", indirizzo: "", gpsY: null, gpsX: null, codicePrezzo: "", area: "", dittaEsecutrice: "", note: "", stato: "DA FARE", done: false, doneAt: null, doneBy: "", numeroProgressivo, commessaId: managementCommessaId, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedByUid: currentUser?.uid || "", updatedByName: getOperatorDisplayName() };
+  const validation = validateManagementPlant(payload, "", numeroProgressivo);
+  if (validation) return alert(validation);
+  const ref = await db.collection(getCommesseCollectionName()).doc(managementCommessaId).collection("impianti").add(payload);
+  managementEditingId = ref.id;
+}
+
+function updateManagementBulkBar() {
+  const bar = document.getElementById("impianti-bulk-actions");
+  bar?.classList.toggle("hidden", !managementSelectedIds.size || !canManageData());
+  const counter = document.getElementById("impianti-selected-count");
+  if (counter) counter.textContent = `${managementSelectedIds.size} selezionati`;
+}
+
+async function runManagementBulkAction(action) {
+  if (!canManageData() || !managementSelectedIds.size) return;
+  const ids = [...managementSelectedIds];
+  const ref = db.collection(getCommesseCollectionName()).doc(managementCommessaId).collection("impianti");
+  if (action === "delete") {
+    if (!confirm(`Eliminare definitivamente ${ids.length} impianti selezionati?`)) return;
+    const batch = db.batch(); ids.forEach((id) => batch.delete(ref.doc(id))); await batch.commit();
+  } else if (action === "export") {
+    return exportAllImpiantiStatus(ids);
+  } else {
+    const labels = { status: "Nuovo stato", operator: "Nuovo operatore", area: "Nuova area", company: "Nuova ditta" };
+    const value = String(prompt(`${labels[action]}:`, action === "status" ? "DA FARE" : "") || "").trim(); if (!value) return;
+    const field = { status: "stato", operator: "operatore", area: "area", company: "dittaEsecutrice" }[action];
+    const batch = db.batch(); ids.forEach((id) => batch.set(ref.doc(id), { [field]: value, ...(action === "status" ? { done: value.toUpperCase() === "FATTO" } : {}), updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedByUid: currentUser?.uid || "", updatedByName: getOperatorDisplayName() }, { merge: true })); await batch.commit();
+  }
+  managementSelectedIds.clear(); renderImpiantiManagementTable();
 }
 
 function styleOfficialWorksheet(sheet) {
@@ -28115,12 +28327,13 @@ function formatRomeDoneParts(value) {
   };
 }
 
-async function exportAllImpiantiStatus() {
+async function exportAllImpiantiStatus(selectedIds = null) {
   const commessaId = getTargetCommessaId();
   const commessa = commesseById.get(commessaId);
   if (!commessaId || !commessa) return alert("Seleziona una commessa.");
   const snapshot = await db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti").get();
-  const plants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => Number(a.numeroProgressivo || a.sortOrder || 0) - Number(b.numeroProgressivo || b.sortOrder || 0));
+  const selected = Array.isArray(selectedIds) ? new Set(selectedIds) : null;
+  const plants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((plant) => !selected || selected.has(plant.id)).sort((a, b) => Number(a.numeroProgressivo || a.sortOrder || 0) - Number(b.numeroProgressivo || b.sortOrder || 0));
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("IMPIANTI");
   sheet.addRow(OFFICIAL_IMPIANTI_COLUMNS);
@@ -28168,7 +28381,7 @@ function renderCommesseManagementList() {
 
     const actions = document.createElement("div");
     actions.className = "commessa-card-actions";
-    const open = createButton("APRI", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
+    const open = createButton("APRI", () => openImpiantiManagement(commessa));
     open.classList.add("btn-primary");
     const menu = document.createElement("details");
     menu.className = "commessa-actions-menu";

@@ -927,7 +927,7 @@
         <header class="impianti-management-head">
           <button id="close-impianti-management-btn" class="btn" type="button">← Indietro</button>
           <div><p class="management-eyebrow">GESTIONE IMPIANTI E CONTABILITÀ</p><h2 id="impianti-management-title">Gestione impianti e contabilità</h2><p id="impianti-management-meta" class="muted"></p><div id="impianti-management-stats" class="impianti-management-stats"></div></div>
-          <div class="impianti-head-actions"><button id="add-management-impianto-btn" class="btn btn-primary" type="button">+ Aggiungi impianto</button><button id="toggle-import-impianti-btn" class="btn" type="button">Importa</button><button id="export-all-impianti-btn" class="btn" type="button">Esporta</button><button id="open-prezziario-btn" class="btn" type="button">Prezziario</button></div>
+          <div class="impianti-head-actions"><button id="add-management-impianto-btn" class="btn btn-primary" type="button">+ Aggiungi impianto</button><button id="repair-imported-plants-btn" class="btn hidden" type="button">Ripara collegamento impianti</button><button id="toggle-import-impianti-btn" class="btn" type="button">Importa</button><button id="export-all-impianti-btn" class="btn" type="button">Esporta</button><button id="open-prezziario-btn" class="btn" type="button">Prezziario</button></div>
         </header>
         <select id="commessa-target-select" class="hidden" aria-label="Commessa selezionata"><option value="">Usa commessa selezionata in home</option></select>
         <section id="impianti-management-toolbar" class="impianti-management-toolbar"><label class="impianti-management-search"><span aria-hidden="true">⌕</span><input id="impianti-management-search" type="search" placeholder="Cerca per impianto, comune, ID SAP o voce prezzo…" autocomplete="off"></label><button id="clear-impianti-management-search" class="btn" type="button">Cancella ricerca</button><select id="impianti-status-filter" aria-label="Filtra stato"><option value="all">Tutti</option><option value="todo">Da fare</option><option value="done">Fatti</option><option value="working">In lavorazione</option><option value="suspended">Sospesi</option><option value="without-price">Senza prezzo</option><option value="errors">Voce prezzo non riconosciuta</option><option value="without-coordinates">Senza coordinate</option></select><select id="impianti-comune-filter" aria-label="Filtra comune"><option value="">Comune</option></select><select id="impianti-tipologia-filter" aria-label="Filtra codice voce"><option value="">Codice voce</option></select><select id="impianti-operatore-filter" aria-label="Filtra operatore"><option value="">Operatore</option></select></section>
@@ -1967,7 +1967,7 @@
   <script src="fuel-stations-search.js?v=20260723a"></script>
   <script src="app.js?v=20260728-calendar1"></script>
   <script src="inrete-work-items-v2.js?v=20260728"></script>
-  <script src="accounting-v2.js?v=20260728"></script>
+  <script src="accounting-v2.js?v=20260728b"></script>
   <script src="today-summary-interactions.js?v=20260728f"></script>
   <script src="identity-card-feature.js?v=20260727a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>

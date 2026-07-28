@@ -27,7 +27,8 @@
     "check:identity-card": "node scripts/check-identity-card-capture.js",
     "check:accounting-v2": "node scripts/check-accounting-v2.js && node scripts/check-inrete-work-items-v2.js",
     "check:segnalazione-pdf": "node scripts/check-segnalazione-pdf.js",
-    "export:testers": "node scripts/export-firestore-emails.js"
+    "export:testers": "node scripts/export-firestore-emails.js",
+    "check:map-fit": "node scripts/check-map-auto-fit.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

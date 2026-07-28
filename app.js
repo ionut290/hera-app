@@ -1860,6 +1860,13 @@ ui.biometricVerifyBtn?.addEventListener("click", () => void verifyBiometricFromS
 ui.biometricDisableBtn?.addEventListener("click", () => void disableBiometricAccess());
 ui.driveConnectBtn?.addEventListener("click", connectGoogleDrive);
 ui.commessaForm?.addEventListener("submit", createCommessa);
+document.getElementById("open-new-commessa-btn")?.addEventListener("click", openNewCommessaDialog);
+document.getElementById("close-new-commessa-btn")?.addEventListener("click", closeNewCommessaDialog);
+document.getElementById("cancel-new-commessa-btn")?.addEventListener("click", closeNewCommessaDialog);
+document.getElementById("commesse-management-search")?.addEventListener("input", renderCommesseManagementList);
+document.getElementById("close-impianti-management-btn")?.addEventListener("click", closeImpiantiManagement);
+document.getElementById("download-excel-template-btn")?.addEventListener("click", downloadOfficialImpiantiTemplate);
+document.getElementById("export-all-impianti-btn")?.addEventListener("click", exportAllImpiantiStatus);
 document.getElementById("snow-roads-form")?.addEventListener("submit", addSnowRoadsToSelectedCommessa);
 ui.commessaType?.addEventListener("change", updateCommessaParentField);
 ui.openOrganizeCommesseBtn?.addEventListener("click", () => toggleOrganizeCommesseScreen(true));
@@ -10971,6 +10978,16 @@ function subscribeStatsForCommesse() {
       commessaStatsById.set(commessaId, calculateImpiantiStats(rawImpianti));
       recalculateCommessaWorkSummaries();
       renderCommesseHomeList();
+      renderCommesseManagementList();
+      const commessa = commesseById.get(commessaId);
+      if (snapshot.empty && commessa && Number(commessa.excelModelVersion || 0) < 2 && canManageData()) {
+        db.collection(getCommesseCollectionName()).doc(commessaId).set({
+          excelModelVersion: 2,
+          excelModelActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          excelModelActivatedBy: auth.currentUser?.email || "",
+          nextImpiantoNumber: 1
+        }, { merge: true }).catch((activationError) => console.error("Attivazione modello Excel v2 fallita:", activationError));
+      }
       renderParentCommessaOverview();
       updateCommessaDashboard();
     }, (error) => console.error("Errore stats commessa:", error));
@@ -11794,6 +11811,10 @@ async function createCommessa(event) {
   const commessaRef = await db.collection(getCommesseCollectionName()).add({
     nome,
     codice,
+    excelModelVersion: 2,
+    excelModelActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    excelModelActivatedBy: user.email || "",
+    nextImpiantoNumber: 1,
     parentCommessaId: parentCommessaId || null,
     creatoDa: user.email || "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -11809,6 +11830,7 @@ async function createCommessa(event) {
   }
 
   ui.commessaForm.reset();
+  closeNewCommessaDialog();
   updateCommessaParentField();
 }
 
@@ -14683,6 +14705,7 @@ async function importPendingRows() {
   const totalPending = pendingRows.length;
   const ref = db.collection("commesse").doc(targetCommessaId).collection("impianti");
   const existingSnapshot = await ref.get();
+  let nextProgressive = Math.max(0, ...existingSnapshot.docs.map((doc) => Number(doc.data()?.numeroProgressivo || doc.data()?.sortOrder || 0))) + 1;
   const existingByKey = new Map();
   existingSnapshot.forEach((doc) => {
     const data = doc.data() || {};
@@ -14712,6 +14735,9 @@ async function importPendingRows() {
     const existing = existingByKey.get(key);
     if (!existing) {
       rowsToCreate.push(row);
+      row.numeroProgressivo = nextProgressive;
+      row.sortOrder = nextProgressive;
+      nextProgressive += 1;
       return;
     }
     const mergedCodicePrezzo = mergeMultiValue(existing.codicePrezzo, row.codicePrezzo);
@@ -14809,6 +14835,7 @@ async function importPendingRows() {
   }
 
   pendingRows = [];
+  if (rowsToCreate.length) await db.collection(getCommesseCollectionName()).doc(targetCommessaId).set({ nextImpiantoNumber: nextProgressive }, { merge: true });
   ui.excelFile.value = "";
   ui.importBtn.disabled = true;
   const skippedCount = Math.max(0, totalPending - rowsToCreate.length - rowsToUpdate.length);
@@ -14873,8 +14900,11 @@ async function addManualImpianto(event) {
     return;
   }
 
+  const numeroProgressivo = Math.max(0, ...existingSnapshot.docs.map((doc) => Number(doc.data()?.numeroProgressivo || doc.data()?.sortOrder || 0))) + 1;
   await ref.add({
     ...row,
+    numeroProgressivo,
+    sortOrder: numeroProgressivo,
     hasOrdinario: hasOrdinario(row.codicePrezzo),
     hasStraordinario: hasStraordinario(row.codicePrezzo),
     tipoManutenzione: classifyTipoManutenzione(row.codicePrezzo),
@@ -14883,6 +14913,7 @@ async function addManualImpianto(event) {
     doneBy: "",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  await db.collection(getCommesseCollectionName()).doc(targetCommessaId).set({ nextImpiantoNumber: numeroProgressivo + 1 }, { merge: true });
 
   ui.manualImpiantoForm.reset();
   ui.manualImpiantoFeedback.textContent = `Impianto aggiunto in "${targetCommessaName}": i precedenti sono stati mantenuti.`;
@@ -27982,13 +28013,138 @@ function renderChatRecipients() {
   });
 }
 
+const OFFICIAL_IMPIANTI_COLUMNS = [
+  "N.", "ID SAP", "Denominazione impianto", "Tipologia impianto", "Comune", "Indirizzo",
+  "Latitudine", "Longitudine", "Codice prezzo", "Area / Competenza", "Ditta esecutrice",
+  "Data esecuzione", "Ora esecuzione", "Operatore", "Note"
+];
+
+function openNewCommessaDialog() {
+  const modal = document.getElementById("new-commessa-modal");
+  modal?.classList.remove("hidden");
+  modal?.setAttribute("aria-hidden", "false");
+  document.getElementById("commessa-name")?.focus();
+}
+
+function closeNewCommessaDialog() {
+  const modal = document.getElementById("new-commessa-modal");
+  modal?.classList.add("hidden");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function openImpiantiManagement(commessa) {
+  if (!commessa?.id) return;
+  const screen = document.getElementById("impianti-management-screen");
+  document.getElementById("commesse-manage-list")?.classList.add("hidden");
+  document.querySelector(".commesse-management-head")?.classList.add("hidden");
+  document.querySelector(".commesse-management-search")?.classList.add("hidden");
+  screen?.classList.remove("hidden");
+  screen?.setAttribute("aria-hidden", "false");
+  if (ui.commessaTargetSelect) ui.commessaTargetSelect.value = commessa.id;
+  const total = Number(getCommessaStats(commessa.id).total || 0);
+  const title = document.getElementById("impianti-management-title");
+  const meta = document.getElementById("impianti-management-meta");
+  if (title) title.textContent = commessa.nome || "Gestione impianti";
+  if (meta) meta.textContent = `Cod. ${commessa.codice || "—"} • ${total} ${total === 1 ? "impianto" : "impianti"}`;
+  screen?.scrollIntoView({ block: "start" });
+}
+
+function closeImpiantiManagement() {
+  const screen = document.getElementById("impianti-management-screen");
+  screen?.classList.add("hidden");
+  screen?.setAttribute("aria-hidden", "true");
+  document.getElementById("commesse-manage-list")?.classList.remove("hidden");
+  document.querySelector(".commesse-management-head")?.classList.remove("hidden");
+  document.querySelector(".commesse-management-search")?.classList.remove("hidden");
+}
+
+function styleOfficialWorksheet(sheet) {
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.autoFilter = { from: "A1", to: "O1" };
+  sheet.columns = [7, 15, 32, 22, 20, 32, 15, 15, 18, 23, 24, 18, 16, 24, 34].map((width) => ({ width }));
+  const header = sheet.getRow(1);
+  header.height = 28;
+  header.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF075E54" } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+}
+
+async function saveOfficialWorkbook(workbook, filename) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadOfficialImpiantiTemplate() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Hera App";
+  const sheet = workbook.addWorksheet("IMPIANTI");
+  sheet.addRow(OFFICIAL_IMPIANTI_COLUMNS);
+  sheet.addRow([1, "SAP-001", "Impianto di esempio", "Depuratore", "Bologna", "Via Roma 1", 44.4949, 11.3426, "A11", "Area Nord", "Ditta esempio", "", "", "", "Rimuovere questa riga prima dell'importazione"]);
+  styleOfficialWorksheet(sheet);
+  const instructions = workbook.addWorksheet("ISTRUZIONI");
+  instructions.columns = [{ width: 28 }, { width: 80 }];
+  instructions.addRows([
+    ["MODELLO UFFICIALE HERA", "Non modificare i nomi delle colonne del foglio IMPIANTI."],
+    ["Campi obbligatori", "N. e Denominazione impianto. ID SAP è consigliato per riconoscere i duplicati."],
+    ["N.", "Numero progressivo stabile e univoco nella commessa."],
+    ["Coordinate", "Latitudine tra -90 e 90; longitudine tra -180 e 180."],
+    ["Completamento", "Data esecuzione, Ora esecuzione e Operatore devono restare vuoti: saranno compilati premendo FATTO."],
+    ["Formati importabili", "XLSX, XLS, CSV e ODS."]
+  ]);
+  instructions.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  instructions.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF075E54" } };
+  await saveOfficialWorkbook(workbook, "modello_ufficiale_impianti.xlsx");
+}
+
+function formatRomeDoneParts(value) {
+  const millis = firestoreDateToMillis(value);
+  if (!millis) return { date: "", time: "" };
+  const date = new Date(millis);
+  return {
+    date: new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric" }).format(date),
+    time: new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit", hour12: false }).format(date)
+  };
+}
+
+async function exportAllImpiantiStatus() {
+  const commessaId = getTargetCommessaId();
+  const commessa = commesseById.get(commessaId);
+  if (!commessaId || !commessa) return alert("Seleziona una commessa.");
+  const snapshot = await db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti").get();
+  const plants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => Number(a.numeroProgressivo || a.sortOrder || 0) - Number(b.numeroProgressivo || b.sortOrder || 0));
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("IMPIANTI");
+  sheet.addRow(OFFICIAL_IMPIANTI_COLUMNS);
+  plants.forEach((plant, index) => {
+    const done = plant.done ? formatRomeDoneParts(plant.doneAt) : { date: "", time: "" };
+    sheet.addRow([plant.numeroProgressivo || plant.sortOrder || index + 1, plant.idSap || "", plant.denominazione || "", plant.tipologiaImpianto || "", plant.comune || "", plant.indirizzo || "", plant.gpsY ?? "", plant.gpsX ?? "", plant.codicePrezzo || "", plant.area || "", plant.dittaEsecutrice || "", done.date, done.time, plant.done ? (plant.doneBy || "") : "", plant.note || plant.noteImpianto || ""]);
+  });
+  styleOfficialWorksheet(sheet);
+  const instructions = workbook.addWorksheet("ISTRUZIONI");
+  instructions.addRow(["Esportazione stato impianti", `Commessa: ${commessa.nome || ""} • Tutti gli impianti sono inclusi.`]);
+  instructions.columns = [{ width: 32 }, { width: 80 }];
+  await saveOfficialWorkbook(workbook, `stato_impianti_${String(commessa.nome || "commessa").replace(/[^a-z0-9]+/gi, "_")}.xlsx`);
+}
+
 function renderCommesseManagementList() {
   if (!ui.commesseManageList) return;
   if (!canManageData()) {
     ui.commesseManageList.innerHTML = "<p class='muted'>Solo gli admin possono rinominare, svuotare o eliminare commesse.</p>";
     return;
   }
-  const commesse = Array.from(commesseById.values());
+  const query = String(document.getElementById("commesse-management-search")?.value || "").trim().toLocaleLowerCase("it");
+  const commesse = sortCommesseByCreatedAtDesc(Array.from(commesseById.values())).filter((commessa) => (
+    !query || `${commessa.nome || ""} ${commessa.codice || ""}`.toLocaleLowerCase("it").includes(query)
+  ));
   if (!commesse.length) {
     ui.commesseManageList.innerHTML = "<p class='muted'>Nessuna commessa disponibile.</p>";
     return;
@@ -27996,20 +28152,33 @@ function renderCommesseManagementList() {
   ui.commesseManageList.innerHTML = "";
   commesse.forEach((commessa) => {
     const row = document.createElement("div");
-    row.className = "simple-list-item commessa-manage-item";
+    row.className = "commessa-manage-card";
     const info = document.createElement("div");
     info.className = "commessa-manage-info";
     const title = document.createElement("strong");
     const codiceCommessa = String(commessa.codice || "").trim();
     const hasSubcommesse = getSubcommesse(commessa.id).length > 0;
-    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${codiceCommessa ? ` • Cod. ${escapeHTML(codiceCommessa)}` : ""}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}`;
+    const total = Number(getCommessaStats(commessa.id).total || 0);
+    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse">📂</span>` : ""}`;
     info.appendChild(title);
+    const meta = document.createElement("p");
+    meta.className = "commessa-manage-meta";
+    meta.innerHTML = `<span>Cod. ${escapeHTML(codiceCommessa || "—")}</span><span>${total} ${total === 1 ? "impianto" : "impianti"}</span>`;
+    info.appendChild(meta);
 
     const actions = document.createElement("div");
-    actions.className = "item-actions";
-    actions.appendChild(createButton("Modifica", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
-    actions.appendChild(createButton("Svuota", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
-    actions.appendChild(createButton("Elimina", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
+    actions.className = "commessa-card-actions";
+    const open = createButton("APRI", () => selectCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || ""));
+    open.classList.add("btn-primary");
+    const menu = document.createElement("details");
+    menu.className = "commessa-actions-menu";
+    menu.innerHTML = `<summary aria-label="Azioni per ${escapeHTML(commessa.nome || "commessa")}">⋮</summary><div></div>`;
+    const menuBody = menu.querySelector("div");
+    menuBody.appendChild(createButton("Modifica", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
+    menuBody.appendChild(createButton("Gestisci impianti", () => openImpiantiManagement(commessa)));
+    menuBody.appendChild(createButton("Svuota commessa", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
+    menuBody.appendChild(createButton("Elimina commessa", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
+    actions.append(open, menu);
 
     row.appendChild(info);
     row.appendChild(actions);
@@ -28043,11 +28212,20 @@ async function clearCommessaImpianti(commessaId, nome) {
     return;
   }
   const ok = window.confirm(
-    `ATTENZIONE: stai per svuotare la commessa "${nome}" ed eliminare tutti gli impianti.\n\nPremi OK per confermare, Annulla per tornare indietro.`
+    `Stai eliminando tutti gli impianti della commessa "${nome}".\n\nAl termine verrà attivato automaticamente il nuovo modello Excel.\n\nOperazione irreversibile.\n\nPremi OK per Svuota e attiva nuovo modello.`
   );
   if (!ok) return;
   const impiantiRef = db.collection("commesse").doc(commessaId).collection("impianti");
   await deleteCollectionDocs(impiantiRef);
+  await db.collection(getCommesseCollectionName()).doc(commessaId).set({
+    excelModelVersion: 2,
+    excelModelActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    excelModelActivatedBy: auth.currentUser?.email || "",
+    nextImpiantoNumber: 1
+  }, { merge: true });
+  const commessa = commesseById.get(commessaId) || { id: commessaId, nome };
+  openImpiantiManagement(commessa);
+  alert("Commessa aggiornata con successo al nuovo modello Excel.");
 }
 
 async function deleteCollectionDocs(collectionRef, batchSize = 200) {

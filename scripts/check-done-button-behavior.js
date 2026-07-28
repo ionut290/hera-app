@@ -65,15 +65,17 @@ async function main() {
     auth: { currentUser: { uid: "u1", email: "op@example.com", displayName: "Operatore" } },
     firebase: {
       firestore: {
-        Timestamp: { fromDate: (date) => ({ millis: date.getTime() }) }
+        Timestamp: { fromDate: (date) => ({ millis: date.getTime() }) },
+        FieldValue: { serverTimestamp: () => ({ serverTimestamp: true }) }
       }
     },
     getCommesseCollectionName: () => "commesse",
     db: {
       collection: () => ({
         doc: () => ({
-          collection: () => ({
-            doc: (id) => ({ id })
+          collection: (name) => ({
+            doc: (id) => ({ id, collection: name }),
+            where: () => ({ get: async () => ({ docs: [] }) })
           })
         })
       }),
@@ -85,11 +87,13 @@ async function main() {
   });
   loadFunctions(batchContext, ["setImpiantoDone"]);
   await batchContext.setImpiantoDone("c1", ["a", "b"], true, {
-    doneAt: new Date("2026-07-26T10:00:00Z")
+    doneAt: vm.runInContext('new Date("2026-07-26T10:00:00Z")', batchContext)
   });
   assert.equal(batchWrites.length, 2, "Tutti i documenti raggruppati devono entrare nel batch");
   assert.equal(batchCommits, 1, "Il FATTO deve usare un solo commit atomico");
-  assert.ok(batchWrites.every((entry) => entry.payload.done === true));
+  assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.done === true));
+  assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.dataEsecuzione === "2026-07-26"));
+  assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.oraEsecuzione === "10:00"));
 
   batchContext.auth.currentUser = null;
   await assert.rejects(

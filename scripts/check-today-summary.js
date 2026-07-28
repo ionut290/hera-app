@@ -26,8 +26,14 @@ assert.match(app, /parseMultiEntryValue\(member \|\| ""\)/);
 assert.match(app, /getSquadraNameVariants/);
 assert.match(app, /squadrePerCommessa\.forEach/);
 assert.match(app, /function updateTodaySummary/);
+assert.match(app, /getOreReportsCollectionName\(\)[\s\S]*?allHoursReports = snapshot\.docs\.map[\s\S]*?hoursReportsLoaded = true;\s*renderTodaySummary\(\);/);
+assert.match(app, /getOreApprovalRequestsCollectionName\(\)[\s\S]*?allHoursApprovalRequests = snapshot\.docs\.map[\s\S]*?hoursApprovalsLoaded = true;\s*renderTodaySummary\(\);/);
 
 assert.match(interactions, /function getCurrentUserSavedHours/);
+assert.match(interactions, /if \(!hoursReportsLoaded \|\| !hoursApprovalsLoaded\) \{\s*return \{ loaded: false, found: false, minutes: 0 \};/);
+assert.match(interactions, /return \{ loaded: true, found, minutes: Math\.max\(0, Math\.round\(total \* 60\)\) \};/);
+assert.match(interactions, /const hoursText = !savedHours\.loaded[\s\S]*?savedHours\.found/);
+assert.match(interactions, /\? "Dati ore in caricamento"/);
 assert.match(interactions, /timeZone: ROME_TIME_ZONE/);
 assert.match(interactions, /elapsed > 8 \* 60 \? elapsed - 60 : elapsed/);
 assert.match(interactions, /window\.setInterval\(\(\) => renderTodaySummary\(\), 60 \* 1000\)/);
@@ -43,7 +49,8 @@ assert.match(notifications, /eventType: "squadra-alert"/);
 assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
-assert.match(index, /today-summary-interactions\.js\?v=20260728e/);
+assert.match(index, /app\.js\?v=20260728-today4/);
+assert.match(index, /today-summary-interactions\.js\?v=20260728f/);
 assert.match(index, /id="today-commesse-action">APRI/);
 assert.doesNotMatch(index, /Nessuna commessa assegnata|Apri la tua commessa/);
 assert.match(index, />Inserisci ore<\/span>/);
@@ -52,7 +59,8 @@ assert.doesNotMatch(index, /Nessun mezzo assegnato|I tuoi mezzi|Visualizza i mez
 assert.match(index, />I tuoi avvisi<\/span>/);
 assert.match(index, /squadre-restyle\.css\?v=20260728c/);
 assert.match(serviceWorker, /hera-app-shell-v\d+/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728e/);
+assert.match(serviceWorker, /app\.js\?v=20260728-today4/);
+assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728f/);
 assert.match(serviceWorker, /squadre-restyle\.css\?v=20260728c/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);

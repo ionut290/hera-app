@@ -11824,6 +11824,9 @@ async function createCommessa(event) {
     nome,
     codice,
     excelModelVersion: 2,
+    priceListVersion: 2,
+    workItemsModelVersion: 2,
+    percentualeRibassoGenerale: 0.01,
     excelModelActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     excelModelActivatedBy: user.email || "",
     nextImpiantoNumber: 1,
@@ -28154,6 +28157,7 @@ function closeNewCommessaDialog() {
 }
 
 function openImpiantiManagement(commessa) {
+  if (window.AccountingV2) return window.AccountingV2.open(commessa);
   if (!commessa?.id) return;
   const screen = document.getElementById("impianti-management-screen");
   document.getElementById("commesse-manage-list")?.classList.add("hidden");
@@ -28387,9 +28391,12 @@ function renderCommesseManagementList() {
     menu.className = "commessa-actions-menu";
     menu.innerHTML = `<summary aria-label="Azioni per ${escapeHTML(commessa.nome || "commessa")}">⋮</summary><div></div>`;
     const menuBody = menu.querySelector("div");
-    menuBody.appendChild(createButton("Modifica", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
+    menuBody.appendChild(createButton("Modifica commessa", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
     menuBody.appendChild(createButton("Gestisci impianti", () => openImpiantiManagement(commessa)));
-    menuBody.appendChild(createButton("Svuota commessa", () => clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
+    menuBody.appendChild(createButton("Gestisci prezziario", async () => { await openImpiantiManagement(commessa); window.AccountingV2?.openPrices(); }));
+    menuBody.appendChild(createButton("Importa dati", () => openImpiantiManagement(commessa)));
+    menuBody.appendChild(createButton("Esporta dati", async () => { await openImpiantiManagement(commessa); window.AccountingV2?.exportWorkbook(); }));
+    menuBody.appendChild(createButton("Svuota commessa", () => window.AccountingV2 ? window.AccountingV2.openClear(commessa) : clearCommessaImpianti(commessa.id, commessa.nome || "Commessa")));
     menuBody.appendChild(createButton("Elimina commessa", () => deleteCommessa(commessa.id, commessa.nome || "Commessa")));
     actions.append(open, menu);
 

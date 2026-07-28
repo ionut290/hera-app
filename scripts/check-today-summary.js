@@ -19,6 +19,13 @@ assert.match(app, /avviso: String\(row\.querySelector\("\.squadra-avviso-input"\
 assert.match(app, /createSquadraAlertsForChangedRows/);
 assert.match(app, /source: "squadra-avviso"/);
 assert.match(app, /targetMemberNames/);
+assert.match(app, /function findCurrentUserSquadreForDate/);
+assert.match(app, /function getSquadrePerCommessaForDate/);
+assert.match(app, /candidate\.uids[\s\S]*candidate\.personaleIds[\s\S]*candidate\.emails[\s\S]*candidate\.names/);
+assert.match(app, /parseMultiEntryValue\(member \|\| ""\)/);
+assert.match(app, /getSquadraNameVariants/);
+assert.match(app, /squadrePerCommessa\.forEach/);
+assert.match(app, /function updateTodaySummary/);
 
 assert.match(interactions, /function getCurrentUserSavedHours/);
 assert.match(interactions, /timeZone: ROME_TIME_ZONE/);
@@ -36,7 +43,7 @@ assert.match(notifications, /eventType: "squadra-alert"/);
 assert.match(notifications, /title: "⚠️ Avviso squadra"/);
 assert.match(notifications, /squadAlert\.operators\.some/);
 
-assert.match(index, /today-summary-interactions\.js\?v=20260728d/);
+assert.match(index, /today-summary-interactions\.js\?v=20260728e/);
 assert.match(index, /id="today-commesse-action">APRI/);
 assert.doesNotMatch(index, /Nessuna commessa assegnata|Apri la tua commessa/);
 assert.match(index, />Inserisci ore<\/span>/);
@@ -45,7 +52,7 @@ assert.doesNotMatch(index, /Nessun mezzo assegnato|I tuoi mezzi|Visualizza i mez
 assert.match(index, />I tuoi avvisi<\/span>/);
 assert.match(index, /squadre-restyle\.css\?v=20260728c/);
 assert.match(serviceWorker, /hera-app-shell-v\d+/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728d/);
+assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728e/);
 assert.match(serviceWorker, /squadre-restyle\.css\?v=20260728c/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);
@@ -55,7 +62,8 @@ assert.match(interactions, /commessaNames\.join\(" • "\)/);
 assert.match(interactions, /\[\.\.\.mezzi\.values\(\)\]\.join\(" • "\)/);
 assert.match(interactions, /getNotificationPrimaryDateKey\(alertItem\) === dateKey/);
 assert.match(interactions, /getActiveSquadreDateKey\(\) \|\| getTodayDateKey\(\)/);
-assert.match(interactions, /getCurrentUserAssignedCommesseForDate\(getSummaryDateKey\(\)\)/);
+assert.match(interactions, /findCurrentUserSquadreForDate\(getSummaryDateKey\(\)\)/);
+assert.match(interactions, /assignedStart === null \? "--:--" : formatHoursMinutes\(assignedStart\)/);
 assert.match(app, /function getSquadraRowMembers/);
 assert.match(app, /row\.personale, row\.operatori, row\.caposquadra/);
 assert.match(app, /Il riepilogo usa gli stessi dati e la stessa data appena renderizzati qui/);

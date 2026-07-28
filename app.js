@@ -7573,6 +7573,78 @@ function getCurrentUserIdentityParts() {
   return getPlatformUserIdentityParts(currentProfile || currentUser);
 }
 
+function getSquadraNameVariants(value) {
+  const normalized = normalizeSquadraMemberIdentity(value);
+  if (!normalized) return [];
+  const words = normalized.split(" ").filter(Boolean);
+  const reversed = words.length > 1 ? [...words].reverse().join(" ") : normalized;
+  return [...new Set([normalized, reversed])];
+}
+
+function getCurrentUserSquadraIdentity() {
+  if (!currentUser) return { uids: new Set(), personaleIds: new Set(), emails: new Set(), names: new Set() };
+  const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser.uid || "")) || {};
+  const currentEmail = normalizeEmail(currentUser.email || currentProfile.email || "");
+  const linkedPerson = personaleRecords.find((person) =>
+    [currentUser.personaleId, currentProfile.personaleId, currentProfile.personId].filter(Boolean).some((id) => String(person.id) === String(id))
+    || (currentEmail && normalizeEmail(person.email) === currentEmail)
+  );
+  const values = (...items) => new Set(items.map((item) => String(item || "").trim()).filter(Boolean));
+  const names = new Set();
+  [
+    linkedPerson && getPersonaleDisplayName(linkedPerson),
+    linkedPerson?.fullName,
+    currentUser.displayName,
+    currentProfile.displayName,
+    currentProfile.fullName,
+    currentProfile.nome,
+    currentProfile.nome && currentProfile.cognome ? `${currentProfile.nome} ${currentProfile.cognome}` : ""
+  ].forEach((name) => getSquadraNameVariants(name).forEach((variant) => names.add(variant)));
+  return {
+    uids: values(currentUser.uid, currentProfile.uid),
+    personaleIds: values(currentUser.personaleId, currentProfile.personaleId, currentProfile.personId, linkedPerson?.id),
+    emails: new Set([currentEmail, normalizeEmail(linkedPerson?.email)].filter(Boolean)),
+    names
+  };
+}
+
+function getSquadraMemberIdentifiers(member) {
+  if (Array.isArray(member)) {
+    return member.reduce((all, item) => {
+      const next = getSquadraMemberIdentifiers(item);
+      Object.keys(all).forEach((key) => all[key].push(...next[key]));
+      return all;
+    }, { uids: [], personaleIds: [], emails: [], names: [] });
+  }
+  if (member && typeof member === "object") {
+    return {
+      uids: [member.uid, member.firebaseUid, member.userId, member.utenteId].filter(Boolean).map(String),
+      personaleIds: [member.personaleId, member.personId, member.id].filter(Boolean).map(String),
+      emails: [member.email, member.mail].filter(Boolean).map(normalizeEmail),
+      names: [member.displayName, member.nomeCompleto, member.fullName, member.name,
+        member.nome && member.cognome ? `${member.nome} ${member.cognome}` : ""].filter(Boolean).flatMap(getSquadraNameVariants)
+    };
+  }
+  const parts = parseMultiEntryValue(member || "");
+  return {
+    // A legacy scalar can represent any supported identifier. Exact matching keeps
+    // UID/personnel-ID comparisons safe while names are normalized separately.
+    uids: parts,
+    personaleIds: parts,
+    emails: parts.map(normalizeEmail),
+    names: parts.flatMap(getSquadraNameVariants)
+  };
+}
+
+function doesSquadraMemberMatchCurrentUser(member, identity = getCurrentUserSquadraIdentity()) {
+  const candidate = getSquadraMemberIdentifiers(member);
+  // Keep this order intentional: stable identifiers win over mutable labels.
+  if (candidate.uids.some((value) => identity.uids.has(String(value).trim()))) return true;
+  if (candidate.personaleIds.some((value) => identity.personaleIds.has(String(value).trim()))) return true;
+  if (candidate.emails.some((value) => identity.emails.has(normalizeEmail(value)))) return true;
+  return candidate.names.some((value) => identity.names.has(normalizeSquadraMemberIdentity(value)));
+}
+
 function getSquadraMemberIdentityValues(member) {
   if (Array.isArray(member)) return member.flatMap(getSquadraMemberIdentityValues);
   if (member && typeof member === "object") {
@@ -7611,7 +7683,8 @@ function getPlatformUserIdentityParts(user) {
   return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
 }
 
-function doSquadraMemberAndUserMatch(memberName, identityParts = getCurrentUserIdentityParts()) {
+function doSquadraMemberAndUserMatch(memberName, identityParts = null) {
+  if (!identityParts) return doesSquadraMemberMatchCurrentUser(memberName);
   const members = getSquadraMemberIdentityValues(memberName).map(normalizeSquadraMemberIdentity).filter(Boolean);
   if (!members.length || !identityParts.length) return false;
   return members.some((member) => identityParts.some((part) => {
@@ -7635,10 +7708,10 @@ function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
   if (!currentUser) return null;
   const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
-  const identities = getCurrentUserIdentityParts();
+  const identity = getCurrentUserSquadraIdentity();
   for (let index = 0; index < squadRows.length; index += 1) {
     const personale = getSquadraRowMembers(squadRows[index]);
-    const matchedName = personale.find((name) => doSquadraMemberAndUserMatch(name, identities));
+    const matchedName = personale.find((member) => doesSquadraMemberMatchCurrentUser(member, identity));
     if (matchedName) {
       return {
         squadraIndex: index + 1,
@@ -7652,21 +7725,27 @@ function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
   return null;
 }
 
-function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey()) {
-  if (!currentUser || !dateKey) return [];
+function getSquadrePerCommessaForDate(dateKey = getActiveSquadreDateKey()) {
+  if (!dateKey) return [];
   const storicoDelGiorno = squadreHistoryByDate.get(dateKey) || new Map();
-  const identities = getCurrentUserIdentityParts();
-  const matches = [];
-
-  Array.from(commesseById.values()).forEach((commessa) => {
+  return Array.from(commesseById.values()).flatMap((commessa) => {
     const squadData = storicoDelGiorno.get(commessa.id) || null;
-    if (!squadData) return;
+    if (!squadData) return [];
     const squadRows = Array.isArray(squadData.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+    if (!squadRows.some(isSquadraRowFilled)) return [];
+    return [{ commessa, squadData, squadRows }];
+  });
+}
+
+function findCurrentUserSquadreForDate(dateKey = getActiveSquadreDateKey()) {
+  if (!currentUser || !dateKey) return [];
+  const identity = getCurrentUserSquadraIdentity();
+  return getSquadrePerCommessaForDate(dateKey).flatMap(({ commessa, squadData, squadRows }) => {
     const matchedRows = [];
 
     squadRows.forEach((row, index) => {
       const rowMembers = getSquadraRowMembers(row);
-      const matchedName = rowMembers.find((name) => doSquadraMemberAndUserMatch(name, identities));
+      const matchedName = rowMembers.find((member) => doesSquadraMemberMatchCurrentUser(member, identity));
       if (matchedName) {
         matchedRows.push({
           squadraIndex: index + 1,
@@ -7678,17 +7757,20 @@ function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey
     });
 
     if (matchedRows.length) {
-      matches.push({
+      return [{
         commessa,
         commessaId: commessa.id,
         commessaName: commessa.nome || "Commessa",
         squadData,
         matchedRows
-      });
+      }];
     }
+    return [];
   });
+}
 
-  return matches;
+function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey()) {
+  return findCurrentUserSquadreForDate(dateKey);
 }
 
 function tryAutoOpenAssignedCommessaAtStartup() {
@@ -22159,6 +22241,9 @@ function getSquadraWorkedHours(row) {
 
 function renderTodaySummary() {
   if (!ui.todayCommesseCount) return;
+  if (!currentUser || areStartupCoreCollectionsLoading()
+    || personaleLoadState.status === "loading" || squadreLoadState.status === "loading"
+    || commesseLoadState.status === "loading" || mezziLoadState.status === "loading") return;
   const assignments = getCurrentUserAssignedCommesseForDate(getTodayDateKey());
   const uniqueRows = new Set();
   const mezzi = new Set();
@@ -22187,9 +22272,12 @@ function renderTodaySummary() {
   ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);
 }
 
+function updateTodaySummary() {
+  renderTodaySummary();
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
-  renderTodaySummary();
   ui.squadreLista.innerHTML = "";
   if (areStartupCoreCollectionsLoading()) {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;
@@ -22210,27 +22298,19 @@ function renderSquadre() {
   }
   const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
-  const storicoDelGiorno = squadreHistoryByDate.get(selectedDateKey) || new Map();
-
-  const commesse = Array.from(commesseById.values());
-  const commesseConSquadre = commesse.filter((commessa) => {
-    const squad = storicoDelGiorno.get(commessa.id) || {};
-    const rows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
-    return rows.some(isSquadraRowFilled);
-  });
-  if (!commesseConSquadre.length) {
+  const squadrePerCommessa = getSquadrePerCommessaForDate(selectedDateKey);
+  if (!squadrePerCommessa.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra trovata</p>";
+    updateTodaySummary();
     return;
   }
   const conflictReport = buildSquadraConflictReport(selectedDateKey);
   ui.squadreLista.innerHTML = renderSquadraConflictSummaryMarkup(conflictReport, selectedDateKey);
   ui.squadreLista.querySelector("[data-open-squadre-conflicts]")?.addEventListener("click", () => openSquadreConflictsModal(conflictReport, selectedDateKey));
 
-  commesseConSquadre.forEach((commessa) => {
+  squadrePerCommessa.forEach(({ commessa, squadData: squad, squadRows }) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
-    const squad = storicoDelGiorno.get(commessa.id) || {};
-    const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
@@ -22322,7 +22402,7 @@ function renderSquadre() {
     ui.squadreLista.appendChild(item);
   });
   // Il riepilogo usa gli stessi dati e la stessa data appena renderizzati qui.
-  renderTodaySummary();
+  updateTodaySummary();
 }
 
 function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {

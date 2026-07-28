@@ -25,7 +25,7 @@
     "check:weather": "node scripts/check-weather.js",
     "check:calendar": "node scripts/check-calendar.js",
     "check:identity-card": "node scripts/check-identity-card-capture.js",
-    "check:accounting-v2": "node scripts/check-accounting-v2.js && node scripts/check-inrete-work-items-v2.js",
+    "check:accounting-v2": "node scripts/check-accounting-v2.js && node scripts/check-inrete-work-items-v2.js && node scripts/check-coordinate-repair.js",
     "check:segnalazione-pdf": "node scripts/check-segnalazione-pdf.js",
     "export:testers": "node scripts/export-firestore-emails.js",
     "check:map-fit": "node scripts/check-map-auto-fit.js"

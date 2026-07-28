@@ -237,22 +237,6 @@ function extractSquadraRowOperators(row = {}) {
   return values;
 }
 
-function extractChangedSquadraAlerts(before, after) {
-  const beforeRows = Array.isArray(before?.squadre) ? before.squadre : [];
-  const afterRows = Array.isArray(after?.squadre) ? after.squadre : [];
-  const sameDate = String(before?.riferimentoData || before?.dateKey || "") === String(after?.riferimentoData || after?.dateKey || "");
-  return afterRows.map((row, index) => {
-    const alertText = [row?.avviso, row?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
-    const previousAlertText = [beforeRows[index]?.avviso, beforeRows[index]?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
-    if (!alertText || (sameDate && normalize(alertText) === normalize(previousAlertText))) return null;
-    return {
-      index,
-      alertText,
-      operators: [...extractSquadraRowOperators(row)]
-    };
-  }).filter(Boolean);
-}
-
 exports.notifyAndroidSquadraAssignment = onDocumentWritten(
   { document: "squadreCommesse/{commessaId}", region: REGION },
   async (event) => {
@@ -263,8 +247,7 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
     const beforeOperators = extractSquadraOperators(before);
     const afterOperators = extractSquadraOperators(after);
     const added = [...afterOperators].filter((operator) => ![...beforeOperators].some((oldValue) => normalize(oldValue) === normalize(operator)));
-    const changedAlerts = extractChangedSquadraAlerts(before, after);
-    if (!added.length && !changedAlerts.length) return null;
+    if (!added.length) return null;
 
     const users = await loadPushUsers();
     const commessaName = String(after.commessaNome || "Commessa");
@@ -277,21 +260,6 @@ exports.notifyAndroidSquadraAssignment = onDocumentWritten(
           eventType: "squadra-assigned",
           data: { commessaId: event.params.commessaId, date },
           tag: `squadra-${event.params.commessaId}-${date}-${user.uid}`
-        });
-      }
-      for (const squadAlert of changedAlerts) {
-        if (!squadAlert.operators.some((operator) => userMatches(user, operator))) continue;
-        await sendToUsers([user], {
-          title: "⚠️ Avviso squadra",
-          body: `${commessaName}${date ? ` • ${date}` : ""}: ${squadAlert.alertText}`,
-          eventType: "squadra-alert",
-          data: {
-            commessaId: event.params.commessaId,
-            date,
-            squadraIndex: squadAlert.index + 1,
-            alertText: squadAlert.alertText
-          },
-          tag: `squadra-alert-${event.params.commessaId}-${date}-${squadAlert.index + 1}-${user.uid}`
         });
       }
     }

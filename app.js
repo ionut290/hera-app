@@ -21325,7 +21325,7 @@ function formatSquadraOrario(row) {
   return `${start} - ${end} = ${formatSquadraHours(workedMinutes / 60)} h${suffix}`;
 }
 
-function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", avviso: "", orario: "", orarioFine: "", senzaPausaPranzo: false, impianti: "" }) {
+function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", note: "", orario: "", orarioFine: "", senzaPausaPranzo: false, impianti: "" }) {
   const index = ui.squadraRows.children.length + 1;
   const orarioParts = getSquadraOrarioParts(rowData);
   const personaleValues = parseMultiEntryValue(rowData.personale);
@@ -21372,10 +21372,6 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
     </div>
     <label class="squadra-note-field">Note
       <textarea class="squadra-note-input" rows="2" placeholder="Note squadra">${escapeHTML(rowData.note || "")}</textarea>
-    </label>
-    <label class="squadra-avviso-field">⚠️ Avviso per questa squadra
-      <textarea class="squadra-avviso-input" rows="3" placeholder="Scrivi un avviso: gli operatori della squadra riceveranno una notifica">${escapeHTML(rowData.avviso || "")}</textarea>
-      <small>Un avviso nuovo o modificato viene mostrato agli operatori assegnati e inviato come notifica.</small>
     </label>
     ${rowData.avvisoAutomaticoAssenze ? `<div class="squadra-automatic-absence-warning"><b>Avviso automatico calendario</b><br>${escapeHTML(rowData.avvisoAutomaticoAssenze)}</div>` : ""}
   `;
@@ -21541,7 +21537,7 @@ function updateEmptySquadraRowsHint() {
 }
 
 function isSquadraRowFilled(row) {
-  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.avviso || row?.orario || row?.orarioFine);
+  return Boolean(row?.caposquadra || row?.personale || row?.mezzi || row?.impianti || row?.note || row?.orario || row?.orarioFine);
 }
 
 function readSquadraRows() {
@@ -21560,7 +21556,6 @@ function readSquadraRows() {
     impianti: impiantiDettagli.map((impianto) => impianto.denominazione || impianto.idSap || "").filter(Boolean).join(", "),
     impiantiDettagli,
     note: String(row.querySelector(".squadra-note-input")?.value || "").trim(),
-    avviso: String(row.querySelector(".squadra-avviso-input")?.value || "").trim(),
     avvisoAutomaticoAssenze: String(row.__squadraRowData?.avvisoAutomaticoAssenze || "").trim(),
     calendarAbsenceEventIds: Array.isArray(row.__squadraRowData?.calendarAbsenceEventIds) ? row.__squadraRowData.calendarAbsenceEventIds : [],
     orario: String(row.querySelector(".squadra-orario-input")?.value || "").trim(),
@@ -21839,51 +21834,6 @@ function getSquadraRowMemberNames(row) {
   ].map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
-function getSquadraAlertTargetUserIds(row) {
-  const memberNames = getSquadraRowMemberNames(row);
-  return platformUsers
-    .filter((user) => memberNames.some((memberName) => doSquadraMemberAndUserMatch(memberName, getPlatformUserIdentityParts(user))))
-    .map((user) => String(user.id || user.uid || "").trim())
-    .filter(Boolean);
-}
-
-async function createSquadraAlertsForChangedRows({ commessaId, commessaNome, dateKey, previousRows, nextRows }) {
-  const createdDateKey = getDateKeyFromLocalDate(new Date());
-  const changedAlerts = nextRows.map((row, index) => {
-    const avviso = [row?.avviso, row?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
-    const previousAvviso = [previousRows[index]?.avviso, previousRows[index]?.avvisoAutomaticoAssenze].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
-    return avviso && normalizeSquadraMemberIdentity(avviso) !== normalizeSquadraMemberIdentity(previousAvviso)
-      ? { row, index, avviso }
-      : null;
-  }).filter(Boolean);
-
-  await Promise.all(changedAlerts.map(({ row, index, avviso }) => {
-    const targetMemberNames = getSquadraRowMemberNames(row);
-    const targetUserIds = getSquadraAlertTargetUserIds(row);
-    return db.collection("userAlerts").add({
-      title: "⚠️ Avviso squadra",
-      message: `${commessaNome} • Squadra ${index + 1} • ${formatDateKeyForDisplay(dateKey)}\n\n${avviso}`,
-      alertText: avviso,
-      source: "squadra-avviso",
-      commessaId,
-      commessaNome,
-      squadraIndex: index + 1,
-      targetMemberNames,
-      targetUserIds,
-      sendToAllRegistered: false,
-      attachments: [],
-      scheduledDateKey: dateKey,
-      createdDateKey,
-      status: "active",
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: currentUser?.email || currentUser?.uid || "admin",
-      acknowledgedUsers: 0
-    });
-  }));
-
-  return changedAlerts.length;
-}
-
 async function saveSquadraComposition(event) {
   event.preventDefault();
   setSquadraFeedback("Salvataggio composizione in corso...", "info");
@@ -21936,14 +21886,12 @@ async function saveSquadraComposition(event) {
   };
   const currentRef = db.collection(getSquadreCurrentCollectionName()).doc(commessaId);
   const historyRef = db.collection(getSquadreHistoryCollectionName()).doc(`${dateKey}__${commessaId}`);
-  let previousRows = [];
   try {
     await db.runTransaction(async (transaction) => {
       const historySnap = await transaction.get(historyRef);
       const currentRows = historySnap.exists
         ? (Array.isArray(historySnap.data()?.squadre) ? historySnap.data().squadre : getLegacySquadreRows(historySnap.data() || {}))
         : [];
-      previousRows = currentRows;
       const mergedRows = squadreRows;
       const transactionDuplicates = findDuplicateSquadraRows(mergedRows);
       if (transactionDuplicates.length) {
@@ -21970,20 +21918,7 @@ async function saveSquadraComposition(event) {
   }
   renderCommesseHomeList();
   renderSquadre();
-  let alertsCreated = 0;
-  try {
-    alertsCreated = await createSquadraAlertsForChangedRows({
-      commessaId,
-      commessaNome: payload.commessaNome,
-      dateKey,
-      previousRows,
-      nextRows: squadreRows
-    });
-  } catch (error) {
-    console.error("Errore creazione notifica avviso squadra:", error);
-  }
-  const notificationFeedback = alertsCreated ? ` ${alertsCreated} avvis${alertsCreated === 1 ? "o inviato" : "i inviati"} agli operatori.` : "";
-  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).${notificationFeedback}`, "success");
+  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).`, "success");
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -22334,7 +22269,6 @@ function renderSquadre() {
         orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
         row.impianti ? renderSquadraImpiantiButtons(row, idx, commessa.id) : "",
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : "",
-        row.avviso ? `<br><span class="squadra-saved-alert"><b>⚠️ Avviso:</b> ${escapeHTML(row.avviso)}</span>` : "",
         row.avvisoAutomaticoAssenze ? `<br><span class="squadra-saved-alert squadra-automatic-absence-warning"><b>⛔ Assenza calendario:</b> ${escapeHTML(row.avvisoAutomaticoAssenze)}</span>` : ""
       ].join("");
       const rowConflictReport = {
@@ -27574,12 +27508,15 @@ async function deleteUserNotification(notificationId) {
 function subscribeUserAlerts() {
   if (unsubscribeUserAlerts) unsubscribeUserAlerts();
   if (!currentUser) return;
+  const legacySquadraAlertSource = ["squadra", "avviso"].join("-");
   if (canManageData()) {
     unsubscribeUserAlerts = db.collection("userAlerts")
       .orderBy("createdAt", "desc")
       .limit(200)
       .onSnapshot((snapshot) => {
-        userAlerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        userAlerts = snapshot.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .filter((item) => item.source !== legacySquadraAlertSource);
         renderNotificationsList();
         renderNotificationCalendar();
         renderTodaySummary();
@@ -27596,11 +27533,12 @@ function subscribeUserAlerts() {
       userAlerts = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
         .filter((item) => {
+          if (item.source === legacySquadraAlertSource) return false;
           const belongsToUser = isNotificationForCurrentUser(item);
           if (!belongsToUser) return false;
           if (Boolean(item?.dismissedByUserIds?.[currentUser.uid])) return false;
           const dateKey = String(item.scheduledDateKey || "").trim();
-          return ["squadra-avviso", "calendar-absence"].includes(item.source) || !dateKey || dateKey <= todayKey;
+          return item.source === "calendar-absence" || !dateKey || dateKey <= todayKey;
         })
         .sort((a, b) => {
           const aMs = a?.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;

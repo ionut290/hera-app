@@ -177,10 +177,11 @@
     ui.userAlertModal?.setAttribute("aria-hidden", "false");
   }
 
-  function getUnreadPersonalAlerts() {
+  function getUnreadPersonalAlerts(dateKey = getTodayDateKey()) {
     if (!currentUser) return [];
     return userAlerts.filter((alertItem) =>
       isNotificationForCurrentUser(alertItem)
+      && (!getNotificationPrimaryDateKey(alertItem) || getNotificationPrimaryDateKey(alertItem) === dateKey)
       && !Boolean(alertItem?.ackByUserIds?.[currentUser.uid])
       && !Boolean(alertItem?.dismissedByUserIds?.[currentUser.uid])
     );
@@ -275,7 +276,7 @@
     if (!ui.todayCommesseCount) return;
     const dateKey = getTodayDateKey();
     const assignments = getCurrentUserAssignedCommesseForDate(dateKey);
-    const mezzi = new Set();
+    const mezzi = new Map();
     const uniqueRows = new Set();
 
     assignments.forEach((assignment) => {
@@ -285,7 +286,7 @@
         uniqueRows.add(rowKey);
         parseMultiEntryValue(row?.mezzi || "").forEach((mezzo) => {
           const key = normalizeSquadraMemberIdentity(mezzo);
-          if (key) mezzi.add(key);
+          if (key && !mezzi.has(key)) mezzi.set(key, String(mezzo).trim());
         });
       });
     });
@@ -294,13 +295,10 @@
     const savedHours = getCurrentUserSavedHours(assignments, dateKey);
     const liveMinutes = savedHours.found ? savedHours.minutes : getLiveWorkedMinutes(assignments);
     const hoursText = liveMinutes === null ? "--:--" : formatHoursMinutes(liveMinutes);
-    const commessaNames = assignments.map(({ commessaName }) => commessaName).filter(Boolean);
-    ui.todayCommesseCount.textContent = assignments.length
-      ? (assignments.length === 1 ? commessaNames[0] : `${assignments.length} commesse assegnate`)
-      : "Nessuna commessa assegnata";
-    document.getElementById("today-commesse-name")?.replaceChildren(document.createTextNode(
-      assignments.length === 1 ? commessaNames[0] : (assignments.length > 1 ? commessaNames.join(", ") : "Nessuna commessa assegnata")
-    ));
+    const commessaNames = [...new Set(assignments.map(({ commessaName }) => String(commessaName || "").trim()).filter(Boolean))];
+    const commessaAction = document.getElementById("today-commesse-action");
+    if (commessaAction) commessaAction.textContent = assignments.length ? "APRI" : "NESSUNA COMMESSA";
+    ui.todayCommesseCount.textContent = assignments.length ? commessaNames.join(" • ") : "";
     ui.todayCommesseBtn.disabled = assignments.length === 0;
     ui.todayHoursCount.textContent = hoursText;
     const hoursInserted = savedHours.found;
@@ -309,9 +307,9 @@
       ? `Ore inserite oggi: ${hoursText}. Premi per visualizzarle o modificarle`
       : `Inserisci ore. Tempo lavorato oggi: ${hoursText}`);
     syncTodayHoursCounter(!hoursInserted && getAssignedStartMinutes(assignments) !== null);
-    ui.todayMezziCount.textContent = mezzi.size
-      ? `${mezzi.size} ${mezzi.size === 1 ? "mezzo assegnato" : "mezzi assegnati"}`
-      : "Nessun mezzo assegnato";
+    const mezziAction = document.getElementById("today-mezzi-action");
+    if (mezziAction) mezziAction.textContent = mezzi.size ? "ELENCO MEZZI" : "NESSUN MEZZO";
+    ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join(" • ") : "";
     ui.todayMezziBtn.disabled = mezzi.size === 0;
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);

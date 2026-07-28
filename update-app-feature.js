@@ -25,7 +25,20 @@
     } catch (error) {
       console.warn("Controllo aggiornamento web non riuscito; ricarico la pagina corrente.", error);
     }
-    window.location.reload();
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((name) => name.startsWith("hera-app-shell-"))
+          .map((name) => caches.delete(name))
+      );
+    } catch (error) {
+      console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
+    }
+
+    const refreshUrl = new URL(window.location.href);
+    refreshUrl.searchParams.set("appRefresh", String(Date.now()));
+    window.location.replace(refreshUrl.toString());
   }
 
   function install() {

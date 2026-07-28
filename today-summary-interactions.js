@@ -4,7 +4,7 @@
   const ROME_TIME_ZONE = "Europe/Rome";
   let todayHoursInterval = null;
 
-  const getSummaryDateKey = () => getActiveSquadreDateKey() || getTodayDateKey();
+  const getSummaryDateKey = () => getTodayDateKey();
   const getAssignments = () => findCurrentUserSquadreForDate(getSummaryDateKey());
 
   function getPlannedHours(assignments = getAssignments()) {

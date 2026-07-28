@@ -189,6 +189,9 @@
   }
 
   function getCurrentUserSavedHours(assignments, dateKey) {
+    if (!hoursReportsLoaded || !hoursApprovalsLoaded) {
+      return { loaded: false, found: false, minutes: 0 };
+    }
     const assignedRows = new Map(assignments.map((assignment) => [
       String(assignment.commessaId),
       new Set((assignment.matchedRows || []).map(({ squadraIndex }) => String(squadraIndex)))
@@ -215,7 +218,7 @@
         });
       });
     });
-    return { found, minutes: Math.max(0, Math.round(total * 60)) };
+    return { loaded: true, found, minutes: Math.max(0, Math.round(total * 60)) };
   }
 
   function formatHoursMinutes(minutes) {
@@ -298,7 +301,9 @@
     const alerts = getUnreadPersonalAlerts().length;
     const savedHours = getCurrentUserSavedHours(assignments, dateKey);
     const assignedStart = getAssignedStartMinutes(assignments);
-    const hoursText = savedHours.found
+    const hoursText = !savedHours.loaded
+      ? "--:--"
+      : savedHours.found
       ? formatHoursMinutes(savedHours.minutes)
       : assignedStart === null ? "--:--" : formatHoursMinutes(assignedStart);
     const commessaNames = [...new Set(assignments.map(({ commessaName }) => String(commessaName || "").trim()).filter(Boolean))];
@@ -309,9 +314,11 @@
     ui.todayHoursCount.textContent = hoursText;
     const hoursInserted = savedHours.found;
     ui.todayHoursBtn?.classList.toggle("is-complete", hoursInserted);
-    ui.todayHoursBtn?.setAttribute("aria-label", hoursInserted
-      ? `Ore inserite oggi: ${hoursText}. Premi per visualizzarle o modificarle`
-      : `Inserisci ore. Inizio squadra: ${hoursText}`);
+    ui.todayHoursBtn?.setAttribute("aria-label", !savedHours.loaded
+      ? "Dati ore in caricamento"
+      : hoursInserted
+        ? `Ore inserite oggi: ${hoursText}. Premi per visualizzarle o modificarle`
+        : `Inserisci ore. Inizio squadra: ${hoursText}`);
     syncTodayHoursCounter(false);
     const mezziAction = document.getElementById("today-mezzi-action");
     if (mezziAction) mezziAction.textContent = mezzi.size ? "ELENCO MEZZI" : "NESSUN MEZZO";

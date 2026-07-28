@@ -4,7 +4,8 @@
   const ROME_TIME_ZONE = "Europe/Rome";
   let todayHoursInterval = null;
 
-  const getAssignments = () => getCurrentUserAssignedCommesseForDate(getTodayDateKey());
+  const getSummaryDateKey = () => getActiveSquadreDateKey() || getTodayDateKey();
+  const getAssignments = () => getCurrentUserAssignedCommesseForDate(getSummaryDateKey());
 
   function getPlannedHours(assignments = getAssignments()) {
     const uniqueRows = new Set();
@@ -85,7 +86,7 @@
   function openAssignedHours() {
     const assignments = getAssignments();
     if (assignments.length === 1) {
-      openHoursPageForCommessa(assignments[0].commessaId, getTodayDateKey());
+      openHoursPageForCommessa(assignments[0].commessaId, getSummaryDateKey());
       return;
     }
     openHoursPage();
@@ -177,7 +178,7 @@
     ui.userAlertModal?.setAttribute("aria-hidden", "false");
   }
 
-  function getUnreadPersonalAlerts(dateKey = getTodayDateKey()) {
+  function getUnreadPersonalAlerts(dateKey = getSummaryDateKey()) {
     if (!currentUser) return [];
     return userAlerts.filter((alertItem) =>
       isNotificationForCurrentUser(alertItem)
@@ -274,7 +275,7 @@
 
   renderTodaySummary = function renderInteractiveTodaySummary() {
     if (!ui.todayCommesseCount) return;
-    const dateKey = getTodayDateKey();
+    const dateKey = getSummaryDateKey();
     const assignments = getCurrentUserAssignedCommesseForDate(dateKey);
     const mezzi = new Map();
     const uniqueRows = new Set();

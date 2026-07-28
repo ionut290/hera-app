@@ -7573,6 +7573,22 @@ function getCurrentUserIdentityParts() {
   return getPlatformUserIdentityParts(currentProfile || currentUser);
 }
 
+function getSquadraMemberIdentityValues(member) {
+  if (Array.isArray(member)) return member.flatMap(getSquadraMemberIdentityValues);
+  if (member && typeof member === "object") {
+    return [
+      member.uid, member.userId, member.utenteId, member.id, member.email,
+      member.displayName, member.nomeCompleto, member.name,
+      member.nome && member.cognome ? `${member.nome} ${member.cognome}` : ""
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+  }
+  return parseMultiEntryValue(member || "");
+}
+
+function getSquadraRowMembers(row = {}) {
+  return [row.personale, row.operatori, row.caposquadra].flatMap(getSquadraMemberIdentityValues);
+}
+
 function getPlatformUserIdentityParts(user) {
   if (!user) return [];
   const userEmail = String(user.email || "").trim();
@@ -7580,15 +7596,15 @@ function getPlatformUserIdentityParts(user) {
     ? personaleRecords.find((person) => normalizeEmail(person?.email) === normalizeEmail(userEmail))
     : null;
   const parts = [
-    linkedPerson ? getPersonaleDisplayName(linkedPerson) : "",
-    linkedPerson?.email,
     user.id,
     user.uid,
+    userEmail,
+    linkedPerson?.email,
+    linkedPerson ? getPersonaleDisplayName(linkedPerson) : "",
     user.displayName,
     user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "",
     user.userName,
-    user.nome,
-    userEmail
+    user.nome
   ];
   const emailLocal = userEmail.split("@")[0] || "";
   if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
@@ -7596,15 +7612,15 @@ function getPlatformUserIdentityParts(user) {
 }
 
 function doSquadraMemberAndUserMatch(memberName, identityParts = getCurrentUserIdentityParts()) {
-  const member = normalizeSquadraMemberIdentity(memberName);
-  if (!member || !identityParts.length) return false;
-  return identityParts.some((part) => {
+  const members = getSquadraMemberIdentityValues(memberName).map(normalizeSquadraMemberIdentity).filter(Boolean);
+  if (!members.length || !identityParts.length) return false;
+  return members.some((member) => identityParts.some((part) => {
     if (!part) return false;
     if (member === part) return true;
     const memberTokens = member.split(" ").filter((token) => token.length > 1);
     const partTokens = part.split(" ").filter((token) => token.length > 1);
     return partTokens.length >= 2 && partTokens.every((token) => memberTokens.includes(token));
-  });
+  }));
 }
 
 function getSquadraDataForCommessaDate(commessaId, dateValue = "") {
@@ -7621,10 +7637,7 @@ function getCurrentUserSquadraAssignment(commessaId, dateValue = "") {
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
   const identities = getCurrentUserIdentityParts();
   for (let index = 0; index < squadRows.length; index += 1) {
-    const personale = [
-      ...parseMultiEntryValue(squadRows[index]?.personale || ""),
-      ...parseMultiEntryValue(squadRows[index]?.caposquadra || "")
-    ];
+    const personale = getSquadraRowMembers(squadRows[index]);
     const matchedName = personale.find((name) => doSquadraMemberAndUserMatch(name, identities));
     if (matchedName) {
       return {
@@ -7652,10 +7665,7 @@ function getCurrentUserAssignedCommesseForDate(dateKey = getActiveSquadreDateKey
     const matchedRows = [];
 
     squadRows.forEach((row, index) => {
-      const rowMembers = [
-        ...parseMultiEntryValue(row?.personale || ""),
-        ...parseMultiEntryValue(row?.caposquadra || "")
-      ];
+      const rowMembers = getSquadraRowMembers(row);
       const matchedName = rowMembers.find((name) => doSquadraMemberAndUserMatch(name, identities));
       if (matchedName) {
         matchedRows.push({
@@ -21938,11 +21948,11 @@ function setDefaultSquadraCompositionDate({ force = false } = {}) {
 }
 
 function getAutomaticSquadreDateKey(now = new Date()) {
-  const base = new Date(now);
-  if (base.getHours() > 17 || (base.getHours() === 17 && base.getMinutes() >= 30)) {
-    base.setDate(base.getDate() + 1);
-  }
-  return getDateKeyFromLocalDate(base);
+  const parts = new Intl.DateTimeFormat("it-IT", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(now);
+  const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function initializeAutomaticSquadreDate() {
@@ -22311,6 +22321,8 @@ function renderSquadre() {
     });
     ui.squadreLista.appendChild(item);
   });
+  // Il riepilogo usa gli stessi dati e la stessa data appena renderizzati qui.
+  renderTodaySummary();
 }
 
 function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {

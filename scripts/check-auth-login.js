@@ -14,6 +14,7 @@ const capacitorBundleSource = fs.readFileSync(
 );
 
 const rulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const rulesDeployWorkflowSource = fs.readFileSync(
   path.join(root, ".github", "workflows", "deploy-self-registration.yml"),
   "utf8"
@@ -113,6 +114,18 @@ if (fixSource.includes("banned: false")) {
 
 if (!fixSource.includes("authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile")) {
   throw new Error("app.js potrebbe controllare il profilo prima della sua preparazione.");
+}
+
+for (const expected of [
+  "isPersistedApprovalValid",
+  "session.accessApproved !== false",
+  "const hasSavedApproval = isPersistedApprovalValid(savedSession, user)",
+  "if (!hasSavedApproval)",
+  'currentAccountStatus !== "attivo"'
+]) {
+  if (!appSource.includes(expected)) {
+    throw new Error(`L'accesso rapido per un utente gia autorizzato non e protetto correttamente: ${expected}`);
+  }
 }
 
 for (const expected of [

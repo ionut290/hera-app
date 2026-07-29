@@ -52,11 +52,17 @@ function getCapacitorPreferencesPlugin() {
 }
 
 function buildPersistedSession(user, overrides = {}) {
+  const previousSession = readLocalPersistedSession();
+  const samePreviousUser = String(previousSession?.uid || "") === String(overrides.uid ?? user?.uid ?? "");
   const email = String(overrides.email ?? user?.email ?? "");
   const displayName = String(overrides.displayName ?? user?.displayName ?? (email || "Utente"));
   const isAdmin = Boolean(overrides.isAdmin ?? canManageData());
   const role = String(overrides.role || overrides.ruolo || (isAdmin ? "admin" : "user"));
   const teamId = String(overrides.teamId || user?.teamId || "").trim();
+  const authorizationStatus = String(overrides.statoAccount || overrides.accountStatus || "").trim();
+  const accessApproved = authorizationStatus
+    ? authorizationStatus === "attivo"
+    : Boolean(overrides.accessApproved ?? (samePreviousUser && previousSession?.accessApproved));
   return {
     version: PERSISTED_SESSION_VERSION,
     uid: String(overrides.uid ?? user?.uid ?? ""),
@@ -68,6 +74,7 @@ function buildPersistedSession(user, overrides = {}) {
     isAdmin,
     admin: isAdmin,
     teamId: teamId || null,
+    accessApproved,
     banned: Boolean(overrides.banned),
     bannedReason: overrides.bannedReason || null,
     bannedAt: overrides.bannedAt || null,
@@ -84,6 +91,18 @@ function isValidPersistedSession(session) {
     && String(session.uid || "").trim()
     && String(session.email || "").includes("@")
     && String(session.lastLoginAt || "").trim()
+  );
+}
+
+function isPersistedApprovalValid(session, user) {
+  return Boolean(
+    isValidPersistedSession(session)
+    // Le sessioni create prima dell'introduzione dell'approvazione non hanno
+    // questo campo: erano gia utenti ammessi e vengono migrate al primo avvio.
+    && session.accessApproved !== false
+    && session.banned !== true
+    && String(session.uid) === String(user?.uid || "")
+    && normalizeEmail(session.email) === normalizeEmail(user?.email)
   );
 }
 
@@ -3279,16 +3298,22 @@ if (!auth || firebaseInitError) {
   });
   if (loggedIn) {
     try {
-      const authorization = await window.HeraAccessApproval.verify(user);
-      if (!authorization.allowed) {
-        stopCommesseSubscription(); stopImpiantiSubscription(); stopChatSubscription();
-        stopPersonaleSubscription(); stopMezziSubscription(); stopSquadreSubscription(); stopUsersSubscription();
-        window.location.hash = "";
-        hideStartupLoading();
-        return;
-      }
       const savedSession = savedStartupSession || await readPersistedSession();
-      const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
+      const hasSavedApproval = isPersistedApprovalValid(savedSession, user);
+      if (!hasSavedApproval) {
+        const authorization = await window.HeraAccessApproval.verify(user);
+        if (!authorization.allowed) {
+          stopCommesseSubscription(); stopImpiantiSubscription(); stopChatSubscription();
+          stopPersonaleSubscription(); stopMezziSubscription(); stopSquadreSubscription(); stopUsersSubscription();
+          window.location.hash = "";
+          hideStartupLoading();
+          return;
+        }
+        await savePersistedSession(user, { ...authorization.profile, accessApproved: true });
+      }
+      const databaseCheck = hasSavedApproval
+        ? { valid: true, profile: { ...savedSession, accessApproved: true }, banned: false }
+        : await verifyPersistedSessionAgainstDatabase(user, savedSession);
       if (databaseCheck.banned) {
         currentUserBanProfile = databaseCheck.profile || { email: user.email, displayName: user.displayName };
         await savePersistedSession(user, currentUserBanProfile);
@@ -26801,6 +26826,13 @@ function subscribeUsers() {
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
     renderChatRecipients();
     const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser?.uid || ""));
+    const currentAccountStatus = window.HeraAccessApproval?.statusOf(currentProfile);
+    if (currentProfile && currentAccountStatus !== "attivo" && !canManageData()) {
+      void clearPersistedSession();
+      stopCommesseSubscription(); stopImpiantiSubscription(); stopSquadreSubscription(); stopPersonaleSubscription(); stopMezziSubscription(); stopGlobalNotificationsSubscription();
+      void window.HeraAccessApproval?.verify(currentUser);
+      return;
+    }
     if (currentProfile?.banned && !canManageData()) {
       currentUserBanProfile = currentProfile;
       stopCommesseSubscription(); stopImpiantiSubscription(); stopSquadreSubscription(); stopPersonaleSubscription(); stopMezziSubscription(); stopGlobalNotificationsSubscription();

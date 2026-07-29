@@ -2845,6 +2845,25 @@ async function showLocalNotification(title, options = {}) {
 
 async function publishGlobalNotificationEvent(eventType, payload = {}) {
   if (!currentUser) return;
+  const centralTypes = {
+    "impianto-done": { type: "IMPIANTO_COMPLETATO", priority: "NORMALE", title: "✅ Impianto completato", actionType: "impianto" },
+    "impianto-navigate": { type: "NAVIGAZIONE", priority: "NORMALE", title: "📍 Navigazione avviata", actionType: "impianto" },
+    "hours-inserted": { type: "ORE", priority: "NORMALE", title: "🕒 Ore inserite", actionType: "ore" }
+  };
+  const central = centralTypes[eventType];
+  if (central && window.HeraNotificationCenter) {
+    // Fire-and-forget: una notifica non deve mai bloccare FATTO, NAVIGA o il salvataggio ore.
+    void window.HeraNotificationCenter.create({
+      ...central,
+      preview: payload.body || "Nuovo aggiornamento operativo.", message: payload.body || "Nuovo aggiornamento operativo.",
+      actorId: currentUser.uid || "", actorName: currentUser.displayName || currentUser.email || "Operatore",
+      scopeType: payload.commessaId ? "COMMESSA" : "PERSONALE", recipientUserIds: [currentUser.uid].filter(Boolean),
+      commessaId: payload.commessaId || "", commessaName: payload.commessaName || "",
+      impiantoId: payload.impiantoKey || "", impiantoName: payload.impiantoName || "", actionTarget: payload.impiantoKey || payload.commessaId || "",
+      dedupeKey: `${eventType}:${currentUser.uid}:${payload.impiantoKey || payload.commessaId || "self"}:${eventType === "impianto-navigate" ? Math.floor(Date.now() / 600000) : Date.now()}`,
+      metadata: { sourceEvent: eventType }
+    });
+  }
   try {
     await db.collection("appNotifications").add({
       eventType,

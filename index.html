@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="squadre-restyle.css?v=20260728c">
   <link rel="stylesheet" href="calendar-feature.css?v=20260728b">
   <link rel="stylesheet" href="notification-center.css?v=20260729a">
+  <link rel="stylesheet" href="approval-access.css?v=20260729a">
 </head>
 <body class="auth-pending">
 
@@ -46,6 +47,15 @@
       <div id="sync-progress-list" class="sync-progress-list"></div>
     </div>
   </div>
+  <section id="access-approval-screen" class="access-approval-screen hidden" aria-live="polite">
+    <div class="access-approval-card">
+      <div class="access-approval-icon">🔐</div>
+      <div id="access-approval-loading"><div class="approval-spinner"></div><h1>Verifica autorizzazione in corso…</h1></div>
+      <div id="access-approval-error" class="hidden"><h1>VERIFICA NON RIUSCITA</h1><p id="access-approval-error-message">Impossibile verificare l’autorizzazione. Controlla la connessione e riprova.</p><button id="access-approval-retry" class="btn">RIPROVA</button></div>
+      <div id="access-approval-content" class="hidden"><h1 id="access-approval-title"></h1><p id="access-approval-description"></p><dl class="access-profile"><dt>Nome e cognome</dt><dd id="access-approval-name">—</dd><dt>Email</dt><dd id="access-approval-email">—</dd><dt>Stato</dt><dd id="access-approval-status">—</dd></dl><p id="access-approval-feedback" class="access-feedback" role="status"></p><div class="access-approval-actions"><button id="access-request-whatsapp" class="btn access-whatsapp">RICHIEDI ACCESSO SU WHATSAPP</button><button id="access-check-approval" class="btn">CONTROLLA APPROVAZIONE</button><button id="access-approval-logout" class="btn">ESCI DALL’ACCOUNT</button></div></div>
+    </div>
+  </section>
+
   <aside id="side-menu" class="side-menu hidden" aria-hidden="true">
     <div class="side-menu-header">
       <h2>Menu</h2>
@@ -56,7 +66,7 @@
       <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
       <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
       <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
-      <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti</button>
+      <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti <span id="pending-users-menu-badge" class="pending-users-badge hidden">0</span></button>
       <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
       <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
       <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
@@ -1071,6 +1081,7 @@
       <div id="mezzi-lista" class="simple-list"></div>
     </div>
     <div id="panel-utenti" class="management-panel hidden">
+      <section id="pending-users-section" class="hidden"><h3 class="pending-users-heading">UTENTI IN ATTESA <span id="pending-users-badge" class="pending-users-badge hidden">0</span></h3><div id="pending-users-list" class="simple-list"></div></section>
       <h3>Admin autorizzati</h3>
       <form id="admin-user-form" class="inline-form">
         <input type="email" id="admin-user-email" placeholder="Email utente da promuovere admin">
@@ -1971,6 +1982,7 @@
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260729a"></script>
   <script src="auth-login-fix.js?v=20260726e"></script>
+  <script src="approval-access.js?v=20260729a"></script>
   <script src="first-login-password.js?v=20260726b"></script>
   <script src="login-retry-fix.js?v=20260726f"></script>
   <script src="private-documents-v2.js?v=20260727a"></script>

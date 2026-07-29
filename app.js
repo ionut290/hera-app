@@ -3279,6 +3279,14 @@ if (!auth || firebaseInitError) {
   });
   if (loggedIn) {
     try {
+      const authorization = await window.HeraAccessApproval.verify(user);
+      if (!authorization.allowed) {
+        stopCommesseSubscription(); stopImpiantiSubscription(); stopChatSubscription();
+        stopPersonaleSubscription(); stopMezziSubscription(); stopSquadreSubscription(); stopUsersSubscription();
+        window.location.hash = "";
+        hideStartupLoading();
+        return;
+      }
       const savedSession = savedStartupSession || await readPersistedSession();
       const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
       if (databaseCheck.banned) {
@@ -26787,6 +26795,7 @@ function subscribeUsers() {
         ...data
       };
     }).sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || ""), "it"));
+    window.HeraAccessApproval?.renderAdmin(platformUsers, canManageData());
     syncNotificationAutoPreferenceFromProfile();
     maybeAutoEnableNotifications();
     deniedImpiantoActions = getDeniedActionsForCurrentUser();
@@ -27487,13 +27496,16 @@ async function setUserBanned(user, banned) {
   const userId = String(user?.id || user?.uid || "");
   if (!userId) return;
   const payload = banned
-    ? { banned: true, bannedReason: "Bloccato da amministratore", bannedAt: firebase.firestore.FieldValue.serverTimestamp(), bannedBy: currentUser?.email || currentUser?.uid || "admin" }
-    : { banned: false, bannedReason: firebase.firestore.FieldValue.delete(), bannedAt: firebase.firestore.FieldValue.delete(), bannedBy: firebase.firestore.FieldValue.delete() };
-  await db.collection("platformUsers").doc(userId).set({
+    ? { banned: true, statoAccount: "bloccato", accountStatus: "bloccato", bannedReason: "Bloccato da amministratore", bannedAt: firebase.firestore.FieldValue.serverTimestamp(), bannedBy: currentUser?.email || currentUser?.uid || "admin" }
+    : { banned: false, statoAccount: "attivo", accountStatus: "attivo", bannedReason: firebase.firestore.FieldValue.delete(), bannedAt: firebase.firestore.FieldValue.delete(), bannedBy: firebase.firestore.FieldValue.delete() };
+  const batch = db.batch();
+  batch.set(db.collection("platformUsers").doc(userId), {
     ...payload,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: currentUser?.email || ""
   }, { merge: true });
+  batch.set(db.collection("userAccessAudit").doc(), { userId, action: banned ? "blocco" : "riattivazione", administratorUid: currentUser?.uid || "", administratorEmail: currentUser?.email || "", createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await batch.commit();
 }
 
 function getPlatformUserLabel(user) {

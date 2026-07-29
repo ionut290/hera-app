@@ -18,6 +18,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/google-sheet-sync"
+  to = "/.netlify/functions/google-sheet-sync"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
@@ -43,6 +48,16 @@
     Cache-Control = "no-cache, must-revalidate"
 
 [[headers]]
+  for = "/firebase-config.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
   for = "/operational-import-repair.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/google-sheet-two-way-sync.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"

@@ -8,7 +8,16 @@ service cloud.firestore {
 
     function signedIn() {
       return authPresent()
-        && (isAdmin() || (request.auth.token.email_verified == true && !isBannedUser()));
+        && (isAdmin() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
+    }
+
+    // I profili storici senza stato restano autorizzati; ogni nuovo profilo nasce in_attesa.
+    function hasActiveAccount() {
+      return exists(/databases/$(database)/documents/platformUsers/$(request.auth.uid))
+        && (
+          !get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.keys().hasAny(["statoAccount", "accountStatus"])
+          || get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.get("statoAccount", get(/databases/$(database)/documents/platformUsers/$(request.auth.uid)).data.get("accountStatus", "")) == "attivo"
+        );
     }
 
     function isBannedUser() {
@@ -70,6 +79,34 @@ service cloud.firestore {
 
     function updatesNoBanFields() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["banned", "bannedReason", "bannedAt", "bannedBy"]);
+    }
+
+    function validPendingProfileCreate(userId) {
+      return isSelf(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.statoAccount == "in_attesa"
+        && request.resource.data.accountStatus == "in_attesa"
+        && request.resource.data.role == "user"
+        && request.resource.data.ruolo == "user"
+        && request.resource.data.get("isAdmin", false) == false
+        && request.resource.data.get("admin", false) == false;
+    }
+
+    function validSelfProfileUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "statoAccount", "accountStatus", "role", "ruolo", "isAdmin", "admin",
+        "approvatoAt", "approvedAt", "approvatoDa", "approvedBy", "approvatoDaEmail",
+        "rifiutatoAt", "rejectedAt", "rifiutatoDa", "rejectedBy", "motivoRifiuto"
+      ]) || (
+        resource.data.get("statoAccount", "") in ["in_attesa", "richiesta_inviata"]
+        && request.resource.data.statoAccount == "richiesta_inviata"
+        && request.resource.data.accountStatus == "richiesta_inviata"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "statoAccount", "accountStatus", "richiestaWhatsappAt", "whatsappRequestedAt",
+          "ultimaRichiestaAt", "lastRequestAt", "numeroRichieste", "requestCount"
+        ])
+      );
     }
 
     match /commesse/{commessaId} {
@@ -207,7 +244,7 @@ service cloud.firestore {
     }
 
     match /posDocuments/{docId} {
-      allow read: if resource.data.active == true || signedIn();
+      allow read: if signedIn();
       allow create, update, delete: if isAdmin();
     }
 
@@ -253,9 +290,14 @@ service cloud.firestore {
 
     match /platformUsers/{userId} {
       allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin() || (isSelf(userId) && createsNoInlinePosition() && createsNoPermissionFields() && createsNoBanFields());
-      allow update: if isAdmin() || (isSelf(userId) && !isBannedUser() && updatesNoInlinePosition() && updatesNoPermissionFields() && updatesNoBanFields());
+      allow create: if isAdmin() || (validPendingProfileCreate(userId) && createsNoInlinePosition() && createsNoPermissionFields() && createsNoBanFields());
+      allow update: if isAdmin() || (isSelf(userId) && !isBannedUser() && updatesNoInlinePosition() && updatesNoPermissionFields() && updatesNoBanFields() && validSelfProfileUpdate());
       allow delete: if isAdmin();
+    }
+
+    match /userAccessAudit/{auditId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /chatMessages/{messageId} {

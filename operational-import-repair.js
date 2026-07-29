@@ -138,6 +138,98 @@
     for (const commessa of targets) await repairCommessa(commessa);
   }
 
+  function getSheetImportFeedback() {
+    let feedback = document.querySelector("#sheet-url-feedback");
+    if (feedback) return feedback;
+    const row = document.querySelector("#sheet-url-import-btn")?.closest(".import-mode-details");
+    if (!row) return document.querySelector("#import-feedback");
+    feedback = document.createElement("p");
+    feedback.id = "sheet-url-feedback";
+    feedback.className = "muted";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    feedback.style.flexBasis = "100%";
+    feedback.style.margin = "0";
+    row.appendChild(feedback);
+    return feedback;
+  }
+
+  function sheetImportEndpoint(sheetUrl) {
+    const configuredOrigin = String(window.HERA_API_ORIGIN || "").trim();
+    const localIsNetlify = /(?:^|\.)netlify\.app$/i.test(window.location.hostname);
+    const apiOrigin = configuredOrigin
+      || (localIsNetlify ? window.location.origin : "https://creative-syrniki-dddbae.netlify.app");
+    const endpoint = new URL("/api/google-sheet-import", apiOrigin);
+    endpoint.searchParams.set("url", sheetUrl);
+    return endpoint.href;
+  }
+
+  async function readErrorMessage(response) {
+    try {
+      const payload = await response.json();
+      return payload?.error || payload?.detail || `Errore HTTP ${response.status}`;
+    } catch (_) {
+      return `Errore HTTP ${response.status}`;
+    }
+  }
+
+  async function importFromGoogleSheet(button) {
+    const input = document.querySelector("#sheet-url");
+    const sheetUrl = String(input?.value || "").trim();
+    const feedback = getSheetImportFeedback();
+    if (!sheetUrl) {
+      if (feedback) feedback.textContent = "Incolla prima il link del Google Sheet.";
+      input?.focus();
+      return;
+    }
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Caricamento…";
+    if (feedback) feedback.textContent = "Lettura del Google Sheet in corso…";
+
+    try {
+      const response = await fetch(sheetImportEndpoint(sheetUrl), {
+        method: "GET",
+        headers: { Accept: "text/csv,application/json;q=0.9" },
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      const csv = await response.text();
+      if (!csv.trim()) throw new Error("Il Google Sheet è vuoto.");
+
+      const file = new File([csv], `google-sheet-${Date.now()}.csv`, {
+        type: "text/csv;charset=utf-8",
+        lastModified: Date.now()
+      });
+      const fileInput = document.querySelector("#excel-file");
+      const importButton = document.querySelector("#import-btn");
+      if (!fileInput || !importButton) throw new Error("Importazione matrice non disponibile in questa schermata.");
+
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      if (feedback) feedback.textContent = "Foglio letto correttamente. Controlla l’anteprima e conferma l’importazione.";
+      importButton.click();
+    } catch (error) {
+      const message = error?.message || "Errore durante la lettura del Google Sheet.";
+      if (feedback) feedback.textContent = `${message} Verifica che il foglio sia condiviso come “Chiunque abbia il link – Visualizzatore”.`;
+      console.error("[Google Sheet Import] importazione non riuscita", error);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  window.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("#sheet-url-import-btn");
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void importFromGoogleSheet(button);
+  }, true);
+
   if (typeof auth !== "undefined") {
     auth.onAuthStateChanged((user) => {
       if (user) window.setTimeout(() => void runRepair(), 1200);

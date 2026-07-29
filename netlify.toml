@@ -13,6 +13,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/google-sheet-import"
+  to = "/.netlify/functions/google-sheet-import"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
@@ -34,5 +39,10 @@
 
 [[headers]]
   for = "/app.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/operational-import-repair.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"

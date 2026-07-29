@@ -14,6 +14,8 @@ const firebaseConfig = fs.readFileSync(path.join(root, "firebase-config.js"), "u
 
 const checks = [
   ["UI bidirezionale", browser.includes("Aggiorna app dal foglio") && browser.includes("Invia app al foglio")],
+  ["creazione foglio per commessa", browser.includes("Crea Google Sheet") && browser.includes('action: "createSpreadsheet"')],
+  ["stato collegamento specifico", browser.includes("Google Sheet collegato a questa commessa") && browser.includes("Nessun Google Sheet collegato a questa commessa")],
   ["chiavi tecniche anti duplicati", browser.includes("SYNC_KEY") && browser.includes("IMPIANTO_KEY")],
   ["ID snapshot autorevole", !browser.includes("{ id: doc.id, ...doc.data() }") && browser.includes("{ ...doc.data(), id: doc.id }")],
   ["scritture Firestore senza undefined", browser.includes("function removeUndefined(value)") && browser.includes("batch.set(ref, removeUndefined(data), { merge: true })")],
@@ -22,6 +24,8 @@ const checks = [
   ["scrittura autenticata", browser.includes("getIdToken") && proxy.includes("authenticateEvent")],
   ["token Firebase verificato", auth.includes("RSA-SHA256") && auth.includes("securetoken.google.com")],
   ["Apps Script doPost", appsScript.includes("function doPost") && appsScript.includes("replaceRows")],
+  ["Apps Script crea foglio e nasconde chiavi", appsScript.includes("SpreadsheetApp.create") && appsScript.includes("hideColumns(1, 2)")],
+  ["risposta completa creazione", appsScript.includes("spreadsheetId: spreadsheet.getId()") && appsScript.includes("sheetUrl: spreadsheet.getUrl()") && appsScript.includes("sheetName: sheet.getName()")],
   ["segreto server side", proxy.includes("GOOGLE_SHEET_SYNC_SECRET") && appsScript.includes("SYNC_SECRET")],
   ["rotta Netlify", netlify.includes('/api/google-sheet-sync')],
   ["modulo caricato", firebaseConfig.includes("google-sheet-two-way-sync.js")]

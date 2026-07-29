@@ -13,7 +13,7 @@ if (document.readyState === "loading") {
   document.write('<script src="native-android-runtime.js?v=20260725c"><\/script>');
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
-  document.write('<script src="google-sheet-two-way-sync.js?v=20260729a"><\/script>');
+  document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
     const nativeRuntimeScript = document.createElement("script");
@@ -35,7 +35,7 @@ if (document.readyState === "loading") {
   }
   if (!document.querySelector('script[data-hera-google-sheet-sync="true"]')) {
     const sheetSyncScript = document.createElement("script");
-    sheetSyncScript.src = "google-sheet-two-way-sync.js?v=20260729a";
+    sheetSyncScript.src = "google-sheet-two-way-sync.js?v=20260729b";
     sheetSyncScript.dataset.heraGoogleSheetSync = "true";
     document.head.appendChild(sheetSyncScript);
   }

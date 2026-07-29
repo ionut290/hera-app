@@ -1,321 +1,332 @@
 (() => {
   "use strict";
 
-  const LOCK_TTL_MS = 30000;
-  const locks = new Map();
-  const pendingCards = new Map();
-  const queueKey = "hera_fatto_ui_queue_v1";
+  const DB_NAME = "hera-fatto-sync";
+  const DB_VERSION = 1;
+  const STORE_NAME = "operations";
+  const STALE_SYNC_MS = 2 * 60 * 1000;
+  const MAX_ATTEMPTS = 12;
+  let processing = false;
+  let installed = false;
 
   const normalize = (value) => String(value ?? "").trim();
-  const normalizeKey = (value) => normalize(value).toLocaleLowerCase("it-IT").replace(/\s+/g, " ");
-  const nowIso = () => new Date().toISOString();
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  function readQueue() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(queueKey) || "[]");
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      return [];
-    }
+  function makeOperationId(impianto) {
+    const key = normalize(
+      impianto?.id || impianto?.key || impianto?.idSap || impianto?.sap || impianto?.ID_SAP || impianto?.nome
+    ).replace(/[^a-zA-Z0-9_-]+/g, "_");
+    const user = normalize(window.auth?.currentUser?.uid || window.auth?.currentUser?.email || "utente")
+      .replace(/[^a-zA-Z0-9_-]+/g, "_");
+    return `fatto_${key || "impianto"}_${user}_${Date.now()}`;
   }
 
-  function writeQueue(items) {
-    try {
-      localStorage.setItem(queueKey, JSON.stringify(items.slice(-300)));
-    } catch (_) {
-      // La cache UI non deve mai bloccare il lavoro dell'operatore.
-    }
-  }
-
-  function getImpiantoCard(button) {
-    return button?.closest?.(
-      "[data-impianto-id],[data-impianto-key],.impianto-card,.impianto-item,.impianto-row,.resource-item,.simple-list-item,article,li"
-    ) || null;
-  }
-
-  function getButtonKey(button) {
-    const card = getImpiantoCard(button);
-    return normalizeKey(
-      button?.dataset?.impiantoId
-      || button?.dataset?.impiantoKey
-      || button?.dataset?.id
-      || card?.dataset?.impiantoId
-      || card?.dataset?.impiantoKey
-      || card?.dataset?.id
-      || card?.querySelector?.("[data-impianto-id]")?.dataset?.impiantoId
-      || card?.querySelector?.("[data-impianto-key]")?.dataset?.impiantoKey
-      || card?.querySelector?.("h3,h4,strong,b")?.textContent
-    );
-  }
-
-  function getImpiantoObjectKeys(impianto) {
-    return [
-      impianto?.id,
-      impianto?.key,
-      impianto?.sap,
-      impianto?.idSap,
-      impianto?.ID_SAP,
-      impianto?.denominazione,
-      impianto?.nome,
-      impianto?.name
-    ].map(normalizeKey).filter(Boolean);
-  }
-
-  function resolvePendingKey(impianto) {
-    const objectKeys = getImpiantoObjectKeys(impianto);
-    for (const key of objectKeys) {
-      if (pendingCards.has(key)) return key;
-    }
-    for (const [pendingKey, pending] of pendingCards) {
-      const text = normalizeKey(pending.card?.textContent);
-      if (objectKeys.some((key) => text.includes(key) || key.includes(text))) return pendingKey;
-    }
-    return pendingCards.size === 1 ? pendingCards.keys().next().value : "";
-  }
-
-  function isFattoButton(button) {
-    if (!(button instanceof HTMLElement)) return false;
-    const action = normalize(button.dataset?.actionKey || button.dataset?.action || "").toLowerCase();
-    const label = normalize(button.getAttribute("aria-label") || button.title || button.textContent).toLowerCase();
-    if (button.classList.contains("is-completed-done")) return false;
-    if (action === "whatsapp") return false;
-    return action === "done" || action === "fatto" || /(^|\s)fatto(\s|$)/i.test(label);
-  }
-
-  function formatShortDate(date = new Date()) {
-    return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit" }).format(date);
-  }
-
-  function acquireLock(key, button) {
-    const lockKey = key || `button:${Date.now()}`;
-    const existing = locks.get(lockKey);
-    if (existing && Date.now() - existing.startedAt < LOCK_TTL_MS) return false;
-    locks.set(lockKey, { startedAt: Date.now(), button });
-    window.setTimeout(() => releaseLock(lockKey), LOCK_TTL_MS);
-    return lockKey;
-  }
-
-  function releaseLock(key) {
-    const item = locks.get(key);
-    if (item?.button?.isConnected) {
-      item.button.disabled = false;
-      item.button.removeAttribute("aria-busy");
-      item.button.classList.remove("fatto-operation-pending");
-    }
-    locks.delete(key);
-  }
-
-  function hidePreparingOverlay() {
-    const overlay = document.getElementById("whazzup-preparing-feedback");
-    if (!overlay) return;
-    overlay.classList.add("hidden");
-    overlay.setAttribute("aria-hidden", "true");
-  }
-
-  function findFattiContainer() {
-    const headings = Array.from(document.querySelectorAll("h2,h3,h4,.section-title,.list-title,.pill"));
-    const heading = headings.find((node) => /^\s*fatti\s*$/i.test(normalize(node.textContent)) || /impianti\s+fatti/i.test(normalize(node.textContent)));
-    if (!heading) return null;
-    const section = heading.closest("section,.card,[data-list-type],.impianti-section") || heading.parentElement;
-    if (!section) return null;
-    return section.querySelector(".impianti-list,.simple-list,.resource-list,[data-list],ul,ol") || section;
-  }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, (char) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
-    })[char]);
-  }
-
-  function createPendingGhost(card, key) {
-    const target = findFattiContainer();
-    if (!target || !card || target.contains(card)) return null;
-    const title = normalize(card.querySelector("h3,h4,strong,b")?.textContent) || "Impianto";
-    const ghost = document.createElement("div");
-    ghost.className = "fatto-pending-ghost";
-    ghost.dataset.fattoPendingKey = key;
-    ghost.setAttribute("role", "status");
-    ghost.innerHTML = `<strong>${escapeHtml(title)}</strong><small>🟡 FATTO ${formatShortDate()} · sincronizzazione in corso</small>`;
-    target.prepend(ghost);
-    return ghost;
-  }
-
-  function applyOptimisticUi(button, key) {
-    const card = getImpiantoCard(button);
-    const original = {
-      html: button.innerHTML,
-      disabled: button.disabled,
-      cardOpacity: card?.style?.opacity || "",
-      cardPointerEvents: card?.style?.pointerEvents || ""
-    };
-
-    button.setAttribute("aria-busy", "true");
-    button.classList.add("fatto-operation-pending");
-    button.dataset.doneLabel = `FATTO ${formatShortDate()}`;
-    button.setAttribute("aria-label", `${button.dataset.doneLabel}: salvataggio in corso`);
-    button.innerHTML = `<span aria-hidden="true">⚠️</span><span>${button.dataset.doneLabel}</span>`;
-
-    // Il blocco effettivo avviene dopo la propagazione del click corrente:
-    // così il listener FATTO già presente in app.js riceve sempre il primo click.
-    window.setTimeout(() => {
-      if (button.isConnected) button.disabled = true;
-      if (card?.isConnected) {
-        card.classList.add("fatto-card-pending");
-        card.dataset.fattoPending = "true";
-        card.style.opacity = "0.64";
-        card.style.pointerEvents = "none";
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      if (!("indexedDB" in window)) {
+        reject(new Error("IndexedDB non disponibile"));
+        return;
       }
-    }, 0);
-
-    const ghost = createPendingGhost(card, key);
-    pendingCards.set(key, { button, card, ghost, original });
-
-    const queue = readQueue().filter((item) => item.key !== key);
-    queue.push({ key, createdAt: nowIso(), status: navigator.onLine ? "saving" : "offline" });
-    writeQueue(queue);
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          const store = db.createObjectStore(STORE_NAME, { keyPath: "operationId" });
+          store.createIndex("status", "status", { unique: false });
+          store.createIndex("createdAt", "createdAt", { unique: false });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Apertura coda non riuscita"));
+    });
   }
 
-  function confirmOptimisticUi(key) {
-    const pending = pendingCards.get(key);
-    if (pending?.ghost?.isConnected) {
-      const small = pending.ghost.querySelector("small");
-      if (small) small.textContent = "🟢 Salvato e sincronizzato";
-      window.setTimeout(() => pending.ghost?.remove(), 900);
-    }
-    if (pending?.card?.isConnected) {
-      pending.card.classList.remove("fatto-card-pending");
-      pending.card.removeAttribute("data-fatto-pending");
-      pending.card.style.opacity = pending.original.cardOpacity;
-      pending.card.style.pointerEvents = pending.original.cardPointerEvents;
-    }
-    pendingCards.delete(key);
-    writeQueue(readQueue().filter((item) => item.key !== key));
-    releaseLock(key);
-  }
-
-  function rollbackOptimisticUi(key, message) {
-    const pending = pendingCards.get(key);
-    if (!pending) return;
-    if (pending.ghost?.isConnected) pending.ghost.remove();
-    if (pending.button?.isConnected) {
-      pending.button.innerHTML = pending.original.html;
-      pending.button.disabled = pending.original.disabled;
-      pending.button.removeAttribute("aria-busy");
-      pending.button.classList.remove("fatto-operation-pending");
-    }
-    if (pending.card?.isConnected) {
-      pending.card.classList.remove("fatto-card-pending");
-      pending.card.removeAttribute("data-fatto-pending");
-      pending.card.style.opacity = pending.original.cardOpacity;
-      pending.card.style.pointerEvents = pending.original.cardPointerEvents;
-    }
-    pendingCards.delete(key);
-    writeQueue(readQueue().filter((item) => item.key !== key));
-    releaseLock(key);
-    if (message) console.warn("FATTO ripristinato:", message);
-  }
-
-  function installFunctionWrappers() {
-    const originalMarkDone = window.markImpiantoDone;
-    if (typeof originalMarkDone === "function" && !originalMarkDone.__fluidFattoWrapped) {
-      const wrapped = function fluidMarkImpiantoDone(impianto) {
-        const pendingKey = resolvePendingKey(impianto);
+  async function withStore(mode, work) {
+    const db = await openDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, mode);
+        const store = transaction.objectStore(STORE_NAME);
         let result;
         try {
-          result = originalMarkDone.apply(this, arguments);
+          result = work(store);
         } catch (error) {
-          if (pendingKey) rollbackOptimisticUi(pendingKey, error);
-          throw error;
+          reject(error);
+          return;
         }
-        if (result && typeof result.then === "function") {
-          return result.then((value) => {
-            if (pendingKey) confirmOptimisticUi(pendingKey);
-            return value;
-          }).catch((error) => {
-            if (pendingKey) rollbackOptimisticUi(pendingKey, error);
-            throw error;
-          });
-        }
-        if (pendingKey) confirmOptimisticUi(pendingKey);
-        return result;
-      };
-      wrapped.__fluidFattoWrapped = true;
-      wrapped.__original = originalMarkDone;
-      window.markImpiantoDone = wrapped;
-    }
-
-    const originalOpenWhatsApp = window.openWhatsApp;
-    if (typeof originalOpenWhatsApp === "function" && !originalOpenWhatsApp.__fluidFattoWrapped) {
-      const wrapped = function fluidOpenWhatsApp() {
-        hidePreparingOverlay();
-        return originalOpenWhatsApp.apply(this, arguments);
-      };
-      wrapped.__fluidFattoWrapped = true;
-      wrapped.__original = originalOpenWhatsApp;
-      window.openWhatsApp = wrapped;
+        transaction.oncomplete = () => resolve(result);
+        transaction.onerror = () => reject(transaction.error || new Error("Errore coda locale"));
+        transaction.onabort = () => reject(transaction.error || new Error("Operazione coda annullata"));
+      });
+    } finally {
+      db.close();
     }
   }
 
-  document.addEventListener("click", (event) => {
-    const button = event.target?.closest?.("button");
-    if (!isFattoButton(button)) return;
+  async function putOperation(operation) {
+    return withStore("readwrite", (store) => store.put(operation));
+  }
 
-    const key = getButtonKey(button) || `fatto:${Date.now()}`;
-    const lockKey = acquireLock(key, button);
-    if (!lockKey) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
+  async function getOperations() {
+    const db = await openDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, "readonly");
+        const request = transaction.objectStore(STORE_NAME).getAll();
+        request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+        request.onerror = () => reject(request.error || new Error("Lettura coda non riuscita"));
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function removeOperation(operationId) {
+    return withStore("readwrite", (store) => store.delete(operationId));
+  }
+
+  function updateSyncIndicator(items = []) {
+    const waiting = items.filter((item) => item.status !== "COMPLETED");
+    document.documentElement.dataset.fattoSyncPending = String(waiting.length);
+    window.dispatchEvent(new CustomEvent("hera:fatto-sync-status", {
+      detail: {
+        pending: waiting.length,
+        syncing: waiting.some((item) => item.status === "SYNCING"),
+        failed: waiting.filter((item) => item.status === "FAILED" || item.status === "BLOCKED").length
+      }
+    }));
+  }
+
+  async function refreshIndicator() {
+    try {
+      updateSyncIndicator(await getOperations());
+    } catch (_) {
+      // L'indicatore non deve bloccare il flusso FATTO.
+    }
+  }
+
+  async function enqueue(impianto, metadata = {}) {
+    const now = Date.now();
+    const operation = {
+      operationId: metadata.operationId || makeOperationId(impianto),
+      type: "IMPIANTO_FATTO",
+      status: "PENDING",
+      impianto: JSON.parse(JSON.stringify(impianto || {})),
+      commessaId: normalize(metadata.commessaId || window.selectedCommessaId),
+      doneAt: metadata.doneAt || new Date(now).toISOString(),
+      doneBy: normalize(metadata.doneBy || window.auth?.currentUser?.displayName || window.auth?.currentUser?.email),
+      attempts: 0,
+      createdAt: now,
+      updatedAt: now,
+      lastError: ""
+    };
+    await putOperation(operation);
+    await refreshIndicator();
+    return operation;
+  }
+
+  async function markStatus(operation, status, error = "") {
+    const updated = {
+      ...operation,
+      status,
+      updatedAt: Date.now(),
+      lastError: normalize(error?.message || error)
+    };
+    await putOperation(updated);
+    return updated;
+  }
+
+  async function complete(operation) {
+    await removeOperation(operation.operationId);
+    await refreshIndicator();
+  }
+
+  async function runExistingSync(operation) {
+    const impianto = operation.impianto || {};
+    const options = {
+      source: "resume-persistent-queue",
+      operationId: operation.operationId,
+      doneAt: operation.doneAt,
+      doneBy: operation.doneBy,
+      requireFirestoreConfirmation: false,
+      reopenWhatsApp: false
+    };
+
+    if (typeof window.forceMoveImpiantoToFatti === "function") {
+      return window.forceMoveImpiantoToFatti(impianto, options);
+    }
+    if (typeof window.markImpiantoDone === "function") {
+      return window.markImpiantoDone(impianto, options);
+    }
+    if (typeof window.forceMarkDone === "function") {
+      return window.forceMarkDone(impianto, options);
+    }
+    throw new Error("Funzione di sincronizzazione FATTO non ancora disponibile");
+  }
+
+  async function processQueue(reason = "manual") {
+    if (processing || !navigator.onLine) return false;
+    processing = true;
+    document.documentElement.dataset.fattoSyncReason = reason;
+    try {
+      const items = (await getOperations()).sort((a, b) => a.createdAt - b.createdAt);
+      updateSyncIndicator(items);
+      for (const original of items) {
+        let operation = original;
+        if (operation.status === "COMPLETED") {
+          await removeOperation(operation.operationId);
+          continue;
+        }
+        if (operation.status === "SYNCING" && Date.now() - Number(operation.updatedAt || 0) < STALE_SYNC_MS) continue;
+        if (Number(operation.attempts || 0) >= MAX_ATTEMPTS) {
+          await markStatus(operation, "BLOCKED", operation.lastError || "Numero massimo di tentativi raggiunto");
+          continue;
+        }
+        operation = await markStatus({ ...operation, attempts: Number(operation.attempts || 0) + 1 }, "SYNCING");
+        try {
+          await runExistingSync(operation);
+          await complete(operation);
+        } catch (error) {
+          await markStatus(operation, "FAILED", error);
+          if (/non ancora disponibile/i.test(normalize(error?.message))) break;
+          await sleep(Math.min(800 * operation.attempts, 4000));
+        }
+      }
+      await refreshIndicator();
+      return true;
+    } finally {
+      processing = false;
+    }
+  }
+
+  function isNativeAndroid() {
+    try {
+      return window.Capacitor?.getPlatform?.() === "android";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getNativeWhatsAppPlugin() {
+    return window.Capacitor?.Plugins?.HeraWhatsApp || null;
+  }
+
+  function extractWhatsAppUrl(args) {
+    for (const value of args) {
+      if (typeof value === "string" && /(whatsapp:|wa\.me|api\.whatsapp\.com)/i.test(value)) return value;
+      if (value && typeof value === "object") {
+        const candidate = value.url || value.href || value.link || value.whatsappUrl;
+        if (typeof candidate === "string" && candidate) return candidate;
+      }
+    }
+    return "";
+  }
+
+  function installOpenWhatsAppWrapper() {
+    const original = window.openWhatsApp;
+    if (typeof original !== "function" || original.__heraNativeWhatsAppWrapped) return false;
+
+    const wrapped = function heraOpenInstalledWhatsApp(...args) {
+      const plugin = getNativeWhatsAppPlugin();
+      if (isNativeAndroid() && plugin?.open) {
+        const url = extractWhatsAppUrl(args);
+        plugin.open({ url }).catch((error) => {
+          console.error("Apertura WhatsApp nativa fallita:", error);
+          window.dispatchEvent(new CustomEvent("hera:whatsapp-error", { detail: { message: normalize(error?.message || error) } }));
+        });
+        return true;
+      }
+      return original.apply(this, args);
+    };
+    wrapped.__heraNativeWhatsAppWrapped = true;
+    wrapped.__original = original;
+    window.openWhatsApp = wrapped;
+    return true;
+  }
+
+  function installFattoFlowWrapper() {
+    const original = window.handleImpiantoWhatsAppClick;
+    if (typeof original !== "function" || original.__heraPersistentQueueWrapped) return false;
+
+    const wrapped = async function heraPersistentFattoFlow(impianto, ...args) {
+      let operation;
+      try {
+        operation = await enqueue(impianto, {
+          commessaId: window.selectedCommessaId,
+          doneAt: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Impossibile mettere FATTO in sicurezza:", error);
+        throw error;
+      }
+
+      try {
+        const result = await original.call(this, impianto, ...args);
+        if (result === true) await complete(operation);
+        else await markStatus(operation, "FAILED", "Flusso FATTO non completato");
+        return result;
+      } catch (error) {
+        await markStatus(operation, "FAILED", error);
+        throw error;
+      }
+    };
+    wrapped.__heraPersistentQueueWrapped = true;
+    wrapped.__original = original;
+    window.handleImpiantoWhatsAppClick = wrapped;
+    return true;
+  }
+
+  function installWrappers() {
+    installOpenWhatsAppWrapper();
+    installFattoFlowWrapper();
+  }
+
+  function requestResume(reason) {
+    installWrappers();
+    window.setTimeout(() => processQueue(reason), 80);
+  }
+
+  function installLifecycle() {
+    if (installed) return;
+    installed = true;
+
+    window.addEventListener("online", () => requestResume("online"));
+    window.addEventListener("pageshow", () => requestResume("pageshow"));
+    window.addEventListener("focus", () => requestResume("focus"));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestResume("visible");
+    });
+    window.addEventListener("hera:auth-ready", () => requestResume("auth-ready"));
+    window.addEventListener("hera:data-ready", () => requestResume("data-ready"));
+    window.addEventListener("hera:native-resume", () => requestResume("native-resume"));
+
+    const appPlugin = window.Capacitor?.Plugins?.App;
+    if (appPlugin?.addListener) {
+      appPlugin.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) requestResume("capacitor-active");
+      }).catch?.(() => {});
     }
 
-    applyOptimisticUi(button, lockKey);
-    hidePreparingOverlay();
-  }, true);
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      installWrappers();
+      if (attempts >= 120 || (
+        window.openWhatsApp?.__heraNativeWhatsAppWrapped
+        && window.handleImpiantoWhatsAppClick?.__heraPersistentQueueWrapped
+      )) window.clearInterval(timer);
+    }, 250);
 
-  window.addEventListener("online", () => {
-    document.documentElement.dataset.fattoNetwork = "online";
+    refreshIndicator();
+    requestResume("startup");
+  }
+
+  window.HeraFattoSync = Object.freeze({
+    enqueue,
+    processQueue,
+    refreshIndicator,
+    getOperations
   });
-  window.addEventListener("offline", () => {
-    document.documentElement.dataset.fattoNetwork = "offline";
-  });
 
-  const style = document.createElement("style");
-  style.textContent = `
-    .fatto-operation-pending{background:#f5c518!important;color:#171717!important;cursor:wait!important}
-    .fatto-card-pending{transition:opacity .16s ease}
-    .fatto-pending-ghost{display:flex;flex-direction:column;gap:3px;margin:7px 0;padding:10px 12px;border:1px solid #d4a800;border-radius:10px;background:#fff8d1;color:#27210b}
-    .fatto-pending-ghost small{font-weight:700;color:#7a5d00}
-    html[data-fatto-network="offline"] .fatto-pending-ghost small::after{content:" · salvato sul dispositivo"}
-    @media(prefers-reduced-motion:reduce){.fatto-card-pending{transition:none}}
-  `;
-  document.head.appendChild(style);
-
-  installFunctionWrappers();
-  window.setTimeout(installFunctionWrappers, 0);
-  window.setTimeout(installFunctionWrappers, 1000);
-
-  const observer = new MutationObserver(() => {
-    installFunctionWrappers();
-    for (const [key, pending] of pendingCards) {
-      if (!pending.button?.isConnected && !pending.card?.isConnected) confirmOptimisticUi(key);
-    }
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-
-  window.HeraFattoFluid = Object.freeze({
-    confirm: confirmOptimisticUi,
-    rollback: rollbackOptimisticUi,
-    pending: () => Array.from(pendingCards.keys()),
-    queue: readQueue
-  });
-})();
-
-(() => {
-  "use strict";
-  if (document.querySelector('script[data-password-access-manager="true"]')) return;
-  const script = document.createElement("script");
-  script.src = "password-access-manager.js?v=20260727a";
-  script.defer = true;
-  script.dataset.passwordAccessManager = "true";
-  document.head.appendChild(script);
+  installLifecycle();
 })();

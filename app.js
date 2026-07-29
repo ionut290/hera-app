@@ -5447,7 +5447,7 @@ function renderPersonalHoursSelectedDay() {
     <article class="calendar-event-card personal-hours-detail">
       <div class="calendar-event-heading">
         <span class="calendar-event-icon" aria-hidden="true">🕒</span>
-        <div><h3>${escapeHTML(entry.commessaName || commesseById.get(entry.commessaId)?.nome || "Ore lavorate")}</h3>
+        <div><h3>${escapeHTML(getHoursCommessaDisplayName(entry))}</h3>
         <p>${formatPersonalHours(hours)} ore</p></div>
       </div>
       ${entry.note ? `<p class="calendar-event-description">${escapeHTML(entry.note)}</p>` : ""}
@@ -6116,7 +6116,7 @@ function renderSavedHoursReports(records = []) {
         .join("");
       return `
         <div class="item-card">
-          <p><b>Commessa:</b> ${escapeHTML(entry.commessaName || "-")}</p>
+          <p><b>Commessa:</b> ${escapeHTML(getHoursCommessaDisplayName(entry))}</p>
           <ul>${rows || "<li>Nessun operatore</li>"}</ul>
           ${entry.note ? `<p><b>Nota:</b> ${escapeHTML(entry.note)}</p>` : ""}
         </div>
@@ -6281,7 +6281,32 @@ function normalizeHoursCommessaMatchValue(value) {
     .trim();
 }
 
+const HOURS_EXTERNAL_COMMESSA_VALUE = "__external__";
+
+function isExternalHoursEntry(entry = {}) {
+  return entry?.commessaEsterna === true || String(entry?.tipoCommessa || "").toLowerCase() === "esterna";
+}
+
+function normalizeExternalHoursCommessaName(value) {
+  return String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+}
+
+function getHoursCommessaDisplayName(entry = {}) {
+  const name = String(entry?.commessaName || entry?.commessaNome || "").trim();
+  if (isExternalHoursEntry(entry)) return `ESTERNA · ${name || "Commessa senza nome"}`;
+  return name || commesseById.get(String(entry?.commessaId || ""))?.nome || "Commessa";
+}
+
+function getHoursEntryGroupingKey(entry = {}) {
+  if (isExternalHoursEntry(entry)) return `external:${normalizeExternalHoursCommessaName(entry.commessaName || entry.commessaNome)}`;
+  return String(resolveHoursEntryCommessa(entry).id || resolveHoursEntryCommessa(entry).key || "").trim();
+}
+
 function resolveHoursEntryCommessa(entry = {}) {
+  if (isExternalHoursEntry(entry)) {
+    const name = String(entry.commessaName || entry.commessaNome || "").trim();
+    return { id: "", nome: name, codice: "", key: name ? `external:${normalizeExternalHoursCommessaName(name)}` : "" };
+  }
   const directId = String(entry?.commessaId || "").trim();
   if (directId && commesseById.has(directId)) {
     const commessa = commesseById.get(directId) || {};
@@ -6309,6 +6334,7 @@ function resolveHoursEntryCommessa(entry = {}) {
 }
 
 function doesHoursEntryMatchCommessa(entry, selectedCommessaId) {
+  if (isExternalHoursEntry(entry)) return false;
   const selected = getSelectedHoursCommessaInfo(selectedCommessaId);
   const resolved = resolveHoursEntryCommessa(entry);
   if (selected.id && resolved.id && selected.id === resolved.id) return true;
@@ -7106,13 +7132,13 @@ async function exportHoursGlobalMonthlyTable(options = {}) {
       const entries = Array.isArray(report.entries) ? report.entries : [];
       entries.forEach((entry) => {
         const entryCommessaInfo = resolveHoursEntryCommessa(entry);
-        const commessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
+        const commessaId = getHoursEntryGroupingKey(entry);
         if (!commessaId) return;
-        if (onlyCommessaId && commessaId !== onlyCommessaId) return;
+        if (onlyCommessaId && (isExternalHoursEntry(entry) || commessaId !== onlyCommessaId)) return;
         const commessaName = String(entryCommessaInfo.nome || entry.commessaName || commesseById.get(entryCommessaInfo.id)?.nome || "Commessa").trim() || "Commessa";
-        const commessaCode = String(entryCommessaInfo.codice || commesseById.get(entryCommessaInfo.id)?.codice || "").trim();
+        const commessaCode = isExternalHoursEntry(entry) ? "" : String(entryCommessaInfo.codice || commesseById.get(entryCommessaInfo.id)?.codice || "").trim();
         if (!commessaMap.has(commessaId)) {
-          commessaMap.set(commessaId, { commessaName, commessaCode, operatorsMap: new Map() });
+          commessaMap.set(commessaId, { commessaName, commessaCode, commessaEsterna: isExternalHoursEntry(entry), operatorsMap: new Map() });
         }
         const commessaBucket = commessaMap.get(commessaId);
         (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
@@ -7376,7 +7402,7 @@ async function exportHoursGlobalMonthlyTable(options = {}) {
 
     const startRow = rowPointer;
     const commessaRow = worksheet.getRow(rowPointer);
-    commessaRow.getCell(1).value = "COMMESSA";
+    commessaRow.getCell(1).value = commessaBlock.commessaEsterna ? "COMMESSA ESTERNA" : "COMMESSA";
     commessaRow.getCell(2).value = commessaBlock.commessaName;
     worksheet.mergeCells(rowPointer, 2, rowPointer, lastColumn);
     commessaRow.font = { bold: true, size: 14, color: { argb: "FF0B1F44" } };
@@ -7596,7 +7622,11 @@ function renderHoursCommessaSelectOptions() {
     commesse.forEach((commessa) => {
       select.appendChild(createCommessaOption(commessa, { includeHierarchy: true }));
     });
-    if (selectedValue && commesse.some((commessa) => commessa.id === selectedValue)) {
+    const externalOption = document.createElement("option");
+    externalOption.value = HOURS_EXTERNAL_COMMESSA_VALUE;
+    externalOption.textContent = "COMMESSA ESTERNA";
+    select.appendChild(externalOption);
+    if (selectedValue === HOURS_EXTERNAL_COMMESSA_VALUE || (selectedValue && commesse.some((commessa) => commessa.id === selectedValue))) {
       select.value = selectedValue;
     }
     renderHoursCardCommessaButtons(select.closest(".hours-commessa-card"), commesse);
@@ -7649,6 +7679,7 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
   const selectedValue = String(select.value || "").trim();
   const selectedIndex = commesse.findIndex((commessa) => commessa.id === selectedValue);
   const selectedCommessa = selectedIndex >= 0 ? commesse[selectedIndex] : null;
+  const isExternalSelected = selectedValue === HOURS_EXTERNAL_COMMESSA_VALUE;
   const isOpen = options.keepOpen === true;
   const query = String(options.query || "").trim();
   const normalizedQuery = normalizeHoursCommessaSearch(query);
@@ -7658,15 +7689,10 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
     ? commesse.filter((commessa) => normalizeHoursCommessaSearch(getCommessaDisplayName(commessa)).includes(normalizedQuery))
     : commesse;
 
-  if (!commesse.length) {
-    container.innerHTML = "<p class='muted hours-commessa-empty'>Nessuna commessa disponibile.</p>";
-    return;
-  }
-
   container.classList.toggle("is-open", isOpen);
   container.innerHTML = `
     <button type="button" class="hours-commessa-picker-toggle" style="--commessa-accent:${escapeHTML(selectedColor)}" aria-expanded="${isOpen ? "true" : "false"}" ${disabled ? "disabled" : ""}>
-      <span class="hours-commessa-picker-label">${escapeHTML(selectedCommessa ? getCommessaDisplayName(selectedCommessa) : "Seleziona commessa")}</span>
+      <span class="hours-commessa-picker-label">${escapeHTML(isExternalSelected ? "COMMESSA ESTERNA" : (selectedCommessa ? getCommessaDisplayName(selectedCommessa) : "Seleziona commessa"))}</span>
       <span class="hours-commessa-picker-arrow" aria-hidden="true">▼</span>
     </button>
     <div class="hours-commessa-picker-menu ${isOpen ? "" : "hidden"}">
@@ -7678,6 +7704,7 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
           const active = selectedValue === commessa.id;
           return `<button type="button" class="hours-commessa-picker-option ${active ? "is-active" : ""}" data-hours-commessa-option="${escapeHTML(commessa.id)}" style="--commessa-accent:${escapeHTML(color)}" role="option" aria-selected="${active ? "true" : "false"}">${escapeHTML(getCommessaDisplayName(commessa))}</button>`;
         }).join("") : "<p class='muted hours-commessa-empty'>Nessuna commessa trovata.</p>"}
+        ${!normalizedQuery || normalizeHoursCommessaSearch("COMMESSA ESTERNA").includes(normalizedQuery) ? `<button type="button" class="hours-commessa-picker-option ${isExternalSelected ? "is-active" : ""}" data-hours-commessa-option="${HOURS_EXTERNAL_COMMESSA_VALUE}" role="option" aria-selected="${isExternalSelected ? "true" : "false"}">COMMESSA ESTERNA</button>` : ""}
       </div>
     </div>
   `;
@@ -8508,6 +8535,9 @@ function addHoursCommessaBlock(blockData = null) {
     <select class="hours-commessa-select" required>
       <option value="">Seleziona commessa</option>
     </select>
+    <label class="hours-external-commessa-field hidden">NOME COMMESSA ESTERNA
+      <input type="text" class="hours-external-commessa-name" placeholder="Scrivi il nome della commessa" autocomplete="off">
+    </label>
     <p class="hours-locked-commessa-label muted hidden"></p>
     <div class="hours-commesse-buttons hours-commessa-picker" aria-label="Seleziona commessa"></div>
     <p class="hours-team-label muted hidden"></p>
@@ -8539,10 +8569,26 @@ function addHoursCommessaBlock(blockData = null) {
     renderHoursSummary();
   });
   const commessaSelect = card.querySelector(".hours-commessa-select");
+  const externalNameField = card.querySelector(".hours-external-commessa-field");
+  const externalNameInput = card.querySelector(".hours-external-commessa-name");
+  const syncExternalCommessaField = () => {
+    const external = commessaSelect.value === HOURS_EXTERNAL_COMMESSA_VALUE;
+    externalNameField?.classList.toggle("hidden", !external);
+    if (externalNameInput) {
+      externalNameInput.required = external;
+      if (!external) externalNameInput.value = "";
+    }
+  };
   commessaSelect.addEventListener("change", () => {
     unlockHoursFinalizeButton();
+    syncExternalCommessaField();
     renderHoursCardCommessaButtons(card);
     applyHoursSuggestedOperators(card, { force: true });
+  });
+  externalNameInput?.addEventListener("input", () => {
+    externalNameInput.setCustomValidity("");
+    unlockHoursFinalizeButton();
+    renderHoursSummary();
   });
   card.querySelector(".hours-note").addEventListener("input", () => {
     unlockHoursFinalizeButton();
@@ -8550,7 +8596,10 @@ function addHoursCommessaBlock(blockData = null) {
   });
 
   if (blockData) {
-    if (blockData.commessaId) {
+    if (isExternalHoursEntry(blockData)) {
+      commessaSelect.value = HOURS_EXTERNAL_COMMESSA_VALUE;
+      externalNameInput.value = String(blockData.commessaName || blockData.commessaNome || "").trim();
+    } else if (blockData.commessaId) {
       commessaSelect.value = blockData.commessaId;
     }
     if (blockData.lockedCommessa) {
@@ -8611,6 +8660,7 @@ function addHoursCommessaBlock(blockData = null) {
   } else {
     applyHoursSuggestedOperators(card, { force: true });
   }
+  syncExternalCommessaField();
   renderHoursCardCommessaButtons(card);
   renderHoursSummary();
   return card;
@@ -8631,9 +8681,15 @@ function collectHoursEntries() {
       squadraIndex: String(row.dataset.squadraIndex || squadraIndex || "").trim(),
       squadraLabel: String(row.dataset.squadraLabel || squadraLabel || "").trim()
     })).filter((row) => row.operatore && row.ore > 0);
-    const commessaName = commesseById.get(commessaId)?.nome || "";
-    return { commessaId, commessaName, note, squadraIndex, squadraLabel, rows };
-  }).filter((entry) => entry.commessaId || entry.rows.length || entry.note);
+    const commessaEsterna = commessaId === HOURS_EXTERNAL_COMMESSA_VALUE;
+    const externalNameInput = card.querySelector(".hours-external-commessa-name");
+    const externalName = String(externalNameInput?.value || "").trim();
+    if (commessaEsterna && !externalName) externalNameInput?.setCustomValidity("Inserisci il nome della commessa esterna.");
+    else externalNameInput?.setCustomValidity("");
+    const realCommessaId = commessaEsterna ? "" : commessaId;
+    const commessaName = commessaEsterna ? externalName : (commesseById.get(realCommessaId)?.nome || "");
+    return { commessaEsterna, tipoCommessa: commessaEsterna ? "esterna" : "interna", commessaId: realCommessaId, commessaName, commessaNome: commessaName, note, squadraIndex, squadraLabel, rows };
+  }).filter((entry) => entry.commessaId || entry.commessaEsterna || entry.rows.length || entry.note);
 }
 
 function normalizeHoursOperatorName(value) {
@@ -9378,7 +9434,7 @@ function renderHoursSummary(forcedEntries = null) {
         : "<li>Nessun operatore indicato.</li>");
     return `
       <article class="item-card">
-        <h3>${idx + 1}. ${escapeHTML(entry.commessaName || "Commessa non selezionata")}</h3>
+        <h3>${idx + 1}. ${escapeHTML(getHoursCommessaDisplayName(entry))}</h3>
         <ul>${rows}</ul>
         ${entry.note ? `<p><b>Nota:</b> ${escapeHTML(entry.note)}</p>` : ""}
       </article>
@@ -9398,7 +9454,7 @@ function buildHoursInsertedChatText(payload) {
     : "-";
   const details = (Array.isArray(payload?.entries) ? payload.entries : [])
     .map((entry) => {
-      const commessaName = String(entry?.commessaName || "Commessa").trim() || "Commessa";
+      const commessaName = getHoursCommessaDisplayName(entry);
       const totalHours = getHoursEntryTotal(entry);
       return `${formatHoursNumber(totalHours)} ore in ${commessaName}`;
     })
@@ -9512,7 +9568,13 @@ async function finalizeHoursReport(event) {
     return;
   }
   const entries = collectHoursEntries();
-  const hasValidEntry = entries.some((entry) => entry.commessaId && entry.rows.some((row) => row.operatore && row.ore > 0));
+  const incompleteExternalEntry = entries.find((entry) => entry.commessaEsterna === true && !String(entry.commessaName || "").trim());
+  if (incompleteExternalEntry) {
+    ui.hoursFeedback.textContent = "Inserisci il nome della commessa esterna.";
+    ui.hoursCommesseList.querySelector(".hours-external-commessa-name:invalid")?.focus();
+    return;
+  }
+  const hasValidEntry = entries.some((entry) => (entry.commessaId || (entry.commessaEsterna === true && entry.commessaName)) && entry.rows.some((row) => row.operatore && row.ore > 0));
   if (!hasValidEntry) {
     ui.hoursFeedback.textContent = "Inserisci almeno una commessa con un operatore e ore > 0.";
     return;
@@ -9520,8 +9582,11 @@ async function finalizeHoursReport(event) {
   const payload = {
     date: dateValue,
     entries: entries.map((entry) => ({
-      commessaId: entry.commessaId,
+      commessaEsterna: entry.commessaEsterna === true,
+      tipoCommessa: entry.commessaEsterna === true ? "esterna" : "interna",
+      commessaId: entry.commessaEsterna === true ? "" : entry.commessaId,
       commessaName: entry.commessaName,
+      commessaNome: entry.commessaName,
       note: entry.note,
       rows: entry.rows
         .filter((row) => row.operatore && row.ore > 0)
@@ -9533,7 +9598,7 @@ async function finalizeHoursReport(event) {
           squadraLabel: row.squadraLabel || "",
           ore: row.ore
         }))
-    })).filter((entry) => entry.commessaId && entry.rows.length),
+    })).filter((entry) => (entry.commessaId || (entry.commessaEsterna === true && String(entry.commessaName || "").trim())) && entry.rows.length),
     createdByUid: currentUser.uid,
     createdByName: currentUser.displayName || currentUser.email || "Operatore",
     createdByEmail: currentUser.email || "",
@@ -9541,7 +9606,7 @@ async function finalizeHoursReport(event) {
     savedWithoutAdminApproval: true,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  const unauthorizedEntry = payload.entries.find((entry) => !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
+  const unauthorizedEntry = payload.entries.find((entry) => entry.commessaEsterna !== true && !canCurrentUserInsertHoursForCommessa(entry.commessaId, dateValue));
   if (unauthorizedEntry) {
     ui.hoursFeedback.textContent = `Permesso negato: commessa non valida (${unauthorizedEntry.commessaName || "Commessa"}).`;
     return;
@@ -26995,7 +27060,7 @@ function canApproveHoursLevel1(request) {
 
 function hasValidHoursRows(record = {}) {
   return (Array.isArray(record.entries) ? record.entries : []).some((entry) => (
-    String(entry?.commessaId || "").trim()
+    (String(entry?.commessaId || "").trim() || (isExternalHoursEntry(entry) && String(entry?.commessaName || entry?.commessaNome || "").trim()))
     && (Array.isArray(entry?.rows) ? entry.rows : []).some((row) => (
       String(row?.operatore || "").trim() && Number(row?.ore || 0) > 0
     ))
@@ -27059,7 +27124,7 @@ function renderHoursApprovalRequests() {
     const author = request.createdByName || request.createdByEmail || "Operatore";
     const summary = (Array.isArray(request.entries) ? request.entries : []).map((entry) => {
       const tot = (entry.rows || []).reduce((sum, row) => sum + (Number(row.ore || 0) || 0), 0);
-      return `<li>${escapeHTML(entry.commessaName || "Commessa")}: ${escapeHTML(String(tot))}h</li>`;
+      return `<li>${escapeHTML(getHoursCommessaDisplayName(entry))}: ${escapeHTML(String(tot))}h</li>`;
     }).join("");
     const hasInvalidBlock = isBlockingHoursApprovalWithoutVisibleRecord(request);
     card.innerHTML = `

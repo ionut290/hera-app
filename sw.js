@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v53";
+const CACHE_NAME = "hera-app-shell-v54";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./accounting-v2.js?v=20260728e",
   "./accounting-view-guard.js?v=20260728a",
   "./operational-import-repair.js?v=20260728a",
+  "./google-sheet-two-way-sync.js?v=20260729a",
   "./native-android-runtime.js?v=20260726-fatto1",
   "./notification-session-enhancements.js?v=20260727b",
   "./today-summary-interactions.js?v=20260728f",

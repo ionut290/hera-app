@@ -1,0 +1,153 @@
+"use strict";
+
+const { authenticateEvent } = require("./_firebase-token");
+
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_ROWS = 20000;
+const MAX_COLUMNS = 80;
+const REQUEST_TIMEOUT_MS = 25000;
+
+function json(statusCode, payload, extraHeaders = {}) {
+  return {
+    statusCode,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      ...extraHeaders
+    },
+    body: JSON.stringify(payload)
+  };
+}
+
+function parseBody(event) {
+  const raw = event.isBase64Encoded
+    ? Buffer.from(event.body || "", "base64").toString("utf8")
+    : String(event.body || "");
+  if (!raw || Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
+    throw new Error("Richiesta vuota o troppo grande (massimo 8 MB).");
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    throw new Error("Dati di sincronizzazione non validi.");
+  }
+}
+
+function validateGoogleSheetUrl(rawUrl) {
+  const parsed = new URL(String(rawUrl || "").trim());
+  if (parsed.protocol !== "https:" || parsed.hostname !== "docs.google.com") {
+    throw new Error("Link Google Sheet non valido.");
+  }
+  const match = parsed.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]+)/);
+  if (!match) throw new Error("ID del Google Sheet non riconosciuto.");
+  return match[1];
+}
+
+function validateAppsScriptUrl(rawUrl) {
+  const parsed = new URL(String(rawUrl || "").trim());
+  const allowedHost = parsed.hostname === "script.google.com" || parsed.hostname.endsWith(".script.google.com");
+  if (parsed.protocol !== "https:" || !allowedHost || !/\/macros\/s\//.test(parsed.pathname)) {
+    throw new Error("GOOGLE_SHEET_APPS_SCRIPT_URL non valido.");
+  }
+  return parsed.href;
+}
+
+function allowedEmails() {
+  return new Set(String(process.env.GOOGLE_SHEET_SYNC_ALLOWED_EMAILS || "")
+    .split(/[;,\s]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean));
+}
+
+function validatePayload(payload) {
+  if (payload?.action !== "replaceRows") throw new Error("Azione di sincronizzazione non supportata.");
+  const spreadsheetIdFromUrl = validateGoogleSheetUrl(payload.sheetUrl);
+  const spreadsheetId = String(payload.spreadsheetId || spreadsheetIdFromUrl).trim();
+  if (spreadsheetId !== spreadsheetIdFromUrl) throw new Error("Il link e l'ID del foglio non coincidono.");
+  const gid = /^\d+$/.test(String(payload.gid || "0")) ? String(payload.gid || "0") : "0";
+  const headers = Array.isArray(payload.headers) ? payload.headers.map((value) => String(value ?? "")) : [];
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  if (!headers.length || headers.length > MAX_COLUMNS) throw new Error("Intestazioni del foglio non valide.");
+  if (rows.length > MAX_ROWS) throw new Error(`Troppe righe: massimo ${MAX_ROWS}.`);
+  if (rows.some((row) => !Array.isArray(row) || row.length > headers.length)) {
+    throw new Error("Una o più righe del foglio non sono valide.");
+  }
+  return {
+    action: "replaceRows",
+    spreadsheetId,
+    gid,
+    headers,
+    rows: rows.map((row) => headers.map((_, index) => row[index] ?? "")),
+    commessaId: String(payload.commessaId || "").slice(0, 200),
+    commessaName: String(payload.commessaName || "").slice(0, 300),
+    operationId: String(payload.operationId || "").slice(0, 300)
+  };
+}
+
+async function callAppsScript(payload, user) {
+  const scriptUrl = validateAppsScriptUrl(process.env.GOOGLE_SHEET_APPS_SCRIPT_URL);
+  const secret = String(process.env.GOOGLE_SHEET_SYNC_SECRET || "").trim();
+  if (!secret) throw new Error("GOOGLE_SHEET_SYNC_SECRET non configurato.");
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(scriptUrl, {
+      method: "POST",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { "Content-Type": "text/plain;charset=utf-8", Accept: "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        secret,
+        requestedByUid: user.sub,
+        requestedByEmail: user.email || "",
+        requestedAt: new Date().toISOString()
+      })
+    });
+    const text = await response.text();
+    let result;
+    try { result = JSON.parse(text); } catch (_) { result = null; }
+    if (!response.ok || !result?.ok) {
+      throw new Error(result?.error || `Apps Script HTTP ${response.status}`);
+    }
+    return result;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Apps Script non ha risposto in tempo.");
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod !== "POST") return json(405, { ok: false, error: "Metodo non consentito." });
+  try {
+    const user = await authenticateEvent(event);
+    const allowlist = allowedEmails();
+    const email = String(user.email || "").toLowerCase();
+    if (allowlist.size && !allowlist.has(email)) throw new Error("Utente non autorizzato alla scrittura del Google Sheet.");
+    const payload = validatePayload(parseBody(event));
+    const result = await callAppsScript(payload, user);
+    return json(200, {
+      ok: true,
+      rowsWritten: Number(result.rowsWritten) || payload.rows.length,
+      sheetName: result.sheetName || "",
+      spreadsheetId: payload.spreadsheetId,
+      gid: payload.gid
+    });
+  } catch (error) {
+    console.error("Sincronizzazione Google Sheet non riuscita:", error);
+    const message = error?.message || "Sincronizzazione Google Sheet non riuscita.";
+    const status = /Token|Sessione|Utente non autorizzato/i.test(message) ? 401
+      : /non configurato|APPS_SCRIPT_URL/i.test(message) ? 503
+        : /non valid|non coincidono|Troppe righe|Intestazioni/i.test(message) ? 400 : 502;
+    return json(status, { ok: false, error: message });
+  }
+};
+
+exports.validatePayload = validatePayload;
+exports.validateGoogleSheetUrl = validateGoogleSheetUrl;

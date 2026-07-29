@@ -32,6 +32,22 @@ service cloud.firestore {
       return authPresent() && request.auth.uid == userId;
     }
 
+    function canReadNotification() {
+      return signedIn() && (isAdmin() || resource.data.scopeType == "GLOBALE" || request.auth.uid in resource.data.recipientUserIds);
+    }
+
+    function onlyPersonalNotificationStateChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy", "deletedBy", "updatedAt"])
+        && request.resource.data.readBy.diff(resource.data.readBy).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.deletedBy.diff(resource.data.deletedBy).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if canReadNotification();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (canReadNotification() && onlyPersonalNotificationStateChanged());
+    }
+
     function createsNoInlinePosition() {
       return !("lastPosition" in request.resource.data);
     }

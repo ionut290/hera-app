@@ -1,8 +1,9 @@
-const CACHE_NAME = "hera-app-shell-v55";
+const CACHE_NAME = "hera-app-shell-v56";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260727-update2",
+  "./notification-center.css?v=20260729a",
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260728c",
@@ -15,6 +16,7 @@ const APP_SHELL = [
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260726-fatto1",
   "./notification-session-enhancements.js?v=20260727b",
+  "./notification-center.js?v=20260729a",
   "./today-summary-interactions.js?v=20260728f",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./fuel-stations-core.js",

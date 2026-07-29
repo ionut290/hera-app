@@ -205,6 +205,23 @@ async function main() {
   assert.equal(evidenceWrites, 1, "Coordinate mancanti bloccano prima del salvataggio FATTO");
   assert.equal(whatsappOpens, 1, "Coordinate mancanti bloccano prima di WhatsApp");
 
+  let completedWhatsappOpens = 0;
+  const completedContext = createContext({
+    auth: { currentUser: { uid: "u1", displayName: "Operatore" } },
+    getCurrentWhatsAppOperatorName: () => "Operatore",
+    openWhatsApp: () => { completedWhatsappOpens += 1; return true; },
+    alert: () => {}
+  });
+  loadFunctions(completedContext, ["handleCompletedImpiantoWhatsAppClick"]);
+  assert.equal(
+    completedContext.handleCompletedImpiantoWhatsAppClick({ done: true, doneAt: "2026-07-29T10:00:00Z" }),
+    true,
+    "FATTO DAL deve riaprire Whazzup"
+  );
+  assert.equal(completedWhatsappOpens, 1);
+  const completedHandler = extractFunction("handleCompletedImpiantoWhatsAppClick");
+  assert.doesNotMatch(completedHandler, /validateImpiantoCoordinates|getCurrentPositionOnce|currentUserPos|distanceFromUser/);
+
   const forceHandler = extractFunction("forceMarkDone");
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);
   assert.doesNotMatch(forceHandler, /if\s*\(!isNetworkOffline\(\)\)/);

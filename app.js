@@ -16042,8 +16042,11 @@ function renderImpianti() {
       completedDoneBtn.className = "btn action-icon-btn is-completed-done";
       completedDoneBtn.dataset.actionKey = "whatsapp";
       completedDoneBtn.dataset.doneLabel = formatDoneButtonLabel(impianto.doneAt);
-      completedDoneBtn.setAttribute("aria-label", completedDoneBtn.dataset.doneLabel);
-      completedDoneBtn.disabled = true;
+      completedDoneBtn.setAttribute("aria-label", `${completedDoneBtn.dataset.doneLabel}: apri di nuovo Whazzup`);
+      completedDoneBtn.title = "Apri di nuovo il messaggio Whazzup";
+      completedDoneBtn.addEventListener("click", () => {
+        handleCompletedImpiantoWhatsAppClick(impianto);
+      });
       primaryActionsRow.appendChild(completedDoneBtn);
     }
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
@@ -23044,6 +23047,23 @@ async function handleImpiantoWhatsAppClick(impianto) {
     clearImpiantoWhazzupProcessing(impianto);
     setImpiantoFattoSavingState(impianto, false);
   }
+}
+
+function handleCompletedImpiantoWhatsAppClick(impianto) {
+  if (!impianto?.done) return false;
+  if (!auth.currentUser) {
+    alert("Sessione scaduta: esegui nuovamente il login.");
+    return false;
+  }
+
+  // Un impianto già nei FATTI può riaprire il messaggio senza controllare la
+  // posizione dell'operatore: non deve essere salvato o trasferito di nuovo.
+  const opened = openWhatsApp(impianto, {
+    doneAt: impianto.doneAt || new Date(),
+    operatorName: impianto.doneBy || getCurrentWhatsAppOperatorName()
+  });
+  if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
+  return Boolean(opened);
 }
 
 async function auditLogWhazzupClick(impianto, options = {}) {

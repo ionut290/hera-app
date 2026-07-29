@@ -7,6 +7,7 @@
   const queueKey = "hera_fatto_ui_queue_v1";
 
   const normalize = (value) => String(value ?? "").trim();
+  const normalizeKey = (value) => normalize(value).toLocaleLowerCase("it-IT").replace(/\s+/g, " ");
   const nowIso = () => new Date().toISOString();
 
   function readQueue() {
@@ -26,9 +27,15 @@
     }
   }
 
+  function getImpiantoCard(button) {
+    return button?.closest?.(
+      "[data-impianto-id],[data-impianto-key],.impianto-card,.impianto-item,.impianto-row,.resource-item,.simple-list-item,article,li"
+    ) || null;
+  }
+
   function getButtonKey(button) {
     const card = getImpiantoCard(button);
-    return normalize(
+    return normalizeKey(
       button?.dataset?.impiantoId
       || button?.dataset?.impiantoKey
       || button?.dataset?.id
@@ -41,10 +48,29 @@
     );
   }
 
-  function getImpiantoCard(button) {
-    return button?.closest?.(
-      "[data-impianto-id],[data-impianto-key],.impianto-card,.impianto-item,.impianto-row,.resource-item,.simple-list-item,article,li"
-    ) || null;
+  function getImpiantoObjectKeys(impianto) {
+    return [
+      impianto?.id,
+      impianto?.key,
+      impianto?.sap,
+      impianto?.idSap,
+      impianto?.ID_SAP,
+      impianto?.denominazione,
+      impianto?.nome,
+      impianto?.name
+    ].map(normalizeKey).filter(Boolean);
+  }
+
+  function resolvePendingKey(impianto) {
+    const objectKeys = getImpiantoObjectKeys(impianto);
+    for (const key of objectKeys) {
+      if (pendingCards.has(key)) return key;
+    }
+    for (const [pendingKey, pending] of pendingCards) {
+      const text = normalizeKey(pending.card?.textContent);
+      if (objectKeys.some((key) => text.includes(key) || key.includes(text))) return pendingKey;
+    }
+    return pendingCards.size === 1 ? pendingCards.keys().next().value : "";
   }
 
   function isFattoButton(button) {
@@ -95,6 +121,12 @@
     return section.querySelector(".impianti-list,.simple-list,.resource-list,[data-list],ul,ol") || section;
   }
 
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+    })[char]);
+  }
+
   function createPendingGhost(card, key) {
     const target = findFattiContainer();
     if (!target || !card || target.contains(card)) return null;
@@ -108,35 +140,32 @@
     return ghost;
   }
 
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, (char) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
-    })[char]);
-  }
-
   function applyOptimisticUi(button, key) {
     const card = getImpiantoCard(button);
     const original = {
-      text: button.textContent,
       html: button.innerHTML,
       disabled: button.disabled,
       cardOpacity: card?.style?.opacity || "",
       cardPointerEvents: card?.style?.pointerEvents || ""
     };
 
-    button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.classList.add("fatto-operation-pending");
     button.dataset.doneLabel = `FATTO ${formatShortDate()}`;
     button.setAttribute("aria-label", `${button.dataset.doneLabel}: salvataggio in corso`);
     button.innerHTML = `<span aria-hidden="true">⚠️</span><span>${button.dataset.doneLabel}</span>`;
 
-    if (card) {
-      card.classList.add("fatto-card-pending");
-      card.dataset.fattoPending = "true";
-      card.style.opacity = "0.64";
-      card.style.pointerEvents = "none";
-    }
+    // Il blocco effettivo avviene dopo la propagazione del click corrente:
+    // così il listener FATTO già presente in app.js riceve sempre il primo click.
+    window.setTimeout(() => {
+      if (button.isConnected) button.disabled = true;
+      if (card?.isConnected) {
+        card.classList.add("fatto-card-pending");
+        card.dataset.fattoPending = "true";
+        card.style.opacity = "0.64";
+        card.style.pointerEvents = "none";
+      }
+    }, 0);
 
     const ghost = createPendingGhost(card, key);
     pendingCards.set(key, { button, card, ghost, original });
@@ -170,7 +199,6 @@
     if (pending.ghost?.isConnected) pending.ghost.remove();
     if (pending.button?.isConnected) {
       pending.button.innerHTML = pending.original.html;
-      pending.button.textContent = pending.original.text;
       pending.button.disabled = pending.original.disabled;
       pending.button.removeAttribute("aria-busy");
       pending.button.classList.remove("fatto-operation-pending");
@@ -190,25 +218,25 @@
   function installFunctionWrappers() {
     const originalMarkDone = window.markImpiantoDone;
     if (typeof originalMarkDone === "function" && !originalMarkDone.__fluidFattoWrapped) {
-      const wrapped = function fluidMarkImpiantoDone(impianto, options = {}) {
-        const key = normalize(impianto?.id || impianto?.key || impianto?.sap || impianto?.idSap || impianto?.denominazione);
+      const wrapped = function fluidMarkImpiantoDone(impianto) {
+        const pendingKey = resolvePendingKey(impianto);
         let result;
         try {
           result = originalMarkDone.apply(this, arguments);
         } catch (error) {
-          if (key) rollbackOptimisticUi(key, error);
+          if (pendingKey) rollbackOptimisticUi(pendingKey, error);
           throw error;
         }
         if (result && typeof result.then === "function") {
           return result.then((value) => {
-            if (key) confirmOptimisticUi(key);
+            if (pendingKey) confirmOptimisticUi(pendingKey);
             return value;
           }).catch((error) => {
-            if (key) rollbackOptimisticUi(key, error);
+            if (pendingKey) rollbackOptimisticUi(pendingKey, error);
             throw error;
           });
         }
-        if (key) confirmOptimisticUi(key);
+        if (pendingKey) confirmOptimisticUi(pendingKey);
         return result;
       };
       wrapped.__fluidFattoWrapped = true;
@@ -242,9 +270,6 @@
 
     applyOptimisticUi(button, lockKey);
     hidePreparingOverlay();
-
-    // Se la logica principale non conferma entro il TTL, il blocco viene liberato.
-    // Il documento Firestore resta la fonte di verità e il prossimo render corregge la UI.
   }, true);
 
   window.addEventListener("online", () => {
@@ -272,9 +297,7 @@
   const observer = new MutationObserver(() => {
     installFunctionWrappers();
     for (const [key, pending] of pendingCards) {
-      if (!pending.button?.isConnected && !pending.card?.isConnected) {
-        confirmOptimisticUi(key);
-      }
+      if (!pending.button?.isConnected && !pending.card?.isConnected) confirmOptimisticUi(key);
     }
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });

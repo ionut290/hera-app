@@ -12,9 +12,13 @@ function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
     verifySecret_(body.secret);
+    if (!Array.isArray(body.headers) || !body.headers.length) throw new Error("Intestazioni mancanti.");
+    if (body.action === "createSpreadsheet") {
+      if (!lock.tryLock(30000)) throw new Error("Creazione foglio già in corso. Riprova tra poco.");
+      return createSpreadsheet_(body);
+    }
     verifySpreadsheetAllowed_(body.spreadsheetId);
     if (body.action !== "replaceRows") throw new Error("Azione non supportata.");
-    if (!Array.isArray(body.headers) || !body.headers.length) throw new Error("Intestazioni mancanti.");
     if (!Array.isArray(body.rows)) throw new Error("Righe mancanti.");
     if (body.rows.length > 20000) throw new Error("Massimo 20.000 righe per sincronizzazione.");
     if (!lock.tryLock(30000)) throw new Error("Foglio occupato. Riprova tra poco.");
@@ -53,6 +57,41 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (_) { /* lock non acquisito */ }
   }
+}
+
+function createSpreadsheet_(body) {
+  var commessaId = String(body.commessaId || "").trim();
+  if (!commessaId) throw new Error("ID commessa mancante.");
+  var propertyKey = "COMMESSA_SHEET_" + digestKey_(commessaId);
+  var properties = PropertiesService.getScriptProperties();
+  var existingId = properties.getProperty(propertyKey);
+  var spreadsheet;
+  if (existingId) {
+    try { spreadsheet = SpreadsheetApp.openById(existingId); } catch (_) { properties.deleteProperty(propertyKey); }
+  }
+  if (spreadsheet) {
+    var existingSheet = spreadsheet.getSheets()[0];
+    return jsonResponse_({ ok: true, spreadsheetId: spreadsheet.getId(), sheetUrl: spreadsheet.getUrl(), gid: String(existingSheet.getSheetId()), sheetName: existingSheet.getName(), alreadyExists: true });
+  }
+  var headers = body.headers.map(safeCell_);
+  if (headers[0] !== "SYNC_KEY" || headers[1] !== "IMPIANTO_KEY") throw new Error("Colonne tecniche mancanti o non valide.");
+  var safeName = String(body.commessaName || "Senza nome").replace(/[\\/]/g, "-").trim();
+  spreadsheet = SpreadsheetApp.create("Varga Cantieri - " + safeName);
+  properties.setProperty(propertyKey, spreadsheet.getId());
+  var sheet = spreadsheet.getSheets()[0];
+  ensureSheetSize_(sheet, 2, headers.length);
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight("bold").setBackground("#0f766e").setFontColor("#ffffff").setWrap(true);
+  sheet.setFrozenRows(1);
+  try { sheet.hideColumns(1, 2); } catch (_) { /* colonne già nascoste */ }
+  SpreadsheetApp.flush();
+  return jsonResponse_({ ok: true, spreadsheetId: spreadsheet.getId(), sheetUrl: spreadsheet.getUrl(), gid: String(sheet.getSheetId()), sheetName: sheet.getName() });
+}
+
+function digestKey_(value) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8);
+  return bytes.map(function(byte) { return (byte + 256).toString(16).slice(-2); }).join("").slice(0, 40);
 }
 
 function verifySecret_(provided) {

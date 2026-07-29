@@ -30,6 +30,8 @@
     cache: { commessa: null, plants: [], work: [], prices: [] },
     pushRunning: false,
     pullRunning: false,
+    createRunning: false,
+    selectionId: 0,
     suppressPushUntil: 0
   };
 
@@ -66,6 +68,16 @@
 
   function canManage() {
     return typeof canManageData !== "function" || canManageData();
+  }
+
+  function hasLinkedSheet(config = state.config) {
+    const spreadsheetId = clean(config?.spreadsheetId);
+    if (/^[A-Za-z0-9_-]+$/.test(spreadsheetId)) return true;
+    try {
+      return Boolean(sheetIdentity(config?.sheetUrl).spreadsheetId);
+    } catch (_) {
+      return false;
+    }
   }
 
   function normalize(value) {
@@ -174,27 +186,32 @@
 
     const controls = document.createElement("div");
     controls.id = "sheet-two-way-controls";
-    controls.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;width:100%;margin-top:10px;padding-top:10px;border-top:1px solid #dbe7e3";
+    controls.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));align-items:stretch;gap:10px;width:100%;margin-top:10px;padding-top:10px;border-top:1px solid #dbe7e3";
     controls.innerHTML = `
+      <p id="sheet-link-status" style="grid-column:1/-1;margin:0;font-weight:600"></p>
+      <button id="sheet-create-btn" class="btn btn-primary" type="button" style="background:#15803d;border-color:#15803d">Crea Google Sheet</button>
+      <a id="sheet-open-btn" class="btn" target="_blank" rel="noopener noreferrer" style="display:none;text-align:center">Apri Google Sheet</a>
       <button id="sheet-save-link-btn" class="btn" type="button">Salva collegamento</button>
+      <div id="sheet-sync-actions" style="display:contents">
       <button id="sheet-pull-btn" class="btn" type="button">Aggiorna app dal foglio</button>
       <button id="sheet-push-btn" class="btn btn-primary" type="button">Invia app al foglio</button>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #dbe7e3;border-radius:10px">
+      <label style="display:flex;align-items:center;gap:10px;min-width:0;padding:9px 11px;border:1px solid #dbe7e3;border-radius:10px;line-height:1.25">
         <input id="sheet-auto-sync" type="checkbox">
         <span>Sync automatica</span>
       </label>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #dbe7e3;border-radius:10px">
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:9px 11px;border:1px solid #dbe7e3;border-radius:10px;line-height:1.25">
         <span>Controlla ogni</span>
-        <select id="sheet-sync-interval" style="min-width:80px">
+        <select id="sheet-sync-interval" style="min-width:86px;max-width:110px">
           <option value="5">5 min</option><option value="15">15 min</option>
           <option value="30">30 min</option><option value="60">60 min</option>
         </select>
-      </label>
+      </label></div>
       <p id="sheet-two-way-feedback" class="muted" role="status" aria-live="polite" style="grid-column:1/-1;margin:2px 0 0"></p>
       <small class="muted" style="grid-column:1/-1">Lettura foglio → app tramite GViz. Scrittura app → foglio tramite Apps Script. La prima direzione va confermata manualmente.</small>`;
     row.appendChild(controls);
 
     document.querySelector("#sheet-save-link-btn")?.addEventListener("click", () => void saveConfigFromUi());
+    document.querySelector("#sheet-create-btn")?.addEventListener("click", (event) => void createSpreadsheet(event.currentTarget));
     document.querySelector("#sheet-pull-btn")?.addEventListener("click", (event) => void pullFromSheet({ manual: true, button: event.currentTarget }));
     document.querySelector("#sheet-push-btn")?.addEventListener("click", (event) => void pushToSheet({ manual: true, button: event.currentTarget }));
     document.querySelector("#sheet-auto-sync")?.addEventListener("change", () => void saveConfigFromUi());
@@ -208,11 +225,27 @@
     const interval = document.querySelector("#sheet-sync-interval");
     const controls = document.querySelector("#sheet-two-way-controls");
     if (!controls) return;
-    controls.style.display = canManage() ? "grid" : "none";
+    controls.style.display = "grid";
+    const linked = hasLinkedSheet();
+    const status = document.querySelector("#sheet-link-status");
+    const createButton = document.querySelector("#sheet-create-btn");
+    const openButton = document.querySelector("#sheet-open-btn");
+    const syncActions = document.querySelector("#sheet-sync-actions");
+    const saveButton = document.querySelector("#sheet-save-link-btn");
+    if (status) status.textContent = linked
+      ? "Google Sheet collegato a questa commessa"
+      : "Nessun Google Sheet collegato a questa commessa";
+    if (createButton) createButton.style.display = !linked && canManage() ? "" : "none";
+    if (openButton) {
+      openButton.style.display = linked ? "block" : "none";
+      openButton.href = state.config?.sheetUrl || `https://docs.google.com/spreadsheets/d/${encodeURIComponent(state.config?.spreadsheetId || "")}/edit`;
+    }
+    if (saveButton) saveButton.style.display = canManage() ? "" : "none";
+    if (syncActions) syncActions.style.display = linked && canManage() ? "contents" : "none";
     if (input && state.config?.sheetUrl && !input.value.trim()) input.value = state.config.sheetUrl;
     if (auto) auto.checked = Boolean(state.config?.enabled);
     if (interval) interval.value = String(state.config?.intervalMinutes || DEFAULT_INTERVAL_MINUTES);
-    if (!state.config?.sheetUrl) setFeedback("Incolla il link del Google Sheet e premi “Salva collegamento”.");
+    if (!linked) setFeedback("Nessun Google Sheet collegato a questa commessa");
     else if (!state.config?.initialized) setFeedback("Collegamento salvato. Scegli una prima direzione: foglio → app oppure app → foglio.");
     else if (state.config.enabled) setFeedback(`Sincronizzazione automatica attiva ogni ${state.config.intervalMinutes} minuti.`, "success");
     else setFeedback("Collegamento attivo. La sincronizzazione automatica è disattivata.");
@@ -281,6 +314,65 @@
     setFeedback(sourceChanged
       ? "Nuovo foglio collegato. Conferma manualmente la prima direzione di sincronizzazione."
       : "Collegamento Google Sheet salvato.", "success");
+  }
+
+  async function createSpreadsheet(button) {
+    if (!state.currentCommessa || !canManage() || state.createRunning) return;
+    const commessaId = state.currentCommessa.id;
+    const snapshot = await db.collection(collectionName()).doc(commessaId).get();
+    const authoritativeConfig = await readConfig({ ...(snapshot.data() || {}), id: snapshot.id });
+    if (hasLinkedSheet(authoritativeConfig)) {
+      state.config = authoritativeConfig;
+      renderConfig();
+      return setFeedback("Questa commessa ha già un Google Sheet collegato.", "error");
+    }
+    state.createRunning = true;
+    setBusy(button, true, "Creazione Google Sheet in corso…");
+    setFeedback("Creazione Google Sheet in corso…");
+    try {
+      const response = await authorizedFetch(endpoint("/api/google-sheet-sync"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "createSpreadsheet",
+          commessaId,
+          commessaName: clean(state.currentCommessa.nome || snapshot.data()?.nome || "Senza nome"),
+          headers: ALL_HEADERS
+        })
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      const payload = await response.json();
+      if (!payload?.spreadsheetId || !payload?.sheetUrl) throw new Error("Apps Script non ha restituito i dati del nuovo foglio.");
+      if (state.currentCommessa?.id !== commessaId) return;
+      const nextConfig = {
+        version: VERSION, sheetUrl: payload.sheetUrl, spreadsheetId: payload.spreadsheetId,
+        gid: String(payload.gid || "0"), sheetName: clean(payload.sheetName), enabled: false,
+        initialized: false, intervalMinutes: DEFAULT_INTERVAL_MINUTES
+      };
+      await db.collection(collectionName()).doc(commessaId).set({
+        sheetSpreadsheetId: nextConfig.spreadsheetId,
+        googleSheetSync: {
+          ...nextConfig,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: auth.currentUser?.uid || "",
+          updatedByName: typeof getOperatorDisplayName === "function" ? getOperatorDisplayName() : ""
+        }
+      }, { merge: true });
+      state.config = nextConfig;
+      state.currentCommessa = { ...state.currentCommessa, sheetSpreadsheetId: nextConfig.spreadsheetId, googleSheetSync: nextConfig };
+      const input = document.querySelector("#sheet-url");
+      if (input) input.value = nextConfig.sheetUrl;
+      setupTimersAndSubscriptions();
+      renderConfig();
+      setFeedback("Google Sheet creato e collegato correttamente", "success");
+    } catch (error) {
+      console.error("[Sheet Sync] creazione non riuscita", error);
+      setFeedback(error.message || "Creazione Google Sheet non riuscita.", "error");
+    } finally {
+      state.createRunning = false;
+      setBusy(button, false);
+      renderConfig();
+    }
   }
 
   function stopSubscriptions() {
@@ -705,9 +797,16 @@
   }
 
   async function selectCommessa(commessa) {
+    const selectionId = ++state.selectionId;
     stopSubscriptions();
     state.currentCommessa = commessa;
-    state.config = await readConfig(commessa);
+    state.config = null;
+    const input = document.querySelector("#sheet-url");
+    if (input) input.value = "";
+    const snapshot = await db.collection(collectionName()).doc(commessa.id).get();
+    if (selectionId !== state.selectionId) return;
+    state.currentCommessa = { ...commessa, ...(snapshot.data() || {}), id: commessa.id };
+    state.config = await readConfig(state.currentCommessa);
     injectUi();
     renderConfig();
     setupTimersAndSubscriptions();

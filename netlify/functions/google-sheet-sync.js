@@ -63,7 +63,16 @@ function allowedEmails() {
 }
 
 function validatePayload(payload) {
-  if (payload?.action !== "replaceRows") throw new Error("Azione di sincronizzazione non supportata.");
+  const action = String(payload?.action || "");
+  if (action === "createSpreadsheet") {
+    const headers = Array.isArray(payload.headers) ? payload.headers.map((value) => String(value ?? "")) : [];
+    if (!String(payload.commessaId || "").trim()) throw new Error("ID commessa mancante.");
+    if (!headers.includes("SYNC_KEY") || !headers.includes("IMPIANTO_KEY") || headers.length > MAX_COLUMNS) {
+      throw new Error("Intestazioni del foglio non valide.");
+    }
+    return { action, commessaId: String(payload.commessaId).slice(0, 200), commessaName: String(payload.commessaName || "Senza nome").slice(0, 300), headers };
+  }
+  if (action !== "replaceRows") throw new Error("Azione di sincronizzazione non supportata.");
   const spreadsheetIdFromUrl = validateGoogleSheetUrl(payload.sheetUrl);
   const spreadsheetId = String(payload.spreadsheetId || spreadsheetIdFromUrl).trim();
   if (spreadsheetId !== spreadsheetIdFromUrl) throw new Error("Il link e l'ID del foglio non coincidono.");
@@ -134,10 +143,11 @@ exports.handler = async (event) => {
     const result = await callAppsScript(payload, user);
     return json(200, {
       ok: true,
-      rowsWritten: Number(result.rowsWritten) || payload.rows.length,
+      rowsWritten: Number(result.rowsWritten) || (Array.isArray(payload.rows) ? payload.rows.length : 0),
       sheetName: result.sheetName || "",
-      spreadsheetId: payload.spreadsheetId,
-      gid: payload.gid
+      spreadsheetId: result.spreadsheetId || payload.spreadsheetId,
+      sheetUrl: result.sheetUrl || "",
+      gid: String(result.gid ?? payload.gid ?? "0")
     });
   } catch (error) {
     console.error("Sincronizzazione Google Sheet non riuscita:", error);

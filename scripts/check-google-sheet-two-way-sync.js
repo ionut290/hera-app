@@ -15,6 +15,8 @@ const firebaseConfig = fs.readFileSync(path.join(root, "firebase-config.js"), "u
 const checks = [
   ["UI bidirezionale", browser.includes("Aggiorna app dal foglio") && browser.includes("Invia app al foglio")],
   ["chiavi tecniche anti duplicati", browser.includes("SYNC_KEY") && browser.includes("IMPIANTO_KEY")],
+  ["ID snapshot autorevole", !browser.includes("{ id: doc.id, ...doc.data() }") && browser.includes("{ ...doc.data(), id: doc.id }")],
+  ["scritture Firestore senza undefined", browser.includes("function removeUndefined(value)") && browser.includes("batch.set(ref, removeUndefined(data), { merge: true })")],
   ["push automatico Firestore", browser.includes("onSnapshot") && browser.includes("schedulePush")],
   ["pull periodico GViz", browser.includes("/api/google-sheet-import") && browser.includes("setInterval")],
   ["scrittura autenticata", browser.includes("getIdToken") && proxy.includes("authenticateEvent")],

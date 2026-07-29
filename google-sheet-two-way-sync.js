@@ -305,22 +305,22 @@
     if (!state.currentCommessa || !state.config?.sheetUrl || !canManage()) return;
     const ref = db.collection(collectionName()).doc(state.currentCommessa.id);
     state.subscriptions.push(ref.onSnapshot((snapshot) => {
-      state.cache.commessa = { id: snapshot.id, ...snapshot.data() };
+      state.cache.commessa = { ...snapshot.data(), id: snapshot.id };
       markHydrated("commessa");
       schedulePush();
     }, (error) => console.error("[Sheet Sync] commessa:", error)));
     state.subscriptions.push(ref.collection("impiantiFisici").onSnapshot((snapshot) => {
-      state.cache.plants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      state.cache.plants = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
       markHydrated("plants");
       schedulePush();
     }, (error) => console.error("[Sheet Sync] impianti:", error)));
     state.subscriptions.push(ref.collection("lavorazioni").onSnapshot((snapshot) => {
-      state.cache.work = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      state.cache.work = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
       markHydrated("work");
       schedulePush();
     }, (error) => console.error("[Sheet Sync] lavorazioni:", error)));
     state.subscriptions.push(ref.collection("prezziario").onSnapshot((snapshot) => {
-      state.cache.prices = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      state.cache.prices = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
       markHydrated("prices");
       schedulePush();
     }, (error) => console.error("[Sheet Sync] prezziario:", error)));
@@ -513,12 +513,34 @@
     return `${prefix}_${fnv1a(`${sourceId}|${key}`)}`;
   }
 
+  function removeUndefined(value) {
+    if (Array.isArray(value)) return value.map(removeUndefined);
+
+    if (value && typeof value === "object") {
+      if (
+        value instanceof firebase.firestore.Timestamp
+        || value instanceof firebase.firestore.FieldValue
+        || value instanceof Date
+      ) {
+        return value;
+      }
+
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([, item]) => typeof item !== "undefined")
+          .map(([key, item]) => [key, removeUndefined(item)])
+      );
+    }
+
+    return value;
+  }
+
   async function commitOperations(operations) {
     for (let index = 0; index < operations.length; index += 350) {
       const batch = db.batch();
       operations.slice(index, index + 350).forEach(({ type, ref, data }) => {
         if (type === "delete") batch.delete(ref);
-        else batch.set(ref, data, { merge: true });
+        else batch.set(ref, removeUndefined(data), { merge: true });
       });
       await batch.commit();
     }
@@ -531,9 +553,9 @@
       commessaRef.collection("lavorazioni").get(),
       commessaRef.collection("prezziario").get()
     ]);
-    const plants = plantSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const works = workSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const prices = priceSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const plants = plantSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    const works = workSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    const prices = priceSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
     const priceMap = window.InreteWorkItemsV2?.buildPriceMap?.(prices) || new Map();
     const generalDiscount = state.cache.commessa?.percentualeRibassoGenerale ?? state.currentCommessa.percentualeRibassoGenerale ?? 0;
     const sourceId = identity.sourceId;

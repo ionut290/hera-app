@@ -264,7 +264,17 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.visibility in ["personal", "shared", "global"]
         && request.resource.data.commessaIds is list
-        && request.resource.data.uploadStatus in ["uploading", "completed", "failed"]
+        && request.resource.data.uploadStatus == "completed"
+        && request.resource.data.id == documentId
+        && request.resource.data.fileUrl is string
+        && request.resource.data.fileUrl.size() > 0
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.size() > 0
+        && request.resource.data.mimeType is string
+        && request.resource.data.mimeType.size() > 0
+        && request.resource.data.fileSize is number
+        && request.resource.data.fileSize > 0
+        && request.resource.data.versionHistoryEnabled == false
         && (request.resource.data.visibility != "personal" || (
           request.resource.data.sharedToAll == false
           && request.resource.data.sharedUserIds.size() == 0

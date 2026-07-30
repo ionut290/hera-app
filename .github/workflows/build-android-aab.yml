@@ -56,9 +56,7 @@ jobs:
           npm run check:auth-login
           npm run check:first-login-password
           npm run check:login-retry
-          npm run check:done-button
-          npm run check:done-button-behavior
-          npm run check:android-done-push
+          npm run check:fatto-critical
           npm run check:fuel-stations
           npm run check:startup-splash
           npm run check:today-summary

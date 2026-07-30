@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const PERSONNEL_COLUMNS = ["ID_OPERATORE","CODICE_OPERATORE","NOME","COGNOME","CODICE_FISCALE","DATA_NASCITA","LUOGO_NASCITA","TELEFONO","EMAIL","RUOLO","MANSIONE","LIVELLO","TIPO_CONTRATTO","DATA_ASSUNZIONE","DATA_FINE_CONTRATTO","MATRICOLA","AZIENDA","SEDE","RESPONSABILE","STATO","SQUADRA","COMMESSE","PATENTE","ABILITAZIONI","DATA_SCADENZA_PATENTE","DATA_SCADENZA_VISITA_MEDICA","DATA_SCADENZA_CONTRATTO","CONTATTO_EMERGENZA","TELEFONO_EMERGENZA","NOTE","ATTIVO","EMAIL_ACCESSO_APP","RUOLO_APP","CONSENTI_ACCESSO_APP","COMMESSE_ABILITATE","MODALITA_AGGIORNAMENTO_COMMESSE","MANTIENI_ABILITAZIONI_ESISTENTI"];
+  const PERSONNEL_COLUMNS = ["ID_OPERATORE","CODICE_OPERATORE","NOME","COGNOME","CODICE_FISCALE","DATA_NASCITA","LUOGO_NASCITA","TELEFONO","EMAIL","RUOLO","MANSIONE","LIVELLO","TIPO_CONTRATTO","DATA_ASSUNZIONE","DATA_FINE_CONTRATTO","MATRICOLA","AZIENDA","SEDE","RESPONSABILE","STATO","SQUADRA","COMMESSE","PATENTE","ABILITAZIONI","DATA_SCADENZA_PATENTE","DATA_SCADENZA_VISITA_MEDICA","DATA_SCADENZA_CONTRATTO","CONTATTO_EMERGENZA","TELEFONO_EMERGENZA","NOTE","ATTIVO","EMAIL_ACCESSO_APP","RUOLO_APP","CONSENTI_ACCESSO_APP","COMMESSE_ABILITATE","MODALITA_AGGIORNAMENTO_COMMESSE","MANTIENI_ABILITAZIONI_ESISTENTI","LINKED_USER_ID","LINKED_USER_EMAIL","PROFILO_COLLEGATO","FONTE_FOTO_PROFILO"];
   const VEHICLE_COLUMNS = ["ID_MEZZO","CODICE_MEZZO","TARGA","CATEGORIA","MARCA","MODELLO","ANNO_IMMATRICOLAZIONE","NUMERO_TELAIO","ALIMENTAZIONE","CILINDRATA","POTENZA","CHILOMETRI","ORE_MOTORE","PORTATA","PESO","NUMERO_POSTI","AZIENDA_PROPRIETARIA","STATO","SQUADRA_ASSEGNATA","OPERATORE_RESPONSABILE","COMMESSE","LUOGO_DEPOSITO","DATA_REVISIONE","DATA_SCADENZA_ASSICURAZIONE","DATA_SCADENZA_BOLLO","DATA_PROSSIMA_MANUTENZIONE","DATA_SCADENZA_TARATURA","DATA_INIZIO_NOLEGGIO","DATA_FINE_NOLEGGIO","FORNITORE_NOLEGGIO","NUMERO_POLIZZA","COMPAGNIA_ASSICURATIVA","NOTE","ATTIVO","FOTO_URL","DOCUMENTI_URL"];
   const PERSON_STATUSES = ["Attivo","Assente","Ferie","Malattia","Permesso","Infortunio","Riposo","Sospeso","Non disponibile","Cessato"];
   const VEHICLE_STATUSES = ["Disponibile","Assegnato","In uso","In manutenzione","Guasto","Fuori servizio","Noleggiato","Restituito","Dismesso"];
@@ -60,5 +60,62 @@
     if (removed.length) warnings.push(`Saranno rimosse ${removed.length} abilitazioni.`);
     return { row, existing: match.record || null, errors, warnings, current, added, removed, finalIds, action: errors.length ? "Errore" : match.record ? "Aggiorna" : "Nuovo" };
   }
-  return { PERSONNEL_COLUMNS, VEHICLE_COLUMNS, PERSON_STATUSES, VEHICLE_STATUSES, VEHICLE_CATEGORIES, MODES, clean, key, unique, splitIds, legacyEnabledIds, applyEnabledMode, identify, validateRow };
+  function normalizeAppUser(user = {}) {
+    const providerData = Array.isArray(user.providerData) ? user.providerData : [];
+    const google = providerData.find((item) => item?.providerId === "google.com") || {};
+    return {
+      uid: clean(user.uid || user.id),
+      displayName: clean(user.displayName || google.displayName),
+      email: clean(user.email || google.email).toLowerCase(),
+      photoURL: clean(user.photoURL || google.photoURL),
+      providerId: clean(user.providerId || google.providerId || user.linkedAuthProvider || "google.com"),
+      emailVerified: user.emailVerified === true,
+      role: clean(user.role || user.ruolo || "operatore"),
+      accountStatus: clean(user.statoAccount || user.accountStatus),
+      firstLoginAt: user.firstLoginAt || user.createdAt || null,
+      lastLoginAt: user.lastLoginAt || user.lastSeenAt || null
+    };
+  }
+  // Il nome Google è solo una proposta modificabile: con più parole non si
+  // presume quale sia il cognome, ma si presenta una suddivisione iniziale.
+  function proposeDisplayName(displayName) {
+    const parts = clean(displayName).split(" ").filter(Boolean);
+    return { nome: parts.shift() || "", cognome: parts.join(" "), ambiguous: parts.length > 1 };
+  }
+  function findUserLinkConflicts(user, personnel = [], currentOperatorId = "") {
+    const profile = normalizeAppUser(user);
+    const linked = personnel.filter((p) => p.id !== currentOperatorId && clean(p.linkedUserId) === profile.uid);
+    const emailMatches = personnel.filter((p) => p.id !== currentOperatorId && profile.email && [p.email, p.emailAccessoApp, p.linkedUserEmail].some((v) => clean(v).toLowerCase() === profile.email));
+    return { linked, emailMatches, duplicateUid: linked.length > 0, ambiguousEmail: emailMatches.length > 1 };
+  }
+  function buildGoogleLinkPatch(operator = {}, user = {}, options = {}) {
+    const profile = normalizeAppUser(user);
+    if (!profile.uid) throw new Error("L’utente selezionato non possiede un UID valido.");
+    const proposed = proposeDisplayName(profile.displayName);
+    const manualPhoto = clean(operator.profilePhotoSource).toLowerCase() === "manual";
+    const patch = {
+      linkedUserId: profile.uid,
+      linkedUserEmail: profile.email,
+      linkedAuthProvider: profile.providerId,
+      profileSource: "google",
+      googleDisplayName: profile.displayName,
+      emailVerified: profile.emailVerified
+    };
+    if (!clean(operator.nome)) patch.nome = clean(options.nome ?? proposed.nome);
+    if (!clean(operator.cognome)) patch.cognome = clean(options.cognome ?? proposed.cognome);
+    if (!clean(operator.email)) patch.email = profile.email;
+    if (!clean(operator.emailAccessoApp)) patch.emailAccessoApp = profile.email;
+    if (!manualPhoto && profile.photoURL) {
+      patch.photoURL = profile.photoURL;
+      patch.profilePhotoSource = "google";
+    }
+    return patch;
+  }
+  function buildGoogleLoginSyncPatch(operator = {}, user = {}) {
+    const profile = normalizeAppUser(user);
+    const patch = { emailVerified: profile.emailVerified, googleDisplayName: profile.displayName, linkedAuthProvider: profile.providerId };
+    if (clean(operator.profilePhotoSource).toLowerCase() === "google" && profile.photoURL) patch.photoURL = profile.photoURL;
+    return patch;
+  }
+  return { PERSONNEL_COLUMNS, VEHICLE_COLUMNS, PERSON_STATUSES, VEHICLE_STATUSES, VEHICLE_CATEGORIES, MODES, clean, key, unique, splitIds, legacyEnabledIds, applyEnabledMode, identify, validateRow, normalizeAppUser, proposeDisplayName, findUserLinkConflicts, buildGoogleLinkPatch, buildGoogleLoginSyncPatch };
 });

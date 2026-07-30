@@ -19,6 +19,7 @@
     "check:done-button": "node scripts/check-done-button-logic.js",
     "check:done-button-behavior": "node scripts/check-done-button-behavior.js",
     "check:android-done-push": "node scripts/check-android-done-push.js",
+    "check:fatto-critical": "npm run check:syntax && npm run check:done-button && npm run check:done-button-behavior && npm run check:android-done-push",
     "check:fuel-stations": "node scripts/check-fuel-stations.js",
     "check:startup-splash": "node scripts/check-startup-splash.js",
     "check:today-summary": "node scripts/check-today-summary.js",

@@ -86,14 +86,19 @@ async function main() {
     }
   });
   loadFunctions(batchContext, ["setImpiantoDone"]);
+  const batchDoneAt = vm.runInContext('new Date("2026-07-26T10:00:00Z")', batchContext);
   await batchContext.setImpiantoDone("c1", ["a", "b"], true, {
-    doneAt: vm.runInContext('new Date("2026-07-26T10:00:00Z")', batchContext)
+    doneAt: batchDoneAt
   });
   assert.equal(batchWrites.length, 2, "Tutti i documenti raggruppati devono entrare nel batch");
   assert.equal(batchCommits, 1, "Il FATTO deve usare un solo commit atomico");
   assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.done === true));
   assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.dataEsecuzione === "2026-07-26"));
-  assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.oraEsecuzione === "10:00"));
+  const expectedExecutionTime = [
+    String(batchDoneAt.getHours()).padStart(2, "0"),
+    String(batchDoneAt.getMinutes()).padStart(2, "0")
+  ].join(":");
+  assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.oraEsecuzione === expectedExecutionTime));
 
   batchContext.auth.currentUser = null;
   await assert.rejects(
@@ -221,6 +226,49 @@ async function main() {
   assert.equal(completedWhatsappOpens, 1);
   const completedHandler = extractFunction("handleCompletedImpiantoWhatsAppClick");
   assert.doesNotMatch(completedHandler, /validateImpiantoCoordinates|getCurrentPositionOnce|currentUserPos|distanceFromUser/);
+
+  const payloadContext = createContext({
+    selectedCommessaId: "c1",
+    selectedCommessaName: "Commessa prova",
+    auth: { currentUser: { uid: "u1", displayName: "Operatore" } },
+    currentUser: null,
+    impiantoWhatsAppTemplateCache: new Map(),
+    getCommessaNoteLinkedNotes: () => [],
+    getCommessaNoteTitle: () => "",
+    buildImpiantoKey: (impianto) => `id:${impianto.id || "mancante"}`,
+    hasOrdinario: () => false,
+    hasStraordinario: () => false
+  });
+  loadFunctions(payloadContext, [
+    "firestoreDateToMillis",
+    "formatDoneDateTime",
+    "getImpiantoWhatsAppTemplateCacheKey",
+    "getCurrentWhatsAppOperatorName",
+    "getDeviceWhatsAppDateLabel",
+    "getImpiantoWhatsAppTemplateSignature",
+    "buildImpiantoWhatsAppTemplate",
+    "prepareImpiantoWhatsAppTemplate",
+    "buildImpiantoWhatsAppPayload"
+  ]);
+  const completePayload = payloadContext.buildImpiantoWhatsAppPayload({
+    id: "a",
+    idSap: "SAP-100",
+    denominazione: "Impianto prova",
+    comune: "Bologna"
+  }, { doneAt: "2026-07-30T10:15:00Z" });
+  assert.match(completePayload.message, /🟢 IMPIANTO FATTO/);
+  assert.match(completePayload.message, /Impianto prova/);
+  assert.ok(completePayload.message.trim(), "Il messaggio Whazzup completo non deve essere vuoto");
+  assert.match(completePayload.appUrl, /^whatsapp:\/\/send\?text=.+/);
+  assert.match(completePayload.webUrl, /^https:\/\/wa\.me\/\?text=.+/);
+
+  const fallbackPayload = payloadContext.buildImpiantoWhatsAppPayload(
+    { id: "b" },
+    { doneAt: "data-non-valida" }
+  );
+  assert.ok(fallbackPayload.message.trim(), "Dati secondari mancanti non devono produrre un messaggio vuoto");
+  assert.match(fallbackPayload.message, /Impianto: -/);
+  assert.match(decodeURIComponent(fallbackPayload.appUrl), /🟢 IMPIANTO FATTO/);
 
   const forceHandler = extractFunction("forceMarkDone");
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);

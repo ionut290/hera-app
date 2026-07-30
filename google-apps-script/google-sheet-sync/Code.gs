@@ -12,6 +12,15 @@ function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
     verifySecret_(body.secret);
+    if (body.action === "createRegistrySpreadsheet") {
+      if (!lock.tryLock(30000)) throw new Error("Creazione foglio già in corso. Riprova tra poco.");
+      return createRegistrySpreadsheet_(body);
+    }
+    if (body.action === "syncRegistrySpreadsheet") {
+      verifySpreadsheetAllowed_(body.spreadsheetId);
+      if (!lock.tryLock(30000)) throw new Error("Foglio occupato. Riprova tra poco.");
+      return syncRegistrySpreadsheet_(body);
+    }
     if (!Array.isArray(body.headers) || !body.headers.length) throw new Error("Intestazioni mancanti.");
     if (body.action === "createSpreadsheet") {
       if (!lock.tryLock(30000)) throw new Error("Creazione foglio già in corso. Riprova tra poco.");
@@ -57,6 +66,62 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (_) { /* lock non acquisito */ }
   }
+}
+
+function createRegistrySpreadsheet_(body) {
+  var names = body.sheetNames || [];
+  var spreadsheet = body.spreadsheetId ? SpreadsheetApp.openById(String(body.spreadsheetId)) : SpreadsheetApp.create("Varga Cantieri - Matrici dati");
+  names.forEach(function(name, index) {
+    var sheet = spreadsheet.getSheetByName(name);
+    if (!sheet) sheet = index === 0 && spreadsheet.getSheets().length === 1 && !spreadsheet.getSheets()[0].getLastRow() ? spreadsheet.getSheets()[0].setName(name) : spreadsheet.insertSheet(name);
+    sheet.setFrozenRows(1);
+  });
+  return jsonResponse_({ ok: true, spreadsheetId: spreadsheet.getId(), sheetUrl: spreadsheet.getUrl(), sheetName: names[0] || "" });
+}
+
+function registryRows_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var values = sheet.getDataRange().getDisplayValues(), headers = values.shift();
+  return values.map(function(valuesRow) { var row = {}; headers.forEach(function(header, index) { row[header] = valuesRow[index]; }); return row; }).filter(function(row) { return String(row.RECORD_ID || "").trim(); });
+}
+
+function syncRegistrySpreadsheet_(body) {
+  var spreadsheet = SpreadsheetApp.openById(String(body.spreadsheetId || ""));
+  var incoming = {}, conflicts = [], written = 0;
+  Object.keys(body.sheets || {}).forEach(function(name) {
+    var sheet = spreadsheet.getSheetByName(name) || spreadsheet.insertSheet(name);
+    var remote = registryRows_(sheet), local = body.sheets[name] || [], byId = {};
+    remote.forEach(function(row) { byId[String(row.RECORD_ID)] = row; });
+    local.forEach(function(row) {
+      var id = String(row.RECORD_ID || ""); if (!id) return;
+      var old = byId[id], localVersion = Number(row.SYNC_VERSION) || 1, remoteVersion = Number(old && old.SYNC_VERSION) || 0;
+      if (old && remoteVersion > localVersion && body.conflictPolicy !== "APP_WINS") {
+        (incoming[name] || (incoming[name] = [])).push(old);
+        conflicts.push({ sheet: name, recordId: id, resolution: "SHEET_NEWER" });
+      } else {
+        byId[id] = row; written += 1;
+        if (old && remoteVersion === localVersion && String(old.UPDATED_AT || "") > String(row.UPDATED_AT || "") && body.conflictPolicy !== "APP_WINS") {
+          byId[id] = old; (incoming[name] || (incoming[name] = [])).push(old);
+          conflicts.push({ sheet: name, recordId: id, resolution: "LATEST_UPDATED_AT" });
+        }
+      }
+    });
+    // Le righe esistenti soltanto nel foglio sono importate, mai eliminate.
+    remote.forEach(function(row) { if (!local.some(function(item) { return String(item.RECORD_ID) === String(row.RECORD_ID); })) (incoming[name] || (incoming[name] = [])).push(row); });
+    var rows = Object.keys(byId).map(function(id) { return byId[id]; }), headerSet = {};
+    rows.forEach(function(row) { Object.keys(row).forEach(function(key) { headerSet[key] = true; }); });
+    local.forEach(function(row) { Object.keys(row).forEach(function(key) { headerSet[key] = true; }); });
+    var technical = ["RECORD_ID", "UPDATED_AT", "UPDATED_BY", "SYNC_VERSION", "SYNC_SOURCE", "ROW_STATUS"];
+    var headers = technical.concat(Object.keys(headerSet).filter(function(key) { return technical.indexOf(key) < 0; }));
+    if (!headers.length) headers = technical;
+    ensureSheetSize_(sheet, Math.max(2, rows.length + 1), headers.length); sheet.clearContents();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#0f766e").setFontColor("#ffffff").setWrap(true);
+    writeRowsInChunks_(sheet, rows.map(function(row) { return headers.map(function(header) { return safeCell_(row[header]); }); }), headers.length); sheet.setFrozenRows(1);
+  });
+  var log = spreadsheet.getSheetByName("LOG_SINCRONIZZAZIONE");
+  if (log) log.appendRow([new Date(), body.requestedByEmail || body.requestedByUid || "", body.registry || "", written, conflicts.length, "SYNC_OK"]);
+  SpreadsheetApp.flush();
+  return jsonResponse_({ ok: true, incoming: incoming, conflicts: conflicts, rowsWritten: written, spreadsheetId: spreadsheet.getId(), sheetUrl: spreadsheet.getUrl() });
 }
 
 function createSpreadsheet_(body) {

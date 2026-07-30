@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./app.js?v=20260729-access1",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
+  "./registry-google-sheet-sync.js?v=20260731",
   "./approval-access.js?v=20260729a",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",

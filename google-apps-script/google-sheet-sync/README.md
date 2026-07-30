@@ -45,3 +45,9 @@ Nella schermata **Gestione impianti e contabilità**:
 La prima direzione è sempre manuale per evitare che un foglio vuoto cancelli dati o che l'app sovrascriva per errore un foglio esistente.
 
 Le prime due colonne tecniche (`SYNC_KEY` e `IMPIANTO_KEY`) vengono nascoste dallo script: non eliminarle, perché consentono aggiornamenti e cancellazioni senza duplicare le righe.
+
+## 4. Matrici Personale e Mezzi
+
+Le sezioni **Personale** e **Mezzi** usano lo stesso endpoint autenticato e possono creare o collegare un file con i fogli `PERSONALE`, `MEZZI`, `COMMESSE_PERSONALE`, `COMMESSE_MEZZI` e `LOG_SINCRONIZZAZIONE`. Non è necessario rendere pubblico questo file: la lettura e la scrittura avvengono tramite Apps Script.
+
+Conservare in ciascun foglio le colonne `RECORD_ID`, `UPDATED_AT`, `UPDATED_BY`, `SYNC_VERSION`, `SYNC_SOURCE` e `ROW_STATUS`. La sincronizzazione è incrementale, risolve i conflitti in base alla versione e alla data di aggiornamento e non elimina automaticamente righe né record. Dopo aver aggiornato `Code.gs`, creare una nuova versione del deployment Apps Script e verificare che `GOOGLE_SHEET_APPS_SCRIPT_URL` punti al deployment aggiornato.

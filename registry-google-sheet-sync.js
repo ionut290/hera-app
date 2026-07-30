@@ -88,20 +88,38 @@
     await save(type, {
       sheetUrl: result.sheetUrl,
       spreadsheetId: result.spreadsheetId,
+      gid: result.gid || "0",
+      legacyMode: result.legacyMode === true,
       linkedAt: firebase.firestore.FieldValue.serverTimestamp(),
       linkedBy: currentUser?.uid || "",
       autoSync: false,
       conflictPolicy: "LATEST_WINS",
       noAutomaticDeletion: true
     });
-    alert("Google Sheet collegato. Puoi avviare la prima sincronizzazione.");
+    alert(result.legacyMode
+      ? "Google Sheet creato e collegato. La modalità compatibile è attiva e consente apertura e sincronizzazione dall’app verso il foglio."
+      : "Google Sheet collegato. Puoi avviare la prima sincronizzazione.");
   }
 
   async function sync(type) {
     const config = await load(type);
     if (!config.sheetUrl) return link(type);
-    const result = await call({ action: "syncRegistrySpreadsheet", registry: type, sheetUrl: config.sheetUrl, spreadsheetId: config.spreadsheetId, sheets: makeSheets(), conflictPolicy: config.conflictPolicy || "LATEST_WINS", noAutomaticDeletion: true });
-    await save(type, { lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(), lastSyncBy: currentUser?.uid || "", lastConflictCount: result.conflicts?.length || 0 });
+    const result = await call({
+      action: "syncRegistrySpreadsheet",
+      registry: type,
+      sheetUrl: config.sheetUrl,
+      spreadsheetId: config.spreadsheetId,
+      gid: config.gid || "0",
+      sheets: makeSheets(),
+      conflictPolicy: config.conflictPolicy || "LATEST_WINS",
+      noAutomaticDeletion: true
+    });
+    await save(type, {
+      lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastSyncBy: currentUser?.uid || "",
+      lastConflictCount: result.conflicts?.length || 0,
+      legacyMode: result.legacyMode === true
+    });
     const primary = type === "personale" ? "PERSONALE" : "MEZZI";
     const idColumn = type === "personale" ? "ID_OPERATORE" : "ID_MEZZO";
     const incoming = (result.incoming?.[primary] || []).filter((row) => clean(row.ROW_STATUS).toUpperCase() !== "DELETED").map((row) => ({ ...row, [idColumn]: row[idColumn] || row.RECORD_ID }));
@@ -110,6 +128,8 @@
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incoming), primary);
       const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       await window.HeraManagementV2.previewImport(type, { name: `Google_Sheets_${primary}.xlsx`, arrayBuffer: async () => bytes });
+    } else if (result.legacyMode) {
+      alert(`Sincronizzazione completata: ${result.rowsWritten || 0} righe inviate al Foglio Google.`);
     } else {
       alert(`Sincronizzazione completata. ${result.rowsWritten || 0} righe aggiornate; ${result.conflicts?.length || 0} conflitti; nessuna eliminazione automatica.`);
     }

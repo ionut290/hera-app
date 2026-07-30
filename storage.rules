@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /documents/{ownerUserId}/{documentId}/{fileName} {
+      allow write: if request.auth != null
+        && request.auth.uid == ownerUserId
+        && fileName.size() <= 120
+        && (request.resource == null || request.resource.size <= 15 * 1024 * 1024);
+      allow read: if request.auth != null && (
+        request.auth.uid == ownerUserId
+        || firestore.get(/databases/(default)/documents/documents/$(documentId)).data.visibility == 'global'
+        || (firestore.get(/databases/(default)/documents/documents/$(documentId)).data.visibility == 'shared'
+          && (firestore.get(/databases/(default)/documents/documents/$(documentId)).data.sharedToAll == true
+            || request.auth.uid in firestore.get(/databases/(default)/documents/documents/$(documentId)).data.sharedUserIds))
+      );
+    }
+  }
+}

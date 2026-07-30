@@ -29,7 +29,8 @@
     "check:google-sheet-sync": "node scripts/check-google-sheet-two-way-sync.js",
     "check:segnalazione-pdf": "node scripts/check-segnalazione-pdf.js",
     "export:testers": "node scripts/export-firestore-emails.js",
-    "check:map-fit": "node scripts/check-map-auto-fit.js"
+    "check:map-fit": "node scripts/check-map-auto-fit.js",
+    "check:management-v2": "node scripts/check-management-v2.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

@@ -26757,6 +26757,11 @@ async function upsertCurrentPlatformUser() {
     uid: currentUser.uid,
     email: currentUser.email || "",
     displayName: currentUser.displayName || currentUser.email || "Utente",
+    photoURL: currentUser.photoURL || "",
+    providerId: Array.isArray(currentUser.providerData)
+      ? String(currentUser.providerData.find((provider) => provider?.providerId === "google.com")?.providerId || "")
+      : "",
+    emailVerified: currentUser.emailVerified === true,
     isAdmin: isAdminUser,
     ...(isSuperAdmin ? {
       role: "super_admin",

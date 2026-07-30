@@ -61,6 +61,9 @@
       const names = splitName(firebaseUser);
       const created = {
         uid: firebaseUser.uid, email: firebaseUser.email || "", displayName: names.nomeCompleto,
+        photoURL: firebaseUser.photoURL || "",
+        providerId: Array.isArray(firebaseUser.providerData) ? String(firebaseUser.providerData.find((provider) => provider?.providerId === "google.com")?.providerId || "") : "",
+        emailVerified: firebaseUser.emailVerified === true,
         ...names, statoAccount: "in_attesa", accountStatus: "in_attesa", ruolo: "user", role: "user",
         primoAccessoAt: serverTime(), firstLoginAt: serverTime(), approvatoAt: null, approvedAt: null,
         approvatoDa: null, approvedBy: null, numeroRichieste: 0, requestCount: 0

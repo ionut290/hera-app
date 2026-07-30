@@ -1,14 +1,17 @@
-const CACHE_NAME = "hera-app-shell-v58";
+const CACHE_NAME = "hera-app-shell-v60";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260727-update2",
+  "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260729a",
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260728c",
   "./app.js?v=20260729-access1",
+  "./management-core.js?v=20260731",
+  "./management-v2.js?v=20260731",
   "./approval-access.js?v=20260729a",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",

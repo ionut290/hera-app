@@ -373,6 +373,50 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Registri gestionali: consultazione agli utenti autenticati, modifiche e
+    // matrici soltanto agli amministratori. Lo storico è append-only.
+    match /personale/{personId} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.linkedUserId == request.auth.uid
+        && request.resource.data.linkedUserId == resource.data.linkedUserId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "emailVerified", "photoURL", "googleDisplayName",
+          "linkedAuthProvider", "googleLastLoginAt", "updatedAt"
+        ])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["photoURL"])
+          || resource.data.profilePhotoSource == "google"
+        )
+      );
+    }
+
+    match /mezzi/{vehicleId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /operatorCommessaHistory/{historyId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /registryImportBackups/{backupId} {
+      allow read, create, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    match /userOperatorLinks/{userId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /operatorUserLinkHistory/{historyId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "appNotifications",
@@ -381,7 +425,6 @@ service cloud.firestore {
         "gpsUpdateRequests",
         "hoursDeadlineAlerts",
         "items",
-        "mezzi",
         "noteCommessa",
         "notificationEmailQueue",
         "oreApprovalRequests",
@@ -389,7 +432,6 @@ service cloud.firestore {
         "oreReports",
         "neve_ore_richieste",
         "neve_ore",
-        "personale",
         "sheetExportQueue",
         "userAlertAcknowledgements",
         "userAlerts",

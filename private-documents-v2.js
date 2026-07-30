@@ -28,6 +28,10 @@
   let processedIdentity = null;
   let corners = [];
   let activeHandle = -1;
+  let activePointerId = null;
+  let activeHandleElement = null;
+  let dragFrame = 0;
+  let previewTimer = 0;
   let previousBodyOverflow = "";
 
   const showFeedback = (message, type = "") => {
@@ -36,12 +40,14 @@
     feedback.classList.toggle("private-docs-feedback-success", type === "success");
     feedback.classList.toggle("private-docs-feedback-error", type === "error");
   };
+
   const readAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("Non riesco a leggere il file selezionato."));
     reader.readAsDataURL(file);
   });
+
   const loadImage = (url) => new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
@@ -49,7 +55,6 @@
     image.src = url;
   });
 
-  // Reads JPEG orientation before decoding: browsers do not expose EXIF consistently.
   async function readExifOrientation(file) {
     if (!file || !/jpe?g/i.test(file.type || file.name || "")) return 1;
     const view = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
@@ -130,100 +135,288 @@
   }
 
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
   function solveLinear(matrix, values) {
     for (let i = 0; i < values.length; i += 1) {
-      let pivot = i; for (let r = i + 1; r < values.length; r += 1) if (Math.abs(matrix[r][i]) > Math.abs(matrix[pivot][i])) pivot = r;
-      [matrix[i], matrix[pivot]] = [matrix[pivot], matrix[i]]; [values[i], values[pivot]] = [values[pivot], values[i]];
-      const div = matrix[i][i] || 1e-10; for (let c = i; c < values.length; c += 1) matrix[i][c] /= div; values[i] /= div;
-      for (let r = 0; r < values.length; r += 1) if (r !== i) { const m = matrix[r][i]; for (let c = i; c < values.length; c += 1) matrix[r][c] -= m * matrix[i][c]; values[r] -= m * values[i]; }
+      let pivot = i;
+      for (let r = i + 1; r < values.length; r += 1) if (Math.abs(matrix[r][i]) > Math.abs(matrix[pivot][i])) pivot = r;
+      [matrix[i], matrix[pivot]] = [matrix[pivot], matrix[i]];
+      [values[i], values[pivot]] = [values[pivot], values[i]];
+      const div = matrix[i][i] || 1e-10;
+      for (let c = i; c < values.length; c += 1) matrix[i][c] /= div;
+      values[i] /= div;
+      for (let r = 0; r < values.length; r += 1) if (r !== i) {
+        const m = matrix[r][i];
+        for (let c = i; c < values.length; c += 1) matrix[r][c] -= m * matrix[i][c];
+        values[r] -= m * values[i];
+      }
     }
     return values;
   }
+
   function homography(from, to) {
     const a = [], b = [];
-    from.forEach((p, i) => { const q = to[i]; a.push([p.x,p.y,1,0,0,0,-q.x*p.x,-q.x*p.y]); b.push(q.x); a.push([0,0,0,p.x,p.y,1,-q.y*p.x,-q.y*p.y]); b.push(q.y); });
+    from.forEach((p, i) => {
+      const q = to[i];
+      a.push([p.x, p.y, 1, 0, 0, 0, -q.x * p.x, -q.x * p.y]); b.push(q.x);
+      a.push([0, 0, 0, p.x, p.y, 1, -q.y * p.x, -q.y * p.y]); b.push(q.y);
+    });
     return [...solveLinear(a, b), 1];
   }
 
   function perspectiveCorrect(canvas, selected) {
     const measuredW = Math.max(distance(selected[0], selected[1]), distance(selected[3], selected[2]));
     const measuredH = Math.max(distance(selected[0], selected[3]), distance(selected[1], selected[2]));
-    // Pad to the physical ID-card ratio instead of cropping content from the detected quadrilateral.
     let contentW = Math.round(measuredW), contentH = Math.round(measuredH);
-    const scale = Math.min(1, 3200 / Math.max(contentW, contentH)); contentW = Math.max(900, Math.round(contentW * scale)); contentH = Math.max(560, Math.round(contentH * scale));
+    const scale = Math.min(1, 3200 / Math.max(contentW, contentH));
+    contentW = Math.max(900, Math.round(contentW * scale)); contentH = Math.max(560, Math.round(contentH * scale));
     let outputW = contentW, outputH = contentH;
     if (outputW / outputH < IDENTITY_RATIO) outputW = Math.round(outputH * IDENTITY_RATIO); else outputH = Math.round(outputW / IDENTITY_RATIO);
     const offsetX = Math.floor((outputW - contentW) / 2), offsetY = Math.floor((outputH - contentH) / 2);
-    const destination = [{x:offsetX,y:offsetY},{x:offsetX+contentW-1,y:offsetY},{x:offsetX+contentW-1,y:offsetY+contentH-1},{x:offsetX,y:offsetY+contentH-1}];
+    const destination = [{ x: offsetX, y: offsetY }, { x: offsetX + contentW - 1, y: offsetY }, { x: offsetX + contentW - 1, y: offsetY + contentH - 1 }, { x: offsetX, y: offsetY + contentH - 1 }];
     const inverse = homography(destination, selected);
     const src = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
     const out = document.createElement("canvas"); out.width = outputW; out.height = outputH;
     const ctx = out.getContext("2d", { alpha: false }); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, outputW, outputH);
     const image = ctx.getImageData(0, 0, outputW, outputH), d = image.data, s = src.data;
     for (let y = offsetY; y < offsetY + contentH; y += 1) for (let x = offsetX; x < offsetX + contentW; x += 1) {
-      const den = inverse[6]*x + inverse[7]*y + inverse[8]; const sx = (inverse[0]*x + inverse[1]*y + inverse[2])/den; const sy = (inverse[3]*x + inverse[4]*y + inverse[5])/den;
-      const ix = Math.max(0, Math.min(canvas.width-1, Math.round(sx))), iy = Math.max(0, Math.min(canvas.height-1, Math.round(sy))); const si=(iy*canvas.width+ix)*4, di=(y*outputW+x)*4;
-      for (let c=0;c<3;c+=1) d[di+c]=s[si+c]; d[di+3]=255;
+      const den = inverse[6] * x + inverse[7] * y + inverse[8];
+      const sx = (inverse[0] * x + inverse[1] * y + inverse[2]) / den;
+      const sy = (inverse[3] * x + inverse[4] * y + inverse[5]) / den;
+      const ix = Math.max(0, Math.min(canvas.width - 1, Math.round(sx))), iy = Math.max(0, Math.min(canvas.height - 1, Math.round(sy)));
+      const si = (iy * canvas.width + ix) * 4, di = (y * outputW + x) * 4;
+      for (let c = 0; c < 3; c += 1) d[di + c] = s[si + c];
+      d[di + 3] = 255;
     }
-    // Moderate brightness/contrast plus an unsharp mask for legible small text.
-    for (let i=0;i<d.length;i+=4) for (let c=0;c<3;c+=1) d[i+c]=Math.max(0,Math.min(255,(d[i+c]-128)*1.10+134));
-    ctx.putImageData(image,0,0); ctx.filter="contrast(1.04) brightness(1.02)"; ctx.globalAlpha=.82; ctx.drawImage(out,0,0); ctx.globalAlpha=1; ctx.filter="none";
+    for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c += 1) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - 128) * 1.10 + 134));
+    ctx.putImageData(image, 0, 0);
+    ctx.filter = "contrast(1.04) brightness(1.02)"; ctx.globalAlpha = .82; ctx.drawImage(out, 0, 0); ctx.globalAlpha = 1; ctx.filter = "none";
     return out;
   }
 
-  function updatePreview() { const out = perspectiveCorrect(sourceCanvas, corners); cropPreview.src = out.toDataURL("image/jpeg", .92); return out; }
+  function updatePreview() {
+    const out = perspectiveCorrect(sourceCanvas, corners);
+    cropPreview.src = out.toDataURL("image/jpeg", .92);
+    return out;
+  }
+
+  function displayPoint(point, scale) {
+    return { x: point.x * scale, y: point.y * scale };
+  }
+
+  function updateCropOverlay() {
+    const scale = Number(cropHandles.dataset.scale) || 1;
+    const handles = cropHandles.querySelectorAll(".identity-crop-handle");
+    const polygon = corners.map((point, index) => {
+      const displayed = displayPoint(point, scale);
+      const handle = handles[index];
+      if (handle) {
+        handle.style.left = `${displayed.x}px`;
+        handle.style.top = `${displayed.y}px`;
+      }
+      return `${displayed.x}px ${displayed.y}px`;
+    });
+    cropHandles.style.setProperty("--crop-polygon", `polygon(${polygon.join(",")})`);
+  }
+
+  function schedulePreviewUpdate(delay = 120) {
+    window.clearTimeout(previewTimer);
+    previewTimer = window.setTimeout(() => {
+      if (sourceCanvas && cropDialog && !cropDialog.classList.contains("hidden")) updatePreview();
+    }, delay);
+  }
+
   function drawCropEditor() {
-    const maxW = Math.min(window.innerWidth - 24, 920), maxH = Math.min(window.innerHeight * .55, 650), scale = Math.min(maxW/sourceCanvas.width,maxH/sourceCanvas.height,1);
-    cropCanvas.width=Math.round(sourceCanvas.width*scale); cropCanvas.height=Math.round(sourceCanvas.height*scale); cropCanvas.getContext("2d").drawImage(sourceCanvas,0,0,cropCanvas.width,cropCanvas.height);
-    cropHandles.innerHTML="";
-    const points=corners.map((point,index)=>{ const handle=document.createElement("button"); handle.type="button"; handle.className="identity-crop-handle"; handle.setAttribute("aria-label",`Angolo ${index+1}`); handle.style.left=`${point.x*scale}px`; handle.style.top=`${point.y*scale}px`; handle.dataset.index=index; cropHandles.appendChild(handle); return `${point.x*scale},${point.y*scale}`; });
-    cropHandles.style.setProperty("--crop-polygon", `polygon(${points.join(",")})`); cropHandles.dataset.scale=String(scale);
+    const maxW = Math.min(window.innerWidth - 24, 920);
+    const maxH = Math.min(window.innerHeight * .55, 650);
+    const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
+    cropCanvas.width = Math.round(sourceCanvas.width * scale);
+    cropCanvas.height = Math.round(sourceCanvas.height * scale);
+    cropCanvas.getContext("2d").drawImage(sourceCanvas, 0, 0, cropCanvas.width, cropCanvas.height);
+    cropHandles.innerHTML = "";
+    corners.forEach((point, index) => {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "identity-crop-handle";
+      handle.setAttribute("aria-label", `Angolo ${index + 1}`);
+      handle.dataset.index = String(index);
+      cropHandles.appendChild(handle);
+    });
+    cropHandles.dataset.scale = String(scale);
+    updateCropOverlay();
     updatePreview();
   }
-  function closeCrop() { cropDialog.classList.add("hidden"); document.body.style.overflow=previousBodyOverflow; }
-  async function openCrop(canvas) {
-    stopCamera(); sourceCanvas=canvas; const detected=detectDocumentEdges(canvas); corners=detected.corners;
-    byId("identity-crop-confidence").textContent=detected.confidence >= .55 ? "Bordi rilevati: controlla i quattro punti prima di continuare." : "Rilevamento incerto: posiziona manualmente i quattro punti sui bordi.";
-    byId("identity-crop-confidence").classList.toggle("low-confidence",detected.confidence < .55);
-    previousBodyOverflow=document.body.style.overflow; document.body.style.overflow="hidden"; cropDialog.classList.remove("hidden"); drawCropEditor();
+
+  function pointFromPointer(event) {
+    const rect = cropCanvas.getBoundingClientRect();
+    const scaleX = sourceCanvas.width / Math.max(1, rect.width);
+    const scaleY = sourceCanvas.height / Math.max(1, rect.height);
+    return {
+      x: Math.max(0, Math.min(sourceCanvas.width, (event.clientX - rect.left) * scaleX)),
+      y: Math.max(0, Math.min(sourceCanvas.height, (event.clientY - rect.top) * scaleY))
+    };
   }
 
-  cropHandles?.addEventListener("pointerdown", (event) => { const handle=event.target.closest(".identity-crop-handle"); if(!handle)return; activeHandle=Number(handle.dataset.index); handle.setPointerCapture(event.pointerId); });
-  cropHandles?.addEventListener("pointermove", (event) => { if(activeHandle<0)return; const rect=cropCanvas.getBoundingClientRect(), scale=Number(cropHandles.dataset.scale)||1; corners[activeHandle]={x:Math.max(0,Math.min(sourceCanvas.width,(event.clientX-rect.left)/scale)),y:Math.max(0,Math.min(sourceCanvas.height,(event.clientY-rect.top)/scale))}; drawCropEditor(); });
-  cropHandles?.addEventListener("pointerup",()=>{activeHandle=-1;});
+  function finishHandleDrag(event) {
+    if (activeHandle < 0) return;
+    if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
+    if (dragFrame) cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+    try {
+      if (activeHandleElement && activePointerId !== null && activeHandleElement.hasPointerCapture(activePointerId)) activeHandleElement.releasePointerCapture(activePointerId);
+    } catch (_) {}
+    activeHandleElement?.classList.remove("is-dragging");
+    activeHandle = -1;
+    activePointerId = null;
+    activeHandleElement = null;
+    schedulePreviewUpdate(0);
+  }
 
-  function stopCamera(){ if(stream){stream.getTracks().forEach((track)=>track.stop());stream=null;} if(video)video.srcObject=null; byId("identity-camera-snap").disabled=true; }
-  async function startCamera(){ try { stopCamera(); stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:4096},height:{ideal:3072}},audio:false}); video.srcObject=stream; await video.play(); byId("identity-camera-snap").disabled=false; } catch(error){ showFeedback("Fotocamera non disponibile: usa il selettore del dispositivo.","error"); dedicatedInput.click(); } }
-  function captureFrame(){ if(!video.videoWidth)return; const canvas=document.createElement("canvas"); canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d",{alpha:false}).drawImage(video,0,0);openCrop(canvas); }
-  function setIdentityMode(active){ identityPreset=active; flow?.classList.toggle("hidden",!active); genericFields.forEach((field)=>field?.classList.toggle("hidden",active)); form.classList.toggle("identity-preset-active",active); if(active){nameInput.value="Tessera di riconoscimento";noteInput.value="Documento personale di riconoscimento.";fileInput.value="";cameraInput.value="";processedIdentity=null;startCamera();}else stopCamera(); }
+  function closeCrop() {
+    finishHandleDrag();
+    cropDialog.classList.add("hidden");
+    document.body.style.overflow = previousBodyOverflow;
+  }
 
-  tesseraButton?.addEventListener("click",()=>setIdentityMode(true));
-  byId("private-docs-preset-pin-btn")?.addEventListener("click",()=>setIdentityMode(false));
-  byId("identity-capture-cancel")?.addEventListener("click",()=>setIdentityMode(false));
-  byId("identity-camera-start")?.addEventListener("click",startCamera);
-  byId("identity-camera-snap")?.addEventListener("click",captureFrame);
-  byId("identity-camera-fallback")?.addEventListener("click",()=>dedicatedInput.click());
-  dedicatedInput?.addEventListener("change",async()=>{const file=dedicatedInput.files?.[0];if(file)openCrop(await orientedCanvas(file));});
-  byId("identity-crop-close")?.addEventListener("click",closeCrop);
-  byId("identity-crop-retry")?.addEventListener("click",()=>{closeCrop();processedIdentity=null;dedicatedInput.value="";startCamera();});
-  byId("identity-crop-use")?.addEventListener("click",()=>{const out=updatePreview();const dataUrl=out.toDataURL("image/jpeg",.92);processedIdentity={dataUrl,fileName:"tessera-riconoscimento.jpg",fileType:"image/jpeg",fileSize:Math.round(dataUrl.length*.75)};closeCrop();showFeedback(`Foto pronta (${out.width} × ${out.height}px). Tocca l’anteprima per ingrandire.`,"success");});
-  byId("identity-preview-zoom")?.addEventListener("click",()=>cropPreview.classList.toggle("is-zoomed"));
-  window.addEventListener("orientationchange",()=>{if(sourceCanvas&&!cropDialog.classList.contains("hidden"))setTimeout(drawCropEditor,120);});
+  async function openCrop(canvas) {
+    stopCamera();
+    sourceCanvas = canvas;
+    const detected = detectDocumentEdges(canvas);
+    corners = detected.corners;
+    byId("identity-crop-confidence").textContent = detected.confidence >= .55 ? "Bordi rilevati: controlla i quattro punti prima di continuare." : "Rilevamento incerto: posiziona manualmente i quattro punti sui bordi.";
+    byId("identity-crop-confidence").classList.toggle("low-confidence", detected.confidence < .55);
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    cropDialog.classList.remove("hidden");
+    drawCropEditor();
+  }
+
+  cropHandles?.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest(".identity-crop-handle");
+    if (!handle || activeHandle >= 0) return;
+    event.preventDefault();
+    activeHandle = Number(handle.dataset.index);
+    activePointerId = event.pointerId;
+    activeHandleElement = handle;
+    handle.classList.add("is-dragging");
+    handle.setPointerCapture(event.pointerId);
+  });
+
+  cropHandles?.addEventListener("pointermove", (event) => {
+    if (activeHandle < 0 || event.pointerId !== activePointerId) return;
+    event.preventDefault();
+    const nextPoint = pointFromPointer(event);
+    if (dragFrame) cancelAnimationFrame(dragFrame);
+    dragFrame = requestAnimationFrame(() => {
+      corners[activeHandle] = nextPoint;
+      updateCropOverlay();
+      dragFrame = 0;
+    });
+  });
+
+  cropHandles?.addEventListener("pointerup", finishHandleDrag);
+  cropHandles?.addEventListener("pointercancel", finishHandleDrag);
+  cropHandles?.addEventListener("lostpointercapture", finishHandleDrag);
+
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach((track) => track.stop()); stream = null; }
+    if (video) video.srcObject = null;
+    byId("identity-camera-snap").disabled = true;
+  }
+
+  async function startCamera() {
+    try {
+      stopCamera();
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 4096 }, height: { ideal: 3072 } }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      byId("identity-camera-snap").disabled = false;
+    } catch (error) {
+      showFeedback("Fotocamera non disponibile: usa il selettore del dispositivo.", "error");
+      dedicatedInput.click();
+    }
+  }
+
+  function captureFrame() {
+    if (!video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext("2d", { alpha: false }).drawImage(video, 0, 0);
+    openCrop(canvas);
+  }
+
+  function setIdentityMode(active) {
+    identityPreset = active;
+    flow?.classList.toggle("hidden", !active);
+    genericFields.forEach((field) => field?.classList.toggle("hidden", active));
+    form.classList.toggle("identity-preset-active", active);
+    if (active) {
+      nameInput.value = "Tessera di riconoscimento";
+      noteInput.value = "Documento personale di riconoscimento.";
+      fileInput.value = ""; cameraInput.value = ""; processedIdentity = null;
+      startCamera();
+    } else stopCamera();
+  }
+
+  tesseraButton?.addEventListener("click", () => setIdentityMode(true));
+  byId("private-docs-preset-pin-btn")?.addEventListener("click", () => setIdentityMode(false));
+  byId("identity-capture-cancel")?.addEventListener("click", () => setIdentityMode(false));
+  byId("identity-camera-start")?.addEventListener("click", startCamera);
+  byId("identity-camera-snap")?.addEventListener("click", captureFrame);
+  byId("identity-camera-fallback")?.addEventListener("click", () => dedicatedInput.click());
+  dedicatedInput?.addEventListener("change", async () => { const file = dedicatedInput.files?.[0]; if (file) openCrop(await orientedCanvas(file)); });
+  byId("identity-crop-close")?.addEventListener("click", closeCrop);
+  byId("identity-crop-retry")?.addEventListener("click", () => { closeCrop(); processedIdentity = null; dedicatedInput.value = ""; startCamera(); });
+  byId("identity-crop-use")?.addEventListener("click", () => {
+    const out = updatePreview();
+    const dataUrl = out.toDataURL("image/jpeg", .92);
+    processedIdentity = { dataUrl, fileName: "tessera-riconoscimento.jpg", fileType: "image/jpeg", fileSize: Math.round(dataUrl.length * .75) };
+    closeCrop();
+    showFeedback(`Foto pronta (${out.width} × ${out.height}px). Tocca l’anteprima per ingrandire.`, "success");
+  });
+  byId("identity-preview-zoom")?.addEventListener("click", () => cropPreview.classList.toggle("is-zoomed"));
+  window.addEventListener("orientationchange", () => {
+    if (sourceCanvas && !cropDialog.classList.contains("hidden")) setTimeout(drawCropEditor, 120);
+  });
 
   async function prepareFile(file) {
-    if (identityPreset) { if (!processedIdentity) throw new Error("Scatta, ritaglia e conferma la foto della tessera prima di salvare."); return processedIdentity; }
-    if (!file) return { dataUrl:"",fileName:"",fileType:"",fileSize:0 };
-    const type=String(file.type||"").toLowerCase(); if(type.startsWith("image/"))return optimizeImage(file);
-    if(type!=="application/pdf")throw new Error("Puoi allegare soltanto immagini oppure PDF.");
-    if(Number(file.size||0)>MAX_PDF_BYTES)throw new Error("Il PDF è troppo grande. Il limite è 500 KB.");
-    return {dataUrl:await readAsDataUrl(file),fileName:file.name||"documento.pdf",fileType:type,fileSize:Number(file.size||0)};
+    if (identityPreset) {
+      if (!processedIdentity) throw new Error("Scatta, ritaglia e conferma la foto della tessera prima di salvare.");
+      return processedIdentity;
+    }
+    if (!file) return { dataUrl: "", fileName: "", fileType: "", fileSize: 0 };
+    const type = String(file.type || "").toLowerCase();
+    if (type.startsWith("image/")) return optimizeImage(file);
+    if (type !== "application/pdf") throw new Error("Puoi allegare soltanto immagini oppure PDF.");
+    if (Number(file.size || 0) > MAX_PDF_BYTES) throw new Error("Il PDF è troppo grande. Il limite è 500 KB.");
+    return { dataUrl: await readAsDataUrl(file), fileName: file.name || "documento.pdf", fileType: type, fileSize: Number(file.size || 0) };
   }
 
-  form.addEventListener("submit",async(event)=>{
-    event.preventDefault();event.stopImmediatePropagation();const user=firebase.auth().currentUser;if(!user)return showFeedback("Devi effettuare il login prima di salvare.","error");
-    const name=String(nameInput.value||"").trim(),note=String(noteInput.value||"").trim(),file=fileInput.files?.[0]||cameraInput.files?.[0]||null;if(!name)return showFeedback("Inserisci la denominazione del documento.","error");
-    saveButton.disabled=true;showFeedback("Preparazione e salvataggio del documento...");
-    try{const prepared=await prepareFile(file);await firebase.firestore().collection("privateDocuments").doc(user.uid).collection("items").add({name,note,fileName:prepared.fileName,fileType:prepared.fileType,fileSize:prepared.fileSize,fileDataUrl:prepared.dataUrl,driveFileId:"",driveWebViewLink:"",storageMode:"private-firestore",ownerUid:user.uid,identityCardProcessed:identityPreset,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});form.reset();setIdentityMode(false);showFeedback("Documento personale salvato correttamente.","success");}
-    catch(error){console.error("Salvataggio documento personale non riuscito:",error);showFeedback(error?.message||"Salvataggio non riuscito. Riprova.","error");}finally{saveButton.disabled=false;}
-  },true);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); event.stopImmediatePropagation();
+    const user = firebase.auth().currentUser;
+    if (!user) return showFeedback("Devi effettuare il login prima di salvare.", "error");
+    const name = String(nameInput.value || "").trim();
+    const note = String(noteInput.value || "").trim();
+    const file = fileInput.files?.[0] || cameraInput.files?.[0] || null;
+    if (!name) return showFeedback("Inserisci la denominazione del documento.", "error");
+    saveButton.disabled = true;
+    showFeedback("Preparazione e salvataggio del documento...");
+    try {
+      const prepared = await prepareFile(file);
+      await firebase.firestore().collection("privateDocuments").doc(user.uid).collection("items").add({
+        name, note, fileName: prepared.fileName, fileType: prepared.fileType, fileSize: prepared.fileSize,
+        fileDataUrl: prepared.dataUrl, driveFileId: "", driveWebViewLink: "", storageMode: "private-firestore",
+        ownerUid: user.uid, identityCardProcessed: identityPreset,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      form.reset(); setIdentityMode(false);
+      showFeedback("Documento personale salvato correttamente.", "success");
+    } catch (error) {
+      console.error("Salvataggio documento personale non riuscito:", error);
+      showFeedback(error?.message || "Salvataggio non riuscito. Riprova.", "error");
+    } finally {
+      saveButton.disabled = false;
+    }
+  }, true);
 })();

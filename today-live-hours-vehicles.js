@@ -12,6 +12,17 @@
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+  const normalizeIdentity = (value) => String(value || "")
+    .toLocaleLowerCase("it-IT")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  function getLiveElement(id, fallback) {
+    const element = document.getElementById(id);
+    if (element) return element;
+    return fallback?.isConnected ? fallback : null;
+  }
+
   function getAssignmentsSafe() {
     try {
       if (typeof findCurrentUserSquadreForDate !== "function" || typeof getTodayDateKey !== "function") return [];
@@ -80,8 +91,80 @@
   }
 
   function formatHoursMinutes(minutes) {
-    const safeMinutes = Math.max(0, Math.floor(Number(minutes) || 0));
+    const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
     return `${String(Math.floor(safeMinutes / 60)).padStart(2, "0")}:${String(safeMinutes % 60).padStart(2, "0")}`;
+  }
+
+  function isCurrentUserOperator(operatorName) {
+    if (typeof doSquadraMemberAndUserMatch === "function") {
+      try {
+        return Boolean(doSquadraMemberAndUserMatch(operatorName));
+      } catch (_) {
+        // Prosegue con il controllo compatibile locale.
+      }
+    }
+
+    const operator = normalizeIdentity(operatorName);
+    if (!operator) return false;
+    const userValues = [
+      typeof currentUser !== "undefined" ? currentUser?.displayName : "",
+      typeof currentUser !== "undefined" ? currentUser?.email : "",
+      typeof currentUser !== "undefined" ? currentUser?.uid : ""
+    ].map(normalizeIdentity).filter(Boolean);
+    return userValues.some((value) => value === operator || value.includes(operator) || operator.includes(value));
+  }
+
+  function getSavedHoursForCurrentUser(assignments) {
+    const reportsLoaded = typeof hoursReportsLoaded === "undefined" || Boolean(hoursReportsLoaded);
+    const approvalsLoaded = typeof hoursApprovalsLoaded === "undefined" || Boolean(hoursApprovalsLoaded);
+    if (!reportsLoaded || !approvalsLoaded) return { loaded: false, found: false, minutes: 0 };
+
+    const dateKey = typeof getTodayDateKey === "function" ? String(getTodayDateKey() || "") : "";
+    if (!dateKey) return { loaded: true, found: false, minutes: 0 };
+
+    const assignedRows = new Map(assignments.map((assignment) => [
+      String(assignment?.commessaId || ""),
+      new Set((assignment?.matchedRows || []).map(({ squadraIndex }) => String(squadraIndex ?? "")))
+    ]));
+
+    const reports = typeof allHoursReports !== "undefined" && Array.isArray(allHoursReports)
+      ? allHoursReports
+      : [];
+    const approvals = typeof allHoursApprovalRequests !== "undefined" && Array.isArray(allHoursApprovalRequests)
+      ? allHoursApprovalRequests.filter((request) => String(request?.status || "").trim().toLowerCase() !== "rejected")
+      : [];
+
+    let sources = [...reports, ...approvals];
+    if (typeof deduplicateHoursRecordsForDisplay === "function") {
+      try {
+        sources = deduplicateHoursRecordsForDisplay(sources);
+      } catch (_) {
+        // Mantiene le sorgenti originali se la deduplicazione non è disponibile.
+      }
+    }
+
+    let minutes = 0;
+    let found = false;
+    sources.forEach((record) => {
+      if (String(record?.date || "").trim() !== dateKey) return;
+      (Array.isArray(record?.entries) ? record.entries : []).forEach((entry) => {
+        const commessaId = String(entry?.commessaId || entry?.commessa?.id || "");
+        const teamIndexes = assignedRows.get(commessaId);
+        if (!teamIndexes) return;
+
+        (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
+          const rowTeam = String(row?.squadraIndex ?? entry?.squadraIndex ?? "").trim();
+          if (rowTeam && !teamIndexes.has(rowTeam)) return;
+          if (!isCurrentUserOperator(row?.operatore || row?.operator || row?.nomeOperatore || "")) return;
+          const hours = Number(row?.ore);
+          if (!Number.isFinite(hours) || hours <= 0) return;
+          found = true;
+          minutes += Math.round(hours * 60);
+        });
+      });
+    });
+
+    return { loaded: true, found, minutes: Math.max(0, minutes) };
   }
 
   function normalizeVehicleValue(value) {
@@ -119,7 +202,7 @@
         parseVehicles(rawVehicles).forEach((vehicle) => {
           const key = typeof normalizeSquadraMemberIdentity === "function"
             ? normalizeSquadraMemberIdentity(vehicle)
-            : vehicle.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+            : normalizeIdentity(vehicle);
           if (key && !vehicles.has(key)) vehicles.set(key, vehicle);
         });
       });
@@ -146,6 +229,7 @@
     const style = document.createElement("style");
     style.id = "today-live-hours-vehicles-style";
     style.textContent = `
+      #today-mezzi-count{display:none!important}
       #today-mezzi-action.today-mezzi-inline{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:3px;max-width:100%;line-height:1.05}
       #today-mezzi-action.today-mezzi-inline .today-vehicle-badge{display:inline-flex;align-items:center;gap:2px;min-height:20px;padding:1px 5px;border:1px solid #cfd9e6;border-radius:7px;background:#f8fafc;color:#172033;font-size:.72rem;font-weight:800;line-height:1;white-space:nowrap;text-transform:none}
       #today-mezzi-action.today-mezzi-inline .today-vehicle-icon{font-size:.78rem;line-height:1}
@@ -155,13 +239,22 @@
   }
 
   function renderLiveHours(assignments) {
-    const hoursButton = (typeof ui !== "undefined" && ui.todayHoursBtn) || document.getElementById("today-hours-btn");
-    const hoursCount = (typeof ui !== "undefined" && ui.todayHoursCount) || document.getElementById("today-hours-count");
+    const hoursButton = getLiveElement("today-hours-btn", typeof ui !== "undefined" ? ui.todayHoursBtn : null);
+    const hoursCount = getLiveElement("today-hours-count", typeof ui !== "undefined" ? ui.todayHoursCount : null);
     if (!hoursButton || !hoursCount) return;
 
-    // Quando le ore sono già state inserite, mantiene il valore registrato e ferma il conteggio visivo.
-    if (hoursButton.classList.contains("is-complete")) return;
+    const savedHours = getSavedHoursForCurrentUser(assignments);
+    if (savedHours.loaded && savedHours.found) {
+      const savedText = formatHoursMinutes(savedHours.minutes);
+      hoursCount.textContent = savedText;
+      hoursButton.classList.add("is-complete");
+      hoursButton.dataset.liveCounter = "stopped";
+      hoursButton.setAttribute("aria-label", `Ore inserite oggi: ${savedText}. Premi per visualizzarle o modificarle`);
+      return;
+    }
 
+    hoursButton.classList.remove("is-complete");
+    hoursButton.dataset.liveCounter = "running";
     const elapsedMinutes = getElapsedWorkMinutes(assignments);
     const hoursText = elapsedMinutes === null ? "--:--" : formatHoursMinutes(elapsedMinutes);
     hoursCount.textContent = hoursText;
@@ -171,23 +264,25 @@
   }
 
   function renderAssignedVehicles(assignments) {
-    const vehicleButton = (typeof ui !== "undefined" && ui.todayMezziBtn) || document.getElementById("today-mezzi-btn");
+    const vehicleButton = getLiveElement("today-mezzi-btn", typeof ui !== "undefined" ? ui.todayMezziBtn : null);
     const vehicleAction = document.getElementById("today-mezzi-action");
-    const vehicleCount = (typeof ui !== "undefined" && ui.todayMezziCount) || document.getElementById("today-mezzi-count");
+    const vehicleCount = getLiveElement("today-mezzi-count", typeof ui !== "undefined" ? ui.todayMezziCount : null);
     if (!vehicleButton || !vehicleAction || !vehicleCount) return;
+
+    vehicleCount.textContent = "";
+    vehicleCount.hidden = true;
+    vehicleCount.setAttribute("aria-hidden", "true");
 
     const vehicles = getAssignedVehicles(assignments);
     vehicleAction.classList.toggle("today-mezzi-inline", vehicles.length > 0);
     if (vehicles.length) {
       vehicleAction.innerHTML = vehicles.map(renderVehicleBadge).join("");
-      vehicleCount.textContent = "";
       vehicleButton.disabled = false;
       vehicleButton.setAttribute("aria-label", `Mezzi assegnati oggi: ${vehicles.join(", ")}`);
       return;
     }
 
     vehicleAction.textContent = "NESSUN MEZZO";
-    vehicleCount.textContent = "";
     vehicleButton.disabled = true;
     vehicleButton.setAttribute("aria-label", "Nessun mezzo assegnato oggi");
   }

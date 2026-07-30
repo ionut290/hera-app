@@ -1,174 +1,47 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const page = $("private-docs-page");
-  const list = $("private-docs-list");
-  const dialog = $("document-dialog");
-  const form = $("document-form");
+  const page = $("private-docs-page"), list = $("private-docs-list"), dialog = $("document-dialog"), form = $("document-form");
   if (!page || !list || !dialog || !form || !window.firebase?.firestore) return;
-
-  const db = firebase.firestore();
-  const auth = firebase.auth();
-  const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
-  const arrayUnion = (...values) => firebase.firestore.FieldValue.arrayUnion(...values);
-  const state = { user: null, tab: "personal", filter: "all", query: "", documents: [], legacy: [], commesse: [], users: [], unsubs: [], commessaOnly: "" };
+  const db = firebase.firestore(), auth = firebase.auth(), serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
+  const state = {user:null,tab:"personal",filter:"all",query:"",documents:[],legacy:[],commesse:[],users:[],unsubs:[],commessaOnly:"",selectedCommesse:new Set(),viewerDoc:null,saving:false};
   const filters = [["all","Tutti"],["pdf","PDF"],["photo","Foto"],["word","Word"],["excel","Excel"],["expiration","Con scadenza"],["expired","Scaduti"],["soon","In scadenza"],["favorite","Preferiti"],["commessa","Collegati a commessa"]];
-  const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
-  const date = (value) => { const d = value?.toDate?.() || (value ? new Date(`${value}T12:00:00`) : null); return d && !Number.isNaN(d.valueOf()) ? d.toLocaleDateString("it-IT") : ""; };
-  const uid = () => state.user?.uid || "";
-  const visibility = (doc) => doc.visibility || "personal";
-  const canEdit = (doc) => Boolean(uid() && (doc.ownerUserId === uid() || doc.createdBy === uid()));
-  const authorized = (doc) => visibility(doc) === "personal" ? doc.ownerUserId === uid() : visibility(doc) === "global" || doc.sharedToAll || (doc.authorizedUserIds || doc.sharedUserIds || []).includes(uid());
-  const commessaName = (id) => state.commesse.find((x) => x.id === id)?.nome || state.commesse.find((x) => x.id === id)?.name || "";
-  const eventRef = (docId) => db.collection("calendarEvents").doc(`document_${docId}`);
-
-  function fileKind(doc) {
-    const value = `${doc.fileType || ""} ${doc.fileName || ""}`.toLowerCase();
-    if (/pdf/.test(value)) return ["pdf","📕"];
-    if (/image|jpg|jpeg|png|webp|heic/.test(value)) return ["photo","🖼️"];
-    if (/word|docx?/.test(value)) return ["word","📘"];
-    if (/excel|sheet|xlsx?/.test(value)) return ["excel","📗"];
-    return ["other","📄"];
-  }
-
-  function expirationState(doc) {
-    if (!doc.expirationDate) return ["",""];
-    const today = new Date(); today.setHours(0,0,0,0);
-    const expiry = new Date(`${doc.expirationDate}T00:00:00`);
-    const days = Math.ceil((expiry - today) / 86400000);
-    if (days < 0) return ["expired","Scaduto"];
-    if (days <= 7) return ["soon", days === 0 ? "Scade oggi" : `Scade tra ${days} giorni`];
-    return ["valid","In corso"];
-  }
-
-  function renderFilters() {
-    $("documents-filters").innerHTML = filters.map(([id,label]) => `<button type="button" class="documents-filter ${state.filter === id ? "active" : ""}" data-doc-filter="${id}">${label}</button>`).join("");
-  }
-
-  function normalizeLegacy(item) {
-    return { ...item, legacy: true, visibility: "personal", ownerUserId: uid(), category: item.category || (/pin/i.test(item.name || "") ? "PIN carburante" : /tessera/i.test(item.name || "") ? "Tessera" : "Documento"), description: item.description || item.note || "", fileUrl: item.fileUrl || item.driveWebViewLink || item.fileDataUrl || "", favoriteBy: item.favoriteBy || [] };
-  }
-
-  function visibleDocuments() {
-    const all = [...state.documents, ...state.legacy.map(normalizeLegacy)].filter(authorized);
-    const query = state.query.trim().toLocaleLowerCase("it");
-    return all.filter((doc) => visibility(doc) === state.tab && (!state.commessaOnly || doc.commessaId === state.commessaOnly)).filter((doc) => {
-      const [kind] = fileKind(doc); const [expiry] = expirationState(doc);
-      if (state.filter === "pdf" || state.filter === "photo" || state.filter === "word" || state.filter === "excel") if (kind !== state.filter) return false;
-      if (state.filter === "expiration" && !doc.expirationDate) return false;
-      if ((state.filter === "expired" || state.filter === "soon") && expiry !== state.filter) return false;
-      if (state.filter === "favorite" && !(doc.favoriteBy || []).includes(uid())) return false;
-      if (state.filter === "commessa" && !doc.commessaId) return false;
-      return !query || [doc.name,doc.category,doc.description,doc.code,doc.fileName,commessaName(doc.commessaId)].some((x) => String(x || "").toLocaleLowerCase("it").includes(query));
-    }).sort((a,b) => Number((b.favoriteBy || []).includes(uid())) - Number((a.favoriteBy || []).includes(uid())) || String(b.createdAt?.seconds || "").localeCompare(String(a.createdAt?.seconds || "")));
-  }
-
-  function render() {
-    renderFilters();
-    document.querySelectorAll("[data-doc-tab]").forEach((button) => { button.classList.toggle("active", button.dataset.docTab === state.tab); button.setAttribute("aria-selected", String(button.dataset.docTab === state.tab)); });
-    const rows = visibleDocuments();
-    $("private-docs-feedback").textContent = state.commessaOnly ? `${rows.length} documenti autorizzati collegati a ${commessaName(state.commessaOnly) || "questa commessa"}.` : `${rows.length} ${rows.length === 1 ? "documento" : "documenti"}`;
-    showDueReminder();
-    if (!rows.length) { list.innerHTML = `<div class="documents-empty"><span>📂</span><strong>${state.commessaOnly ? "Nessun documento collegato a questa commessa." : "Nessun documento in questa scheda."}</strong>${state.user ? '<button class="btn btn-primary" data-empty-new>+ Aggiungi documento</button>' : ""}</div>`; list.querySelector("[data-empty-new]")?.addEventListener("click", () => openForm()); return; }
-    list.innerHTML = rows.map((doc) => { const [kind,icon] = fileKind(doc); const [status,statusText] = expirationState(doc); const favorite = (doc.favoriteBy || []).includes(uid()); return `<article class="document-card" data-document-id="${esc(doc.id)}" data-legacy="${doc.legacy ? "1" : "0"}"><div class="document-format document-format-${kind}" aria-hidden="true">${icon}</div><div class="document-card-body"><div class="document-title-row"><h3>${esc(doc.name || "Documento")}</h3><button class="document-star ${favorite ? "active" : ""}" data-doc-action="favorite" aria-label="${favorite ? "Rimuovi dai" : "Aggiungi ai"} preferiti">★</button><button class="document-menu-btn" data-doc-action="menu" aria-label="Azioni documento">⋮</button></div><p>${esc(doc.category || "Senza categoria")}${doc.commessaId ? ` <span>• ${esc(commessaName(doc.commessaId) || "Commessa")}</span>` : ""}</p><div class="document-meta"><span>Caricato ${esc(date(doc.createdAt) || "-")}</span>${doc.expirationDate ? `<span class="expiration-${status}">Scadenza ${esc(date(doc.expirationDate))} • ${statusText}</span>` : ""}</div></div><div class="document-actions hidden"><button data-doc-action="open">Apri</button><button data-doc-action="download">Scarica</button>${canEdit(doc) && !doc.legacy ? '<button data-doc-action="edit">Modifica</button><button data-doc-action="replace">Sostituisci file</button><button data-doc-action="unlink">Rimuovi da commessa</button><button class="danger" data-doc-action="delete">Elimina</button>' : ""}</div></article>`; }).join("");
-  }
-
-  async function showDueReminder() {
-    if (!state.user || document.querySelector(".document-reminder")) return;
-    const today = new Date().toISOString().slice(0,10);
-    const doc = state.documents.find((item) => authorized(item) && item.reminderEnabled && item.reminderDate && item.reminderDate <= today && item.expirationDate >= today && sessionStorage.getItem(`document-remind-later:${item.id}`) !== "hidden");
-    if (!doc) return;
-    const ackId = `${doc.id}_${uid()}`;
-    const acknowledged = await db.collection("documentReminderAcknowledgements").doc(ackId).get().then((snap) => snap.exists).catch(() => false);
-    if (acknowledged || document.querySelector(".document-reminder")) return;
-    const reminder = document.createElement("aside"); reminder.className = "document-reminder"; reminder.setAttribute("role","alertdialog");
-    reminder.innerHTML = `<strong>Documento in scadenza</strong><p>Il documento ${esc(doc.name)} scadrà il ${esc(date(doc.expirationDate))}.${doc.commessaId ? `<br>Commessa: ${esc(commessaName(doc.commessaId))}.` : ""}</p><div><button class="btn btn-primary" data-reminder-open>Apri documento</button><button class="btn" data-reminder-calendar>Apri calendario</button><button class="btn" data-reminder-ack>Ho capito</button><button class="btn" data-reminder-later>Ricordamelo</button></div>`;
-    document.body.appendChild(reminder);
-    reminder.querySelector("[data-reminder-open]").onclick = () => { state.tab=visibility(doc); state.query=doc.name; $("documents-search").value=doc.name; $("open-private-docs-btn")?.click(); render(); reminder.remove(); };
-    reminder.querySelector("[data-reminder-calendar]").onclick = () => { location.hash=`calendar=${doc.expirationDate}`; reminder.remove(); };
-    reminder.querySelector("[data-reminder-ack]").onclick = async () => { await db.collection("documentReminderAcknowledgements").doc(ackId).set({documentId:doc.id,userId:uid(),acknowledgedAt:serverTime()}); reminder.remove(); };
-    reminder.querySelector("[data-reminder-later]").onclick = () => { sessionStorage.setItem(`document-remind-later:${doc.id}`,"hidden"); reminder.remove(); };
-  }
-
-  async function loadReferenceData() {
-    const [commesse, users] = await Promise.all([db.collection("commesse").get().catch(() => null), db.collection("utenti").get().catch(() => null)]);
-    state.commesse = commesse?.docs.map((d) => ({id:d.id,...d.data()})) || [];
-    state.users = users?.docs.map((d) => ({id:d.id,...d.data()})).filter((u) => u.id !== uid()) || [];
-    $("document-commessa").innerHTML = '<option value="">Nessuna commessa</option>' + state.commesse.map((c) => `<option value="${esc(c.id)}">${esc(c.nome || c.name || "Commessa")}</option>`).join("");
-    $("document-users").innerHTML = state.users.map((u) => `<label><input type="checkbox" value="${esc(u.id)}"> ${esc(u.nome || u.displayName || u.email || "Utente")}</label>`).join("") || '<span class="muted">Nessun utente disponibile.</span>';
-  }
-
-  function stop() { state.unsubs.splice(0).forEach((fn) => fn()); state.documents = []; state.legacy = []; }
-  function subscribe(user) {
-    stop(); state.user = user; if (!user) { render(); return; }
-    // Query separate: Firestore rules can validate each privacy boundary without exposing personal metadata.
-    const merge = new Map();
-    const watch = (query, key) => state.unsubs.push(query.onSnapshot({includeMetadataChanges:true}, (snap) => { snap.docChanges().forEach((change) => change.type === "removed" ? merge.delete(change.doc.id) : merge.set(change.doc.id,{id:change.doc.id,...change.doc.data()})); state.documents = [...merge.values()]; render(); }, () => render()));
-    watch(db.collection("documents").where("ownerUserId","==",user.uid), "owner");
-    watch(db.collection("documents").where("visibility","==","shared").where("sharedUserIds","array-contains",user.uid), "shared");
-    watch(db.collection("documents").where("visibility","==","shared").where("sharedToAll","==",true), "all");
-    watch(db.collection("documents").where("visibility","==","global"), "global");
-    state.unsubs.push(db.collection("privateDocuments").doc(user.uid).collection("items").onSnapshot((snap) => { state.legacy = snap.docs.map((d) => ({id:d.id,...d.data()})); render(); }));
-    loadReferenceData().then(render);
-  }
-
-  function showDialog() { if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open",""); setTimeout(() => $("document-name").focus(), 30); }
-  function closeDialog() { if (dialog.open && dialog.close) dialog.close(); else dialog.removeAttribute("open"); }
-  function openForm(doc = null, replace = false) {
-    if (!state.user) return alert("Devi fare login per usare i documenti.");
-    form.reset(); $("document-id").value = doc?.id || ""; $("document-form-title").textContent = replace ? "Sostituisci file" : doc ? "Modifica documento" : "Nuovo documento";
-    $("document-name").value = doc?.name || ""; $("document-category").value = doc?.category || ""; $("document-description").value = doc?.description || ""; $("document-expiration").value = doc?.expirationDate || ""; $("document-commessa").value = doc?.commessaId || state.commessaOnly || ""; $("document-favorite").checked = (doc?.favoriteBy || []).includes(uid());
-    const vis = doc?.visibility || state.tab || "personal"; form.querySelector(`[name=document-visibility][value=${vis}]`).checked = true;
-    $("document-recipients").classList.toggle("hidden", vis !== "shared"); $("document-share-all").checked = Boolean(doc?.sharedToAll); form.querySelectorAll("#document-users input").forEach((input) => input.checked = (doc?.sharedUserIds || []).includes(input.value));
-    $("document-file").required = Boolean(replace); $("document-form-feedback").textContent = ""; showDialog();
-  }
-
-  async function upload(file) {
-    if (!file) return {};
-    if (navigator.onLine === false) throw new Error("Connessione assente. Il documento sarà sincronizzato appena torni online.");
-    if (typeof window.uploadBlobToDrive === "function") { const result = await window.uploadBlobToDrive(file, file.name, file.type || "application/octet-stream", "", {driveType:"DOCUMENTI",commessaName:"Documenti"}); return { fileUrl: result.webViewLink || "", driveFileId: result.fileId || "" }; }
-    if (file.size > 700000) throw new Error("File troppo grande per il salvataggio locale: collega Google Drive e riprova.");
-    const fileUrl = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload=()=>resolve(String(reader.result)); reader.onerror=reject; reader.readAsDataURL(file); });
-    return { fileUrl };
-  }
-
-  async function syncExpiration(docId, data, previous = {}) {
-    const ref = eventRef(docId);
-    if (!data.expirationDate) { if (previous.calendarEventId) await ref.delete().catch(() => {}); return ""; }
-    const authorizedUserIds = data.visibility === "personal" ? [data.ownerUserId] : data.sharedToAll || data.visibility === "global" ? [] : data.sharedUserIds;
-    await ref.set({ type:"SCADENZA_DOCUMENTO", title:`Scadenza documento – ${data.name}`, compactTitle:`📄 ${data.name}`, startDate:data.expirationDate, endDate:data.expirationDate, allDay:true, documentId:docId, documentVisibility:data.visibility, ownerUserId:data.ownerUserId, authorizedUserIds, sharedToAll:Boolean(data.sharedToAll || data.visibility === "global"), commessaId:data.commessaId || "", worksite:data.commessaId ? `Commessa: ${commessaName(data.commessaId)}` : "", description:`Scadenza documento${data.description ? `\n${data.description}` : ""}`, link:data.fileUrl || previous.fileUrl || "", createdByUid:data.createdBy || uid(), createdByName:state.user.displayName || state.user.email || "Utente", reminderDate:new Date(new Date(`${data.expirationDate}T12:00:00`).getTime()-7*86400000).toISOString().slice(0,10), reminderDaysBefore:7, updatedAt:serverTime() }, {merge:true});
-    return ref.id;
-  }
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault(); const button = $("document-save"); button.disabled = true;
-    try {
-      const id = $("document-id").value || db.collection("documents").doc().id; const ref = db.collection("documents").doc(id); const old = state.documents.find((x) => x.id === id) || {}; const file = $("document-file").files?.[0];
-      const selectedVisibility = form.querySelector("[name=document-visibility]:checked").value; const sharedUserIds = [...form.querySelectorAll("#document-users input:checked")].map((x) => x.value); const sharedToAll = $("document-share-all").checked;
-      if (selectedVisibility === "shared" && !sharedToAll && !sharedUserIds.length) throw new Error("Seleziona almeno un destinatario per il documento condiviso.");
-      const uploaded = await upload(file); const data = { name:$("document-name").value.trim(), category:$("document-category").value.trim(), description:$("document-description").value.trim(), visibility:selectedVisibility, ownerUserId:old.ownerUserId || uid(), sharedUserIds:selectedVisibility === "shared" ? sharedUserIds : [], sharedTeamIds:old.sharedTeamIds || [], sharedToAll:selectedVisibility !== "personal" && (selectedVisibility === "global" || sharedToAll), authorizedUserIds:selectedVisibility === "personal" ? [uid()] : sharedUserIds, commessaId:$("document-commessa").value, expirationDate:$("document-expiration").value, reminderDate:$("document-expiration").value ? new Date(new Date(`${$("document-expiration").value}T12:00:00`).getTime()-7*86400000).toISOString().slice(0,10) : "", reminderDaysBefore:7, reminderEnabled:Boolean($("document-expiration").value), favoriteBy:$("document-favorite").checked ? [...new Set([...(old.favoriteBy || []),uid()])] : (old.favoriteBy || []).filter((x) => x !== uid()), fileName:file?.name || old.fileName || "", fileType:file?.type || old.fileType || "", fileSize:file?.size || old.fileSize || 0, fileUrl:uploaded.fileUrl || old.fileUrl || "", driveFileId:uploaded.driveFileId || old.driveFileId || "", createdBy:old.createdBy || uid(), updatedBy:uid(), createdAt:old.createdAt || serverTime(), updatedAt:serverTime(), status:"active" };
-      const calendarEventId = await syncExpiration(id,data,old); data.calendarEventId = calendarEventId; await ref.set(data,{merge:true}); closeDialog();
-    } catch (error) { $("document-form-feedback").textContent = error.message || "Salvataggio non riuscito."; }
-    finally { button.disabled = false; }
-  });
-
-  async function act(card, action) {
-    const doc = [...state.documents,...state.legacy.map(normalizeLegacy)].find((x) => x.id === card.dataset.documentId); if (!doc) return;
-    if (action === "menu") return card.querySelector(".document-actions").classList.toggle("hidden");
-    if (action === "open" || action === "download") { if (navigator.onLine === false && !String(doc.fileUrl || "").startsWith("data:")) return alert("Connessione assente. Il file non può essere aperto."); if (!doc.fileUrl) return alert("Nessun file allegato."); const link=document.createElement("a"); link.href=doc.fileUrl; link.target="_blank"; link.rel="noopener"; if(action==="download") link.download=doc.fileName||doc.name; link.click(); return; }
-    if (action === "edit") return openForm(doc);
-    if (action === "replace") return openForm(doc,true);
-    if (action === "favorite") { if (doc.legacy) return; const active=(doc.favoriteBy||[]).includes(uid()); await db.collection("documents").doc(doc.id).update({favoriteBy:active ? firebase.firestore.FieldValue.arrayRemove(uid()) : arrayUnion(uid()),updatedAt:serverTime()}); return; }
-    if (action === "unlink") { await db.collection("documents").doc(doc.id).update({commessaId:"",updatedAt:serverTime()}); await syncExpiration(doc.id,{...doc,commessaId:""},doc); return; }
-    if (action === "delete" && confirm(`Eliminare definitivamente “${doc.name}”?`)) { await eventRef(doc.id).delete().catch(()=>{}); await db.collection("documents").doc(doc.id).delete(); }
-  }
-
-  page.addEventListener("click", (event) => { const tab=event.target.closest("[data-doc-tab]"); if(tab){state.tab=tab.dataset.docTab;state.commessaOnly="";render();return;} const filter=event.target.closest("[data-doc-filter]");if(filter){state.filter=filter.dataset.docFilter;render();return;} const action=event.target.closest("[data-doc-action]");if(action)act(action.closest(".document-card"),action.dataset.docAction); });
-  $("documents-search").addEventListener("input", (event) => { state.query=event.target.value; render(); });
-  $("documents-new-btn").addEventListener("click", () => openForm()); $("document-dialog-close").addEventListener("click",closeDialog); $("document-cancel").addEventListener("click",closeDialog);
-  form.addEventListener("change", (event) => { if(event.target.name === "document-visibility") $("document-recipients").classList.toggle("hidden",event.target.value !== "shared"); });
-  $("open-private-docs-upload-btn")?.addEventListener("click", () => setTimeout(() => openForm(),80));
-  $("commessa-documents-btn")?.addEventListener("click", () => { const match=location.hash.match(/commessa=([^&]+)/); state.commessaOnly=match?decodeURIComponent(match[1]):""; state.tab="global"; $("open-private-docs-btn")?.click(); setTimeout(render,60); });
-  const online = () => $("documents-offline").classList.toggle("hidden",navigator.onLine); window.addEventListener("online",online);window.addEventListener("offline",online);online();renderFilters();auth.onAuthStateChanged(subscribe);
-  window.HeraDocuments = { open: (options={}) => { state.commessaOnly=options.commessaId||""; state.tab=options.visibility||"global"; $("open-private-docs-btn")?.click(); setTimeout(()=>options.create?openForm():render(),50); } };
+  const allowedExtensions = new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx","csv","txt","ppt","pptx"]), maxFileSize = 25 * 1024 * 1024;
+  const esc = (v) => String(v ?? "").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+  const uid=()=>state.user?.uid||"", visibility=d=>d.visibility||"personal", ids=d=>Array.isArray(d.commessaIds)?d.commessaIds.filter(Boolean):(d.commessaId?[d.commessaId]:[]);
+  const commessaName=id=>state.commesse.find(c=>c.id===id)?.nome||state.commesse.find(c=>c.id===id)?.name||"";
+  const canEdit=d=>Boolean(uid()&&(d.ownerUserId===uid()||d.createdBy===uid()));
+  const authorized=d=>visibility(d)==="personal"?d.ownerUserId===uid():visibility(d)==="global"||d.sharedToAll||(d.authorizedUserIds||d.sharedUserIds||[]).includes(uid());
+  const date=v=>{const d=v?.toDate?.()||(v?new Date(`${v}T12:00:00`):null);return d&&!Number.isNaN(d.valueOf())?d.toLocaleDateString("it-IT"):"";};
+  const eventRef=id=>db.collection("calendarEvents").doc(`document_${id}`);
+  const extension=d=>String(d.fileExtension||d.originalFileName||d.fileName||"").split(".").pop().toLowerCase();
+  function fileKind(d){const v=`${d.mimeType||d.fileType||""} ${extension(d)}`.toLowerCase();if(/pdf/.test(v))return["pdf","📕"];if(/image|jpg|jpeg|png|webp/.test(v))return["photo","🖼️"];if(/word|docx?/.test(v))return["word","📘"];if(/excel|sheet|xlsx?|csv/.test(v))return["excel","📗"];if(/ppt/.test(v))return["other","📙"];return["other","📄"];}
+  function expiry(d){if(!d.expirationDate)return["",""];const n=new Date();n.setHours(0,0,0,0);const days=Math.ceil((new Date(`${d.expirationDate}T00:00:00`)-n)/86400000);return days<0?["expired","Scaduto"]:days<=7?["soon",days===0?"Scade oggi":`Scade tra ${days} giorni`]:["valid","In corso"];}
+  function normalizeLegacy(d){return{...d,legacy:true,visibility:"personal",ownerUserId:uid(),commessaIds:ids(d),category:d.category||"Documento",fileUrl:d.fileUrl||d.driveWebViewLink||d.fileDataUrl||"",originalFileName:d.originalFileName||d.fileName||"",uploadStatus:d.uploadStatus||((d.fileUrl||d.driveWebViewLink||d.fileDataUrl)?"completed":"failed"),favoriteBy:d.favoriteBy||[]};}
+  function visible(){const q=state.query.trim().toLowerCase();return[...state.documents,...state.legacy.map(normalizeLegacy)].filter(authorized).filter(d=>visibility(d)===state.tab&&(!state.commessaOnly||ids(d).includes(state.commessaOnly))).filter(d=>{const[k]=fileKind(d),[e]=expiry(d);if(["pdf","photo","word","excel"].includes(state.filter)&&k!==state.filter)return false;if(state.filter==="expiration"&&!d.expirationDate)return false;if(["expired","soon"].includes(state.filter)&&e!==state.filter)return false;if(state.filter==="favorite"&&!(d.favoriteBy||[]).includes(uid()))return false;if(state.filter==="commessa"&&!ids(d).length)return false;return!q||[d.name,d.category,d.description,d.originalFileName,...ids(d).map(commessaName)].some(v=>String(v||"").toLowerCase().includes(q));});}
+  function commesseText(d){const linked=ids(d), names=linked.map(commessaName).filter(Boolean);if(linked.length===1)return names[0]||"1 commessa collegata";return linked.length?`${linked.length} commesse collegate`:"";}
+  function render(){ $("documents-filters").innerHTML=filters.map(([id,label])=>`<button type="button" class="documents-filter ${state.filter===id?"active":""}" data-doc-filter="${id}">${label}</button>`).join("");document.querySelectorAll("[data-doc-tab]").forEach(b=>b.classList.toggle("active",b.dataset.docTab===state.tab));const rows=visible();$("private-docs-feedback").textContent=`${rows.length} ${rows.length===1?"documento":"documenti"}`;if(!rows.length){list.innerHTML=`<div class="documents-empty"><span>📂</span><strong>Nessun documento in questa scheda.</strong><button class="btn btn-primary" data-empty-new>+ Aggiungi documento</button></div>`;return;}
+    list.innerHTML=rows.map(d=>{const[k,icon]=fileKind(d),[s,st]=expiry(d),fav=(d.favoriteBy||[]).includes(uid()),linked=commesseText(d);return`<article class="document-card" tabindex="0" role="button" data-document-id="${esc(d.id)}"><div class="document-format document-format-${k}">${icon}</div><div class="document-card-body"><div class="document-title-row"><h3>${esc(d.name||"Documento")}</h3><button class="document-star ${fav?"active":""}" data-doc-action="favorite" aria-label="Preferito">★</button><button class="document-menu-btn" data-doc-action="menu" aria-label="Azioni documento">⋮</button></div><p>${esc(d.category||"Senza categoria")} • ${esc(extension(d).toUpperCase()||"FILE")}</p>${linked?`<button class="document-commesse-link" data-doc-action="commesse">${esc(linked)}</button>`:""}<div class="document-meta">${d.expirationDate?`<span class="expiration-${s}">Scade il ${esc(date(d.expirationDate))} • ${st}</span>`:""}${d.uploadStatus&&d.uploadStatus!=="completed"?'<span class="expiration-expired">File non disponibile</span>':""}</div></div><div class="document-actions hidden"><button data-doc-action="open">Apri</button><button data-doc-action="download">Scarica</button>${canEdit(d)&&!d.legacy?'<button data-doc-action="edit">Modifica</button><button class="danger" data-doc-action="delete">Elimina</button>':""}</div></article>`;}).join(""); }
+  function selectionSummary(){const n=state.selectedCommesse.size,text=`${n} ${n===1?"commessa selezionata":"commesse selezionate"}`;$("document-commesse-summary").textContent=text;$("document-commesse-count").textContent=text;}
+  function renderCommesse(){const q=$("document-commesse-search").value.trim().toLowerCase();$("document-commesse-list").innerHTML=state.commesse.filter(c=>(c.nome||c.name||"").toLowerCase().includes(q)).map(c=>`<label><input type="checkbox" value="${esc(c.id)}" ${state.selectedCommesse.has(c.id)?"checked":""}> ${esc(c.nome||c.name||"Commessa")}</label>`).join("")||'<p class="muted">Nessuna commessa trovata.</p>';selectionSummary();}
+  async function loadReferences(){const[c,u]=await Promise.all([db.collection("commesse").get().catch(()=>null),db.collection("utenti").get().catch(()=>null)]);state.commesse=c?.docs.map(x=>({id:x.id,...x.data()}))||[];state.users=u?.docs.map(x=>({id:x.id,...x.data()})).filter(x=>x.id!==uid())||[];$("document-users").innerHTML=state.users.map(x=>`<label><input type="checkbox" value="${esc(x.id)}"> ${esc(x.nome||x.displayName||x.email||"Utente")}</label>`).join("");}
+  function openForm(d=null){if(!state.user)return alert("Devi fare login per usare i documenti.");form.reset();$("document-id").value=d?.id||db.collection("documents").doc().id;$("document-form-title").textContent=d?"Modifica documento":"Nuovo documento";$("document-name").value=d?.name||"";$("document-category").value=d?.category||"";$("document-description").value=d?.description||"";$("document-expiration").value=d?.expirationDate||"";state.selectedCommesse=new Set(d?ids(d):(state.commessaOnly?[state.commessaOnly]:[]));selectionSummary();const vis=d?.visibility||state.tab||"personal";form.querySelector(`[name=document-visibility][value=${vis}]`).checked=true;$("document-recipients").classList.toggle("hidden",vis!=="shared");$("document-share-all").checked=Boolean(d?.sharedToAll);form.querySelectorAll("#document-users input").forEach(i=>i.checked=(d?.sharedUserIds||[]).includes(i.value));$("document-favorite").checked=(d?.favoriteBy||[]).includes(uid());$("document-file-preview").textContent=d?.originalFileName||d?.fileName||"Nessun file selezionato.";$("document-form-feedback").textContent="";dialog.showModal?.();}
+  function validateFile(file){if(!file)return;const ext=file.name.split(".").pop().toLowerCase();if(!allowedExtensions.has(ext))throw new Error("Formato file non supportato.");if(file.size>maxFileSize)throw new Error("Il file selezionato supera la dimensione massima consentita.");}
+  function previewFile(file){try{validateFile(file);const[,icon]=fileKind({fileName:file.name,fileType:file.type});$("document-file-preview").innerHTML=`<span>${icon}</span><strong>${esc(file.name)}</strong><span>${esc(file.name.split(".").pop().toUpperCase())} • ${(file.size/1024/1024).toFixed(2)} MB</span><button class="btn" type="button" data-remove-file>Rimuovi o cambia file</button>`;$("document-form-feedback").textContent="";}catch(e){$("document-file-preview").textContent="Nessun file selezionato.";$("document-form-feedback").textContent=e.message;$("document-file").value="";$("document-camera").value="";}}
+  async function upload(file){validateFile(file);if(!file)return{};if(!navigator.onLine)throw new Error("Caricamento non riuscito. Il documento non è stato salvato.");if(typeof window.uploadBlobToDrive==="function"){const r=await window.uploadBlobToDrive(file,file.name,file.type||"application/octet-stream","",{driveType:"DOCUMENTI",commessaName:"Documenti"});const url=String(r.webViewLink||r.downloadUrl||"");if(!url)throw new Error("Caricamento non riuscito. Il documento non è stato salvato.");return{fileUrl:url,fileId:r.fileId||"",storagePath:r.storagePath||""};}if(file.size>700000)throw new Error("Il file selezionato supera la dimensione massima consentita.");const fileUrl=await new Promise((ok,no)=>{const rd=new FileReader();rd.onload=()=>ok(String(rd.result));rd.onerror=no;rd.readAsDataURL(file);});return{fileUrl};}
+  function normalizeUrl(d){let value=d.fileUrl||d.downloadUrl||d.driveWebViewLink||d.fileDataUrl||"";if(value&&typeof value==="object")value=value.url||value.href||"";value=String(value).trim();if(value.startsWith("{")&&value.endsWith("}")){try{const parsed=JSON.parse(value);value=String(parsed.url||parsed.fileUrl||parsed.webViewLink||"");}catch(e){console.error("Invalid document URL payload",e);return"";}}return /^(https?:|data:|blob:)/i.test(value)&&value!=="about:blank"?value:"";}
+  function fileName(d){const ext=extension(d),base=String(d.originalFileName||d.name||"documento").replace(/\.[^.]+$/,"").replace(/[^a-z0-9._-]+/gi,"_");return `${base||"documento"}${ext?`.${ext}`:""}`;}
+  function showOpenError(d,error){console.error("Document open failed",{documentId:d?.id,error});state.viewerDoc=d;$("document-error-dialog").showModal?.();}
+  async function download(d){const url=normalizeUrl(d);if(!url||d.uploadStatus&&d.uploadStatus!=="completed")throw new Error("URL non disponibile");const a=document.createElement("a");a.href=url;a.download=fileName(d);a.rel="noopener";document.body.appendChild(a);a.click();a.remove();}
+  function openViewer(d){const url=normalizeUrl(d);if(!url||d.uploadStatus&&d.uploadStatus!=="completed")return showOpenError(d,"missing or incomplete file");state.viewerDoc=d;const[k]=fileKind(d),viewer=$("document-viewer"),content=$("document-viewer-content");$("document-viewer-title").textContent=d.name||"Documento";$("document-viewer-page").textContent=k==="pdf"?"PDF":"";content.innerHTML='<p>Caricamento documento…</p>';viewer.showModal?.();setTimeout(()=>{if(k==="photo")content.innerHTML=`<img src="${esc(url)}" alt="${esc(d.name||"Documento")}" data-document-media>`;else if(k==="pdf")content.innerHTML=`<object data="${esc(url)}" type="application/pdf"><div class="document-generic"><p>Anteprima PDF non disponibile.</p><button class="btn btn-primary" data-viewer-download>Scarica</button></div></object>`;else content.innerHTML=`<div class="document-generic"><div class="document-format">${fileKind(d)[1]}</div><h2>${esc(d.name||"Documento")}</h2><p>${esc(extension(d).toUpperCase())} • ${d.fileSize?`${(d.fileSize/1024/1024).toFixed(2)} MB`:"Dimensione non disponibile"}</p><button class="btn btn-primary" data-viewer-download>Scarica</button><button class="btn" data-viewer-external>Apri con un'altra applicazione</button></div>`;},30);}
+  async function syncExpiration(id,data,old={}){const ref=eventRef(id);if(!data.expirationDate){if(old.calendarEventId)await ref.delete().catch(()=>{});return"";}const names=data.commessaIds.map(commessaName).filter(Boolean);await ref.set({type:"SCADENZA_DOCUMENTO",title:`Scadenza documento – ${data.name}`,startDate:data.expirationDate,endDate:data.expirationDate,allDay:true,documentId:id,documentVisibility:data.visibility,ownerUserId:data.ownerUserId,authorizedUserIds:data.visibility==="personal"?[data.ownerUserId]:data.sharedUserIds,sharedToAll:Boolean(data.sharedToAll),commessaIds:data.commessaIds,worksite:`Commesse collegate: ${data.commessaIds.length}`,description:`Commesse collegate: ${data.commessaIds.length}${names.length?`\n${names.join(", ")}`:""}`,createdByUid:data.createdBy||uid(),reminderDate:data.reminderDate,reminderDaysBefore:7,updatedAt:serverTime()},{merge:true});return ref.id;}
+  form.addEventListener("submit",async e=>{e.preventDefault();if(state.saving)return;state.saving=true;const button=$("document-save");button.disabled=true;$("document-form-feedback").textContent="Caricamento documento…";try{const id=$("document-id").value,ref=db.collection("documents").doc(id),old=state.documents.find(x=>x.id===id)||{},file=$("document-file").files[0]||$("document-camera").files[0],vis=form.querySelector("[name=document-visibility]:checked").value,shared=[...form.querySelectorAll("#document-users input:checked")].map(x=>x.value),all=$("document-share-all").checked;if(vis==="shared"&&!all&&!shared.length)throw new Error("Seleziona almeno un destinatario per il documento condiviso.");if(!file&&!normalizeUrl(old))throw new Error("Seleziona un file.");const uploaded=await upload(file),reminder=$("document-expiration").value?new Date(new Date(`${$("document-expiration").value}T12:00:00`).getTime()-7*86400000).toISOString().slice(0,10):"";const data={name:$("document-name").value.trim(),category:$("document-category").value.trim(),description:$("document-description").value.trim(),visibility:vis,ownerUserId:old.ownerUserId||uid(),sharedUserIds:vis==="shared"?shared:[],sharedTeamIds:old.sharedTeamIds||[],sharedToAll:vis!=="personal"&&(vis==="global"||all),authorizedUserIds:vis==="personal"?[uid()]:shared,commessaIds:[...state.selectedCommesse],expirationDate:$("document-expiration").value,reminderDate:reminder,reminderDaysBefore:7,reminderEnabled:Boolean(reminder),favoriteBy:$("document-favorite").checked?[...new Set([...(old.favoriteBy||[]),uid()])]:(old.favoriteBy||[]).filter(x=>x!==uid()),originalFileName:file?.name||old.originalFileName||old.fileName||"",storedFileName:old.storedFileName||file?.name||"",fileExtension:file?.name.split(".").pop().toLowerCase()||old.fileExtension||extension(old),fileType:file?.type||old.fileType||"",mimeType:file?.type||old.mimeType||"",fileSize:file?.size||old.fileSize||0,fileUrl:uploaded.fileUrl||old.fileUrl||"",fileId:uploaded.fileId||old.fileId||old.driveFileId||"",storagePath:uploaded.storagePath||old.storagePath||"",createdBy:old.createdBy||uid(),updatedBy:uid(),createdAt:old.createdAt||serverTime(),updatedAt:serverTime(),uploadStatus:"completed",status:"active"};data.calendarEventId=await syncExpiration(id,data,old);await ref.set(data,{merge:true});dialog.close();}catch(error){console.error("Document save failed",error);$("document-form-feedback").textContent=error.message||"Caricamento non riuscito. Il documento non è stato salvato.";}finally{state.saving=false;button.disabled=false;}});
+  async function act(card,action){const d=[...state.documents,...state.legacy.map(normalizeLegacy)].find(x=>x.id===card.dataset.documentId);if(!d)return;document.querySelectorAll(".document-actions").forEach(m=>{if(m!==card.querySelector(".document-actions"))m.classList.add("hidden")});if(action==="menu")return card.querySelector(".document-actions").classList.toggle("hidden");card.querySelector(".document-actions")?.classList.add("hidden");if(action==="open")return openViewer(d);if(action==="download")return download(d).catch(e=>{console.error(e);alert("Download non riuscito. Controlla la connessione e riprova.");});if(action==="edit")return openForm(d);if(action==="commesse")return alert(ids(d).map(commessaName).filter(Boolean).join("\n")||"Nessuna commessa visibile.");if(action==="favorite"&&!d.legacy)return db.collection("documents").doc(d.id).update({favoriteBy:(d.favoriteBy||[]).includes(uid())?firebase.firestore.FieldValue.arrayRemove(uid()):firebase.firestore.FieldValue.arrayUnion(uid()),updatedAt:serverTime()});if(action==="delete"&&confirm(`Vuoi eliminare definitivamente il documento ‘${d.name}’?`)){await eventRef(d.id).delete().catch(()=>{});await db.collection("documentReminderAcknowledgements").where("documentId","==",d.id).get().then(s=>Promise.all(s.docs.map(x=>x.ref.delete()))).catch(()=>{});await db.collection("documents").doc(d.id).delete();}}
+  page.addEventListener("click",e=>{const tab=e.target.closest("[data-doc-tab]");if(tab){state.tab=tab.dataset.docTab;state.commessaOnly="";render();return;}const fil=e.target.closest("[data-doc-filter]");if(fil){state.filter=fil.dataset.docFilter;render();return;}if(e.target.closest("[data-empty-new]"))return openForm();const action=e.target.closest("[data-doc-action]");if(action){e.stopPropagation();return act(action.closest(".document-card"),action.dataset.docAction);}const card=e.target.closest(".document-card");if(card)act(card,"open");});
+  page.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("document-card")){e.preventDefault();act(e.target,"open");}});document.addEventListener("click",e=>{if(!e.target.closest(".document-card"))document.querySelectorAll(".document-actions").forEach(x=>x.classList.add("hidden"));});
+  $("document-file").addEventListener("change",e=>previewFile(e.target.files[0]));$("document-camera").addEventListener("change",e=>previewFile(e.target.files[0]));$("document-file-preview").addEventListener("click",e=>{if(e.target.closest("[data-remove-file]")){$("document-file").value="";$("document-camera").value="";$("document-file-preview").textContent="Nessun file selezionato.";}});$("document-commesse-open").onclick=()=>{renderCommesse();$("document-commesse-dialog").showModal?.();};$("document-commesse-search").oninput=renderCommesse;$("document-commesse-list").onchange=e=>{e.target.checked?state.selectedCommesse.add(e.target.value):state.selectedCommesse.delete(e.target.value);selectionSummary();};$("document-commesse-all").onclick=()=>{state.commesse.forEach(c=>state.selectedCommesse.add(c.id));renderCommesse();};$("document-commesse-none").onclick=()=>{state.selectedCommesse.clear();renderCommesse();};$("document-commesse-confirm").onclick=selectionSummary;
+  $("document-viewer-back").onclick=()=>$("document-viewer").close();$("document-viewer-download").onclick=()=>download(state.viewerDoc).catch(()=>alert("Download non riuscito. Controlla la connessione e riprova."));$("document-viewer-external").onclick=()=>{const u=normalizeUrl(state.viewerDoc);if(u)window.open(u,"_blank","noopener,noreferrer");else showOpenError(state.viewerDoc,"invalid URL");};$("document-viewer-content").onclick=e=>{if(e.target.closest("[data-viewer-download]"))download(state.viewerDoc);if(e.target.closest("[data-viewer-external]"))$("document-viewer-external").click();};let zoom=1;const setZoom=n=>{zoom=Math.max(.5,Math.min(3,n));const media=$("document-viewer-content").querySelector("img,object");if(media)media.style.transform=`scale(${zoom})`;};$("document-viewer-zoom-in").onclick=()=>setZoom(zoom+.25);$("document-viewer-zoom-out").onclick=()=>setZoom(zoom-.25);$("document-error-close").onclick=()=>$("document-error-dialog").close();$("document-error-retry").onclick=()=>{$("document-error-dialog").close();openViewer(state.viewerDoc);};
+  $("documents-search").oninput=e=>{state.query=e.target.value;render();};$("documents-new-btn").onclick=()=>openForm();$("document-dialog-close").onclick=()=>dialog.close();$("document-cancel").onclick=()=>dialog.close();form.addEventListener("change",e=>{if(e.target.name==="document-visibility")$("document-recipients").classList.toggle("hidden",e.target.value!=="shared");});$("open-private-docs-upload-btn")?.addEventListener("click",()=>setTimeout(()=>openForm(),80));$("commessa-documents-btn")?.addEventListener("click",()=>{const m=location.hash.match(/commessa=([^&]+)/);state.commessaOnly=m?decodeURIComponent(m[1]):"";state.tab="global";$("open-private-docs-btn")?.click();setTimeout(render,60);});
+  function subscribe(user){state.unsubs.splice(0).forEach(f=>f());state.user=user;if(!user)return render();const merge=new Map(),watch=q=>state.unsubs.push(q.onSnapshot(s=>{s.docChanges().forEach(c=>c.type==="removed"?merge.delete(c.doc.id):merge.set(c.doc.id,{id:c.doc.id,...c.doc.data()}));state.documents=[...merge.values()];render();},e=>console.error("Document query failed",e)));watch(db.collection("documents").where("ownerUserId","==",user.uid));watch(db.collection("documents").where("visibility","==","shared").where("sharedUserIds","array-contains",user.uid));watch(db.collection("documents").where("visibility","==","shared").where("sharedToAll","==",true));watch(db.collection("documents").where("visibility","==","global"));state.unsubs.push(db.collection("privateDocuments").doc(user.uid).collection("items").onSnapshot(s=>{state.legacy=s.docs.map(x=>({id:x.id,...x.data()}));render();}));loadReferences().then(render);}
+  const online=()=>$("documents-offline").classList.toggle("hidden",navigator.onLine);window.addEventListener("online",online);window.addEventListener("offline",online);online();render();auth.onAuthStateChanged(subscribe);window.HeraDocuments={open:(o={})=>{state.commessaOnly=o.commessaId||"";state.tab=o.visibility||"global";$("open-private-docs-btn")?.click();setTimeout(()=>o.create?openForm():render(),50);}};
 })();

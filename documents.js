@@ -4,6 +4,10 @@
   const page = $("private-docs-page"), list = $("private-docs-list"), dialog = $("document-dialog"), form = $("document-form");
   if (!page || !list || !dialog || !form || !window.firebase?.firestore) return;
   const db = firebase.firestore(), auth = firebase.auth(), storage = firebase.storage?.(), serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
+  // The SDK otherwise retries some Storage failures for up to ten minutes while
+  // leaving the UI at 0%. Keep retries bounded; uploadStorage also has an idle watchdog.
+  storage?.setMaxUploadRetryTime?.(30000);
+  storage?.setMaxOperationRetryTime?.(15000);
   const state = {user:null,tab:"personal",filter:"all",query:"",documents:[],legacy:[],commesse:[],users:[],unsubs:[],commessaOnly:"",selectedCommesse:new Set(),viewerDoc:null,saving:false};
   const filters = [["all","Tutti"],["pdf","PDF"],["photo","Foto"],["word","Word"],["excel","Excel"],["expiration","Con scadenza"],["expired","Scaduti"],["soon","In scadenza"],["favorite","Preferiti"],["commessa","Collegati a commessa"]];
   const allowedExtensions = new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx","csv","txt","ppt","pptx"]);
@@ -81,7 +85,8 @@
     if(code.includes("unauth")||message.includes("sessione"))return "Sessione non valida. Accedi nuovamente e riprova.";
     if(code.includes("unauthorized")||code.includes("permission-denied"))return "Non hai il permesso di caricare questo documento.";
     if(code.includes("quota-exceeded")||code.includes("resource-exhausted"))return "Lo spazio disponibile non è sufficiente oppure il servizio non è momentaneamente disponibile.";
-    if(code.includes("network")||message.includes("offline"))return "Connessione assente o instabile. Controlla Internet e riprova.";
+    if(code.includes("bucket-not-found")||code.includes("project-not-found")||code.includes("storage/unavailable"))return "L’archivio documenti non è disponibile. Contatta l’amministratore.";
+    if(code.includes("retry-limit")||code.includes("upload-timeout")||code.includes("network")||message.includes("offline"))return "Il caricamento non risponde. Controlla la connessione e riprova.";
     if(code.includes("invalid-argument")||code.includes("empty-file"))return "Alcuni dati del documento non sono validi.";
     return "Si è verificato un errore durante il salvataggio del documento. Riprova.";
   }
@@ -90,8 +95,17 @@
     if(!storage)throw documentError("storage/unavailable","Firebase Storage non è disponibile.");
     const storedFileName=sanitizeFileName(file.name,documentId,file.type),storagePath=`documents/${ownerUserId}/${documentId}/${storedFileName}`,reference=storage.ref(storagePath);
     const task=reference.put(file,{contentType:file.type||"application/octet-stream",customMetadata:{documentId,ownerUserId}});
-    await new Promise((resolve,reject)=>task.on("state_changed",snap=>onProgress?.(snap.totalBytes?snap.bytesTransferred/snap.totalBytes*100:0),reject,resolve));
-    const fileUrl=await reference.getDownloadURL();if(!fileUrl)throw documentError("storage/object-not-found","File caricato ma non disponibile.");
+    await new Promise((resolve,reject)=>{
+      let settled=false,lastBytes=-1,timer;
+      const finish=callback=>value=>{if(settled)return;settled=true;clearTimeout(timer);callback(value);};
+      const fail=finish(reject),done=finish(resolve);
+      const armWatchdog=()=>{clearTimeout(timer);timer=setTimeout(()=>{task.cancel();fail(documentError("storage/upload-timeout","Firebase Storage non ha avviato il trasferimento entro il tempo previsto."));},30000);};
+      armWatchdog();
+      task.on("state_changed",snap=>{if(snap.bytesTransferred!==lastBytes){lastBytes=snap.bytesTransferred;armWatchdog();}onProgress?.(snap.totalBytes?snap.bytesTransferred/snap.totalBytes*100:0);},fail,done);
+    });
+    let fileUrl;
+    try{fileUrl=await reference.getDownloadURL();}catch(error){await reference.delete().catch(()=>{});throw error;}
+    if(!fileUrl){await reference.delete().catch(()=>{});throw documentError("storage/object-not-found","File caricato ma non disponibile.");}
     return {fileUrl,storagePath,storedFileName,reference};
   }
   async function removeStoragePath(path){if(path&&storage&&String(path).startsWith("documents/"))await storage.ref(path).delete();}

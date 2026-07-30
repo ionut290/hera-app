@@ -136,12 +136,22 @@
   }
 
   async function open(type) {
-    const config = await load(type);
-    if (!config.sheetUrl) return link(type);
-    const url = clean(config.sheetUrl);
-    if (!/^https:\/\/docs\.google\.com\/spreadsheets\//i.test(url)) throw new Error("Il collegamento del Foglio Google non è valido. Collegalo nuovamente.");
-    const popup = window.open(url, "_blank", "noopener,noreferrer");
-    if (!popup) throw new Error("Il browser ha bloccato l’apertura del Foglio Google. Consenti i popup per questa app.");
+    const pendingTab = window.open("", "_blank");
+    if (!pendingTab) throw new Error("Il browser ha bloccato l’apertura del Foglio Google. Consenti i popup per questa app.");
+    try {
+      pendingTab.opener = null;
+      const config = await load(type);
+      if (!config.sheetUrl) {
+        pendingTab.close();
+        return link(type);
+      }
+      const url = clean(config.sheetUrl);
+      if (!/^https:\/\/docs\.google\.com\/spreadsheets\//i.test(url)) throw new Error("Il collegamento del Foglio Google non è valido. Collegalo nuovamente.");
+      pendingTab.location.replace(url);
+    } catch (error) {
+      try { pendingTab.close(); } catch (_) {}
+      throw error;
+    }
   }
 
   const run = (operation) => void operation().catch((error) => alert(friendlyError(error)));

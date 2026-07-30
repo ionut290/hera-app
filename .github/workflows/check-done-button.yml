@@ -1,12 +1,31 @@
 name: Check FATTO and Whazzup
 
 on:
-  pull_request:
+  push:
+    branches:
+      - main
     paths:
       - "app.js"
+      - "index.html"
+      - "sw.js"
       - "native-android-runtime.js"
       - "fatto-button-immediate.js"
       - "done-button-fix.js"
+      - "android/app/src/main/java/it/vargacantieri/hera/whatsapp/**"
+      - "scripts/check-done-button-*.js"
+      - "scripts/check-android-done-push.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/check-done-button.yml"
+  pull_request:
+    paths:
+      - "app.js"
+      - "index.html"
+      - "sw.js"
+      - "native-android-runtime.js"
+      - "fatto-button-immediate.js"
+      - "done-button-fix.js"
+      - "android/app/src/main/java/it/vargacantieri/hera/whatsapp/**"
       - "scripts/check-done-button-*.js"
       - "scripts/check-android-done-push.js"
       - "package.json"
@@ -16,6 +35,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: fatto-whazzup-critical-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -36,8 +59,4 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify FATTO and Whazzup
-        run: |
-          npm run check:syntax
-          npm run check:done-button
-          npm run check:done-button-behavior
-          npm run check:android-done-push
+        run: npm run check:fatto-critical

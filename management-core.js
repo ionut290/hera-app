@@ -29,7 +29,7 @@
     return values;
   }
   function identify(row, records, type) {
-    const fields = type === "personale" ? [["ID_OPERATORE","id"],["CODICE_OPERATORE","codiceOperatore"],["EMAIL_ACCESSO_APP","emailAccessoApp"]] : [["ID_MEZZO","id"],["CODICE_MEZZO","codiceMezzo"],["TARGA","targa"]];
+    const fields = type === "personale" ? [["ID_OPERATORE","id"],["CODICE_OPERATORE","codiceOperatore"],["EMAIL_ACCESSO_APP","emailAccessoApp"],["EMAIL","email"]] : [["ID_MEZZO","id"],["CODICE_MEZZO","codiceMezzo"],["TARGA","targa"]];
     for (const [column, field] of fields) {
       const value = key(row[column]);
       if (!value) continue;

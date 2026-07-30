@@ -64,6 +64,21 @@ function allowedEmails() {
 
 function validatePayload(payload) {
   const action = String(payload?.action || "");
+  if (action === "createRegistrySpreadsheet") {
+    const registry = ["personale", "mezzi"].includes(String(payload.registry)) ? String(payload.registry) : "";
+    const sheetNames = Array.isArray(payload.sheetNames) ? payload.sheetNames.map(String) : [];
+    if (!registry || !["PERSONALE", "MEZZI", "COMMESSE_PERSONALE", "COMMESSE_MEZZI", "LOG_SINCRONIZZAZIONE"].every((name) => sheetNames.includes(name))) throw new Error("Configurazione matrice Google non valida.");
+    const sheetUrl = String(payload.sheetUrl || "").trim();
+    return { action, registry, sheetNames, sheetUrl, spreadsheetId: sheetUrl ? validateGoogleSheetUrl(sheetUrl) : "" };
+  }
+  if (action === "syncRegistrySpreadsheet") {
+    const spreadsheetId = validateGoogleSheetUrl(payload.sheetUrl);
+    if (String(payload.spreadsheetId || spreadsheetId) !== spreadsheetId) throw new Error("Il link e l'ID del foglio non coincidono.");
+    const sheets = payload.sheets && typeof payload.sheets === "object" ? payload.sheets : {};
+    const required = ["PERSONALE", "MEZZI", "COMMESSE_PERSONALE", "COMMESSE_MEZZI", "LOG_SINCRONIZZAZIONE"];
+    if (!required.every((name) => Array.isArray(sheets[name])) || Object.values(sheets).some((rows) => rows.length > MAX_ROWS)) throw new Error("Fogli registro non validi.");
+    return { action, registry: String(payload.registry || ""), spreadsheetId, sheetUrl: payload.sheetUrl, sheets, conflictPolicy: payload.conflictPolicy === "APP_WINS" ? "APP_WINS" : "LATEST_WINS", noAutomaticDeletion: true };
+  }
   if (action === "createSpreadsheet") {
     const headers = Array.isArray(payload.headers) ? payload.headers.map((value) => String(value ?? "")) : [];
     if (!String(payload.commessaId || "").trim()) throw new Error("ID commessa mancante.");
@@ -147,7 +162,9 @@ exports.handler = async (event) => {
       sheetName: result.sheetName || "",
       spreadsheetId: result.spreadsheetId || payload.spreadsheetId,
       sheetUrl: result.sheetUrl || "",
-      gid: String(result.gid ?? payload.gid ?? "0")
+      gid: String(result.gid ?? payload.gid ?? "0"),
+      incoming: result.incoming || {},
+      conflicts: result.conflicts || []
     });
   } catch (error) {
     console.error("Sincronizzazione Google Sheet non riuscita:", error);

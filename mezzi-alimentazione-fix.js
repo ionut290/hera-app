@@ -81,7 +81,7 @@
   // Mantiene separata e protetta la logica del riepilogo Oggi: ore live e mezzi della squadra.
   if (!document.querySelector('script[data-today-live-hours-vehicles]')) {
     const script = document.createElement("script");
-    script.src = "./today-live-hours-vehicles.js?v=20260730a";
+    script.src = "./today-live-hours-vehicles.js?v=20260730b";
     script.defer = true;
     script.dataset.todayLiveHoursVehicles = "1";
     document.head.appendChild(script);

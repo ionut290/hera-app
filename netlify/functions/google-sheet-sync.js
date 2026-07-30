@@ -77,7 +77,16 @@ function validatePayload(payload) {
     const sheets = payload.sheets && typeof payload.sheets === "object" ? payload.sheets : {};
     const required = ["PERSONALE", "MEZZI", "COMMESSE_PERSONALE", "COMMESSE_MEZZI", "LOG_SINCRONIZZAZIONE"];
     if (!required.every((name) => Array.isArray(sheets[name])) || Object.values(sheets).some((rows) => rows.length > MAX_ROWS)) throw new Error("Fogli registro non validi.");
-    return { action, registry: String(payload.registry || ""), spreadsheetId, sheetUrl: payload.sheetUrl, sheets, conflictPolicy: payload.conflictPolicy === "APP_WINS" ? "APP_WINS" : "LATEST_WINS", noAutomaticDeletion: true };
+    return {
+      action,
+      registry: String(payload.registry || ""),
+      spreadsheetId,
+      sheetUrl: payload.sheetUrl,
+      gid: /^\d+$/.test(String(payload.gid || "0")) ? String(payload.gid || "0") : "0",
+      sheets,
+      conflictPolicy: payload.conflictPolicy === "APP_WINS" ? "APP_WINS" : "LATEST_WINS",
+      noAutomaticDeletion: true
+    };
   }
   if (action === "createSpreadsheet") {
     const headers = Array.isArray(payload.headers) ? payload.headers.map((value) => String(value ?? "")) : [];
@@ -146,6 +155,84 @@ async function callAppsScript(payload, user) {
   }
 }
 
+function registryLabel(registry) {
+  return registry === "mezzi" ? "Registro Mezzi" : "Registro Personale";
+}
+
+function isLegacyRegistryDeploymentError(error) {
+  const message = String(error?.message || "");
+  return /ID Google Sheet non valido|Azione non supportata|Intestazioni mancanti/i.test(message);
+}
+
+function legacyRegistryRows(payload) {
+  const primary = payload.registry === "mezzi" ? "MEZZI" : "PERSONALE";
+  const sourceRows = Array.isArray(payload.sheets?.[primary]) ? payload.sheets[primary] : [];
+  const headerSet = new Set(["SYNC_KEY", "IMPIANTO_KEY"]);
+  sourceRows.forEach((row) => Object.keys(row || {}).forEach((key) => headerSet.add(String(key))));
+  const headers = Array.from(headerSet).slice(0, MAX_COLUMNS);
+  const rows = sourceRows.map((row) => {
+    const recordId = String(row?.RECORD_ID || row?.ID_OPERATORE || row?.ID_MEZZO || "");
+    return headers.map((header) => {
+      if (header === "SYNC_KEY" || header === "IMPIANTO_KEY") return recordId;
+      return row?.[header] ?? "";
+    });
+  });
+  return { primary, headers, rows };
+}
+
+async function callAppsScriptWithRegistryCompatibility(payload, user) {
+  try {
+    return { ...(await callAppsScript(payload, user)), legacyMode: false };
+  } catch (error) {
+    if (!isLegacyRegistryDeploymentError(error)) throw error;
+
+    if (payload.action === "createRegistrySpreadsheet") {
+      const result = await callAppsScript({
+        action: "createSpreadsheet",
+        commessaId: `registry-${payload.registry}`,
+        commessaName: registryLabel(payload.registry),
+        headers: [
+          "SYNC_KEY",
+          "IMPIANTO_KEY",
+          "RECORD_ID",
+          "UPDATED_AT",
+          "UPDATED_BY",
+          "SYNC_VERSION",
+          "SYNC_SOURCE",
+          "ROW_STATUS"
+        ]
+      }, user);
+      return { ...result, legacyMode: true };
+    }
+
+    if (payload.action === "syncRegistrySpreadsheet") {
+      const legacy = legacyRegistryRows(payload);
+      const result = await callAppsScript({
+        action: "replaceRows",
+        spreadsheetId: payload.spreadsheetId,
+        sheetUrl: payload.sheetUrl,
+        gid: payload.gid || "0",
+        headers: legacy.headers,
+        rows: legacy.rows,
+        commessaId: `registry-${payload.registry}`,
+        commessaName: registryLabel(payload.registry),
+        operationId: `registry-${payload.registry}-${Date.now()}`
+      }, user);
+      return {
+        ...result,
+        spreadsheetId: payload.spreadsheetId,
+        sheetUrl: payload.sheetUrl,
+        incoming: {},
+        conflicts: [],
+        rowsWritten: legacy.rows.length,
+        legacyMode: true
+      };
+    }
+
+    throw error;
+  }
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return json(204, {});
   if (event.httpMethod !== "POST") return json(405, { ok: false, error: "Metodo non consentito." });
@@ -155,16 +242,17 @@ exports.handler = async (event) => {
     const email = String(user.email || "").toLowerCase();
     if (allowlist.size && !allowlist.has(email)) throw new Error("Utente non autorizzato alla scrittura del Google Sheet.");
     const payload = validatePayload(parseBody(event));
-    const result = await callAppsScript(payload, user);
+    const result = await callAppsScriptWithRegistryCompatibility(payload, user);
     return json(200, {
       ok: true,
       rowsWritten: Number(result.rowsWritten) || (Array.isArray(payload.rows) ? payload.rows.length : 0),
       sheetName: result.sheetName || "",
       spreadsheetId: result.spreadsheetId || payload.spreadsheetId,
-      sheetUrl: result.sheetUrl || "",
+      sheetUrl: result.sheetUrl || payload.sheetUrl || "",
       gid: String(result.gid ?? payload.gid ?? "0"),
       incoming: result.incoming || {},
-      conflicts: result.conflicts || []
+      conflicts: result.conflicts || [],
+      legacyMode: result.legacyMode === true
     });
   } catch (error) {
     console.error("Sincronizzazione Google Sheet non riuscita:", error);
@@ -178,3 +266,4 @@ exports.handler = async (event) => {
 
 exports.validatePayload = validatePayload;
 exports.validateGoogleSheetUrl = validateGoogleSheetUrl;
+exports.legacyRegistryRows = legacyRegistryRows;

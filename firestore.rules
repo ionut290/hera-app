@@ -263,6 +263,8 @@ service cloud.firestore {
         && request.resource.data.ownerUserId == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.visibility in ["personal", "shared", "global"]
+        && request.resource.data.commessaIds is list
+        && request.resource.data.uploadStatus in ["uploading", "completed", "failed"]
         && (request.resource.data.visibility != "personal" || (
           request.resource.data.sharedToAll == false
           && request.resource.data.sharedUserIds.size() == 0
@@ -270,6 +272,8 @@ service cloud.firestore {
       allow update: if ownsDocument(resource.data)
         && request.resource.data.ownerUserId == resource.data.ownerUserId
         && request.resource.data.visibility in ["personal", "shared", "global"]
+        && request.resource.data.commessaIds is list
+        && request.resource.data.uploadStatus in ["uploading", "completed", "failed"]
         && (request.resource.data.visibility != "personal" || (
           request.resource.data.sharedToAll == false
           && request.resource.data.sharedUserIds.size() == 0

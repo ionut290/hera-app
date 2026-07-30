@@ -3,6 +3,7 @@
   const PHONE = "393892352575";
   const WAIT_MS = 60000;
   const PENDING = new Set(["in_attesa", "richiesta_inviata"]);
+  const ACTIVE = new Set(["attivo", "active", "approved", "autorizzato", "abilitato"]);
   let db;
   let auth;
   let user;
@@ -12,7 +13,24 @@
 
   const el = (id) => document.getElementById(id);
   const serverTime = () => firebase.firestore.FieldValue.serverTimestamp();
-  const statusOf = (data) => String(data?.statoAccount || data?.accountStatus || (data?.banned ? "bloccato" : "attivo"));
+  const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
+  const hasExplicitStatus = (data) => Boolean(
+    data && (
+      Object.prototype.hasOwnProperty.call(data, "statoAccount") ||
+      Object.prototype.hasOwnProperty.call(data, "accountStatus") ||
+      Object.prototype.hasOwnProperty.call(data, "banned")
+    )
+  );
+  const statusOf = (data) => {
+    if (!data) return "in_attesa";
+    if (data.banned === true) return "bloccato";
+    const explicit = normalizeStatus(data.statoAccount || data.accountStatus);
+    if (explicit) return explicit;
+    // Compatibilità utenti storici: i profili già esistenti senza i nuovi campi
+    // di autorizzazione devono continuare a essere considerati attivi.
+    return "attivo";
+  };
+  const isAllowedStatus = (status) => ACTIVE.has(normalizeStatus(status));
   const splitName = (firebaseUser) => {
     const parts = String(firebaseUser.displayName || "").trim().split(/\s+/).filter(Boolean);
     return { nome: parts[0] || "", cognome: parts.slice(1).join(" "), nomeCompleto: parts.join(" ") || firebaseUser.email || "Utente" };
@@ -28,6 +46,12 @@
     if (unsubscribe) unsubscribe();
     unsubscribe = null;
     clearInterval(cooldownTimer);
+  }
+
+  function hide() {
+    const screen = el("access-approval-screen");
+    document.body.classList.remove("access-approval-locked");
+    screen?.classList.add("hidden");
   }
 
   function show(state, message = "") {
@@ -57,7 +81,18 @@
     const ref = db.collection("platformUsers").doc(firebaseUser.uid);
     return db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
-      if (snapshot.exists) return snapshot.data() || {};
+      if (snapshot.exists) {
+        const existing = snapshot.data() || {};
+        if (!hasExplicitStatus(existing)) {
+          transaction.update(ref, {
+            statoAccount: "attivo",
+            accountStatus: "attivo",
+            legacyAuthorized: true
+          });
+          return { ...existing, statoAccount: "attivo", accountStatus: "attivo", legacyAuthorized: true };
+        }
+        return existing;
+      }
       const names = splitName(firebaseUser);
       const created = {
         uid: firebaseUser.uid, email: firebaseUser.email || "", displayName: names.nomeCompleto,
@@ -79,7 +114,7 @@
       if (!snapshot.exists) return;
       profile = { id: snapshot.id, ...(snapshot.data() || {}) };
       const status = statusOf(profile);
-      if (status === "attivo") {
+      if (isAllowedStatus(status)) {
         stop();
         el("access-approval-feedback").textContent = "Accesso autorizzato";
         setTimeout(() => window.location.reload(), 700);
@@ -89,13 +124,13 @@
 
   async function verify(firebaseUser) {
     db = firebase.firestore(); auth = firebase.auth(); user = firebaseUser;
-    show("checking");
+    hide();
     try {
       profile = { id: user.uid, ...(await ensureProfile(user)) };
       const status = statusOf(profile);
-      const allowed = status === "attivo";
+      const allowed = isAllowedStatus(status);
       if (!allowed) { show(status); listen(); }
-      else document.body.classList.remove("access-approval-locked");
+      else hide();
       return { allowed, profile, status };
     } catch (error) {
       console.error("Verifica autorizzazione fallita", error);
@@ -138,8 +173,13 @@
 
   async function refresh() {
     show("checking");
-    try { const snapshot = await db.collection("platformUsers").doc(user.uid).get({ source: "server" }); profile = snapshot.data(); show(statusOf(profile)); }
-    catch (_) { show("error"); }
+    try {
+      const snapshot = await db.collection("platformUsers").doc(user.uid).get({ source: "server" });
+      profile = snapshot.data();
+      const status = statusOf(profile);
+      if (isAllowedStatus(status)) hide();
+      else show(status);
+    } catch (_) { show("error"); }
   }
 
   async function decide(uid, decision) {

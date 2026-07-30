@@ -1573,7 +1573,7 @@ const MENU_HOWTO_CONTENT = {
   "open-private-docs-btn": {
     rispostaBreve: "Area personale per caricare e consultare documenti individuali.",
     passi: [
-      "Apri il menu (⋮) e premi “Documenti personali”.",
+      "Apri il menu (⋮) e premi “Documenti”.",
       "Compila nome/note e allega file o foto.",
       "Salva e verifica la presenza del documento nell'elenco."
     ],
@@ -5198,7 +5198,7 @@ function buildHowtoFaqItems() {
 
 function openPrivateDocsPage() {
   if (!currentUser) {
-    alert("Devi fare login per usare i documenti personali.");
+    alert("Devi fare login per usare i documenti.");
     return;
   }
   window.location.hash = "documenti";
@@ -5332,8 +5332,14 @@ function formatPersonalHours(hours) {
 function subscribeCalendarEvents() {
   if (!currentUser || !db || unsubscribeCalendarEvents) return;
   if (ui.calendarFeedback) ui.calendarFeedback.textContent = "Caricamento eventi...";
-  unsubscribeCalendarEvents = db.collection("calendarEvents").onSnapshot((snapshot) => {
-    calendarEvents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const visibleEvents = new Map();
+  const subscriptions = [];
+  const applySnapshot = (snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === "removed") visibleEvents.delete(change.doc.id);
+      else visibleEvents.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+    });
+    calendarEvents = Array.from(visibleEvents.values());
     calendarAbsenceCache.clear();
     if (ui.calendarFeedback) {
       ui.calendarFeedback.textContent = calendarEvents.length
@@ -5341,10 +5347,20 @@ function subscribeCalendarEvents() {
         : "Nessun evento inserito.";
     }
     renderCalendar();
-  }, (error) => {
+  };
+  const handleError = (error) => {
     console.error("Errore caricamento calendario condiviso:", error);
     if (ui.calendarFeedback) ui.calendarFeedback.textContent = "Impossibile caricare gli eventi. Verifica la connessione e i permessi.";
-  });
+  };
+  // Keep private document expirations out of the broad shared-calendar query.
+  // Firestore then validates each privacy-scoped query against the same rules used
+  // for direct reads, so an administrator cannot enumerate personal expirations.
+  const events = db.collection("calendarEvents");
+  subscriptions.push(events.where("type", "!=", "SCADENZA_DOCUMENTO").onSnapshot(applySnapshot, handleError));
+  subscriptions.push(events.where("ownerUserId", "==", currentUser.uid).onSnapshot(applySnapshot, handleError));
+  subscriptions.push(events.where("authorizedUserIds", "array-contains", currentUser.uid).onSnapshot(applySnapshot, handleError));
+  subscriptions.push(events.where("sharedToAll", "==", true).onSnapshot(applySnapshot, handleError));
+  unsubscribeCalendarEvents = () => subscriptions.forEach((unsubscribe) => unsubscribe());
 }
 
 function stopCalendarEventsSubscription() {
@@ -5512,6 +5528,7 @@ function showCalendarToday() {
 }
 
 function canModifyCalendarEvent(event) {
+  if (event?.type === "SCADENZA_DOCUMENTO") return Boolean(currentUser && String(event?.ownerUserId || "") === String(currentUser.uid || ""));
   return Boolean(currentUser && (canManageData() || String(event?.createdByUid || "") === String(currentUser.uid || "")));
 }
 
@@ -5538,7 +5555,8 @@ function renderCalendarSelectedDay() {
     return;
   }
   ui.calendarDayEvents.innerHTML = events.map((event) => {
-    const type = CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro;
+    const isDocumentExpiration = event.type === "SCADENZA_DOCUMENTO";
+    const type = isDocumentExpiration ? { icon: "📄", label: "Scadenza documento" } : (CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro);
     const mayModify = canModifyCalendarEvent(event);
     const safeLink = /^https?:\/\//i.test(String(event.link || "")) ? String(event.link) : "";
     const detailRows = [
@@ -5554,7 +5572,7 @@ function renderCalendarSelectedDay() {
           <span class="calendar-event-icon" aria-hidden="true">${type.icon}</span>
           <div>
             <span class="calendar-event-type">${escapeHTML(type.label)}</span>
-            <h3>${escapeHTML(event.title || "Evento")}</h3>
+            <h3>${escapeHTML(isDocumentExpiration ? (event.compactTitle || event.title || "Documento") : (event.title || "Evento"))}</h3>
             <p class="calendar-event-period">${escapeHTML(formatCalendarEventPeriod(event))}</p>
           </div>
         </div>
@@ -5563,8 +5581,8 @@ function renderCalendarSelectedDay() {
           <span>Inserito da <strong>${escapeHTML(event.createdByName || event.createdByEmail || "Utente")}</strong></span>
           ${mayModify ? `
             <span class="calendar-event-actions">
-              <button class="btn" type="button" data-calendar-edit="${escapeHTML(event.id)}">Modifica</button>
-              <button class="btn btn-danger" type="button" data-calendar-delete="${escapeHTML(event.id)}">Elimina</button>
+              ${isDocumentExpiration ? `<button class="btn" type="button" data-calendar-document="${escapeHTML(event.documentId || "")}">Apri documento</button>` : `<button class="btn" type="button" data-calendar-edit="${escapeHTML(event.id)}">Modifica</button>`}
+              ${isDocumentExpiration ? "" : `<button class="btn btn-danger" type="button" data-calendar-delete="${escapeHTML(event.id)}">Elimina</button>`}
             </span>
           ` : ""}
         </div>
@@ -5576,6 +5594,9 @@ function renderCalendarSelectedDay() {
       const event = calendarEvents.find((item) => item.id === button.dataset.calendarEdit);
       if (event) openCalendarEventForm(event.startDate, event);
     });
+  });
+  ui.calendarDayEvents.querySelectorAll("[data-calendar-document]").forEach((button) => {
+    button.addEventListener("click", () => window.HeraDocuments?.open({ visibility: "personal" }));
   });
   ui.calendarDayEvents.querySelectorAll("[data-calendar-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteCalendarEvent(button.dataset.calendarDelete || ""));
@@ -13051,19 +13072,10 @@ function stopResourcesSubscription() {
 }
 
 function subscribePrivateDocs() {
-  if (!currentUser) return;
-  unsubscribePrivateDocs = db
-    .collection("privateDocuments")
-    .doc(currentUser.uid)
-    .collection("items")
-    .orderBy("createdAt", "desc")
-    .onSnapshot((snapshot) => {
-      privateDocsRecords = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderPrivateDocsList();
-    }, (error) => {
-      console.error("Errore caricamento documenti personali:", error);
-      ui.privateDocsFeedback.textContent = "Errore caricamento documenti personali.";
-    });
+  // The document archive owns both the new privacy-scoped queries and the
+  // historical per-user subscription (documents.js). Keeping the former broad
+  // renderer active here would overwrite the tabbed archive with the legacy list.
+  return undefined;
 }
 
 function stopPrivateDocsSubscription() {
@@ -13207,7 +13219,7 @@ async function savePrivateDocument(event) {
       fileType = file.type || "application/octet-stream";
       if (useDriveUpload) {
         ui.privateDocsFeedback.textContent = "Caricamento sul cloud centralizzato...";
-        const upload = await uploadBlobToDrive(file, fileName, fileType, driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: "Documenti personali" });
+        const upload = await uploadBlobToDrive(file, fileName, fileType, driveReportsFolderId, { driveType: "DOCUMENTI", commessaName: "Documenti" });
         driveFileId = upload.fileId;
         driveWebViewLink = upload.webViewLink;
       } else {
@@ -13245,7 +13257,7 @@ async function deletePrivateDocument(docId) {
 function renderPrivateDocsList() {
   if (!ui.privateDocsList) return;
   if (!currentUser) {
-    ui.privateDocsList.innerHTML = "<p class='muted'>Fai login per usare i documenti personali.</p>";
+    ui.privateDocsList.innerHTML = "<p class='muted'>Fai login per usare i documenti.</p>";
     return;
   }
   if (!privateDocsRecords.length) {

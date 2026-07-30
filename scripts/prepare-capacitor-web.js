@@ -38,7 +38,7 @@ const requiredFiles = [
   "first-login-password.js",
   "login-retry-fix.css",
   "login-retry-fix.js",
-  "private-documents-v2.js",
+  "documents.js",
   "private-documents-v2.css",
   "identity-card-feature.js",
   "identity-card-feature.css",

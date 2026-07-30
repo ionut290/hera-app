@@ -220,7 +220,12 @@ service cloud.firestore {
     }
 
     match /calendarEvents/{eventId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        resource.data.type != "SCADENZA_DOCUMENTO"
+        || resource.data.ownerUserId == request.auth.uid
+        || resource.data.sharedToAll == true
+        || request.auth.uid in resource.data.authorizedUserIds
+      );
       allow create: if signedIn()
         && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.startDate is string
@@ -234,13 +239,57 @@ service cloud.firestore {
           "riunione",
           "formazione",
           "scadenza",
-          "altro"
+          "altro",
+          "SCADENZA_DOCUMENTO"
         ];
       allow update: if signedIn()
         && (isAdmin() || resource.data.createdByUid == request.auth.uid)
         && request.resource.data.createdByUid == resource.data.createdByUid;
       allow delete: if signedIn()
         && (isAdmin() || resource.data.createdByUid == request.auth.uid);
+    }
+
+    match /documents/{documentId} {
+      function ownsDocument(data) {
+        return signedIn() && data.ownerUserId == request.auth.uid;
+      }
+      function canReadDocument(data) {
+        return ownsDocument(data)
+          || (data.visibility == "shared" && (data.sharedToAll == true || request.auth.uid in data.sharedUserIds))
+          || data.visibility == "global";
+      }
+      allow read: if canReadDocument(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.ownerUserId == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.visibility in ["personal", "shared", "global"]
+        && (request.resource.data.visibility != "personal" || (
+          request.resource.data.sharedToAll == false
+          && request.resource.data.sharedUserIds.size() == 0
+        ));
+      allow update: if ownsDocument(resource.data)
+        && request.resource.data.ownerUserId == resource.data.ownerUserId
+        && request.resource.data.visibility in ["personal", "shared", "global"]
+        && (request.resource.data.visibility != "personal" || (
+          request.resource.data.sharedToAll == false
+          && request.resource.data.sharedUserIds.size() == 0
+        ));
+      allow delete: if ownsDocument(resource.data);
+    }
+
+    match /documentReminderAcknowledgements/{acknowledgementId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Historical documents remain in their original path, but only their owner can
+    // read or mutate them. Administrators intentionally receive no exception.
+    match /privateDocuments/{userId}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
     match /posDocuments/{docId} {
@@ -327,7 +376,6 @@ service cloud.firestore {
         "neve_ore_richieste",
         "neve_ore",
         "personale",
-        "privateDocuments",
         "sheetExportQueue",
         "userAlertAcknowledgements",
         "userAlerts",
@@ -336,8 +384,7 @@ service cloud.firestore {
 
       match /{document=**} {
         allow read, write: if signedIn() && collection in [
-          "globalCommesse",
-          "privateDocuments"
+          "globalCommesse"
         ];
       }
     }

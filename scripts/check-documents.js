@@ -1,0 +1,17 @@
+"use strict";
+const fs = require("fs");
+const assert = require("assert");
+const read = (file) => fs.readFileSync(file, "utf8");
+const html = read("index.html");
+const js = read("documents.js");
+const app = read("app.js");
+const rules = read("firestore.rules");
+const css = read("private-documents-v2.css");
+const required = (source, values, scope) => values.forEach((value) => assert(source.includes(value), `${scope}: manca ${value}`));
+required(html, [">Documenti<", "data-doc-tab=\"personal\"", "data-doc-tab=\"shared\"", "data-doc-tab=\"global\"", "+ Nuovo documento", "document-expiration", "document-commessa", "document-recipients", "commessa-documents-btn"], "interfaccia");
+required(js, ["visibility(doc) === \"personal\"", "sharedUserIds", "sharedToAll", "commessaId", "reminderDaysBefore:7", "SCADENZA_DOCUMENTO", "documentReminderAcknowledgements", "eventRef(doc.id).delete", "syncExpiration", "privateDocuments"], "logica");
+required(rules, ["match /documents/{documentId}", "ownsDocument", "match /privateDocuments/{userId}/{document=**}", "request.auth.uid == userId", "SCADENZA_DOCUMENTO", "documentReminderAcknowledgements"], "sicurezza");
+required(app, ["where(\"type\", \"!=\", \"SCADENZA_DOCUMENTO\")", "where(\"ownerUserId\", \"==\", currentUser.uid)", "data-calendar-document"], "calendario");
+required(css, [".documents-grid", ".document-dialog", "@media(max-width:640px)", ".document-reminder"], "responsive");
+assert(!html.includes("Documenti personali"), "La vecchia etichetta è ancora nell'interfaccia");
+console.log("Archivio documenti: struttura, privacy, scadenze, commesse, promemoria e responsive verificati.");

@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v67";
+const CACHE_NAME = "varga-cantieri-shell-v68";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -27,6 +27,8 @@ const APP_SHELL = [
   "./today-live-hours-vehicles.js?v=20260731-codes1",
   "./squad-operator-profile.js?v=20260731a",
   "./fatto-button-immediate.js?v=20260727-fatto2",
+  "./header-menu-runtime.js?v=20260731-header1",
+  "./varga-branding.js?v=20260731a",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",
   "./fuel-stations-search.js",
@@ -131,7 +133,7 @@ function normalizePushPayload(event) {
   const notification = payload.notification || {};
   const data = payload.data || {};
   return {
-    title: payload.title || notification.title || data.title || "Varga Cantieri",
+    title: payload.title || notification.title || data.title || "VARGA CANTIERI",
     body: payload.body || notification.body || data.body || "Nuovo aggiornamento disponibile.",
     destination: data.destination || data.page || data.route || "home",
     url: payload.url || data.url || "./index.html",
@@ -187,7 +189,7 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("sync", (event) => {
   if (event.tag !== "hera-app-background-check") return;
-  event.waitUntil(self.registration.showNotification("Varga Cantieri", {
+  event.waitUntil(self.registration.showNotification("VARGA CANTIERI", {
     body: "Controllo in background completato.",
     icon: "./icons/varga-cantieri-192.png",
     badge: "./icons/varga-cantieri-192.png",

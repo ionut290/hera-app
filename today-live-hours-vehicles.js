@@ -1,6 +1,9 @@
 "use strict";
 
 (() => {
+  if (window.__heraTodayLiveHoursVehiclesInstalled) return;
+  window.__heraTodayLiveHoursVehiclesInstalled = true;
+
   const ROME_TIME_ZONE = "Europe/Rome";
   let minuteTimeout = null;
   let minuteInterval = null;
@@ -229,11 +232,8 @@
     const style = document.createElement("style");
     style.id = "today-live-hours-vehicles-style";
     style.textContent = `
-      #today-mezzi-count{display:none!important}
-      #today-mezzi-action.today-mezzi-inline{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:3px;max-width:100%;line-height:1.05}
-      #today-mezzi-action.today-mezzi-inline .today-vehicle-badge{display:inline-flex;align-items:center;gap:2px;min-height:20px;padding:1px 5px;border:1px solid #cfd9e6;border-radius:7px;background:#f8fafc;color:#172033;font-size:.72rem;font-weight:800;line-height:1;white-space:nowrap;text-transform:none}
-      #today-mezzi-action.today-mezzi-inline .today-vehicle-icon{font-size:.78rem;line-height:1}
-      @media(max-width:480px){#today-mezzi-action.today-mezzi-inline{gap:2px}#today-mezzi-action.today-mezzi-inline .today-vehicle-badge{font-size:.66rem;padding:1px 4px}}
+      #today-mezzi-count{display:block!important;visibility:visible!important;opacity:1!important;width:100%!important;color:#172033!important;font-weight:900!important;text-align:center!important;line-height:1.15!important}
+      @media(max-width:480px){#today-mezzi-count{font-size:.68rem!important}}
     `;
     document.head.appendChild(style);
   }
@@ -265,26 +265,17 @@
 
   function renderAssignedVehicles(assignments) {
     const vehicleButton = getLiveElement("today-mezzi-btn", typeof ui !== "undefined" ? ui.todayMezziBtn : null);
-    const vehicleAction = document.getElementById("today-mezzi-action");
     const vehicleCount = getLiveElement("today-mezzi-count", typeof ui !== "undefined" ? ui.todayMezziCount : null);
-    if (!vehicleButton || !vehicleAction || !vehicleCount) return;
-
-    vehicleCount.textContent = "";
-    vehicleCount.hidden = true;
-    vehicleCount.setAttribute("aria-hidden", "true");
+    if (!vehicleButton || !vehicleCount) return;
 
     const vehicles = getAssignedVehicles(assignments);
-    vehicleAction.classList.toggle("today-mezzi-inline", vehicles.length > 0);
-    if (vehicles.length) {
-      vehicleAction.innerHTML = vehicles.map(renderVehicleBadge).join("");
-      vehicleButton.disabled = false;
-      vehicleButton.setAttribute("aria-label", `Mezzi assegnati oggi: ${vehicles.join(", ")}`);
-      return;
-    }
-
-    vehicleAction.textContent = "NESSUN MEZZO";
-    vehicleButton.disabled = true;
-    vehicleButton.setAttribute("aria-label", "Nessun mezzo assegnato oggi");
+    vehicleCount.hidden = false;
+    vehicleCount.removeAttribute("aria-hidden");
+    vehicleCount.textContent = vehicles.length ? vehicles.join("  ") : "MEZZI";
+    vehicleButton.disabled = false;
+    vehicleButton.setAttribute("aria-label", vehicles.length
+      ? `Mezzi assegnati oggi: ${vehicles.join(", ")}`
+      : "Apri i mezzi assegnati oggi");
   }
 
   function applyTodayLiveSummary() {

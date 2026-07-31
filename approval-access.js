@@ -26,8 +26,10 @@
     if (data.banned === true) return "bloccato";
     const explicit = normalizeStatus(data.statoAccount || data.accountStatus);
     if (explicit) return explicit;
-    // Compatibilità utenti storici: i profili già esistenti senza i nuovi campi
-    // di autorizzazione devono continuare a essere considerati attivi.
+    // I profili creati dal nuovo flusso sono gli unici che devono attendere
+    // l'approvazione. Tutti i documenti storici già presenti in Firestore,
+    // privi dei nuovi campi, restano autorizzati senza alcuna migrazione.
+    if (data.profileMigratedByEmail === false) return "in_attesa";
     return "attivo";
   };
   const isAllowedStatus = (status) => ACTIVE.has(normalizeStatus(status));
@@ -82,16 +84,10 @@
     return db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (snapshot.exists) {
-        const existing = snapshot.data() || {};
-        if (!hasExplicitStatus(existing)) {
-          transaction.update(ref, {
-            statoAccount: "attivo",
-            accountStatus: "attivo",
-            legacyAuthorized: true
-          });
-          return { ...existing, statoAccount: "attivo", accountStatus: "attivo", legacyAuthorized: true };
-        }
-        return existing;
+        // Non scrivere sui profili storici: la scrittura automatica dei nuovi
+        // campi può essere negata dalle regole Firestore e bloccare l'accesso.
+        // statusOf() gestisce in memoria la compatibilità con gli utenti esistenti.
+        return snapshot.data() || {};
       }
       const names = splitName(firebaseUser);
       const created = {

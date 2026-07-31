@@ -13,6 +13,7 @@ on:
       - "assets/**"
       - "icons/**"
       - "functions/**"
+      - "scripts/**"
       - "package.json"
       - "package-lock.json"
       - "capacitor.config.json"

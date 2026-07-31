@@ -1,4 +1,4 @@
-const CACHE_NAME = "hera-app-shell-v63";
+const CACHE_NAME = "hera-app-shell-v64";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,7 +8,7 @@ const APP_SHELL = [
   "./approval-access.css?v=20260731-legacy1",
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
-  "./squadre-restyle.css?v=20260728c",
+  "./squadre-restyle.css?v=20260731-mezzi1",
   "./app.js?v=20260729-access1",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
@@ -21,8 +21,8 @@ const APP_SHELL = [
   "./operational-import-repair.js?v=20260728a",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260726-fatto1",
-  "./notification-center.js?v=20260730b",
-  "./today-summary-interactions.js?v=20260728f",
+  "./notification-center.js?v=20260731-header1",
+  "./today-summary-interactions.js?v=20260731-mezzi1",
   "./mezzi-alimentazione-fix.js?v=20260723",
   "./today-live-hours-vehicles.js?v=20260730b",
   "./fatto-button-immediate.js?v=20260727-fatto2",

@@ -19,8 +19,35 @@
     }
   }
 
+  function syncMenuViewState() {
+    const menu = document.getElementById('side-menu');
+    const isOpen = Boolean(menu && !menu.classList.contains('hidden'));
+    document.body.classList.toggle('menu-fullscreen-open', isOpen);
+  }
+
+  function initMenuViewObserver() {
+    const menu = document.getElementById('side-menu');
+    if (!menu) return;
+
+    syncMenuViewState();
+
+    const observer = new MutationObserver(syncMenuViewState);
+    observer.observe(menu, {
+      attributes: true,
+      attributeFilter: ['class', 'aria-hidden']
+    });
+
+    const closeButton = document.getElementById('menu-close-btn');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        window.setTimeout(syncMenuViewState, 0);
+      });
+    }
+  }
+
   function init() {
     setLoginPhoto();
+    initMenuViewObserver();
 
     if (window.firebase?.auth) {
       try {

@@ -11,6 +11,7 @@
   <link rel="preload" href="./icons/varga-cantieri-512.png" as="image" type="image/png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css?v=20260727-update2">
+  <link rel="stylesheet" href="menu-grouping.css?v=20260731">
   <link rel="stylesheet" href="management-v2.css?v=20260731">
   <link rel="stylesheet" href="accounting-v2.css?v=20260728">
   <link rel="stylesheet" href="first-login-password.css?v=20260726a">
@@ -63,27 +64,46 @@
       <button id="menu-close-btn" class="btn" type="button">Chiudi</button>
     </div>
     <div class="side-menu-body">
-      <button id="open-panel-commesse" class="btn menu-title-btn" type="button">Gestione commesse</button>
-      <button id="open-panel-squadre" class="btn menu-title-btn" type="button">Composizione squadre</button>
-      <button id="open-panel-personale" class="btn menu-title-btn" type="button">Personale</button>
-      <button id="open-panel-mezzi" class="btn menu-title-btn" type="button">Mezzi</button>
-      <button id="open-panel-utenti" class="btn menu-title-btn" type="button">Gestione utenti <span id="pending-users-menu-badge" class="pending-users-badge hidden">0</span></button>
-      <button id="open-panel-global" class="btn menu-title-btn" type="button">Global</button>
-      <button id="open-panel-banner" class="btn menu-title-btn" type="button">Banner home</button>
-      <button id="open-panel-info-utili" class="btn menu-title-btn" type="button">Informazioni utili</button>
-      <button id="open-panel-notifiche" class="btn menu-title-btn" type="button">Gestione notifiche</button>
-      <button id="open-panel-programmazione" class="btn menu-title-btn" type="button">📅 Programmazione</button>
-      <button id="open-panel-banner-gestione" class="btn menu-title-btn" type="button">Gestione banner</button>
-      <button id="open-private-docs-btn" class="btn menu-title-btn" type="button">Documenti</button>
-      <button id="open-private-docs-upload-btn" class="btn menu-title-btn" type="button">+ Nuovo documento</button>
-      <button id="open-personal-services-btn" class="btn menu-title-btn" type="button">Servizi personali</button>
-      <button id="open-hours-btn" class="btn menu-title-btn" type="button">Gestione ore</button>
-      <button id="open-pos-btn" class="btn menu-title-btn" type="button">📄 POS</button>
-      <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button">Segnalazioni</button>
-      <button id="open-howto-btn" class="btn menu-title-btn" type="button">Come si fa?</button>
-      <button id="open-control-center-btn" class="btn menu-title-btn" type="button">🛠️ Centro di controllo</button>
-      <button id="install-app-btn" class="btn menu-title-btn" type="button">Installa app</button>
-      <button id="open-book-pdf-btn" class="btn menu-title-btn" type="button">Libro PDF</button>
+      <section class="menu-section" aria-labelledby="menu-operativo-title">
+        <h3 id="menu-operativo-title" class="menu-section-title">Gestione operativa</h3>
+        <button id="open-panel-commesse" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📂</span>Gestione commesse</button>
+        <button id="open-panel-squadre" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">👥</span>Composizione squadre</button>
+        <button id="open-panel-programmazione" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🗓️</span>Programmazione</button>
+        <button id="open-panel-global" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌐</span>Global</button>
+        <button id="open-hours-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🕒</span>Gestione ore</button>
+        <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">⚠️</span>Segnalazioni</button>
+      </section>
+
+      <section class="menu-section" aria-labelledby="menu-personale-title">
+        <h3 id="menu-personale-title" class="menu-section-title">Personale e accessi</h3>
+        <button id="open-panel-personale" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">👤</span>Personale</button>
+        <button id="open-panel-mezzi" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🚜</span>Mezzi</button>
+        <button id="open-panel-utenti" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🔐</span>Gestione utenti <span id="pending-users-menu-badge" class="pending-users-badge hidden">0</span></button>
+        <button id="open-personal-services-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📍</span>Servizi personali</button>
+      </section>
+
+      <section class="menu-section" aria-labelledby="menu-comunicazione-title">
+        <h3 id="menu-comunicazione-title" class="menu-section-title">Comunicazione</h3>
+        <button id="open-panel-banner" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📢</span>Banner home</button>
+        <button id="open-panel-banner-gestione" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🛠️</span>Gestione banner</button>
+        <button id="open-panel-notifiche" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🔔</span>Gestione notifiche</button>
+        <button id="open-panel-info-utili" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">ℹ️</span>Informazioni utili</button>
+      </section>
+
+      <section class="menu-section" aria-labelledby="menu-documenti-title">
+        <h3 id="menu-documenti-title" class="menu-section-title">Documenti</h3>
+        <button id="open-private-docs-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📁</span>Documenti</button>
+        <button id="open-private-docs-upload-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">➕</span>Nuovo documento</button>
+        <button id="open-pos-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📄</span>POS</button>
+        <button id="open-book-pdf-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📘</span>Libro PDF</button>
+      </section>
+
+      <section class="menu-section" aria-labelledby="menu-strumenti-title">
+        <h3 id="menu-strumenti-title" class="menu-section-title">Altri strumenti</h3>
+        <button id="open-howto-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">❓</span>Come si fa?</button>
+        <button id="open-control-center-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🛠️</span>Centro di controllo</button>
+        <button id="install-app-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">📲</span>Installa app</button>
+      </section>
     </div>
   </aside>
 

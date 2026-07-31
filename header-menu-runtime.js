@@ -58,10 +58,15 @@
     normalizeActionButton(qs('#refresh-app-btn'), 'Refresh', '↻');
     normalizeActionButton(qs('#update-app-btn'), 'Aggiorna', '↻');
     normalizeActionButton(qs('#menu-toggle-btn'), 'Menu', '☰');
+    normalizeActionButton(qs('#snow-service-btn'), 'Neve', '❄️');
 
-    const notificationButton = qs('#notification-bell-btn, #notification-center-btn, .notification-bell-btn, [data-notification-bell]');
+    const notificationButton = qs('#notification-inbox-btn, #notification-bell-btn, #notification-center-btn, .notification-bell-btn, [data-notification-bell]');
     if (notificationButton) {
       notificationButton.classList.add('header-action-button', 'header-notification-button');
+      notificationButton.querySelector('[aria-hidden="true"]')?.classList.add('header-action-icon');
+      if (!notificationButton.querySelector('.header-action-label')) {
+        notificationButton.append(createLabel('Notifiche'));
+      }
     }
   }
 

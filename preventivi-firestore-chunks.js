@@ -16,6 +16,7 @@
   const originalSaveRemote = PV.saveRemote.bind(PV);
   const originalDeleteRemote = PV.deleteRemote.bind(PV);
   const originalSubscribeCollection = PV.subscribeCollection.bind(PV);
+  const originalLoadLocal = PV.loadLocal.bind(PV);
 
   const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 
@@ -265,16 +266,22 @@
   if (document.body) modalObserver.observe(document.body, { childList: true, subtree: true });
   ensureRetryButton();
 
-  try {
-    const alreadyMigrated = localStorage.getItem(MIGRATION_KEY) === '1';
-    if (!alreadyMigrated) {
+  function migrateLocalPriceLists() {
+    try {
+      const alreadyMigrated = localStorage.getItem(MIGRATION_KEY) === '1';
+      if (alreadyMigrated) return;
       PV.state.priceLists = (PV.state.priceLists || []).map((item) => ({ ...item, syncPending: true }));
       PV.persistLocal();
       localStorage.setItem(MIGRATION_KEY, '1');
+    } catch (error) {
+      console.warn('Preventivi: stato migrazione prezziari non memorizzato.', error);
     }
-  } catch (error) {
-    console.warn('Preventivi: stato migrazione prezziari non memorizzato.', error);
   }
+
+  PV.loadLocal = () => {
+    originalLoadLocal();
+    migrateLocalPriceLists();
+  };
 
   // Se il vecchio collegamento era già partito, lo riavvia con il formato a blocchi.
   if (PV.state.storageMode !== 'device' && window.firebase?.auth?.()?.currentUser) {

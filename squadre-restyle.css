@@ -376,3 +376,24 @@
     animation: none !important;
   }
 }
+
+
+/* Oggi > Mezzi: mostra soltanto i codici realmente assegnati. */
+#today-summary-card #today-mezzi-btn.today-mezzi-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 3px;
+}
+
+#today-summary-card #today-mezzi-btn.today-mezzi-only #today-mezzi-count {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  color: #172033;
+  font-size: clamp(0.62rem, 1.8vw, 0.82rem);
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

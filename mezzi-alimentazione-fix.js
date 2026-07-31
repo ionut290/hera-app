@@ -86,4 +86,13 @@
     script.dataset.todayLiveHoursVehicles = "1";
     document.head.appendChild(script);
   }
+
+  // Rende cliccabili i nomi delle squadre senza intervenire sulla logica FATTO/WhatsApp.
+  if (!document.querySelector('script[data-squad-operator-profile]')) {
+    const script = document.createElement("script");
+    script.src = "./squad-operator-profile.js?v=20260731a";
+    script.defer = true;
+    script.dataset.squadOperatorProfile = "1";
+    document.head.appendChild(script);
+  }
 })();

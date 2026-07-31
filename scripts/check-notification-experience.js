@@ -38,4 +38,5 @@ assert.match(userNotifications, /ti ha segnato/);
 assert.match(userNotifications, /fullMessage/);
 assert.match(doneNotifications, /fullMessage/);
 
+// Mantiene attivo il trigger automatico della build Android dopo la correzione del controllo notifiche.
 console.log("Notification experience checks passed.");

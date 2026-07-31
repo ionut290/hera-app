@@ -118,11 +118,59 @@
     }
   }
 
+  function loadPreventiviFeature() {
+    try {
+      if (!document.querySelector('link[data-preventivi-feature-css]')) {
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = './preventivi-feature.css?v=20260731a';
+        css.dataset.preventiviFeatureCss = '1';
+        document.head.appendChild(css);
+      }
+
+      const modules = [
+        ['core', './preventivi-core.js?v=20260731a'],
+        ['storage', './preventivi-storage-config.js?v=20260731a'],
+        ['price-lists', './preventivi-price-lists.js?v=20260731a'],
+        ['quotes', './preventivi-quotes.js?v=20260731a'],
+        ['feature', './preventivi-feature.js?v=20260731a']
+      ];
+
+      const loadModule = (index) => {
+        if (index >= modules.length) return;
+        const [name, src] = modules[index];
+        const existing = document.querySelector(`script[data-preventivi-module="${name}"]`);
+        if (existing) {
+          if (existing.dataset.loaded === '1') loadModule(index + 1);
+          else existing.addEventListener('load', () => loadModule(index + 1), { once: true });
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.dataset.preventiviModule = name;
+        script.addEventListener('load', () => {
+          script.dataset.loaded = '1';
+          loadModule(index + 1);
+        }, { once: true });
+        script.addEventListener('error', () => {
+          console.warn(`Modulo Preventivi non caricato: ${name}.`);
+        }, { once: true });
+        document.head.appendChild(script);
+      };
+
+      loadModule(0);
+    } catch (error) {
+      console.warn('Modulo Preventivi non caricato:', error);
+    }
+  }
+
   function init() {
     setupHomeHeader();
     setupSnowHeader();
     setLoginPhoto();
     loadOperatorProfileFeature();
+    loadPreventiviFeature();
 
     if (window.firebase?.auth) {
       try {

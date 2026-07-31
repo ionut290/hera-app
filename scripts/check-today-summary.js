@@ -83,23 +83,33 @@ assert.match(interactions, /isNotificationForCurrentUser\(alertItem\)/);
 assert.match(notifications, /title: "👷 Aggiunto a una squadra"/);
 assert.match(notifications, /avvisoAutomaticoAssenze/);
 
-assert.match(index, /today-summary-interactions\.js\?v=20260728f/);
+const getAssetVersion = (source, assetName) => {
+  const escapedName = assetName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return source.match(new RegExp(`["'](?:\\./)?${escapedName}\\?v=([^"']+)["']`))?.[1];
+};
+const assertAssetIsSynchronized = (assetName) => {
+  const indexVersion = getAssetVersion(index, assetName);
+  const serviceWorkerVersion = getAssetVersion(serviceWorker, assetName);
+  assert.ok(indexVersion, `index.html non carica ${assetName} con cache-busting`);
+  assert.equal(serviceWorkerVersion, indexVersion, `${assetName} non è sincronizzato in sw.js`);
+};
+
+assertAssetIsSynchronized("today-summary-interactions.js");
 assert.match(index, /id="today-commesse-action">APRI/);
 assert.doesNotMatch(index, /Nessuna commessa assegnata|Apri la tua commessa/);
 assert.match(index, />Inserisci ore<\/span>/);
-assert.match(index, /id="today-mezzi-action">ELENCO MEZZI/);
+assert.match(index, /id="today-mezzi-btn"[^>]*today-mezzi-only[^>]*>[\s\S]*?id="today-mezzi-count">NESSUN MEZZO/);
 assert.doesNotMatch(index, /Nessun mezzo assegnato|I tuoi mezzi|Visualizza i mezzi assegnati alla tua squadra/);
 assert.match(index, />I tuoi avvisi<\/span>/);
-assert.match(index, /squadre-restyle\.css\?v=20260728c/);
+assertAssetIsSynchronized("squadre-restyle.css");
 assert.match(serviceWorker, /hera-app-shell-v\d+/);
-assert.match(serviceWorker, /today-summary-interactions\.js\?v=20260728f/);
-assert.match(serviceWorker, /squadre-restyle\.css\?v=20260728c/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);
 assert.match(layout, /#today-summary-card \.today-summary-item\s*\{[\s\S]*?min-height: 54px;[\s\S]*?padding: 6px 4px;/);
 assert.doesNotMatch(layout, /#today-summary-card #today-commesse-count,[\s\S]*?text-overflow: ellipsis/);
 assert.match(interactions, /commessaNames\.join\(" • "\)/);
-assert.match(interactions, /\[\.\.\.mezzi\.values\(\)\]\.join\(" • "\)/);
+assert.match(interactions, /function renderVehicleBadge\(vehicle\)/);
+assert.match(interactions, /vehicles\.map\(renderVehicleBadge\)\.join\(""\)/);
 assert.match(interactions, /getNotificationPrimaryDateKey\(alertItem\) === dateKey/);
 assert.match(interactions, /const getSummaryDateKey = \(\) => getTodayDateKey\(\);/);
 assert.doesNotMatch(interactions, /getActiveSquadreDateKey\(/);

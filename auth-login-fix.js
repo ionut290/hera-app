@@ -71,9 +71,18 @@
       permissions: {}
     };
 
+    const existingStatus = String(
+      existingProfile?.statoAccount || existingProfile?.accountStatus || ""
+    ).trim().toLowerCase();
+    const initialStatus = existingProfile
+      ? (existingProfile.banned === true ? "bloccato" : (existingStatus || "attivo"))
+      : "in_attesa";
+
     await currentRef.set({
       ...safeProfile,
       uid: user.uid,
+      statoAccount: initialStatus,
+      accountStatus: initialStatus,
       authProviders: Array.isArray(user.providerData)
         ? user.providerData.map((provider) => provider && provider.providerId).filter(Boolean)
         : [],

@@ -1,6 +1,9 @@
 "use strict";
 
 (() => {
+  if (window.__heraTodayLiveHoursVehiclesInstalled) return;
+  window.__heraTodayLiveHoursVehiclesInstalled = true;
+
   const ROME_TIME_ZONE = "Europe/Rome";
   let minuteTimeout = null;
   let minuteInterval = null;

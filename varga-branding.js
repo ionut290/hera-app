@@ -7,8 +7,7 @@
   const BRAND_ATTRIBUTES = ['alt', 'aria-label', 'title'];
 
   function replaceBrand(value) {
-    const text = String(value ?? '');
-    return BRAND_PATTERN.test(text) ? text.replace(BRAND_PATTERN, BRAND_NAME) : text;
+    return String(value ?? '').replace(BRAND_PATTERN, BRAND_NAME);
   }
 
   function brandTextNode(node) {

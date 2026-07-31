@@ -20,8 +20,8 @@ const rulesDeployWorkflowSource = fs.readFileSync(
   "utf8"
 );
 
-if (!indexSource.includes('<script src="auth-login-fix.js?v=20260726e"></script>')) {
-  throw new Error("auth-login-fix.js non viene caricato da index.html.");
+if (!/<script\s+src=["'](?:\.\/)?auth-login-fix\.js\?v=[^"']+["']><\/script>/.test(indexSource)) {
+  throw new Error("auth-login-fix.js non viene caricato da index.html con cache-busting.");
 }
 
 if (!fixSource.includes("configurePlatformLoginOptions")) {

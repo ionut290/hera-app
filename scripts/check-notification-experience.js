@@ -35,7 +35,8 @@ assert.match(serviceWorker, /const CACHE_NAME = "hera-app-shell-v\d+";/);
 assert.doesNotMatch(serviceWorker, /notification-session-enhancements\.js\?v=/);
 
 // La versione del centro notifiche deve essere quella realmente caricata da index.html.
-const indexNotificationCenter = index.match(/["']\.\/notification-center\.js\?v=([^"']+)["']/);
+// Accetta sia "notification-center.js" sia "./notification-center.js".
+const indexNotificationCenter = index.match(/["'](?:\.\/)?notification-center\.js\?v=([^"']+)["']/);
 assert.ok(indexNotificationCenter, "index.html non carica notification-center.js con una versione cache-busting");
 const expectedNotificationCenter = new RegExp(
   `notification-center\\.js\\?v=${indexNotificationCenter[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`

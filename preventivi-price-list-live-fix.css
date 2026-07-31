@@ -1,0 +1,69 @@
+.pv-page .pv-shell,
+.pv-shell.pv-shell-full-width {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.pv-page .pv-content {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.pv-price-list-editor-shell .pv-form-card {
+  width: 100%;
+}
+
+.pv-price-list-editor-shell .pv-items-head,
+.pv-price-list-editor-shell .pv-item-row.pv-item-row-matrix {
+  grid-template-columns:
+    minmax(165px, 1.05fr)
+    minmax(150px, 0.9fr)
+    minmax(360px, 2.5fr)
+    minmax(95px, 0.55fr)
+    minmax(150px, 0.75fr)
+    minmax(115px, 0.6fr)
+    42px;
+}
+
+.pv-line-picker {
+  position: relative;
+  z-index: 5;
+}
+
+.pv-line-picker select.pv-live-select-open {
+  min-height: 245px;
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+.pv-line-picker select.pv-live-select-open option {
+  padding: 7px 9px;
+}
+
+@media (max-width: 1100px) {
+  .pv-price-list-editor-shell .pv-items-head,
+  .pv-price-list-editor-shell .pv-item-row.pv-item-row-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pv-price-list-editor-shell .pv-items-head {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .pv-page .pv-content {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .pv-price-list-editor-shell .pv-item-row.pv-item-row-matrix {
+    grid-template-columns: 1fr;
+  }
+
+  .pv-line-picker select.pv-live-select-open {
+    min-height: 220px;
+  }
+}

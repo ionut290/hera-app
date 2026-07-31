@@ -1,0 +1,56 @@
+.pv-matrix-toolbar-actions,
+.pv-matrix-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.pv-file-label {
+  cursor: pointer;
+}
+
+.pv-items-head,
+.pv-item-row.pv-item-row-matrix {
+  grid-template-columns:
+    minmax(130px, 0.9fr)
+    minmax(135px, 0.85fr)
+    minmax(250px, 2fr)
+    minmax(95px, 0.6fr)
+    minmax(135px, 0.75fr)
+    minmax(110px, 0.6fr)
+    42px;
+}
+
+@media (max-width: 1100px) {
+  .pv-items-head,
+  .pv-item-row.pv-item-row-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pv-items-head {
+    display: none;
+  }
+
+  .pv-item-row.pv-item-row-matrix .pv-icon-btn {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 720px) {
+  .pv-matrix-toolbar-actions,
+  .pv-matrix-file-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .pv-matrix-toolbar-actions .pv-btn,
+  .pv-matrix-file-actions .pv-btn {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
+  .pv-item-row.pv-item-row-matrix {
+    grid-template-columns: 1fr;
+  }
+}

@@ -317,8 +317,11 @@
     syncTodayHoursCounter(false);
     const mezziAction = document.getElementById("today-mezzi-action");
     if (mezziAction) mezziAction.textContent = mezzi.size ? "ELENCO MEZZI" : "NESSUN MEZZO";
-    ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join("  ") : "";
-    ui.todayMezziBtn.disabled = mezzi.size === 0;
+    ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join("  ") : "MEZZI";
+    ui.todayMezziBtn.disabled = false;
+    ui.todayMezziBtn.setAttribute("aria-label", mezzi.size
+      ? `Apri i mezzi assegnati oggi: ${[...mezzi.values()].join(", ")}`
+      : "Apri i mezzi assegnati oggi");
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);
   };

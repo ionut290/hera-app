@@ -75,6 +75,21 @@
     normalizeActionButton(qs('#snow-service-menu-btn'), 'Menu', '☰');
   }
 
+  function loadBrandingFeature() {
+    try {
+      if (document.querySelector('script[data-varga-branding]')) return;
+      const script = document.createElement('script');
+      script.src = './varga-branding.js?v=20260731a';
+      script.dataset.vargaBranding = '1';
+      script.addEventListener('error', () => {
+        console.warn('Branding VARGA CANTIERI non caricato.');
+      }, { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Branding VARGA CANTIERI non caricato:', error);
+    }
+  }
+
   function setLoginPhoto() {
     const button = qs('#user-toggle-btn');
     if (!button) return;
@@ -166,6 +181,7 @@
   }
 
   function init() {
+    loadBrandingFeature();
     setupHomeHeader();
     setupSnowHeader();
     setLoginPhoto();

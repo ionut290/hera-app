@@ -1,0 +1,159 @@
+.side-menu {
+  width: min(410px, 94vw);
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  border-right: 1px solid #cbd7e6;
+  box-shadow: 20px 0 50px rgba(15, 23, 42, 0.22);
+}
+
+.side-menu-header {
+  padding: 18px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #d8e1ec;
+}
+
+.side-menu-header h2 {
+  margin: 0;
+  font-size: 1.16rem;
+  color: #172033;
+}
+
+.side-menu-header h2::after {
+  content: "Gestione e strumenti";
+  display: block;
+  margin-top: 3px;
+  color: #718096;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.side-menu-body {
+  padding: 14px;
+  gap: 14px;
+}
+
+.menu-section {
+  display: grid;
+  gap: 7px;
+}
+
+.menu-section-title {
+  margin: 2px 4px 0;
+  color: #52627a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.menu-section-items {
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid #dbe4ef;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.055);
+}
+
+.menu-title-btn {
+  position: relative;
+  min-height: 54px;
+  width: 100%;
+  padding: 10px 40px 10px 50px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #1d2939;
+  text-align: left;
+  font-size: 0.96rem;
+  font-weight: 750;
+  box-shadow: none;
+}
+
+.menu-title-btn::before {
+  content: attr(data-menu-icon);
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: #edf3fb;
+  font-size: 1rem;
+}
+
+.menu-title-btn::after {
+  content: "›";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #98a4b7;
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.menu-title-btn:hover,
+.menu-title-btn:focus-visible {
+  background: #edf4ff;
+  color: #174ea6;
+  outline: none;
+}
+
+.menu-title-btn:active {
+  transform: scale(0.99);
+}
+
+.menu-title-btn .pending-users-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.menu-section-admin .menu-section-title {
+  color: #8a5a00;
+}
+
+.menu-section-admin .menu-section-items {
+  border-color: #ead8ad;
+  background: linear-gradient(180deg, #fffdf7 0%, #fffaf0 100%);
+}
+
+.menu-section-admin .menu-title-btn::before {
+  background: #fff0c7;
+}
+
+.menu-section-personal .menu-section-title {
+  color: #176b52;
+}
+
+.menu-section-personal .menu-section-items {
+  border-color: #cde6dc;
+}
+
+.menu-section-personal .menu-title-btn::before {
+  background: #e4f7ef;
+}
+
+@media (max-width: 520px) {
+  .side-menu {
+    width: min(390px, 96vw);
+  }
+
+  .side-menu-body {
+    padding: 10px;
+  }
+
+  .menu-section-items {
+    border-radius: 14px;
+  }
+
+  .menu-title-btn {
+    min-height: 52px;
+    font-size: 0.93rem;
+  }
+}

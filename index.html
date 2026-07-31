@@ -11,14 +11,14 @@
   <link rel="preload" href="./icons/varga-cantieri-512.png" as="image" type="image/png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="style.css?v=20260727-update2">
-  <link rel="stylesheet" href="menu-grouping.css?v=20260731b">
+  <link rel="stylesheet" href="menu-grouping.css?v=20260731-header1">
   <link rel="stylesheet" href="management-v2.css?v=20260731">
   <link rel="stylesheet" href="accounting-v2.css?v=20260728">
   <link rel="stylesheet" href="first-login-password.css?v=20260726a">
   <link rel="stylesheet" href="login-retry-fix.css?v=20260726a">
   <link rel="stylesheet" href="identity-card-feature.css?v=20260727a">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260730b">
-  <link rel="stylesheet" href="squadre-restyle.css?v=20260728c">
+  <link rel="stylesheet" href="squadre-restyle.css?v=20260731-mezzi1">
   <link rel="stylesheet" href="calendar-feature.css?v=20260728b">
   <link rel="stylesheet" href="notification-center.css?v=20260729a">
   <link rel="stylesheet" href="approval-access.css?v=20260731-legacy1">
@@ -308,7 +308,7 @@
         <section class="card user-card" id="user-card"><div id="user-details-panel" class="user-details-panel hidden"><div class="actions-row weather-user-actions"><button id="login-btn" class="btn btn-primary" type="button">Login con Google</button><button id="switch-account-btn" class="btn hidden" type="button">Cambia account</button><button id="logout-btn" class="btn" type="button" disabled>Logout</button><button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button></div><div class="weather-status-grid"><p id="user" class="status status-chip">Non loggato</p><p id="user-name" class="muted status-chip">Nome utente: -</p><p id="drive-status" class="muted status-chip status-chip-drive">Cloud amministratore non configurato</p></div><section id="biometric-security-settings" class="biometric-security hidden" aria-labelledby="biometric-security-title"><h3 id="biometric-security-title">Sicurezza</h3><label class="biometric-switch-row" for="biometric-toggle"><span>Accesso biometrico</span><input id="biometric-toggle" type="checkbox" role="switch"></label><p id="biometric-settings-feedback" class="muted" role="status" aria-live="polite"></p><div class="actions-row"><button id="biometric-verify-btn" class="btn" type="button">Verifica biometria</button><button id="biometric-disable-btn" class="btn" type="button">Disattiva accesso biometrico</button></div></section><div class="weather-status-grid"><p id="pwa-notification-status" class="muted status-chip">Notifiche: verifica supporto...</p><div class="actions-row"><button id="enable-notifications-btn" class="btn" type="button">Attiva notifiche</button><button id="test-notification-btn" class="btn" type="button" disabled>Test notifica</button></div></div></div></section>
       </section>
       <section class="home-quick-access" aria-label="Accessi personali rapidi"><button id="identity-card-btn" class="home-quick-access-btn" type="button" aria-label="Apri tesserino di riconoscimento"><span aria-hidden="true">🪪</span><span>Tesserino</span></button><button id="fuel-pin-btn" class="home-quick-access-btn fuel-pin-btn" type="button" aria-label="Apri PIN carburante"><span aria-hidden="true">⛽</span><span>PIN</span></button><button id="home-calendar-btn" class="home-quick-access-btn" type="button" aria-label="Apri scelta calendario"><span aria-hidden="true">🗓️</span><span>Calendario</span></button><button id="home-segnalazioni-btn" class="home-quick-access-btn home-quick-access-btn--warning" type="button" aria-label="Apri segnalazioni"><span aria-hidden="true">⚠️</span><span>Segnalazioni</span></button></section>
-      <section id="today-summary-card" class="card today-summary-card" aria-labelledby="today-summary-title"><h2 id="today-summary-title">Oggi</h2><div class="today-summary-grid"><button id="today-commesse-btn" class="today-summary-item" type="button" aria-label="Vai alle commesse assegnate oggi"><span class="today-summary-icon" aria-hidden="true">📂</span><span class="today-summary-copy"><b id="today-commesse-action">APRI</b><small id="today-commesse-count">COMMESSA</small></span></button><button id="today-hours-btn" class="today-summary-item" type="button" aria-label="Apri le ore di oggi"><span class="today-summary-icon" aria-hidden="true">🕒</span><strong id="today-hours-count">--:--</strong><span>Inserisci ore</span></button><button id="today-mezzi-btn" class="today-summary-item" type="button" aria-label="Vai ai mezzi assegnati oggi"><span class="today-summary-icon" aria-hidden="true">🚜</span><span class="today-summary-copy"><b id="today-mezzi-action">ELENCO MEZZI</b><small id="today-mezzi-count">NESSUN MEZZO</small></span></button><button id="today-alerts-btn" class="today-summary-item" type="button" aria-label="Vai agli avvisi di oggi"><span class="today-summary-icon" aria-hidden="true">⚠️</span><strong id="today-alerts-count">0</strong><span>I tuoi avvisi</span></button></div></section>
+      <section id="today-summary-card" class="card today-summary-card" aria-labelledby="today-summary-title"><h2 id="today-summary-title">Oggi</h2><div class="today-summary-grid"><button id="today-commesse-btn" class="today-summary-item" type="button" aria-label="Vai alle commesse assegnate oggi"><span class="today-summary-icon" aria-hidden="true">📂</span><span class="today-summary-copy"><b id="today-commesse-action">APRI</b><small id="today-commesse-count">COMMESSA</small></span></button><button id="today-hours-btn" class="today-summary-item" type="button" aria-label="Apri le ore di oggi"><span class="today-summary-icon" aria-hidden="true">🕒</span><strong id="today-hours-count">--:--</strong><span>Inserisci ore</span></button><button id="today-mezzi-btn" class="today-summary-item today-mezzi-only" type="button" aria-label="Apri i mezzi assegnati oggi"><span id="today-mezzi-count">NESSUN MEZZO</span></button><button id="today-alerts-btn" class="today-summary-item" type="button" aria-label="Vai agli avvisi di oggi"><span class="today-summary-icon" aria-hidden="true">⚠️</span><strong id="today-alerts-count">0</strong><span>I tuoi avvisi</span></button></div></section>
       <section id="commesse-home-card" class="card hidden" aria-hidden="true"><div class="section-head"><h2>Commesse</h2><span class="pill">Dashboard</span></div><p id="commesse-next-action" class="muted">Prossima azione consigliata: scegli la commessa.</p><div id="commesse-lista" class="commesse-lista"></div><p id="commessa-attiva" class="muted commessa-active-chip">Seleziona una commessa.</p></section>
       <section id="today-squads-section" class="card squadre-card"><div class="section-head squadre-section-head"><h2>Squadre per commessa</h2><button id="toggle-commesse-home-btn" class="btn squadre-commesse-toggle" type="button" aria-controls="commesse-home-card" aria-expanded="false">Tutte le commesse</button><span class="pill squadre-status-pill">Operativo</span></div><div id="squadre-filter-controls" class="inline-form squadre-filter-controls hidden" aria-label="Filtro giorno squadre"><input id="squadre-filter-date" type="date" aria-label="Giorno squadre"><button id="squadre-filter-clear-btn" class="btn squadre-auto-btn" type="button">Auto</button></div><div id="squadre-lista" class="squadre-lista"></div></section>
       <section id="squadre-impianto-detail" class="squadre-impianto-detail hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="squadre-impianto-detail-title"><article class="card squadre-impianto-detail-card"><header class="squadre-impianto-detail-head"><button id="squadre-impianto-back-btn" class="btn squadre-impianto-back-btn" type="button">← INDIETRO</button><div><p class="squadre-impianto-detail-eyebrow">Scheda impianto</p><h2 id="squadre-impianto-detail-title">Impianto</h2><p id="squadre-impianto-detail-commessa" class="muted"></p></div></header><dl id="squadre-impianto-detail-body" class="squadre-impianto-detail-grid"></dl><p id="squadre-impianto-position-feedback" class="squadre-impianto-position-feedback hidden" role="status" aria-live="polite"></p><button id="squadre-impianto-navigate-btn" class="squadre-impianto-navigate-btn" type="button">NAVIGA</button></article></section>
@@ -399,7 +399,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
-  <script src="notification-center.js?v=20260729a"></script>
+  <script src="notification-center.js?v=20260731-header1"></script>
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260731-legacy1"></script>
   <script src="first-login-password.js?v=20260726b"></script>
@@ -418,13 +418,13 @@
   <script src="commessa-produced-widget.js?v=20260728a"></script>
   <script src="accounting-view-guard.js?v=20260728a"></script>
   <script src="operational-import-repair.js?v=20260728a"></script>
-  <script src="today-summary-interactions.js?v=20260728f"></script>
+  <script src="today-summary-interactions.js?v=20260731-mezzi1"></script>
   <script src="identity-card-feature.js?v=20260727a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
   <script src="fatto-button-immediate.js?v=20260727-fatto2"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260723"></script>
   <script src="hours-export-range.js?v=20260619"></script>
-  <script src="header-menu-runtime.js?v=20260731a"></script>
+  <script src="header-menu-runtime.js?v=20260731-header1"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

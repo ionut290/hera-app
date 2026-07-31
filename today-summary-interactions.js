@@ -317,7 +317,7 @@
     syncTodayHoursCounter(false);
     const mezziAction = document.getElementById("today-mezzi-action");
     if (mezziAction) mezziAction.textContent = mezzi.size ? "ELENCO MEZZI" : "NESSUN MEZZO";
-    ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join(" • ") : "";
+    ui.todayMezziCount.textContent = mezzi.size ? [...mezzi.values()].join("  ") : "";
     ui.todayMezziBtn.disabled = mezzi.size === 0;
     ui.todayAlertsCount.textContent = String(alerts);
     ui.todayAlertsBtn?.classList.toggle("has-alerts", alerts > 0);

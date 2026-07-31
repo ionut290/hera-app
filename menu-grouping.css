@@ -275,3 +275,71 @@ body.menu-fullscreen-open #menu-overlay {
     margin-left: 2px;
   }
 }
+
+
+/* Barra Home: sei comandi uguali, sempre contenuti e senza sovrapposizioni. */
+.home-header-modern .logo-head {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-height: 64px;
+}
+
+.home-header-modern .logo-head-left,
+.home-header-modern .logo-head-actions,
+.home-header-modern .logo-head-action-icons {
+  display: contents;
+}
+
+.home-header-modern .header-action-button,
+.home-header-modern #user-toggle-btn,
+.home-header-modern .snow-service-btn {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 64px;
+  min-width: 0;
+  min-height: 64px;
+  max-width: none;
+  margin: 0;
+  padding: 5px 2px 7px;
+  align-self: stretch;
+  overflow: visible;
+}
+
+.home-header-modern .header-action-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.home-header-modern .header-notification-button .notification-bell-badge {
+  z-index: 3;
+}
+
+@media (max-width: 480px) {
+  .home-header-modern .logo-head {
+    gap: 3px;
+    min-height: 58px;
+  }
+
+  .home-header-modern .header-action-button,
+  .home-header-modern #user-toggle-btn,
+  .home-header-modern .snow-service-btn {
+    height: 58px;
+    min-height: 58px;
+    padding: 4px 1px 6px;
+    border-radius: 12px;
+    font-size: clamp(0.5rem, 2.25vw, 0.62rem);
+  }
+
+  .home-header-modern .header-login-photo {
+    width: 26px;
+    height: 26px;
+  }
+}

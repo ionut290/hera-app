@@ -1,28 +1,58 @@
+.side-menu {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  background: #f7fbff;
+  z-index: 1200;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.side-menu-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.side-menu-header h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+}
+
 .side-menu-body {
   display: block;
-  padding: 14px;
+  padding: 18px;
   overflow: auto;
 }
 
 .menu-section {
   display: grid;
-  gap: 10px;
-  padding: 0 0 16px;
-  margin: 0 0 16px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 14px;
+  padding: 0 0 22px;
+  margin: 0 0 22px;
   border-bottom: 1px solid var(--border);
 }
 
 .menu-section:last-child {
   margin-bottom: 0;
-  padding-bottom: 0;
+  padding-bottom: 18px;
   border-bottom: 0;
 }
 
 .menu-section-title {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 2px 4px 0;
+  padding: 0 2px 4px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -30,20 +60,154 @@
 
 .menu-section .menu-title-btn {
   width: 100%;
+  min-height: 118px;
   margin: 0;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-align: center;
+  line-height: 1.15;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .menu-title-btn .menu-item-icon {
   display: inline-flex;
-  width: 1.5rem;
+  align-items: center;
   justify-content: center;
-  margin-right: 8px;
+  width: 58px;
+  height: 48px;
+  margin: 0;
+  border-radius: 14px 14px 10px 10px;
+  background: linear-gradient(180deg, #e8f2ff 0%, #dbeafe 100%);
+  border: 1px solid #bfdbfe;
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.menu-section:nth-of-type(2) .menu-item-icon {
+  background: linear-gradient(180deg, #e7fff7 0%, #d1fae5 100%);
+  border-color: #a7f3d0;
+}
+
+.menu-section:nth-of-type(3) .menu-item-icon {
+  background: linear-gradient(180deg, #fff7df 0%, #fef3c7 100%);
+  border-color: #fde68a;
+}
+
+.menu-section:nth-of-type(4) .menu-item-icon {
+  background: linear-gradient(180deg, #f5edff 0%, #ede9fe 100%);
+  border-color: #ddd6fe;
+}
+
+.menu-section:nth-of-type(5) .menu-item-icon {
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-color: #d1d5db;
+}
+
+.home-header-modern .logo-head {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(58px, auto));
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+}
+
+.home-header-modern .logo-head-left,
+.home-header-modern .logo-head-actions,
+.home-header-modern .logo-head-action-icons {
+  display: contents;
+}
+
+.home-header-modern .header-action-button,
+.home-header-modern #user-toggle-btn {
+  min-width: 64px;
+  min-height: 72px;
+  padding: 8px 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.home-header-modern .header-action-button .header-action-icon,
+.home-header-modern #user-toggle-btn .header-action-icon {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.home-header-modern .header-login-photo {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: none;
+}
+
+.home-header-modern #user-toggle-btn.has-photo .header-login-photo {
+  display: block;
+}
+
+.home-header-modern #user-toggle-btn.has-photo .header-action-icon {
+  display: none;
+}
+
+.home-header-modern .snow-service-btn {
+  grid-column: 1 / -1;
+  justify-self: end;
 }
 
 @media (max-width: 700px) {
+  .side-menu-body {
+    padding: 14px;
+  }
+
   .menu-section {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding-bottom: 18px;
+    margin-bottom: 18px;
+  }
+
+  .menu-section .menu-title-btn {
+    min-height: 104px;
+    padding: 12px 8px;
+    font-size: 0.78rem;
+  }
+
+  .menu-title-btn .menu-item-icon {
+    width: 52px;
+    height: 44px;
+    font-size: 1.35rem;
+  }
+
+  .home-header-modern .logo-head {
+    grid-template-columns: repeat(5, minmax(52px, 1fr));
     gap: 8px;
-    padding-bottom: 14px;
-    margin-bottom: 14px;
+  }
+
+  .home-header-modern .header-action-button,
+  .home-header-modern #user-toggle-btn {
+    min-width: 0;
+    min-height: 68px;
+    padding: 7px 4px;
+    font-size: 0.7rem;
+  }
+
+  .home-header-modern .header-login-photo {
+    width: 34px;
+    height: 34px;
   }
 }

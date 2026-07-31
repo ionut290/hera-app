@@ -376,6 +376,21 @@
   min-width: 0;
 }
 
+.pv-line-picker select {
+  min-height: 86px;
+  height: auto;
+  overflow-y: auto;
+  white-space: normal;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.pv-line-picker select option {
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .pv-line-total {
   display: flex;
   align-items: center;
@@ -562,6 +577,10 @@
   .pv-line .pv-line-wide,
   .pv-line .pv-line-picker {
     grid-column: auto;
+  }
+
+  .pv-line-picker select {
+    min-height: 110px;
   }
 
   .pv-items-head {

@@ -5,11 +5,12 @@ const app = fs.readFileSync("app.js", "utf8");
 const reader = fs.readFileSync("notification-session-enhancements.js", "utf8");
 const center = fs.readFileSync("notification-center.js", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
+const index = fs.readFileSync("index.html", "utf8");
 const userNotifications = fs.readFileSync("functions/user-notifications.js", "utf8");
 const doneNotifications = fs.readFileSync("functions/index.js", "utf8");
 
 const mergeConflictMarker = /^(?:<<<<<<<|=======|>>>>>>>)(?: .*)?$/m;
-[app, reader, center, serviceWorker, userNotifications, doneNotifications].forEach((source) => {
+[app, reader, center, serviceWorker, index, userNotifications, doneNotifications].forEach((source) => {
   assert.doesNotMatch(source, mergeConflictMarker);
 });
 
@@ -32,7 +33,14 @@ assert.match(center, /OK, HO CAPITO/);
 // Verifica che il service worker usi una cache versionata senza bloccare gli aggiornamenti futuri.
 assert.match(serviceWorker, /const CACHE_NAME = "hera-app-shell-v\d+";/);
 assert.doesNotMatch(serviceWorker, /notification-session-enhancements\.js\?v=/);
-assert.match(serviceWorker, /notification-center\.js\?v=20260730b/);
+
+// La versione del centro notifiche deve essere quella realmente caricata da index.html.
+const indexNotificationCenter = index.match(/["']\.\/notification-center\.js\?v=([^"']+)["']/);
+assert.ok(indexNotificationCenter, "index.html non carica notification-center.js con una versione cache-busting");
+const expectedNotificationCenter = new RegExp(
+  `notification-center\\.js\\?v=${indexNotificationCenter[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`
+);
+assert.match(serviceWorker, expectedNotificationCenter);
 
 assert.match(userNotifications, /ti ha segnato/);
 assert.match(userNotifications, /fullMessage/);

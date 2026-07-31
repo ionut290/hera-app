@@ -281,12 +281,30 @@
     document.head.appendChild(css);
   }
 
+  if (!document.querySelector('link[data-preventivi-live-fix-css]')) {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = './preventivi-price-list-live-fix.css?v=20260731a';
+    css.dataset.preventiviLiveFixCss = '1';
+    document.head.appendChild(css);
+  }
+
   if (!document.querySelector('script[data-preventivi-matrix-js]')) {
     const script = document.createElement('script');
     script.src = './preventivi-price-list-matrix.js?v=20260731b';
     script.dataset.preventiviMatrixJs = '1';
     script.addEventListener('error', () => {
       console.warn('Preventivi: modulo matrice prezziario non caricato.');
+    }, { once: true });
+    document.head.appendChild(script);
+  }
+
+  if (!document.querySelector('script[data-preventivi-live-fix-js]')) {
+    const script = document.createElement('script');
+    script.src = './preventivi-price-list-live-fix.js?v=20260731a';
+    script.dataset.preventiviLiveFixJs = '1';
+    script.addEventListener('error', () => {
+      console.warn('Preventivi: correzione prezzi e suggerimenti non caricata.');
     }, { once: true });
     document.head.appendChild(script);
   }

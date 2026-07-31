@@ -145,7 +145,7 @@
 
       const modules = [
         ['core', './preventivi-core.js?v=20260731a'],
-        ['storage', './preventivi-storage-config.js?v=20260731a'],
+        ['storage', './preventivi-storage-config.js?v=20260731b'],
         ['price-lists', './preventivi-price-lists.js?v=20260731a'],
         ['quotes', './preventivi-quotes.js?v=20260731a'],
         ['feature', './preventivi-feature.js?v=20260731a']

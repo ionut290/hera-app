@@ -36,6 +36,7 @@ const APP_SHELL = [
   "./preventivi-registry-model-followup.js?v=20260801a",
   "./preventivi-exact-xlsx.js?v=20260801a",
   "./preventivi-matrix-form-profile.js?v=20260801a",
+  "./preventivi-matrix-xlsx-fields.js?v=20260801a",
   "./preventivi-models.css?v=20260801a",
   "./preventivi-firestore-path-fix.js?v=20260731a",
   "./preventivi-firestore-chunks.js?v=20260731a",

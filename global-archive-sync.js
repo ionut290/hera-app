@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '20260801a';
+  const VERSION = '20260801b';
   const ARCHIVE_ROOT = 'globalArchive';
   const MIGRATION_KEY = `hera_global_archive_migrated_${VERSION}`;
   const syncLocks = new Map();
@@ -70,6 +70,14 @@
     return archiveCommessaRef(commessaId)?.collection('impianti');
   }
 
+  function visibleCommessaRef(commessaId) {
+    return db()?.collection('globalCommesse').doc(text(commessaId));
+  }
+
+  function visiblePlantsRef(commessaId) {
+    return visibleCommessaRef(commessaId)?.collection('impianti');
+  }
+
   function plantKey(raw = {}, fallback = '') {
     const sap = norm(first(raw, ['idSap','idSAP','ID SAP','sap','codiceSap','codiceHera']));
     if (sap) return `sap-${sap}`;
@@ -96,9 +104,34 @@
     await ref.set(merged, { merge: true });
   }
 
+  async function mirrorVisibleCommessa(commessaId, raw = {}) {
+    const snapshot = commessaSnapshot(raw, commessaId);
+    await mergeArchiveDocument(visibleCommessaRef(commessaId), {
+      ...snapshot,
+      nome: snapshot.nome || 'Commessa',
+      sincronizzataDaArchivio: true
+    });
+  }
+
+  async function mirrorVisiblePlant(commessaId, plantId, raw = {}) {
+    const key = plantKey(raw, plantId);
+    const snapshot = plantSnapshot(raw, commessaId, plantId);
+    await mirrorVisibleCommessa(commessaId, raw);
+    await mergeArchiveDocument(visiblePlantsRef(commessaId).doc(key), {
+      ...snapshot,
+      idSAP: snapshot.idSap || '',
+      tipologiaImpianto: snapshot.tipologia || '',
+      descrizioneVia: snapshot.indirizzo || '',
+      competenza: snapshot.area || '',
+      sincronizzatoDaArchivio: true
+    });
+  }
+
   async function archiveCommessa(commessaId, raw = {}) {
     if (!db() || !text(commessaId)) return;
-    await mergeArchiveDocument(archiveCommessaRef(commessaId), commessaSnapshot(raw, commessaId));
+    const snapshot = commessaSnapshot(raw, commessaId);
+    await mergeArchiveDocument(archiveCommessaRef(commessaId), snapshot);
+    await mirrorVisibleCommessa(commessaId, raw);
   }
 
   async function archivePlant(commessaId, plantId, raw = {}) {
@@ -106,7 +139,9 @@
     await archiveCommessa(commessaId, { id: commessaId });
     const key = plantKey(raw, plantId);
     if (!key) return;
-    await mergeArchiveDocument(archivePlantsRef(commessaId).doc(key), plantSnapshot(raw, commessaId, plantId));
+    const snapshot = plantSnapshot(raw, commessaId, plantId);
+    await mergeArchiveDocument(archivePlantsRef(commessaId).doc(key), snapshot);
+    await mirrorVisiblePlant(commessaId, plantId, raw);
   }
 
   async function syncCommessa(commessaId, rawCommessa = null) {
@@ -127,9 +162,6 @@
 
   async function migrateAll() {
     if (!db() || !authUser()) return;
-    try {
-      if (localStorage.getItem(MIGRATION_KEY) === '1') return;
-    } catch (_) { /* continua */ }
     const snapshot = await db().collection(commesseCollectionName()).get();
     for (const doc of snapshot.docs) await syncCommessa(doc.id, doc.data() || {});
     try { localStorage.setItem(MIGRATION_KEY, '1'); } catch (_) { /* non bloccante */ }
@@ -180,7 +212,11 @@
       archivePlant,
       syncCommessa,
       migrateAll,
-      rootCollection: ARCHIVE_ROOT
+      mirrorVisibleCommessa,
+      mirrorVisiblePlant,
+      plantKey,
+      rootCollection: ARCHIVE_ROOT,
+      visibleCollection: 'globalCommesse'
     });
   }
 

@@ -3,153 +3,41 @@
   const M=window.HeraPreventiviModels,P=M?.PV;
   if(!M||!P||M.runtime.avolaSystemModel)return;
   M.runtime.avolaSystemModel=true;
-
-  const MODEL_ID='model-standard-avola-app';
-  const MODEL_NAME='STANDARD AVOLA – MODELLO APP';
-  const ORIGINAL_NAME='Matrice_Preventivo_Avola_Modello_App.xlsx';
-  const FILE_URL='./models/Matrice_Preventivo_Avola_Modello_App.xlsx?v=20260801a';
-  const DETECTION_VERSION='20260801c';
-  const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-  const RNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-  const PRNS='http://schemas.openxmlformats.org/package/2006/relationships';
-  const XNS='http://www.w3.org/XML/1998/namespace';
-  const parser=new DOMParser(),serializer=new XMLSerializer();
-  const C=v=>String(v??'').trim();
-  const N=v=>C(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-
+  const VERSION='20260801d',NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main',RNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships',PRNS='http://schemas.openxmlformats.org/package/2006/relationships',XNS='http://www.w3.org/XML/1998/namespace';
+  const parser=new DOMParser(),serializer=new XMLSerializer(),C=v=>String(v??'').trim(),N=v=>C(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const fields=[
-    {key:'numero_preventivo',label:'Numero preventivo',type:'text',source:'number',required:false,automatic:true,calculated:true,token:'{{numero_preventivo}}'},
-    {key:'data_documento',label:'Data preventivo',type:'date',source:'date',required:false,automatic:true,calculated:true,token:'{{data_documento}}'},
-    {key:'cliente',label:'Cliente / Ragione sociale',type:'textarea',source:'clientName',required:true,automatic:false,token:'{{cliente}}'},
-    {key:'richiedente',label:'C.A. / Richiedente',type:'text',source:'requester',required:false,automatic:false,token:'{{richiedente}}'},
-    {key:'oggetto',label:'Oggetto',type:'textarea',source:'subject',required:true,automatic:false,token:'{{oggetto}}'},
-    {key:'lavorazioni',label:'Lavorazioni',type:'repeater',source:'lavorazioni',required:true,automatic:true,calculated:true,detectedFromLabel:'tabella lavorazioni'}
+    {key:'numero_preventivo',label:'Numero preventivo',type:'text',source:'number',automatic:true,calculated:true},
+    {key:'data_documento',label:'Data preventivo',type:'date',source:'date',automatic:true,calculated:true},
+    {key:'cliente',label:'Cliente / Ragione sociale',type:'textarea',source:'clientName',required:true},
+    {key:'richiedente',label:'C.A. / Richiedente',type:'text',source:'requester'},
+    {key:'oggetto',label:'Oggetto',type:'textarea',source:'subject',required:true},
+    {key:'lavorazioni',label:'Lavorazioni',type:'repeater',source:'lavorazioni',required:true,automatic:true,calculated:true}
   ];
-
-  function ensureModel(){
-    P.state.models=P.state.models||[];
-    let model=P.state.models.find(item=>item.id===MODEL_ID)||P.state.models.find(item=>{
-      const text=N(`${item.name||''} ${item.originalName||''}`);
-      return text.includes('standard avola')||text.includes('matrice preventivo avola fedele pdf');
-    });
-    const now=P.nowIso?.()||new Date().toISOString();
-    const data={
-      id:model?.id||MODEL_ID,
-      name:MODEL_NAME,
-      documentType:'preventivo',
-      description:'Matrice Avola ufficiale integrata nell’app. Compila cliente, richiedente, oggetto e lavorazioni mantenendo il foglio originale.',
-      format:'xlsx',
-      originalName:ORIGINAL_NAME,
-      fileUrl:FILE_URL,
-      active:true,
-      systemModel:true,
-      builtIn:false,
-      version:Math.max(1,Number(model?.version)||1),
-      fields:fields.map(field=>({...field})),
-      fieldDetectionVersion:DETECTION_VERSION,
-      analysis:{...(model?.analysis||{}),sheets:['Preventivo Avola'],fieldDetectionVersion:DETECTION_VERSION,recoveredFields:fields.length,systemTemplate:true},
-      compatibility:'XLSX originale compilato, logo e impaginazione invariati',
-      createdAt:model?.createdAt||now,
-      updatedAt:now,
-      updatedBy:P.currentUser?.()||'',
-      syncPending:true
-    };
-    if(model)Object.assign(model,data);else P.state.models.unshift(data);
-    P.persistLocal?.();
-    P.scheduleSync?.();
-    return model||data;
+  const isAvola=model=>{const text=N(`${model?.name||''} ${model?.originalName||''}`);return model?.format==='xlsx'&&(text.includes('standard avola')||text.includes('matrice preventivo avola fedele'))};
+  function updateExisting(){
+    const models=P.state.models||[],model=models.find(isAvola);if(!model)return null;
+    const signature=JSON.stringify(model.fields||[]),next=JSON.stringify(fields);
+    Object.assign(model,{documentType:'preventivo',active:true,systemModel:true,fieldDetectionVersion:VERSION,fields:fields.map(x=>({...x})),compatibility:'XLSX originale compilato, logo e impaginazione invariati',analysis:{...(model.analysis||{}),fieldDetectionVersion:VERSION,recoveredFields:fields.length,avolaTemplate:true}});
+    if(signature!==next){model.version=Math.max(1,Number(model.version)||1)+1;model.updatedAt=P.nowIso();model.updatedBy=P.currentUser();model.syncPending=true;P.persistLocal?.();P.scheduleSync?.();}
+    return model;
   }
-
-  const parse=text=>{const doc=parser.parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw new Error('La matrice Avola non è leggibile.');return doc};
-  const child=(node,name)=>[...node.children].find(item=>item.localName===name)||null;
-  const sheetPath=zip=>{
-    const wb=parse(zip.file('xl/workbook.xml').asText());
-    const rels=parse(zip.file('xl/_rels/workbook.xml.rels').asText());
-    const sheet=wb.getElementsByTagNameNS(NS,'sheet')[0];
-    const id=sheet?.getAttributeNS(RNS,'id')||sheet?.getAttribute('r:id');
-    const rel=[...rels.getElementsByTagNameNS(PRNS,'Relationship')].find(item=>item.getAttribute('Id')===id);
-    const target=rel?.getAttribute('Target')?.replace(/^\/+/, '');
-    if(!target)throw new Error('Foglio Preventivo Avola non trovato.');
-    return target.startsWith('xl/')?target:`xl/${target}`;
-  };
-  const sheetData=doc=>doc.getElementsByTagNameNS(NS,'sheetData')[0];
-  const row=(doc,n)=>{
-    let result=[...doc.getElementsByTagNameNS(NS,'row')].find(item=>Number(item.getAttribute('r'))===n);
-    if(result)return result;
-    result=doc.createElementNS(NS,'row');result.setAttribute('r',String(n));
-    const data=sheetData(doc),next=[...data.children].find(item=>Number(item.getAttribute('r'))>n);
-    data.insertBefore(result,next||null);return result;
-  };
-  const colNumber=letters=>[...String(letters||'').toUpperCase()].reduce((total,ch)=>total*26+ch.charCodeAt(0)-64,0);
-  const point=ref=>{const match=String(ref||'').match(/^([A-Z]+)(\d+)$/i);return match?{col:colNumber(match[1]),row:Number(match[2])}:null};
-  const cell=(doc,ref)=>{
-    let result=[...doc.getElementsByTagNameNS(NS,'c')].find(item=>item.getAttribute('r')===ref);
-    if(result)return result;
-    const p=point(ref),targetRow=row(doc,p.row);result=doc.createElementNS(NS,'c');result.setAttribute('r',ref);
-    const next=[...targetRow.children].find(item=>colNumber((item.getAttribute('r')||'').replace(/\d+/g,''))>p.col);
-    targetRow.insertBefore(result,next||null);return result;
-  };
-  const clear=target=>{[...target.children].forEach(item=>item.remove());target.removeAttribute('t')};
-  const setText=(doc,ref,value)=>{
-    const target=cell(doc,ref),style=target.getAttribute('s');clear(target);if(style!==null)target.setAttribute('s',style);
-    target.setAttribute('t','inlineStr');const is=doc.createElementNS(NS,'is'),text=doc.createElementNS(NS,'t');
-    text.setAttributeNS(XNS,'xml:space','preserve');text.textContent=String(value??'');is.appendChild(text);target.appendChild(is);
-  };
-  const setNumber=(doc,ref,value)=>{
-    const target=cell(doc,ref),style=target.getAttribute('s');clear(target);if(style!==null)target.setAttribute('s',style);
-    const node=doc.createElementNS(NS,'v');node.textContent=String(Number(value)||0);target.appendChild(node);
-  };
-  const setFormula=(doc,ref,formula,cached=0)=>{
-    const target=cell(doc,ref),style=target.getAttribute('s');clear(target);if(style!==null)target.setAttribute('s',style);
-    const f=doc.createElementNS(NS,'f'),v=doc.createElementNS(NS,'v');f.textContent=formula;v.textContent=String(Number(cached)||0);target.append(f,v);
-  };
-  const dateIt=value=>{const raw=C(value),m=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:raw};
-  const forceRecalc=zip=>{
-    zip.remove('xl/calcChain.xml');
-    const entry=zip.file('xl/workbook.xml');if(!entry)return;
-    const doc=parse(entry.asText());let calc=doc.getElementsByTagNameNS(NS,'calcPr')[0];
-    if(!calc){calc=doc.createElementNS(NS,'calcPr');doc.documentElement.appendChild(calc)}
-    calc.setAttribute('calcMode','auto');calc.setAttribute('fullCalcOnLoad','1');calc.setAttribute('forceFullCalc','1');
-    zip.file('xl/workbook.xml',serializer.serializeToString(doc));
-  };
-  const isAvola=model=>model&&(model.id===MODEL_ID||model.systemModel===true&&N(model.name).includes('standard avola'));
-
+  const parse=text=>{const doc=parser.parseFromString(text,'application/xml');if(doc.querySelector('parsererror'))throw Error('La matrice Avola non è leggibile.');return doc};
+  const sheetPath=zip=>{const wb=parse(zip.file('xl/workbook.xml').asText()),rels=parse(zip.file('xl/_rels/workbook.xml.rels').asText()),sheet=wb.getElementsByTagNameNS(NS,'sheet')[0],id=sheet?.getAttributeNS(RNS,'id')||sheet?.getAttribute('r:id'),rel=[...rels.getElementsByTagNameNS(PRNS,'Relationship')].find(x=>x.getAttribute('Id')===id),target=rel?.getAttribute('Target')?.replace(/^\/+/, '');if(!target)throw Error('Foglio Preventivo Avola non trovato.');return target.startsWith('xl/')?target:`xl/${target}`};
+  const colN=s=>[...String(s||'').toUpperCase()].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0),point=r=>{const m=String(r||'').match(/^([A-Z]+)(\d+)$/i);return m?{c:colN(m[1]),r:Number(m[2])}:null};
+  const row=(doc,n)=>{let r=[...doc.getElementsByTagNameNS(NS,'row')].find(x=>Number(x.getAttribute('r'))===n);if(r)return r;r=doc.createElementNS(NS,'row');r.setAttribute('r',String(n));const data=doc.getElementsByTagNameNS(NS,'sheetData')[0],next=[...data.children].find(x=>Number(x.getAttribute('r'))>n);data.insertBefore(r,next||null);return r};
+  const cell=(doc,ref)=>{let c=[...doc.getElementsByTagNameNS(NS,'c')].find(x=>x.getAttribute('r')===ref);if(c)return c;const p=point(ref),rw=row(doc,p.r);c=doc.createElementNS(NS,'c');c.setAttribute('r',ref);const next=[...rw.children].find(x=>colN((x.getAttribute('r')||'').replace(/\d+/g,''))>p.c);rw.insertBefore(c,next||null);return c};
+  const clear=c=>{[...c.children].forEach(x=>x.remove());c.removeAttribute('t')};
+  const text=(doc,ref,value)=>{const c=cell(doc,ref),s=c.getAttribute('s');clear(c);if(s!==null)c.setAttribute('s',s);c.setAttribute('t','inlineStr');const is=doc.createElementNS(NS,'is'),t=doc.createElementNS(NS,'t');t.setAttributeNS(XNS,'xml:space','preserve');t.textContent=String(value??'');is.appendChild(t);c.appendChild(is)};
+  const number=(doc,ref,value)=>{const c=cell(doc,ref),s=c.getAttribute('s');clear(c);if(s!==null)c.setAttribute('s',s);const v=doc.createElementNS(NS,'v');v.textContent=String(Number(value)||0);c.appendChild(v)};
+  const formula=(doc,ref,f,cached=0)=>{const c=cell(doc,ref),s=c.getAttribute('s');clear(c);if(s!==null)c.setAttribute('s',s);const fn=doc.createElementNS(NS,'f'),v=doc.createElementNS(NS,'v');fn.textContent=f;v.textContent=String(Number(cached)||0);c.append(fn,v)};
+  const dateIt=v=>{const m=C(v).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:C(v)};
   async function exportAvola(model,stored,data){
-    await M.ensureScript('PizZip',M.constants.ZIP_LIB,'pizzip');
-    const zip=new PizZip(stored.buffer),path=sheetPath(zip),entry=zip.file(path);
-    if(!entry)throw new Error('File matrice Avola non disponibile.');
-    const doc=parse(entry.asText()),lines=Array.isArray(data.lavorazioni)?data.lavorazioni:[];
-    if(lines.length>12)throw new Error('La matrice STANDARD AVOLA contiene 12 righe lavorazioni. Riduci le lavorazioni oppure crea un secondo preventivo.');
-
-    setText(doc,'H2',`Offerta n° ${C(data.numero_preventivo||data.numero_documento||data.number)} del ${dateIt(data.data_documento||data.date)}`);
-    setText(doc,'H6',C(data.cliente||data.clientName));
-    setText(doc,'H11',`C.A.: ${C(data.richiedente||data.requester)}`);
-    setText(doc,'D17',C(data.oggetto||data.subject));
-
-    for(let index=0;index<12;index+=1){
-      const r=24+index,line=lines[index]||{};
-      setText(doc,`B${r}`,C(line.codice));
-      setText(doc,`D${r}`,C(line.descrizione));
-      setText(doc,`J${r}`,C(line.unita_misura));
-      if(lines[index]){
-        setNumber(doc,`K${r}`,Number(line.quantita)||0);
-        setNumber(doc,`L${r}`,Number(line.prezzo_unitario)||0);
-        setFormula(doc,`N${r}`,`K${r}*L${r}`,Number(line.totale_riga)||((Number(line.quantita)||0)*(Number(line.prezzo_unitario)||0)));
-      }else{
-        setText(doc,`K${r}`,'');setText(doc,`L${r}`,'');setText(doc,`N${r}`,'');
-      }
-    }
-    const end=Math.max(24,23+lines.length);
-    setFormula(doc,'N37',`SUM(N24:N${end})`,Number(data.totale_imponibile)||0);
-    zip.file(path,serializer.serializeToString(doc));forceRecalc(zip);
-    const output=zip.generate({type:'blob',mimeType:stored.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
-    M.download(output,'Matrice_Preventivo_Avola-compilato.xlsx');
+    await M.ensureScript('PizZip',M.constants.ZIP_LIB,'pizzip');const zip=new PizZip(stored.buffer),path=sheetPath(zip),entry=zip.file(path);if(!entry)throw Error('File originale STANDARD AVOLA non disponibile.');
+    const doc=parse(entry.asText()),lines=Array.isArray(data.lavorazioni)?data.lavorazioni:[];if(lines.length>12)throw Error('La matrice STANDARD AVOLA contiene 12 righe lavorazioni.');
+    text(doc,'H2',`Offerta n° ${C(data.numero_preventivo||data.number)} del ${dateIt(data.data_documento||data.date)}`);text(doc,'H6',C(data.cliente||data.clientName));text(doc,'H11',`C.A.: ${C(data.richiedente||data.requester)}`);text(doc,'D17',C(data.oggetto||data.subject));
+    for(let i=0;i<12;i+=1){const r=24+i,line=lines[i];text(doc,`B${r}`,line?.codice||'');text(doc,`D${r}`,line?.descrizione||'');text(doc,`J${r}`,line?.unita_misura||'');if(line){number(doc,`K${r}`,line.quantita);number(doc,`L${r}`,line.prezzo_unitario);formula(doc,`N${r}`,`K${r}*L${r}`,line.totale_riga)}else{text(doc,`K${r}`,'');text(doc,`L${r}`,'');text(doc,`N${r}`,'')}}
+    formula(doc,'N37',`SUM(N24:N${Math.max(24,23+lines.length)})`,data.totale_imponibile);zip.file(path,serializer.serializeToString(doc));zip.remove('xl/calcChain.xml');M.download(zip.generate({type:'blob',mimeType:stored.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'}),'Matrice_Preventivo_Avola-compilato.xlsx');
   }
-
-  const previous=M.exportSheet?.bind(M);
-  if(previous)M.exportSheet=(model,stored,data,doc)=>isAvola(model)?exportAvola(model,stored,data):previous(model,stored,data,doc);
-
-  ensureModel();
-  [800,2500,6000].forEach(delay=>setTimeout(ensureModel,delay));
-  window.addEventListener('focus',()=>setTimeout(ensureModel,200));
+  const previous=M.exportSheet?.bind(M);if(previous)M.exportSheet=(model,stored,data,doc)=>isAvola(model)?exportAvola(model,stored,data):previous(model,stored,data,doc);
+  updateExisting();[800,2500,6000].forEach(ms=>setTimeout(updateExisting,ms));window.addEventListener('focus',()=>setTimeout(updateExisting,200));
 })();

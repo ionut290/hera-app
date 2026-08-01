@@ -33,7 +33,8 @@
     "check:map-fit": "node scripts/check-map-auto-fit.js",
     "check:management-v2": "node scripts/check-management-v2.js",
     "check:preventivi-models": "node scripts/check-preventivi-models.js",
-    "check:preventivi-registry-model": "node scripts/check-preventivi-registry-model-fix.js"
+    "check:preventivi-registry-model": "node scripts/check-preventivi-registry-model-fix.js",
+    "check:preventivi-model-field-recovery": "node scripts/check-preventivi-model-field-recovery.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

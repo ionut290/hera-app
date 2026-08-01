@@ -152,6 +152,7 @@
         ['price-lists', './preventivi-price-lists.js?v=20260731a'],
         ['quotes', './preventivi-quotes.js?v=20260731a'],
         ['consuntivi', './preventivi-consuntivi.js?v=20260801a'],
+        ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801b'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

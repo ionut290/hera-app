@@ -102,7 +102,7 @@ assert.match(index, /id="today-mezzi-btn"[^>]*today-mezzi-only[^>]*>[\s\S]*?id="
 assert.doesNotMatch(index, /Nessun mezzo assegnato|I tuoi mezzi|Visualizza i mezzi assegnati alla tua squadra/);
 assert.match(index, />I tuoi avvisi<\/span>/);
 assertAssetIsSynchronized("squadre-restyle.css");
-assert.match(serviceWorker, /hera-app-shell-v\d+/);
+assert.match(serviceWorker, /varga-cantieri-shell-v\d+/);
 assert.match(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 assert.doesNotMatch(layout, /#today-summary-card \.today-summary-grid\s*\{\s*grid-template-columns: repeat\(2,/);
 assert.match(layout, /#today-summary-card \.today-summary-item\s*\{[\s\S]*?min-height: 54px;[\s\S]*?padding: 6px 4px;/);

@@ -9,8 +9,11 @@ assert(!fix.includes('Impianto senza nome'),'Non deve apparire Impianto senza no
 ['originalOutputName','-compilato.${extension}','stesso formato e stessa impaginazione','Il PDF originale non contiene campi modulo compilabili','button.hidden = true'].forEach(x=>assert(fix.includes(x),`Manca esportazione rigorosa: ${x}`));
 assert(follow.includes('pending=null'),'Manca protezione salvataggio asincrono.');
 assert(follow.includes("replace(/\\[\\[\\s*"),'Manca supporto segnaposto DOCX [[campo]].');
+assert(follow.includes('__preventiviExportTextGuard'),'Manca la protezione contro il ciclo infinito dei pulsanti.');
+assert(follow.includes("this.matches?.('[data-pvm-export]')"),'La protezione deve essere limitata ai pulsanti di esportazione.');
+assert(follow.includes("descriptor.get.call(this)===next"),'Manca il controllo che evita scritture textContent identiche.');
 assert(loader.includes("preventivi-registry-model-export-fix.js?v=20260801a"),'Modulo principale non caricato.');
 assert(loader.includes("preventivi-registry-model-followup.js?v=20260801a"),'Modulo follow-up non caricato.');
-assert(sw.includes('varga-cantieri-shell-v74'),'Cache PWA non aggiornata.');
-assert(sw.includes('preventivi-registry-model-export-fix.js?v=20260801a'),'Correzione non presente nella cache.');
+assert(sw.includes('varga-cantieri-shell-v75'),'Cache PWA anti blocco non aggiornata.');
+assert(sw.includes('preventivi-registry-model-followup.js?v=20260801a'),'Hotfix non presente nella cache.');
 console.log('check-preventivi-registry-model-fix: OK');

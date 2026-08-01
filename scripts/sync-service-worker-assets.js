@@ -32,9 +32,19 @@ for (const assetName of assetNames) {
 }
 
 if (changed) {
-  serviceWorker = serviceWorker.replace(/hera-app-shell-v(\d+)/, (_, version) => (
-    `hera-app-shell-v${Number(version) + 1}`
-  ));
+  let cacheVersionUpdated = false;
+  serviceWorker = serviceWorker.replace(
+    /((?:hera-app|varga-cantieri)-shell-v)(\d+)/,
+    (_, prefix, version) => {
+      cacheVersionUpdated = true;
+      return `${prefix}${Number(version) + 1}`;
+    }
+  );
+
+  if (!cacheVersionUpdated) {
+    throw new Error(`${serviceWorkerPath} non contiene un nome cache versionato riconosciuto`);
+  }
+
   fs.writeFileSync(serviceWorkerPath, serviceWorker);
   console.log("Service Worker sincronizzato con le versioni degli asset in index.html.");
 } else {

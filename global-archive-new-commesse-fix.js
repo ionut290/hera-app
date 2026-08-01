@@ -73,14 +73,37 @@
       script.src = './preventivi-persistenza-selezioni-fix.js?v=20260801a';
       script.defer = true;
       script.dataset.preventiviSelectionPersistence = '1';
-      script.addEventListener('error', () => console.warn('Persistenza selezioni preventivi non caricata.'), { once: true });
+      script.addEventListener('load', loadCompleteQuotePersistence, { once: true });
+      script.addEventListener('error', () => {
+        console.warn('Persistenza selezioni preventivi non caricata.');
+        loadCompleteQuotePersistence();
+      }, { once: true });
       document.head.appendChild(script);
     };
     waitForModules();
   }
 
+  function loadCompleteQuotePersistence() {
+    if (document.querySelector('script[data-preventivi-complete-persistence-v2]')) return;
+    const wait = () => {
+      if (!window.HeraPreventivi?.saveRemote || !window.HeraPreventiviModels?.selectedModel) {
+        window.setTimeout(wait, 350);
+        return;
+      }
+      if (document.querySelector('script[data-preventivi-complete-persistence-v2]')) return;
+      const script = document.createElement('script');
+      script.src = './preventivi-salvataggio-completo-v2.js?v=20260801a';
+      script.defer = true;
+      script.dataset.preventiviCompletePersistenceV2 = '1';
+      script.addEventListener('error', () => console.warn('Salvataggio completo preventivi v2 non caricato.'), { once: true });
+      document.head.appendChild(script);
+    };
+    wait();
+  }
+
   function start() {
     loadPreventiviSelectionPersistence();
+    window.setTimeout(loadCompleteQuotePersistence, 2500);
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
       if (!user) return;

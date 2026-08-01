@@ -169,6 +169,7 @@
         ['models-ui', './preventivi-models-ui.js?v=20260801b'],
         ['models-documents', './preventivi-models-documents.js?v=20260801c'],
         ['models-export', './preventivi-models-export.js?v=20260801c'],
+        ['conditional-discount', './preventivi-ribasso-condizionale-fix.js?v=20260801a'],
         ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
         ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801b'],
         ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801c'],

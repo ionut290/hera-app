@@ -70,9 +70,18 @@
       }
       if (document.querySelector('script[data-preventivi-export-naming-fix]')) return;
       const script = document.createElement('script');
-      script.src = './preventivi-export-naming-fix.js?v=20260801a';
+      script.src = './preventivi-export-naming-fix.js?v=20260801b';
       script.defer = true;
       script.dataset.preventiviExportNamingFix = '1';
+      script.addEventListener('load', () => {
+        if (document.querySelector('script[data-preventivi-export-standard-override]')) return;
+        const override = document.createElement('script');
+        override.src = './preventivi-export-naming-standard-override.js?v=20260801a';
+        override.defer = true;
+        override.dataset.preventiviExportStandardOverride = '1';
+        override.addEventListener('error', () => console.warn('Regole modello Standard non caricate.'), { once: true });
+        document.head.appendChild(override);
+      }, { once: true });
       script.addEventListener('error', () => console.warn('Regole nomi documenti non caricate.'), { once: true });
       document.head.appendChild(script);
     };

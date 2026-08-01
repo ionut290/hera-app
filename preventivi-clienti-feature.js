@@ -37,8 +37,10 @@
     clients: [],
     loaded: false,
     syncing: false,
-    viewInstalled: false
+    viewInstalled: false,
+    remoteLoadedAt: 0
   };
+  const REMOTE_TTL_MS = 5 * 60 * 1000;
 
   function loadLocal() {
     try {
@@ -78,13 +80,13 @@
       for (const key of keys) if (raw[key] !== undefined && text(raw[key])) return text(raw[key]);
       return '';
     };
-    const client = { id: clientId(raw), updatedAt: raw.updatedAt || now() };
+    const client = { id: clientId(raw), updatedAt: raw.updatedAt || now(), syncPending: raw.syncPending === true };
     Object.entries(aliases).forEach(([key, keys]) => { client[key] = pick(keys); });
     if (!client.spettabile) client.spettabile = client.ragioneSociale;
     return client;
   }
 
-  function mergeClients(rows) {
+  function mergeClients(rows, { markPending = false } = {}) {
     const map = new Map(state.clients.map((item) => [item.id, item]));
     rows.map(normalizeClient).forEach((incoming) => {
       const match = [...map.values()].find((item) =>
@@ -92,24 +94,37 @@
         (incoming.partitaIva && normalize(item.partitaIva) === normalize(incoming.partitaIva)) ||
         (incoming.ragioneSociale && normalize(item.ragioneSociale) === normalize(incoming.ragioneSociale))
       );
-      if (match) Object.assign(match, Object.fromEntries(Object.entries(incoming).filter(([, value]) => text(value))), { updatedAt: now() });
-      else map.set(incoming.id, incoming);
+      if (match?.syncPending && !markPending) return;
+      const values = Object.fromEntries(Object.entries(incoming).filter(([key, value]) => key === 'syncPending' || text(value)));
+      if (match) Object.assign(match, values, markPending ? { updatedAt: now(), syncPending: true } : {});
+      else map.set(incoming.id, { ...incoming, syncPending: markPending || incoming.syncPending === true });
     });
     state.clients = [...map.values()].sort((a, b) => (a.ragioneSociale || a.spettabile).localeCompare(b.ragioneSociale || b.spettabile, 'it'));
     saveLocal();
   }
 
-  async function syncRemote() {
+  async function syncRemote({ force = false } = {}) {
     const db = window.firebase?.firestore?.();
     const user = window.firebase?.auth?.()?.currentUser;
     if (!db || !user || state.syncing) return;
     state.syncing = true;
     try {
-      const snapshot = await db.collection(COLLECTION).get();
-      mergeClients(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      const batch = db.batch();
-      state.clients.forEach((client) => batch.set(db.collection(COLLECTION).doc(client.id), { ...client, updatedAt: now() }, { merge: true }));
-      await batch.commit();
+      if (force || !state.remoteLoadedAt || Date.now() - state.remoteLoadedAt >= REMOTE_TTL_MS) {
+        const snapshot = await db.collection(COLLECTION).get();
+        mergeClients(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data(), syncPending: false })));
+        state.remoteLoadedAt = Date.now();
+      }
+      const pending = state.clients.filter((client) => client.syncPending);
+      if (pending.length) {
+        const batch = db.batch();
+        pending.forEach((client) => {
+          const payload = { ...client, syncPending: false };
+          batch.set(db.collection(COLLECTION).doc(client.id), payload, { merge: true });
+        });
+        await batch.commit();
+        pending.forEach((client) => { client.syncPending = false; });
+        saveLocal();
+      }
     } catch (error) {
       console.warn('Clienti preventivi: sincronizzazione non riuscita.', error);
     } finally {
@@ -144,8 +159,8 @@
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         const valid = rows.filter((row) => text(row['RAGIONE SOCIALE'] || row['SPETT.LE'] || row['PARTITA IVA']));
-        mergeClients(valid);
-        await syncRemote();
+        mergeClients(valid, { markPending: true });
+        await syncRemote({ force: true });
         PV.setFeedback?.(`Importati o aggiornati ${valid.length} clienti.`, 'success');
         renderClientsView();
       } catch (error) {
@@ -257,6 +272,7 @@
     event.preventDefault();
     PV.state.view = 'clients';
     renderClientsView();
+    void syncRemote();
     document.querySelectorAll('[data-pv-view]').forEach((button) => button.classList.toggle('active', button.dataset.pvView === 'clients'));
   }, true);
 
@@ -274,8 +290,7 @@
     ensureTab();
     decorateForms();
     observer.observe(document.body, { childList: true, subtree: true });
-    if (window.firebase?.auth) window.firebase.auth().onAuthStateChanged((user) => { if (user) syncRemote(); });
-    else state.loaded = true;
+    state.loaded = true;
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();

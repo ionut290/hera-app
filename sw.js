@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v72";
+const CACHE_NAME = "varga-cantieri-shell-v80";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -28,6 +28,19 @@ const APP_SHELL = [
   "./squad-operator-profile.js?v=20260731a",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./header-menu-runtime.js?v=20260731-header1",
+  "./preventivi-models-core.js?v=20260801b",
+  "./preventivi-models-ui.js?v=20260801b",
+  "./preventivi-models-documents.js?v=20260801b",
+  "./preventivi-models-export.js?v=20260801b",
+  "./preventivi-registry-model-export-fix.js?v=20260801a",
+  "./preventivi-registry-model-followup.js?v=20260801a",
+  "./preventivi-exact-xlsx.js?v=20260801a",
+  "./preventivi-matrix-form-profile.js?v=20260801a",
+  "./preventivi-matrix-xlsx-fields.js?v=20260801a",
+  "./preventivi-model-field-recovery.js?v=20260801c",
+  "./preventivi-model-driven-form.js?v=20260801a",
+  "./preventivi-avola-system-model.js?v=20260801a",
+  "./preventivi-models.css?v=20260801a",
   "./preventivi-firestore-path-fix.js?v=20260731a",
   "./preventivi-firestore-chunks.js?v=20260731a",
   "./preventivi-firestore-batch-fix.js?v=20260731a",
@@ -168,9 +181,7 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "read" || event.action === "") {
     event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
-      for (const client of windows) {
-        client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
-      }
+      for (const client of windows) client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
     }));
     return;
   }

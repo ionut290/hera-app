@@ -21,7 +21,7 @@ const draft = fs.readFileSync(path.join(root, 'preventivi-draft-preserver.js'), 
   "['models-export', './preventivi-models-export.js?v=20260801c']"
 ].forEach(needle => assert(loader.includes(needle), `Loader mancante: ${needle}`));
 assert(loader.includes('preventivi-models.css?v=20260801a'), 'CSS modelli non caricato.');
-assert(sw.includes('varga-cantieri-shell-v86'), 'Cache PWA non aggiornata.');
+assert(sw.includes('varga-cantieri-shell-v87'), 'Cache PWA non aggiornata.');
 assert(source.includes('M.liveModelFields'), 'La ricostruzione dei campi non conserva i valori digitati.');
 assert(loader.includes("['draft-preserver', './preventivi-draft-preserver.js?v=20260801b']"), 'Protezione bozza aggiornata non caricata.');
 assert(draft.includes("saved.key === 'modelId'"), 'Il modello scelto non viene ripristinato prima dei campi.');

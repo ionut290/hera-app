@@ -7,7 +7,7 @@ const p=fs.readFileSync(profile,'utf8'),x=fs.readFileSync(fields,'utf8'),f=fs.re
 ['richiedente_intervento','ditta_esecutrice','competenza_bologna_ovest','competenza_bologna_est','data_richiesta','data_esecuzione'].forEach(token=>assert(p.includes(token)&&x.includes(token),`Campo matrice non completo: ${token}`));
 assert(f.includes('preventivi-matrix-form-profile.js?v=20260801a'));
 assert(f.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'));
-assert(s.includes('varga-cantieri-shell-v86'));
+assert(s.includes('varga-cantieri-shell-v87'));
 assert(s.includes('preventivi-matrix-form-profile.js?v=20260801a'));
 assert(s.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'));
 console.log('check-preventivi-matrix-form: OK');

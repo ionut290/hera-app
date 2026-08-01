@@ -14,7 +14,7 @@ const checks = [
   [runtime.includes('Il collegamento automatico con la commessa non era presente'), 'fallback commessa senza relazione esplicita'],
   [header.includes("['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a']"), 'caricamento runtime hotfix'],
   [header.indexOf("['matrix-runtime-fix'") > header.indexOf("['tabs-models-plant-guard'"), 'ordine caricamento dopo guardia modelli'],
-  [sw.includes('varga-cantieri-shell-v86'), 'cache PWA v86'],
+  [sw.includes('varga-cantieri-shell-v87'), 'cache PWA v87'],
   [sw.includes('./preventivi-matrix-runtime-fix.js?v=20260801a'), 'hotfix nella app shell']
 ];
 

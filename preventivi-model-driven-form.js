@@ -27,6 +27,15 @@
   const modelField=(form,key)=>form.querySelector(`[data-pvm-field="${key}"]`);
   const dataValue=(form,...keys)=>{for(const key of keys){const el=modelField(form,key);if(C(el?.value))return C(el.value)}return''};
   const setModelField=(form,key,value,onlyEmpty=false)=>{const el=modelField(form,key);if(el&&(!onlyEmpty||!C(el.value)))el.value=value??''};
+  const liveValue=(form,name,fallback='')=>{const el=form.elements?.namedItem(name);return el&&'value'in el?el.value:fallback};
+  function liveDoc(form,type,base=currentDoc(type)){
+    const modelFields={...(base.modelFields||{})};
+    form.querySelectorAll('[data-pvm-field]').forEach(el=>{modelFields[el.dataset.pvmField]=el.type==='checkbox'?(el.checked?'X':''):el.value});
+    const commessaId=form.querySelector('[data-pvd-backing="commessaId"]')?.value??base.commessaId??'';
+    const plantId=form.querySelector('[data-pvd-backing="plantId"]')?.value??base.plantId??'';
+    const plantSearch=form.querySelector('[data-pvd-plant-search]')?.value||base.plantName||'';
+    return {...base,modelFields,commessaId,plantId,plantName:plantSearch.split(' — ID SAP ')[0],date:liveValue(form,'date',base.date),issuerName:liveValue(form,'issuerName',base.issuerName),clientName:liveValue(form,'clientName',base.clientName),clientTaxCode:liveValue(form,'clientTaxCode',base.clientTaxCode),workLocation:liveValue(form,'workLocation',base.workLocation),subject:liveValue(form,'subject',base.subject),notes:liveValue(form,'notes',base.notes),validityDays:liveValue(form,'validityDays',base.validityDays),vatRate:liveValue(form,'vatRate',base.vatRate),contractNumber:liveValue(form,'contractNumber',base.contractNumber),requester:liveValue(form,'requester',base.requester),startDate:liveValue(form,'startDate',base.startDate),endDate:liveValue(form,'endDate',base.endDate),description:liveValue(form,'description',base.description),hours:liveValue(form,'hours',base.hours),operators:liveValue(form,'operators',base.operators),vehicles:liveValue(form,'vehicles',base.vehicles),materials:liveValue(form,'materials',base.materials),compiler:liveValue(form,'compiler',base.compiler),commessaCode:liveValue(form,'commessaCode',base.commessaCode),plantSap:liveValue(form,'plantSap',base.plantSap),city:liveValue(form,'city',base.city),plantType:liveValue(form,'plantType',base.plantType)};
+  }
 
   function backing(form,name){
     let hidden=form.querySelector(`input[type="hidden"][data-pvd-backing="${name}"]`);
@@ -114,21 +123,21 @@
       setNamed(form,'vatRate',dataValue(form,'aliquota_iva')||form.elements.namedItem('vatRate')?.value||'0');
     }
   }
-  function restore(form){
+  function restore(form,doc=currentDoc(typeOf(form))){
     if(!form?.classList.contains('pvd-active'))return;
     form.classList.remove('pvd-active');form.querySelector('[data-pvd-section]')?.remove();form.querySelectorAll('[data-pvd-hidden]').forEach(el=>hide(el,false));
     const header=standardHeader(form);restoreRequired(header);restoreBackings(form);
-    const dyn=form.querySelector('[data-pvm-dynamic-fields]');if(dyn){delete dyn.dataset.pvdOwned;M.renderDynamic?.(form,currentDoc(typeOf(form)));}
+    const dyn=form.querySelector('[data-pvm-dynamic-fields]');if(dyn){delete dyn.dataset.pvdOwned;M.renderDynamic?.(form,doc);}
     delete form.dataset.pvdSignature;
   }
   function apply(form){
     if(!form)return;
-    const type=typeOf(form),model=selectedModel(form);
-    if(!model)return restore(form);
-    if(type==='preventivo'&&isDepGas(model)){restore(form);return;}
+    const type=typeOf(form),model=selectedModel(form),doc=liveDoc(form,type);
+    if(!model)return restore(form,doc);
+    if(type==='preventivo'&&isDepGas(model)){restore(form,doc);return;}
     const r=registry(),sig=[model.id,model.version,fields(model).map(f=>`${f.key}:${f.required?'1':'0'}:${f.type}`).join(','),r.commesse.map(x=>x.id).join(','),r.plants.map(x=>x.id).join(',')].join('|');
     if(form.dataset.pvdSignature===sig){syncTechnical(form);return;}
-    const doc=currentDoc(type),header=standardHeader(form);hide(header,true);suspendRequired(header);form.classList.add('pvd-active');
+    const header=standardHeader(form);hide(header,true);suspendRequired(header);form.classList.add('pvd-active');
     backing(form,'commessaId').value=doc.commessaId||'';backing(form,'plantId').value=doc.plantId||'';
     const dyn=form.querySelector('[data-pvm-dynamic-fields]');if(dyn){dyn.innerHTML='<p class="pv-muted">I campi vengono mostrati nella sezione dedicata al modello.</p>';dyn.dataset.pvdOwned='1';}
     economicSections(form,type,needsEconomic(model));renderSection(form,model,doc,r);form.dataset.pvdSignature=sig;syncTechnical(form);

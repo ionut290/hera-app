@@ -20,12 +20,13 @@ assert(follow.includes("descriptor.get.call(this)===next"),'Manca il controllo c
 assert(follow.includes('preventivi-exact-xlsx.js?v=20260801b'),'Compilatore XLSX esatto non caricato.');
 assert(follow.includes('preventivi-matrix-form-profile.js?v=20260801a'),'Profilo matrice non caricato.');
 assert(follow.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'),'Campi matrice XLSX non caricati.');
-assert(follow.includes('preventivi-model-driven-form.js?v=20260801a'),'Form dinamico generale non caricato.');
+assert(follow.includes('preventivi-model-driven-form.js?v=20260801b'),'Form dinamico generale non caricato.');
 ['typeof commesseById','data-matrix-commessa','data-matrix-plant-search','Dati richiesti dalla matrice','richiedente_intervento','ditta_esecutrice','competenza_bologna_ovest','competenza_bologna_est','data_richiesta','data_esecuzione'].forEach(x=>assert(matrix.includes(x),`Manca nel form matrice: ${x}`));
 assert(matrix.includes("first.hidden=true"),'Il modulo deve nascondere l’intestazione generica.');
 assert(matrix.includes("set('issuerName','Avola Società Cooperativa')"),'Manca la compilazione automatica dei campi tecnici nascosti.');
 ['RICHIEDENTE INTERVENTO','DITTA ESECUTRICE SE DIVERSA DA AVOLA','COMPETENZA BOLOGNA OVEST','COMPETENZA BOLOGNA EST','DATA RICHIESTA','DATA ESECUZIONE'].forEach(x=>assert(matrixFields.includes(x),`Manca esportazione campo matrice: ${x}`));
 ['Dati richiesti dal modello','data-pvd-commessa','data-pvd-plant-search','economicSections','needsEconomic','pvd-active','commessaId','plantId','originalModelData','modelFields:M.modelPayload','type===\'consuntivo\''].forEach(x=>assert(dynamic.includes(x),`Manca nel form dinamico: ${x}`));
+['function liveDoc','querySelectorAll(\'[data-pvm-field]\')','clientName:liveValue','subject:liveValue','restore(form,doc)','doc=liveDoc(form,type)'].forEach(x=>assert(dynamic.includes(x),`Manca protezione cambio modello: ${x}`));
 assert(dynamic.includes("ordinary=all.filter"),'Il form deve filtrare i campi automatici ed economici.');
 assert(dynamic.includes("hide(header,true)"),'L’intestazione standard deve essere nascosta.');
 assert(dynamic.includes("if(type==='preventivo'&&isDepGas(model))"),'Il modello DEPURAZIONE–GAS deve mantenere il profilo dedicato.');
@@ -34,9 +35,9 @@ assert(exact.includes('[data-pv-action="print-quote"]'),'La stampa generica del 
 assert(exact.includes('[data-cons-print]'),'La stampa generica del consuntivo deve essere bloccata.');
 assert(loader.includes("preventivi-registry-model-export-fix.js?v=20260801a"),'Modulo principale non caricato.');
 assert(loader.includes("preventivi-registry-model-followup.js?v=20260801b"),'Modulo follow-up non caricato.');
-assert(sw.includes('varga-cantieri-shell-v86'),'Cache PWA form dinamico non aggiornata.');
+assert(sw.includes('varga-cantieri-shell-v87'),'Cache PWA form dinamico non aggiornata.');
 assert(sw.includes('preventivi-exact-xlsx.js?v=20260801b'),'Compilatore XLSX non presente nella cache.');
 assert(sw.includes('preventivi-matrix-form-profile.js?v=20260801a'),'Profilo matrice non presente nella cache.');
 assert(sw.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'),'Campi matrice non presenti nella cache.');
-assert(sw.includes('preventivi-model-driven-form.js?v=20260801a'),'Form dinamico non presente nella cache.');
+assert(sw.includes('preventivi-model-driven-form.js?v=20260801b'),'Form dinamico non presente nella cache.');
 console.log('check-preventivi-registry-model-fix: OK');

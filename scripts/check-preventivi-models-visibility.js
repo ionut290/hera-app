@@ -14,7 +14,7 @@ assert(guard.includes('[data-pvm-model-select]'),'Selettore modello non protetto
 assert(guard.includes("'senza nome'"),'Filtro Senza nome non presente.');
 assert(guard.includes('candidateName'),'Recupero denominazione impianto non presente.');
 assert(guard.includes('Impianto SAP'),'Fallback ID SAP non presente.');
-assert(sw.includes('varga-cantieri-shell-v86'),'Cache PWA non aggiornata.');
+assert(sw.includes('varga-cantieri-shell-v87'),'Cache PWA non aggiornata.');
 assert(sw.includes('preventivi-tabs-models-plant-guard.js?v=20260801a'),'Guardia non presente nella cache PWA.');
 cp.execFileSync(process.execPath,['--check',path.join(root,'header-menu-runtime.js')]);
 cp.execFileSync(process.execPath,['--check',path.join(root,'preventivi-tabs-models-plant-guard.js')]);

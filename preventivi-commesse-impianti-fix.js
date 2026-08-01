@@ -1,254 +1,214 @@
 (() => {
   'use strict';
 
-  const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  const first = (obj, keys) => {
-    for (const key of keys) {
-      const value = obj?.[key];
-      if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+  const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const get = (o, keys) => {
+    for (const k of keys) {
+      const v = o?.[k];
+      if (v !== undefined && v !== null && String(v).trim()) return v;
     }
     return '';
   };
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  const COMMESSA_KEYS = ['id','uid','commessaId','projectId','codice','codiceCommessa','numeroCommessa'];
-  const COMMESSA_NAME_KEYS = ['nome','name','denominazione','titolo','commessa','descrizione'];
-  const PLANT_ID_KEYS = ['id','uid','impiantoId','plantId','idSap','ID SAP','sap','codiceSap'];
-  const PLANT_NAME_KEYS = ['denominazione','Denominazione Impianto','nome','name','impianto','descrizione'];
-
-  function collectRegistry() {
+  function registry() {
     const commesse = [];
     const plants = [];
-    const seenObjects = new WeakSet();
+    const seen = new WeakSet();
 
-    const addCommessa = (raw, isGlobal, path) => {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-      const id = String(first(raw, COMMESSA_KEYS) || `${isGlobal ? 'global' : 'commessa'}-${normalize(first(raw, COMMESSA_NAME_KEYS)) || commesse.length}`);
-      const name = String(first(raw, COMMESSA_NAME_KEYS) || 'Commessa senza nome');
-      if (!name || /impianto senza nome/i.test(name)) return null;
-      const item = {
-        id,
-        name,
-        code: String(first(raw, ['codiceCommessa','codice','code','numeroCommessa']) || ''),
-        client: String(first(raw, ['cliente','committente','clientName','ragioneSociale']) || ''),
-        contract: String(first(raw, ['numeroContratto','contratto','contractNumber']) || ''),
-        requester: String(first(raw, ['richiedente','referente','referenteCliente']) || ''),
-        isGlobal: Boolean(isGlobal),
-        path,
-        raw
-      };
-      const existing = commesse.find((entry) => entry.id === item.id && entry.isGlobal === item.isGlobal);
-      if (!existing) commesse.push(item);
-      return existing || item;
+    const addCommessa = (raw, global, path) => {
+      const name = String(get(raw, ['nome','name','denominazione','titolo','commessa','descrizione']) || '');
+      if (!name) return null;
+      const id = String(get(raw, ['id','uid','commessaId','projectId','codice','codiceCommessa','numeroCommessa']) || `${global ? 'global' : 'commessa'}-${norm(name)}`);
+      let item = commesse.find((x) => x.id === id && x.global === global);
+      if (!item) {
+        item = {
+          id, name, global, path,
+          code: String(get(raw, ['codiceCommessa','codice','code','numeroCommessa']) || ''),
+          client: String(get(raw, ['cliente','committente','clientName','ragioneSociale']) || ''),
+          contract: String(get(raw, ['numeroContratto','contratto','contractNumber']) || ''),
+          requester: String(get(raw, ['richiedente','referente','referenteCliente']) || '')
+        };
+        commesse.push(item);
+      }
+      return item;
     };
 
-    const addPlant = (raw, commessa, isGlobal, path) => {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
-      const name = String(first(raw, PLANT_NAME_KEYS) || '');
-      const sap = String(first(raw, ['idSap','ID SAP','sap','codiceSap']) || '');
+    const addPlant = (raw, parent, global, path) => {
+      const name = String(get(raw, ['denominazione','Denominazione Impianto','nome','name','impianto','descrizione']) || '');
+      const sap = String(get(raw, ['idSap','ID SAP','sap','codiceSap']) || '');
       if (!name && !sap) return;
-      const id = String(first(raw, PLANT_ID_KEYS) || `${commessa?.id || 'impianto'}-${normalize(name || sap)}-${plants.length}`);
-      const explicitCommessa = String(first(raw, ['commessaId','projectId','idCommessa','codiceCommessa','commessa','commessaUid']) || '');
+      const id = String(get(raw, ['id','uid','impiantoId','plantId','idSap','ID SAP','sap']) || `${parent?.id || 'impianto'}-${norm(name || sap)}`);
+      const commessaId = String(get(raw, ['commessaId','projectId','idCommessa','codiceCommessa','commessa','commessaUid']) || parent?.id || '');
       const item = {
-        id,
-        commessaId: explicitCommessa || commessa?.id || '',
-        commessaName: commessa?.name || String(first(raw, ['nomeCommessa','commessaNome']) || ''),
-        isGlobal: Boolean(isGlobal || commessa?.isGlobal),
-        name: name || `Impianto ${sap}`,
-        sap,
-        address: String(first(raw, ['indirizzo','Descrizione via','descrizioneVia','via','address','ubicazione']) || ''),
-        city: String(first(raw, ['comune','Comune','city','localita']) || ''),
-        type: String(first(raw, ['tipologia','Tipologia impianto','tipo','type']) || ''),
-        area: String(first(raw, ['area','AREA','competenza','Area/Competenza']) || ''),
-        coordinates: String(first(raw, ['coordinate','coordinates','Coordinate GPS(X)/GPS(Y)','coordinateGps']) || ''),
-        raw,
-        path
+        id, commessaId, commessaName: parent?.name || String(get(raw, ['nomeCommessa','commessaNome']) || ''),
+        global: Boolean(global || parent?.global), path, name: name || `Impianto ${sap}`, sap,
+        address: String(get(raw, ['indirizzo','Descrizione via','descrizioneVia','via','address','ubicazione']) || ''),
+        city: String(get(raw, ['comune','Comune','city','localita']) || ''),
+        type: String(get(raw, ['tipologia','Tipologia impianto','tipo','type']) || ''),
+        area: String(get(raw, ['area','AREA','competenza','Area/Competenza']) || ''),
+        coordinates: String(get(raw, ['coordinate','coordinates','Coordinate GPS(X)/GPS(Y)','coordinateGps']) || '')
       };
-      if (!plants.some((entry) => entry.id === item.id && entry.commessaId === item.commessaId && entry.isGlobal === item.isGlobal)) plants.push(item);
+      if (!plants.some((x) => x.id === id && x.commessaId === commessaId && x.global === item.global)) plants.push(item);
     };
 
-    const walk = (value, path = '', inheritedCommessa = null, inheritedGlobal = false, depth = 0) => {
-      if (depth > 8 || value === null || value === undefined) return;
-      const isGlobal = inheritedGlobal || /(^|[._\-/ ])global([._\-/ ]|$)/i.test(path);
-
+    const walk = (value, path = '', parent = null, global = false, depth = 0) => {
+      if (depth > 8 || value == null) return;
+      global = global || /(^|[._\-/ ])global([._\-/ ]|$)/i.test(path);
       if (Array.isArray(value)) {
-        value.forEach((item, index) => walk(item, `${path}[${index}]`, inheritedCommessa, isGlobal, depth + 1));
+        value.forEach((x, i) => walk(x, `${path}[${i}]`, parent, global, depth + 1));
         return;
       }
-      if (typeof value !== 'object') return;
-      if (seenObjects.has(value)) return;
-      seenObjects.add(value);
+      if (typeof value !== 'object' || seen.has(value)) return;
+      seen.add(value);
 
-      const looksPlant = Boolean(first(value, ['idSap','ID SAP','impiantoId','plantId','Denominazione Impianto','Tipologia impianto'])) || /impiant|plant|site/i.test(path.split('.').pop() || '');
-      const nestedPlants = first(value, ['impianti','plants','sites','elencoImpianti','impiantiGlobal']);
-      const looksCommessa = Boolean(first(value, ['codiceCommessa','numeroContratto','committente','projectId'])) || (!looksPlant && Boolean(nestedPlants)) || /commess|project|global/i.test(path.split('.').pop() || '');
-
-      let currentCommessa = inheritedCommessa;
-      if (looksCommessa && first(value, COMMESSA_NAME_KEYS)) currentCommessa = addCommessa(value, isGlobal, path) || inheritedCommessa;
-      if (looksPlant && (first(value, PLANT_NAME_KEYS) || first(value, ['idSap','ID SAP','sap']))) addPlant(value, currentCommessa, isGlobal, path);
-
-      Object.entries(value).forEach(([key, child]) => {
-        if (['raw'].includes(key)) return;
-        walk(child, path ? `${path}.${key}` : key, currentCommessa, isGlobal || /global/i.test(key), depth + 1);
-      });
+      const last = path.split('.').pop() || '';
+      const looksPlant = Boolean(get(value, ['idSap','ID SAP','impiantoId','plantId','Denominazione Impianto','Tipologia impianto'])) || /impiant|plant|site/i.test(last);
+      const nested = get(value, ['impianti','plants','sites','elencoImpianti','impiantiGlobal']);
+      const looksCommessa = Boolean(get(value, ['codiceCommessa','numeroContratto','committente','projectId'])) || (!looksPlant && Array.isArray(nested)) || /commess|project/i.test(last);
+      let current = parent;
+      if (looksCommessa) current = addCommessa(value, global, path) || parent;
+      if (looksPlant) addPlant(value, current, global, path);
+      Object.entries(value).forEach(([k, child]) => walk(child, path ? `${path}.${k}` : k, current, global || /global/i.test(k), depth + 1));
     };
 
-    ['commesse','projects','cantieri','impianti','plants','sites','global','globalCommesse','commesseGlobal','globalImpianti','impiantiGlobal'].forEach((key) => {
-      try { walk(window[key], `window.${key}`, null, /global/i.test(key)); } catch (_) { /* sorgente opzionale */ }
+    ['commesse','projects','cantieri','impianti','plants','sites','global','globalCommesse','commesseGlobal','globalImpianti','impiantiGlobal'].forEach((k) => {
+      try { walk(window[k], `window.${k}`, null, /global/i.test(k)); } catch (_) {}
     });
-
     try {
       for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i) || '';
-        if (!/(commess|impiant|cantier|plant|site|global)/i.test(key)) continue;
-        try { walk(JSON.parse(localStorage.getItem(key)), `localStorage.${key}`, null, /global/i.test(key)); } catch (_) { /* valore non JSON */ }
+        const k = localStorage.key(i) || '';
+        if (!/(commess|impiant|cantier|plant|site|global)/i.test(k)) continue;
+        try { walk(JSON.parse(localStorage.getItem(k)), `localStorage.${k}`, null, /global/i.test(k)); } catch (_) {}
       }
-    } catch (_) { /* localStorage non disponibile */ }
+    } catch (_) {}
 
-    const uniqueCommesse = [...new Map(commesse.map((item) => [`${item.isGlobal ? 'G' : 'N'}:${item.id}`, item])).values()]
-      .sort((a, b) => Number(a.isGlobal) - Number(b.isGlobal) || a.name.localeCompare(b.name, 'it'));
-    const uniquePlants = [...new Map(plants.map((item) => [`${item.isGlobal ? 'G' : 'N'}:${item.commessaId}:${item.id}`, item])).values()];
-    return { commesse: uniqueCommesse, plants: uniquePlants };
+    return {
+      commesse: [...new Map(commesse.map((x) => [`${x.global}:${x.id}`, x])).values()].sort((a,b) => Number(a.global)-Number(b.global) || a.name.localeCompare(b.name,'it')),
+      plants: [...new Map(plants.map((x) => [`${x.global}:${x.commessaId}:${x.id}`, x])).values()]
+    };
   }
 
-  function fieldByLabel(root, labelText) {
-    const wanted = normalize(labelText);
-    return [...root.querySelectorAll('label')].find((label) => normalize(label.querySelector('span')?.textContent || label.textContent).startsWith(wanted))?.querySelector('input,select,textarea') || null;
+  function byLabel(root, text) {
+    const wanted = norm(text);
+    const label = [...root.querySelectorAll('label')].find((x) => norm(x.querySelector('span')?.textContent || x.textContent).startsWith(wanted));
+    return label?.querySelector('input,select,textarea') || null;
   }
+  const commessaField = (root) => root.querySelector('[data-doc-commessa],select[name="commessaId"],input[name="commessaId"],select[name="commessa"],input[name="commessa"]') || byLabel(root, 'Commessa');
+  const plantField = (root) => root.querySelector('[data-doc-plant],select[name="plantId"],input[name="plantId"],select[name="impianto"],input[name="impianto"]') || byLabel(root, 'Impianto');
 
-  function commessaField(root) {
-    return root.querySelector('[data-doc-commessa], select[name="commessaId"], input[name="commessaId"], select[name="commessa"], input[name="commessa"]') || fieldByLabel(root, 'Commessa');
-  }
-
-  function plantField(root) {
-    return root.querySelector('[data-doc-plant], select[name="plantId"], input[name="plantId"], input[name="impianto"], select[name="impianto"]') || fieldByLabel(root, 'Impianto');
-  }
-
-  function selectedCommessa(registry, field) {
+  function chosenCommessa(data, field) {
     if (!field) return null;
     const option = field.tagName === 'SELECT' ? field.selectedOptions?.[0] : null;
-    const id = String(field.value || '');
-    const label = String(option?.textContent || field.value || '').replace(/^GLOBAL\s*[—-]?\s*/i, '').trim();
-    const isGlobal = /^GLOBAL\b/i.test(option?.textContent || '') || field.dataset.global === '1';
-    return registry.commesse.find((item) => item.id === id && (!isGlobal || item.isGlobal))
-      || registry.commesse.find((item) => normalize(item.name) === normalize(label) && (!isGlobal || item.isGlobal))
-      || null;
+    const global = /^GLOBAL\b/i.test(option?.textContent || '');
+    const value = String(field.value || '');
+    const label = String(option?.textContent || value).replace(/^GLOBAL\s*[—-]?\s*/i, '').replace(/\s+[—-]\s+\S+$/, '').trim();
+    return data.commesse.find((x) => x.id === value && (!global || x.global)) || data.commesse.find((x) => norm(x.name) === norm(label) && (!global || x.global)) || null;
   }
 
-  function fillFromPlant(root, plant) {
-    if (!plant) return;
-    const set = (name, value) => {
-      if (!value) return;
-      const input = root.querySelector(`[name="${name}"]`);
-      if (input && !String(input.value || '').trim()) input.value = value;
-    };
-    set('plantSap', plant.sap);
-    set('idSap', plant.sap);
-    set('workLocation', [plant.address, plant.city].filter(Boolean).join(', '));
-    set('city', plant.city);
-    set('comune', plant.city);
-    set('plantType', plant.type);
-    set('tipologiaImpianto', plant.type);
-    set('area', plant.area);
-    set('coordinates', plant.coordinates);
-    set('plantName', plant.name);
-    set('nomeImpianto', plant.name);
+  function setEmpty(root, name, value) {
+    if (!value) return;
+    const el = root.querySelector(`[name="${name}"]`);
+    if (el && !String(el.value || '').trim()) el.value = value;
+  }
+  function fillPlant(root, item) {
+    if (!item) return;
+    setEmpty(root, 'plantSap', item.sap); setEmpty(root, 'idSap', item.sap);
+    setEmpty(root, 'plantName', item.name); setEmpty(root, 'nomeImpianto', item.name);
+    setEmpty(root, 'workLocation', [item.address,item.city].filter(Boolean).join(', '));
+    setEmpty(root, 'city', item.city); setEmpty(root, 'comune', item.city);
+    setEmpty(root, 'plantType', item.type); setEmpty(root, 'tipologiaImpianto', item.type);
+    setEmpty(root, 'area', item.area); setEmpty(root, 'coordinates', item.coordinates);
   }
 
-  function refreshPlantChoices(root, force = false) {
-    const registry = collectRegistry();
-    const commessa = selectedCommessa(registry, commessaField(root));
-    const plant = plantField(root);
-    if (!plant) return;
-
-    const matches = registry.plants.filter((item) => {
+  function matchesFor(data, commessa) {
+    return data.plants.filter((x) => {
       if (!commessa) return true;
-      if (item.isGlobal !== commessa.isGlobal) return false;
-      const byId = item.commessaId && (item.commessaId === commessa.id || normalize(item.commessaId) === normalize(commessa.code));
-      const byName = item.commessaName && normalize(item.commessaName) === normalize(commessa.name);
-      const byPath = item.path && commessa.path && item.path.startsWith(commessa.path);
-      return byId || byName || byPath || (!item.commessaId && !item.commessaName);
+      if (x.global !== commessa.global) return false;
+      return x.commessaId === commessa.id || norm(x.commessaId) === norm(commessa.code) || norm(x.commessaName) === norm(commessa.name) || (x.path && commessa.path && x.path.startsWith(commessa.path)) || (!x.commessaId && !x.commessaName);
     });
+  }
 
-    if (plant.tagName === 'SELECT') {
-      const previous = plant.value;
-      plant.innerHTML = '<option value="">Seleziona impianto</option>' + matches.map((item) => `<option value="${String(item.id).replace(/"/g, '&quot;')}">${item.isGlobal ? 'GLOBAL — ' : ''}${item.name}${item.sap ? ` — ${item.sap}` : ''}</option>`).join('');
-      if (matches.some((item) => item.id === previous)) plant.value = previous;
+  function refreshCommesse(page, data) {
+    const field = commessaField(page);
+    if (!field || field.tagName !== 'SELECT' || !data.commesse.length) return;
+    const previous = field.value;
+    const placeholder = [...field.options].find((o) => !o.value)?.textContent || 'Seleziona commessa';
+    const html = `<option value="">${esc(placeholder)}</option>` + data.commesse.map((x) => `<option value="${esc(x.id)}">${x.global ? 'GLOBAL — ' : ''}${esc(x.name)}${x.code ? ` — ${esc(x.code)}` : ''}</option>`).join('');
+    const signature = data.commesse.map((x) => `${x.global}:${x.id}:${x.name}:${x.code}`).join('|');
+    if (field.dataset.registrySignature === signature) return;
+    field.innerHTML = html;
+    field.dataset.registrySignature = signature;
+    if ([...field.options].some((o) => o.value === previous)) field.value = previous;
+  }
+
+  function refreshPlants(page, data, force = false) {
+    const field = plantField(page);
+    if (!field) return;
+    const commessa = chosenCommessa(data, commessaField(page));
+    const items = matchesFor(data, commessa);
+
+    if (field.tagName === 'SELECT') {
+      const previous = field.value;
+      const signature = items.map((x) => `${x.global}:${x.id}:${x.name}:${x.sap}`).join('|');
+      if (field.dataset.registrySignature === signature) return;
+      field.innerHTML = '<option value="">Seleziona impianto</option>' + items.map((x) => `<option value="${esc(x.id)}">${x.global ? 'GLOBAL — ' : ''}${esc(x.name)}${x.sap ? ` — ${esc(x.sap)}` : ''}</option>`).join('');
+      field.dataset.registrySignature = signature;
+      if (items.some((x) => x.id === previous)) field.value = previous;
       return;
     }
 
-    let listId = plant.getAttribute('list');
-    let list = listId ? document.getElementById(listId) : null;
+    let list = field.list;
     if (!list) {
-      listId = `pv-impianti-${Math.random().toString(36).slice(2)}`;
-      list = document.createElement('datalist');
-      list.id = listId;
-      plant.setAttribute('list', listId);
-      plant.insertAdjacentElement('afterend', list);
+      const id = `pv-impianti-${Math.random().toString(36).slice(2)}`;
+      list = document.createElement('datalist'); list.id = id; field.setAttribute('list', id); field.insertAdjacentElement('afterend', list);
     }
-    const query = normalize(plant.value);
-    const filtered = query && !force ? matches.filter((item) => normalize(`${item.name} ${item.sap} ${item.city} ${item.address}`).includes(query)) : matches;
-    list.innerHTML = filtered.slice(0, 300).map((item) => `<option value="${String(item.name).replace(/"/g, '&quot;')}">${item.isGlobal ? 'GLOBAL — ' : ''}${item.sap ? `${item.sap} — ` : ''}${item.city || ''}</option>`).join('');
-    plant.dataset.registryCount = String(matches.length);
+    const q = norm(field.value);
+    const filtered = q && !force ? items.filter((x) => norm(`${x.name} ${x.sap} ${x.city} ${x.address}`).includes(q)) : items;
+    const signature = filtered.map((x) => `${x.global}:${x.id}:${x.name}:${x.sap}`).join('|');
+    if (list.dataset.registrySignature === signature) return;
+    list.innerHTML = filtered.slice(0,300).map((x) => `<option value="${esc(x.name)}">${x.global ? 'GLOBAL — ' : ''}${x.sap ? `${esc(x.sap)} — ` : ''}${esc(x.city)}</option>`).join('');
+    list.dataset.registrySignature = signature;
   }
 
-  function augmentCommesse(root) {
-    const field = commessaField(root);
-    if (!field || field.tagName !== 'SELECT') return;
-    const registry = collectRegistry();
-    const previous = field.value;
-    const current = [...field.options].map((option) => ({ value: option.value, text: option.textContent || '' }));
-    const placeholder = current.find((item) => !item.value)?.text || 'Seleziona commessa';
-    const options = registry.commesse.map((item) => ({ value: item.id, text: `${item.isGlobal ? 'GLOBAL — ' : ''}${item.name}${item.code ? ` — ${item.code}` : ''}` }));
-    const merged = [...new Map(options.map((item) => [`${item.text}|${item.value}`, item])).values()];
-    if (!merged.length) return;
-    field.innerHTML = `<option value="">${placeholder}</option>` + merged.map((item) => `<option value="${String(item.value).replace(/"/g, '&quot;')}">${item.text}</option>`).join('');
-    if ([...field.options].some((option) => option.value === previous)) field.value = previous;
-  }
-
-  function enhance(root = document) {
-    const page = root.querySelector?.('#preventivi-page') || document.getElementById('preventivi-page');
+  function enhance() {
+    const page = document.getElementById('preventivi-page');
     if (!page || page.classList.contains('hidden')) return;
-    augmentCommesse(page);
-    refreshPlantChoices(page, true);
+    const data = registry();
+    refreshCommesse(page, data);
+    refreshPlants(page, data, true);
   }
 
   document.addEventListener('change', (event) => {
     const page = event.target.closest?.('#preventivi-page');
     if (!page) return;
+    const data = registry();
     if (event.target === commessaField(page)) {
-      refreshPlantChoices(page, true);
-      const registry = collectRegistry();
-      const commessa = selectedCommessa(registry, event.target);
-      if (commessa) {
-        const set = (name, value) => { const input = page.querySelector(`[name="${name}"]`); if (input && value && !String(input.value || '').trim()) input.value = value; };
-        set('commessaCode', commessa.code);
-        set('clientName', commessa.client);
-        set('contractNumber', commessa.contract);
-        set('requester', commessa.requester);
+      event.target.removeAttribute('data-registry-signature');
+      const c = chosenCommessa(data, event.target);
+      refreshPlants(page, data, true);
+      if (c) {
+        setEmpty(page, 'commessaCode', c.code); setEmpty(page, 'clientName', c.client);
+        setEmpty(page, 'contractNumber', c.contract); setEmpty(page, 'requester', c.requester);
       }
-      return;
-    }
-    const plant = plantField(page);
-    if (event.target === plant) {
-      const registry = collectRegistry();
-      const commessa = selectedCommessa(registry, commessaField(page));
-      const match = registry.plants.find((item) => item.id === plant.value)
-        || registry.plants.find((item) => normalize(item.name) === normalize(plant.value) && (!commessa || item.isGlobal === commessa.isGlobal));
-      fillFromPlant(page, match);
+    } else if (event.target === plantField(page)) {
+      const c = chosenCommessa(data, commessaField(page));
+      const item = data.plants.find((x) => x.id === event.target.value) || data.plants.find((x) => norm(x.name) === norm(event.target.value) && (!c || x.global === c.global));
+      fillPlant(page, item);
     }
   }, true);
 
   document.addEventListener('input', (event) => {
     const page = event.target.closest?.('#preventivi-page');
     if (!page || event.target !== plantField(page)) return;
-    refreshPlantChoices(page, false);
+    refreshPlants(page, registry(), false);
   }, true);
 
-  const observer = new MutationObserver(() => enhance(document));
-  const start = () => {
-    observer.observe(document.body, { childList: true, subtree: true });
-    enhance(document);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-  else start();
+  let timer = 0;
+  const observer = new MutationObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(enhance, 60);
+  });
+  const start = () => { observer.observe(document.body, { childList:true, subtree:true }); enhance(); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true }); else start();
 })();

@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),path=require('path'),cp=require('child_process'),root=path.join(__dirname,'..');
+const profile=path.join(root,'preventivi-matrix-form-profile.js'),fields=path.join(root,'preventivi-matrix-xlsx-fields.js'),follow=path.join(root,'preventivi-registry-model-followup.js'),sw=path.join(root,'sw.js');
+[profile,fields,follow,sw].forEach(file=>cp.execFileSync(process.execPath,['--check',file],{stdio:'pipe'}));
+const p=fs.readFileSync(profile,'utf8'),x=fs.readFileSync(fields,'utf8'),f=fs.readFileSync(follow,'utf8'),s=fs.readFileSync(sw,'utf8');
+['typeof commesseById','data-matrix-commessa','data-matrix-plant-search','Dati richiesti dalla matrice','first.hidden=true','Avola Società Cooperativa'].forEach(token=>assert(p.includes(token),`Manca ${token}`));
+['richiedente_intervento','ditta_esecutrice','competenza_bologna_ovest','competenza_bologna_est','data_richiesta','data_esecuzione'].forEach(token=>assert(p.includes(token)&&x.includes(token),`Campo matrice non completo: ${token}`));
+assert(f.includes('preventivi-matrix-form-profile.js?v=20260801a'));
+assert(f.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'));
+assert(s.includes('varga-cantieri-shell-v77'));
+assert(s.includes('preventivi-matrix-form-profile.js?v=20260801a'));
+assert(s.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'));
+console.log('check-preventivi-matrix-form: OK');

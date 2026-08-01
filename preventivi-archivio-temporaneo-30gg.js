@@ -6,7 +6,9 @@
 
   const RETENTION_DAYS = 30;
   const WARNING_DAYS = 5;
-  const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+  const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const MIN_CHECK_GAP_MS = 12 * 60 * 60 * 1000;
+  const LAST_CHECK_KEY = 'hera_preventivi_temporary_archive_last_check_v1';
   const DAY_MS = 24 * 60 * 60 * 1000;
   let cleanupRunning = false;
   let timer = null;
@@ -90,8 +92,19 @@
     }
   }
 
-  async function cleanupExpired() {
-    if (cleanupRunning) return;
+  function lastCheckAt() {
+    try { return Number(localStorage.getItem(LAST_CHECK_KEY) || 0); }
+    catch (_) { return 0; }
+  }
+
+  function markChecked() {
+    try { localStorage.setItem(LAST_CHECK_KEY, String(Date.now())); }
+    catch (_) { /* La cache temporale è facoltativa. */ }
+  }
+
+  async function cleanupExpired({ force = false } = {}) {
+    if (cleanupRunning) return false;
+    if (!force && Date.now() - lastCheckAt() < MIN_CHECK_GAP_MS) return false;
     cleanupRunning = true;
     try {
       applyRetentionToLocal();
@@ -99,10 +112,15 @@
         const expired = [...(PV.state[entry.stateKey] || [])].filter(isExpired);
         for (const record of expired) await deleteExpiredRecord(entry, record);
       }
-      decorateWarnings();
-      PV.renderCurrentView?.();
+      markChecked();
+      if (PV.state?.isOpen) {
+        decorateWarnings();
+        PV.renderCurrentView?.();
+      }
+      return true;
     } catch (error) {
       console.warn('Archivio temporaneo: eliminazione documenti scaduti non riuscita.', error);
+      return false;
     } finally {
       cleanupRunning = false;
     }
@@ -117,7 +135,7 @@
 
   function decorateWarnings() {
     const page = PV.page?.() || document.getElementById('preventivi-page');
-    if (!page) return;
+    if (!page || !PV.state?.isOpen) return;
     const content = page.querySelector('[data-pv-content]');
     if (content && !content.querySelector('[data-pv-retention-banner]')) {
       content.insertAdjacentHTML('afterbegin', bannerHtml());
@@ -186,7 +204,7 @@
     PV.__temporaryArchiveRenderPatched = true;
     PV.renderCurrentView = (...args) => {
       const result = originalRender(...args);
-      requestAnimationFrame(decorateWarnings);
+      if (PV.state?.isOpen) requestAnimationFrame(decorateWarnings);
       return result;
     };
   }
@@ -194,11 +212,10 @@
   function start() {
     installStyles();
     applyRetentionToLocal();
-    cleanupExpired();
-    if (!timer) timer = window.setInterval(cleanupExpired, CHECK_INTERVAL_MS);
-    window.addEventListener('focus', cleanupExpired);
+    void cleanupExpired();
+    if (!timer) timer = window.setInterval(() => void cleanupExpired(), CHECK_INTERVAL_MS);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) cleanupExpired();
+      if (!document.hidden && PV.state?.isOpen) void cleanupExpired();
     });
   }
 

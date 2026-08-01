@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v78";
+const CACHE_NAME = "varga-cantieri-shell-v79";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -37,6 +37,7 @@ const APP_SHELL = [
   "./preventivi-exact-xlsx.js?v=20260801a",
   "./preventivi-matrix-form-profile.js?v=20260801a",
   "./preventivi-matrix-xlsx-fields.js?v=20260801a",
+  "./preventivi-model-field-recovery.js?v=20260801c",
   "./preventivi-model-driven-form.js?v=20260801a",
   "./preventivi-models.css?v=20260801a",
   "./preventivi-firestore-path-fix.js?v=20260731a",

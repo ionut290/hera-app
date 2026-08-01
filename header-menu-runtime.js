@@ -147,6 +147,7 @@
         ['models-documents', './preventivi-models-documents.js?v=20260801b'],
         ['models-export', './preventivi-models-export.js?v=20260801b'],
         ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
+        ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

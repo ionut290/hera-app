@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v73";
+const CACHE_NAME = "varga-cantieri-shell-v74";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -32,6 +32,8 @@ const APP_SHELL = [
   "./preventivi-models-ui.js?v=20260801b",
   "./preventivi-models-documents.js?v=20260801b",
   "./preventivi-models-export.js?v=20260801b",
+  "./preventivi-registry-model-export-fix.js?v=20260801a",
+  "./preventivi-registry-model-followup.js?v=20260801a",
   "./preventivi-models.css?v=20260801a",
   "./preventivi-firestore-path-fix.js?v=20260731a",
   "./preventivi-firestore-chunks.js?v=20260731a",
@@ -173,9 +175,7 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "read" || event.action === "") {
     event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
-      for (const client of windows) {
-        client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
-      }
+      for (const client of windows) client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
     }));
     return;
   }

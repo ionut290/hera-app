@@ -12,31 +12,25 @@
     if (!button) return;
     button.classList.add('header-action-button');
     button.textContent = '';
-
     const icon = document.createElement('span');
     icon.className = 'header-action-icon';
     icon.setAttribute('aria-hidden', 'true');
     icon.textContent = iconText;
-
     button.append(icon, createLabel(labelText));
   }
 
   function setupProfileButton() {
     const button = qs('#user-toggle-btn');
     if (!button) return;
-
     button.classList.add('header-action-button');
     button.textContent = '';
-
     const image = document.createElement('img');
     image.className = 'header-login-photo';
     image.alt = 'Foto profilo Google';
-
     const icon = document.createElement('span');
     icon.className = 'header-action-icon';
     icon.setAttribute('aria-hidden', 'true');
     icon.textContent = '👤';
-
     button.append(image, icon, createLabel('Login'));
   }
 
@@ -52,21 +46,17 @@
     const card = qs('#home-page .logo-card');
     if (!card) return;
     card.classList.add('home-header-modern');
-
     hideHomeTitle();
     setupProfileButton();
     normalizeActionButton(qs('#refresh-app-btn'), 'Refresh', '↻');
     normalizeActionButton(qs('#update-app-btn'), 'Aggiorna', '↻');
     normalizeActionButton(qs('#menu-toggle-btn'), 'Menu', '☰');
     normalizeActionButton(qs('#snow-service-btn'), 'Neve', '❄️');
-
     const notificationButton = qs('#notification-inbox-btn, #notification-bell-btn, #notification-center-btn, .notification-bell-btn, [data-notification-bell]');
     if (notificationButton) {
       notificationButton.classList.add('header-action-button', 'header-notification-button');
       notificationButton.querySelector('[aria-hidden="true"]')?.classList.add('header-action-icon');
-      if (!notificationButton.querySelector('.header-action-label')) {
-        notificationButton.append(createLabel('Notifiche'));
-      }
+      if (!notificationButton.querySelector('.header-action-label')) notificationButton.append(createLabel('Notifiche'));
     }
   }
 
@@ -81,9 +71,7 @@
       const script = document.createElement('script');
       script.src = './varga-branding.js?v=20260731a';
       script.dataset.vargaBranding = '1';
-      script.addEventListener('error', () => {
-        console.warn('Branding VARGA CANTIERI non caricato.');
-      }, { once: true });
+      script.addEventListener('error', () => console.warn('Branding VARGA CANTIERI non caricato.'), { once: true });
       document.head.appendChild(script);
     } catch (error) {
       console.warn('Branding VARGA CANTIERI non caricato:', error);
@@ -93,11 +81,9 @@
   function setLoginPhoto() {
     const button = qs('#user-toggle-btn');
     if (!button) return;
-
     const image = button.querySelector('.header-login-photo');
     const user = window.firebase?.auth?.()?.currentUser || null;
     const photoURL = user?.photoURL || '';
-
     if (image && photoURL) {
       image.src = photoURL;
       image.alt = user?.displayName ? `Foto profilo di ${user.displayName}` : 'Foto profilo Google';
@@ -117,15 +103,12 @@
         css.dataset.operatorProfileCss = '1';
         document.head.appendChild(css);
       }
-
       if (!document.querySelector('script[data-operator-profile-js]')) {
         const script = document.createElement('script');
         script.src = './operator-profile-feature.js?v=20260731-safe2';
         script.defer = true;
         script.dataset.operatorProfileJs = '1';
-        script.addEventListener('error', () => {
-          console.warn('Scheda operatore non caricata: file JavaScript non disponibile.');
-        }, { once: true });
+        script.addEventListener('error', () => console.warn('Scheda operatore non caricata: file JavaScript non disponibile.'), { once: true });
         document.head.appendChild(script);
       }
     } catch (error) {
@@ -163,6 +146,8 @@
         ['models-ui', './preventivi-models-ui.js?v=20260801b'],
         ['models-documents', './preventivi-models-documents.js?v=20260801b'],
         ['models-export', './preventivi-models-export.js?v=20260801b'],
+        ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
+        ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 
@@ -175,7 +160,6 @@
           else existing.addEventListener('load', () => loadModule(index + 1), { once: true });
           return;
         }
-
         const script = document.createElement('script');
         script.src = src;
         script.dataset.preventiviModule = name;
@@ -183,12 +167,9 @@
           script.dataset.loaded = '1';
           loadModule(index + 1);
         }, { once: true });
-        script.addEventListener('error', () => {
-          console.warn(`Modulo Preventivi non caricato: ${name}.`);
-        }, { once: true });
+        script.addEventListener('error', () => console.warn(`Modulo Preventivi non caricato: ${name}.`), { once: true });
         document.head.appendChild(script);
       };
-
       loadModule(0);
     } catch (error) {
       console.warn('Modulo Preventivi non caricato:', error);
@@ -202,7 +183,6 @@
     setLoginPhoto();
     loadOperatorProfileFeature();
     loadPreventiviFeature();
-
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);
@@ -212,9 +192,6 @@
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+  else init();
 })();

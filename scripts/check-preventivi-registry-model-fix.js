@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),path=require('path'),root=path.join(__dirname,'..');
+const fix=fs.readFileSync(path.join(root,'preventivi-registry-model-export-fix.js'),'utf8');
+const follow=fs.readFileSync(path.join(root,'preventivi-registry-model-followup.js'),'utf8');
+const loader=fs.readFileSync(path.join(root,'header-menu-runtime.js'),'utf8');
+const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+['window.commesseById','Cerca nome impianto o ID SAP','ID SAP ${P.escapeHtml','commessaName','plantName','plantSap'].forEach(x=>assert(fix.includes(x),`Manca: ${x}`));
+assert(!fix.includes('Impianto senza nome'),'Non deve apparire Impianto senza nome.');
+['originalOutputName','-compilato.${extension}','stesso formato e stessa impaginazione','Il PDF originale non contiene campi modulo compilabili','button.hidden = true'].forEach(x=>assert(fix.includes(x),`Manca esportazione rigorosa: ${x}`));
+assert(follow.includes('pending=null'),'Manca protezione salvataggio asincrono.');
+assert(follow.includes("replace(/\\[\\[\\s*"),'Manca supporto segnaposto DOCX [[campo]].');
+assert(loader.includes("preventivi-registry-model-export-fix.js?v=20260801a"),'Modulo principale non caricato.');
+assert(loader.includes("preventivi-registry-model-followup.js?v=20260801a"),'Modulo follow-up non caricato.');
+assert(sw.includes('varga-cantieri-shell-v74'),'Cache PWA non aggiornata.');
+assert(sw.includes('preventivi-registry-model-export-fix.js?v=20260801a'),'Correzione non presente nella cache.');
+console.log('check-preventivi-registry-model-fix: OK');

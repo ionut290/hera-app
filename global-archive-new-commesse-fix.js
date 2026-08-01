@@ -1,6 +1,8 @@
 (() => {
   'use strict';
 
+  let started = false;
+
   function loadPreventiviSelectionPersistence() {
     if (document.querySelector('script[data-preventivi-selection-persistence]')) return;
     const waitForModules = () => {
@@ -64,13 +66,15 @@
   }
 
   function start() {
+    if (started) return;
+    started = true;
     loadPreventiviSelectionPersistence();
     window.setTimeout(loadCompleteQuotePersistence, 2500);
     window.setTimeout(loadTemporaryArchive, 4000);
-    // global-archive-sync.js gestisce già da solo la migrazione iniziale.
-    // Non richiamarla una seconda volta dopo l'autenticazione.
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-  else start();
+  window.HeraLoadPreventiviCompatibilityFixes = start;
+  window.addEventListener('hera:preventivi-ready', start, { once: true });
+
+  if (window.HeraPreventivi && window.HeraPreventiviModels) start();
 })();

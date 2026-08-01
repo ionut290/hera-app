@@ -1,10 +1,11 @@
 (() => {
   'use strict';
 
-  const VERSION = '20260801b';
+  const VERSION = '20260801c';
   const ARCHIVE_ROOT = 'globalArchive';
   const MIGRATION_KEY = `hera_global_archive_migrated_${VERSION}`;
   const syncLocks = new Map();
+  const verifiedDocuments = new Map();
   let migrationPromise = null;
 
   const db = () => window.firebase?.firestore?.() || null;
@@ -20,6 +21,9 @@
   };
   const cleanObject = (source) => Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined && value !== null && text(value) !== ''));
   const serverTimestamp = () => window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+  const stableSignature = (value) => JSON.stringify(Object.fromEntries(Object.entries(value || {})
+    .filter(([key]) => !['updatedAt','updatedByUid'].includes(key))
+    .sort(([a], [b]) => a.localeCompare(b))));
 
   function commesseCollectionName() {
     try {
@@ -87,11 +91,15 @@
   }
 
   async function mergeArchiveDocument(ref, incoming) {
-    if (!ref || !incoming) return;
+    if (!ref || !incoming) return false;
+    const signature = stableSignature(incoming);
+    if (verifiedDocuments.get(ref.path) === signature) return false;
     const current = await ref.get();
     if (!current.exists) {
       await ref.set({ ...incoming, updatedAt: serverTimestamp() }, { merge: true });
-      return;
+      verifiedDocuments.set(ref.path, signature);
+      if (verifiedDocuments.size > 5000) verifiedDocuments.clear();
+      return true;
     }
     const existing = current.data() || {};
     const merged = { ...existing };
@@ -101,10 +109,13 @@
       if (key !== 'updatedByUid' && JSON.stringify(existing[key] ?? null) !== JSON.stringify(value)) changed = true;
       merged[key] = value;
     });
-    if (!changed) return;
+    verifiedDocuments.set(ref.path, signature);
+    if (verifiedDocuments.size > 5000) verifiedDocuments.clear();
+    if (!changed) return false;
     merged.archivioPermanente = true;
     merged.updatedAt = serverTimestamp();
     await ref.set(merged, { merge: true });
+    return true;
   }
 
   async function mirrorVisibleCommessa(commessaId, raw = {}) {
@@ -180,8 +191,7 @@
 
   function installRealtimeArchive() {
     // Le scritture sono intercettate da patchWrites. Un secondo listener sulla
-    // collezione completa duplicava il listener principale dell'app e, alla
-    // connessione, rileggeva anche tutti gli impianti di ogni commessa.
+    // collezione completa duplicava il listener principale dell'app.
   }
 
   function patchWrites() {
@@ -230,7 +240,10 @@
     patchWrites();
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
-      if (!user) return;
+      if (!user) {
+        verifiedDocuments.clear();
+        return;
+      }
       installRealtimeArchive();
       migrateAll().catch((error) => console.warn('Global archive: migrazione iniziale non riuscita.', error));
     });

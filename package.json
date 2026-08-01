@@ -36,7 +36,8 @@
     "check:preventivi-registry-model": "node scripts/check-preventivi-registry-model-fix.js",
     "check:preventivi-model-field-recovery": "node scripts/check-preventivi-model-field-recovery.js",
     "check:preventivi-avola-system-model": "node scripts/check-preventivi-avola-system-model.js",
-    "check:preventivi-models-visibility": "node scripts/check-preventivi-models-visibility.js"
+    "check:preventivi-models-visibility": "node scripts/check-preventivi-models-visibility.js",
+    "check:preventivi-matrix-runtime": "node scripts/check-preventivi-matrix-runtime-fix.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

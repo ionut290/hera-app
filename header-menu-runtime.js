@@ -150,6 +150,7 @@
         ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801a'],
         ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801c'],
         ['tabs-models-plant-guard', './preventivi-tabs-models-plant-guard.js?v=20260801a'],
+        ['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

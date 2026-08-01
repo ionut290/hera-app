@@ -61,7 +61,26 @@
     if (!timer) timer = window.setInterval(reconcile, INTERVAL_MS);
   }
 
+  function loadExportNamingFix() {
+    if (document.querySelector('script[data-preventivi-export-naming-fix]')) return;
+    const waitForModels = () => {
+      if (!window.HeraPreventiviModels?.exportOriginal) {
+        window.setTimeout(waitForModels, 400);
+        return;
+      }
+      if (document.querySelector('script[data-preventivi-export-naming-fix]')) return;
+      const script = document.createElement('script');
+      script.src = './preventivi-export-naming-fix.js?v=20260801a';
+      script.defer = true;
+      script.dataset.preventiviExportNamingFix = '1';
+      script.addEventListener('error', () => console.warn('Regole nomi documenti non caricate.'), { once: true });
+      document.head.appendChild(script);
+    };
+    waitForModels();
+  }
+
   function start() {
+    loadExportNamingFix();
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
       if (!user) return;

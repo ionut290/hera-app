@@ -61,7 +61,26 @@
     if (!timer) timer = window.setInterval(reconcile, INTERVAL_MS);
   }
 
+  function loadPreventiviSelectionPersistence() {
+    if (document.querySelector('script[data-preventivi-selection-persistence]')) return;
+    const waitForModules = () => {
+      if (!window.HeraPreventivi || !window.HeraPreventiviModels || !document.querySelector('script[data-preventivi-module="clients"]')) {
+        window.setTimeout(waitForModules, 400);
+        return;
+      }
+      if (document.querySelector('script[data-preventivi-selection-persistence]')) return;
+      const script = document.createElement('script');
+      script.src = './preventivi-persistenza-selezioni-fix.js?v=20260801a';
+      script.defer = true;
+      script.dataset.preventiviSelectionPersistence = '1';
+      script.addEventListener('error', () => console.warn('Persistenza selezioni preventivi non caricata.'), { once: true });
+      document.head.appendChild(script);
+    };
+    waitForModules();
+  }
+
   function start() {
+    loadPreventiviSelectionPersistence();
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
       if (!user) return;

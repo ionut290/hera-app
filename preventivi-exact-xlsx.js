@@ -16,9 +16,48 @@ const clear=c=>{[...c.children].forEach(x=>c.removeChild(x));c.removeAttribute('
 const items=(d,ss)=>[...d.getElementsByTagNameNS(NS,'c')].map(c=>({ref:c.getAttribute('r'),text:text(c,ss)})),find=(list,labels)=>{const w=labels.map(norm);return list.find(x=>w.includes(norm(x.text)))||list.find(x=>w.some(y=>norm(x.text).startsWith(y)))||list.find(x=>w.some(y=>norm(x.text).includes(y)))||null},after=(item,ms)=>{if(!item)return'';const p=pos(item.ref),m=mergeAt(ms,item.ref);return ref((m?.e.col||p.col)+1,p.row)},put=(d,list,ms,labels,value)=>{const r=after(find(list,labels),ms);if(r&&String(value??'').trim())inline(d,r,value);return r};
 const dateIt=v=>{const s=String(v||'').trim(),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:s},outName=m=>String(m.originalName||m.name||'modello.xlsx').replace(/[\\/:*?"<>|]/g,'_').replace(/\.xlsx$/i,'')+'-compilato.xlsx';
 const recalc=zip=>{zip.remove('xl/calcChain.xml');for(const path of ['xl/_rels/workbook.xml.rels','[Content_Types].xml']){const e=zip.file(path);if(!e)continue;const d=parse(e.asText());[...d.documentElement.children].filter(x=>/calcChain\.xml$/i.test(x.getAttribute('Target')||x.getAttribute('PartName')||'')).forEach(x=>x.remove());zip.file(path,serializer.serializeToString(d))}const e=zip.file('xl/workbook.xml');if(e){const d=parse(e.asText());let c=d.getElementsByTagNameNS(NS,'calcPr')[0];if(!c){c=d.createElementNS(NS,'calcPr');d.documentElement.appendChild(c)}c.setAttribute('calcMode','auto');c.setAttribute('fullCalcOnLoad','1');c.setAttribute('forceFullCalc','1');zip.file('xl/workbook.xml',serializer.serializeToString(d))}};
-const exportExact=async(model,stored,d)=>{await M.ensureScript('PizZip',M.constants.ZIP_LIB,'pizzip');const zip=new PizZip(stored.buffer),path=sheetPath(zip),entry=zip.file(path);if(!entry)throw Error('Il foglio principale del modello non è disponibile.');const xml=parse(entry.asText()),ss=shared(zip),list=items(xml,ss),ms=merges(xml),plant=[d.denominazione_impianto||d.impianto,d.id_sap?`ID SAP: ${d.id_sap}`:''].filter(Boolean).join(' - ');
-put(xml,list,ms,['nome impianto'],plant);put(xml,list,ms,['comune'],d.comune);put(xml,list,ms,['odl','ordine di lavoro'],d.numero_ordine||d.numero_richiesta||'');put(xml,list,ms,['descrizione intervento'],d.descrizione_intervento||d.oggetto);put(xml,list,ms,['richiedente intervento'],d.richiedente);put(xml,list,ms,['richiedente'],d.richiedente);put(xml,list,ms,['data richiesta'],dateIt(d.data_documento));put(xml,list,ms,['data esecuzione'],dateIt(d.data_fine_lavori||d.data_inizio_lavori));
-const h=find(list,['cod prest est','codice prestazione','codice lavorazione']);if(!h)throw Error('La matrice non contiene una tabella lavorazioni riconoscibile.');const hr=pos(h.ref).row,heads=list.filter(x=>pos(x.ref)?.row===hr),q=find(heads,['quantita']);if(!q)throw Error('La matrice non contiene la colonna Quantità.');const pick=(labels,fallback)=>pos((find(heads,labels)||fallback).ref).col,cols={code:pos(h.ref).col,short:pick(['testo breve'],h),description:pick(['testo esteso','lavorazione'],h),unit:pick(['unita di misura','u m'],q),quantity:pos(q.ref).col,price:pick(['prezzo capitolato','prezzo unitario'],q),discount:pick(['% ribasso','percentuale ribasso'],q),discountFlag:pick(['ribasso si no'],q),net:pick(['prezzo netto ribassato','prezzo netto'],q),total:pick(['importo prestazione'],q),notes:pick(['note descrizioni','note'],q)},start=hr+1,rows=[...xml.getElementsByTagNameNS(NS,'row')].map(r=>Number(r.getAttribute('r'))).filter(r=>r>hr),max=rows.length?Math.max(...rows):start+49,lines=Array.isArray(d.lavorazioni)?d.lavorazioni:[];if(lines.length>max-start+1)throw Error(`La matrice contiene spazio per ${max-start+1} lavorazioni, ma il documento ne contiene ${lines.length}.`);for(let r=start;r<=max;r++)Object.values(cols).forEach(c=>{const x=cell(xml,ref(c,r));if(x)clear(x)});lines.forEach((l,i)=>{const r=start+i,p=Number(l.prezzo_unitario)||0,q=Number(l.quantita)||0,t=Number(l.totale_riga)||(p*q);inline(xml,ref(cols.code,r),l.codice||'');inline(xml,ref(cols.short,r),l.testo_breve||l.descrizione||'');inline(xml,ref(cols.description,r),l.descrizione||'');inline(xml,ref(cols.unit,r),l.unita_misura||'');number(xml,ref(cols.quantity,r),q);number(xml,ref(cols.price,r),p);number(xml,ref(cols.discount,r),Number(l.ribasso)||0);inline(xml,ref(cols.discountFlag,r),Number(l.ribasso)>0?'Sì':'No');number(xml,ref(cols.net,r),p);number(xml,ref(cols.total,r),t);if(l.note)inline(xml,ref(cols.notes,r),l.note)});const total=find(list,['totale intervento']);if(total){const tr=after(total,ms),end=Math.max(start,start+lines.length-1);formula(xml,tr,`SUM(${ref(cols.total,start)}:${ref(cols.total,end)})`,Number(d.totale_imponibile)||0)}zip.file(path,serializer.serializeToString(xml));recalc(zip);M.download(zip.generate({type:'blob',mimeType:stored.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'}),outName(model))};
+const exportExact=async(model,stored,d)=>{
+  await M.ensureScript('PizZip',M.constants.ZIP_LIB,'pizzip');
+  const zip=new PizZip(stored.buffer),path=sheetPath(zip),entry=zip.file(path);
+  if(!entry)throw Error('Il foglio principale del modello non è disponibile.');
+  const xml=parse(entry.asText()),ss=shared(zip),list=items(xml,ss),ms=merges(xml),plant=[d.denominazione_impianto||d.impianto,d.id_sap?`ID SAP: ${d.id_sap}`:''].filter(Boolean).join(' - ');
+  put(xml,list,ms,['nome impianto'],plant);put(xml,list,ms,['comune'],d.comune);put(xml,list,ms,['odl','ordine di lavoro'],d.numero_ordine||d.numero_richiesta||'');put(xml,list,ms,['descrizione intervento'],d.descrizione_intervento||d.oggetto);put(xml,list,ms,['richiedente intervento'],d.richiedente);put(xml,list,ms,['richiedente'],d.richiedente);put(xml,list,ms,['data richiesta'],dateIt(d.data_documento));put(xml,list,ms,['data esecuzione'],dateIt(d.data_fine_lavori||d.data_inizio_lavori));
+
+  const h=find(list,['cod prest est','codice prestazione','codice lavorazione']);
+  if(!h)throw Error('La matrice non contiene una tabella lavorazioni riconoscibile.');
+  const hr=pos(h.ref).row,heads=list.filter(x=>pos(x.ref)?.row===hr),q=find(heads,['quantita']);
+  if(!q)throw Error('La matrice non contiene la colonna Quantità.');
+  const pick=labels=>{const found=find(heads,labels);return found?pos(found.ref).col:null};
+  const cols={
+    code:pos(h.ref).col,
+    short:pick(['testo breve']),
+    description:pick(['testo esteso','lavorazione','descrizione']),
+    unit:pick(['unita di misura','u m']),
+    quantity:pos(q.ref).col,
+    price:pick(['prezzo capitolato','prezzo unitario']),
+    discount:pick(['% ribasso','percentuale ribasso']),
+    discountFlag:pick(['ribasso si no']),
+    net:pick(['prezzo netto ribassato','prezzo netto']),
+    total:pick(['importo prestazione','totale riga']),
+    notes:pick(['note descrizioni','note'])
+  };
+  const uniqueCols=[...new Set(Object.values(cols).filter(Boolean))],start=hr+1;
+  const total=list.filter(item=>{const p=pos(item.ref),label=norm(item.text);return p?.row>hr&&['totale intervento','totale preventivo','totale consuntivo','totale'].includes(label)}).sort((a,b)=>pos(a.ref).row-pos(b.ref).row)[0]||null;
+  const lines=Array.isArray(d.lavorazioni)?d.lavorazioni:[];
+  const tableEnd=total?pos(total.ref).row-1:start+Math.max(lines.length,1)-1;
+  const capacity=Math.max(0,tableEnd-start+1);
+  if(lines.length>capacity)throw Error(`La matrice contiene spazio per ${capacity} lavorazioni, ma il documento ne contiene ${lines.length}.`);
+  for(let r=start;r<=tableEnd;r++)uniqueCols.forEach(c=>{const x=cell(xml,ref(c,r));if(x)clear(x)});
+  const writeText=(column,r,value)=>{if(column)inline(xml,ref(column,r),value)};
+  const writeNumber=(column,r,value)=>{if(column)number(xml,ref(column,r),value)};
+  lines.forEach((l,i)=>{
+    const r=start+i,contractPrice=Number(l.prezzo_capitolato??l.prezzo_unitario)||0,discount=Number(l.ribasso)||0,netPrice=Number(l.prezzo_netto_ribassato??l.prezzo_unitario)||0,quantity=Number(l.quantita)||0,amount=Number(l.importo_prestazione??l.totale_riga)||(netPrice*quantity);
+    writeText(cols.code,r,l.codice||'');writeText(cols.short,r,l.testo_breve||l.descrizione||'');writeText(cols.description,r,l.testo_esteso||l.descrizione||'');writeText(cols.unit,r,l.unita_misura||'');writeNumber(cols.quantity,r,quantity);writeNumber(cols.price,r,contractPrice);writeNumber(cols.discount,r,discount);writeText(cols.discountFlag,r,l.ribasso_si_no||(discount>0?'Sì':'No'));writeNumber(cols.net,r,netPrice);writeNumber(cols.total,r,amount);writeText(cols.notes,r,l.note_attivita||l.note||'');
+  });
+  if(total&&cols.total){const tr=after(total,ms),end=Math.max(start,start+lines.length-1);formula(xml,tr,`SUM(${ref(cols.total,start)}:${ref(cols.total,end)})`,Number(d.totale_imponibile)||0)}
+  zip.file(path,serializer.serializeToString(xml));recalc(zip);
+  M.download(zip.generate({type:'blob',mimeType:stored.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'}),outName(model));
+};
 const old=M.exportSheet?.bind(M);M.exportSheet=(model,stored,d,doc)=>String(model?.format||'').toLowerCase()==='xlsx'?exportExact(model,stored,d):old(model,stored,d,doc);
 window.addEventListener('click',event=>{const b=event.target.closest?.('[data-pvm-doc="preview"], [data-pvm-export="pdf"], [data-pv-action="print-quote"], [data-pv-action="print-current-quote"], [data-cons-print], [data-cons-print-current]');if(!b)return;const cons=b.matches('[data-cons-print], [data-cons-print-current]')||b.dataset.docType==='consuntivo',type=cons?'consuntivo':'preventivo',form=P.page()?.querySelector(cons?'[data-cons-form]':'[data-pv-quote-form]'),id=b.dataset.id||b.dataset.consPrint||'',draft=M.collectDraft?.(type),doc=id?M.getDocument?.(type,id):draft,model=M.getModel(doc?.modelId||form?.querySelector('[data-pvm-model-select]')?.value);if(!model||model.builtIn)return;event.preventDefault();event.stopImmediatePropagation();P.setFeedback(`Questo documento usa il modello “${model.originalName||model.name}”. Usa “Scarica modello compilato” per ottenere la matrice identica al file caricato.`,'error')},true);
 })();

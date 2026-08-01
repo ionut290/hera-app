@@ -1,5 +1,28 @@
 (()=>{'use strict';
 const P=window.HeraPreventivi,M=window.HeraPreventiviModels,R=window.HeraPreventiviRegistry;if(!P||!M||!R)return;
+/*
+ * HOTFIX BLOCCO PREVENTIVI
+ * Il modulo precedente aggiorna le etichette dei pulsanti tramite MutationObserver.
+ * Impostare textContent allo stesso valore generava comunque una nuova mutazione,
+ * riattivando l'observer senza fine. Per i soli pulsanti di esportazione evitiamo
+ * la scrittura quando il testo è già identico.
+ */
+if(!window.__preventiviExportTextGuard&&window.Node&&window.HTMLButtonElement){
+  const descriptor=Object.getOwnPropertyDescriptor(Node.prototype,'textContent');
+  if(descriptor?.get&&descriptor?.set){
+    window.__preventiviExportTextGuard=true;
+    Object.defineProperty(HTMLButtonElement.prototype,'textContent',{
+      configurable:true,
+      enumerable:descriptor.enumerable,
+      get(){return descriptor.get.call(this)},
+      set(value){
+        const next=String(value??'');
+        if(this.matches?.('[data-pvm-export]')&&descriptor.get.call(this)===next)return;
+        descriptor.set.call(this,value);
+      }
+    });
+  }
+}
 const C=v=>String(v??'').trim(),enrich=(record,fd)=>{if(!record||!fd)return record;const data=R.registry(),cid=C(fd.get('commessaId')),pid=C(fd.get('plantId')),c=data.commesse.find(x=>x.id===cid),p=data.plants.find(x=>x.id===pid);return Object.assign(record,{commessaId:cid,commessaName:c?.name||record.commessaName||'',commessaCode:C(fd.get('commessaCode'))||c?.code||record.commessaCode||'',plantId:pid,plantName:p?.name||record.plantName||'',plantSap:C(fd.get('plantSap'))||p?.sap||record.plantSap||'',workLocation:C(fd.get('workLocation'))||[p?.address,p?.city].filter(Boolean).join(', ')||record.workLocation||'',city:C(fd.get('city'))||p?.city||record.city||'',plantType:C(fd.get('plantType'))||p?.type||record.plantType||''})};
 let pending=null;const remote=P.saveRemote?.bind(P);if(remote)P.saveRemote=(collection,record)=>{if(collection===P.collections.quotes&&pending){enrich(record,pending);const local=(P.state.quotes||[]).find(x=>x.id===record.id);if(local)Object.assign(local,record);P.persistLocal?.();pending=null}return remote(collection,record)};const save=P.saveQuote?.bind(P);if(save)P.saveQuote=async form=>{const fd=new FormData(form);pending=fd;const out=await save(form);setTimeout(()=>{if(pending===fd)pending=null},30000);return out};
 const exact=M.exportOriginal?.bind(M);if(exact)M.exportOriginal=(doc,type)=>{const model=M.getModel(doc?.modelId);if(!model?.builtIn)return exact(doc,type);const html=`<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${P.escapeHtml(doc.number||'Documento')}</title></head><body>${M.previewHtml(doc,type)}</body></html>`;M.download(new Blob([html],{type:'text/html;charset=utf-8'}),`${M.fileName(doc.number)}.html`);P.setFeedback('Modello standard compilato.','success')};

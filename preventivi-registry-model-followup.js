@@ -34,4 +34,11 @@ if(!document.querySelector('script[data-preventivi-exact-xlsx]')){
   script.addEventListener('error',()=>console.warn('Compilatore matrice XLSX non caricato.'),{once:true});
   document.head.appendChild(script);
 }
+if(!document.querySelector('script[data-preventivi-matrix-profile]')){
+  const script=document.createElement('script');
+  script.src='./preventivi-matrix-form-profile.js?v=20260801a';
+  script.dataset.preventiviMatrixProfile='1';
+  script.addEventListener('error',()=>console.warn('Profilo form matrice non caricato.'),{once:true});
+  document.head.appendChild(script);
+}
 })();

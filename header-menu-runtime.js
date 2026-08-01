@@ -65,6 +65,20 @@
     normalizeActionButton(qs('#snow-service-menu-btn'), 'Menu', '☰');
   }
 
+  function loadAutoLoginFeature() {
+    try {
+      if (document.querySelector('script[data-auto-login-saved-credentials]')) return;
+      const script = document.createElement('script');
+      script.src = './auto-login-saved-credentials.js?v=20260801a';
+      script.defer = true;
+      script.dataset.autoLoginSavedCredentials = '1';
+      script.addEventListener('error', () => console.warn('Accesso automatico non caricato.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Accesso automatico non caricato:', error);
+    }
+  }
+
   function loadBrandingFeature() {
     try {
       if (document.querySelector('script[data-varga-branding]')) return;
@@ -207,6 +221,7 @@
   }
 
   function init() {
+    loadAutoLoginFeature();
     loadBrandingFeature();
     setupHomeHeader();
     setupSnowHeader();

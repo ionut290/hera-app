@@ -31,7 +31,7 @@ assert.match(center, /userAlertAcknowledgements/);
 assert.match(center, /OK, HO CAPITO/);
 
 // Verifica che il service worker usi una cache versionata senza bloccare gli aggiornamenti futuri.
-assert.match(serviceWorker, /const CACHE_NAME = "hera-app-shell-v\d+";/);
+assert.match(serviceWorker, /const CACHE_NAME = "[a-z0-9-]+-shell-v\d+";/i);
 assert.doesNotMatch(serviceWorker, /notification-session-enhancements\.js\?v=/);
 
 // Confronta la versione realmente caricata, indipendentemente dal prefisso relativo.

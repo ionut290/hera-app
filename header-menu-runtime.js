@@ -142,7 +142,14 @@
         ['price-lists', './preventivi-price-lists.js?v=20260731a'],
         ['quotes', './preventivi-quotes.js?v=20260731a'],
         ['consuntivi', './preventivi-consuntivi.js?v=20260801a'],
+        ['models-core', './preventivi-models-core.js?v=20260801b'],
+        ['models-ui', './preventivi-models-ui.js?v=20260801b'],
+        ['models-documents', './preventivi-models-documents.js?v=20260801b'],
+        ['models-export', './preventivi-models-export.js?v=20260801b'],
+        ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
+        ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801a'],
         ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801c'],
+        ['tabs-models-plant-guard', './preventivi-tabs-models-plant-guard.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

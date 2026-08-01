@@ -166,6 +166,7 @@
         ['tabs-models-plant-guard', './preventivi-tabs-models-plant-guard.js?v=20260801a'],
         ['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a'],
         ['draft-preserver', './preventivi-draft-preserver.js?v=20260801a'],
+        ['commessa-search-bridge', './preventivi-commessa-search-bridge.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

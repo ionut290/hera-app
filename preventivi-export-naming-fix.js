@@ -19,94 +19,70 @@
     }
     return '';
   };
-  const cleanPart = (value) => text(value)
-    .replace(/[\\/:*?"<>|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const cleanPart = (value) => text(value).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
   const safeFileBase = (value) => cleanPart(value).replace(/[. ]+$/g, '') || 'DOCUMENTO';
   const safeSheetName = (value) => cleanPart(value).replace(/[\[\]]/g, ' ').slice(0, 31).trim() || 'DOCUMENTO';
 
   M.isDepurazioneOrInreteModel = (model, doc) => {
-    const haystack = normalized([
-      model?.name,
-      model?.fileName,
-      doc?.modelName,
-      doc?.commessaName,
-      doc?.commessaCode
-    ].filter(Boolean).join(' '));
-    return haystack.includes('DEPURAZIONE') || haystack.includes('INRETE');
+    const modelIdentity = normalized([model?.name, model?.originalName, doc?.modelName].filter(Boolean).join(' '));
+    if (modelIdentity.includes('STANDARD')) return false;
+    if (modelIdentity.includes('DEPURAZIONE') || modelIdentity.includes('INRETE')) return true;
+    const commessaIdentity = normalized([doc?.commessaName, doc?.commessaCode].filter(Boolean).join(' '));
+    return commessaIdentity.includes('DEPURAZIONE') || commessaIdentity.includes('INRETE');
   };
 
-  M.documentExecutionDate = (doc, type) => {
-    if (type === 'consuntivo') {
-      return doc?.executionDate || doc?.endDate || doc?.startDate || doc?.date || '';
-    }
-    return doc?.executionDate || doc?.date || doc?.startDate || doc?.endDate || '';
-  };
+  M.documentExecutionDate = (doc, type) => type === 'consuntivo'
+    ? (doc?.executionDate || doc?.endDate || doc?.startDate || doc?.date || '')
+    : (doc?.executionDate || doc?.date || doc?.startDate || doc?.endDate || '');
 
   M.documentExportName = (doc, type, model = M.getModel?.(doc?.modelId)) => {
     const tipo = type === 'consuntivo' ? 'CONSUNTIVO' : 'PREVENTIVO';
     const data = compactDate(M.documentExecutionDate(doc, type)) || compactDate(new Date());
-    const specific = M.isDepurazioneOrInreteModel(model, doc);
-    const subject = specific
+    const subject = M.isDepurazioneOrInreteModel(model, doc)
       ? (doc?.plantName || doc?.denominazioneImpianto || doc?.plantSap || 'IMPIANTO')
       : (doc?.clientName || doc?.committente || doc?.requester || 'CLIENTE');
     return safeFileBase(`${tipo} ${data} ${cleanPart(subject)}`);
   };
 
-  M.documentSheetName = (doc, type, model = M.getModel?.(doc?.modelId)) =>
-    safeSheetName(M.documentExportName(doc, type, model));
+  M.documentSheetName = (doc, type, model = M.getModel?.(doc?.modelId)) => safeSheetName(M.documentExportName(doc, type, model));
 
   const originalExportOriginal = M.exportOriginal?.bind(M);
   if (originalExportOriginal) {
     M.exportOriginal = async (doc, type) => {
       M.runtime.currentExportType = type;
-      try {
-        return await originalExportOriginal(doc, type);
-      } finally {
-        M.runtime.currentExportType = '';
-      }
+      try { return await originalExportOriginal(doc, type); }
+      finally { M.runtime.currentExportType = ''; }
     };
   }
 
-  const originalExportSheet = M.exportSheet?.bind(M);
-  if (originalExportSheet) {
-    M.exportSheet = async (model, stored, data, doc) => {
-      if (!window.XLSX) throw new Error('Motore fogli non disponibile.');
-      const type = M.runtime.currentExportType || (doc?.type === 'consuntivo' ? 'consuntivo' : 'preventivo');
-      const workbook = XLSX.read(stored.buffer, { type: 'array', cellStyles: true });
-      workbook.SheetNames.forEach((name) => {
-        const sheet = workbook.Sheets[name];
-        Object.keys(sheet).filter((address) => !address.startsWith('!')).forEach((address) => {
-          const cell = sheet[address];
-          if (typeof cell?.v === 'string') {
-            const value = M.replaceTokens(cell.v, data);
-            cell.v = value;
-            cell.w = value;
-          }
-        });
-      });
-      if (workbook.SheetNames.length) {
-        const oldName = workbook.SheetNames[0];
-        const newName = M.documentSheetName(doc, type, model);
-        if (newName && newName !== oldName) {
-          workbook.Sheets[newName] = workbook.Sheets[oldName];
-          delete workbook.Sheets[oldName];
-          workbook.SheetNames[0] = newName;
+  M.exportSheet = async (model, stored, data, doc) => {
+    if (!window.XLSX) throw new Error('Motore fogli non disponibile.');
+    const type = M.runtime.currentExportType || (doc?.type === 'consuntivo' ? 'consuntivo' : 'preventivo');
+    const workbook = XLSX.read(stored.buffer, { type: 'array', cellStyles: true });
+    workbook.SheetNames.forEach((name) => {
+      const sheet = workbook.Sheets[name];
+      Object.keys(sheet).filter((address) => !address.startsWith('!')).forEach((address) => {
+        const cell = sheet[address];
+        if (typeof cell?.v === 'string') {
+          const value = M.replaceTokens(cell.v, data);
+          cell.v = value;
+          cell.w = value;
         }
-      }
-      const output = XLSX.write(workbook, {
-        type: 'array',
-        bookType: model.format === 'ods' ? 'ods' : 'xlsx',
-        cellStyles: true
       });
-      const mime = model.format === 'ods'
-        ? 'application/vnd.oasis.opendocument.spreadsheet'
-        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      const fileName = `${M.documentExportName(doc, type, model)}.${model.format}`;
-      M.download(new Blob([output], { type: mime }), fileName);
-    };
-  }
+    });
+    if (workbook.SheetNames.length) {
+      const oldName = workbook.SheetNames[0];
+      const newName = M.documentSheetName(doc, type, model);
+      if (newName && newName !== oldName) {
+        workbook.Sheets[newName] = workbook.Sheets[oldName];
+        delete workbook.Sheets[oldName];
+        workbook.SheetNames[0] = newName;
+      }
+    }
+    const output = XLSX.write(workbook, { type: 'array', bookType: model.format === 'ods' ? 'ods' : 'xlsx', cellStyles: true });
+    const mime = model.format === 'ods' ? 'application/vnd.oasis.opendocument.spreadsheet' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    M.download(new Blob([output], { type: mime }), `${M.documentExportName(doc, type, model)}.${model.format}`);
+  };
 
   const wrapNamedExporter = (name, extension) => {
     const original = M[name]?.bind(M);
@@ -116,11 +92,8 @@
       const type = M.runtime.currentExportType || (doc?.type === 'consuntivo' ? 'consuntivo' : 'preventivo');
       const originalDownload = M.download;
       M.download = (blob) => originalDownload(blob, `${M.documentExportName(doc, type, model)}.${extension || model?.format || 'pdf'}`);
-      try {
-        return await original(...args);
-      } finally {
-        M.download = originalDownload;
-      }
+      try { return await original(...args); }
+      finally { M.download = originalDownload; }
     };
   };
 
@@ -129,45 +102,36 @@
   wrapNamedExporter('exportOdt', 'odt');
   wrapNamedExporter('exportFillablePdf', 'pdf');
 
-  const originalExportPdf = M.exportPdf?.bind(M);
-  if (originalExportPdf) {
-    M.exportPdf = async (doc, type) => {
-      const originalSave = window.jspdf?.jsPDF?.API?.save;
-      M.runtime.currentExportType = type;
-      try {
-        const holder = document.createElement('div');
-        holder.className = 'pvm-offscreen';
-        holder.innerHTML = M.previewHtml(doc, type);
-        document.body.appendChild(holder);
-        try {
-          if (!window.html2canvas || !window.jspdf?.jsPDF) throw new Error('Generatore PDF non disponibile.');
-          const canvas = await html2canvas(holder, { scale: 1.5, backgroundColor: '#ffffff' });
-          const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
-          const width = 190;
-          const height = canvas.height * 190 / canvas.width;
-          const page = 277;
-          const img = canvas.toDataURL('image/jpeg', 0.92);
-          let y = 10;
-          let left = height;
-          pdf.addImage(img, 'JPEG', 10, y, width, height);
-          left -= page;
-          while (left > 0) {
-            y = 10 - left;
-            pdf.addPage();
-            pdf.addImage(img, 'JPEG', 10, y, width, height);
-            left -= page;
-          }
-          pdf.save(`${M.documentExportName(doc, type)}.pdf`);
-          PV.setFeedback('PDF generato.', 'success');
-        } catch (error) {
-          PV.setFeedback(error.message, 'error');
-        } finally {
-          holder.remove();
-        }
-      } finally {
-        M.runtime.currentExportType = '';
-        void originalSave;
+  M.exportPdf = async (doc, type) => {
+    if (!doc) return;
+    const holder = document.createElement('div');
+    holder.className = 'pvm-offscreen';
+    holder.innerHTML = M.previewHtml(doc, type);
+    document.body.appendChild(holder);
+    try {
+      if (!window.html2canvas || !window.jspdf?.jsPDF) throw new Error('Generatore PDF non disponibile.');
+      const canvas = await html2canvas(holder, { scale: 1.5, backgroundColor: '#ffffff' });
+      const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+      const width = 190;
+      const height = canvas.height * 190 / canvas.width;
+      const page = 277;
+      const img = canvas.toDataURL('image/jpeg', 0.92);
+      let y = 10;
+      let left = height;
+      pdf.addImage(img, 'JPEG', 10, y, width, height);
+      left -= page;
+      while (left > 0) {
+        y = 10 - left;
+        pdf.addPage();
+        pdf.addImage(img, 'JPEG', 10, y, width, height);
+        left -= page;
       }
-    };
-  }
+      pdf.save(`${M.documentExportName(doc, type)}.pdf`);
+      PV.setFeedback('PDF generato.', 'success');
+    } catch (error) {
+      PV.setFeedback(error.message, 'error');
+    } finally {
+      holder.remove();
+    }
+  };
 })();

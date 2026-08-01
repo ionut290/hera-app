@@ -2,6 +2,7 @@
 const assert=require('assert'),fs=require('fs'),path=require('path'),root=path.join(__dirname,'..');
 const fix=fs.readFileSync(path.join(root,'preventivi-registry-model-export-fix.js'),'utf8');
 const follow=fs.readFileSync(path.join(root,'preventivi-registry-model-followup.js'),'utf8');
+const exact=fs.readFileSync(path.join(root,'preventivi-exact-xlsx.js'),'utf8');
 const loader=fs.readFileSync(path.join(root,'header-menu-runtime.js'),'utf8');
 const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
 ['window.commesseById','Cerca nome impianto o ID SAP','ID SAP ${P.escapeHtml','commessaName','plantName','plantSap'].forEach(x=>assert(fix.includes(x),`Manca: ${x}`));
@@ -12,8 +13,12 @@ assert(follow.includes("replace(/\\[\\[\\s*"),'Manca supporto segnaposto DOCX [[
 assert(follow.includes('__preventiviExportTextGuard'),'Manca la protezione contro il ciclo infinito dei pulsanti.');
 assert(follow.includes("this.matches?.('[data-pvm-export]')"),'La protezione deve essere limitata ai pulsanti di esportazione.');
 assert(follow.includes("descriptor.get.call(this)===next"),'Manca il controllo che evita scritture textContent identiche.');
+assert(follow.includes('preventivi-exact-xlsx.js?v=20260801a'),'Compilatore XLSX esatto non caricato.');
+['new PizZip(stored.buffer)','xl/workbook.xml','mergeCell','inlineStr','calcChain.xml','totale intervento','cod prest est','importo prestazione',"toLowerCase()==='xlsx'"].forEach(x=>assert(exact.includes(x),`Manca compilazione XLSX esatta: ${x}`));
+assert(exact.includes('[data-pv-action="print-quote"]'),'La stampa generica del preventivo deve essere bloccata.');
+assert(exact.includes('[data-cons-print]'),'La stampa generica del consuntivo deve essere bloccata.');
 assert(loader.includes("preventivi-registry-model-export-fix.js?v=20260801a"),'Modulo principale non caricato.');
 assert(loader.includes("preventivi-registry-model-followup.js?v=20260801a"),'Modulo follow-up non caricato.');
-assert(sw.includes('varga-cantieri-shell-v75'),'Cache PWA anti blocco non aggiornata.');
-assert(sw.includes('preventivi-registry-model-followup.js?v=20260801a'),'Hotfix non presente nella cache.');
+assert(sw.includes('varga-cantieri-shell-v76'),'Cache PWA matrice XLSX non aggiornata.');
+assert(sw.includes('preventivi-exact-xlsx.js?v=20260801a'),'Compilatore XLSX non presente nella cache.');
 console.log('check-preventivi-registry-model-fix: OK');

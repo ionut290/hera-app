@@ -7,7 +7,7 @@
   const VERSION='20260801c';
   const C=v=>String(v??'').trim().replace(/\s+/g,' ');
   const N=v=>C(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9%]+/g,' ').trim();
-  const PLACEHOLDER=/^(?:[-_.:/\\ ]+|x+|n\/?a|da compilare|da inserire|inserire|compilare|selezionare)$/i;
+  const PLACEHOLDER=new RegExp('^(?:[-_.:/\\\\ ]+|x+|n\\/?a|da compilare|da inserire|inserire|compilare|selezionare)$','i');
 
   const DEFINITIONS=[
     {labels:['nome impianto','denominazione impianto'],key:'denominazione_impianto',label:'Nome impianto',type:'text',source:'plantName',required:true,automatic:true,plant:true},
@@ -17,7 +17,7 @@
     {labels:['tipologia impianto'],key:'tipologia_impianto',label:'Tipologia impianto',type:'text',source:'plantType',automatic:true,plant:true},
     {labels:['codice commessa'],key:'codice_commessa',label:'Codice commessa',type:'text',source:'commessaCode',automatic:true,commessa:true},
     {labels:['commessa'],key:'commessa',label:'Commessa',type:'text',source:'commessaName',automatic:true,commessa:true},
-    {labels:['odl','ordine di lavoro','numero ordine','n ordine'],key:'numero_ordine',label:'ODL / Numero ordine',type:'text',source:'orderNumber',required:false},
+    {labels:['odl','ordine di lavoro','numero ordine','n ordine'],key:'numero_ordine',label:'ODL / Numero ordine',type:'text',source:'orderNumber'},
     {labels:['numero richiesta','n richiesta'],key:'numero_richiesta',label:'Numero richiesta',type:'text',source:'requestNumber'},
     {labels:['numero contratto','contratto n','contratto numero'],key:'numero_contratto',label:'Numero contratto',type:'text',source:'contractNumber'},
     {labels:['oggetto','oggetto del preventivo'],key:'oggetto',label:'Oggetto',type:'text',source:'subject',required:true},
@@ -63,8 +63,8 @@
     return best;
   };
   const inlineTail=(raw,label)=>{
-    const cleaned=C(raw),normalized=N(cleaned),index=normalized.indexOf(label);
-    if(index!==0)return'';
+    const cleaned=C(raw),normalized=N(cleaned);
+    if(!normalized.startsWith(label))return'';
     const colon=cleaned.indexOf(':');
     if(colon>=0)return C(cleaned.slice(colon+1));
     const words=label.split(' ').length;
@@ -99,9 +99,7 @@
         if(definition.type==='checkbox'||!fixed){add(definitionField(definition));if(definition.plant)plant=true;}
       });
     });
-    if(plant){
-      add({key:'commessa',label:'Commessa',type:'text',source:'commessaName',required:true,automatic:true,helperOnly:true,detectedFromLabel:'collegamento impianto',detectionVersion:VERSION});
-    }
+    if(plant)add({key:'commessa',label:'Commessa',type:'text',source:'commessaName',required:true,automatic:true,helperOnly:true,detectedFromLabel:'collegamento impianto',detectionVersion:VERSION});
     if(economic)add({...M.fieldDefinition('lavorazioni'),type:'repeater',source:'lavorazioni',automatic:true,calculated:true,detectedFromLabel:'tabella lavorazioni',detectionVersion:VERSION});
     return [...map.values()];
   }
@@ -117,13 +115,15 @@
   async function rowsFromStored(stored,format){
     if(format==='xlsx'){
       if(!window.XLSX)throw new Error('Lettore Excel non disponibile.');
-      const workbook=XLSX.read(stored.buffer,{type:'array',cellText:true,cellDates:false});
-      const rows=[];workbook.SheetNames.forEach(name=>rows.push(...XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,raw:false,defval:''}),[]));return rows;
+      const workbook=XLSX.read(stored.buffer,{type:'array',cellText:true,cellDates:false}),rows=[];
+      workbook.SheetNames.forEach(name=>rows.push(...XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,raw:false,defval:''})));
+      return rows;
     }
     if(['docx','odt','ods'].includes(format)){
       await M.ensureScript('PizZip',M.constants.ZIP_LIB,'pizzip');
       const zip=new PizZip(stored.buffer),paths=format==='docx'?['word/document.xml']:['content.xml'],rows=[];
-      paths.forEach(path=>{const entry=zip.file(path);if(entry)rows.push(...rowsFromXmlText(entry.asText(),format));});return rows;
+      paths.forEach(path=>{const entry=zip.file(path);if(entry)rows.push(...rowsFromXmlText(entry.asText(),format))});
+      return rows;
     }
     if(['html','htm','rtf','txt','json'].includes(format)){
       const text=await stored.blob.text();
@@ -142,8 +142,7 @@
   async function recoverStored(model,stored){
     const format=String(model.format||M.extension(model.originalName)).toLowerCase();
     if(format==='pdf')return model.fields||[];
-    const rows=await rowsFromStored(stored,format),recovered=detectRows(rows);
-    return mergeFields(model.fields,recovered);
+    return mergeFields(model.fields,detectRows(await rowsFromStored(stored,format)));
   }
   async function recoverModel(model,form=null){
     if(!model||model.builtIn||model.fieldDetectionVersion===VERSION||M.runtime.recoveringModel===model.id)return false;
@@ -154,7 +153,7 @@
       model.analysis={...(model.analysis||{}),fieldDetectionVersion:VERSION,recoveredFields:fields.length};
       if(before!==after){model.fields=fields;model.version=Math.max(1,Number(model.version)||1)+1;model.updatedAt=P.nowIso();model.updatedBy=P.currentUser();model.syncPending=true;}
       P.persistLocal?.();if(before!==after)P.scheduleSync?.();
-      if(form&&before!==after){form.dataset.pvdSignature='';const select=form.querySelector('[data-pvm-model-select]');select?.dispatchEvent(new Event('change',{bubbles:true}));P.setFeedback?.(`Modello “${model.name}” aggiornato: riconosciuti ${fields.length} campi.`, 'success');}
+      if(form&&before!==after){form.dataset.pvdSignature='';form.querySelector('[data-pvm-model-select]')?.dispatchEvent(new Event('change',{bubbles:true}));P.setFeedback?.(`Modello “${model.name}” aggiornato: riconosciuti ${fields.length} campi.`, 'success');}
       return before!==after;
     }catch(error){console.warn(`Riconoscimento campi non riuscito per ${model.name}:`,error);return false}
     finally{if(M.runtime.recoveringModel===model.id)M.runtime.recoveringModel=''}
@@ -179,9 +178,16 @@
     return payload;
   };
 
+  function upgradeCheckboxes(form){
+    const model=M.selectedModel?.(form);if(!model)return;
+    (model.fields||[]).filter(field=>field.type==='checkbox').forEach(field=>{
+      const input=form.querySelector(`[data-pvm-field="${M.slug(field.key)}"]`);if(!input||input.type==='checkbox')return;
+      const checked=/^(?:x|si|sì|true|1|on)$/i.test(C(input.value));input.type='checkbox';input.value='X';input.checked=checked;input.closest('label')?.classList.add('pv-check-card');
+    });
+  }
   function selectedForm(target){return target?.closest?.('[data-pv-quote-form],[data-cons-form]')||P.page()?.querySelector('[data-pv-quote-form],[data-cons-form]')}
   function queueRecovery(form){
-    if(!form)return;const model=M.selectedModel?.(form);if(!model||model.builtIn)return;
+    if(!form)return;upgradeCheckboxes(form);const model=M.selectedModel?.(form);if(!model||model.builtIn)return;
     clearTimeout(form._pvmRecoveryTimer);form._pvmRecoveryTimer=setTimeout(()=>recoverModel(model,form),80);
   }
   document.addEventListener('change',event=>{if(event.target.matches?.('[data-pvm-model-select]'))queueRecovery(selectedForm(event.target))},true);

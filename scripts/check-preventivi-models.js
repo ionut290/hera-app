@@ -9,6 +9,7 @@ const css = fs.readFileSync(path.join(root, 'preventivi-models.css'), 'utf8');
 const loader = fs.readFileSync(path.join(root, 'header-menu-runtime.js'), 'utf8');
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const draft = fs.readFileSync(path.join(root, 'preventivi-draft-preserver.js'), 'utf8');
+const core = fs.readFileSync(path.join(root, 'preventivi-core.js'), 'utf8');
 [
   'Modelli preventivi e consuntivi', 'Prezziario di riferimento', 'Campi riconosciuti nel modello',
   'exportDocx', 'exportSheet', 'exportFillablePdf', 'data-pvm-dynamic-fields',
@@ -22,6 +23,9 @@ const draft = fs.readFileSync(path.join(root, 'preventivi-draft-preserver.js'), 
 ].forEach(needle => assert(loader.includes(needle), `Loader mancante: ${needle}`));
 assert(loader.includes('preventivi-models.css?v=20260801a'), 'CSS modelli non caricato.');
 assert(sw.includes('varga-cantieri-shell-v87'), 'Cache PWA non aggiornata.');
+assert(core.includes('data-pv-drive-connect'), 'Pulsante Collega Google Drive assente dai Preventivi.');
+assert(core.includes('PV.openDriveConnection'), 'Collegamento al flusso Drive esistente assente.');
+assert(loader.includes("['core', './preventivi-core.js?v=20260801-drive1']"), 'Core Preventivi aggiornato non caricato.');
 assert(source.includes('M.liveModelFields'), 'La ricostruzione dei campi non conserva i valori digitati.');
 assert(loader.includes("['draft-preserver', './preventivi-draft-preserver.js?v=20260801b']"), 'Protezione bozza aggiornata non caricata.');
 assert(draft.includes("saved.key === 'modelId'"), 'Il modello scelto non viene ripristinato prima dei campi.');

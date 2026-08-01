@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),path=require('path'),cp=require('child_process');
+const root=path.join(__dirname,'..'),model=path.join(root,'preventivi-avola-system-model.js'),follow=path.join(root,'preventivi-registry-model-followup.js'),sw=path.join(root,'sw.js');
+[model,follow,sw].forEach(file=>cp.execFileSync(process.execPath,['--check',file],{stdio:'pipe'}));
+const m=fs.readFileSync(model,'utf8'),f=fs.readFileSync(follow,'utf8'),s=fs.readFileSync(sw,'utf8');
+['standard avola','matrice preventivo avola fedele','cliente','richiedente','oggetto','lavorazioni','H2','H6','H11','D17','B${r}','D${r}','J${r}','K${r}','L${r}','N${r}','N37'].forEach(token=>assert(m.toLowerCase().includes(token.toLowerCase()),`Manca ${token}`));
+assert(m.includes('if(!model)return null'),'Il correttore non deve creare un modello duplicato.');
+assert(m.includes('stored.buffer'),'La compilazione deve usare il file originale già caricato.');
+assert(f.includes('preventivi-avola-system-model.js?v=20260801a'),'Modulo STANDARD AVOLA non caricato.');
+assert(s.includes('varga-cantieri-shell-v80'),'Cache PWA non aggiornata.');
+assert(s.includes('preventivi-avola-system-model.js?v=20260801a'),'Modulo STANDARD AVOLA non presente nella cache.');
+assert(!s.includes('Matrice_Preventivo_Avola_Modello_App.xlsx'),'La cache non deve richiedere un file modello inesistente.');
+console.log('check-preventivi-avola-system-model: OK');

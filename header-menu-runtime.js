@@ -142,6 +142,13 @@
         css.dataset.preventiviFeatureCss = '1';
         document.head.appendChild(css);
       }
+      if (!document.querySelector('link[data-preventivi-models-css]')) {
+        const modelsCss = document.createElement('link');
+        modelsCss.rel = 'stylesheet';
+        modelsCss.href = './preventivi-models.css?v=20260801a';
+        modelsCss.dataset.preventiviModelsCss = '1';
+        document.head.appendChild(modelsCss);
+      }
 
       const modules = [
         ['core', './preventivi-core.js?v=20260731a'],
@@ -152,6 +159,10 @@
         ['price-lists', './preventivi-price-lists.js?v=20260731a'],
         ['quotes', './preventivi-quotes.js?v=20260731a'],
         ['consuntivi', './preventivi-consuntivi.js?v=20260801a'],
+        ['models-core', './preventivi-models-core.js?v=20260801b'],
+        ['models-ui', './preventivi-models-ui.js?v=20260801b'],
+        ['models-documents', './preventivi-models-documents.js?v=20260801b'],
+        ['models-export', './preventivi-models-export.js?v=20260801b'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

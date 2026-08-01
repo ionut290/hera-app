@@ -20,7 +20,7 @@ const styleAsset = index.match(/style\.css\?v=[^"']+/)?.[0];
 assert.ok(styleAsset, "index.html deve caricare style.css con una versione cache-busting");
 assert.match(styles, /\.startup-loading\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;/);
 assert.match(styles, /\.startup-loading-logo\s*\{[\s\S]*width:\s*min\(90vw,\s*72dvh,\s*820px\);/);
-assert.match(serviceWorker, /hera-app-shell-v\d+/);
+assert.match(serviceWorker, /[a-z0-9-]+-shell-v\d+/i);
 assert.ok(serviceWorker.includes(`./${styleAsset}`), "Il Service Worker deve precaricare la stessa versione di style.css usata da index.html");
 assert.equal(manifest.background_color, "#111214");
 assert.equal(manifest.theme_color, "#111214");

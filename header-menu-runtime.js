@@ -116,6 +116,20 @@
     }
   }
 
+  function loadGlobalArchiveFeature() {
+    try {
+      if (document.querySelector('script[data-global-archive-sync]')) return;
+      const script = document.createElement('script');
+      script.src = './global-archive-sync.js?v=20260801a';
+      script.defer = true;
+      script.dataset.globalArchiveSync = '1';
+      script.addEventListener('error', () => console.warn('Archivio Global permanente non caricato.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Archivio Global permanente non caricato:', error);
+    }
+  }
+
   function loadPreventiviFeature() {
     try {
       if (!document.querySelector('link[data-preventivi-feature-css]')) {
@@ -185,6 +199,7 @@
     setupSnowHeader();
     setLoginPhoto();
     loadOperatorProfileFeature();
+    loadGlobalArchiveFeature();
     loadPreventiviFeature();
     if (window.firebase?.auth) {
       try {

@@ -118,13 +118,22 @@
 
   function loadGlobalArchiveFeature() {
     try {
-      if (document.querySelector('script[data-global-archive-sync]')) return;
-      const script = document.createElement('script');
-      script.src = './global-archive-sync.js?v=20260801a';
-      script.defer = true;
-      script.dataset.globalArchiveSync = '1';
-      script.addEventListener('error', () => console.warn('Archivio Global permanente non caricato.'), { once: true });
-      document.head.appendChild(script);
+      if (!document.querySelector('script[data-global-archive-sync]')) {
+        const script = document.createElement('script');
+        script.src = './global-archive-sync.js?v=20260801b';
+        script.defer = true;
+        script.dataset.globalArchiveSync = '1';
+        script.addEventListener('error', () => console.warn('Archivio Global permanente non caricato.'), { once: true });
+        document.head.appendChild(script);
+      }
+      if (!document.querySelector('script[data-global-archive-new-commesse-fix]')) {
+        const fix = document.createElement('script');
+        fix.src = './global-archive-new-commesse-fix.js?v=20260801a';
+        fix.defer = true;
+        fix.dataset.globalArchiveNewCommesseFix = '1';
+        fix.addEventListener('error', () => console.warn('Controllo nuove commesse Global non caricato.'), { once: true });
+        document.head.appendChild(fix);
+      }
     } catch (error) {
       console.warn('Archivio Global permanente non caricato:', error);
     }

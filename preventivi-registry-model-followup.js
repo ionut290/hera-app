@@ -36,6 +36,7 @@ const loadModelModules=async()=>{
   await loadScript('data-preventivi-matrix-xlsx-fields','./preventivi-matrix-xlsx-fields.js?v=20260801a','Campi matrice XLSX non caricati.');
   await loadScript('data-preventivi-model-field-recovery','./preventivi-model-field-recovery.js?v=20260801c','Riconoscimento avanzato campi modello non caricato.');
   await loadScript('data-preventivi-model-driven-form','./preventivi-model-driven-form.js?v=20260801a','Form dinamico dei modelli non caricato.');
+  await loadScript('data-preventivi-avola-system-model','./preventivi-avola-system-model.js?v=20260801a','Modello STANDARD AVOLA integrato non caricato.');
 };
 const existingExact=document.querySelector('script[data-preventivi-exact-xlsx]');
 if(existingExact){loadModelModules();}

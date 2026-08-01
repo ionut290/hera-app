@@ -149,6 +149,46 @@
     else section.appendChild(button);
   };
 
+  PV.driveAdminEmail = 'ionut29019@gmail.com';
+  PV.getDriveConnectSource = () => document.getElementById('drive-connect-btn');
+  PV.canConnectDrive = () => {
+    const email = String(window.firebase?.auth?.()?.currentUser?.email || '').trim().toLowerCase();
+    const source = PV.getDriveConnectSource();
+    return email === PV.driveAdminEmail
+      || Boolean(source && !source.classList.contains('hidden') && !source.disabled);
+  };
+  PV.syncDriveConnectButton = () => {
+    const button = PV.page()?.querySelector('[data-pv-drive-connect]');
+    if (!button) return;
+    const allowed = PV.canConnectDrive();
+    let connected = false;
+    try {
+      connected = localStorage.getItem('googleDriveConnected') === 'true'
+        || Boolean(localStorage.getItem('googleDriveAccessToken'));
+    } catch (_) {}
+    const status = document.getElementById('drive-status')?.textContent || '';
+    connected = connected || /cloud centralizzato attivo|archiviazione cloud attiva/i.test(status);
+    button.hidden = !allowed;
+    button.classList.toggle('hidden', !allowed);
+    button.disabled = !allowed;
+    button.textContent = connected ? '☁️ Ricollega Google Drive' : '☁️ Collega Google Drive';
+  };
+  PV.openDriveConnection = () => {
+    PV.syncDriveConnectButton();
+    if (!PV.canConnectDrive()) {
+      window.alert('Solo un amministratore può collegare Google Drive.');
+      return;
+    }
+    const source = PV.getDriveConnectSource();
+    if (!source) {
+      window.alert('Comando Google Drive non disponibile. Aggiorna l’app e riprova.');
+      return;
+    }
+    source.classList.remove('hidden');
+    source.disabled = false;
+    source.click();
+  };
+
   PV.ensurePage = () => {
     if (PV.page()) return;
     const page = document.createElement('section');
@@ -159,6 +199,7 @@
       <header class="pv-header">
         <button type="button" class="pv-back" data-pv-close>← Home</button>
         <div class="pv-header-title"><h1>🧾 Preventivi</h1><p>Prezziari, lavorazioni e calcoli automatici</p></div>
+        <button type="button" class="pv-btn pv-btn-secondary pv-btn-small hidden" data-pv-drive-connect hidden>☁️ Collega Google Drive</button>
         <span class="pv-sync-badge" data-pv-sync>💾 Dati sul dispositivo</span>
       </header>
       <nav class="pv-nav" aria-label="Sezioni Preventivi">
@@ -167,6 +208,16 @@
       </nav>
       <div class="pv-content" data-pv-content></div>`;
     document.body.appendChild(page);
+    page.querySelector('[data-pv-drive-connect]')?.addEventListener('click', PV.openDriveConnection);
+    const source = PV.getDriveConnectSource();
+    if (source && window.MutationObserver) {
+      const observer = new MutationObserver(PV.syncDriveConnectButton);
+      observer.observe(source, { attributes: true, attributeFilter: ['class', 'disabled'] });
+    }
+    if (window.firebase?.auth) {
+      try { window.firebase.auth().onAuthStateChanged(PV.syncDriveConnectButton); } catch (_) {}
+    }
+    PV.syncDriveConnectButton();
   };
 
   PV.open = () => {
@@ -180,6 +231,7 @@
     document.getElementById('menu-overlay')?.classList.add('hidden');
     PV.state.editingQuoteId = '';
     PV.state.editingPriceListId = '';
+    PV.syncDriveConnectButton();
     PV.renderCurrentView();
   };
   PV.close = () => {

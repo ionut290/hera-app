@@ -120,7 +120,7 @@ async function run() {
   assert.doesNotMatch(app, /fetchOpenWeatherPrimary/);
   const appAsset = index.match(/app\.js\?v=[^"']+/)?.[0];
   assert.ok(appAsset, "index.html deve caricare app.js con una versione cache-busting");
-  assert.match(serviceWorker, /hera-app-shell-v\d+/);
+  assert.match(serviceWorker, /varga-cantieri-shell-v\d+/);
   assert.ok(serviceWorker.includes(`./${appAsset}`), "Il Service Worker deve precaricare la stessa versione di app.js usata da index.html");
   assert.match(netlify, /from = "\/api\/weather"/);
 

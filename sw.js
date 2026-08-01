@@ -40,7 +40,6 @@ const APP_SHELL = [
   "./preventivi-model-field-recovery.js?v=20260801c",
   "./preventivi-model-driven-form.js?v=20260801a",
   "./preventivi-avola-system-model.js?v=20260801a",
-  "./models/Matrice_Preventivo_Avola_Modello_App.xlsx?v=20260801a",
   "./preventivi-models.css?v=20260801a",
   "./preventivi-firestore-path-fix.js?v=20260731a",
   "./preventivi-firestore-chunks.js?v=20260731a",

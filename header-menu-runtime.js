@@ -151,6 +151,7 @@
         ['batch-size', './preventivi-firestore-batch-fix.js?v=20260731a'],
         ['price-lists', './preventivi-price-lists.js?v=20260731a'],
         ['quotes', './preventivi-quotes.js?v=20260731a'],
+        ['consuntivi', './preventivi-consuntivi.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

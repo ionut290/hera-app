@@ -117,7 +117,29 @@
       script.src = './preventivi-archivio-temporaneo-30gg.js?v=20260801a';
       script.defer = true;
       script.dataset.preventiviTemporaryArchive = '1';
-      script.addEventListener('error', () => console.warn('Archivio temporaneo di 30 giorni non caricato.'), { once: true });
+      script.addEventListener('load', loadGoogleDrive, { once: true });
+      script.addEventListener('error', () => {
+        console.warn('Archivio temporaneo di 30 giorni non caricato.');
+        loadGoogleDrive();
+      }, { once: true });
+      document.head.appendChild(script);
+    };
+    wait();
+  }
+
+  function loadGoogleDrive() {
+    if (document.querySelector('script[data-preventivi-google-drive]')) return;
+    const wait = () => {
+      if (!window.HeraPreventivi?.persistLocal || !window.HeraPreventiviModels?.download) {
+        window.setTimeout(wait, 350);
+        return;
+      }
+      if (document.querySelector('script[data-preventivi-google-drive]')) return;
+      const script = document.createElement('script');
+      script.src = './preventivi-google-drive.js?v=20260801a';
+      script.defer = true;
+      script.dataset.preventiviGoogleDrive = '1';
+      script.addEventListener('error', () => console.warn('Modulo Google Drive non caricato.'), { once: true });
       document.head.appendChild(script);
     };
     wait();
@@ -127,6 +149,7 @@
     loadPreventiviSelectionPersistence();
     window.setTimeout(loadCompleteQuotePersistence, 2500);
     window.setTimeout(loadTemporaryArchive, 4000);
+    window.setTimeout(loadGoogleDrive, 5500);
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
       if (!user) return;

@@ -43,9 +43,9 @@ assert(source.exact.includes('const uniqueCols=[...new Set(Object.values(cols).f
 assert(source.exact.includes('const tableEnd=total?pos(total.ref).row-1'), 'Il limite della tabella lavorazioni non è protetto.');
 assert(!source.exact.includes('fallback)=>pos((find(heads,labels)||fallback)'), 'È ancora presente il riuso pericoloso di una colonna non riconosciuta.');
 assert(source.followup.includes('preventivi-exact-xlsx.js?v=20260801b'), 'Il compilatore XLSX aggiornato non viene caricato.');
-assert(source.header.includes('preventivi-models-documents.js?v=20260801c'), 'Il modulo documenti aggiornato non viene caricato.');
+assert(source.header.includes('preventivi-models-documents.js?v=20260801d'), 'Il modulo documenti aggiornato non viene caricato.');
 assert(source.header.includes('preventivi-models-export.js?v=20260801c'), 'Il modulo esportazione aggiornato non viene caricato.');
-assert(source.sw.includes('varga-cantieri-shell-v85'), 'Cache PWA non aggiornata.');
+assert(source.sw.includes('varga-cantieri-shell-v86'), 'Cache PWA non aggiornata.');
 assert(source.sw.includes('preventivi-exact-xlsx.js?v=20260801b'), 'Compilatore XLSX aggiornato assente dalla cache.');
 
 console.log('check-preventivi-template-fidelity: OK');

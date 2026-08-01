@@ -17,7 +17,7 @@ assert(follow.includes("replace(/\\[\\[\\s*"),'Manca supporto segnaposto DOCX [[
 assert(follow.includes('__preventiviExportTextGuard'),'Manca la protezione contro il ciclo infinito dei pulsanti.');
 assert(follow.includes("this.matches?.('[data-pvm-export]')"),'La protezione deve essere limitata ai pulsanti di esportazione.');
 assert(follow.includes("descriptor.get.call(this)===next"),'Manca il controllo che evita scritture textContent identiche.');
-assert(follow.includes('preventivi-exact-xlsx.js?v=20260801a'),'Compilatore XLSX esatto non caricato.');
+assert(follow.includes('preventivi-exact-xlsx.js?v=20260801b'),'Compilatore XLSX esatto non caricato.');
 assert(follow.includes('preventivi-matrix-form-profile.js?v=20260801a'),'Profilo matrice non caricato.');
 assert(follow.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'),'Campi matrice XLSX non caricati.');
 assert(follow.includes('preventivi-model-driven-form.js?v=20260801a'),'Form dinamico generale non caricato.');
@@ -33,9 +33,9 @@ assert(dynamic.includes("if(type==='preventivo'&&isDepGas(model))"),'Il modello 
 assert(exact.includes('[data-pv-action="print-quote"]'),'La stampa generica del preventivo deve essere bloccata.');
 assert(exact.includes('[data-cons-print]'),'La stampa generica del consuntivo deve essere bloccata.');
 assert(loader.includes("preventivi-registry-model-export-fix.js?v=20260801a"),'Modulo principale non caricato.');
-assert(loader.includes("preventivi-registry-model-followup.js?v=20260801a"),'Modulo follow-up non caricato.');
-assert(sw.includes('varga-cantieri-shell-v78'),'Cache PWA form dinamico non aggiornata.');
-assert(sw.includes('preventivi-exact-xlsx.js?v=20260801a'),'Compilatore XLSX non presente nella cache.');
+assert(loader.includes("preventivi-registry-model-followup.js?v=20260801b"),'Modulo follow-up non caricato.');
+assert(sw.includes('varga-cantieri-shell-v86'),'Cache PWA form dinamico non aggiornata.');
+assert(sw.includes('preventivi-exact-xlsx.js?v=20260801b'),'Compilatore XLSX non presente nella cache.');
 assert(sw.includes('preventivi-matrix-form-profile.js?v=20260801a'),'Profilo matrice non presente nella cache.');
 assert(sw.includes('preventivi-matrix-xlsx-fields.js?v=20260801a'),'Campi matrice non presenti nella cache.');
 assert(sw.includes('preventivi-model-driven-form.js?v=20260801a'),'Form dinamico non presente nella cache.');

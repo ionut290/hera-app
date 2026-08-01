@@ -49,7 +49,19 @@
 
   function restoreDraft(form, draft) {
     if (!form || !draft) return;
-    const controls = [...form.querySelectorAll(CONTROL_SELECTOR)];
+    let controls = [...form.querySelectorAll(CONTROL_SELECTOR)];
+    const savedModel = draft.values.find((saved) => saved.key === 'modelId');
+    const modelSelect = form.querySelector('[data-pvm-model-select]');
+    if (savedModel && modelSelect && [...modelSelect.options].some((option) => option.value === savedModel.value)) {
+      modelSelect.value = savedModel.value;
+      const modelFields = {};
+      draft.values.forEach((saved) => {
+        if (saved.key && saved.key !== 'modelId' && !saved.key.startsWith('control-')) modelFields[saved.key] = saved.value;
+      });
+      window.HeraPreventiviModels?.renderDynamic?.(form, { modelId: savedModel.value, modelFields });
+      form.dataset.pvdSignature = '';
+      controls = [...form.querySelectorAll(CONTROL_SELECTOR)];
+    }
     const grouped = new Map();
     controls.forEach((control, index) => {
       const key = controlKey(control, index);
@@ -59,7 +71,7 @@
 
     draft.values.forEach((saved, index) => {
       const candidates = grouped.get(saved.key) || [];
-      const control = candidates.shift() || controls[index];
+      const control = candidates.shift() || (saved.key.startsWith('control-') ? controls[index] : null);
       if (!control) return;
       if (control.type === 'checkbox' || control.type === 'radio') {
         control.checked = saved.checked;
@@ -81,6 +93,7 @@
         try { focusControl.setSelectionRange(draft.selectionStart, draft.selectionEnd); } catch (_) { /* tipo input non compatibile */ }
       }
     }
+    form.dispatchEvent(new CustomEvent('hera:draft-restored', { bubbles: true }));
   }
 
   const originalRenderCurrentView = PV.renderCurrentView?.bind(PV);

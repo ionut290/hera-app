@@ -33,6 +33,6 @@ const sw=fs.readFileSync(swPath,'utf8');
 ].forEach(token=>assert(recovery.includes(token),`Manca nel recupero campi: ${token}`));
 assert(followup.includes('preventivi-model-field-recovery.js?v=20260801c'),'Modulo recupero campi non caricato.');
 assert(followup.indexOf('preventivi-model-field-recovery.js')<followup.indexOf('preventivi-model-driven-form.js'),'Il recupero campi deve caricarsi prima del form dinamico.');
-assert(sw.includes('varga-cantieri-shell-v79'),'Cache PWA non aggiornata a v79.');
+assert(sw.includes('varga-cantieri-shell-v86'),'Cache PWA non aggiornata a v86.');
 assert(sw.includes('preventivi-model-field-recovery.js?v=20260801c'),'Modulo recupero campi assente dalla cache.');
 console.log('check-preventivi-model-field-recovery: OK');

@@ -167,7 +167,7 @@
         ['consuntivi', './preventivi-consuntivi.js?v=20260801b'],
         ['models-core', './preventivi-models-core.js?v=20260801b'],
         ['models-ui', './preventivi-models-ui.js?v=20260801b'],
-        ['models-documents', './preventivi-models-documents.js?v=20260801c'],
+        ['models-documents', './preventivi-models-documents.js?v=20260801d'],
         ['models-export', './preventivi-models-export.js?v=20260801c'],
         ['conditional-discount', './preventivi-ribasso-condizionale-fix.js?v=20260801a'],
         ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
@@ -175,7 +175,7 @@
         ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801c'],
         ['tabs-models-plant-guard', './preventivi-tabs-models-plant-guard.js?v=20260801a'],
         ['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a'],
-        ['draft-preserver', './preventivi-draft-preserver.js?v=20260801a'],
+        ['draft-preserver', './preventivi-draft-preserver.js?v=20260801b'],
         ['commessa-search-bridge', './preventivi-commessa-search-bridge.js?v=20260801a'],
         ['clients', './preventivi-clienti-feature.js?v=20260801a'],
         ['feature', './preventivi-feature.js?v=20260731a']

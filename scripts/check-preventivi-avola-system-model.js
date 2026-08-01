@@ -7,7 +7,7 @@ const m=fs.readFileSync(model,'utf8'),f=fs.readFileSync(follow,'utf8'),s=fs.read
 assert(m.includes('if(!model)return null'),'Il correttore non deve creare un modello duplicato.');
 assert(m.includes('stored.buffer'),'La compilazione deve usare il file originale già caricato.');
 assert(f.includes('preventivi-avola-system-model.js?v=20260801a'),'Modulo STANDARD AVOLA non caricato.');
-assert(s.includes('varga-cantieri-shell-v80'),'Cache PWA non aggiornata.');
+assert(s.includes('varga-cantieri-shell-v86'),'Cache PWA non aggiornata.');
 assert(s.includes('preventivi-avola-system-model.js?v=20260801a'),'Modulo STANDARD AVOLA non presente nella cache.');
 assert(!s.includes('Matrice_Preventivo_Avola_Modello_App.xlsx'),'La cache non deve richiedere un file modello inesistente.');
 console.log('check-preventivi-avola-system-model: OK');

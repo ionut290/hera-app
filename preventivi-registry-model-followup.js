@@ -41,6 +41,6 @@ const loadModelModules=async()=>{
 const existingExact=document.querySelector('script[data-preventivi-exact-xlsx]');
 if(existingExact){loadModelModules();}
 else{
-  const script=document.createElement('script');script.src='./preventivi-exact-xlsx.js?v=20260801a';script.async=false;script.dataset.preventiviExactXlsx='1';script.addEventListener('load',loadModelModules,{once:true});script.addEventListener('error',()=>{console.warn('Compilatore matrice XLSX non caricato.');loadModelModules();},{once:true});document.head.appendChild(script);
+  const script=document.createElement('script');script.src='./preventivi-exact-xlsx.js?v=20260801b';script.async=false;script.dataset.preventiviExactXlsx='1';script.addEventListener('load',loadModelModules,{once:true});script.addEventListener('error',()=>{console.warn('Compilatore matrice XLSX non caricato.');loadModelModules();},{once:true});document.head.appendChild(script);
 }
 })();

@@ -4,7 +4,39 @@
   if(!M||!PV) throw new Error('Preventivi Models core non caricato.');
   const DOCX_LIB='https://cdn.jsdelivr.net/npm/docxtemplater@3.51.0/build/docxtemplater.js';
 
-  M.modelData=(doc,type)=>{const totals=PV.quoteTotals({lines:doc.lines||[],vatRate:doc.vatRate||0}),priceListNames=(doc.priceListIds||[]).map(id=>PV.getPriceList(id)?.name).filter(Boolean).join(', '),lines=(doc.lines||[]).map((line,index)=>({progressivo:index+1,codice:line.code||'',descrizione:line.description||'',unita_misura:line.unit||'',quantita:line.quantity||0,prezzo_unitario:line.unitPrice||0,totale_riga:PV.roundMoney((Number(line.quantity)||0)*(Number(line.unitPrice)||0))}));return {...(doc.modelFields||{}),numero_documento:doc.number||'',numero_preventivo:type==='preventivo'?doc.number||'':'',numero_consuntivo:type==='consuntivo'?doc.number||'':'',numero_contratto:doc.contractNumber||'',numero_ordine:doc.orderNumber||'',numero_richiesta:doc.requestNumber||'',richiedente:doc.requester||'',cliente:doc.clientName||'',committente:doc.clientName||'',data_documento:doc.date||'',data_inizio_lavori:doc.startDate||'',data_fine_lavori:doc.endDate||'',commessa:doc.commessaName||'',codice_commessa:doc.commessaCode||'',impianto:doc.plantName||'',denominazione_impianto:doc.plantName||'',id_sap:doc.plantSap||'',indirizzo:doc.workLocation||'',comune:doc.city||'',tipologia_impianto:doc.plantType||'',oggetto:doc.subject||'',descrizione_intervento:doc.description||'',descrizione_lavori:doc.description||'',operatori:doc.operators||'',ore_impiegate:doc.hours||'',mezzi_utilizzati:doc.vehicles||'',materiali_utilizzati:doc.materials||'',prezziario:priceListNames,note:doc.notes||'',totale_imponibile:totals.subtotal,aliquota_iva:totals.vatRate,iva:totals.vatAmount,totale_generale:totals.total,lavorazioni:lines};};
+  M.modelData=(doc,type)=>{
+    const totals=PV.quoteTotals({lines:doc.lines||[],vatRate:doc.vatRate||0});
+    const priceListNames=(doc.priceListIds||[]).map(id=>PV.getPriceList(id)?.name).filter(Boolean).join(', ');
+    const lines=(doc.lines||[]).map((line,index)=>{
+      const priceList=PV.getPriceList(line.priceListId);
+      const priceItem=(priceList?.items||[]).find(item=>item.id===line.priceItemId)||null;
+      const contractPrice=Number(line.contractPrice??line.baseUnitPrice??priceItem?.unitPrice??line.unitPrice)||0;
+      const discount=Math.min(100,Math.max(0,Number(line.discount??priceItem?.discount)||0));
+      const netPrice=Number.isFinite(Number(line.unitPrice))?Number(line.unitPrice):PV.roundMoney(contractPrice*(1-discount/100));
+      const quantity=Number(line.quantity)||0;
+      const amount=PV.roundMoney(quantity*netPrice);
+      return {
+        progressivo:index+1,
+        capitolo:line.chapter||priceItem?.chapter||'',
+        codice:line.code||priceItem?.code||'',
+        testo_breve:line.shortText||line.description||priceItem?.description||'',
+        testo_esteso:line.extendedText||line.description||priceItem?.description||'',
+        descrizione:line.description||priceItem?.description||'',
+        unita_misura:line.unit||priceItem?.unit||'',
+        quantita:quantity,
+        prezzo_capitolato:contractPrice,
+        prezzo_unitario:netPrice,
+        ribasso:discount,
+        ribasso_si_no:discount>0?'Sì':'No',
+        prezzo_netto_ribassato:netPrice,
+        importo_prestazione:amount,
+        totale_riga:amount,
+        note:line.notes||line.note||'',
+        note_attivita:line.notes||line.note||''
+      };
+    });
+    return {...(doc.modelFields||{}),numero_documento:doc.number||'',numero_preventivo:type==='preventivo'?doc.number||'':'',numero_consuntivo:type==='consuntivo'?doc.number||'':'',numero_contratto:doc.contractNumber||'',numero_ordine:doc.orderNumber||'',numero_richiesta:doc.requestNumber||'',richiedente:doc.requester||'',cliente:doc.clientName||'',committente:doc.clientName||'',data_documento:doc.date||'',data_inizio_lavori:doc.startDate||'',data_fine_lavori:doc.endDate||'',commessa:doc.commessaName||'',codice_commessa:doc.commessaCode||'',impianto:doc.plantName||'',denominazione_impianto:doc.plantName||'',id_sap:doc.plantSap||'',indirizzo:doc.workLocation||'',comune:doc.city||'',tipologia_impianto:doc.plantType||'',oggetto:doc.subject||'',descrizione_intervento:doc.description||'',descrizione_lavori:doc.description||'',operatori:doc.operators||'',ore_impiegate:doc.hours||'',mezzi_utilizzati:doc.vehicles||'',materiali_utilizzati:doc.materials||'',prezziario:priceListNames,note:doc.notes||'',totale_imponibile:totals.subtotal,aliquota_iva:totals.vatRate,iva:totals.vatAmount,totale_generale:totals.total,lavorazioni:lines};
+  };
   M.flatten=(value,prefix='',target={})=>{if(Array.isArray(value)){target[prefix]=value;return target;}if(value&&typeof value==='object'){Object.entries(value).forEach(([key,item])=>M.flatten(item,prefix?`${prefix}.${key}`:key,target));}else target[prefix]=value;return target;};
   M.replaceTokens=(text,data)=>{const flat=M.flatten(data);return String(text||'').replace(/\{\{\s*([^{}]+?)\s*\}\}|\[\[\s*([^\[\]]+?)\s*\]\]/g,(all,a,b)=>{const key=M.slug(a||b);const value=data[key]??flat[a||b]??'';return Array.isArray(value)?value.map(row=>Object.values(row).join(' | ')).join('\n'):String(value??'');});};
   M.fileName=(value)=>M.slug(value).replace(/_/g,'-')||'documento';

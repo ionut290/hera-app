@@ -77,7 +77,7 @@
   };
   const totals = (doc) => PV.quoteTotals({ lines: doc.lines || [], vatRate: doc.vatRate || 0 });
   const getDoc = (id) => (PV.state.consuntivi || []).find((x) => x.id === id) || null;
-  const lineHtml = (line = {}) => `<div class="pv-line" data-cons-line>
+  const lineHtml = (line = {}) => `<div class="pv-line" data-cons-line data-line-id="${PV.escapeHtml(line.id || '')}" data-price-list-id="${PV.escapeHtml(line.priceListId || '')}" data-price-item-id="${PV.escapeHtml(line.priceItemId || '')}" data-contract-price="${PV.escapeHtml(line.contractPrice ?? line.baseUnitPrice ?? '')}" data-discount="${PV.escapeHtml(line.discount ?? '')}">
     <label class="pv-label pv-line-wide"><span>Descrizione *</span><input data-cons-desc required value="${PV.escapeHtml(line.description || '')}"></label>
     <label class="pv-label"><span>Codice</span><input data-cons-code value="${PV.escapeHtml(line.code || '')}"></label>
     <label class="pv-label"><span>U.M.</span><input data-cons-unit value="${PV.escapeHtml(line.unit || '')}"></label>
@@ -138,7 +138,7 @@
     if (!form.reportValidity()) return;
     const fd = new FormData(form); const existing = getDoc(PV.state.editingConsuntivoId); const id = existing?.id || PV.uid('cons');
     const c = registry().commesse.find((x)=>x.id===fd.get('commessaId')); const p = registry().plants.find((x)=>x.id===fd.get('plantId'));
-    const lines = [...form.querySelectorAll('[data-cons-line]')].map((row)=>({ id:PV.uid('line'), description:row.querySelector('[data-cons-desc]').value.trim(), code:row.querySelector('[data-cons-code]').value.trim(), unit:row.querySelector('[data-cons-unit]').value.trim(), quantity:PV.parseNumber(row.querySelector('[data-cons-qty]').value), unitPrice:PV.parseNumber(row.querySelector('[data-cons-price]').value) })).filter((x)=>x.description);
+    const lines = [...form.querySelectorAll('[data-cons-line]')].map((row)=>({ id:row.dataset.lineId||PV.uid('line'), priceListId:String(row.dataset.priceListId||''), priceItemId:String(row.dataset.priceItemId||''), contractPrice:row.dataset.contractPrice===''?null:PV.parseNumber(row.dataset.contractPrice), discount:row.dataset.discount===''?null:PV.parseNumber(row.dataset.discount), description:row.querySelector('[data-cons-desc]').value.trim(), code:row.querySelector('[data-cons-code]').value.trim(), unit:row.querySelector('[data-cons-unit]').value.trim(), quantity:PV.parseNumber(row.querySelector('[data-cons-qty]').value), unitPrice:PV.parseNumber(row.querySelector('[data-cons-price]').value) })).filter((x)=>x.description);
     const doc = { ...(existing||{}), id, ...Object.fromEntries(fd.entries()), commessaName:c?.name||existing?.commessaName||'', plantName:p?.name||existing?.plantName||'', lines, updatedAt:PV.nowIso(), createdAt:existing?.createdAt||PV.nowIso(), updatedBy:PV.currentUser(), syncPending:true };
     doc.vatRate=PV.parseNumber(doc.vatRate); doc.hours=PV.parseNumber(doc.hours); doc.operators=PV.parseNumber(doc.operators);
     const i=PV.state.consuntivi.findIndex((x)=>x.id===id); if(i>=0) PV.state.consuntivi[i]=doc; else PV.state.consuntivi.push(doc); write();

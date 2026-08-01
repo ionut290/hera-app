@@ -120,7 +120,7 @@
     try {
       if (!document.querySelector('script[data-global-archive-sync]')) {
         const script = document.createElement('script');
-        script.src = './global-archive-sync.js?v=20260801b';
+        script.src = './global-archive-sync.js?v=20260801-cost1';
         script.defer = true;
         script.dataset.globalArchiveSync = '1';
         script.addEventListener('error', () => console.warn('Archivio Global permanente non caricato.'), { once: true });
@@ -128,7 +128,7 @@
       }
       if (!document.querySelector('script[data-global-archive-new-commesse-fix]')) {
         const fix = document.createElement('script');
-        fix.src = './global-archive-new-commesse-fix.js?v=20260801a';
+        fix.src = './global-archive-new-commesse-fix.js?v=20260801-cost1';
         fix.defer = true;
         fix.dataset.globalArchiveNewCommesseFix = '1';
         fix.addEventListener('error', () => console.warn('Controllo nuove commesse Global non caricato.'), { once: true });
@@ -158,7 +158,7 @@
 
       const modules = [
         ['core', './preventivi-core.js?v=20260801-drive1'],
-        ['storage', './preventivi-storage-config.js?v=20260731b'],
+        ['storage', './preventivi-storage-config.js?v=20260801-cost1'],
         ['paths', './preventivi-firestore-path-fix.js?v=20260731a'],
         ['chunks', './preventivi-firestore-chunks.js?v=20260731a'],
         ['batch-size', './preventivi-firestore-batch-fix.js?v=20260731a'],
@@ -177,7 +177,7 @@
         ['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a'],
         ['draft-preserver', './preventivi-draft-preserver.js?v=20260801b'],
         ['commessa-search-bridge', './preventivi-commessa-search-bridge.js?v=20260801a'],
-        ['clients', './preventivi-clienti-feature.js?v=20260801a'],
+        ['clients', './preventivi-clienti-feature.js?v=20260801-cost1'],
         ['feature', './preventivi-feature.js?v=20260731a']
       ];
 

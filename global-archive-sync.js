@@ -5,6 +5,7 @@
   const ARCHIVE_ROOT = 'globalArchive';
   const MIGRATION_KEY = `hera_global_archive_migrated_${VERSION}`;
   const syncLocks = new Map();
+  let migrationPromise = null;
 
   const db = () => window.firebase?.firestore?.() || null;
   const authUser = () => window.firebase?.auth?.()?.currentUser || null;
@@ -36,7 +37,6 @@
       numeroContratto: text(first(raw, ['numeroContratto','contratto','contractNumber'])),
       richiedente: text(first(raw, ['richiedente','referente','referenteCliente'])),
       archivioPermanente: true,
-      updatedAt: serverTimestamp(),
       updatedByUid: authUser()?.uid || ''
     });
   }
@@ -57,7 +57,6 @@
       gpsY: first(raw, ['gpsY','latitude','latitudine']),
       dittaEsecutrice: text(first(raw, ['dittaEsecutrice','Ditta esecutrice'])),
       archivioPermanente: true,
-      updatedAt: serverTimestamp(),
       updatedByUid: authUser()?.uid || ''
     });
   }
@@ -91,16 +90,20 @@
     if (!ref || !incoming) return;
     const current = await ref.get();
     if (!current.exists) {
-      await ref.set(incoming, { merge: true });
+      await ref.set({ ...incoming, updatedAt: serverTimestamp() }, { merge: true });
       return;
     }
     const existing = current.data() || {};
     const merged = { ...existing };
+    let changed = existing.archivioPermanente !== true;
     Object.entries(incoming).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && text(value) !== '') merged[key] = value;
+      if (value === undefined || value === null || text(value) === '') return;
+      if (key !== 'updatedByUid' && JSON.stringify(existing[key] ?? null) !== JSON.stringify(value)) changed = true;
+      merged[key] = value;
     });
+    if (!changed) return;
     merged.archivioPermanente = true;
-    merged.updatedAt = incoming.updatedAt || serverTimestamp();
+    merged.updatedAt = serverTimestamp();
     await ref.set(merged, { merge: true });
   }
 
@@ -160,23 +163,25 @@
     return task;
   }
 
-  async function migrateAll() {
-    if (!db() || !authUser()) return;
-    const snapshot = await db().collection(commesseCollectionName()).get();
-    for (const doc of snapshot.docs) await syncCommessa(doc.id, doc.data() || {});
-    try { localStorage.setItem(MIGRATION_KEY, '1'); } catch (_) { /* non bloccante */ }
+  function migrateAll({ force = false } = {}) {
+    if (!db() || !authUser()) return Promise.resolve(false);
+    if (migrationPromise) return migrationPromise;
+    migrationPromise = (async () => {
+      try {
+        if (!force && localStorage.getItem(MIGRATION_KEY) === '1') return false;
+      } catch (_) { /* continua senza cache locale */ }
+      const snapshot = await db().collection(commesseCollectionName()).get();
+      for (const doc of snapshot.docs) await syncCommessa(doc.id, doc.data() || {});
+      try { localStorage.setItem(MIGRATION_KEY, '1'); } catch (_) { /* non bloccante */ }
+      return true;
+    })().finally(() => { migrationPromise = null; });
+    return migrationPromise;
   }
 
   function installRealtimeArchive() {
-    if (!db()) return;
-    const root = db().collection(commesseCollectionName());
-    root.onSnapshot((snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'removed') return;
-        archiveCommessa(change.doc.id, change.doc.data() || {}).catch((error) => console.warn('Global archive: commessa non archiviata.', error));
-        syncCommessa(change.doc.id, change.doc.data() || {}).catch((error) => console.warn('Global archive: sincronizzazione commessa non riuscita.', error));
-      });
-    }, (error) => console.warn('Global archive: listener commesse non disponibile.', error));
+    // Le scritture sono intercettate da patchWrites. Un secondo listener sulla
+    // collezione completa duplicava il listener principale dell'app e, alla
+    // connessione, rileggeva anche tutti gli impianti di ogni commessa.
   }
 
   function patchWrites() {

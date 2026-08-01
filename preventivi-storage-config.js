@@ -186,7 +186,7 @@
     }
   }
 
-  PV.connectFirebase = () => {
+  PV.connectFirebase = (options = {}) => {
     ensureAuthWatcher();
     if (PV.state.storageMode !== FIRESTORE_MODE) {
       disconnectFirestoreSubscriptions();
@@ -202,16 +202,21 @@
       PV.setSyncBadge('Accesso richiesto per Firestore.', 'warning');
       return;
     }
-    if (PV.state.firestoreConnecting || (PV.state.firestore && PV.state.unsubscribers.length)) return;
+    if (PV.state.firestoreConnecting) return;
 
     try {
       PV.state.firestoreConnecting = true;
       PV.state.remoteConnected = false;
       PV.state.remoteDenied = false;
       PV.state.firestore = window.firebase.firestore();
+      if (!PV.state.isOpen) {
+        PV.state.firestoreConnecting = false;
+        PV.setSyncBadge('☁️ Firestore pronto (apri Preventivi per aggiornare)');
+        return;
+      }
       PV.setSyncBadge('Connessione a Firestore…');
-      PV.subscribeCollection(PV.collections.priceLists, 'priceLists', 'priceLists');
-      PV.subscribeCollection(PV.collections.quotes, 'quotes', 'quotes');
+      PV.subscribeCollection(PV.collections.priceLists, 'priceLists', 'priceLists', options);
+      PV.subscribeCollection(PV.collections.quotes, 'quotes', 'quotes', options);
       PV.state.firestoreConnecting = false;
       PV.scheduleSync();
     } catch (error) {

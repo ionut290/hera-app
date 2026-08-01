@@ -1197,6 +1197,9 @@ let programmazioni = [];
 let programmazioneOperatorAutocomplete = null;
 let programmazioneMezziAutocomplete = null;
 let unsubscribeProgrammazioni = null;
+let programmazioniLoadedAt = 0;
+let programmazioniLoadPromise = null;
+const PROGRAMMAZIONI_CACHE_TTL_MS = 5 * 60 * 1000;
 let operatorPositions = [];
 let operatorPositionsVisible = true;
 let activeUsersLogs = [];
@@ -1312,8 +1315,6 @@ let geolocationWatchId = null;
 let mapAutoFitSignature = "";
 let userLocationMapMarker = null;
 let userLocationFullscreenMarker = null;
-let lastPositionPublishAt = 0;
-let lastPublishedUserPos = null;
 let latestGeolocationCoords = null;
 let locationPermission = "prompt";
 let isLocationEnabled = false;
@@ -2280,7 +2281,6 @@ window.addEventListener("hera:native-location", (event) => {
   updateCurrentUserPosition(nativePosition.coords, nativePosition.timestamp);
   if (ui.gpsStatus) ui.gpsStatus.textContent = "Posizione Android aggiornata.";
 });
-window.addEventListener("pagehide", markCurrentOperatorOffline);
 ui.commessaResourceViewerCloseBtn?.addEventListener("click", closeCommessaResourceViewer);
 document.querySelectorAll(".resource-filter-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -3440,8 +3440,6 @@ if (!auth || firebaseInitError) {
   gpsUpdateRequests = [];
   operatorPositions = [];
   hoursApprovalRequests = [];
-  lastPublishedUserPos = null;
-  lastPositionPublishAt = 0;
   renderPrivateDocsList();
   renderPosDocuments();
   renderResourceButtonsForCommessa();
@@ -3482,7 +3480,7 @@ if (!auth || firebaseInitError) {
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
       () => upsertCurrentPlatformUser(),
-      () => initGeolocation({ forcePublishCurrent: true }),
+      () => initGeolocation(),
       () => subscribeUsers(),
       () => subscribeAdminUsers(),
       () => subscribeChat(),
@@ -3507,7 +3505,6 @@ if (!auth || firebaseInitError) {
       })
     ]);
   } else {
-    markCurrentOperatorOffline();
     squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
     renderSquadre();
     if (ui.commesseLista) ui.commesseLista.innerHTML = "<p class='muted'>Fai login per vedere le commesse.</p>";
@@ -3844,6 +3841,7 @@ function openManagementPanel(panel) {
   if (panel === "squadre") setDefaultSquadraCompositionDate({ force: true });
   if (panel === "global") setTimeout(() => globalMap.invalidateSize(), 60);
   if (panel === "notifiche") closeNotificationCalendarView();
+  if (panel === "programmazione") void subscribeProgrammazioni();
   closeSideMenu();
 }
 
@@ -5203,6 +5201,7 @@ function openPrivateDocsPage() {
   }
   window.location.hash = "documenti";
   applyRoute();
+  window.HeraDocuments?.activate?.();
   closeSideMenu();
 }
 
@@ -5216,6 +5215,7 @@ function openPrivateDocsUploadPage() {
 }
 
 function closePrivateDocsPage() {
+  window.HeraDocuments?.deactivate?.();
   window.location.hash = "";
   applyRoute();
 }
@@ -25398,20 +25398,6 @@ async function fetchOverpassWithFallback(query) {
   throw lastError || new Error("Overpass non disponibile");
 }
 
-function shouldPublishOperatorPosition(coords, options = {}) {
-  if (!currentUser || !coords) return false;
-  if (options.force) return true;
-  const now = Date.now();
-  if (!lastPublishedUserPos) return true;
-  const movedMeters = haversine(
-    lastPublishedUserPos.lat,
-    lastPublishedUserPos.lng,
-    coords.latitude,
-    coords.longitude
-  ) * 1000;
-  return movedMeters >= 20 || now - lastPositionPublishAt >= 15 * 1000;
-}
-
 function getCurrentOperatorPositionAssignment() {
   const dateKey = getActiveSquadreDateKey();
   const assignment = getCurrentUserAssignedCommesseForDate(dateKey)[0];
@@ -25427,78 +25413,18 @@ function getCurrentOperatorPositionAssignment() {
   };
 }
 
-async function publishCurrentOperatorPosition(coords, options = {}) {
-  if (!shouldPublishOperatorPosition(coords, options)) return;
-  lastPositionPublishAt = Date.now();
-  lastPublishedUserPos = { lat: coords.latitude, lng: coords.longitude };
-  try {
-    const assignment = getCurrentOperatorPositionAssignment();
-    await db.collection("operatorPositions").doc(currentUser.uid).set({
-      userId: currentUser.uid,
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      displayName: currentUser.displayName || currentUser.email || "Utente",
-      nomeOperatore: assignment.operatorName || currentUser.displayName || currentUser.email || "Operatore",
-      operatorName: assignment.operatorName || currentUser.displayName || currentUser.email || "Operatore",
-      squadra: assignment.squadraLabel || assignment.squadraName || "",
-      squadraIndex: assignment.squadraIndex || "",
-      squadraLabel: assignment.squadraLabel || "",
-      squadraName: assignment.squadraName || "",
-      commessaAttiva: assignment.commessaName || "",
-      commessaId: assignment.commessaId || "",
-      commessaName: assignment.commessaName || "",
-      riferimentoData: assignment.riferimentoData || "",
-      lat: Number(coords.latitude),
-      lng: Number(coords.longitude),
-      latitude: Number(coords.latitude),
-      longitude: Number(coords.longitude),
-      accuracy: Number(coords.accuracy || 0),
-      stato: "online",
-      status: "online",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    await db.collection("platformUsers").doc(currentUser.uid).set({
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      displayName: currentUser.displayName || currentUser.email || "Utente",
-      lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  } catch (error) {
-    console.warn("Aggiornamento posizione operatore non riuscito:", error);
-  }
-}
-
-function markCurrentOperatorOffline() {
-  if (!currentUser) return;
-  db.collection("operatorPositions").doc(currentUser.uid).set({
-    userId: currentUser.uid,
-    uid: currentUser.uid,
-    stato: "offline",
-    status: "offline",
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true }).catch((error) => console.warn("Aggiornamento stato operatore non riuscito:", error));
-}
-
-function initGeolocation(options = {}) {
+function initGeolocation() {
   if (!navigator.geolocation) {
     ui.gpsStatus.textContent = "Geolocalizzazione non supportata dal browser.";
     updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
     return;
   }
   void syncLocationAvailability();
-  if (options.forcePublishCurrent && latestGeolocationCoords && currentUser) {
-    publishCurrentOperatorPosition(latestGeolocationCoords, { force: true });
-    options.forcePublishCurrent = false;
-  }
   if (geolocationWatchId != null) navigator.geolocation.clearWatch(geolocationWatchId);
 
   const onPosition = (pos) => {
     latestGeolocationCoords = pos.coords;
     updateCurrentUserPosition(pos.coords, pos.timestamp, { render: false });
-    publishCurrentOperatorPosition(pos.coords, { force: Boolean(options.forcePublishCurrent) });
-    options.forcePublishCurrent = false;
     evaluateTimbraturaReminders();
     ui.gpsStatus.textContent = "Posizione attiva: impianti ordinati per distanza.";
     updateLocationWarningState({ permission: "granted", enabled: true, mode: "prompt" });
@@ -26873,37 +26799,43 @@ function subscribeUsers() {
     }
     checkAndSendHoursDeadlineAlerts();
   };
-  runFirestoreGetWithRetry(source, { label: "LOAD UTENTI", timeoutMs: 9000, retries: 2 })
-    .then((snapshot) => {
-      applySnapshot(snapshot);
-      try {
-        unsubscribeUsers = source.onSnapshot(applySnapshot, (error) => {
-          logFirestoreError("LOAD UTENTI LISTENER", error);
-          platformUsers = [];
-          renderChatRecipients();
-          renderHeaderActivitySummary();
-        });
-      } catch (error) {
-        logFirestoreError("LOAD UTENTI LISTENER INIT", error);
-      }
-    })
-    .catch((error) => {
-      logFirestoreError("LOAD UTENTI", error);
+  // onSnapshot include già il caricamento iniziale: il precedente get() faceva
+  // pagare due volte la stessa lista a ogni accesso.
+  try {
+    unsubscribeUsers = source.onSnapshot(applySnapshot, (error) => {
+      logFirestoreError("LOAD UTENTI LISTENER", error);
       platformUsers = [];
       renderChatRecipients();
       renderHeaderActivitySummary();
     });
+  } catch (error) {
+    logFirestoreError("LOAD UTENTI LISTENER INIT", error);
+  }
 }
 
-function subscribeProgrammazioni() {
-  if (unsubscribeProgrammazioni) unsubscribeProgrammazioni();
-  unsubscribeProgrammazioni = db.collection("programmazioni").onSnapshot((snapshot) => {
-    programmazioni = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+function subscribeProgrammazioni({ force = false } = {}) {
+  if (!currentUser || !canManageData()) return Promise.resolve();
+  if (!force && programmazioniLoadedAt && Date.now() - programmazioniLoadedAt < PROGRAMMAZIONI_CACHE_TTL_MS) {
     renderProgrammazioni();
-  }, () => {
-    programmazioni = [];
-    renderProgrammazioni();
-  });
+    return Promise.resolve();
+  }
+  if (programmazioniLoadPromise) return programmazioniLoadPromise;
+  if (unsubscribeProgrammazioni) {
+    unsubscribeProgrammazioni();
+    unsubscribeProgrammazioni = null;
+  }
+  programmazioniLoadPromise = db.collection("programmazioni").get()
+    .then((snapshot) => {
+      programmazioni = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      programmazioniLoadedAt = Date.now();
+      renderProgrammazioni();
+    })
+    .catch((error) => {
+      console.error("Errore caricamento programmazioni:", error);
+      renderProgrammazioni();
+    })
+    .finally(() => { programmazioniLoadPromise = null; });
+  return programmazioniLoadPromise;
 }
 
 function populateProgrammazioneFormOptions() {
@@ -27008,19 +26940,10 @@ function buildProgrammazioneAutocomplete(root, label, options, selectedValues = 
 
 function subscribeOperatorPositions() {
   stopOperatorPositionsSubscription();
-  if (!currentUser || !canManageData()) {
-    operatorPositions = [];
-    renderMap();
-    return;
-  }
-  unsubscribeOperatorPositions = db.collection("operatorPositions").onSnapshot((snapshot) => {
-    operatorPositions = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    renderMap();
-  }, (error) => {
-    console.error("Errore caricamento posizioni squadre:", error);
-    operatorPositions = [];
-    renderMap();
-  });
+  // La mappa corrente mostra solo la posizione locale dell'utente. Il vecchio
+  // listener leggeva tutte le posizioni senza che venissero mai visualizzate.
+  operatorPositions = [];
+  renderMap();
 }
 
 function stopOperatorPositionsSubscription() {
@@ -27284,7 +27207,7 @@ function startPresenceHeartbeat() {
   if (!currentUser) return;
   presenceHeartbeatTimer = setInterval(() => {
     upsertCurrentPlatformUser();
-  }, 60 * 1000);
+  }, 5 * 60 * 1000);
 }
 
 function stopPresenceHeartbeat() {
@@ -30363,6 +30286,7 @@ async function saveProgrammazione(event) {
   }
   ui.programmazioneDialog?.close();
   ui.programmazioneForm?.reset();
+  await subscribeProgrammazioni({ force: true });
 }
 
 async function syncProgrammazioneToSquadra(programmazioneId, payload, { remove = false } = {}) {
@@ -30391,6 +30315,7 @@ async function deleteProgrammazioneById(id) {
   if (!window.confirm("Sei sicuro di voler eliminare questa programmazione?")) return;
   await syncProgrammazioneToSquadra(id, item, { remove: true });
   await db.collection("programmazioni").doc(id).delete();
+  await subscribeProgrammazioni({ force: true });
 }
 async function deleteProgrammazioneFromForm() { return deleteProgrammazioneById(ui.programmaId?.value || ""); }
 

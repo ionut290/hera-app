@@ -13,7 +13,8 @@
       priceLists: 'hera_preventivi_prezziari_v1',
       quotes: 'hera_preventivi_documenti_v1',
       deletions: 'hera_preventivi_eliminati_v1',
-      settings: 'hera_preventivi_impostazioni_v1'
+      settings: 'hera_preventivi_impostazioni_v1',
+      remoteCache: 'hera_preventivi_remote_cache_v1'
     },
     state: {
       view: 'quotes',
@@ -29,7 +30,10 @@
       remoteConnected: false,
       remoteDenied: false,
       unsubscribers: [],
-      syncTimer: null
+      syncTimer: null,
+      isOpen: false,
+      remoteLoadedAt: {},
+      remoteLoadPromises: {}
     }
   };
 
@@ -96,12 +100,23 @@
       quotes: deletions?.quotes && typeof deletions.quotes === 'object' ? deletions.quotes : {}
     };
     PV.state.settings = settings && typeof settings === 'object' ? settings : {};
+    const remoteLoadedAt = PV.readJson(PV.keys.remoteCache, {});
+    PV.state.remoteLoadedAt = remoteLoadedAt && typeof remoteLoadedAt === 'object' ? remoteLoadedAt : {};
   };
   PV.persistLocal = () => {
     PV.writeJson(PV.keys.priceLists, PV.state.priceLists);
     PV.writeJson(PV.keys.quotes, PV.state.quotes);
     PV.writeJson(PV.keys.deletions, PV.state.deletions);
     PV.writeJson(PV.keys.settings, PV.state.settings);
+    PV.writeJson(PV.keys.remoteCache, PV.state.remoteLoadedAt);
+  };
+
+  PV.remoteCacheTtlMs = 5 * 60 * 1000;
+  PV.shouldRefreshRemote = (collectionName, force = false) => force || !PV.state.remoteLoadedAt[collectionName]
+    || Date.now() - Number(PV.state.remoteLoadedAt[collectionName]) >= PV.remoteCacheTtlMs;
+  PV.markRemoteRefreshed = (collectionName) => {
+    PV.state.remoteLoadedAt[collectionName] = Date.now();
+    PV.writeJson(PV.keys.remoteCache, PV.state.remoteLoadedAt);
   };
 
   PV.page = () => document.getElementById(PV.pageId);
@@ -231,10 +246,18 @@
     document.getElementById('menu-overlay')?.classList.add('hidden');
     PV.state.editingQuoteId = '';
     PV.state.editingPriceListId = '';
+    PV.state.isOpen = true;
     PV.syncDriveConnectButton();
     PV.renderCurrentView();
+    PV.connectFirebase?.();
   };
   PV.close = () => {
+    PV.state.isOpen = false;
+    (PV.state.unsubscribers || []).splice(0).forEach((unsubscribe) => {
+      try { unsubscribe(); } catch (_) { /* Listener già chiuso. */ }
+    });
+    window.clearTimeout(PV.state.syncTimer);
+    PV.state.syncTimer = null;
     PV.page()?.classList.add('hidden');
     PV.page()?.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
@@ -274,6 +297,7 @@
     }
   };
   PV.scheduleSync = () => {
+    if (!PV.state.isOpen) return;
     window.clearTimeout(PV.state.syncTimer);
     PV.state.syncTimer = window.setTimeout(() => PV.syncPending().catch((error) => console.warn('Preventivi: sincronizzazione differita non riuscita.', error)), 350);
   };
@@ -304,30 +328,40 @@
     });
     return [...merged.values()].filter((record) => !deletionMap[record.id]);
   };
-  PV.subscribeCollection = (collectionName, stateKey, deletionKey) => {
-    const unsubscribe = PV.state.firestore.collection(collectionName).onSnapshot((snapshot) => {
+  PV.subscribeCollection = (collectionName, stateKey, deletionKey, { force = false } = {}) => {
+    if (!PV.state.firestore || !PV.state.isOpen || !PV.shouldRefreshRemote(collectionName, force)) return Promise.resolve(false);
+    if (PV.state.remoteLoadPromises[collectionName]) return PV.state.remoteLoadPromises[collectionName];
+    const task = PV.state.firestore.collection(collectionName).get().then((snapshot) => {
       const remote = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       PV.state[stateKey] = PV.mergeRemote(PV.state[stateKey], remote, PV.state.deletions[deletionKey]);
       PV.state.remoteConnected = true;
       PV.state.remoteDenied = false;
+      PV.markRemoteRefreshed(collectionName);
       PV.persistLocal();
       PV.setSyncBadge('☁️ Sincronizzato', 'ok');
       if (!PV.state.editingQuoteId && !PV.state.editingPriceListId) PV.renderCurrentView();
       PV.scheduleSync();
-    }, (error) => {
+      return true;
+    }).catch((error) => {
       if (error?.code === 'permission-denied') PV.state.remoteDenied = true;
       console.warn(`Preventivi: lettura Firebase non riuscita (${collectionName}).`, error);
       PV.setSyncBadge('💾 Modalità dispositivo', 'warning');
+      return false;
+    }).finally(() => {
+      delete PV.state.remoteLoadPromises[collectionName];
     });
-    PV.state.unsubscribers.push(unsubscribe);
+    PV.state.remoteLoadPromises[collectionName] = task;
+    return task;
   };
-  PV.connectFirebase = () => {
+  PV.connectFirebase = (options = {}) => {
     try {
       if (!window.firebase?.firestore) { PV.setSyncBadge('💾 Modalità dispositivo', 'warning'); return; }
       PV.state.firestore = window.firebase.firestore();
-      PV.subscribeCollection(PV.collections.priceLists, 'priceLists', 'priceLists');
-      PV.subscribeCollection(PV.collections.quotes, 'quotes', 'quotes');
-      PV.scheduleSync();
+      if (PV.state.isOpen) {
+        PV.subscribeCollection(PV.collections.priceLists, 'priceLists', 'priceLists', options);
+        PV.subscribeCollection(PV.collections.quotes, 'quotes', 'quotes', options);
+        PV.scheduleSync();
+      }
     } catch (error) {
       console.warn('Preventivi: Firebase non disponibile.', error);
       PV.state.firestore = null;

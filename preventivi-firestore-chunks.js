@@ -163,34 +163,40 @@
     return { id: doc.id, ...data, items, syncPending: false };
   }
 
-  function subscribeChunkedPriceLists(stateKey, deletionKey) {
-    let readSequence = 0;
-    const unsubscribe = PV.state.firestore.collection(PV.collections.priceLists).onSnapshot(async (snapshot) => {
-      const currentSequence = ++readSequence;
+  function subscribeChunkedPriceLists(stateKey, deletionKey, { force = false } = {}) {
+    const collectionName = PV.collections.priceLists;
+    if (!PV.state.firestore || !PV.state.isOpen || !PV.shouldRefreshRemote(collectionName, force)) return Promise.resolve(false);
+    if (PV.state.remoteLoadPromises[collectionName]) return PV.state.remoteLoadPromises[collectionName];
+    const task = PV.state.firestore.collection(collectionName).get().then(async (snapshot) => {
       try {
         showProgress('☁️ Firestore: leggo i prezziari…');
         const remote = await Promise.all(snapshot.docs.map(hydratePriceList));
-        if (currentSequence !== readSequence) return;
         PV.state[stateKey] = PV.mergeRemote(PV.state[stateKey], remote, PV.state.deletions[deletionKey]);
         PV.state.remoteConnected = true;
         PV.state.remoteDenied = false;
+        PV.markRemoteRefreshed(collectionName);
         PV.persistLocal();
         showProgress('☁️ Firestore sincronizzato', 'ok');
         if (!PV.state.editingQuoteId && !PV.state.editingPriceListId) PV.renderCurrentView();
         PV.scheduleSync();
+        return true;
       } catch (error) {
-        if (currentSequence !== readSequence) return;
         if (error?.code === 'permission-denied') PV.state.remoteDenied = true;
         console.warn('Preventivi: lettura prezziari divisi non riuscita.', error);
         showProgress('⚠️ Firestore: sincronizzazione non riuscita', 'warning');
         PV.setFeedback?.(error?.message || 'Sincronizzazione prezziari non riuscita.', 'warning');
+        return false;
       }
-    }, (error) => {
+    }).catch((error) => {
       if (error?.code === 'permission-denied') PV.state.remoteDenied = true;
-      console.warn('Preventivi: ascolto prezziari Firestore non riuscito.', error);
+      console.warn('Preventivi: lettura prezziari Firestore non riuscita.', error);
       showProgress('⚠️ Firestore non autorizzato', 'warning');
+      return false;
+    }).finally(() => {
+      delete PV.state.remoteLoadPromises[collectionName];
     });
-    PV.state.unsubscribers.push(unsubscribe);
+    PV.state.remoteLoadPromises[collectionName] = task;
+    return task;
   }
 
   async function deleteChunkedPriceList(id) {
@@ -228,11 +234,11 @@
     return deleteChunkedPriceList(id);
   };
 
-  PV.subscribeCollection = (collectionName, stateKey, deletionKey) => {
+  PV.subscribeCollection = (collectionName, stateKey, deletionKey, options = {}) => {
     if (collectionName !== PV.collections.priceLists) {
-      return originalSubscribeCollection(collectionName, stateKey, deletionKey);
+      return originalSubscribeCollection(collectionName, stateKey, deletionKey, options);
     }
-    return subscribeChunkedPriceLists(stateKey, deletionKey);
+    return subscribeChunkedPriceLists(stateKey, deletionKey, options);
   };
 
   PV.retryFirestoreSync = () => {
@@ -283,14 +289,5 @@
     migrateLocalPriceLists();
   };
 
-  // Se il vecchio collegamento era già partito, lo riavvia con il formato a blocchi.
-  if (PV.state.storageMode !== 'device' && window.firebase?.auth?.()?.currentUser) {
-    (PV.state.unsubscribers || []).forEach((unsubscribe) => {
-      try { unsubscribe(); } catch (_) { /* Listener già chiuso. */ }
-    });
-    PV.state.unsubscribers = [];
-    PV.state.firestore = null;
-    PV.state.remoteConnected = false;
-    window.setTimeout(() => PV.connectFirebase?.(), 0);
-  }
+  // Il collegamento parte solo quando la pagina Preventivi viene aperta.
 })();

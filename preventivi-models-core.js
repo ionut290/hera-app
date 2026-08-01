@@ -98,7 +98,7 @@
   const load=PV.loadLocal.bind(PV); PV.loadLocal=()=>{ load(); const models=PV.readJson(MODELS_KEY,[]); PV.state.models=Array.isArray(models)?models:[]; PV.state.deletions.models=PV.state.deletions.models||{}; M.seed(); };
   const persist=PV.persistLocal.bind(PV); PV.persistLocal=()=>{ persist(); PV.writeJson(MODELS_KEY,PV.state.models||[]); };
   const sync=PV.syncPending.bind(PV); PV.syncPending=async()=>{ await sync(); if(!PV.state.firestore) return; for(const model of (PV.state.models||[]).filter(m=>m.syncPending)){ if(await PV.saveRemote(PV.collections.models,{...M.sanitizeModel(model),syncPending:false})) model.syncPending=false; } for(const id of Object.keys(PV.state.deletions.models||{})){ if(await PV.deleteRemote(PV.collections.models,id)) delete PV.state.deletions.models[id]; } PV.persistLocal(); };
-  M.subscribe = (attempt=0) => { if(M.runtime.remoteSubscribed) return; if(!PV.state.firestore){ if(attempt<20) setTimeout(()=>M.subscribe(attempt+1),500); return; } M.runtime.remoteSubscribed=true; PV.subscribeCollection(PV.collections.models,'models','models'); };
-  const connect=PV.connectFirebase.bind(PV); PV.connectFirebase=()=>{ connect(); M.subscribe(); };
+  M.subscribe = (attempt=0,options={}) => { if(!PV.state.isOpen)return; if(!PV.state.firestore){ if(attempt<20)setTimeout(()=>M.subscribe(attempt+1,options),500); return; } PV.subscribeCollection(PV.collections.models,'models','models',options); };
+  const connect=PV.connectFirebase.bind(PV); PV.connectFirebase=(options={})=>{ connect(options); M.subscribe(0,options); };
   M.seed();
 })();

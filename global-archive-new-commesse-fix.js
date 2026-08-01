@@ -1,14 +1,6 @@
 (() => {
   'use strict';
 
-  const api = () => window.HeraGlobalArchive || null;
-
-  function startChecks() {
-    // global-archive-sync intercetta già le scritture. Il vecchio controllo
-    // ogni 15 secondi rileggeva e riscriveva l'intero archivio senza necessità.
-    api()?.migrateAll?.().catch((error) => console.warn('Global archive: migrazione iniziale non riuscita.', error));
-  }
-
   function loadPreventiviSelectionPersistence() {
     if (document.querySelector('script[data-preventivi-selection-persistence]')) return;
     const waitForModules = () => {
@@ -75,15 +67,8 @@
     loadPreventiviSelectionPersistence();
     window.setTimeout(loadCompleteQuotePersistence, 2500);
     window.setTimeout(loadTemporaryArchive, 4000);
-    if (!window.firebase?.auth) return;
-    window.firebase.auth().onAuthStateChanged((user) => {
-      if (!user) return;
-      const waitForArchive = () => {
-        if (api()) startChecks();
-        else window.setTimeout(waitForArchive, 500);
-      };
-      waitForArchive();
-    });
+    // global-archive-sync.js gestisce già da solo la migrazione iniziale.
+    // Non richiamarla una seconda volta dopo l'autenticazione.
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });

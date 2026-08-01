@@ -38,7 +38,8 @@
     "check:preventivi-avola-system-model": "node scripts/check-preventivi-avola-system-model.js",
     "check:preventivi-models-visibility": "node scripts/check-preventivi-models-visibility.js",
     "check:preventivi-matrix-runtime": "node scripts/check-preventivi-matrix-runtime-fix.js",
-    "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js"
+    "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js",
+    "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

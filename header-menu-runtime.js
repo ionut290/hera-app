@@ -157,7 +157,7 @@
       }
 
       const modules = [
-        ['core', './preventivi-core.js?v=20260731a'],
+        ['core', './preventivi-core.js?v=20260801-drive1'],
         ['storage', './preventivi-storage-config.js?v=20260731b'],
         ['paths', './preventivi-firestore-path-fix.js?v=20260731a'],
         ['chunks', './preventivi-firestore-chunks.js?v=20260731a'],

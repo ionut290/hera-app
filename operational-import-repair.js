@@ -1,9 +1,12 @@
-/* Recupera automaticamente gli impianti INRETE importati nel modello contabile
-   ma non ancora presenti nella raccolta operativa usata da mappa ed elenchi. */
+/* Recupera gli impianti INRETE mancanti nella raccolta operativa.
+   La verifica viene eseguita una sola volta per versione, non a ogni ritorno online. */
 (() => {
   "use strict";
 
+  const REPAIR_VERSION = 2;
+  const REPAIR_FIELD = "operationalRepairVersion";
   const inFlight = new Set();
+
   const parseNumber = (value) => {
     const parsed = Number.parseFloat(String(value ?? "").trim().replace(",", "."));
     return Number.isFinite(parsed) ? parsed : null;
@@ -11,25 +14,41 @@
   const isDone = (item) => Boolean(item.done)
     || String(item.stato || "").trim().toUpperCase() === "FATTO";
   const isInrete = (commessa) => String(commessa?.nome || commessa?.codice || "")
-    .trim()
-    .toLocaleUpperCase("it-IT")
-    .includes("INRETE");
+    .trim().toLocaleUpperCase("it-IT").includes("INRETE");
+  const collectionName = () => typeof getCommesseCollectionName === "function"
+    ? getCommesseCollectionName()
+    : "commesse";
 
-  async function repairCommessa(commessa) {
+  async function markChecked(ref, extra = {}) {
+    await ref.set({
+      [REPAIR_FIELD]: REPAIR_VERSION,
+      operationalRepairCheckedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...extra
+    }, { merge: true });
+  }
+
+  async function repairCommessa(commessa, { force = false } = {}) {
     const commessaId = String(commessa?.id || "").trim();
     if (!commessaId || inFlight.has(commessaId)) return false;
+    if (!force && Number(commessa?.[REPAIR_FIELD] || 0) >= REPAIR_VERSION) return false;
+
     inFlight.add(commessaId);
     try {
-      const collectionName = typeof getCommesseCollectionName === "function"
-        ? getCommesseCollectionName()
-        : "commesse";
-      const commessaRef = db.collection(collectionName).doc(commessaId);
-      const [workSnapshot, physicalSnapshot, operationalSnapshot] = await Promise.all([
+      const commessaRef = db.collection(collectionName()).doc(commessaId);
+      const operationalSnapshot = await commessaRef.collection("impianti").limit(1).get();
+      if (!operationalSnapshot.empty) {
+        await markChecked(commessaRef);
+        return false;
+      }
+
+      const [workSnapshot, physicalSnapshot] = await Promise.all([
         commessaRef.collection("lavorazioni").get(),
-        commessaRef.collection("impiantiFisici").get(),
-        commessaRef.collection("impianti").get()
+        commessaRef.collection("impiantiFisici").get()
       ]);
-      if (!operationalSnapshot.empty || workSnapshot.empty || physicalSnapshot.empty) return false;
+      if (workSnapshot.empty || physicalSnapshot.empty) {
+        await markChecked(commessaRef);
+        return false;
+      }
 
       const physicalById = new Map(
         physicalSnapshot.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }])
@@ -43,7 +62,10 @@
         items.push(work);
         workByPlantId.set(plantId, items);
       });
-      if (!workByPlantId.size) return false;
+      if (!workByPlantId.size) {
+        await markChecked(commessaRef);
+        return false;
+      }
 
       const operations = [];
       let donePlants = 0;
@@ -74,14 +96,8 @@
             gpsX: lon,
             latitudine: lat,
             longitudine: lon,
-            codicePrezzo: items
-              .map((item) => String(item.codiceVocePrezzo || item.codicePrezzo || "").trim())
-              .filter(Boolean)
-              .join("; "),
-            tipologiaIntervento: items
-              .map((item) => String(item.tipologiaLavorazione || item.tipologiaIntervento || "").trim())
-              .filter(Boolean)
-              .join("; "),
+            codicePrezzo: items.map((item) => String(item.codiceVocePrezzo || item.codicePrezzo || "").trim()).filter(Boolean).join("; "),
+            tipologiaIntervento: items.map((item) => String(item.tipologiaLavorazione || item.tipologiaIntervento || "").trim()).filter(Boolean).join("; "),
             stato: status,
             statoGenerale: status,
             done: allDone,
@@ -96,12 +112,10 @@
 
       for (let index = 0; index < operations.length; index += 400) {
         const batch = db.batch();
-        operations.slice(index, index + 400).forEach((operation) => {
-          batch.set(operation.ref, operation.data, { merge: true });
-        });
+        operations.slice(index, index + 400).forEach(({ ref, data }) => batch.set(ref, data, { merge: true }));
         await batch.commit();
       }
-      await commessaRef.set({
+      await markChecked(commessaRef, {
         impiantiCount: operations.length,
         totalPlants: operations.length,
         workItemsCount: workSnapshot.size,
@@ -110,12 +124,8 @@
         workItemsFattiCount: doneWorkItems,
         workItemsDaFareCount: workSnapshot.size - doneWorkItems,
         operationalModelSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      console.info("[INRETE Import Repair] riparazione completata", {
-        commessaId,
-        impianti: operations.length,
-        lavorazioni: workSnapshot.size
       });
+      console.info("[INRETE Import Repair] riparazione completata", { commessaId, impianti: operations.length, lavorazioni: workSnapshot.size });
       return true;
     } catch (error) {
       console.error("[INRETE Import Repair] riparazione non riuscita", { commessaId, error });
@@ -125,17 +135,16 @@
     }
   }
 
-  async function runRepair() {
-    if (typeof db === "undefined" || typeof auth === "undefined" || !auth.currentUser) return;
-    if (typeof canManageData === "function" && !canManageData()) return;
-    const collectionName = typeof getCommesseCollectionName === "function"
-      ? getCommesseCollectionName()
-      : "commesse";
-    const snapshot = await db.collection(collectionName).get();
+  async function runRepair({ force = false } = {}) {
+    if (typeof db === "undefined" || typeof auth === "undefined" || !auth.currentUser) return false;
+    if (typeof canManageData === "function" && !canManageData()) return false;
+    const snapshot = await db.collection(collectionName()).get();
     const targets = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter(isInrete);
-    for (const commessa of targets) await repairCommessa(commessa);
+      .filter(isInrete)
+      .filter((commessa) => force || Number(commessa?.[REPAIR_FIELD] || 0) < REPAIR_VERSION);
+    for (const commessa of targets) await repairCommessa(commessa, { force });
+    return targets.length > 0;
   }
 
   function getSheetImportFeedback() {
@@ -157,8 +166,7 @@
   function sheetImportEndpoint(sheetUrl) {
     const configuredOrigin = String(window.HERA_API_ORIGIN || "").trim();
     const localIsNetlify = /(?:^|\.)netlify\.app$/i.test(window.location.hostname);
-    const apiOrigin = configuredOrigin
-      || (localIsNetlify ? window.location.origin : "https://creative-syrniki-dddbae.netlify.app");
+    const apiOrigin = configuredOrigin || (localIsNetlify ? window.location.origin : "https://creative-syrniki-dddbae.netlify.app");
     const endpoint = new URL("/api/google-sheet-import", apiOrigin);
     endpoint.searchParams.set("url", sheetUrl);
     return endpoint.href;
@@ -182,30 +190,19 @@
       input?.focus();
       return;
     }
-
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = "Caricamento…";
     if (feedback) feedback.textContent = "Lettura del Google Sheet in corso…";
-
     try {
-      const response = await fetch(sheetImportEndpoint(sheetUrl), {
-        method: "GET",
-        headers: { Accept: "text/csv,application/json;q=0.9" },
-        cache: "no-store"
-      });
+      const response = await fetch(sheetImportEndpoint(sheetUrl), { method: "GET", headers: { Accept: "text/csv,application/json;q=0.9" }, cache: "no-store" });
       if (!response.ok) throw new Error(await readErrorMessage(response));
       const csv = await response.text();
       if (!csv.trim()) throw new Error("Il Google Sheet è vuoto.");
-
-      const file = new File([csv], `google-sheet-${Date.now()}.csv`, {
-        type: "text/csv;charset=utf-8",
-        lastModified: Date.now()
-      });
+      const file = new File([csv], `google-sheet-${Date.now()}.csv`, { type: "text/csv;charset=utf-8", lastModified: Date.now() });
       const fileInput = document.querySelector("#excel-file");
       const importButton = document.querySelector("#import-btn");
       if (!fileInput || !importButton) throw new Error("Importazione matrice non disponibile in questa schermata.");
-
       const transfer = new DataTransfer();
       transfer.items.add(file);
       fileInput.files = transfer.files;
@@ -235,6 +232,5 @@
       if (user) window.setTimeout(() => void runRepair(), 1200);
     });
   }
-  window.addEventListener("online", () => void runRepair());
-  window.repairImportedInretePlants = runRepair;
+  window.repairImportedInretePlants = (options = {}) => runRepair({ force: options.force === true });
 })();

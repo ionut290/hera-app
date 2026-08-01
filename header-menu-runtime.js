@@ -142,7 +142,7 @@
       }
       if (!document.querySelector('script[data-global-archive-new-commesse-fix]')) {
         const fix = document.createElement('script');
-        fix.src = './global-archive-new-commesse-fix.js?v=20260801-cost1';
+        fix.src = './global-archive-new-commesse-fix.js?v=20260801-lazy1';
         fix.defer = true;
         fix.dataset.globalArchiveNewCommesseFix = '1';
         fix.addEventListener('error', () => console.warn('Controllo nuove commesse Global non caricato.'), { once: true });
@@ -153,70 +153,17 @@
     }
   }
 
-  function loadPreventiviFeature() {
+  function loadPreventiviLazyFeature() {
     try {
-      if (!document.querySelector('link[data-preventivi-feature-css]')) {
-        const css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.href = './preventivi-feature.css?v=20260731a';
-        css.dataset.preventiviFeatureCss = '1';
-        document.head.appendChild(css);
-      }
-      if (!document.querySelector('link[data-preventivi-models-css]')) {
-        const modelsCss = document.createElement('link');
-        modelsCss.rel = 'stylesheet';
-        modelsCss.href = './preventivi-models.css?v=20260801a';
-        modelsCss.dataset.preventiviModelsCss = '1';
-        document.head.appendChild(modelsCss);
-      }
-
-      const modules = [
-        ['core', './preventivi-core.js?v=20260801-drive1'],
-        ['storage', './preventivi-storage-config.js?v=20260801-cost1'],
-        ['paths', './preventivi-firestore-path-fix.js?v=20260731a'],
-        ['chunks', './preventivi-firestore-chunks.js?v=20260731a'],
-        ['batch-size', './preventivi-firestore-batch-fix.js?v=20260731a'],
-        ['price-lists', './preventivi-price-lists.js?v=20260731a'],
-        ['quotes', './preventivi-quotes.js?v=20260731a'],
-        ['consuntivi', './preventivi-consuntivi.js?v=20260801b'],
-        ['models-core', './preventivi-models-core.js?v=20260801b'],
-        ['models-ui', './preventivi-models-ui.js?v=20260801b'],
-        ['models-documents', './preventivi-models-documents.js?v=20260801d'],
-        ['models-export', './preventivi-models-export.js?v=20260801c'],
-        ['conditional-discount', './preventivi-ribasso-condizionale-fix.js?v=20260801a'],
-        ['registry-model-export-fix', './preventivi-registry-model-export-fix.js?v=20260801a'],
-        ['registry-model-followup', './preventivi-registry-model-followup.js?v=20260801b'],
-        ['registry-fix', './preventivi-commesse-impianti-fix.js?v=20260801c'],
-        ['tabs-models-plant-guard', './preventivi-tabs-models-plant-guard.js?v=20260801a'],
-        ['matrix-runtime-fix', './preventivi-matrix-runtime-fix.js?v=20260801a'],
-        ['draft-preserver', './preventivi-draft-preserver.js?v=20260801b'],
-        ['commessa-search-bridge', './preventivi-commessa-search-bridge.js?v=20260801a'],
-        ['clients', './preventivi-clienti-feature.js?v=20260801-cost1'],
-        ['feature', './preventivi-feature.js?v=20260731a']
-      ];
-
-      const loadModule = (index) => {
-        if (index >= modules.length) return;
-        const [name, src] = modules[index];
-        const existing = document.querySelector(`script[data-preventivi-module="${name}"]`);
-        if (existing) {
-          if (existing.dataset.loaded === '1') loadModule(index + 1);
-          else existing.addEventListener('load', () => loadModule(index + 1), { once: true });
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = src;
-        script.dataset.preventiviModule = name;
-        script.addEventListener('load', () => {
-          script.dataset.loaded = '1';
-          loadModule(index + 1);
-        }, { once: true });
-        script.addEventListener('error', () => console.warn(`Modulo Preventivi non caricato: ${name}.`), { once: true });
-        document.head.appendChild(script);
-      };
-      loadModule(0);
+      if (document.querySelector('script[data-preventivi-lazy-loader]')) return;
+      const script = document.createElement('script');
+      script.src = './preventivi-lazy-loader.js?v=20260801a';
+      script.defer = true;
+      script.dataset.preventiviLazyLoader = '1';
+      script.addEventListener('error', () => console.warn('Caricatore Preventivi non disponibile.'), { once: true });
+      document.head.appendChild(script);
     } catch (error) {
-      console.warn('Modulo Preventivi non caricato:', error);
+      console.warn('Caricatore Preventivi non disponibile:', error);
     }
   }
 
@@ -228,7 +175,7 @@
     setLoginPhoto();
     loadOperatorProfileFeature();
     loadGlobalArchiveFeature();
-    loadPreventiviFeature();
+    loadPreventiviLazyFeature();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

@@ -102,8 +102,19 @@
     return true;
   }
 
+  function loadCloudRubrica() {
+    if (document.querySelector('script[data-rubrica-cloud-v3]')) return;
+    const script = document.createElement('script');
+    script.src = './rubrica-cloud-v3.js?v=20260802a';
+    script.defer = true;
+    script.dataset.rubricaCloudV3 = '1';
+    script.addEventListener('error', () => console.warn('Rubrica cloud V3 non caricata.'), { once:true });
+    document.head.appendChild(script);
+  }
+
   function init() {
     applyCachedProfiles();
+    loadCloudRubrica();
     const observer = new MutationObserver(() => installButton());
     observer.observe(document.body, { childList: true, subtree: true });
     installButton();

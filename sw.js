@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v89";
+const CACHE_NAME = "varga-cantieri-shell-v90";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,7 +12,7 @@ const APP_SHELL = [
   "./app.js?v=20260801-cost1",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
-  "./registry-google-sheet-sync.js?v=20260731",
+  "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
@@ -30,7 +30,7 @@ const APP_SHELL = [
   "./header-menu-runtime.js?v=20260801-cost1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
-  "./global-archive-sync.js?v=20260801-cost1",
+  "./global-archive-sync.js?v=20260802-cost2",
   "./global-archive-new-commesse-fix.js?v=20260801-lazy1",
   "./auto-login-saved-credentials.js?v=20260801a",
   "./varga-branding.js?v=20260731a",

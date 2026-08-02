@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anteprima multi-organizzazione</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f4f6f8;color:#18212b}
+    main{max-width:720px;margin:0 auto;padding:24px}
+    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    .actions{display:grid;gap:12px;margin-top:20px}
+    a{display:block;text-decoration:none;padding:14px 16px;border-radius:12px;background:#0b6b3a;color:#fff;font-weight:700;text-align:center}
+    a.secondary{background:#273142}
+    .note{margin-top:18px;padding:12px;border-radius:12px;background:#fff7d6;color:#5f4b00}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Anteprima multi-organizzazione</h1>
+      <p>Questa pagina serve esclusivamente per il collaudo del branch di prova. Non modifica dati e non attiva la separazione delle commesse.</p>
+      <div class="actions">
+        <a href="./">Apri Hera App di prova</a>
+        <a class="secondary" href="./multi-organization-admin.html">Apri pannello Super Admin</a>
+      </div>
+      <p class="note"><strong>Attenzione:</strong> non eseguire la migrazione reale finché non sono state provate le regole Firestore in ambiente controllato.</p>
+    </section>
+  </main>
+</body>
+</html>

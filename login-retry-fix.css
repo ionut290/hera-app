@@ -52,3 +52,15 @@
   min-height: 1.25rem;
   overflow-wrap: anywhere;
 }
+
+/* Prestazioni liste lunghe: il browser evita il disegno degli elementi
+   lontani dallo schermo. Dati, eventi e logica JavaScript restano invariati. */
+@supports (content-visibility: auto) {
+  .impianti-lista > *,
+  .simple-list > *,
+  .hours-commesse-list > *,
+  #today-squads-section .squadre-lista > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
+  }
+}

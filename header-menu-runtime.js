@@ -126,7 +126,7 @@
         document.head.appendChild(script);
       }
     } catch (error) {
-      console.warn('Scheda operatore non caricata:', error);
+      console.warn('Scheda operatore non caricato:', error);
     }
   }
 
@@ -181,6 +181,20 @@
     }
   }
 
+  function loadControlCenterBackup() {
+    try {
+      if (document.querySelector('script[data-control-center-backup]')) return;
+      const script = document.createElement('script');
+      script.src = './control-center-backup.js?v=20260802a';
+      script.defer = true;
+      script.dataset.controlCenterBackup = '1';
+      script.addEventListener('error', () => console.warn('Backup dati del Centro di controllo non caricato.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Backup dati del Centro di controllo non caricato:', error);
+    }
+  }
+
   function init() {
     loadAutoLoginFeature();
     loadBrandingFeature();
@@ -191,6 +205,7 @@
     loadGlobalArchiveFeature();
     loadPreventiviLazyFeature();
     loadFirestoreUsageControl();
+    loadControlCenterBackup();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

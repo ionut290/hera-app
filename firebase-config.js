@@ -14,6 +14,7 @@ if (document.readyState === "loading") {
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
+  document.write('<script src="multi-organization-menu-runtime.js?v=20260802a"><\/script>');
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
     const nativeRuntimeScript = document.createElement("script");
@@ -38,5 +39,11 @@ if (document.readyState === "loading") {
     sheetSyncScript.src = "google-sheet-two-way-sync.js?v=20260729b";
     sheetSyncScript.dataset.heraGoogleSheetSync = "true";
     document.head.appendChild(sheetSyncScript);
+  }
+  if (!document.querySelector('script[data-hera-multi-organization-menu="true"]')) {
+    const organizationMenuScript = document.createElement("script");
+    organizationMenuScript.src = "multi-organization-menu-runtime.js?v=20260802a";
+    organizationMenuScript.dataset.heraMultiOrganizationMenu = "true";
+    document.head.appendChild(organizationMenuScript);
   }
 }

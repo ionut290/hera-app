@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '20260801c';
+  const VERSION = '20260802-cost2';
   const ARCHIVE_ROOT = 'globalArchive';
   const MIGRATION_KEY = `hera_global_archive_migrated_${VERSION}`;
   const syncLocks = new Map();
@@ -142,24 +142,25 @@
   }
 
   async function archiveCommessa(commessaId, raw = {}) {
-    if (!db() || !text(commessaId)) return;
+    if (!db() || !text(commessaId)) return false;
     const snapshot = commessaSnapshot(raw, commessaId);
-    await mergeArchiveDocument(archiveCommessaRef(commessaId), snapshot);
-    await mirrorVisibleCommessa(commessaId, raw);
+    const archived = await mergeArchiveDocument(archiveCommessaRef(commessaId), snapshot);
+    const mirrored = await mirrorVisibleCommessa(commessaId, raw);
+    return archived || mirrored;
   }
 
   async function archivePlant(commessaId, plantId, raw = {}) {
-    if (!db() || !text(commessaId)) return;
-    await archiveCommessa(commessaId, { id: commessaId });
+    if (!db() || !text(commessaId)) return false;
     const key = plantKey(raw, plantId);
-    if (!key) return;
+    if (!key) return false;
     const snapshot = plantSnapshot(raw, commessaId, plantId);
-    await mergeArchiveDocument(archivePlantsRef(commessaId).doc(key), snapshot);
-    await mirrorVisiblePlant(commessaId, plantId, raw);
+    const archived = await mergeArchiveDocument(archivePlantsRef(commessaId).doc(key), snapshot);
+    const mirrored = await mirrorVisiblePlant(commessaId, plantId, raw);
+    return archived || mirrored;
   }
 
   async function syncCommessa(commessaId, rawCommessa = null) {
-    if (!db() || !text(commessaId)) return;
+    if (!db() || !text(commessaId)) return false;
     if (syncLocks.has(commessaId)) return syncLocks.get(commessaId);
     const task = (async () => {
       const ref = db().collection(commesseCollectionName()).doc(commessaId);
@@ -169,6 +170,7 @@
         const snapshot = await ref.collection(collectionName).get();
         for (const doc of snapshot.docs) await archivePlant(commessaId, doc.id, doc.data() || {});
       }
+      return true;
     })().finally(() => syncLocks.delete(commessaId));
     syncLocks.set(commessaId, task);
     return task;
@@ -189,35 +191,8 @@
     return migrationPromise;
   }
 
-  function installRealtimeArchive() {
-    // Le scritture sono intercettate da patchWrites. Un secondo listener sulla
-    // collezione completa duplicava il listener principale dell'app.
-  }
-
-  function patchWrites() {
-    const proto = window.firebase?.firestore?.DocumentReference?.prototype;
-    if (!proto || proto.__heraGlobalArchivePatched) return;
-    proto.__heraGlobalArchivePatched = true;
-    const originalSet = proto.set;
-    const originalUpdate = proto.update;
-    const afterWrite = (ref, data) => {
-      try {
-        const segments = ref.path.split('/');
-        const collection = segments[0];
-        const commessaId = segments[1];
-        const childCollection = segments[2];
-        const childId = segments[3];
-        if (collection !== commesseCollectionName() || !commessaId) return;
-        if (!childCollection) archiveCommessa(commessaId, data || {}).catch(() => {});
-        else if (['impiantiFisici','impianti'].includes(childCollection)) archivePlant(commessaId, childId, data || {}).catch(() => {});
-      } catch (_) { /* mai bloccare la scrittura originale */ }
-    };
-    proto.set = function patchedSet(data, options) {
-      return originalSet.call(this, data, options).then((result) => { afterWrite(this, data); return result; });
-    };
-    proto.update = function patchedUpdate(data) {
-      return originalUpdate.call(this, data).then((result) => { afterWrite(this, data); return result; });
-    };
+  function requestMigration(options = {}) {
+    return migrateAll(options);
   }
 
   function exposeApi() {
@@ -226,26 +201,25 @@
       archiveCommessa,
       archivePlant,
       syncCommessa,
-      migrateAll,
+      migrateAll: requestMigration,
       mirrorVisibleCommessa,
       mirrorVisiblePlant,
       plantKey,
       rootCollection: ARCHIVE_ROOT,
-      visibleCollection: 'globalCommesse'
+      visibleCollection: 'globalCommesse',
+      automaticWriteInterception: false,
+      automaticStartupMigration: false
     });
   }
 
-  async function start() {
+  function start() {
     exposeApi();
-    patchWrites();
+    window.addEventListener('hera:global-archive-migrate', (event) => {
+      requestMigration(event?.detail || {}).catch((error) => console.warn('Global archive: migrazione manuale non riuscita.', error));
+    });
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
-      if (!user) {
-        verifiedDocuments.clear();
-        return;
-      }
-      installRealtimeArchive();
-      migrateAll().catch((error) => console.warn('Global archive: migrazione iniziale non riuscita.', error));
+      if (!user) verifiedDocuments.clear();
     });
   }
 

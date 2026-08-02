@@ -86,7 +86,7 @@
     try {
       if (document.querySelector('script[data-firestore-safe-optimizer]')) return;
       const script = document.createElement('script');
-      script.src = './firestore-safe-optimizer.js?v=20260802a';
+      script.src = './firestore-safe-optimizer.js?v=20260802b';
       script.defer = true;
       script.dataset.firestoreSafeOptimizer = '1';
       script.addEventListener('error', () => console.warn('Ottimizzatore Firestore non caricato; avvio app non interrotto.'), { once: true });

@@ -67,12 +67,12 @@
     try {
       if (document.querySelector('script[data-firestore-safe-optimizer]')) return;
       const script = document.createElement('script');
-      script.src = './firestore-safe-optimizer.js?v=20260802c';
+      script.src = './firestore-safe-optimizer.js?v=20260802d';
       script.defer = true;
       script.dataset.firestoreSafeOptimizer = '1';
-      script.addEventListener('error', () => console.warn('Ottimizzatore Firestore non caricato; avvio app non interrotto.'), { once:true });
+      script.addEventListener('error', () => console.warn('Modulo compatibilità Firestore non caricato; avvio app non interrotto.'), { once:true });
       document.head.appendChild(script);
-    } catch (error) { console.warn('Ottimizzatore Firestore non caricato; avvio app non interrotto:', error); }
+    } catch (error) { console.warn('Modulo compatibilità Firestore non caricato; avvio app non interrotto:', error); }
   }
 
   function loadFirestoreDiagnostics() {

@@ -24,7 +24,6 @@
     if (input) input.value = normalizeAlimentazione(input.value);
   }, true);
 
-  // La bonifica storica è conclusa: nessuna scansione automatica della collezione mezzi.
   const originalSubscribeMezzi = window.subscribeMezzi;
   const originalSubscribeSquadre = window.subscribeSquadre;
   const originalOpenManagementPanel = window.openManagementPanel;
@@ -190,4 +189,5 @@
   loadOptionalScript('script[data-today-live-hours-vehicles]', "./today-live-hours-vehicles.js?v=20260730b", "todayLiveHoursVehicles");
   loadOptionalScript('script[data-squad-operator-profile]', "./squad-operator-profile.js?v=20260731a", "squadOperatorProfile");
   loadOptionalScript('script[data-calendar-personal-hours-loader]', "./calendar-personal-hours-loader.js?v=20260802b", "calendarPersonalHoursLoader");
+  loadOptionalScript('script[data-rubrica-personale-restore]', "./rubrica-personale-restore.js?v=20260802d", "rubricaPersonaleRestore");
 })();

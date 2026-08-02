@@ -1,7 +1,8 @@
 (() => {
   'use strict';
 
-  const state = { operator: null };
+  const state = { operator: null, operatorCache: new Map(), pendingLookups: new Map() };
+  const CACHE_MISS = Symbol('operator-cache-miss');
 
   function normalizeEmail(value) {
     return String(value || '').trim().toLowerCase();
@@ -24,7 +25,30 @@
     }
   }
 
-  async function findOperatorByEmail(email) {
+  function getMemoryCollections() {
+    const sources = [
+      window.personaleRecords,
+      window.platformUsers,
+      window.operatori,
+      window.operators,
+      window.utenti,
+      window.users
+    ];
+    const records = [];
+    sources.forEach(source => {
+      if (Array.isArray(source)) records.push(...source);
+      else if (source instanceof Map) records.push(...source.values());
+    });
+    return records;
+  }
+
+  function findOperatorInMemory(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+    return getMemoryCollections().find(record => normalizeEmail(record?.emailLower || record?.email || record?.mail) === normalized) || null;
+  }
+
+  async function queryOperatorByEmail(email) {
     const db = getDb();
     const normalized = normalizeEmail(email);
     if (!db || !normalized) return null;
@@ -39,6 +63,33 @@
       }
     }
     return null;
+  }
+
+  async function findOperatorByEmail(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+
+    const memoryRecord = findOperatorInMemory(normalized);
+    if (memoryRecord) {
+      state.operatorCache.set(normalized, memoryRecord);
+      return memoryRecord;
+    }
+
+    if (state.operatorCache.has(normalized)) {
+      const cached = state.operatorCache.get(normalized);
+      return cached === CACHE_MISS ? null : cached;
+    }
+
+    if (state.pendingLookups.has(normalized)) return state.pendingLookups.get(normalized);
+
+    const lookup = queryOperatorByEmail(normalized)
+      .then(operator => {
+        state.operatorCache.set(normalized, operator || CACHE_MISS);
+        return operator;
+      })
+      .finally(() => state.pendingLookups.delete(normalized));
+    state.pendingLookups.set(normalized, lookup);
+    return lookup;
   }
 
   function getText(node) {

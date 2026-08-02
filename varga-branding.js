@@ -97,12 +97,21 @@
     loadScriptOnce('script[data-rubrica-v3-bridge]', './rubrica-v3-bridge.js?v=20260802-fix1', 'rubricaV3Bridge', null, 'Collegamento Rubrica V3 non caricato; resta disponibile la Rubrica base.');
   }
 
+  function loadRubricaMatrixImport() {
+    loadScriptOnce('script[data-rubrica-matrice-import]', './rubrica-matrice-personale-import.js?v=20260802a', 'rubricaMatriceImport', null, 'Importazione matrice personale non caricata.');
+  }
+
   function loadRubricaCloudV3() {
-    loadScriptOnce('script[data-rubrica-cloud-v3]', './rubrica-cloud-v3.js?v=20260802-fix3', 'rubricaCloudV3', loadRubricaV3Bridge, 'Rubrica condivisa V3 non caricata; resta disponibile la Rubrica base.');
+    const afterCloud = () => { loadRubricaV3Bridge(); loadRubricaMatrixImport(); };
+    loadScriptOnce('script[data-rubrica-cloud-v3]', './rubrica-cloud-v3.js?v=20260802-fix4', 'rubricaCloudV3', afterCloud, 'Rubrica condivisa V3 non caricata; resta disponibile la Rubrica base.');
+  }
+
+  function loadRubricaPermissionsBridge() {
+    loadScriptOnce('script[data-rubrica-permissions-bridge]', './rubrica-firestore-permissions-bridge.js?v=20260802a', 'rubricaPermissionsBridge', loadRubricaCloudV3, 'Compatibilità permessi Rubrica non caricata.');
   }
 
   function loadGoogleProfileFeature() {
-    const afterGoogle = () => { loadVcardShareFeature(); loadRubricaCloudV3(); };
+    const afterGoogle = () => { loadVcardShareFeature(); loadRubricaPermissionsBridge(); };
     loadScriptOnce('script[data-rubrica-google-profile]', './rubrica-google-profile.js?v=20260802-google1', 'rubricaGoogleProfile', afterGoogle, 'Profilo Google Rubrica non caricato; avvio app non interrotto.');
   }
 
@@ -112,8 +121,10 @@
     };
     loadScriptOnce('script[data-rubrica-user-enrichment]', './rubrica-user-enrichment.js?v=20260802-user1', 'rubricaUserEnrichment', loadView, 'Arricchimento Rubrica non caricato; apro comunque la Rubrica base.');
     window.setTimeout(loadView, 1200);
-    window.setTimeout(loadRubricaCloudV3, 1600);
+    window.setTimeout(loadRubricaPermissionsBridge, 1400);
+    window.setTimeout(loadRubricaCloudV3, 1800);
     window.setTimeout(loadRubricaV3Bridge, 2200);
+    window.setTimeout(loadRubricaMatrixImport, 2400);
   }
 
   function init() {

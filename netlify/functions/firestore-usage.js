@@ -62,7 +62,7 @@ async function accessToken() {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion })
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth2:grant-type:jwt-bearer", assertion })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token) throw new Error(data.error_description || "Autorizzazione Cloud Monitoring non riuscita.");
@@ -91,22 +91,41 @@ function pointValue(point) {
   return Number(value.int64Value ?? value.doubleValue ?? 0) || 0;
 }
 
+function pointBelongsToPeriod(point, start, end) {
+  const pointEnd = new Date(point?.interval?.endTime || 0).getTime();
+  return Number.isFinite(pointEnd) && pointEnd > start.getTime() && pointEnd <= end.getTime();
+}
+
 async function readMetric(metricType, start, end, token) {
-  const params = new URLSearchParams({
-    filter: `metric.type="${metricType}"`,
-    "interval.startTime": start.toISOString(),
-    "interval.endTime": end.toISOString(),
-    view: "FULL",
-    "aggregation.alignmentPeriod": "86400s",
-    "aggregation.perSeriesAligner": "ALIGN_SUM",
-    "aggregation.crossSeriesReducer": "REDUCE_SUM"
-  });
-  const response = await fetch(`https://monitoring.googleapis.com/v3/projects/${encodeURIComponent(PROJECT_ID)}/timeSeries?${params}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || `Cloud Monitoring HTTP ${response.status}`);
-  return (data.timeSeries || []).reduce((sum, series) => sum + (series.points || []).reduce((subtotal, point) => subtotal + pointValue(point), 0), 0);
+  let total = 0;
+  let pageToken = "";
+
+  do {
+    const params = new URLSearchParams({
+      filter: `metric.type="${metricType}"`,
+      "interval.startTime": start.toISOString(),
+      "interval.endTime": end.toISOString(),
+      view: "FULL",
+      "aggregation.alignmentPeriod": "60s",
+      "aggregation.perSeriesAligner": "ALIGN_SUM",
+      "aggregation.crossSeriesReducer": "REDUCE_SUM",
+      pageSize: "1000"
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const response = await fetch(`https://monitoring.googleapis.com/v3/projects/${encodeURIComponent(PROJECT_ID)}/timeSeries?${params}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error?.message || `Cloud Monitoring HTTP ${response.status}`);
+
+    total += (data.timeSeries || []).reduce((sum, series) => sum + (series.points || [])
+      .filter((point) => pointBelongsToPeriod(point, start, end))
+      .reduce((subtotal, point) => subtotal + pointValue(point), 0), 0);
+    pageToken = String(data.nextPageToken || "");
+  } while (pageToken);
+
+  return total;
 }
 
 function allowedAdmin(user) {
@@ -142,7 +161,7 @@ exports.handler = async (event) => {
       periodStart: start.toISOString(),
       periodEnd: end.toISOString(),
       generatedAt: new Date().toISOString(),
-      source: "Google Cloud Monitoring",
+      source: "Google Cloud Monitoring — intervallo esatto del giorno Firestore",
       cached: false
     };
     cache = { value, expiresAt: Date.now() + CACHE_MS };

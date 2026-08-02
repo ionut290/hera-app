@@ -79,6 +79,20 @@
     }
   }
 
+  function loadFirestorePresenceCostGuard() {
+    try {
+      if (document.querySelector('script[data-firestore-presence-cost-guard]')) return;
+      const script = document.createElement('script');
+      script.src = './firestore-presence-cost-guard.js?v=20260802a';
+      script.defer = true;
+      script.dataset.firestorePresenceCostGuard = '1';
+      script.addEventListener('error', () => console.warn('Riduzione scritture presenza Firestore non caricata.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Riduzione scritture presenza Firestore non caricata:', error);
+    }
+  }
+
   function loadBrandingFeature() {
     try {
       if (document.querySelector('script[data-varga-branding]')) return;
@@ -197,6 +211,7 @@
 
   function init() {
     loadAutoLoginFeature();
+    loadFirestorePresenceCostGuard();
     loadBrandingFeature();
     setupHomeHeader();
     setupSnowHeader();

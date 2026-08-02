@@ -63,78 +63,52 @@
     window.__vargaBrandingObserver = observer;
   }
 
-  function loadFirestoreSafeOptimizer() {
+  function loadScriptOnce(selector, src, datasetKey, onLoad, errorMessage) {
     try {
-      if (document.querySelector('script[data-firestore-safe-optimizer]')) return;
+      const existing = document.querySelector(selector);
+      if (existing) { if (onLoad) onLoad(); return existing; }
       const script = document.createElement('script');
-      script.src = './firestore-safe-optimizer.js?v=20260802d';
+      script.src = src;
       script.defer = true;
-      script.dataset.firestoreSafeOptimizer = '1';
-      script.addEventListener('error', () => console.warn('Modulo compatibilità Firestore non caricato; avvio app non interrotto.'), { once:true });
+      script.dataset[datasetKey] = '1';
+      if (onLoad) script.addEventListener('load', onLoad, { once:true });
+      script.addEventListener('error', () => console.warn(errorMessage), { once:true });
       document.head.appendChild(script);
-    } catch (error) { console.warn('Modulo compatibilità Firestore non caricato; avvio app non interrotto:', error); }
+      return script;
+    } catch (error) {
+      console.warn(errorMessage, error);
+      return null;
+    }
+  }
+
+  function loadFirestoreSafeOptimizer() {
+    loadScriptOnce('script[data-firestore-safe-optimizer]', './firestore-safe-optimizer.js?v=20260802d', 'firestoreSafeOptimizer', null, 'Modulo compatibilità Firestore non caricato; avvio app non interrotto.');
   }
 
   function loadFirestoreDiagnostics() {
-    try {
-      if (document.querySelector('script[data-firestore-operation-diagnostics]')) return;
-      const script = document.createElement('script');
-      script.src = './firestore-operation-diagnostics.js?v=20260802b';
-      script.defer = true;
-      script.dataset.firestoreOperationDiagnostics = '1';
-      script.addEventListener('error', () => console.warn('Diagnostica Firestore non caricata; avvio app non interrotto.'), { once:true });
-      document.head.appendChild(script);
-    } catch (error) { console.warn('Diagnostica Firestore non caricata; avvio app non interrotto:', error); }
+    loadScriptOnce('script[data-firestore-operation-diagnostics]', './firestore-operation-diagnostics.js?v=20260802b', 'firestoreOperationDiagnostics', null, 'Diagnostica Firestore non caricata; avvio app non interrotto.');
   }
 
   function loadVcardShareFeature() {
-    try {
-      if (document.querySelector('script[data-rubrica-vcard-share]')) return;
-      const script = document.createElement('script');
-      script.src = './rubrica-vcard-share.js?v=20260802a';
-      script.defer = true;
-      script.dataset.rubricaVcardShare = '1';
-      script.addEventListener('error', () => console.warn('Condivisione vCard Rubrica non caricata; avvio app non interrotto.'), { once:true });
-      document.head.appendChild(script);
-    } catch (error) { console.warn('Condivisione vCard Rubrica non caricata; avvio app non interrotto:', error); }
+    loadScriptOnce('script[data-rubrica-vcard-share]', './rubrica-vcard-share.js?v=20260802a', 'rubricaVcardShare', null, 'Condivisione vCard Rubrica non caricata; avvio app non interrotto.');
+  }
+
+  function loadRubricaCloudV3() {
+    loadScriptOnce('script[data-rubrica-cloud-v3]', './rubrica-cloud-v3.js?v=20260802-fix2', 'rubricaCloudV3', null, 'Rubrica condivisa V3 non caricata; resta disponibile la Rubrica base.');
   }
 
   function loadGoogleProfileFeature() {
-    try {
-      if (document.querySelector('script[data-rubrica-google-profile]')) { loadVcardShareFeature(); return; }
-      const script = document.createElement('script');
-      script.src = './rubrica-google-profile.js?v=20260802-google1';
-      script.defer = true;
-      script.dataset.rubricaGoogleProfile = '1';
-      script.addEventListener('load', loadVcardShareFeature, { once:true });
-      script.addEventListener('error', () => { console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto.'); loadVcardShareFeature(); }, { once:true });
-      document.head.appendChild(script);
-    } catch (error) { console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto:', error); loadVcardShareFeature(); }
+    const afterGoogle = () => { loadVcardShareFeature(); loadRubricaCloudV3(); };
+    loadScriptOnce('script[data-rubrica-google-profile]', './rubrica-google-profile.js?v=20260802-google1', 'rubricaGoogleProfile', afterGoogle, 'Profilo Google Rubrica non caricato; avvio app non interrotto.');
   }
 
   function loadRubricaFeature() {
-    try {
-      if (document.querySelector('script[data-rubrica-feature-v2]')) { loadGoogleProfileFeature(); return; }
-      const loadView = () => {
-        if (document.querySelector('script[data-rubrica-feature-v2]')) { loadGoogleProfileFeature(); return; }
-        const script = document.createElement('script');
-        script.src = './rubrica-feature-v2.js?v=20260802-email1';
-        script.defer = true;
-        script.dataset.rubricaFeatureV2 = '1';
-        script.addEventListener('load', loadGoogleProfileFeature, { once:true });
-        script.addEventListener('error', () => console.warn('Rubrica V2 non caricata; avvio app non interrotto.'), { once:true });
-        document.head.appendChild(script);
-      };
-      if (!document.querySelector('script[data-rubrica-user-enrichment]')) {
-        const enrichment = document.createElement('script');
-        enrichment.src = './rubrica-user-enrichment.js?v=20260802-user1';
-        enrichment.defer = true;
-        enrichment.dataset.rubricaUserEnrichment = '1';
-        enrichment.addEventListener('load', loadView, { once:true });
-        enrichment.addEventListener('error', () => { console.warn('Arricchimento Rubrica non caricato; apro comunque la Rubrica base.'); loadView(); }, { once:true });
-        document.head.appendChild(enrichment);
-      } else loadView();
-    } catch (error) { console.warn('Rubrica V2 non caricata; avvio app non interrotto:', error); }
+    const loadView = () => {
+      loadScriptOnce('script[data-rubrica-feature-v2]', './rubrica-feature-v2.js?v=20260802-email1', 'rubricaFeatureV2', loadGoogleProfileFeature, 'Rubrica V2 non caricata; avvio app non interrotto.');
+    };
+    loadScriptOnce('script[data-rubrica-user-enrichment]', './rubrica-user-enrichment.js?v=20260802-user1', 'rubricaUserEnrichment', loadView, 'Arricchimento Rubrica non caricato; apro comunque la Rubrica base.');
+    window.setTimeout(loadView, 1200);
+    window.setTimeout(loadRubricaCloudV3, 1600);
   }
 
   function init() {

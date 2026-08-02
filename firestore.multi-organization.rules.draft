@@ -1,0 +1,129 @@
+// BOZZA NON DISTRIBUITA.
+// Questo file non è referenziato da firebase.json e non modifica le regole attive.
+// Serve come base verificabile per la futura migrazione multi-organizzazione.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function authPresent() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return authPresent()
+        && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/superAdmins/$(request.auth.uid)).data.get("active", false) == true;
+    }
+
+    function membershipPath(organizationId) {
+      return /databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid);
+    }
+
+    function hasActiveMembership(organizationId) {
+      return authPresent()
+        && exists(membershipPath(organizationId))
+        && get(membershipPath(organizationId)).data.get("status", "") == "active";
+    }
+
+    function organizationRole(organizationId) {
+      return hasActiveMembership(organizationId)
+        ? get(membershipPath(organizationId)).data.get("role", "")
+        : "";
+    }
+
+    function canReadOrganization(organizationId) {
+      return isSuperAdmin() || hasActiveMembership(organizationId);
+    }
+
+    function canAdminOrganization(organizationId) {
+      return isSuperAdmin()
+        || organizationRole(organizationId) in ["owner", "admin"];
+    }
+
+    match /superAdmins/{uid} {
+      allow read: if isSuperAdmin() || (authPresent() && request.auth.uid == uid);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if canReadOrganization(organizationId);
+      allow create: if isSuperAdmin()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.status == "active";
+      allow update: if isSuperAdmin() || canAdminOrganization(organizationId);
+      allow delete: if isSuperAdmin();
+
+      match /members/{uid} {
+        allow read: if isSuperAdmin()
+          || canAdminOrganization(organizationId)
+          || (authPresent() && request.auth.uid == uid);
+        allow create, update, delete: if isSuperAdmin() || canAdminOrganization(organizationId);
+      }
+
+      match /commesse/{commessaId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canReadOrganization(organizationId);
+
+        match /{document=**} {
+          allow read, write: if canReadOrganization(organizationId);
+        }
+      }
+
+      match /squadre/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canAdminOrganization(organizationId);
+      }
+
+      match /squadreCommesse/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canAdminOrganization(organizationId);
+      }
+
+      match /squadreStorico/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canAdminOrganization(organizationId);
+      }
+
+      match /personale/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canAdminOrganization(organizationId);
+      }
+
+      match /mezzi/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canAdminOrganization(organizationId);
+      }
+
+      match /{collection}/{documentId} {
+        allow read: if canReadOrganization(organizationId);
+        allow write: if canReadOrganization(organizationId)
+          && collection in [
+            "globalCommesse",
+            "commessaResources",
+            "noteCommessa",
+            "oreReports",
+            "oreLocks",
+            "oreApprovalRequests",
+            "calendarEvents",
+            "programmazioni",
+            "notifications",
+            "appNotifications",
+            "userAlerts",
+            "documents",
+            "posDocuments",
+            "chatMessages",
+            "safetyContacts",
+            "weatherAlerts"
+          ];
+      }
+    }
+
+    // Identità globale: la membership resta separata nei documenti organizzazione.
+    match /platformUsers/{uid} {
+      allow read: if isSuperAdmin() || (authPresent() && request.auth.uid == uid);
+      allow create, update: if authPresent() && request.auth.uid == uid;
+      allow delete: if isSuperAdmin();
+    }
+  }
+}

@@ -67,7 +67,7 @@
     try {
       if (document.querySelector('script[data-rubrica-feature]')) return;
       const script = document.createElement('script');
-      script.src = './rubrica-feature.js?v=20260802-safe1';
+      script.src = './rubrica-feature.js?v=20260802-import1';
       script.defer = true;
       script.dataset.rubricaFeature = '1';
       script.addEventListener('error', () => console.warn('Rubrica non caricata; avvio app non interrotto.'), { once: true });

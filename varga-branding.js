@@ -57,6 +57,20 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function loadFirestoreDiagnostics() {
+    try {
+      if (document.querySelector('script[data-firestore-operation-diagnostics]')) return;
+      const script = document.createElement('script');
+      script.src = './firestore-operation-diagnostics.js?v=20260802a';
+      script.defer = true;
+      script.dataset.firestoreOperationDiagnostics = '1';
+      script.addEventListener('error', () => console.warn('Diagnostica Firestore non caricata; avvio app non interrotto.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Diagnostica Firestore non caricata; avvio app non interrotto:', error);
+    }
+  }
+
   function loadVcardShareFeature() {
     try {
       if (document.querySelector('script[data-rubrica-vcard-share]')) return;
@@ -136,6 +150,7 @@
   function init() {
     applyBranding();
     observeDynamicContent();
+    window.setTimeout(loadFirestoreDiagnostics, 0);
     window.setTimeout(loadRubricaFeature, 0);
   }
 

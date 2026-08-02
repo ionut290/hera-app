@@ -3,12 +3,14 @@
   const TECHNICAL_COLUMNS = ["RECORD_ID", "UPDATED_AT", "UPDATED_BY", "SYNC_VERSION", "SYNC_SOURCE", "ROW_STATUS"];
   const SHEETS = ["PERSONALE", "MEZZI", "COMMESSE_PERSONALE", "COMMESSE_MEZZI", "LOG_SINCRONIZZAZIONE"];
   const CONFIG_FIELD = "registryGoogleSheetLinks";
+  const AUTO_SYNC_MIN_INTERVAL_MS = 30 * 60 * 1000;
   const configs = new Map();
+  const syncInFlight = new Map();
+  const autoSyncChecked = new Set();
   const clean = (value) => String(value == null ? "" : value).trim();
-  // La configurazione viene salvata nel documento integrazioni già autorizzato
-  // dalle regole Firestore: lettura agli utenti attivi, scrittura agli admin.
   const configDocRef = () => db.collection("appConfig").doc("driveBridge");
   const timestamp = (value) => value?.toDate instanceof Function ? value.toDate().toISOString() : clean(value) || new Date(0).toISOString();
+  const autoSyncKey = (type) => `hera_registry_sheet_auto_sync_${type}`;
 
   function friendlyError(error) {
     const code = clean(error?.code).toLowerCase();
@@ -47,6 +49,8 @@
       if (clean(error?.code).toLowerCase() !== "not-found") throw error;
     }
     configs.delete(type);
+    autoSyncChecked.delete(type);
+    try { sessionStorage.removeItem(autoSyncKey(type)); } catch (_) {}
   }
 
   async function token() {
@@ -80,6 +84,17 @@
     return { PERSONALE: personnel, MEZZI: vehicles, COMMESSE_PERSONALE: personnelLinks, COMMESSE_MEZZI: vehicleLinks, LOG_SINCRONIZZAZIONE: [] };
   }
 
+  function autoSyncAllowed(type) {
+    if (autoSyncChecked.has(type)) return false;
+    autoSyncChecked.add(type);
+    try {
+      const last = Number(sessionStorage.getItem(autoSyncKey(type)) || 0);
+      if (last && Date.now() - last < AUTO_SYNC_MIN_INTERVAL_MS) return false;
+      sessionStorage.setItem(autoSyncKey(type), String(Date.now()));
+    } catch (_) { /* la memoria in sessione è facoltativa */ }
+    return true;
+  }
+
   async function link(type) {
     const existing = await load(type);
     const supplied = window.prompt("Incolla il link di un Google Sheet esistente oppure lascia vuoto per crearne uno nuovo.", existing.sheetUrl || "");
@@ -101,38 +116,43 @@
       : "Google Sheet collegato. Puoi avviare la prima sincronizzazione.");
   }
 
-  async function sync(type) {
-    const config = await load(type);
-    if (!config.sheetUrl) return link(type);
-    const result = await call({
-      action: "syncRegistrySpreadsheet",
-      registry: type,
-      sheetUrl: config.sheetUrl,
-      spreadsheetId: config.spreadsheetId,
-      gid: config.gid || "0",
-      sheets: makeSheets(),
-      conflictPolicy: config.conflictPolicy || "LATEST_WINS",
-      noAutomaticDeletion: true
-    });
-    await save(type, {
-      lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastSyncBy: currentUser?.uid || "",
-      lastConflictCount: result.conflicts?.length || 0,
-      legacyMode: result.legacyMode === true
-    });
-    const primary = type === "personale" ? "PERSONALE" : "MEZZI";
-    const idColumn = type === "personale" ? "ID_OPERATORE" : "ID_MEZZO";
-    const incoming = (result.incoming?.[primary] || []).filter((row) => clean(row.ROW_STATUS).toUpperCase() !== "DELETED").map((row) => ({ ...row, [idColumn]: row[idColumn] || row.RECORD_ID }));
-    if (incoming.length) {
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incoming), primary);
-      const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      await window.HeraManagementV2.previewImport(type, { name: `Google_Sheets_${primary}.xlsx`, arrayBuffer: async () => bytes });
-    } else if (result.legacyMode) {
-      alert(`Sincronizzazione completata: ${result.rowsWritten || 0} righe inviate al Foglio Google.`);
-    } else {
-      alert(`Sincronizzazione completata. ${result.rowsWritten || 0} righe aggiornate; ${result.conflicts?.length || 0} conflitti; nessuna eliminazione automatica.`);
-    }
+  function sync(type) {
+    if (syncInFlight.has(type)) return syncInFlight.get(type);
+    const task = (async () => {
+      const config = await load(type);
+      if (!config.sheetUrl) return link(type);
+      const result = await call({
+        action: "syncRegistrySpreadsheet",
+        registry: type,
+        sheetUrl: config.sheetUrl,
+        spreadsheetId: config.spreadsheetId,
+        gid: config.gid || "0",
+        sheets: makeSheets(),
+        conflictPolicy: config.conflictPolicy || "LATEST_WINS",
+        noAutomaticDeletion: true
+      });
+      await save(type, {
+        lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastSyncBy: currentUser?.uid || "",
+        lastConflictCount: result.conflicts?.length || 0,
+        legacyMode: result.legacyMode === true
+      });
+      const primary = type === "personale" ? "PERSONALE" : "MEZZI";
+      const idColumn = type === "personale" ? "ID_OPERATORE" : "ID_MEZZO";
+      const incoming = (result.incoming?.[primary] || []).filter((row) => clean(row.ROW_STATUS).toUpperCase() !== "DELETED").map((row) => ({ ...row, [idColumn]: row[idColumn] || row.RECORD_ID }));
+      if (incoming.length) {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incoming), primary);
+        const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        await window.HeraManagementV2.previewImport(type, { name: `Google_Sheets_${primary}.xlsx`, arrayBuffer: async () => bytes });
+      } else if (result.legacyMode) {
+        alert(`Sincronizzazione completata: ${result.rowsWritten || 0} righe inviate al Foglio Google.`);
+      } else {
+        alert(`Sincronizzazione completata. ${result.rowsWritten || 0} righe aggiornate; ${result.conflicts?.length || 0} conflitti; nessuna eliminazione automatica.`);
+      }
+    })().finally(() => syncInFlight.delete(type));
+    syncInFlight.set(type, task);
+    return task;
   }
 
   async function settings(type) {
@@ -144,6 +164,8 @@
     if (!["LATEST_WINS", "APP_WINS"].includes(normalized)) return alert("Impostazione non valida.");
     const autoSync = window.confirm("Abilitare la sincronizzazione automatica incrementale all’apertura della sezione?");
     await save(type, { conflictPolicy: normalized, autoSync, noAutomaticDeletion: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    autoSyncChecked.delete(type);
+    try { sessionStorage.removeItem(autoSyncKey(type)); } catch (_) {}
     alert("Impostazioni sincronizzazione salvate.");
   }
 
@@ -183,7 +205,7 @@
     root.querySelector("[data-sheet-settings]")?.addEventListener("click", () => run(() => settings(type)));
     root.querySelector("[data-sheet-unlink]")?.addEventListener("click", () => run(() => unlink(type)));
     void load(type).then((config) => {
-      if (config.autoSync && config.sheetUrl && navigator.onLine) sync(type).catch(() => {});
+      if (config.autoSync && config.sheetUrl && navigator.onLine && autoSyncAllowed(type)) sync(type).catch(() => {});
     }).catch(() => {});
   }
 

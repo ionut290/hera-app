@@ -167,6 +167,20 @@
     }
   }
 
+  function loadFirestoreUsageControl() {
+    try {
+      if (document.querySelector('script[data-firestore-usage-control]')) return;
+      const script = document.createElement('script');
+      script.src = './control-center-firestore-usage.js?v=20260802a';
+      script.defer = true;
+      script.dataset.firestoreUsageControl = '1';
+      script.addEventListener('error', () => console.warn('Monitoraggio consumo Firestore non caricato.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Monitoraggio consumo Firestore non caricato:', error);
+    }
+  }
+
   function init() {
     loadAutoLoginFeature();
     loadBrandingFeature();
@@ -176,6 +190,7 @@
     loadOperatorProfileFeature();
     loadGlobalArchiveFeature();
     loadPreventiviLazyFeature();
+    loadFirestoreUsageControl();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

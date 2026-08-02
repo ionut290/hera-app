@@ -1,9 +1,6 @@
 (function () {
   "use strict";
 
-  const CLEANUP_VERSION = "20260802-cost2";
-  const CLEANUP_KEY_PREFIX = "hera_mezzi_alimentazione_cleanup_";
-
   function normalizeAlimentazione(value) {
     const original = String(value || "").trim();
     const normalized = original.toLowerCase();
@@ -35,54 +32,9 @@
     if (input) input.value = normalizeAlimentazione(input.value);
   }, true);
 
-  let cleanupInProgress = false;
+  // La bonifica storica è conclusa: nessuna scansione automatica della collezione mezzi.
+  // La normalizzazione resta attiva durante lettura e salvataggio dei singoli mezzi.
 
-  async function cleanupSnapshot(snapshot) {
-    if (cleanupInProgress) return;
-
-    const updates = snapshot.docs.flatMap((doc) => {
-      const current = String(doc.data()?.alimentazione || "").trim();
-      const corrected = normalizeAlimentazione(current);
-      return corrected !== current ? [{ ref: doc.ref, alimentazione: corrected }] : [];
-    });
-    if (!updates.length) return;
-
-    cleanupInProgress = true;
-    try {
-      const firestore = firebase.firestore();
-      for (let start = 0; start < updates.length; start += 450) {
-        const batch = firestore.batch();
-        updates.slice(start, start + 450).forEach(({ ref, alimentazione }) => {
-          batch.update(ref, { alimentazione });
-        });
-        await batch.commit();
-      }
-      console.log(`Alimentazione mezzi corretta: ${updates.length} record aggiornati.`);
-    } catch (error) {
-      console.error("Errore durante la correzione dell'alimentazione dei mezzi", error);
-    } finally {
-      cleanupInProgress = false;
-    }
-  }
-
-  function cleanupKey(user) {
-    return `${CLEANUP_KEY_PREFIX}${CLEANUP_VERSION}_${user?.uid || "anonymous"}`;
-  }
-
-  firebase.auth().onAuthStateChanged(async (user) => {
-    if (!user) return;
-    const key = cleanupKey(user);
-    try {
-      if (localStorage.getItem(key) === "done") return;
-      const snapshot = await firebase.firestore().collection("mezzi").get();
-      await cleanupSnapshot(snapshot);
-      localStorage.setItem(key, "done");
-    } catch (error) {
-      console.error("Impossibile controllare l'alimentazione dei mezzi", error);
-    }
-  });
-
-  // Carica il miglioramento grafico direttamente nelle schede delle squadre della schermata Oggi.
   if (!document.querySelector('script[data-squadre-mezzi-pictograms]')) {
     const script = document.createElement("script");
     script.src = "./squadre-mezzi-pictograms.js?v=20260727a";
@@ -91,7 +43,6 @@
     document.head.appendChild(script);
   }
 
-  // Mantiene separata e protetta la logica del riepilogo Oggi: ore live e mezzi della squadra.
   if (!document.querySelector('script[data-today-live-hours-vehicles]')) {
     const script = document.createElement("script");
     script.src = "./today-live-hours-vehicles.js?v=20260730b";
@@ -100,7 +51,6 @@
     document.head.appendChild(script);
   }
 
-  // Rende cliccabili i nomi delle squadre senza intervenire sulla logica FATTO/WhatsApp.
   if (!document.querySelector('script[data-squad-operator-profile]')) {
     const script = document.createElement("script");
     script.src = "./squad-operator-profile.js?v=20260731a";

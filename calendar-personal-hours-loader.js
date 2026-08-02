@@ -19,18 +19,6 @@
     return { first, last };
   }
 
-  function getCollectionName() {
-    if (typeof getHoursReportsCollectionName === "function") {
-      try {
-        const value = String(getHoursReportsCollectionName() || "").trim();
-        if (value) return value;
-      } catch (_) {
-        // Usa il nome storico compatibile.
-      }
-    }
-    return "hoursReports";
-  }
-
   function mergeReports(docs) {
     if (typeof allHoursReports === "undefined" || !Array.isArray(allHoursReports)) return;
     const merged = new Map(allHoursReports.map((report) => [String(report?.id || ""), report]));
@@ -55,8 +43,9 @@
           ui.calendarFeedback.textContent = "Caricamento delle ore personali del mese...";
         }
 
-        const collection = db.collection(getCollectionName());
-        const query = collection.where("date", ">=", range.first).where("date", "<=", range.last);
+        const query = db.collection("oreReports")
+          .where("date", ">=", range.first)
+          .where("date", "<=", range.last);
         const snapshot = typeof runFirestoreGetWithRetry === "function"
           ? await runFirestoreGetWithRetry(query, {
               label: `CALENDARIO ORE PERSONALI ${monthKey}`,

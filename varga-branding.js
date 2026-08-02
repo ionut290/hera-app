@@ -100,7 +100,7 @@
     try {
       if (document.querySelector('script[data-firestore-operation-diagnostics]')) return;
       const script = document.createElement('script');
-      script.src = './firestore-operation-diagnostics.js?v=20260802a';
+      script.src = './firestore-operation-diagnostics.js?v=20260802b';
       script.defer = true;
       script.dataset.firestoreOperationDiagnostics = '1';
       script.addEventListener('error', () => console.warn('Diagnostica Firestore non caricata; avvio app non interrotto.'), { once: true });

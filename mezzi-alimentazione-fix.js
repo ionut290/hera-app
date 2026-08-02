@@ -1,6 +1,9 @@
 (function () {
   "use strict";
 
+  const CLEANUP_VERSION = "20260802-cost2";
+  const CLEANUP_KEY_PREFIX = "hera_mezzi_alimentazione_cleanup_";
+
   function normalizeAlimentazione(value) {
     const original = String(value || "").trim();
     const normalized = original.toLowerCase();
@@ -62,11 +65,21 @@
     }
   }
 
-  firebase.auth().onAuthStateChanged((user) => {
+  function cleanupKey(user) {
+    return `${CLEANUP_KEY_PREFIX}${CLEANUP_VERSION}_${user?.uid || "anonymous"}`;
+  }
+
+  firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) return;
-    firebase.firestore().collection("mezzi").onSnapshot(cleanupSnapshot, (error) => {
+    const key = cleanupKey(user);
+    try {
+      if (localStorage.getItem(key) === "done") return;
+      const snapshot = await firebase.firestore().collection("mezzi").get();
+      await cleanupSnapshot(snapshot);
+      localStorage.setItem(key, "done");
+    } catch (error) {
       console.error("Impossibile controllare l'alimentazione dei mezzi", error);
-    });
+    }
   });
 
   // Carica il miglioramento grafico direttamente nelle schede delle squadre della schermata Oggi.

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v90";
+const CACHE_NAME = "varga-cantieri-shell-v91";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -26,6 +26,7 @@ const APP_SHELL = [
   "./mezzi-alimentazione-fix.js?v=20260723",
   "./today-live-hours-vehicles.js?v=20260731-codes1",
   "./squad-operator-profile.js?v=20260731a",
+  "./operator-profile-feature.js?v=20260802-cost1",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./header-menu-runtime.js?v=20260801-cost1",
   "./firestore-presence-cost-guard.js?v=20260802a",

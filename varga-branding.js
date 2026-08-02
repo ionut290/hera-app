@@ -57,16 +57,37 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function loadGoogleProfileFeature() {
+    try {
+      if (document.querySelector('script[data-rubrica-google-profile]')) return;
+      const script = document.createElement('script');
+      script.src = './rubrica-google-profile.js?v=20260802-google1';
+      script.defer = true;
+      script.dataset.rubricaGoogleProfile = '1';
+      script.addEventListener('error', () => console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto:', error);
+    }
+  }
+
   function loadRubricaFeature() {
     try {
-      if (document.querySelector('script[data-rubrica-feature-v2]')) return;
+      if (document.querySelector('script[data-rubrica-feature-v2]')) {
+        loadGoogleProfileFeature();
+        return;
+      }
 
       const loadView = () => {
-        if (document.querySelector('script[data-rubrica-feature-v2]')) return;
+        if (document.querySelector('script[data-rubrica-feature-v2]')) {
+          loadGoogleProfileFeature();
+          return;
+        }
         const script = document.createElement('script');
         script.src = './rubrica-feature-v2.js?v=20260802-email1';
         script.defer = true;
         script.dataset.rubricaFeatureV2 = '1';
+        script.addEventListener('load', loadGoogleProfileFeature, { once: true });
         script.addEventListener('error', () => console.warn('Rubrica V2 non caricata; avvio app non interrotto.'), { once: true });
         document.head.appendChild(script);
       };

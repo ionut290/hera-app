@@ -63,9 +63,24 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function loadRubricaFeature() {
+    try {
+      if (document.querySelector('script[data-rubrica-feature]')) return;
+      const script = document.createElement('script');
+      script.src = './rubrica-feature.js?v=20260802-safe1';
+      script.defer = true;
+      script.dataset.rubricaFeature = '1';
+      script.addEventListener('error', () => console.warn('Rubrica non caricata; avvio app non interrotto.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Rubrica non caricata; avvio app non interrotto:', error);
+    }
+  }
+
   function init() {
     applyBranding();
     observeDynamicContent();
+    window.setTimeout(loadRubricaFeature, 0);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

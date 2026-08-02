@@ -18,14 +18,12 @@
 
   function brandElement(element) {
     if (!(element instanceof Element)) return;
-
     BRAND_ATTRIBUTES.forEach((attribute) => {
       if (!element.hasAttribute(attribute)) return;
       const current = element.getAttribute(attribute) || '';
       const next = replaceBrand(current);
       if (next !== current) element.setAttribute(attribute, next);
     });
-
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     let node = walker.nextNode();
     while (node) {
@@ -36,16 +34,13 @@
 
   function applyBranding(root = document.documentElement) {
     document.title = BRAND_NAME;
-
     const applicationName = document.querySelector('meta[name="application-name"]');
     if (applicationName) applicationName.setAttribute('content', BRAND_NAME);
-
     brandElement(root);
   }
 
   function observeDynamicContent() {
     if (!document.body || window.__vargaBrandingObserver) return;
-
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'characterData') {
@@ -58,22 +53,21 @@
         });
       });
     });
-
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     window.__vargaBrandingObserver = observer;
   }
 
   function loadRubricaFeature() {
     try {
-      if (document.querySelector('script[data-rubrica-feature]')) return;
+      if (document.querySelector('script[data-rubrica-feature-v2]')) return;
       const script = document.createElement('script');
-      script.src = './rubrica-feature.js?v=20260802-import1';
+      script.src = './rubrica-feature-v2.js?v=20260802-email1';
       script.defer = true;
-      script.dataset.rubricaFeature = '1';
-      script.addEventListener('error', () => console.warn('Rubrica non caricata; avvio app non interrotto.'), { once: true });
+      script.dataset.rubricaFeatureV2 = '1';
+      script.addEventListener('error', () => console.warn('Rubrica V2 non caricata; avvio app non interrotto.'), { once: true });
       document.head.appendChild(script);
     } catch (error) {
-      console.warn('Rubrica non caricata; avvio app non interrotto:', error);
+      console.warn('Rubrica V2 non caricata; avvio app non interrotto:', error);
     }
   }
 

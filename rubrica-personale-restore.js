@@ -1,193 +1,86 @@
 (() => {
   'use strict';
-  if (window.__vargaPersonaleRestore) return;
-  window.__vargaPersonaleRestore = true;
+  if (window.__vargaPersonaleRestoreV2) return;
+  window.__vargaPersonaleRestoreV2 = true;
 
-  const RAW = `CHIAPELLI|PAOLO|3453032319
-PIZZIRANI|MATTEO|3356104823
-TURUKU|FATOS|3497846935
-RUSSO|FEDERICO|3421360654
-BUJA|DANIEL G.|3453027657
-ROMAN LUYA|ROLANDO|
-COJOCARU|SERAFIM|3207297669
-POP|CRISTIAN-ADRIAN|
-LAZAR|RELU LUCIAN|3474744526
-BOLDRIN|AMABILE|3453031205
-MAGGIORI|FABIO|3483349536
-MASOTTI|MASSIMO|3272485046
-CONTRERAS|HENRRY|3313369754
-PEREZ PONCE|CESAR OMAR|
-VARGA|IONEL|3892352575
-ODURO|ERNEST|3510791476
-TEAN|ALEXANDR|3200844991
-KHAN|IMRAN|3886436589
-COVALIOV|IGOR|3898405263
-ZORJANI|IBRAHIM|3278246410
-SCOLLO|MARIO|
-CHIRIAC|DRAGOS NICOLAIE|
-ZAMBELLI|MICHELA|3664499094
-DRAGULEAN|VALENTIN|
-DE GIORGIO|GIORGIO AGOSTINO|
-STEGANI|BARBARA|3396211738
-PIRRITANO|PIETRO|3485346214
-LAZAR|ALEXANDRU|3452918172
-SUPPINI|ANDREA|3285650853
-JOITA|ION|3209756574
-PROVENZANO|ANTONINO|3338450530
-GHITIU|EMILIAN CRISTIAN|
-MARANGON|SILVANO|3351270878
-STOICHINA|GABI-CORNEL|3273373589
-AAZIZ|AZIZ|3898435481
-EGBONA|SALOME|3801875446
-BEJAOUI|HAFEDH|3205308237
-SUNDAY|CHRISTABEL|
-VENTURI GRANDI|ANGELA|
-ADAMES RAMIREZ|FABIO|3474972033
-ALI|IMURANA|3273932458
-ALI|MAHMOUD FATHI MOHAMED|3515529023
-AMOAH FRIMPONG|ALBERT|
-ARGINELLI|FEDERICO|3341455406
-ARTUSO|GIUSEPPE|3533052572
-BALBONI|TIZIANA|3245942353
-BARONE|ANTONIO|3425167778
-BOTTITTA|LORENZO|
-BOUHCHICH|RACHID|3428380388
-BUDACA|SIMONA PAULA|3405364219
-CENERINI|CORRADO|3665273253
-CHAMBI ARAPA|LUIS JUSTO|3457648607
-CORONA|LUCIO|
-DAMANDE|MICHEL|3802370055
-DI GIOVANNI|BRANDO|
-ED DAHRI|CHERKAOUI|3881138530
-ERRACHIDI|ABDELMOULA|3922320599
-FARDOOS|ARSLAN|3271051887
-FERRARI|MASSIMO|3485361939
-FERRETTI|MATTEO|
-FLOREA|IOAN CIPRIAN|3270025568
-FRANCESCHELLI|ALESSANDRO|
-GERDAN|GEORGETA|3733474725
-GHERARDI|FEDERICO|
-GIORGIO|FLAVIO|
-GOLINELLI|FABIO|3452915339
-GUERNELLI|MANUEL|
-HOSEINI|SEIED HEIDAR|
-IACOVIELLO|ANTONIO|3297224023
-IQBAL|BILAWAL|3387423134
-IQBAL|MUHAMMAD ADNAN|
-JAURIGUE|JOEY RITZ|
-JAVED|MUBASHAR|3477426527
-KONE|MAMADOU|3511705192
-KRYSKIV|TARAS|3899931149
-LAMSSAOUI|ABDELKERIM|3337608403
-LAVEZZI|RICKY|3453252641
-LEGUIA HUAYANA|ROBERT|
-LEVATO|GIUSEPPE|3472745943
-MARTINENGO|DAVIDE|3407097968
-MARTINO|LUIGI ANTONIO|
-MELIANI|ELMOSTAFA|3319178298
-MELONI|LUCA|
-MENDOZA MATOS|MICHAEL ROY|
-MENNA|ADRIANO|3713819240
-MINELLI|MARZIA|3315650834
-MOHAMMAD|ASIF|3343058072
-MONARI|ALESSIA|
-MUHAMMAD|AKRAM|3512101349
-MUHAMMAD|KHAN|3276272679
-MUHAMMAD|BILAL|3889340090
-MURAN|MASSIMO|3519625736
-NANNI|PIERO|3297667658
-NDAW|MODOU|3347636097
-NUAOBASI|EMMANUEL|3208584375
-OJEGA|OSATO|3511643163
-OKOSUN|RAPHAEL|3409977897
-OMORU|FAITH|3807614502
-OSTI|FRANCESCO|3703077858
-OUCHARI|CHAKER|3881759817
-PARZANESE|MANUEL|3409997107
-PIRRITANO|SALVATORE|3201778773
-PIZZIRANI|LORENZO|
-POZZI|GIOVANNI|3395844616
-RUSSO|PAOLO|3498512296
-SACCHI|LORENZO|3314613608
-SAMB|MAME MOR|3274142344
-SAVORRI|VASCO|3713233679
-SHABBIR|HASSAN|3395349520
-SITZIA|CRISTIAN|3791474333
-SYLLA|MOUSTAPHA|3271327968
-TALIGNANI|EMANUELE|
-TARTARINI|FEDERICO|
-UGOLINI|GIULIO|
-VELAZQUEZ FERNANDEZ|DARIEL|
-VIESTI|DANIEL|
-VITALE|SALVATORE|
-YEBOAH|JOHNSON|3515648143
-ZARRI|ANDREA|3664139062
-ZARUBKO|MAKSYM|
-ZORJANI|MEVLAN|
-CALICIOTTI|LORENZO|
-MEREACRE|VLADIMIR|3891423646
-STARINIERI|ERIKA|
-EYONULAGBA|BELLO NOUHADINE|
-GALVAGNI|PIETRO|3509011571
-LIMA|VITO|
-AMA OKORIE|PRINCE|3512908737
-FINI|TERESA|
-DAL BROLLO|MILO|
-SALAMI|HELEN|3275563223
-LANDI|ELISA|
-AJMAL|MUHAMMAD|3512694845
-MINELLI|LORENZA|
-BASCIU|ALESSANDRO|
-GERARDI|VALENTINA|
-FRIGHI|ANDREA|`;
-
-  const records = RAW.split('\n').map((line, index) => {
-    const [nome, cognome, telefono] = line.split('|');
-    const slug = `${nome}-${cognome}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return {
-      id: `recovery-${slug || index + 1}`,
-      nome,
-      cognome,
-      telefono: telefono || '',
-      stato: 'Attivo',
-      attivo: 'SÌ',
-      fullName: `${cognome} ${nome}`.trim(),
-      source: 'ripristino-matrice-2026-08-02'
-    };
-  });
-
+  const RECORDS = __RECORDS__;
+  const text = value => String(value ?? '').trim();
+  const normalize = value => text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleUpperCase('it-IT')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const personKey = record => [record?.cognome, record?.nome].map(normalize).filter(Boolean).join('|');
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-  async function restore() {
+  async function restoreHistoricalIds() {
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const firestore = window.firebase?.firestore?.();
       const currentUser = window.firebase?.auth?.()?.currentUser;
       const isManager = typeof window.canManageData === 'function' && window.canManageData();
-      if (firestore && currentUser && isManager) {
-        const collectionName = typeof window.getPersonaleCollectionName === 'function'
-          ? window.getPersonaleCollectionName()
-          : 'personale';
-        const collection = firestore.collection(collectionName);
-        const existing = await collection.limit(1).get();
-        if (!existing.empty) return;
-
-        const batch = firestore.batch();
-        const timestamp = window.firebase.firestore.FieldValue.serverTimestamp();
-        records.forEach(record => {
-          batch.set(collection.doc(record.id), {
-            ...record,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            updatedBy: currentUser.uid
-          }, { merge: true });
-        });
-        await batch.commit();
-        console.info(`Ripristino Personale completato: ${records.length} operatori.`);
-        return;
+      if (!firestore || !currentUser || !isManager) {
+        await wait(250);
+        continue;
       }
-      await wait(250);
+
+      const collectionName = typeof window.getPersonaleCollectionName === 'function'
+        ? window.getPersonaleCollectionName()
+        : 'personale';
+      const collection = firestore.collection(collectionName);
+      const currentSnapshot = await collection.get();
+      const currentByKey = new Map();
+      currentSnapshot.docs.forEach(doc => {
+        const data = doc.data() || {};
+        const key = personKey(data);
+        if (key && !currentByKey.has(key)) currentByKey.set(key, { doc, data });
+      });
+
+      const timestamp = window.firebase.firestore.FieldValue.serverTimestamp();
+      let changed = 0;
+      for (let start = 0; start < RECORDS.length; start += 400) {
+        const batch = firestore.batch();
+        let batchChanges = 0;
+        RECORDS.slice(start, start + 400).forEach(record => {
+          const historicalId = text(record.idOperatore);
+          const key = personKey(record);
+          if (!historicalId || !key) return;
+          const current = currentByKey.get(key);
+          const source = current?.data || {};
+          const payload = {
+            ...source,
+            id: historicalId,
+            idOperatore: historicalId,
+            ID_OPERATORE: historicalId,
+            nome: text(record.nome) || text(source.nome),
+            cognome: text(record.cognome) || text(source.cognome),
+            fullName: `${text(record.cognome)} ${text(record.nome)}`.trim(),
+            codiceOperatore: text(record.codiceOperatore) || text(source.codiceOperatore),
+            emailAccessoApp: text(record.emailAccessoApp) || text(source.emailAccessoApp),
+            linkedUserId: text(record.linkedUserId) || text(source.linkedUserId),
+            linkedUserEmail: text(record.linkedUserEmail) || text(source.linkedUserEmail),
+            profiloCollegato: text(record.profiloCollegato) || text(source.profiloCollegato),
+            restoredHistoricalIdAt: timestamp,
+            updatedAt: timestamp,
+            updatedBy: currentUser.uid,
+            source: 'ripristino-id-matrice-2026-08-02'
+          };
+          batch.set(collection.doc(historicalId), payload, { merge: true });
+          batchChanges += 1;
+          changed += 1;
+        });
+        if (batchChanges) await batch.commit();
+      }
+
+      console.info(`Ripristino ID personale completato: ${changed} operatori elaborati.`);
+      if (typeof window.subscribePersonale === 'function') {
+        try { window.subscribePersonale(); } catch (_) {}
+      }
+      return;
     }
   }
 
-  restore().catch(error => console.error('Ripristino Personale non riuscito:', error));
+  restoreHistoricalIds().catch(error => console.error('Ripristino ID personale non riuscito:', error));
 })();
+".replace("__RECORDS__

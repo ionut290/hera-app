@@ -3,101 +3,191 @@
   if (window.__vargaPersonaleRestore) return;
   window.__vargaPersonaleRestore = true;
 
-  const text = value => String(value ?? '').trim();
-  const lower = value => text(value).toLowerCase();
-  const escapeHtml = value => text(value).replace(/[&<>"']/g, char => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[char]));
+  const RAW = `CHIAPELLI|PAOLO|3453032319
+PIZZIRANI|MATTEO|3356104823
+TURUKU|FATOS|3497846935
+RUSSO|FEDERICO|3421360654
+BUJA|DANIEL G.|3453027657
+ROMAN LUYA|ROLANDO|
+COJOCARU|SERAFIM|3207297669
+POP|CRISTIAN-ADRIAN|
+LAZAR|RELU LUCIAN|3474744526
+BOLDRIN|AMABILE|3453031205
+MAGGIORI|FABIO|3483349536
+MASOTTI|MASSIMO|3272485046
+CONTRERAS|HENRRY|3313369754
+PEREZ PONCE|CESAR OMAR|
+VARGA|IONEL|3892352575
+ODURO|ERNEST|3510791476
+TEAN|ALEXANDR|3200844991
+KHAN|IMRAN|3886436589
+COVALIOV|IGOR|3898405263
+ZORJANI|IBRAHIM|3278246410
+SCOLLO|MARIO|
+CHIRIAC|DRAGOS NICOLAIE|
+ZAMBELLI|MICHELA|3664499094
+DRAGULEAN|VALENTIN|
+DE GIORGIO|GIORGIO AGOSTINO|
+STEGANI|BARBARA|3396211738
+PIRRITANO|PIETRO|3485346214
+LAZAR|ALEXANDRU|3452918172
+SUPPINI|ANDREA|3285650853
+JOITA|ION|3209756574
+PROVENZANO|ANTONINO|3338450530
+GHITIU|EMILIAN CRISTIAN|
+MARANGON|SILVANO|3351270878
+STOICHINA|GABI-CORNEL|3273373589
+AAZIZ|AZIZ|3898435481
+EGBONA|SALOME|3801875446
+BEJAOUI|HAFEDH|3205308237
+SUNDAY|CHRISTABEL|
+VENTURI GRANDI|ANGELA|
+ADAMES RAMIREZ|FABIO|3474972033
+ALI|IMURANA|3273932458
+ALI|MAHMOUD FATHI MOHAMED|3515529023
+AMOAH FRIMPONG|ALBERT|
+ARGINELLI|FEDERICO|3341455406
+ARTUSO|GIUSEPPE|3533052572
+BALBONI|TIZIANA|3245942353
+BARONE|ANTONIO|3425167778
+BOTTITTA|LORENZO|
+BOUHCHICH|RACHID|3428380388
+BUDACA|SIMONA PAULA|3405364219
+CENERINI|CORRADO|3665273253
+CHAMBI ARAPA|LUIS JUSTO|3457648607
+CORONA|LUCIO|
+DAMANDE|MICHEL|3802370055
+DI GIOVANNI|BRANDO|
+ED DAHRI|CHERKAOUI|3881138530
+ERRACHIDI|ABDELMOULA|3922320599
+FARDOOS|ARSLAN|3271051887
+FERRARI|MASSIMO|3485361939
+FERRETTI|MATTEO|
+FLOREA|IOAN CIPRIAN|3270025568
+FRANCESCHELLI|ALESSANDRO|
+GERDAN|GEORGETA|3733474725
+GHERARDI|FEDERICO|
+GIORGIO|FLAVIO|
+GOLINELLI|FABIO|3452915339
+GUERNELLI|MANUEL|
+HOSEINI|SEIED HEIDAR|
+IACOVIELLO|ANTONIO|3297224023
+IQBAL|BILAWAL|3387423134
+IQBAL|MUHAMMAD ADNAN|
+JAURIGUE|JOEY RITZ|
+JAVED|MUBASHAR|3477426527
+KONE|MAMADOU|3511705192
+KRYSKIV|TARAS|3899931149
+LAMSSAOUI|ABDELKERIM|3337608403
+LAVEZZI|RICKY|3453252641
+LEGUIA HUAYANA|ROBERT|
+LEVATO|GIUSEPPE|3472745943
+MARTINENGO|DAVIDE|3407097968
+MARTINO|LUIGI ANTONIO|
+MELIANI|ELMOSTAFA|3319178298
+MELONI|LUCA|
+MENDOZA MATOS|MICHAEL ROY|
+MENNA|ADRIANO|3713819240
+MINELLI|MARZIA|3315650834
+MOHAMMAD|ASIF|3343058072
+MONARI|ALESSIA|
+MUHAMMAD|AKRAM|3512101349
+MUHAMMAD|KHAN|3276272679
+MUHAMMAD|BILAL|3889340090
+MURAN|MASSIMO|3519625736
+NANNI|PIERO|3297667658
+NDAW|MODOU|3347636097
+NUAOBASI|EMMANUEL|3208584375
+OJEGA|OSATO|3511643163
+OKOSUN|RAPHAEL|3409977897
+OMORU|FAITH|3807614502
+OSTI|FRANCESCO|3703077858
+OUCHARI|CHAKER|3881759817
+PARZANESE|MANUEL|3409997107
+PIRRITANO|SALVATORE|3201778773
+PIZZIRANI|LORENZO|
+POZZI|GIOVANNI|3395844616
+RUSSO|PAOLO|3498512296
+SACCHI|LORENZO|3314613608
+SAMB|MAME MOR|3274142344
+SAVORRI|VASCO|3713233679
+SHABBIR|HASSAN|3395349520
+SITZIA|CRISTIAN|3791474333
+SYLLA|MOUSTAPHA|3271327968
+TALIGNANI|EMANUELE|
+TARTARINI|FEDERICO|
+UGOLINI|GIULIO|
+VELAZQUEZ FERNANDEZ|DARIEL|
+VIESTI|DANIEL|
+VITALE|SALVATORE|
+YEBOAH|JOHNSON|3515648143
+ZARRI|ANDREA|3664139062
+ZARUBKO|MAKSYM|
+ZORJANI|MEVLAN|
+CALICIOTTI|LORENZO|
+MEREACRE|VLADIMIR|3891423646
+STARINIERI|ERIKA|
+EYONULAGBA|BELLO NOUHADINE|
+GALVAGNI|PIETRO|3509011571
+LIMA|VITO|
+AMA OKORIE|PRINCE|3512908737
+FINI|TERESA|
+DAL BROLLO|MILO|
+SALAMI|HELEN|3275563223
+LANDI|ELISA|
+AJMAL|MUHAMMAD|3512694845
+MINELLI|LORENZA|
+BASCIU|ALESSANDRO|
+GERARDI|VALENTINA|
+FRIGHI|ANDREA|`;
 
-  function sourceRows() {
-    const personale = Array.isArray(window.personaleRecords) ? window.personaleRecords : [];
-    const utenti = Array.isArray(window.platformUsers) ? window.platformUsers : [];
-    const rows = [];
-    const seen = new Set();
-
-    const add = (record, source) => {
-      if (!record || typeof record !== 'object') return;
-      const email = lower(record.email || record.emailAccessoApp || record.linkedUserEmail);
-      const telefono = text(record.telefono || record.phone || record.cellulare || record.mobile || record.telefonoPersonale);
-      const nome = text(record.displayName || record.nomeCompleto || `${text(record.nome)} ${text(record.cognome)}`) || email || telefono;
-      if (!nome) return;
-      const key = email || telefono.replace(/\D/g, '') || lower(nome);
-      if (seen.has(key)) return;
-      seen.add(key);
-      rows.push({
-        nome,
-        telefono,
-        email,
-        ruolo: text(record.mansione || record.ruolo || record.role),
-        azienda: text(record.azienda || record.company),
-        foto: text(record.photoUrl || record.fotoUrl || record.photoURL),
-        source
-      });
+  const records = RAW.split('\n').map((line, index) => {
+    const [nome, cognome, telefono] = line.split('|');
+    const slug = `${nome}-${cognome}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return {
+      id: `recovery-${slug || index + 1}`,
+      nome,
+      cognome,
+      telefono: telefono || '',
+      stato: 'Attivo',
+      attivo: 'SÌ',
+      fullName: `${cognome} ${nome}`.trim(),
+      source: 'ripristino-matrice-2026-08-02'
     };
+  });
 
-    personale.forEach(record => add(record, 'personale'));
-    utenti.forEach(record => add(record, 'utente'));
-    return rows.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity:'base' }));
-  }
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-  function initials(nome) {
-    return text(nome).split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || '👤';
-  }
+  async function restore() {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const firestore = window.firebase?.firestore?.();
+      const currentUser = window.firebase?.auth?.()?.currentUser;
+      const isManager = typeof window.canManageData === 'function' && window.canManageData();
+      if (firestore && currentUser && isManager) {
+        const collectionName = typeof window.getPersonaleCollectionName === 'function'
+          ? window.getPersonaleCollectionName()
+          : 'personale';
+        const collection = firestore.collection(collectionName);
+        const existing = await collection.limit(1).get();
+        if (!existing.empty) return;
 
-  function installStyle() {
-    if (document.getElementById('varga-personale-restore-style')) return;
-    const style = document.createElement('style');
-    style.id = 'varga-personale-restore-style';
-    style.textContent = `
-      .vpr-page{position:fixed;inset:0;z-index:17000;background:#eef4f2;overflow:auto;padding:calc(12px + env(safe-area-inset-top)) 14px 30px}
-      .vpr-shell{max-width:760px;margin:auto}.vpr-head{display:flex;align-items:center;gap:10px}.vpr-head h2{flex:1;color:#173c35}
-      .vpr-page button{min-height:46px;border:1px solid #bfd0cb;border-radius:14px;background:#fff;padding:8px 12px;font-weight:850;color:#075fae}
-      .vpr-search{width:100%;min-height:54px;border:1px solid #bfd0cb;border-radius:16px;padding:0 14px;font-size:17px;margin:10px 0 14px}
-      .vpr-list{display:grid;gap:10px}.vpr-card{display:flex;align-items:center;gap:12px;text-align:left;color:#173c35}
-      .vpr-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:#dcebe7;display:grid;place-items:center;flex:none;font-weight:900}
-      .vpr-main{min-width:0;flex:1}.vpr-main strong,.vpr-main small{display:block;overflow:hidden;text-overflow:ellipsis}
-      .vpr-empty{text-align:center;color:#687a75;padding:36px 10px}
-    `;
-    document.head.appendChild(style);
-  }
-
-  function openPersonale() {
-    document.querySelector('.vpr-page')?.remove();
-    installStyle();
-    const page = document.createElement('section');
-    page.className = 'vpr-page';
-    page.innerHTML = `<div class="vpr-shell"><div class="vpr-head"><button data-back>← INDIETRO</button><h2>👥 Personale</h2></div><input class="vpr-search" type="search" placeholder="Cerca nome, telefono, e-mail, ruolo o azienda…"><div class="vpr-list"></div></div>`;
-    const search = page.querySelector('.vpr-search');
-    const list = page.querySelector('.vpr-list');
-
-    const render = () => {
-      const query = lower(search.value);
-      const rows = sourceRows().filter(row => [row.nome,row.telefono,row.email,row.ruolo,row.azienda].some(value => lower(value).includes(query)));
-      list.innerHTML = rows.length ? rows.map(row => {
-        const avatar = row.foto ? `<img class="vpr-avatar" src="${escapeHtml(row.foto)}" alt="Foto ${escapeHtml(row.nome)}">` : `<span class="vpr-avatar">${escapeHtml(initials(row.nome))}</span>`;
-        const details = [row.telefono,row.email,row.ruolo,row.azienda].filter(Boolean).join(' · ');
-        const call = row.telefono ? ` onclick="location.href='tel:${escapeHtml(row.telefono.replace(/[^\d+]/g,''))}'"` : '';
-        return `<button class="vpr-card"${call}>${avatar}<span class="vpr-main"><strong>${escapeHtml(row.nome)}</strong><small>${escapeHtml(details || 'Personale')}</small></span></button>`;
-      }).join('') : '<div class="vpr-empty">Elenco personale non ancora caricato. Chiudi e riapri questa sezione tra pochi secondi.</div>';
-    };
-
-    search.addEventListener('input', render);
-    page.querySelector('[data-back]').addEventListener('click', () => page.remove());
-    document.body.appendChild(page);
-    render();
-    window.setTimeout(render, 600);
-    window.setTimeout(render, 1600);
-  }
-
-  window.openPersonaleRipristinato = openPersonale;
-  document.addEventListener('click', event => {
-    const element = event.target.closest('button,a,[role="button"]');
-    if (!element || element.closest('.vpr-page')) return;
-    const label = text(element.textContent).toUpperCase();
-    if (label === 'PERSONALE' || label === 'RUBRICA' || label.includes('RUBRICA CONTATTI')) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      openPersonale();
+        const batch = firestore.batch();
+        const timestamp = window.firebase.firestore.FieldValue.serverTimestamp();
+        records.forEach(record => {
+          batch.set(collection.doc(record.id), {
+            ...record,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            updatedBy: currentUser.uid
+          }, { merge: true });
+        });
+        await batch.commit();
+        console.info(`Ripristino Personale completato: ${records.length} operatori.`);
+        return;
+      }
+      await wait(250);
     }
-  }, true);
+  }
+
+  restore().catch(error => console.error('Ripristino Personale non riuscito:', error));
 })();

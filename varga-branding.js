@@ -93,8 +93,12 @@
     loadScriptOnce('script[data-rubrica-vcard-share]', './rubrica-vcard-share.js?v=20260802a', 'rubricaVcardShare', null, 'Condivisione vCard Rubrica non caricata; avvio app non interrotto.');
   }
 
+  function loadRubricaV3Bridge() {
+    loadScriptOnce('script[data-rubrica-v3-bridge]', './rubrica-v3-bridge.js?v=20260802-fix1', 'rubricaV3Bridge', null, 'Collegamento Rubrica V3 non caricato; resta disponibile la Rubrica base.');
+  }
+
   function loadRubricaCloudV3() {
-    loadScriptOnce('script[data-rubrica-cloud-v3]', './rubrica-cloud-v3.js?v=20260802-fix2', 'rubricaCloudV3', null, 'Rubrica condivisa V3 non caricata; resta disponibile la Rubrica base.');
+    loadScriptOnce('script[data-rubrica-cloud-v3]', './rubrica-cloud-v3.js?v=20260802-fix3', 'rubricaCloudV3', loadRubricaV3Bridge, 'Rubrica condivisa V3 non caricata; resta disponibile la Rubrica base.');
   }
 
   function loadGoogleProfileFeature() {
@@ -109,6 +113,7 @@
     loadScriptOnce('script[data-rubrica-user-enrichment]', './rubrica-user-enrichment.js?v=20260802-user1', 'rubricaUserEnrichment', loadView, 'Arricchimento Rubrica non caricato; apro comunque la Rubrica base.');
     window.setTimeout(loadView, 1200);
     window.setTimeout(loadRubricaCloudV3, 1600);
+    window.setTimeout(loadRubricaV3Bridge, 2200);
   }
 
   function init() {

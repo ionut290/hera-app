@@ -39,7 +39,10 @@
     "check:preventivi-models-visibility": "node scripts/check-preventivi-models-visibility.js",
     "check:preventivi-matrix-runtime": "node scripts/check-preventivi-matrix-runtime-fix.js",
     "check:preventivi-commessa-search": "node scripts/check-preventivi-commessa-search-bridge.js",
-    "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js"
+    "check:preventivi-template-fidelity": "node scripts/check-preventivi-template-fidelity.js",
+    "check:multi-organization": "node scripts/check-multi-organization.js",
+    "test:multi-organization": "node tests/organization-access-model.test.js && node tests/super-admin-organizations-model.test.js && node tests/multi-organization-migration-plan.test.js && npm run check:multi-organization",
+    "check:multi-organization-safe": "npm run test:multi-organization && npm run check:fatto-critical"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

@@ -60,12 +60,31 @@
   function loadRubricaFeature() {
     try {
       if (document.querySelector('script[data-rubrica-feature-v2]')) return;
-      const script = document.createElement('script');
-      script.src = './rubrica-feature-v2.js?v=20260802-email1';
-      script.defer = true;
-      script.dataset.rubricaFeatureV2 = '1';
-      script.addEventListener('error', () => console.warn('Rubrica V2 non caricata; avvio app non interrotto.'), { once: true });
-      document.head.appendChild(script);
+
+      const loadView = () => {
+        if (document.querySelector('script[data-rubrica-feature-v2]')) return;
+        const script = document.createElement('script');
+        script.src = './rubrica-feature-v2.js?v=20260802-email1';
+        script.defer = true;
+        script.dataset.rubricaFeatureV2 = '1';
+        script.addEventListener('error', () => console.warn('Rubrica V2 non caricata; avvio app non interrotto.'), { once: true });
+        document.head.appendChild(script);
+      };
+
+      if (!document.querySelector('script[data-rubrica-user-enrichment]')) {
+        const enrichment = document.createElement('script');
+        enrichment.src = './rubrica-user-enrichment.js?v=20260802-user1';
+        enrichment.defer = true;
+        enrichment.dataset.rubricaUserEnrichment = '1';
+        enrichment.addEventListener('load', loadView, { once: true });
+        enrichment.addEventListener('error', () => {
+          console.warn('Arricchimento Rubrica non caricato; apro comunque la Rubrica base.');
+          loadView();
+        }, { once: true });
+        document.head.appendChild(enrichment);
+      } else {
+        loadView();
+      }
     } catch (error) {
       console.warn('Rubrica V2 non caricata; avvio app non interrotto:', error);
     }

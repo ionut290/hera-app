@@ -57,17 +57,39 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function loadVcardShareFeature() {
+    try {
+      if (document.querySelector('script[data-rubrica-vcard-share]')) return;
+      const script = document.createElement('script');
+      script.src = './rubrica-vcard-share.js?v=20260802a';
+      script.defer = true;
+      script.dataset.rubricaVcardShare = '1';
+      script.addEventListener('error', () => console.warn('Condivisione vCard Rubrica non caricata; avvio app non interrotto.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Condivisione vCard Rubrica non caricata; avvio app non interrotto:', error);
+    }
+  }
+
   function loadGoogleProfileFeature() {
     try {
-      if (document.querySelector('script[data-rubrica-google-profile]')) return;
+      if (document.querySelector('script[data-rubrica-google-profile]')) {
+        loadVcardShareFeature();
+        return;
+      }
       const script = document.createElement('script');
       script.src = './rubrica-google-profile.js?v=20260802-google1';
       script.defer = true;
       script.dataset.rubricaGoogleProfile = '1';
-      script.addEventListener('error', () => console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto.'), { once: true });
+      script.addEventListener('load', loadVcardShareFeature, { once: true });
+      script.addEventListener('error', () => {
+        console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto.');
+        loadVcardShareFeature();
+      }, { once: true });
       document.head.appendChild(script);
     } catch (error) {
       console.warn('Profilo Google Rubrica non caricato; avvio app non interrotto:', error);
+      loadVcardShareFeature();
     }
   }
 

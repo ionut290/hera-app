@@ -1,5 +1,5 @@
-/* Recupera gli impianti INRETE mancanti nella raccolta operativa.
-   La verifica viene eseguita una sola volta per versione, non a ogni ritorno online. */
+/* Recupera manualmente gli impianti INRETE mancanti nella raccolta operativa.
+   Nessuna scansione Firestore viene eseguita automaticamente all'avvio. */
 (() => {
   "use strict";
 
@@ -227,10 +227,6 @@
     void importFromGoogleSheet(button);
   }, true);
 
-  if (typeof auth !== "undefined") {
-    auth.onAuthStateChanged((user) => {
-      if (user) window.setTimeout(() => void runRepair(), 1200);
-    });
-  }
+  // Disponibile solo come operazione manuale esplicita.
   window.repairImportedInretePlants = (options = {}) => runRepair({ force: options.force === true });
 })();

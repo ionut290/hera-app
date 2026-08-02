@@ -82,6 +82,20 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function loadFirestoreSafeOptimizer() {
+    try {
+      if (document.querySelector('script[data-firestore-safe-optimizer]')) return;
+      const script = document.createElement('script');
+      script.src = './firestore-safe-optimizer.js?v=20260802a';
+      script.defer = true;
+      script.dataset.firestoreSafeOptimizer = '1';
+      script.addEventListener('error', () => console.warn('Ottimizzatore Firestore non caricato; avvio app non interrotto.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Ottimizzatore Firestore non caricato; avvio app non interrotto:', error);
+    }
+  }
+
   function loadFirestoreDiagnostics() {
     try {
       if (document.querySelector('script[data-firestore-operation-diagnostics]')) return;
@@ -174,6 +188,7 @@
 
   function init() {
     disableAutomaticHoursRepair();
+    loadFirestoreSafeOptimizer();
     applyBranding();
     observeDynamicContent();
     window.setTimeout(loadFirestoreDiagnostics, 0);
@@ -181,6 +196,7 @@
   }
 
   disableAutomaticHoursRepair();
+  loadFirestoreSafeOptimizer();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();

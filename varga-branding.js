@@ -6,6 +6,31 @@
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'OPTION']);
   const BRAND_ATTRIBUTES = ['alt', 'aria-label', 'title'];
 
+  function disableAutomaticHoursRepair(attempt = 0) {
+    const current = window.repairDuplicateHours;
+    if (typeof current !== 'function') {
+      if (attempt < 40) window.setTimeout(() => disableAutomaticHoursRepair(attempt + 1), 50);
+      return;
+    }
+    if (current.__vargaStartupGuard) return;
+    const original = current;
+    const guarded = function hoursRepairStartupGuard(options = {}) {
+      if (options?.force === true) return original.apply(this, arguments);
+      console.info('Riparazione automatica ore saltata: usare force:true solo per una riparazione manuale richiesta.');
+      return Promise.resolve({
+        changed: false,
+        repaired: 0,
+        deleted: 0,
+        duplicates: 0,
+        skipped: true,
+        reason: 'automatic-startup-disabled'
+      });
+    };
+    guarded.__vargaStartupGuard = true;
+    guarded.__vargaOriginalRepair = original;
+    window.repairDuplicateHours = guarded;
+  }
+
   function replaceBrand(value) {
     return String(value ?? '').replace(BRAND_PATTERN, BRAND_NAME);
   }
@@ -148,12 +173,14 @@
   }
 
   function init() {
+    disableAutomaticHoursRepair();
     applyBranding();
     observeDynamicContent();
     window.setTimeout(loadFirestoreDiagnostics, 0);
     window.setTimeout(loadRubricaFeature, 0);
   }
 
+  disableAutomaticHoursRepair();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();

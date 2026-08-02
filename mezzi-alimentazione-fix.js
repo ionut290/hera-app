@@ -7,23 +7,15 @@
     const hasBenzina = /\bbenzina\b/.test(normalized);
     const hasMetano = /\bmetano\b/.test(normalized);
     const hasGpl = /\bgpl\b/.test(normalized);
-
     if (!hasBenzina || (!hasMetano && !hasGpl)) return original;
-
-    const alimentazioni = [];
-    if (hasMetano) alimentazioni.push("METANO");
-    if (hasGpl) alimentazioni.push("GPL");
-    return alimentazioni.join(" + ");
+    return [hasMetano ? "METANO" : "", hasGpl ? "GPL" : ""].filter(Boolean).join(" + ");
   }
 
   const originalNormalizeMezzoDocument = window.normalizeMezzoDocument;
   if (typeof originalNormalizeMezzoDocument === "function") {
     window.normalizeMezzoDocument = function (doc) {
       const mezzo = originalNormalizeMezzoDocument(doc);
-      return {
-        ...mezzo,
-        alimentazione: normalizeAlimentazione(mezzo.alimentazione)
-      };
+      return { ...mezzo, alimentazione: normalizeAlimentazione(mezzo.alimentazione) };
     };
   }
 
@@ -33,15 +25,6 @@
   }, true);
 
   // La bonifica storica è conclusa: nessuna scansione automatica della collezione mezzi.
-  // La normalizzazione resta attiva durante lettura e salvataggio dei singoli mezzi.
-
-  /*
-   * Ottimizzazione Firestore mezzi:
-   * - all'avvio non scarica più l'intera anagrafica;
-   * - dopo il caricamento delle squadre legge solo i mezzi assegnati alla data attiva;
-   * - l'anagrafica completa e il listener live vengono attivati soltanto nelle sezioni
-   *   amministrative che devono scegliere o gestire qualunque mezzo.
-   */
   const originalSubscribeMezzi = window.subscribeMezzi;
   const originalSubscribeSquadre = window.subscribeSquadre;
   const originalOpenManagementPanel = window.openManagementPanel;
@@ -49,19 +32,14 @@
   let fullMezziMode = false;
   let assignedLoadSequence = 0;
 
-  const normalizeVehicleKey = (value) => String(value || "")
-    .trim()
-    .toLocaleUpperCase("it-IT");
+  const normalizeVehicleKey = (value) => String(value || "").trim().toLocaleUpperCase("it-IT");
 
   function parseAssignedVehicles(value) {
     if (Array.isArray(value)) return value.flatMap(parseAssignedVehicles);
     if (value && typeof value === "object") {
       return parseAssignedVehicles(value.nId || value.codice || value.targa || value.nome || value.label || value.id || "");
     }
-    return String(value || "")
-      .split(/[\n,;|]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+    return String(value || "").split(/[\n,;|]+/).map((item) => item.trim()).filter(Boolean);
   }
 
   function collectAssignedVehicleCodes() {
@@ -72,26 +50,20 @@
       ? squadreHistoryByDate.get(dateKey)
       : null;
     const codes = new Map();
-
-    const addFromRow = (row) => {
+    const addRow = (row) => {
       if (!row || typeof row !== "object") return;
-      const raw = row.mezzi ?? row.mezzo ?? row.veicoli ?? row.mezziAssegnati ?? "";
-      parseAssignedVehicles(raw).forEach((value) => {
+      parseAssignedVehicles(row.mezzi ?? row.mezzo ?? row.veicoli ?? row.mezziAssegnati ?? "").forEach((value) => {
         const key = normalizeVehicleKey(value);
         if (key && !codes.has(key)) codes.set(key, value);
       });
     };
-
     if (history instanceof Map) {
-      history.forEach((entry) => {
-        const rows = Array.isArray(entry?.squadre) ? entry.squadre : [];
-        rows.forEach(addFromRow);
-      });
+      history.forEach((entry) => (Array.isArray(entry?.squadre) ? entry.squadre : []).forEach(addRow));
     }
     return [...codes.values()];
   }
 
-  function applyAssignedVehicleRecords(records) {
+  function applyVehicleRecords(records) {
     mezziRecords = Array.isArray(records) ? records : [];
     mezziLoadState = { status: "loaded", message: "" };
     if (typeof renderTodaySummary === "function") renderTodaySummary();
@@ -99,81 +71,71 @@
     if (typeof updateSuggestionLists === "function") updateSuggestionLists();
   }
 
-  async function getQuerySnapshot(query, label) {
-    if (typeof runFirestoreGetWithRetry === "function") {
-      return runFirestoreGetWithRetry(query, { label, timeoutMs: 9000, retries: 2 });
-    }
-    return query.get();
+  async function getSnapshot(query, label) {
+    return typeof runFirestoreGetWithRetry === "function"
+      ? runFirestoreGetWithRetry(query, { label, timeoutMs: 9000, retries: 2 })
+      : query.get();
   }
 
-  async function queryAssignedVehiclesByField(collection, field, values, sequence) {
-    const found = [];
+  async function queryByField(collection, field, values, sequence) {
+    const docs = [];
     for (let start = 0; start < values.length; start += 10) {
-      if (sequence !== assignedLoadSequence || fullMezziMode) return found;
-      const chunk = values.slice(start, start + 10);
-      const snapshot = await getQuerySnapshot(
-        collection.where(field, "in", chunk),
+      if (sequence !== assignedLoadSequence || fullMezziMode) return docs;
+      const snapshot = await getSnapshot(
+        collection.where(field, "in", values.slice(start, start + 10)),
         `LOAD MEZZI ASSEGNATI ${field}`
       );
-      snapshot.docs.forEach((doc) => found.push(doc));
+      snapshot.docs.forEach((doc) => docs.push(doc));
     }
-    return found;
+    return docs;
   }
 
   async function loadAssignedVehicles() {
-    if (fullMezziMode || !window.currentUser) return false;
+    if (fullMezziMode || typeof currentUser === "undefined" || !currentUser) return false;
     const sequence = ++assignedLoadSequence;
-    const assignedValues = collectAssignedVehicleCodes();
-    if (!assignedValues.length) {
-      applyAssignedVehicleRecords([]);
+    const values = [...new Set(collectAssignedVehicleCodes().map((value) => String(value).trim()).filter(Boolean))];
+    if (!values.length) {
+      applyVehicleRecords([]);
       return true;
     }
 
     mezziLoadState = { status: "loading", message: "Caricamento mezzi assegnati..." };
     try {
       const collection = db.collection(getMezziCollectionName());
-      const exactValues = [...new Set(assignedValues.map((value) => String(value).trim()).filter(Boolean))];
-      const byNId = await queryAssignedVehiclesByField(collection, "nId", exactValues, sequence);
+      const byNId = await queryByField(collection, "nId", values, sequence);
       if (sequence !== assignedLoadSequence || fullMezziMode) return false;
 
-      const matchedKeys = new Set();
-      byNId.forEach((doc) => {
+      const matched = new Set(byNId.map((doc) => {
         const data = doc.data() || {};
-        matchedKeys.add(normalizeVehicleKey(data.nId || data.numero || ""));
-      });
-      const unresolved = exactValues.filter((value) => !matchedKeys.has(normalizeVehicleKey(value)));
-      const byTarga = unresolved.length
-        ? await queryAssignedVehiclesByField(collection, "targa", unresolved, sequence)
-        : [];
+        return normalizeVehicleKey(data.nId || data.numero || "");
+      }));
+      const unresolved = values.filter((value) => !matched.has(normalizeVehicleKey(value)));
+      const byTarga = unresolved.length ? await queryByField(collection, "targa", unresolved, sequence) : [];
       if (sequence !== assignedLoadSequence || fullMezziMode) return false;
 
       const uniqueDocs = new Map([...byNId, ...byTarga].map((doc) => [doc.id, doc]));
-      const records = [...uniqueDocs.values()].map(window.normalizeMezzoDocument || normalizeMezzoDocument);
-      applyAssignedVehicleRecords(records);
-      console.log("Mezzi assegnati caricati", { richiesti: exactValues.length, trovati: records.length });
+      const normalizer = window.normalizeMezzoDocument || normalizeMezzoDocument;
+      const records = [...uniqueDocs.values()].map((doc) => normalizer(doc));
+      applyVehicleRecords(records);
+      console.log("Mezzi assegnati caricati", { richiesti: values.length, trovati: records.length });
       return true;
     } catch (error) {
       console.warn("Caricamento mirato mezzi non riuscito", error);
-      if (sequence === assignedLoadSequence && !fullMezziMode) {
-        // Nessun fallback all'intera collezione: il riepilogo Oggi usa già i codici presenti nelle squadre.
-        applyAssignedVehicleRecords([]);
-      }
+      if (sequence === assignedLoadSequence && !fullMezziMode) applyVehicleRecords([]);
       return false;
     }
   }
 
   if (typeof originalSubscribeMezzi === "function") {
-    window.subscribeMezzi = function subscribeOnlyNeededVehicles() {
+    window.subscribeMezzi = function () {
       if (fullMezziMode) return originalSubscribeMezzi.apply(this, arguments);
-      // Durante l'avvio le squadre vengono caricate in parallelo. Evita qui la lettura di tutti i mezzi;
-      // il caricamento mirato parte subito dopo il primo snapshot delle squadre.
-      applyAssignedVehicleRecords([]);
+      applyVehicleRecords([]);
       return Promise.resolve(true);
     };
   }
 
   if (typeof originalSubscribeSquadre === "function") {
-    window.subscribeSquadre = function subscribeSquadreAndAssignedVehicles() {
+    window.subscribeSquadre = function () {
       const result = originalSubscribeSquadre.apply(this, arguments);
       return Promise.resolve(result).then((value) => {
         if (!fullMezziMode) void loadAssignedVehicles();
@@ -201,43 +163,30 @@
   }
 
   if (typeof originalOpenManagementPanel === "function") {
-    window.openManagementPanel = function openManagementPanelWithLazyMezzi(panelName) {
-      if (["mezzi", "squadre", "programmazione"].includes(String(panelName || ""))) {
-        enableFullMezziMode();
-      }
+    window.openManagementPanel = function (panelName) {
+      if (["mezzi", "squadre", "programmazione"].includes(String(panelName || ""))) enableFullMezziMode();
       return originalOpenManagementPanel.apply(this, arguments);
     };
   }
 
   if (typeof originalCloseManagementPanel === "function") {
-    window.closeManagementPanel = function closeManagementPanelAndReleaseMezzi() {
+    window.closeManagementPanel = function () {
       const result = originalCloseManagementPanel.apply(this, arguments);
       restoreAssignedMezziMode();
       return result;
     };
   }
 
-  if (!document.querySelector('script[data-squadre-mezzi-pictograms]')) {
+  function loadOptionalScript(selector, src, datasetKey) {
+    if (document.querySelector(selector)) return;
     const script = document.createElement("script");
-    script.src = "./squadre-mezzi-pictograms.js?v=20260727a";
+    script.src = src;
     script.defer = true;
-    script.dataset.squadreMezziPictograms = "1";
+    script.dataset[datasetKey] = "1";
     document.head.appendChild(script);
   }
 
-  if (!document.querySelector('script[data-today-live-hours-vehicles]')) {
-    const script = document.createElement("script");
-    script.src = "./today-live-hours-vehicles.js?v=20260730b";
-    script.defer = true;
-    script.dataset.todayLiveHoursVehicles = "1";
-    document.head.appendChild(script);
-  }
-
-  if (!document.querySelector('script[data-squad-operator-profile]')) {
-    const script = document.createElement("script");
-    script.src = "./squad-operator-profile.js?v=20260731a";
-    script.defer = true;
-    script.dataset.squadOperatorProfile = "1";
-    document.head.appendChild(script);
-  }
+  loadOptionalScript('script[data-squadre-mezzi-pictograms]', "./squadre-mezzi-pictograms.js?v=20260727a", "squadreMezziPictograms");
+  loadOptionalScript('script[data-today-live-hours-vehicles]', "./today-live-hours-vehicles.js?v=20260730b", "todayLiveHoursVehicles");
+  loadOptionalScript('script[data-squad-operator-profile]', "./squad-operator-profile.js?v=20260731a", "squadOperatorProfile");
 })();

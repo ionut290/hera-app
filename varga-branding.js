@@ -93,6 +93,10 @@
     loadScriptOnce('script[data-rubrica-vcard-share]', './rubrica-vcard-share.js?v=20260802a', 'rubricaVcardShare', null, 'Condivisione vCard Rubrica non caricata; avvio app non interrotto.');
   }
 
+  function loadPersonaleRestore() {
+    loadScriptOnce('script[data-rubrica-personale-restore]', './rubrica-personale-restore.js?v=20260802a', 'rubricaPersonaleRestore', null, 'Ripristino elenco personale non caricato.');
+  }
+
   function loadRubricaV3Bridge() {
     loadScriptOnce('script[data-rubrica-v3-bridge]', './rubrica-v3-bridge.js?v=20260802-fix1', 'rubricaV3Bridge', null, 'Collegamento Rubrica V3 non caricato; resta disponibile la Rubrica base.');
   }
@@ -116,6 +120,7 @@
   }
 
   function loadRubricaFeature() {
+    loadPersonaleRestore();
     const loadView = () => {
       loadScriptOnce('script[data-rubrica-feature-v2]', './rubrica-feature-v2.js?v=20260802-email1', 'rubricaFeatureV2', loadGoogleProfileFeature, 'Rubrica V2 non caricata; avvio app non interrotto.');
     };

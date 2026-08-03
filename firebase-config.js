@@ -8,9 +8,11 @@ window.firebaseConfig = {
 };
 
 // Carica il bridge Android prima di app.js, così la mappa usa subito
-// Capacitor Geolocation e non il rilevamento posizione del browser Chrome.
+// Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
+const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
+
 if (document.readyState === "loading") {
-  document.write('<script src="native-android-runtime.js?v=20260725c"><\/script>');
+  document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
@@ -18,7 +20,7 @@ if (document.readyState === "loading") {
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
     const nativeRuntimeScript = document.createElement("script");
-    nativeRuntimeScript.src = "native-android-runtime.js?v=20260725c";
+    nativeRuntimeScript.src = HERA_NATIVE_RUNTIME_SRC;
     nativeRuntimeScript.dataset.heraNativeRuntime = "true";
     document.head.appendChild(nativeRuntimeScript);
   }

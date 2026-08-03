@@ -289,7 +289,10 @@
       window.removeEventListener("pagehide", cancelFallback, true);
       window.removeEventListener("blur", cancelFallback, true);
       if (!leftPage && document.visibilityState === "visible") {
-        window.location.assign(webUrl);
+        const accepted = window.confirm(
+          "WhatsApp non si è aperto. Vuoi aprire WhatsApp Web?"
+        );
+        if (accepted) window.location.assign(webUrl);
       }
     }, 3000);
 

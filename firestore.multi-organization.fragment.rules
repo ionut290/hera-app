@@ -1,0 +1,62 @@
+// HERA_MULTI_ORGANIZATION_RULES_START
+// Inserire dentro match /databases/{database}/documents, prima del match generico finale.
+// Bootstrap Super Admin limitato al Firebase UID verificato nel deploy preview.
+function isBootstrapPlatformSuperAdmin() {
+  return authPresent()
+    && request.auth.uid == "KzVjYtKABxbgIt3YyDRbOkZypBg2";
+}
+
+function isPlatformSuperAdmin() {
+  return authPresent()
+    && (
+      isBootstrapPlatformSuperAdmin()
+      || (
+        exists(/databases/$(database)/documents/platformSuperAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/platformSuperAdmins/$(request.auth.uid)).data.get("active", false) == true
+      )
+    );
+}
+
+function isOrganizationMember(organizationId) {
+  return authPresent()
+    && exists(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid))
+    && get(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid)).data.get("active", false) == true;
+}
+
+function isOrganizationAdmin(organizationId) {
+  return isPlatformSuperAdmin()
+    || (
+      isOrganizationMember(organizationId)
+      && get(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid)).data.get("role", "operatore") in ["admin", "super_admin"]
+    );
+}
+
+match /platformSuperAdmins/{userId} {
+  allow read: if isPlatformSuperAdmin() || (isBootstrapPlatformSuperAdmin() && userId == request.auth.uid);
+  allow create: if isBootstrapPlatformSuperAdmin()
+    && userId == request.auth.uid
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.get("active", false) == true;
+  allow update: if isPlatformSuperAdmin();
+  allow delete: if isPlatformSuperAdmin() && userId != request.auth.uid;
+}
+
+match /organizations/{organizationId} {
+  allow read: if isPlatformSuperAdmin() || isOrganizationMember(organizationId);
+  allow create, update: if isPlatformSuperAdmin();
+  allow delete: if isPlatformSuperAdmin() && organizationId != "varga";
+
+  match /members/{userId} {
+    allow read: if isPlatformSuperAdmin()
+      || isOrganizationAdmin(organizationId)
+      || (authPresent() && userId == request.auth.uid);
+    allow create, update, delete: if isOrganizationAdmin(organizationId);
+  }
+
+  // Le collezioni operative organizzative verranno abilitate una alla volta.
+  // Nessun accesso generico è concesso in questa fase.
+  match /{document=**} {
+    allow read, write: if false;
+  }
+}
+// HERA_MULTI_ORGANIZATION_RULES_END

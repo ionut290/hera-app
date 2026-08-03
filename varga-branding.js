@@ -81,6 +81,16 @@
     }
   }
 
+  function loadWhatsAppInstalledOnlyGuard() {
+    loadScriptOnce(
+      'script[data-whazzup-installed-only-guard]',
+      './whazzup-preload-cache.js?v=20260803-installed-only2',
+      'whazzupInstalledOnlyGuard',
+      null,
+      'Protezione WhatsApp installato non caricata; nessun fallback web deve essere usato.'
+    );
+  }
+
   function loadFirestoreSafeOptimizer() {
     loadScriptOnce('script[data-firestore-safe-optimizer]', './firestore-safe-optimizer.js?v=20260802d', 'firestoreSafeOptimizer', null, 'Modulo compatibilità Firestore non caricato; avvio app non interrotto.');
   }
@@ -134,6 +144,7 @@
 
   function init() {
     disableAutomaticHoursRepair();
+    loadWhatsAppInstalledOnlyGuard();
     loadFirestoreSafeOptimizer();
     applyBranding();
     observeDynamicContent();
@@ -142,6 +153,7 @@
   }
 
   disableAutomaticHoursRepair();
+  loadWhatsAppInstalledOnlyGuard();
   loadFirestoreSafeOptimizer();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once:true });
   else init();

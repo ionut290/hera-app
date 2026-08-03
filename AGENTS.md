@@ -78,30 +78,37 @@ Non devono essere introdotte condizioni che possano produrre:
 
 Non rinominare, spostare, eliminare o duplicare le funzioni utilizzate da WhatsApp/WHAZZUP.
 
-### 3-BIS. PRIORITÀ OBBLIGATORIA DI APERTURA WHATSAPP
+### 3-BIS. APERTURA ESCLUSIVA DELL’APP WHATSAPP INSTALLATA
 
-Quando viene richiesta l’apertura di WhatsApp, l’app deve tentare sempre per prima l’apertura dell’applicazione WhatsApp installata sul dispositivo tramite deep link o intent nativo.
+Quando viene richiesta l’apertura di WhatsApp, l’app deve utilizzare esclusivamente l’applicazione WhatsApp installata sul dispositivo tramite intent nativo.
 
-WhatsApp Web deve essere utilizzato esclusivamente come fallback quando il tentativo di apertura dell’app WhatsApp installata fallisce realmente, ad esempio perché:
+È consentito utilizzare WhatsApp normale o WhatsApp Business, in base a quale applicazione risulta installata e supportata.
 
-- WhatsApp non è installato sul dispositivo;
-- il sistema operativo non gestisce il deep link o l’intent;
-- l’apertura dell’app viene rifiutata o restituisce un errore;
-- non è tecnicamente possibile avviare l’app WhatsApp installata.
+È vietato in modo assoluto:
 
-È vietato:
+- aprire WhatsApp Web;
+- aprire il browser come fallback;
+- utilizzare `web.whatsapp.com`, `wa.me` o `api.whatsapp.com` come destinazione di apertura;
+- usare `Intent.ACTION_VIEW` o sistemi equivalenti per aprire una pagina WhatsApp nel browser;
+- aprire contemporaneamente l’app WhatsApp e una pagina web;
+- reintrodurre in futuro funzioni di fallback web o browser.
 
-- aprire WhatsApp Web come prima scelta;
-- aprire WhatsApp Web quando l’app WhatsApp installata è disponibile e funzionante;
-- aprire contemporaneamente l’app WhatsApp e WhatsApp Web;
-- usare un semplice ritardo temporale come unica prova del fallimento, se la piattaforma mette a disposizione un controllo più affidabile;
-- modificare il messaggio, il testo precompilato, i dati, la codifica o i destinatari durante il fallback.
+I collegamenti `wa.me` o `api.whatsapp.com` già prodotti dall’app possono essere interpretati internamente esclusivamente per estrarre numero e testo da consegnare all’app WhatsApp installata. Non devono mai essere aperti nel browser.
 
-Il fallback a WhatsApp Web deve essere automatico e deve mantenere esattamente lo stesso messaggio precompilato.
+Se WhatsApp o WhatsApp Business non sono installati, oppure l’app installata non può essere aperta, l’operazione deve terminare mostrando un errore chiaro all’utente. Non deve essere aperto alcun sito web.
 
-Questa regola autorizza esclusivamente la scelta del canale di apertura, con priorità all’app installata e WhatsApp Web come fallback. Non autorizza refactoring, rinomina, spostamento, duplicazione o riscrittura delle funzioni protette di WhatsApp/WHAZZUP.
+Devono rimanere identici:
 
-L’implementazione non deve aggiungere letture, scritture o listener Firestore e deve mantenere il funzionamento degli impianti “Da fare” e “Fatti”.
+- il messaggio precompilato;
+- il testo e la relativa codifica;
+- il destinatario già previsto;
+- i dati dell’impianto;
+- il comportamento degli impianti “Da fare” e “Fatti”;
+- tutte le funzioni FATTO.
+
+La versione approvata del plugin nativo WhatsApp è protetta tramite controllo automatico dell’impronta del file. Qualsiasi modifica deve far fallire i controlli critici e non deve essere pubblicata.
+
+L’implementazione non deve aggiungere letture, scritture o listener Firestore.
 
 ## 4. PROTEZIONE DELLA GESTIONE IMPIANTI
 
@@ -137,7 +144,6 @@ Il **Personale**, gli **Utenti**, l’**elenco Personale**, l’**elenco Utenti*
 **NON DEVONO MAI ESSERE ELIMINATI, SVUOTATI, AZZERATI, SOVRASCRITTI IN MASSA, SCOLLEGATI O RICREATI CON NUOVI ID, IN NESSUN CASO.**
 
 Questa protezione comprende obbligatoriamente:
-
 - tutti i documenti e record del Personale;
 - tutti i documenti e profili Utente;
 - gli account Firebase Authentication;
@@ -277,7 +283,6 @@ Non eliminare una lettura o una scrittura solamente per ridurre i costi senza av
 ## 8. CONTROLLO OBBLIGATORIO DOPO LE MODIFICHE
 
 Dopo ogni modifica verificare almeno:
-
 - avvio corretto dell’app;
 - assenza di schermata bianca;
 - assenza di caricamento infinito;
@@ -313,11 +318,13 @@ Dopo ogni modifica verificare almeno:
 - il messaggio viene generato;
 - il messaggio non è vuoto;
 - i dati dell’impianto sono presenti;
-- WhatsApp si apre correttamente;
+- si apre esclusivamente l’app WhatsApp o WhatsApp Business installata;
+- il browser e WhatsApp Web non vengono mai aperti;
+- se WhatsApp non è installato viene mostrato un errore senza apertura web;
 - il pulsante funziona sugli impianti “Da fare”;
 - il pulsante funziona sugli impianti “Fatti”;
 - non compare “Non puoi inviare un messaggio vuoto”;
-- il comportamento precedente è rimasto invariato.
+- il comportamento precedente, salvo l’eliminazione autorizzata del fallback web, è rimasto invariato.
 
 ## 9. PROCEDURA GIT E PUBBLICAZIONE
 

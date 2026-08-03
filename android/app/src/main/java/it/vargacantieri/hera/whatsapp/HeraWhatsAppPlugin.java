@@ -21,13 +21,14 @@ public class HeraWhatsAppPlugin extends Plugin {
     @PluginMethod
     public void open(PluginCall call) {
         String rawUrl = call.getString("url", "");
+        WhatsAppPayload payload = parsePayload(rawUrl);
         String packageName = resolveInstalledPackage();
+
         if (packageName == null) {
-            call.reject("WhatsApp non è installato sul dispositivo.");
+            openWebFallback(call, rawUrl, payload, "WhatsApp non è installato sul dispositivo.");
             return;
         }
 
-        WhatsAppPayload payload = parsePayload(rawUrl);
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/plain");
         intent.setPackage(packageName);
@@ -42,14 +43,51 @@ public class HeraWhatsAppPlugin extends Plugin {
             getActivity().startActivity(intent);
             JSObject result = new JSObject();
             result.put("opened", true);
+            result.put("fallback", false);
             result.put("packageName", packageName);
             result.put("phone", payload.phone);
             call.resolve(result);
         } catch (ActivityNotFoundException error) {
-            call.reject("Impossibile aprire WhatsApp installato.", error);
+            openWebFallback(call, rawUrl, payload, "Impossibile aprire WhatsApp installato.");
         } catch (Exception error) {
-            call.reject("Errore durante l'apertura di WhatsApp.", error);
+            openWebFallback(call, rawUrl, payload, "Errore durante l'apertura di WhatsApp.");
         }
+    }
+
+    private void openWebFallback(PluginCall call, String rawUrl, WhatsAppPayload payload, String reason) {
+        String webUrl = buildWebUrl(rawUrl, payload);
+        if (webUrl.isEmpty()) {
+            call.reject(reason);
+            return;
+        }
+
+        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(webUrl));
+        browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        try {
+            getActivity().startActivity(browserIntent);
+            JSObject result = new JSObject();
+            result.put("opened", true);
+            result.put("fallback", true);
+            result.put("reason", reason);
+            result.put("phone", payload.phone);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Impossibile aprire WhatsApp installato o WhatsApp Web.", error);
+        }
+    }
+
+    private String buildWebUrl(String rawUrl, WhatsAppPayload payload) {
+        String value = rawUrl == null ? "" : rawUrl.trim();
+        if (value.startsWith("https://wa.me/") || value.startsWith("https://api.whatsapp.com/")) {
+            return value;
+        }
+
+        Uri.Builder builder = Uri.parse("https://api.whatsapp.com/send").buildUpon();
+        if (!payload.phone.isEmpty()) builder.appendQueryParameter("phone", payload.phone);
+        if (!payload.text.isEmpty()) builder.appendQueryParameter("text", payload.text);
+        if (payload.phone.isEmpty() && payload.text.isEmpty()) return "";
+        return builder.build().toString();
     }
 
     private String resolveInstalledPackage() {

@@ -209,6 +209,20 @@
     }
   }
 
+  function loadPerformanceDiagnostic() {
+    try {
+      if (document.querySelector('script[data-performance-diagnostic]')) return;
+      const script = document.createElement('script');
+      script.src = './admin-console.js?v=20260803-performance1';
+      script.defer = true;
+      script.dataset.performanceDiagnostic = '1';
+      script.addEventListener('error', () => console.warn('Diagnostica prestazioni e fluidità non caricata.'), { once: true });
+      document.head.appendChild(script);
+    } catch (error) {
+      console.warn('Diagnostica prestazioni e fluidità non caricata:', error);
+    }
+  }
+
   function init() {
     loadAutoLoginFeature();
     loadFirestorePresenceCostGuard();
@@ -221,6 +235,7 @@
     loadPreventiviLazyFeature();
     loadFirestoreUsageControl();
     loadControlCenterBackup();
+    loadPerformanceDiagnostic();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

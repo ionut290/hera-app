@@ -218,3 +218,98 @@
     }
   });
 })();
+
+(function installWebWhatsAppDirectOpen() {
+  "use strict";
+
+  if (window.__heraWebWhatsAppDirectOpenInstalled) return;
+  window.__heraWebWhatsAppDirectOpenInstalled = true;
+
+  function isNativeApp() {
+    try {
+      return Boolean(window.Capacitor?.isNativePlatform?.()) || window.Capacitor?.getPlatform?.() === "android";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isWhatsAppWebUrl(value) {
+    if (typeof value !== "string") return false;
+    try {
+      const url = new URL(value, window.location.href);
+      const host = url.hostname.toLowerCase();
+      return host === "api.whatsapp.com" || host === "wa.me" || host === "www.wa.me";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function toWhatsAppScheme(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      const params = new URLSearchParams();
+      const text = url.searchParams.get("text") || url.searchParams.get("message") || "";
+      const phoneFromQuery = url.searchParams.get("phone") || "";
+      const phoneFromPath = /(?:^|\/)\+?([0-9]{6,})(?:\/|$)/.exec(url.pathname)?.[1] || "";
+      const phone = String(phoneFromQuery || phoneFromPath).replace(/\D/g, "");
+
+      if (phone) params.set("phone", phone);
+      if (text) params.set("text", text);
+      if (!phone && !text) return "";
+      return `whatsapp://send?${params.toString()}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function openDirectWithFallback(webUrl) {
+    const directUrl = toWhatsAppScheme(webUrl);
+    if (!directUrl) return false;
+
+    let fallbackTimer = null;
+    let leftPage = false;
+
+    const cancelFallback = () => {
+      leftPage = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange, true);
+      window.removeEventListener("pagehide", cancelFallback, true);
+      window.removeEventListener("blur", cancelFallback, true);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") cancelFallback();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange, true);
+    window.addEventListener("pagehide", cancelFallback, true);
+    window.addEventListener("blur", cancelFallback, true);
+
+    fallbackTimer = window.setTimeout(() => {
+      document.removeEventListener("visibilitychange", onVisibilityChange, true);
+      window.removeEventListener("pagehide", cancelFallback, true);
+      window.removeEventListener("blur", cancelFallback, true);
+      if (!leftPage && document.visibilityState === "visible") {
+        window.location.assign(webUrl);
+      }
+    }, 1400);
+
+    window.location.assign(directUrl);
+    return true;
+  }
+
+  if (!isNativeApp()) {
+    const originalOpen = window.open.bind(window);
+    window.open = function heraWhatsAppAwareOpen(url, target, features) {
+      if (isWhatsAppWebUrl(url) && openDirectWithFallback(url)) return null;
+      return originalOpen(url, target, features);
+    };
+
+    document.addEventListener("click", (event) => {
+      const anchor = event.target?.closest?.("a[href]");
+      if (!anchor || !isWhatsAppWebUrl(anchor.href)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openDirectWithFallback(anchor.href);
+    }, true);
+  }
+})();

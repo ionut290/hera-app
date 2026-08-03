@@ -105,6 +105,75 @@ Non cambiare il formato dei documenti Firestore esistenti senza una migrazione s
 
 Non sostituire gli identificativi esistenti con nuovi identificativi generati automaticamente.
 
+## 4-BIS. PROTEZIONE ASSOLUTA E IRREVOCABILE DI PERSONALE, UTENTI E COLLEGAMENTI
+
+Il **Personale**, gli **Utenti**, l’**elenco Personale**, l’**elenco Utenti** e ogni dato o collegamento associato sono dati critici e permanenti.
+
+**NON DEVONO MAI ESSERE ELIMINATI, SVUOTATI, AZZERATI, SOVRASCRITTI IN MASSA, SCOLLEGATI O RICREATI CON NUOVI ID, IN NESSUN CASO.**
+
+Questa protezione comprende obbligatoriamente:
+
+- tutti i documenti e record del Personale;
+- tutti i documenti e profili Utente;
+- gli account Firebase Authentication;
+- gli ID storici degli operatori e degli utenti;
+- nomi, cognomi, email, telefoni, ruoli, permessi e abilitazioni;
+- collegamenti tra Personale e Utenti;
+- `LINKED_USER_ID`, `LINKED_USER_EMAIL`, `EMAIL_ACCESSO_APP` e campi equivalenti;
+- appartenenza e collegamenti alle squadre;
+- storico delle squadre;
+- collegamenti con calendario, presenze, ore, timbrature, assenze, ferie e malattie;
+- collegamenti con commesse, impianti, mezzi, notifiche, documenti e attività;
+- dati storici, record inattivi e relazioni non immediatamente visibili;
+- qualsiasi riferimento usato da altre collezioni, moduli o funzioni dell’app.
+
+È vietato introdurre o eseguire:
+
+- `delete()`, `batch.delete()` o cancellazioni equivalenti su Personale, Utenti e relativi collegamenti;
+- svuotamenti di collezioni, array, mappe, cache persistenti o elenchi;
+- cancellazioni massive o automatiche;
+- cancellazioni a cascata;
+- script “esegui una volta” che eliminano dati;
+- sostituzioni dell’intero elenco con un elenco vuoto o incompleto;
+- importazioni che eliminano i record non presenti nel file importato;
+- sincronizzazioni che considerano il file esterno come sostituzione distruttiva del database;
+- pulizie, deduplicazioni o ottimizzazioni che cancellano record;
+- migrazioni che generano nuovi ID al posto degli ID esistenti;
+- scollegamenti automatici tra personale, utenti, squadre, calendario, ore o commesse;
+- rimozioni motivate dalla riduzione di letture, scritture o costi Firestore.
+
+Questa regola vale anche durante:
+
+- importazioni Excel o Google Sheets;
+- sincronizzazioni Firestore;
+- ripristini e backup;
+- migrazioni;
+- ottimizzazioni;
+- deduplicazioni;
+- test;
+- correzioni urgenti;
+- refactoring;
+- funzioni automatiche, pianificate o temporanee.
+
+Quando un operatore non è più attivo, il record deve essere **mantenuto** e può essere soltanto marcato come inattivo, cessato, archiviato o non abilitato. Non deve essere eliminato e non devono essere rimossi i suoi collegamenti storici.
+
+In presenza di duplicati, non è consentita la cancellazione automatica. È obbligatorio usare una procedura non distruttiva che preservi entrambi i record, gli ID e tutti i collegamenti, oppure unisca esclusivamente i dati mancanti senza eliminare alcun documento.
+
+Ogni importazione o sincronizzazione deve operare in modalità **aggiunta o aggiornamento non distruttivo**. I record assenti dal file importato devono rimanere invariati nel database.
+
+Prima di qualsiasi modifica che coinvolga questi dati è obbligatorio:
+
+1. verificare il numero di record prima dell’intervento;
+2. verificare tutti gli ID e le relazioni;
+3. creare o verificare un backup utilizzabile;
+4. assicurarsi che non esista alcuna operazione di eliminazione;
+5. controllare squadre, calendario, ore e collegamenti utente;
+6. verificare che il numero dei record non diminuisca dopo l’intervento.
+
+Se una richiesta o una modifica comporta anche soltanto il rischio di eliminare, svuotare, scollegare o perdere Personale, Utenti o collegamenti, **INTERROMPERE IMMEDIATAMENTE IL LAVORO E NON ESEGUIRE L’OPERAZIONE**. Proporre esclusivamente una soluzione non distruttiva.
+
+Questa regola ha priorità superiore rispetto a deduplicazione, pulizia dati, ottimizzazione, riduzione dei costi Firestore, migrazione e qualsiasi altra istruzione tecnica.
+
 ## 5. MODIFICHE LIMITATE ALLA RICHIESTA
 
 Ogni intervento deve essere limitato esclusivamente alla funzione richiesta.
@@ -281,7 +350,8 @@ Al termine di ogni intervento fornire un resoconto che indichi:
 - branch pubblicato;
 - conferma che FATTO non è stato modificato;
 - conferma che WhatsApp/WHAZZUP non è stato modificato;
-- conferma che la gestione degli impianti non è stata modificata, salvo richiesta esplicita.
+- conferma che la gestione degli impianti non è stata modificata, salvo richiesta esplicita;
+- conferma che Personale, Utenti, squadre, calendario, ore e tutti i collegamenti correlati non sono stati eliminati, svuotati o scollegati.
 
 Non dichiarare come eseguito un test o un controllo che non è stato realmente effettuato.
 
@@ -297,10 +367,11 @@ Interrompere la modifica e chiedere autorizzazione prima di procedere quando:
 - è necessario effettuare una migrazione dei dati;
 - la modifica può produrre incompatibilità con dati esistenti;
 - non è possibile verificare l’effetto della modifica;
-- vengono rilevati errori preesistenti che impediscono test affidabili.
+- vengono rilevati errori preesistenti che impediscono test affidabili;
+- una modifica può eliminare, svuotare o scollegare Personale, Utenti, squadre, calendario, ore o collegamenti correlati.
 
 ## CONFERMA FINALE OBBLIGATORIA
 
 Ogni resoconto conclusivo deve terminare con la seguente dichiarazione:
 
-> Confermo che la logica del pulsante FATTO e la logica del pulsante WhatsApp/WHAZZUP non sono state modificate. Le modifiche sono state limitate alla funzione richiesta. È stato controllato che non siano state introdotte letture, scritture o listener Firestore inutili o duplicati. La gestione degli impianti e la compatibilità con i dati esistenti sono state preservate. Gli eventuali controlli non eseguibili sono indicati espressamente nel resoconto.
+> Confermo che la logica del pulsante FATTO e la logica del pulsante WhatsApp/WHAZZUP non sono state modificate. Le modifiche sono state limitate alla funzione richiesta. È stato controllato che non siano state introdotte letture, scritture o listener Firestore inutili o duplicati. La gestione degli impianti e la compatibilità con i dati esistenti sono state preservate. Personale, Utenti, elenco Personale, elenco Utenti, squadre, calendario, ore e tutti i collegamenti correlati non sono stati eliminati, svuotati o scollegati. Gli eventuali controlli non eseguibili sono indicati espressamente nel resoconto.

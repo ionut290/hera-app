@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v93";
+const CACHE_NAME = "varga-cantieri-shell-v94";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -36,6 +36,7 @@ const APP_SHELL = [
   "./global-archive-new-commesse-fix.js?v=20260801-lazy1",
   "./auto-login-saved-credentials.js?v=20260801a",
   "./varga-branding.js?v=20260731a",
+  "./whazzup-preload-cache.js?v=20260803-installed-only2",
   "./fuel-stations-core.js",
   "./fuel-stations-national-cache.js",
   "./fuel-stations-search.js",

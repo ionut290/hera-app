@@ -2,12 +2,47 @@
   "use strict";
 
   const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
+  let controllerReloaded = false;
 
   function isNativeAndroid() {
     return Boolean(
       window.Capacitor?.isNativePlatform?.()
       && window.Capacitor?.getPlatform?.() === "android"
     );
+  }
+
+  async function clearWebAppCaches() {
+    if (!("caches" in window)) return;
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((name) => name.startsWith("hera-app-shell-") || name.startsWith("varga-cantieri-shell-"))
+          .map((name) => caches.delete(name))
+      );
+    } catch (error) {
+      console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
+    }
+  }
+
+  async function requestPwaUpdate({ reload = false } = {}) {
+    if (isNativeAndroid() || !("serviceWorker" in navigator)) return false;
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      await registration?.update?.();
+      const waiting = registration?.waiting;
+      if (waiting) waiting.postMessage({ type: "SKIP_WAITING" });
+      if (reload) {
+        await clearWebAppCaches();
+        const refreshUrl = new URL(window.location.href);
+        refreshUrl.searchParams.set("appRefresh", String(Date.now()));
+        window.location.replace(refreshUrl.toString());
+      }
+      return true;
+    } catch (error) {
+      console.warn("Controllo aggiornamento web non riuscito.", error);
+      return false;
+    }
   }
 
   async function updateApplication(button) {
@@ -19,26 +54,30 @@
       return;
     }
 
-    try {
-      const registration = await navigator.serviceWorker?.getRegistration?.();
-      await registration?.update?.();
-    } catch (error) {
-      console.warn("Controllo aggiornamento web non riuscito; ricarico la pagina corrente.", error);
+    await requestPwaUpdate({ reload: true });
+    if (document.visibilityState === "visible") {
+      const refreshUrl = new URL(window.location.href);
+      refreshUrl.searchParams.set("appRefresh", String(Date.now()));
+      window.location.replace(refreshUrl.toString());
     }
-    try {
-      const cacheNames = await caches.keys();
-      await Promise.all(
-        cacheNames
-          .filter((name) => name.startsWith("hera-app-shell-"))
-          .map((name) => caches.delete(name))
-      );
-    } catch (error) {
-      console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
-    }
+  }
 
-    const refreshUrl = new URL(window.location.href);
-    refreshUrl.searchParams.set("appRefresh", String(Date.now()));
-    window.location.replace(refreshUrl.toString());
+  function installAutomaticPwaUpdate() {
+    if (isNativeAndroid() || !("serviceWorker" in navigator)) return;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (controllerReloaded) return;
+      controllerReloaded = true;
+      window.location.reload();
+    });
+
+    const check = () => void requestPwaUpdate();
+    window.addEventListener("online", check);
+    window.addEventListener("pageshow", check);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") check();
+    });
+    window.setTimeout(check, 1500);
   }
 
   function install() {
@@ -85,6 +124,7 @@
     userButton.insertAdjacentElement("afterend", button);
   }
 
+  installAutomaticPwaUpdate();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", install, { once: true });
   } else {

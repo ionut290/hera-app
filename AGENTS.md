@@ -78,6 +78,31 @@ Non devono essere introdotte condizioni che possano produrre:
 
 Non rinominare, spostare, eliminare o duplicare le funzioni utilizzate da WhatsApp/WHAZZUP.
 
+### 3-BIS. PRIORITÀ OBBLIGATORIA DI APERTURA WHATSAPP
+
+Quando viene richiesta l’apertura di WhatsApp, l’app deve tentare sempre per prima l’apertura dell’applicazione WhatsApp installata sul dispositivo tramite deep link o intent nativo.
+
+WhatsApp Web deve essere utilizzato esclusivamente come fallback quando il tentativo di apertura dell’app WhatsApp installata fallisce realmente, ad esempio perché:
+
+- WhatsApp non è installato sul dispositivo;
+- il sistema operativo non gestisce il deep link o l’intent;
+- l’apertura dell’app viene rifiutata o restituisce un errore;
+- non è tecnicamente possibile avviare l’app WhatsApp installata.
+
+È vietato:
+
+- aprire WhatsApp Web come prima scelta;
+- aprire WhatsApp Web quando l’app WhatsApp installata è disponibile e funzionante;
+- aprire contemporaneamente l’app WhatsApp e WhatsApp Web;
+- usare un semplice ritardo temporale come unica prova del fallimento, se la piattaforma mette a disposizione un controllo più affidabile;
+- modificare il messaggio, il testo precompilato, i dati, la codifica o i destinatari durante il fallback.
+
+Il fallback a WhatsApp Web deve essere automatico e deve mantenere esattamente lo stesso messaggio precompilato.
+
+Questa regola autorizza esclusivamente la scelta del canale di apertura, con priorità all’app installata e WhatsApp Web come fallback. Non autorizza refactoring, rinomina, spostamento, duplicazione o riscrittura delle funzioni protette di WhatsApp/WHAZZUP.
+
+L’implementazione non deve aggiungere letture, scritture o listener Firestore e deve mantenere il funzionamento degli impianti “Da fare” e “Fatti”.
+
 ## 4. PROTEZIONE DELLA GESTIONE IMPIANTI
 
 Non modificare senza richiesta esplicita:

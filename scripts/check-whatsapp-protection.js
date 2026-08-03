@@ -7,7 +7,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const protectedFile = 'android/app/src/main/java/it/vargacantieri/hera/whatsapp/HeraWhatsAppPlugin.java';
-const expectedGitBlobSha = 'c7145043e56dc98984827c149c6d9fce46bf6d8b';
+const expectedGitBlobSha = 'c1bf032d116e2a7adf32413e103872272ee848a8';
 
 function fail(message) {
   console.error(`\n❌ PROTEZIONE WHATSAPP BLOCCATA\n${message}\n`);
@@ -31,7 +31,7 @@ if (actualSha !== expectedGitBlobSha) {
     `Il file protetto è stato modificato: ${protectedFile}`,
     `Hash atteso: ${expectedGitBlobSha}`,
     `Hash trovato: ${actualSha}`,
-    'Ripristinare la versione approvata. Qualsiasi modifica richiede autorizzazione esplicita e aggiornamento consapevole di questo controllo.'
+    'Ripristinare la versione approvata. La logica WhatsApp attuale non deve essere modificata.'
   ].join('\n'));
 }
 
@@ -40,28 +40,36 @@ const requiredMarkers = [
   'private static final String WHATSAPP = "com.whatsapp";',
   'private static final String WHATSAPP_BUSINESS = "com.whatsapp.w4b";',
   'String packageName = resolveInstalledPackage();',
-  'if (packageName == null)',
+  'call.reject("WhatsApp non è installato sul dispositivo.");',
   'intent.setPackage(packageName);',
   'intent.putExtra(Intent.EXTRA_TEXT, payload.text);',
   'intent.putExtra("jid", payload.phone + "@s.whatsapp.net");',
-  'openWebFallback(call, rawUrl, payload, "Impossibile aprire WhatsApp installato.");',
-  'https://api.whatsapp.com/send',
-  'https://wa.me/'
+  'call.reject("Impossibile aprire WhatsApp installato.", error);',
+  'result.put("fallback", false);'
 ];
 
 for (const marker of requiredMarkers) {
   if (!source.includes(marker)) fail(`Comportamento WhatsApp protetto non trovato: ${marker}`);
 }
 
-const appFirst = source.indexOf('resolveInstalledPackage()');
-const webFallback = source.indexOf('openWebFallback(call, rawUrl, payload');
-if (appFirst < 0 || webFallback < 0 || appFirst > webFallback) {
-  fail('La priorità app WhatsApp installata → fallback web non è più garantita.');
+const forbiddenMarkers = [
+  'openWebFallback',
+  'buildWebUrl',
+  'Intent.ACTION_VIEW',
+  'browserIntent',
+  'result.put("fallback", true)',
+  'Impossibile aprire WhatsApp installato o WhatsApp Web'
+];
+
+for (const marker of forbiddenMarkers) {
+  if (source.includes(marker)) fail(`WhatsApp Web o fallback browser reintrodotto: ${marker}`);
 }
 
-if (/openWebFallback\([^)]*\);\s*openWebFallback\(/s.test(source)) {
-  fail('Rilevato possibile fallback WhatsApp duplicato.');
+const packageResolution = source.indexOf('resolveInstalledPackage()');
+const nativeSend = source.indexOf('new Intent(Intent.ACTION_SEND)');
+if (packageResolution < 0 || nativeSend < 0 || packageResolution > nativeSend) {
+  fail('L’apertura dell’app WhatsApp installata non è più garantita.');
 }
 
-console.log('✅ WhatsApp/WHAZZUP protetto: file immutato e regole critiche verificate.');
+console.log('✅ WhatsApp/WHAZZUP protetto: solo app installata, nessun fallback web.');
 console.log(`✅ Impronta approvata: ${expectedGitBlobSha}`);

@@ -219,7 +219,7 @@
   });
 })();
 
-(function installWebWhatsAppDirectOpen() {
+(function installWhatsAppInstalledAppOnlyOpen() {
   "use strict";
 
   if (window.__heraWebWhatsAppDirectOpenInstalled) return;
@@ -233,86 +233,71 @@
     }
   }
 
-  function isWhatsAppWebUrl(value) {
+  function isWhatsAppLink(value) {
     if (typeof value !== "string") return false;
     try {
       const url = new URL(value, window.location.href);
       const host = url.hostname.toLowerCase();
       return host === "api.whatsapp.com" || host === "wa.me" || host === "www.wa.me";
     } catch (_) {
-      return false;
+      return value.startsWith("whatsapp://");
     }
   }
 
   function toWhatsAppScheme(value) {
+    if (typeof value !== "string") return "";
+    if (value.startsWith("whatsapp://")) return value;
     try {
       const url = new URL(value, window.location.href);
       const params = new URLSearchParams();
-      const text = url.searchParams.get("text") || url.searchParams.get("message") || "";
+      const message = url.searchParams.get("text") || url.searchParams.get("message") || "";
       const phoneFromQuery = url.searchParams.get("phone") || "";
       const phoneFromPath = /(?:^|\/)\+?([0-9]{6,})(?:\/|$)/.exec(url.pathname)?.[1] || "";
       const phone = String(phoneFromQuery || phoneFromPath).replace(/\D/g, "");
-
       if (phone) params.set("phone", phone);
-      if (text) params.set("text", text);
-      if (!phone && !text) return "";
+      if (message) params.set("text", message);
+      if (!phone && !message) return "";
       return `whatsapp://send?${params.toString()}`;
     } catch (_) {
       return "";
     }
   }
 
-  function openDirectWithFallback(webUrl) {
-    const directUrl = toWhatsAppScheme(webUrl);
-    if (!directUrl) return false;
-
-    let fallbackTimer = null;
-    let leftPage = false;
-
-    const cancelFallback = () => {
-      leftPage = true;
-      if (fallbackTimer) window.clearTimeout(fallbackTimer);
-      document.removeEventListener("visibilitychange", onVisibilityChange, true);
-      window.removeEventListener("pagehide", cancelFallback, true);
-      window.removeEventListener("blur", cancelFallback, true);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") cancelFallback();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange, true);
-    window.addEventListener("pagehide", cancelFallback, true);
-    window.addEventListener("blur", cancelFallback, true);
-
-    fallbackTimer = window.setTimeout(() => {
-      document.removeEventListener("visibilitychange", onVisibilityChange, true);
-      window.removeEventListener("pagehide", cancelFallback, true);
-      window.removeEventListener("blur", cancelFallback, true);
-      if (!leftPage && document.visibilityState === "visible") {
-        const accepted = window.confirm(
-          "WhatsApp non si è aperto. Vuoi aprire WhatsApp Web?"
-        );
-        if (accepted) window.location.assign(webUrl);
+  function showUnavailableMessage() {
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") {
+        window.alert("WhatsApp non è installato o non può essere aperto su questo dispositivo.");
       }
-    }, 3000);
+    }, 1800);
+  }
 
+  function openInstalledWhatsApp(value) {
+    const directUrl = toWhatsAppScheme(value);
+    if (!directUrl) {
+      window.alert("Messaggio WhatsApp non disponibile.");
+      return false;
+    }
     window.location.assign(directUrl);
+    showUnavailableMessage();
     return true;
   }
 
   if (!isNativeApp()) {
     const originalOpen = window.open.bind(window);
-    window.open = function heraWhatsAppAwareOpen(url, target, features) {
-      if (isWhatsAppWebUrl(url) && openDirectWithFallback(url)) return null;
+    window.open = function heraWhatsAppInstalledOnlyOpen(url, target, features) {
+      if (isWhatsAppLink(url)) {
+        openInstalledWhatsApp(url);
+        return null;
+      }
       return originalOpen(url, target, features);
     };
 
     document.addEventListener("click", (event) => {
       const anchor = event.target?.closest?.("a[href]");
-      if (!anchor || !isWhatsAppWebUrl(anchor.href)) return;
+      if (!anchor || !isWhatsAppLink(anchor.href)) return;
       event.preventDefault();
       event.stopPropagation();
-      openDirectWithFallback(anchor.href);
+      openInstalledWhatsApp(anchor.href);
     }, true);
   }
 })();

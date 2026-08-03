@@ -27,6 +27,12 @@ function gitBlobSha(buffer) {
   return crypto.createHash('sha1').update(Buffer.concat([header, buffer])).digest('hex');
 }
 
+function readFile(relativePath) {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) fail(`File mancante: ${relativePath}`);
+  return fs.readFileSync(absolutePath, 'utf8');
+}
+
 function readProtectedFile(definition) {
   const absolutePath = path.join(root, definition.path);
   if (!fs.existsSync(absolutePath)) fail(`File protetto mancante: ${definition.path}`);
@@ -45,6 +51,8 @@ function readProtectedFile(definition) {
 
 const nativeSource = readProtectedFile(protectedFiles[0]);
 const webSource = readProtectedFile(protectedFiles[1]);
+const loaderSource = readFile('varga-branding.js');
+const serviceWorkerSource = readFile('sw.js');
 
 const nativeRequiredMarkers = [
   '@CapacitorPlugin(name = "HeraWhatsApp")',
@@ -99,5 +107,23 @@ for (const marker of webForbiddenMarkers) {
   if (webSource.includes(marker)) fail(`Fallback WhatsApp Web reintrodotto nella PWA: ${marker}`);
 }
 
+const loaderMarkers = [
+  'function loadWhatsAppInstalledOnlyGuard()',
+  './whazzup-preload-cache.js?v=20260803-installed-only2',
+  "'whazzupInstalledOnlyGuard'",
+  'loadWhatsAppInstalledOnlyGuard();'
+];
+for (const marker of loaderMarkers) {
+  if (!loaderSource.includes(marker)) fail(`Il blocco WhatsApp PWA non viene caricato all’avvio: ${marker}`);
+}
+
+if (!serviceWorkerSource.includes('varga-cantieri-shell-v94')) {
+  fail('La cache PWA non è aggiornata alla versione che rimuove il vecchio fallback WhatsApp Web.');
+}
+if (!serviceWorkerSource.includes('./whazzup-preload-cache.js?v=20260803-installed-only2')) {
+  fail('Il modulo WhatsApp installato-only non è presente nella cache PWA.');
+}
+
 console.log('✅ WhatsApp/WHAZZUP protetto su Android e PWA: solo app installata, nessun fallback web.');
+console.log('✅ Il blocco PWA viene caricato all’avvio ed è incluso nella cache corrente.');
 protectedFiles.forEach((file) => console.log(`✅ ${file.path}: ${file.sha}`));

@@ -291,7 +291,7 @@
       if (!leftPage && document.visibilityState === "visible") {
         window.location.assign(webUrl);
       }
-    }, 1400);
+    }, 3000);
 
     window.location.assign(directUrl);
     return true;

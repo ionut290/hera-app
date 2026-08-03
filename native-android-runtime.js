@@ -1,3 +1,80 @@
+(function installEarlyPwaWhatsAppGuard() {
+  "use strict";
+
+  if (window.__heraEarlyPwaWhatsAppGuardInstalled) return;
+  window.__heraEarlyPwaWhatsAppGuardInstalled = true;
+
+  const isNativeAndroid = Boolean(
+    window.Capacitor &&
+    typeof window.Capacitor.isNativePlatform === "function" &&
+    window.Capacitor.isNativePlatform() &&
+    window.Capacitor.getPlatform() === "android"
+  );
+  if (isNativeAndroid) return;
+
+  function isWhatsAppWebLink(value) {
+    if (typeof value !== "string") return false;
+    try {
+      const url = new URL(value, window.location.href);
+      const host = url.hostname.toLowerCase();
+      return host === "api.whatsapp.com" || host === "wa.me" || host === "www.wa.me" || host === "web.whatsapp.com";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function toWhatsAppScheme(value) {
+    if (typeof value !== "string") return "";
+    if (value.startsWith("whatsapp://")) return value;
+    try {
+      const url = new URL(value, window.location.href);
+      const params = new URLSearchParams();
+      const text = url.searchParams.get("text") || url.searchParams.get("message") || "";
+      const phoneFromQuery = url.searchParams.get("phone") || url.searchParams.get("send") || "";
+      const phoneFromPath = /(?:^|\/)\+?([0-9]{6,})(?:\/|$)/.exec(url.pathname)?.[1] || "";
+      const phone = String(phoneFromQuery || phoneFromPath).replace(/\D/g, "");
+      if (phone) params.set("phone", phone);
+      if (text) params.set("text", text);
+      if (!phone && !text) return "";
+      return `whatsapp://send?${params.toString()}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function openInstalledWhatsApp(value) {
+    const directUrl = toWhatsAppScheme(value);
+    if (!directUrl) {
+      window.alert("Messaggio WhatsApp non disponibile.");
+      return false;
+    }
+    window.location.href = directUrl;
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") {
+        window.alert("WhatsApp non è installato o non può essere aperto su questo dispositivo.");
+      }
+    }, 1800);
+    return true;
+  }
+
+  const originalOpen = window.open.bind(window);
+  window.open = function heraEarlyWhatsAppOpen(url, target, features) {
+    if (isWhatsAppWebLink(url)) {
+      openInstalledWhatsApp(url);
+      return null;
+    }
+    return originalOpen(url, target, features);
+  };
+
+  document.addEventListener("click", (event) => {
+    const anchor = event.target?.closest?.("a[href]");
+    if (!anchor || !isWhatsAppWebLink(anchor.href)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    openInstalledWhatsApp(anchor.href);
+  }, true);
+})();
+
 (function () {
   "use strict";
 

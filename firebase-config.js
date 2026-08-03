@@ -14,6 +14,7 @@ if (document.readyState === "loading") {
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
+  document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
 } else {
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {
     const nativeRuntimeScript = document.createElement("script");
@@ -38,5 +39,11 @@ if (document.readyState === "loading") {
     sheetSyncScript.src = "google-sheet-two-way-sync.js?v=20260729b";
     sheetSyncScript.dataset.heraGoogleSheetSync = "true";
     document.head.appendChild(sheetSyncScript);
+  }
+  if (!document.querySelector('script[data-personnel-training-manager="true"]')) {
+    const trainingScript = document.createElement("script");
+    trainingScript.src = "personnel-training-manager.js?v=20260803a";
+    trainingScript.dataset.personnelTrainingManager = "true";
+    document.head.appendChild(trainingScript);
   }
 }

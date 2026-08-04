@@ -6,7 +6,7 @@ const path = require("node:path");
 
 let calls = 0;
 let rejectNext = false;
-let resolver = null;
+const pendingResolvers = [];
 const originalSnapshots = [];
 
 function makeQuery(collection, canonical) {
@@ -18,20 +18,27 @@ function makeQuery(collection, canonical) {
   };
 }
 
+function resolveNext() {
+  const next = pendingResolvers.shift();
+  assert.equal(typeof next, "function", "Deve esistere una richiesta simulata in attesa");
+  next();
+}
+
 global.window = {
   addEventListener() {},
   runFirestoreGetWithRetry(query) {
     calls += 1;
+    const callNumber = calls;
     if (rejectNext) {
       rejectNext = false;
       return Promise.reject(new Error("errore simulato"));
     }
     return new Promise((resolve) => {
-      resolver = () => {
-        const snapshot = { marker: `snapshot-${calls}`, query, docs: [] };
+      pendingResolvers.push(() => {
+        const snapshot = { marker: `snapshot-${callNumber}`, query, docs: [] };
         originalSnapshots.push(snapshot);
         resolve(snapshot);
-      };
+      });
     });
   }
 };
@@ -49,7 +56,7 @@ async function run() {
   const second = window.runFirestoreGetWithRetry(queryA2, options2);
   const third = window.runFirestoreGetWithRetry(queryA1, options1);
   assert.equal(calls, 1, "Tre richieste simultanee identiche devono avviare una sola lettura reale");
-  resolver();
+  resolveNext();
   const [a, b, c] = await Promise.all([first, second, third]);
   assert.equal(a, b, "Tutti i chiamanti devono ricevere lo stesso snapshot Firestore originale");
   assert.equal(b, c);
@@ -57,26 +64,24 @@ async function run() {
 
   const next = window.runFirestoreGetWithRetry(queryA1, options1);
   assert.equal(calls, 2, "Dopo il completamento una nuova richiesta deve leggere nuovamente Firestore");
-  resolver();
+  resolveNext();
   const nextSnapshot = await next;
   assert.notEqual(nextSnapshot, a);
 
   const mezzi = window.runFirestoreGetWithRetry(makeQuery("mezzi", "mezzi|ob:createdAtasc"), options1);
   const personaleDifferent = window.runFirestoreGetWithRetry(makeQuery("personale", "personale|where:attivo"), options1);
   assert.equal(calls, 4, "Query differenti o collezioni differenti non devono essere condivise");
-  resolver();
-  await personaleDifferent;
-  resolver();
-  await mezzi;
+  resolveNext();
+  resolveNext();
+  await Promise.all([mezzi, personaleDifferent]);
 
   const squadreQuery = makeQuery("squadre", "squadre|all");
   const squadreA = window.runFirestoreGetWithRetry(squadreQuery, options1);
   const squadreB = window.runFirestoreGetWithRetry(squadreQuery, options1);
   assert.equal(calls, 6, "Squadre deve restare completamente esclusa dall'ottimizzazione");
-  resolver();
-  await squadreB;
-  resolver();
-  await squadreA;
+  resolveNext();
+  resolveNext();
+  await Promise.all([squadreA, squadreB]);
 
   rejectNext = true;
   await assert.rejects(
@@ -86,9 +91,10 @@ async function run() {
   );
   const retry = window.runFirestoreGetWithRetry(queryA1, options1);
   assert.equal(calls, 8, "Dopo un errore la richiesta deve poter ripartire normalmente");
-  resolver();
+  resolveNext();
   await retry;
 
+  assert.equal(pendingResolvers.length, 0, "Nessuna richiesta simulata deve restare sospesa");
   const state = window.HeraFirestoreInflightReadCoalescer.getState();
   assert.equal(state.inFlight, 0);
   assert.equal(state.stats.duplicateCallsShared, 2);

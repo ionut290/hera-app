@@ -275,9 +275,9 @@
     root.appendChild(card);
     card.querySelector('[data-refresh]').onclick = render;
     card.querySelector('[data-reset]').onclick = () => {
-      if (confirm('Azzerare la diagnostica locale di oggi?')) {
-        localStorage.removeItem(storageKey());
-        render();
+      if (confirm('Azzerare la diagnostica locale e iniziare una nuova sessione?')) {
+        localStorage.setItem(storageKey(), JSON.stringify(blank()));
+        window.location.reload();
       }
     };
     card.querySelector('[data-export]').onclick = () => {
@@ -336,7 +336,7 @@
   window.VargaFirestoreDiagnostics = {
     read: load,
     render,
-    reset: () => { localStorage.removeItem(storageKey()); render(); },
+    reset: () => { localStorage.setItem(storageKey(), JSON.stringify(blank())); render(); },
     activeListeners: () => activeListeners
   };
 

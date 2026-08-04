@@ -97,7 +97,7 @@
     try {
       if (document.querySelector('script[data-varga-branding]')) return;
       const script = document.createElement('script');
-      script.src = './varga-branding.js?v=20260731a';
+      script.src = './varga-branding.js?v=20260804-diagnostics-reset1';
       script.dataset.vargaBranding = '1';
       script.addEventListener('error', () => console.warn('Branding VARGA CANTIERI non caricato.'), { once: true });
       document.head.appendChild(script);

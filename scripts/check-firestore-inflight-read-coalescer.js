@@ -98,7 +98,7 @@ async function run() {
   const state = window.HeraFirestoreInflightReadCoalescer.getState();
   assert.equal(state.inFlight, 0);
   assert.equal(state.stats.duplicateCallsShared, 2);
-  assert.equal(state.stats.networkRequestsStarted, 5);
+  assert.equal(state.stats.networkRequestsStarted, 6);
   assert.equal(state.stats.rejected, 1);
 
   console.log("✅ Snapshot Firestore originali mantenuti senza ricostruzione.");

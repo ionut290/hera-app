@@ -50,6 +50,42 @@
     }
   }
 
+  function readInflightCoalescerState() {
+    const coalescer = window.HeraFirestoreInflightReadCoalescer;
+    const capturedAt = new Date().toISOString();
+    if (!coalescer || typeof coalescer.getState !== 'function') {
+      return {
+        capturedAt,
+        installed: Boolean(coalescer?.installed),
+        available: false,
+        inFlight: 0,
+        stats: {},
+        note: 'Condivisione richieste in corso non disponibile in questa sessione.'
+      };
+    }
+    try {
+      const state = coalescer.getState() || {};
+      return {
+        capturedAt,
+        installed: Boolean(state.installed ?? coalescer.installed),
+        available: true,
+        inFlight: number(state.inFlight),
+        stats: { ...(state.stats || coalescer.stats || {}) },
+        note: 'Condivide solo richieste simultanee identiche; non conserva snapshot dopo il completamento.'
+      };
+    } catch (error) {
+      return {
+        capturedAt,
+        installed: Boolean(coalescer.installed),
+        available: false,
+        inFlight: 0,
+        stats: {},
+        error: text(error?.message || error),
+        note: 'Stato della condivisione richieste non leggibile.'
+      };
+    }
+  }
+
   function enhancedReport() {
     const diagnostics = window.VargaFirestoreDiagnostics;
     const base = typeof diagnostics?.read === 'function' ? diagnostics.read() : {};
@@ -58,7 +94,8 @@
       activeListeners: typeof diagnostics?.activeListeners === 'function'
         ? diagnostics.activeListeners()
         : number(base.activeListeners),
-      registryOptimizer: readOptimizerState()
+      registryOptimizer: readOptimizerState(),
+      inflightReadCoalescer: readInflightCoalescerState()
     };
   }
 
@@ -94,24 +131,31 @@
 
     const state = readOptimizerState();
     const stats = state.stats || {};
+    const coalescerState = readInflightCoalescerState();
+    const coalescerStats = coalescerState.stats || {};
     const avoided = number(stats.reusedDeviceCache)
       + number(stats.reusedRecent)
-      + number(stats.reusedInFlight);
+      + number(stats.reusedInFlight)
+      + number(coalescerStats.duplicateCallsShared);
 
     panel.innerHTML = `
-      <summary><strong>Cache personale e mezzi — sessione corrente</strong></summary>
+      <summary><strong>Ottimizzazione letture — sessione corrente</strong></summary>
       ${row('Ottimizzatore disponibile', state.available ? 'SÌ' : 'NO')}
       ${row('Query Firestore di rete', number(stats.networkGets))}
       ${row('Risposte dalla cache del dispositivo', number(stats.reusedDeviceCache))}
       ${row('Risposte dalla cache recente', number(stats.reusedRecent))}
-      ${row('Richieste duplicate condivise', number(stats.reusedInFlight))}
+      ${row('Richieste duplicate cache condivise', number(stats.reusedInFlight))}
+      ${row('Coalescer richieste in corso disponibile', coalescerState.available ? 'SÌ' : 'NO')}
+      ${row('Letture originali avviate dal coalescer', number(coalescerStats.networkRequestsStarted))}
+      ${row('Richieste simultanee condivise in sicurezza', number(coalescerStats.duplicateCallsShared))}
+      ${row('Richieste attualmente in corso', number(coalescerState.inFlight))}
       ${row('Query evitate complessivamente', avoided)}
       ${row('Aggiornamenti della cache locale', number(stats.deviceCacheWrites))}
       ${row('Snapshot ricevuti dai listener', number(stats.listenerSnapshots))}
       ${row('Invalidazioni cache', number(stats.invalidations))}
       ${row('Scritture profilo lasciate passare', number(stats.profileWritesPassed))}
       ${row('Scritture profilo duplicate evitate', number(stats.profileWritesSkipped))}
-      <p class="muted">${state.note}</p>`;
+      <p class="muted">${coalescerState.note}</p>`;
 
     if (!summary.__vargaOptimizerSummaryObserver) {
       const observer = new MutationObserver(() => {
@@ -150,6 +194,7 @@
   window.VargaFirestoreOptimizerDiagnostics = {
     read: enhancedReport,
     optimizerState: readOptimizerState,
+    inflightCoalescerState: readInflightCoalescerState,
     render: renderOptimizerSummary,
     download: downloadEnhancedReport
   };

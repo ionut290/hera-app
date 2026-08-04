@@ -40,13 +40,13 @@ if (document.readyState === "loading") {
   }
 
   function loadRegistryOptimizer() {
-    if (window.HeraFirestoreRegistryOptimizer?.installed) {
+    if (window.HeraFirestoreRegistryOptimizer) {
       loadRegistryOrderedQueryFix();
       return;
     }
     const existingOptimizerScript = document.querySelector('script[data-hera-firestore-registry-optimizer="true"]');
     if (existingOptimizerScript) {
-      existingOptimizerScript.addEventListener("load", loadRegistryOrderedQueryFix, { once: true });
+      loadRegistryOrderedQueryFix();
       return;
     }
     const optimizerScript = document.createElement("script");

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v102";
+const CACHE_NAME = "varga-cantieri-shell-v103";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -42,8 +42,8 @@ const APP_SHELL = [
   "./fuel-stations-search.js",
   "./fuel-stations-integration.js",
   "./registry-device-cache.js?v=20260804c",
-  "./firestore-registry-read-optimizer.js?v=20260804-registry-cache-2",
-  "./firestore-diagnostics-optimizer-extension.js?v=20260804-registry-cache-2",
+  "./firestore-registry-read-optimizer.js?v=20260804b",
+  "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",

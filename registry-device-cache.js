@@ -13,6 +13,10 @@
     return key === KEYS.personale || key === KEYS.mezzi;
   }
 
+  function recordId(record) {
+    return String(record?.id || record?.docId || record?._id || "").trim();
+  }
+
   function openDb() {
     return new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) return reject(new Error("IndexedDB non disponibile"));
@@ -81,6 +85,25 @@
     return true;
   }
 
+  async function patchRecord(key, id, patch) {
+    if (!isValidKey(key) || !id || !patch || typeof patch !== "object") return false;
+    const cached = await read(key).catch(() => null);
+    if (!cached?.records?.length) return false;
+    const index = cached.records.findIndex((record) => recordId(record) === String(id));
+    if (index < 0) return false;
+
+    const current = cached.records[index] || {};
+    const next = { ...current, ...patch };
+    try {
+      if (JSON.stringify(current) === JSON.stringify(next)) return false;
+    } catch (_) {}
+
+    const records = cached.records.slice();
+    records[index] = next;
+    await write(key, records);
+    return true;
+  }
+
   function notify(type, count) {
     window.dispatchEvent(new CustomEvent("hera:registry-cache-restored", { detail: { type, count } }));
   }
@@ -129,6 +152,7 @@
     readFresh,
     write,
     writeIfChanged,
+    patchRecord,
     remove,
     maxAgeMs: MAX_AGE_MS
   };

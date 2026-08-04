@@ -133,4 +133,5 @@ exports.syncSharedRegistriesFromMezzi = onDocumentWritten({ document: "mezzi/{do
 exports.syncSharedSquadreFromHistory = onDocumentWritten({ document: "squadreStorico/{documentId}", region: REGION }, rebuildSquadreFromWrite);
 exports.syncSharedSquadreFromCurrent = onDocumentWritten({ document: "squadreCommesse/{documentId}", region: REGION }, rebuildSquadreFromWrite);
 
-exports.__test = { dateKey, dataDateKey };\nexports.__server = { rebuildRegistryView, rebuildSquadreDate, rebuildCalendarMonth };
+exports.__test = { dateKey, dataDateKey };
+exports.__server = { rebuildRegistryView, rebuildSquadreDate, rebuildCalendarMonth };

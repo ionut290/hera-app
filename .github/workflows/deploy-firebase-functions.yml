@@ -6,7 +6,8 @@ on:
     branches:
       - main
     paths:
-      - "functions/**"\n      - "firestore.rules"
+      - "functions/**"
+      - "firestore.rules"
       - "firebase.json"
       - ".firebaserc"
       - ".github/workflows/deploy-firebase-functions.yml"

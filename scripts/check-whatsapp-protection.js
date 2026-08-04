@@ -53,6 +53,7 @@ const nativeSource = readProtectedFile(protectedFiles[0]);
 const webSource = readProtectedFile(protectedFiles[1]);
 const loaderSource = readFile('varga-branding.js');
 const serviceWorkerSource = readFile('sw.js');
+const appSource = readFile('app.js');
 
 const nativeRequiredMarkers = [
   '@CapacitorPlugin(name = "HeraWhatsApp")',
@@ -105,6 +106,17 @@ const webForbiddenMarkers = [
 
 for (const marker of webForbiddenMarkers) {
   if (webSource.includes(marker)) fail(`Fallback WhatsApp Web reintrodotto nella PWA: ${marker}`);
+}
+
+const appForbiddenFallbackMarkers = [
+  'window.location.href = webUrl',
+  'targetWindow.location.replace(webUrl)',
+  'if (!opened && !disableWebFallback)',
+  'Errore fallback WhatsApp wa.me:'
+];
+
+for (const marker of appForbiddenFallbackMarkers) {
+  if (appSource.includes(marker)) fail(`Fallback WhatsApp Web reintrodotto nel flusso principale: ${marker}`);
 }
 
 const loaderMarkers = [

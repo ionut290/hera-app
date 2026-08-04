@@ -8,11 +8,16 @@
   let activeType = "squadre";
   let activeKey = "";
 
+  const OPERATIONAL_BUTTONS = {
+    squadre: "open-panel-squadre",
+    calendario: "open-hours-btn"
+  };
+
   const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
   function todayKey() {
@@ -53,6 +58,8 @@
       .shared-view-list{display:grid;gap:8px}
       .shared-view-json{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f4f4;padding:12px;border-radius:10px}
       .shared-view-feedback{min-height:20px;font-size:.9rem}
+      .shared-view-primary-menu{font-weight:800}
+      .shared-view-operational-menu{opacity:.86}
     `;
     document.head.appendChild(style);
   }
@@ -73,6 +80,7 @@
         <div class="shared-view-controls">
           <input id="shared-view-key" aria-label="Data o mese">
           <button id="shared-view-refresh" class="btn" type="button">AGGIORNA</button>
+          <button id="shared-view-open-operational" class="btn" type="button">APRI MODIFICA</button>
           <button id="shared-view-publish" class="btn btn-primary" type="button">PUBBLICA VERSIONE ATTUALE</button>
         </div>
       </div>
@@ -84,6 +92,7 @@
       const key = dialog.querySelector("#shared-view-key").value.trim();
       openView(activeType, key);
     });
+    dialog.querySelector("#shared-view-open-operational").addEventListener("click", openOperationalView);
     dialog.querySelector("#shared-view-publish").addEventListener("click", publishCurrent);
     dialog.addEventListener("close", () => {
       if (typeof unsubscribe === "function") unsubscribe();
@@ -100,11 +109,12 @@
     const body = document.getElementById("shared-view-body");
     if (!body) return;
     if (!documentValue?.payload) {
-      body.innerHTML = `<div class="shared-view-empty">Nessuna vista condivisa pubblicata per questo periodo.</div>`;
+      body.innerHTML = `<div class="shared-view-empty">Nessuna vista condivisa pubblicata per questo periodo.<br>Un amministratore può aprire la modalità modifica e poi pubblicare la versione aggiornata.</div>`;
       return;
     }
-    const updated = documentValue.updatedAt?.toDate?.() || documentValue.updatedAt || "";
-    const updatedText = updated instanceof Date ? updated.toLocaleString("it-IT") : String(updated || "");
+    const updated = documentValue.updatedAt?.toDate?.() || documentValue.updatedAt || documentValue.updatedAtClient || "";
+    const updatedDate = updated instanceof Date ? updated : (updated ? new Date(updated) : null);
+    const updatedText = updatedDate && !Number.isNaN(updatedDate.getTime()) ? updatedDate.toLocaleString("it-IT") : String(updated || "");
     const payload = documentValue.payload;
     const items = Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : null);
     let content = "";
@@ -133,13 +143,26 @@
     const input = dialog.querySelector("#shared-view-key");
     input.type = type === "squadre" ? "date" : "month";
     input.value = activeKey;
-    dialog.querySelector("#shared-view-title").textContent = type === "squadre" ? "Vista squadre condivisa" : "Vista calendario condivisa";
+    dialog.querySelector("#shared-view-title").textContent = type === "squadre" ? "Composizione squadre" : "Calendario personale";
+    dialog.querySelector("#shared-view-open-operational").textContent = type === "squadre" ? "MODIFICA SQUADRE" : "MODIFICA ORE";
     dialog.querySelector("#shared-view-publish").hidden = !isAdmin();
     setFeedback("");
-    renderPayload(api?.readLocal?.(type, activeKey));
+    renderPayload(api?.getCached?.(type, activeKey));
     if (typeof unsubscribe === "function") unsubscribe();
-    unsubscribe = api?.subscribe?.(type, activeKey, renderPayload, (error) => setFeedback(error?.message || "Errore lettura vista condivisa", true)) || null;
+    unsubscribe = api?.subscribe?.(type, activeKey, renderPayload) || null;
     if (!dialog.open) dialog.showModal();
+  }
+
+  function openOperationalView() {
+    const dialog = ensureDialog();
+    const buttonId = OPERATIONAL_BUTTONS[activeType];
+    const operationalButton = buttonId ? document.getElementById(buttonId) : null;
+    if (!operationalButton) {
+      setFeedback("Schermata di modifica non disponibile.", true);
+      return;
+    }
+    dialog.close();
+    operationalButton.click();
   }
 
   async function publishCurrent() {
@@ -157,23 +180,34 @@
     }
   }
 
-  function addMenuButton(afterId, id, label, type) {
-    if (document.getElementById(id)) return true;
-    const anchor = document.getElementById(afterId);
+  function renameOperationalButton(anchor, label) {
+    if (!anchor || anchor.dataset.heraSharedOperationalRenamed === "true") return;
+    anchor.dataset.heraSharedOperationalRenamed = "true";
+    anchor.classList.add("shared-view-operational-menu");
+    anchor.setAttribute("aria-label", label);
+    anchor.setAttribute("title", label);
+    anchor.innerHTML = `<span class="menu-item-icon" aria-hidden="true">✏️</span>${label}`;
+  }
+
+  function addPrimaryMenuButton(anchorId, id, label, type, operationalLabel) {
+    const existing = document.getElementById(id);
+    const anchor = document.getElementById(anchorId);
     if (!anchor?.parentNode) return false;
+    renameOperationalButton(anchor, operationalLabel);
+    if (existing) return true;
     const button = document.createElement("button");
     button.id = id;
     button.type = "button";
-    button.className = "btn menu-title-btn";
+    button.className = "btn menu-title-btn shared-view-primary-menu";
     button.innerHTML = `<span class="menu-item-icon" aria-hidden="true">🖼️</span>${label}`;
     button.addEventListener("click", () => openView(type));
-    anchor.insertAdjacentElement("afterend", button);
+    anchor.insertAdjacentElement("beforebegin", button);
     return true;
   }
 
   function install() {
-    const a = addMenuButton("open-panel-squadre", "open-shared-squadre-view", "Vista squadre condivisa", "squadre");
-    const b = addMenuButton("open-hours-btn", "open-shared-calendar-view", "Vista calendario condivisa", "calendario");
+    const a = addPrimaryMenuButton("open-panel-squadre", "open-shared-squadre-view", "COMPOSIZIONE SQUADRE", "squadre", "MODIFICA SQUADRE");
+    const b = addPrimaryMenuButton("open-hours-btn", "open-shared-calendar-view", "CALENDARIO PERSONALE", "calendario", "MODIFICA ORE / CALENDARIO");
     return a && b;
   }
 
@@ -183,5 +217,9 @@
     if (install() || attempts >= 80) clearInterval(timer);
   }, 250);
 
-  window.HeraSharedStaticViewsUi = { openSquadre: (date) => openView("squadre", date), openCalendar: (month) => openView("calendario", month) };
+  window.HeraSharedStaticViewsUi = {
+    openSquadre: (date) => openView("squadre", date),
+    openCalendar: (month) => openView("calendario", month),
+    openOperational: openOperationalView
+  };
 })();

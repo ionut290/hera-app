@@ -33,11 +33,7 @@
     return todayKey().slice(0, 7);
   }
 
-  function isAdmin() {
-    const user = typeof currentUser !== "undefined" ? currentUser : window.currentUser;
-    const role = String(user?.role || user?.ruolo || "").toLowerCase();
-    return user?.isAdmin === true || role === "admin" || role === "superadmin" || role === "super_admin";
-  }
+  function isAdmin() {\n    try { return typeof canManageData === "function" && canManageData(); } catch (_) { return false; }\n  }
 
   function ensureStyles() {
     if (document.getElementById("shared-static-views-ui-style")) return;

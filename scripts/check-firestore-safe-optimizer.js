@@ -129,7 +129,11 @@ async function run() {
 
   const state = optimizer.getState();
   assert.equal(state.activeGroups, 0);
-  assert.equal(state.stats.preventedListenerStarts, 2);
+  assert.equal(
+    state.stats.preventedListenerStarts,
+    3,
+    "Devono essere evitati il secondo commesse, la riapertura commesse e il secondo userAlerts"
+  );
   assert.equal(state.stats.gracePeriodReuses, 1);
   assert.equal(state.stats.physicalListenersStarted, 3);
   assert.equal(physicalCloses, 5, "Tutti i listener fisici devono poter essere chiusi normalmente");

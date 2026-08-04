@@ -9,6 +9,9 @@ const core = fs.readFileSync("functions/shared-operational-views.js", "utf8");
 const runner = fs.readFileSync("functions/scripts/initialize-shared-registries.js", "utf8");
 
 assert.match(workflow, /workflow_dispatch:/);
+assert.match(workflow, /push:/);
+assert.match(workflow, /branches:\s*\n\s*- main/);
+assert.match(workflow, /initialize-shared-registries\.yml/);
 assert.match(workflow, /FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B/);
 assert.match(workflow, /initialize-shared-registries\.js/);
 assert.match(core, /__server = \{ rebuildRegistryView \}/);

@@ -4,7 +4,7 @@
   const GLOBAL_NAME = "HeraFirestoreInflightReadCoalescer";
   const WRAPPED = "__heraInflightReadCoalescerWrapped";
   const ORIGINAL = "__heraInflightReadCoalescerOriginal";
-  const TARGETS = new Set(["personale", "mezzi"]);
+  const TARGETS = new Set(["personale", "mezzi", "platformUsers", "appConfig"]);
   const RETRY_MS = 50;
   const RETRY_LIMIT = 400;
 
@@ -84,11 +84,12 @@
 
   function requestInfo(query, options) {
     const path = queryPath(query);
-    if (!TARGETS.has(path)) return null;
+    const target = path.split("/")[0] || "";
+    if (!TARGETS.has(target)) return null;
     const canonical = canonicalQuery(query);
     if (!canonical && !query?.path) return null;
     return {
-      target: path,
+      target,
       key: `${path}|${canonical || `collection:${path}`}|${stableValue(options)}`
     };
   }
@@ -164,11 +165,13 @@
 
   const api = {
     installed: false,
+    targets: Object.freeze(Array.from(TARGETS)),
     stats,
     refreshInstallation: install,
     getState() {
       return {
         installed: api.installed,
+        targets: Array.from(TARGETS),
         inFlight: inFlight.size,
         stats: { ...stats }
       };

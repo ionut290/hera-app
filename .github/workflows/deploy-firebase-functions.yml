@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - "functions/**"
+      - "functions/**"\n      - "firestore.rules"
       - "firebase.json"
       - ".firebaserc"
       - ".github/workflows/deploy-firebase-functions.yml"
@@ -53,6 +53,16 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Deploy Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: >-
+          firebase deploy
+          --only firestore:rules
+          --project hera-app-6cd2b
+          --non-interactive
+          --force
 
       - name: Deploy approved Cloud Functions
         env:

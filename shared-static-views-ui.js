@@ -33,7 +33,9 @@
     return todayKey().slice(0, 7);
   }
 
-  function isAdmin() {\n    try { return typeof canManageData === "function" && canManageData(); } catch (_) { return false; }\n  }
+  function isAdmin() {
+    try { return typeof canManageData === "function" && canManageData(); } catch (_) { return false; }
+  }
 
   function ensureStyles() {
     if (document.getElementById("shared-static-views-ui-style")) return;

@@ -9,6 +9,10 @@
   const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
   const KEYS = { personale: "personale", mezzi: "mezzi" };
 
+  function isValidKey(key) {
+    return key === KEYS.personale || key === KEYS.mezzi;
+  }
+
   function openDb() {
     return new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) return reject(new Error("IndexedDB non disponibile"));
@@ -23,6 +27,7 @@
   }
 
   async function read(key) {
+    if (!isValidKey(key)) return null;
     const db = await openDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
@@ -33,14 +38,33 @@
     });
   }
 
+  async function readFresh(key, maxAgeMs = MAX_AGE_MS) {
+    const cached = await read(key);
+    if (!cached || !Array.isArray(cached.records) || !cached.records.length) return null;
+    const age = Date.now() - Number(cached.savedAt || 0);
+    if (!Number.isFinite(age) || age < 0 || age > maxAgeMs) return null;
+    return cached;
+  }
+
   async function write(key, records) {
-    if (!Array.isArray(records)) return;
+    if (!isValidKey(key) || !Array.isArray(records) || !records.length) return false;
     const db = await openDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
       tx.objectStore(STORE).put({ key, records, savedAt: Date.now() });
-      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.oncomplete = () => { db.close(); resolve(true); };
       tx.onerror = () => { db.close(); reject(tx.error || new Error("Salvataggio cache non riuscito")); };
+    });
+  }
+
+  async function remove(key) {
+    if (!isValidKey(key)) return false;
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(key);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); reject(tx.error || new Error("Eliminazione cache non riuscita")); };
     });
   }
 
@@ -49,21 +73,32 @@
     try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
   }
 
+  async function writeIfChanged(key, records) {
+    if (!isValidKey(key) || !Array.isArray(records) || !records.length) return false;
+    const cached = await read(key).catch(() => null);
+    if (cached && sameDataset(cached.records, records)) return false;
+    await write(key, records);
+    return true;
+  }
+
   function notify(type, count) {
     window.dispatchEvent(new CustomEvent("hera:registry-cache-restored", { detail: { type, count } }));
   }
 
   async function restore() {
     try {
-      const [personale, mezzi] = await Promise.all([read(KEYS.personale), read(KEYS.mezzi)]);
+      const [personale, mezzi] = await Promise.all([
+        readFresh(KEYS.personale),
+        readFresh(KEYS.mezzi)
+      ]);
       const personaleCorrente = Array.isArray(window.personaleRecords) ? window.personaleRecords : [];
       const mezziCorrenti = Array.isArray(window.mezziRecords) ? window.mezziRecords : [];
 
-      if (!personaleCorrente.length && personale?.records?.length && Date.now() - personale.savedAt <= MAX_AGE_MS) {
+      if (!personaleCorrente.length && personale?.records?.length) {
         window.personaleRecords = personale.records;
         notify("personale", personale.records.length);
       }
-      if (!mezziCorrenti.length && mezzi?.records?.length && Date.now() - mezzi.savedAt <= MAX_AGE_MS) {
+      if (!mezziCorrenti.length && mezzi?.records?.length) {
         window.mezziRecords = mezzi.records;
         notify("mezzi", mezzi.records.length);
       }
@@ -76,12 +111,10 @@
     try {
       const tasks = [];
       if (Array.isArray(window.personaleRecords) && window.personaleRecords.length) {
-        const cached = await read(KEYS.personale).catch(() => null);
-        if (!cached || !sameDataset(cached.records, window.personaleRecords)) tasks.push(write(KEYS.personale, window.personaleRecords));
+        tasks.push(writeIfChanged(KEYS.personale, window.personaleRecords));
       }
       if (Array.isArray(window.mezziRecords) && window.mezziRecords.length) {
-        const cached = await read(KEYS.mezzi).catch(() => null);
-        if (!cached || !sameDataset(cached.records, window.mezziRecords)) tasks.push(write(KEYS.mezzi, window.mezziRecords));
+        tasks.push(writeIfChanged(KEYS.mezzi, window.mezziRecords));
       }
       await Promise.all(tasks);
     } catch (error) {
@@ -89,7 +122,16 @@
     }
   }
 
-  window.HeraRegistryDeviceCache = { restore, persistCurrent, read, write };
+  window.HeraRegistryDeviceCache = {
+    restore,
+    persistCurrent,
+    read,
+    readFresh,
+    write,
+    writeIfChanged,
+    remove,
+    maxAgeMs: MAX_AGE_MS
+  };
   restore();
 
   const observer = new MutationObserver(() => {

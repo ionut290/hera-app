@@ -15,6 +15,7 @@ assert.match(client, /documento-mancante/);
 assert.match(client, /payload-non-valido/);
 assert.match(client, /const FALLBACK_MS = 9000/);
 assert.match(client, /timeout/);
+assert.match(client, /getRecords: \(kind\)/);
 assert.doesNotMatch(client, /subscribeSquadre\s*=/);
 assert.doesNotMatch(client, /subscribeHoursStats\s*=/);
 assert.doesNotMatch(client, /subscribeHoursApprovals\s*=/);

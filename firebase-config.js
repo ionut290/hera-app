@@ -12,6 +12,7 @@ window.firebaseConfig = {
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
 const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260804b";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
+const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 
 if (document.readyState === "loading") {
   // Condivide soltanto richieste identiche ancora in corso e restituisce
@@ -19,6 +20,8 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
   // Mantiene disponibili i contatori diagnostici del coalescer.
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
+  // Prepara le viste condivise senza sostituire i caricamenti operativi esistenti.
+  document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
@@ -39,6 +42,14 @@ if (document.readyState === "loading") {
     diagnosticsOptimizerScript.src = HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC;
     diagnosticsOptimizerScript.dataset.heraFirestoreDiagnosticsOptimizer = "true";
     document.head.appendChild(diagnosticsOptimizerScript);
+  }
+
+  if (!window.HeraSharedStaticViews?.installed &&
+      !document.querySelector('script[data-hera-shared-static-views="true"]')) {
+    const sharedViewsScript = document.createElement("script");
+    sharedViewsScript.src = HERA_SHARED_STATIC_VIEWS_SRC;
+    sharedViewsScript.dataset.heraSharedStaticViews = "true";
+    document.head.appendChild(sharedViewsScript);
   }
 
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {

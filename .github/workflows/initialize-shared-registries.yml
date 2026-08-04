@@ -2,6 +2,13 @@ name: Initialize Shared Registries
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/initialize-shared-registries.yml"
+      - "functions/shared-operational-views.js"
+      - "functions/scripts/initialize-shared-registries.js"
 
 permissions:
   contents: read

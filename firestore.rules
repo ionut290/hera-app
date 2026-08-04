@@ -417,6 +417,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /sharedStaticViews/{viewId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "appNotifications",

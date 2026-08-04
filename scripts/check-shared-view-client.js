@@ -1,20 +1,22 @@
-#!/usr/bin/env node
 "use strict";
-const fs = require("node:fs");
-const assert = require("node:assert/strict");
+
+const assert = require("assert");
+const fs = require("fs");
+
 const client = fs.readFileSync("shared-static-views-client.js", "utf8");
-const shared = fs.readFileSync("shared-static-views.js", "utf8");
-const functions = fs.readFileSync("functions/shared-operational-views.js", "utf8");
-const ui = fs.readFileSync("shared-static-views-ui.js", "utf8");
-assert.match(client, /subscribePersonale = \(\) => registry\("personale"\)/);
-assert.match(client, /subscribeMezzi = \(\) => registry\("mezzi"\)/);
-assert.match(client, /subscribeSquadre = function subscribeSquadreSafe/);
-assert.match(client, /subscribeHoursStats = function subscribeHoursSafe/);
-assert.match(client, /fallback sorgente/);
-assert.match(client, /fetchHoursReportsForMonth/);
-assert.match(client, /original\.squadre\(\)/);
-assert.match(shared, /callbacks = new Set/);
-assert.match(functions, /rebuildAllSharedStaticViews/);
-assert.match(functions, /data\.dateKey, data\.date, data\.data, data\.giorno, data\.workDate, data\.selectedDate/);
-assert.match(ui, /typeof canManageData === "function"/);
-console.log("✅ Fallback sicuro, admin ufficiale e backfill verificati.");
+
+assert.match(client, /subscribePersonale = \(\) => subscribe\("personale"\)/);
+assert.match(client, /subscribeMezzi = \(\) => subscribe\("mezzi"\)/);
+assert.match(client, /collection\("sharedStaticViews"\)\.doc\("registri__corrente"\)/);
+assert.strictEqual((client.match(/\.onSnapshot\(/g) || []).length, 1);
+assert.match(client, /Array\.isArray\(view\.payload\.personale\)/);
+assert.match(client, /Array\.isArray\(view\.payload\.mezzi\)/);
+assert.match(client, /documento-mancante/);
+assert.match(client, /payload-non-valido/);
+assert.match(client, /timeout/);
+assert.doesNotMatch(client, /subscribeSquadre\s*=/);
+assert.doesNotMatch(client, /subscribeHoursStats\s*=/);
+assert.doesNotMatch(client, /subscribeHoursApprovals\s*=/);
+assert.doesNotMatch(client, /squadreStorico|squadreCommesse|oreReports|oreApprovalRequests/);
+
+console.log("Shared registries client checks passed.");

@@ -100,6 +100,23 @@
 
     mezziLoadState = { status: "loading", message: "Caricamento mezzi assegnati..." };
     try {
+      const sharedRows = window.HeraSharedRegistries?.getRecords?.("mezzi");
+      if (Array.isArray(sharedRows)) {
+        const requested = new Set(values.map(normalizeVehicleKey));
+        const normalizer = window.normalizeMezzoDocument || normalizeMezzoDocument;
+        const records = sharedRows
+          .map((row) => normalizer({ id: row.id, data: () => row }))
+          .filter((row) => [
+            row.nId, row.numero, row.codice, row.targa, row.nome, row.label, row.id
+          ].some((value) => requested.has(normalizeVehicleKey(value))));
+        applyVehicleRecords(records);
+        console.log("Mezzi assegnati caricati dalla vista condivisa", {
+          richiesti: values.length,
+          trovati: records.length
+        });
+        return true;
+      }
+
       const collection = db.collection(getMezziCollectionName());
       const byNId = await queryByField(collection, "nId", values, sequence);
       if (sequence !== assignedLoadSequence || fullMezziMode) return false;

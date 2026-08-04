@@ -97,8 +97,16 @@
     observer.timer = setTimeout(persistCurrent, 500);
   });
 
-  window.addEventListener("DOMContentLoaded", () => {
+  function startObserving() {
+    if (!document.body || observer.started) return;
+    observer.started = true;
     observer.observe(document.body, { childList: true, subtree: true });
     setTimeout(persistCurrent, 1500);
-  }, { once: true });
+  }
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", startObserving, { once: true });
+  } else {
+    startObserving();
+  }
 })();

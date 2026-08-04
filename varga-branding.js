@@ -96,7 +96,7 @@
   }
 
   function loadFirestoreDiagnostics() {
-    loadScriptOnce('script[data-firestore-operation-diagnostics]', './firestore-operation-diagnostics.js?v=20260802b', 'firestoreOperationDiagnostics', null, 'Diagnostica Firestore non caricata; avvio app non interrotto.');
+    loadScriptOnce('script[data-firestore-operation-diagnostics]', './firestore-operation-diagnostics.js?v=20260804-reset1', 'firestoreOperationDiagnostics', null, 'Diagnostica Firestore non caricata; avvio app non interrotto.');
   }
 
   function loadVcardShareFeature() {

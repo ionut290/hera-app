@@ -8,8 +8,8 @@ const functions = fs.readFileSync("functions/shared-operational-views.js", "utf8
 const html = fs.readFileSync("index.html", "utf8");
 assert.match(client, /subscribePersonale = \(\) => subscribeRegistry\("personale"\)/);
 assert.match(client, /subscribeMezzi = \(\) => subscribeRegistry\("mezzi"\)/);
-assert.match(client, /subscribeSquadre = function subscribeSquadreFromSharedViews/);
-assert.match(client, /subscribeHoursStats = function subscribeHoursFromSharedView/);
+assert.match(client, /subscribeSquadre = function subscribeSquadreSafe/);
+assert.match(client, /subscribeHoursStats = function subscribeHoursSafe/);
 assert.match(shared, /callbacks = new Set/);
 assert.match(functions, /registri__corrente/);
 assert.match(functions, /squadre__\$\{date\}/);

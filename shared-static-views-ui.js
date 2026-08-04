@@ -34,9 +34,7 @@
   }
 
   function isAdmin() {
-    const user = typeof currentUser !== "undefined" ? currentUser : window.currentUser;
-    const role = String(user?.role || user?.ruolo || "").toLowerCase();
-    return user?.isAdmin === true || role === "admin" || role === "superadmin" || role === "super_admin";
+    try { return typeof canManageData === "function" && canManageData(); } catch (_) { return false; }
   }
 
   function ensureStyles() {

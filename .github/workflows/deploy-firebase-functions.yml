@@ -40,40 +40,6 @@ jobs:
       - name: Validate Firebase functions
         run: node -e "require('./functions/main.js'); console.log('Functions loaded successfully')"
 
-      - name: Add sharedStaticViews security rule
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path("firestore.rules")
-          source = path.read_text(encoding="utf-8")
-          rule = '''
-
-    // Viste aggregate condivise: consultazione agli utenti attivi,
-    // pubblicazione manuale soltanto agli amministratori.
-    match /sharedStaticViews/{viewId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-'''
-          marker = "\n    match /{collection}/{docId} {"
-
-          if "match /sharedStaticViews/{viewId}" not in source:
-              if marker not in source:
-                  raise SystemExit("Punto di inserimento delle regole non trovato")
-              source = source.replace(marker, rule + marker, 1)
-              path.write_text(source, encoding="utf-8")
-
-          patched = path.read_text(encoding="utf-8")
-          required = [
-              "match /sharedStaticViews/{viewId}",
-              "allow read: if signedIn();",
-              "allow create, update, delete: if isAdmin();",
-          ]
-          missing = [item for item in required if item not in patched]
-          if missing:
-              raise SystemExit(f"Regola sharedStaticViews incompleta: {missing}")
-
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
 

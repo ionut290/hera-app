@@ -24,6 +24,7 @@
     version: "1.0.0",
     fullUsersEnabled: false,
     fullUsersStarted: false,
+    usersSessionUid: "",
     lightUsersUid: "",
     hoursSourceEnabled: false,
     commessaStatsEnabled: false,
@@ -190,6 +191,13 @@
     if (!sourceSubscriptions.users || !currentUser?.uid) return null;
     const uid = String(currentUser.uid);
 
+    if (lazyStartup.usersSessionUid && lazyStartup.usersSessionUid !== uid) {
+      lazyStartup.fullUsersEnabled = false;
+      lazyStartup.fullUsersStarted = false;
+      lazyStartup.lightUsersUid = "";
+    }
+    lazyStartup.usersSessionUid = uid;
+
     if (lazyStartup.fullUsersEnabled) {
       if (lazyStartup.fullUsersStarted && typeof unsubscribeUsers === "function") return unsubscribeUsers;
       lazyStartup.fullUsersStarted = true;
@@ -218,6 +226,7 @@
     if (!sourceSubscriptions.users || lazyStartup.fullUsersStarted) return;
     lazyStartup.fullUsersEnabled = true;
     lazyStartup.fullUsersStarted = true;
+    lazyStartup.usersSessionUid = String(currentUser?.uid || "");
     lazyStartup.lightUsersUid = "";
     runSafely(() => sourceSubscriptions.users(), "caricamento completo utenti");
     console.debug("[LIGHT STARTUP] elenco utenti completo attivato dalla sezione Gestione utenti");
@@ -278,7 +287,7 @@
   function applyStaticCalendar(view, metadata = {}) {
     const reports = Array.isArray(view?.payload?.reports) ? view.payload.reports : [];
     const directReports = reports
-      .filter((record) => record?.sourceCollection === "oreReports")
+      .filter((record) => !record?.sourceCollection || record.sourceCollection === "oreReports")
       .map(normalizeStaticReport)
       .filter(Boolean);
     const approvalReports = reports
@@ -290,9 +299,9 @@
     allHoursApprovalRequests = approvalReports;
     hoursReportsLoaded = true;
 
+    // La vista contiene il solo mese corrente: aggiorna il riepilogo di oggi,
+    // ma non ricalcolare i totali storici delle commesse con dati parziali.
     runSafely(() => renderTodaySummary(), "render riepilogo ore statiche");
-    runSafely(() => recalculateCommessaWorkSummaries(), "ricalcolo riepiloghi statici");
-    runSafely(() => renderCommesseHomeList(), "render commesse con ore statiche");
     if (!ui.calendarPage?.classList.contains("hidden") && calendarMode === "hours") {
       runSafely(() => renderCalendar(), "render calendario statico");
     }
@@ -368,6 +377,7 @@
     getState: () => ({
       fullUsersEnabled: lazyStartup.fullUsersEnabled,
       fullUsersStarted: lazyStartup.fullUsersStarted,
+      usersSessionUid: lazyStartup.usersSessionUid,
       lightUsersUid: lazyStartup.lightUsersUid,
       hoursSourceEnabled: lazyStartup.hoursSourceEnabled,
       commessaStatsEnabled: lazyStartup.commessaStatsEnabled,

@@ -334,7 +334,14 @@
   }
 
   function installLazyTriggers() {
-    bindCapture("open-panel-utenti", enableFullUsers);
+    [
+      "open-panel-utenti",
+      "open-panel-notifiche",
+      "chat-open-btn",
+      "open-private-docs-btn",
+      "open-private-docs-upload-btn",
+      "documents-new-btn"
+    ].forEach((id) => bindCapture(id, enableFullUsers));
 
     bindCapture("open-hours-btn", enableHoursSource);
     bindCapture("today-hours-btn", enableHoursSource);

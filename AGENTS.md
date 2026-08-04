@@ -407,3 +407,7 @@ Interrompere la modifica e chiedere autorizzazione prima di procedere quando:
 Ogni resoconto conclusivo deve terminare con la seguente dichiarazione:
 
 > Confermo che la logica del pulsante FATTO e la logica del pulsante WhatsApp/WHAZZUP non sono state modificate. Le modifiche sono state limitate alla funzione richiesta. È stato controllato che non siano state introdotte letture, scritture o listener Firestore inutili o duplicati. La gestione degli impianti e la compatibilità con i dati esistenti sono state preservate. Personale, Utenti, elenco Personale, elenco Utenti, squadre, calendario, ore e tutti i collegamenti correlati non sono stati eliminati, svuotati o scollegati. Gli eventuali controlli non eseguibili sono indicati espressamente nel resoconto.
+
+## 12. VISTE CONDIVISE PRIORITARIE
+
+Calendario, squadre, ore, personale e mezzi devono leggere prioritariamente i documenti aggregati in `sharedStaticViews`. All’avvio sono vietati listener o letture complete sulle raccolte sorgenti equivalenti. Le raccolte originali restano autorevoli per le sole operazioni di modifica; i client ricevono gli aggiornamenti tramite un unico listener per documento condiviso.

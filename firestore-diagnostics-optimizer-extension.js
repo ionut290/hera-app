@@ -205,3 +205,121 @@
     init();
   }
 })();
+
+(() => {
+  'use strict';
+
+  if (window.__vargaAppNotificationsReadOptimizer) return;
+  window.__vargaAppNotificationsReadOptimizer = true;
+
+  const state = {
+    installed: false,
+    attempts: 0,
+    calls: 0,
+    rewrittenLimits: 0,
+    fallbacks: 0,
+    originalLimit: 40,
+    optimizedLimit: 1
+  };
+  window.VargaAppNotificationsReadOptimizer = state;
+
+  function bindOrReturn(target, property) {
+    const value = Reflect.get(target, property, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }
+
+  function wrapNotificationQuery(query) {
+    return new Proxy(query, {
+      get(target, property) {
+        if (property === 'limit') {
+          return (amount) => {
+            const requested = Number(amount);
+            if (requested === state.originalLimit) {
+              state.rewrittenLimits += 1;
+              return target.limit(state.optimizedLimit);
+            }
+            return target.limit(amount);
+          };
+        }
+        return bindOrReturn(target, property);
+      }
+    });
+  }
+
+  function wrapNotificationsCollection(collectionReference) {
+    return new Proxy(collectionReference, {
+      get(target, property) {
+        if (property === 'orderBy') {
+          return (...args) => wrapNotificationQuery(target.orderBy(...args));
+        }
+        return bindOrReturn(target, property);
+      }
+    });
+  }
+
+  function install() {
+    state.attempts += 1;
+    if (typeof subscribeGlobalNotifications !== 'function') return false;
+    if (typeof db === 'undefined' || !db || typeof db.collection !== 'function') return false;
+    if (subscribeGlobalNotifications.__vargaAppNotificationsLimitOne) {
+      state.installed = true;
+      return true;
+    }
+
+    const originalSubscribe = subscribeGlobalNotifications;
+    const optimizedSubscribe = async function optimizedSubscribeGlobalNotifications(...args) {
+      const originalCollection = db.collection;
+      const temporaryCollection = function optimizedCollection(path) {
+        const reference = originalCollection.call(this, path);
+        return String(path) === 'appNotifications'
+          ? wrapNotificationsCollection(reference)
+          : reference;
+      };
+
+      let overrideApplied = false;
+      try {
+        db.collection = temporaryCollection;
+        overrideApplied = db.collection === temporaryCollection;
+      } catch (error) {
+        console.warn('Ottimizzazione appNotifications non applicabile: uso il listener originale.', error);
+      }
+
+      if (!overrideApplied) {
+        state.fallbacks += 1;
+        return originalSubscribe.apply(this, args);
+      }
+
+      state.calls += 1;
+      try {
+        return await originalSubscribe.apply(this, args);
+      } finally {
+        if (db.collection === temporaryCollection) {
+          db.collection = originalCollection;
+        }
+      }
+    };
+
+    Object.defineProperty(optimizedSubscribe, '__vargaAppNotificationsLimitOne', {
+      value: true,
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
+
+    subscribeGlobalNotifications = optimizedSubscribe;
+    state.installed = true;
+    console.info('Ottimizzazione appNotifications attiva: listener iniziale limitato a 1 documento.');
+    return true;
+  }
+
+  if (install()) return;
+
+  const timer = setInterval(() => {
+    if (install() || state.attempts >= 200) {
+      clearInterval(timer);
+      if (!state.installed) {
+        console.warn('Ottimizzazione appNotifications non installata: funzione non disponibile.');
+      }
+    }
+  }, 50);
+})();

@@ -1,0 +1,55 @@
+name: Initialize Shared Registries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: initialize-shared-registries
+  cancel-in-progress: false
+
+jobs:
+  initialize:
+    name: Create sharedStaticViews/registri__corrente
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GCLOUD_PROJECT: hera-app-6cd2b
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Configure Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B mancante."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Validate server runner
+        run: |
+          node --check functions/shared-operational-views.js
+          node --check functions/scripts/initialize-shared-registries.js
+          node -e "require('./functions/main.js'); console.log('Functions loaded successfully')"
+
+      - name: Create shared registries document
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: node functions/scripts/initialize-shared-registries.js

@@ -11,14 +11,17 @@ window.firebaseConfig = {
 // Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
 const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804b";
+const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260804a";
 const HERA_REGISTRY_DEVICE_CACHE_SRC = "registry-device-cache.js?v=20260804c";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804a";
 
 if (document.readyState === "loading") {
   // IndexedDB deve essere disponibile prima che app.js chieda personale e mezzi.
   document.write(`<script src="${HERA_REGISTRY_DEVICE_CACHE_SRC}"><\/script>`);
-  // Intercetta soltanto le query duplicate delle collezioni personale e mezzi.
+  // Mantiene l'ottimizzatore stabile esistente senza cambiare gli snapshot Firestore reali.
   document.write(`<script src="${HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC}"><\/script>`);
+  // Condivide esclusivamente richieste identiche ancora in corso tramite runFirestoreGetWithRetry.
+  document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
   // Aggiunge alla diagnostica i contatori dell'ottimizzatore senza interrogare Firestore.
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
@@ -27,7 +30,17 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
 } else {
+  function loadInflightCoalescer() {
+    if (window.HeraFirestoreInflightReadCoalescer?.installed ||
+        document.querySelector('script[data-hera-firestore-inflight-coalescer="true"]')) return;
+    const script = document.createElement("script");
+    script.src = HERA_FIRESTORE_INFLIGHT_COALESCER_SRC;
+    script.dataset.heraFirestoreInflightCoalescer = "true";
+    document.head.appendChild(script);
+  }
+
   function loadRegistryOptimizer() {
+    loadInflightCoalescer();
     if (window.HeraFirestoreRegistryOptimizer?.installed ||
         document.querySelector('script[data-hera-firestore-registry-optimizer="true"]')) return;
     const optimizerScript = document.createElement("script");

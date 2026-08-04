@@ -1,15 +1,21 @@
-# Verifica manuale ottimizzatore Firestore
+# Verifica cache locale personale e mezzi
 
-Questa modifica è limitata alle collezioni complete `personale` e `mezzi`.
+La modifica resta limitata alle collezioni `personale` e `mezzi` e non modifica calendario, squadre, ore, FATTO o WhatsApp.
 
-## Controlli eseguiti
+## Comportamenti da verificare
 
-- Tre `get()` contemporanei sulla stessa collezione producono una sola richiesta reale.
-- Un `get()` ripetuto entro la finestra breve riusa lo stesso `QuerySnapshot`.
-- Il primo `QuerySnapshot` ricevuto da `onSnapshot()` può soddisfare i `get()` successivi.
-- `set()`, `update()`, `delete()` e `add()` invalidano immediatamente il dato recente.
-- Le query con `source` esplicita continuano a usare direttamente Firestore.
-- Le altre collezioni e le query non identificabili con sicurezza non vengono intercettate.
+- La cache IndexedDB viene caricata prima di `app.js`.
+- Un `get()` sulla collezione completa `personale` usa la cache locale quando contiene record validi e recenti.
+- Un `get()` sulla collezione completa `mezzi` usa la cache locale quando contiene record validi e recenti.
+- La risposta locale mantiene le proprietà usate di un `QuerySnapshot`: `docs`, `size`, `empty`, `forEach()` e `docChanges()`.
+- Ogni documento locale mantiene `id`, `ref`, `exists`, `data()` e `get()`.
+- Se la cache manca, è scaduta o contiene record senza ID, viene usata la query Firestore originale.
+- Il listener Firestore continua a essere la fonte di aggiornamento e riscrive IndexedDB soltanto quando l’elenco cambia.
+- Tre `get()` contemporanei sulla stessa collezione condividono una sola Promise.
+- Le query con `source` esplicita e tutte le altre collezioni continuano a usare direttamente Firestore.
+- Le scritture normali su personale e mezzi invalidano la copia recente dopo il successo.
+- Le patch automatiche limitate a nome, email e foto non svuotano l’intera cache: il listener aggiorna la copia.
+- Patch automatiche identiche sullo stesso documento entro 60 secondi vengono eseguite una sola volta.
 
 ## Controllo dopo il deploy
 
@@ -19,4 +25,10 @@ Aprire la console ed eseguire:
 HeraFirestoreRegistryOptimizer.getState()
 ```
 
-I contatori `reusedInFlight` e `reusedRecent` indicano quante richieste duplicate sono state evitate.
+Contatori principali:
+
+- `reusedDeviceCache`: caricamenti completi evitati grazie a IndexedDB;
+- `reusedInFlight`: richieste contemporanee accorpate;
+- `reusedRecent`: risultati recenti riutilizzati;
+- `profileWritesSkipped`: scritture profilo identiche evitate;
+- `networkGets`: caricamenti realmente inoltrati a Firestore.

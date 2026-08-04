@@ -17,16 +17,27 @@
     personale: 30 * 1000,
     mezzi: 15 * 1000
   });
+  const DEVICE_CACHE_MAX_AGE_MS = Object.freeze({
+    personale: 24 * 60 * 60 * 1000,
+    mezzi: 12 * 60 * 60 * 1000
+  });
+  const PROFILE_WRITE_DEDUPE_MS = 60 * 1000;
+  const PROFILE_FIELDS = new Set(["name", "email", "photoURL", "updatedAt"]);
   const inFlight = new Map();
   const recent = new Map();
+  const recentProfileWrites = new Map();
   const generations = new Map(Object.keys(TARGET_TTL_MS).map((name) => [name, 0]));
   const stats = {
     installedAt: new Date().toISOString(),
     networkGets: 0,
     reusedInFlight: 0,
     reusedRecent: 0,
+    reusedDeviceCache: 0,
+    deviceCacheWrites: 0,
     listenerSnapshots: 0,
-    invalidations: 0
+    invalidations: 0,
+    profileWritesPassed: 0,
+    profileWritesSkipped: 0
   };
 
   function canonicalPath(value) {
@@ -54,19 +65,22 @@
       canonical = typeof internal?.canonicalId === "function" ? internal.canonicalId() : "";
     } catch (_) {}
 
-    // CollectionReference espone `path`; per le query composte richiediamo
-    // invece l'identificatore canonico, così due filtri diversi non condividono dati.
     if (!query?.path && !canonical) return null;
 
     return {
       target,
+      path,
+      isFullCollection: Boolean(query?.path),
       key: `${target}|${canonical || `collection:${path}`}`
     };
   }
 
+  function documentPath(ref) {
+    return String(ref?.path || canonicalPath(ref?._key?.path) || "").replace(/^\/+|\/+$/g, "");
+  }
+
   function documentTarget(ref) {
-    const path = String(ref?.path || canonicalPath(ref?._key?.path) || "").replace(/^\/+|\/+$/g, "");
-    const first = path.split("/")[0] || "";
+    const first = documentPath(ref).split("/")[0] || "";
     return Object.prototype.hasOwnProperty.call(TARGET_TTL_MS, first) ? first : "";
   }
 
@@ -82,6 +96,33 @@
     stats.invalidations += 1;
   }
 
+  function extractSnapshotRecords(snapshot) {
+    if (!Array.isArray(snapshot?.docs)) return [];
+    const records = [];
+    for (const document of snapshot.docs) {
+      const id = String(document?.id || "").trim();
+      if (!id || typeof document?.data !== "function") return [];
+      const data = document.data() || {};
+      records.push({ id, ...data });
+    }
+    return records;
+  }
+
+  function persistSnapshotToDevice(info, snapshot) {
+    if (!info?.isFullCollection) return;
+    const cache = window.HeraRegistryDeviceCache;
+    if (!cache || typeof cache.writeIfChanged !== "function") return;
+    const records = extractSnapshotRecords(snapshot);
+    if (!records.length) return;
+    Promise.resolve(cache.writeIfChanged(info.target, records))
+      .then((changed) => {
+        if (changed) stats.deviceCacheWrites += 1;
+      })
+      .catch((error) => {
+        console.warn(`Cache locale ${info.target} non aggiornata:`, error);
+      });
+  }
+
   function remember(info, snapshot, source) {
     if (!info || !snapshot) return;
     recent.set(info.key, {
@@ -91,6 +132,7 @@
       source
     });
     if (source === "listener") stats.listenerSnapshots += 1;
+    if (source !== "device-cache") persistSnapshotToDevice(info, snapshot);
   }
 
   function getFresh(info) {
@@ -104,15 +146,101 @@
     return entry.snapshot;
   }
 
-  const originalGet = QueryProto.get;
-  QueryProto.get = function optimizedRegistryGet(options) {
-    const info = queryInfo(this);
-    if (!info || options?.source) {
-      return originalGet.apply(this, arguments);
+  function cachedRecordId(record) {
+    return String(record?.id || record?.docId || record?._id || "").trim();
+  }
+
+  function cachedRecordData(record) {
+    const data = { ...(record || {}) };
+    delete data.id;
+    delete data.docId;
+    delete data._id;
+    return data;
+  }
+
+  function readNestedValue(data, fieldPath) {
+    if (typeof fieldPath !== "string" || !fieldPath) return undefined;
+    return fieldPath.split(".").reduce((value, part) => value == null ? undefined : value[part], data);
+  }
+
+  function buildDeviceCachedSnapshot(query, info, records) {
+    if (!info?.isFullCollection || !Array.isArray(records) || !records.length) return null;
+    const firestore = query?.firestore;
+    if (!firestore || typeof firestore.collection !== "function") return null;
+
+    const metadata = Object.freeze({ fromCache: true, hasPendingWrites: false });
+    const docs = [];
+    for (const record of records) {
+      const id = cachedRecordId(record);
+      if (!id) return null;
+      const data = cachedRecordData(record);
+      const ref = firestore.collection(info.target).doc(id);
+      const document = {
+        id,
+        ref,
+        exists: true,
+        metadata,
+        data() {
+          return { ...data };
+        },
+        get(fieldPath) {
+          return readNestedValue(data, fieldPath);
+        },
+        isEqual(other) {
+          return Boolean(other && other.id === id && other.ref?.path === ref.path);
+        }
+      };
+      docs.push(Object.freeze(document));
     }
 
-    const sourceKey = "default";
-    const key = `${info.key}|source:${sourceKey}`;
+    const snapshot = {
+      query,
+      docs: Object.freeze(docs),
+      size: docs.length,
+      empty: docs.length === 0,
+      metadata,
+      forEach(callback, thisArg) {
+        docs.forEach((document) => callback.call(thisArg, document));
+      },
+      docChanges() {
+        return docs.map((document, index) => ({
+          type: "added",
+          doc: document,
+          oldIndex: -1,
+          newIndex: index
+        }));
+      },
+      isEqual(other) {
+        return other === snapshot;
+      }
+    };
+    return Object.freeze(snapshot);
+  }
+
+  async function getDeviceCachedSnapshot(query, info) {
+    if (!info?.isFullCollection) return null;
+    const cache = window.HeraRegistryDeviceCache;
+    if (!cache || typeof cache.readFresh !== "function") return null;
+    try {
+      const cached = await cache.readFresh(info.target, DEVICE_CACHE_MAX_AGE_MS[info.target]);
+      if (!cached?.records?.length) return null;
+      return buildDeviceCachedSnapshot(query, info, cached.records);
+    } catch (error) {
+      console.warn(`Cache locale ${info.target} non leggibile:`, error);
+      return null;
+    }
+  }
+
+  const originalGet = QueryProto.get;
+  QueryProto.get = function optimizedRegistryGet(options) {
+    const query = this;
+    const args = arguments;
+    const info = queryInfo(query);
+    if (!info || options?.source) {
+      return originalGet.apply(query, args);
+    }
+
+    const key = `${info.key}|source:default`;
     const fresh = getFresh(info);
     if (fresh) {
       stats.reusedRecent += 1;
@@ -126,13 +254,22 @@
     }
 
     const generationAtStart = generations.get(info.target) || 0;
-    stats.networkGets += 1;
-    const request = Promise.resolve(originalGet.apply(this, arguments))
-      .then((snapshot) => {
-        if ((generations.get(info.target) || 0) === generationAtStart) {
-          remember(info, snapshot, "get");
+    const request = Promise.resolve()
+      .then(() => getDeviceCachedSnapshot(query, info))
+      .then((cachedSnapshot) => {
+        if (cachedSnapshot) {
+          stats.reusedDeviceCache += 1;
+          remember(info, cachedSnapshot, "device-cache");
+          return cachedSnapshot;
         }
-        return snapshot;
+
+        stats.networkGets += 1;
+        return Promise.resolve(originalGet.apply(query, args)).then((snapshot) => {
+          if ((generations.get(info.target) || 0) === generationAtStart) {
+            remember(info, snapshot, "get");
+          }
+          return snapshot;
+        });
       })
       .finally(() => {
         if (inFlight.get(key) === request) inFlight.delete(key);
@@ -174,13 +311,94 @@
     return originalOnSnapshot.apply(this, args);
   };
 
+  function profilePatchPayload(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    const keys = Object.keys(data);
+    if (!keys.length || keys.some((key) => !PROFILE_FIELDS.has(key))) return null;
+
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(data, "name")) patch.name = String(data.name || "").trim();
+    if (Object.prototype.hasOwnProperty.call(data, "email")) patch.email = String(data.email || "").trim();
+    if (Object.prototype.hasOwnProperty.call(data, "photoURL")) patch.photoURL = String(data.photoURL || "").trim();
+    return Object.keys(patch).length ? patch : null;
+  }
+
+  function profileSyncMutation(ref, method, args) {
+    if (method !== "set" || documentTarget(ref) !== "personale") return null;
+    const options = args[1];
+    if (!options || options.merge !== true) return null;
+    const patch = profilePatchPayload(args[0]);
+    if (!patch) return null;
+    return {
+      path: documentPath(ref),
+      signature: JSON.stringify(patch),
+      patch
+    };
+  }
+
+  function updateProfileDeviceCache(profileMutation) {
+    const cache = window.HeraRegistryDeviceCache;
+    if (!cache || typeof cache.patchRecord !== "function") return;
+    const id = profileMutation.path.split("/")[1] || "";
+    if (!id) return;
+    Promise.resolve(cache.patchRecord("personale", id, profileMutation.patch))
+      .then((changed) => {
+        if (changed) stats.deviceCacheWrites += 1;
+      })
+      .catch((error) => {
+        console.warn("Aggiornamento profilo nella cache locale non riuscito:", error);
+      });
+  }
+
   function wrapMutation(proto, method) {
     if (!proto || typeof proto[method] !== "function") return;
     const original = proto[method];
     proto[method] = function optimizedRegistryMutation() {
-      const target = documentTarget(this);
-      if (target) invalidate(target);
-      return original.apply(this, arguments);
+      const ref = this;
+      const args = Array.from(arguments);
+      const target = documentTarget(ref);
+      const profileMutation = profileSyncMutation(ref, method, args);
+
+      if (profileMutation) {
+        const previous = recentProfileWrites.get(profileMutation.path);
+        if (previous && previous.signature === profileMutation.signature &&
+            Date.now() - previous.savedAt <= PROFILE_WRITE_DEDUPE_MS) {
+          stats.profileWritesSkipped += 1;
+          return previous.promise || Promise.resolve();
+        }
+
+        stats.profileWritesPassed += 1;
+        const request = Promise.resolve(original.apply(ref, args))
+          .then((value) => {
+            updateProfileDeviceCache(profileMutation);
+            return value;
+          })
+          .catch((error) => {
+            const current = recentProfileWrites.get(profileMutation.path);
+            if (current?.signature === profileMutation.signature) {
+              recentProfileWrites.delete(profileMutation.path);
+            }
+            throw error;
+          });
+
+        recentProfileWrites.set(profileMutation.path, {
+          signature: profileMutation.signature,
+          savedAt: Date.now(),
+          promise: request
+        });
+
+        // Nome, email e foto vengono già propagati dal listener `personale`.
+        // Non svuotiamo la cache dell'intera collezione per questa sola patch:
+        // il prossimo snapshot sostituirà automaticamente la copia recente.
+        return request;
+      }
+
+      const result = original.apply(ref, args);
+      if (!target) return result;
+      return Promise.resolve(result).then((value) => {
+        invalidate(target);
+        return value;
+      });
     };
   }
 
@@ -193,11 +411,17 @@
     installed: true,
     stats,
     invalidate,
+    clearDeviceCache(type) {
+      const cache = window.HeraRegistryDeviceCache;
+      if (cache && typeof cache.remove === "function") return cache.remove(type);
+      return Promise.resolve(false);
+    },
     getState() {
       return {
         stats: { ...stats },
         inFlight: inFlight.size,
-        recent: recent.size
+        recent: recent.size,
+        profileWriteGuards: recentProfileWrites.size
       };
     }
   };

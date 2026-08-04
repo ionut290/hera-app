@@ -145,5 +145,16 @@
     }).catch(() => void fallback());
   };
 
+  ui?.squadraForm?.addEventListener("submit", () => {
+    setTimeout(() => {
+      stopSquadreSubscription();
+      void original.squadre();
+      renderSquadre();
+      renderTodaySummary();
+      updateCommessaDashboard();
+      renderCommesseHomeList();
+    }, 900);
+  });
+
   window.HeraSharedViewFallback = { installed: true, romeDateKey, visibleMonth };
 })();

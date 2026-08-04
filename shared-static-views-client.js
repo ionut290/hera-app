@@ -3,158 +3,171 @@
 
   const original = {
     personale: subscribePersonale,
-    mezzi: subscribeMezzi,
-    squadre: subscribeSquadre
+    mezzi: subscribeMezzi
   };
   const FALLBACK_MS = 1400;
+  const registry = {
+    unsubscribe: null,
+    active: new Set(),
+    sourceFallback: new Set(),
+    timers: new Map(),
+    pending: new Map(),
+    lastView: null
+  };
 
-  const romeDateKey = () => new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit"
-  }).format(new Date());
-  const visibleMonth = () => String(ui?.hoursStatsMonth?.value || ui?.hoursTableMonth?.value || romeDateKey().slice(0, 7));
+  function settle(kind, value) {
+    const pending = registry.pending.get(kind) || [];
+    registry.pending.delete(kind);
+    pending.forEach((resolve) => resolve(value));
+  }
 
-  function apiReady(timeoutMs = FALLBACK_MS) {
-    if (window.HeraSharedStaticViews?.installed) return Promise.resolve(window.HeraSharedStaticViews);
-    return new Promise((resolve, reject) => {
-      const startedAt = Date.now();
-      const timer = setInterval(() => {
-        if (window.HeraSharedStaticViews?.installed) { clearInterval(timer); resolve(window.HeraSharedStaticViews); }
-        else if (Date.now() - startedAt >= timeoutMs) { clearInterval(timer); reject(new Error("Viste condivise non disponibili.")); }
-      }, 50);
+  function clearFallbackTimer(kind) {
+    const timer = registry.timers.get(kind);
+    if (timer) clearTimeout(timer);
+    registry.timers.delete(kind);
+  }
+
+  function release(kind) {
+    clearFallbackTimer(kind);
+    registry.active.delete(kind);
+    if (registry.active.size || !registry.unsubscribe) return;
+    registry.unsubscribe();
+    registry.unsubscribe = null;
+    registry.lastView = null;
+  }
+
+  function useOriginal(kind, reason) {
+    if (registry.sourceFallback.has(kind)) return;
+    registry.sourceFallback.add(kind);
+    clearFallbackTimer(kind);
+    registry.active.delete(kind);
+    console.warn("[SHARED REGISTRIES] fallback sorgente", { kind, reason });
+    Promise.resolve(original[kind]())
+      .then(() => settle(kind, false))
+      .catch((error) => {
+        console.error("[SHARED REGISTRIES] fallback fallito", { kind, error });
+        settle(kind, false);
+      });
+    if (!registry.active.size && registry.unsubscribe) {
+      registry.unsubscribe();
+      registry.unsubscribe = null;
+      registry.lastView = null;
+    }
+  }
+
+  function validView(view) {
+    return Boolean(
+      view &&
+      view.payload &&
+      Array.isArray(view.payload.personale) &&
+      Array.isArray(view.payload.mezzi)
+    );
+  }
+
+  function applyPersonale(records) {
+    personaleRecords = records.map((record) =>
+      normalizePersonaleDocument({ id: record.id, data: () => record })
+    );
+    personaleLoadState = { status: "loaded", message: "" };
+    renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
+    refreshResolvedUserIdentity();
+    renderHoursOperatoriOptions();
+    renderSquadre();
+    renderTodaySummary();
+    updateSquadraHintFromSources();
+    updateSuggestionLists();
+  }
+
+  function applyMezzi(records) {
+    mezziRecords = records.map((record) =>
+      normalizeMezzoDocument({ id: record.id, data: () => record })
+    );
+    mezziLoadState = { status: "loaded", message: "" };
+    renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
+    renderTodaySummary();
+    updateSquadraHintFromSources();
+    updateSuggestionLists();
+  }
+
+  function applyView(view, metadata = {}) {
+    if (!validView(view)) {
+      [...registry.active].forEach((kind) => useOriginal(kind, "payload-non-valido"));
+      return;
+    }
+    registry.lastView = view;
+    if (registry.active.has("personale") && !registry.sourceFallback.has("personale")) {
+      applyPersonale(view.payload.personale);
+      clearFallbackTimer("personale");
+      settle("personale", true);
+    }
+    if (registry.active.has("mezzi") && !registry.sourceFallback.has("mezzi")) {
+      applyMezzi(view.payload.mezzi);
+      clearFallbackTimer("mezzi");
+      settle("mezzi", true);
+    }
+    console.debug("[SHARED REGISTRIES] registri", {
+      personale: view.payload.personale.length,
+      mezzi: view.payload.mezzi.length,
+      source: metadata.source || "firestore"
     });
   }
 
-  function registry(kind) {
-    const isPersonale = kind === "personale";
-    if (!currentUser) return Promise.resolve(false);
-    if (isPersonale) stopPersonaleSubscription(); else stopMezziSubscription();
-    return apiReady().then((api) => new Promise((resolve) => {
-      let settled = false;
-      let stopShared = null;
-      const fallback = () => {
-        if (settled) return;
-        settled = true;
-        stopShared?.();
-        console.warn("[SHARED VIEWS] fallback sorgente", { kind });
-        Promise.resolve(original[kind]()).then(resolve);
-      };
-      const timer = setTimeout(fallback, FALLBACK_MS);
-      stopShared = api.subscribe("registri", "corrente", (view, metadata = {}) => {
-        const records = Array.isArray(view?.payload?.[kind]) ? view.payload[kind] : [];
-        if (!records.length) return fallback();
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (isPersonale) {
-          personaleRecords = records.map((record) => normalizePersonaleDocument({ id: record.id, data: () => record }));
-          personaleLoadState = { status: "loaded", message: "" };
-          renderPersonaleList(ui.personaleLista, personaleRecords, deletePersonale);
-          refreshResolvedUserIdentity(); renderHoursOperatoriOptions(); renderSquadre();
-          unsubscribePersonale = stopShared;
-        } else {
-          mezziRecords = records.map((record) => normalizeMezzoDocument({ id: record.id, data: () => record }));
-          mezziLoadState = { status: "loaded", message: "" };
-          renderMezziList(ui.mezziLista, mezziRecords, deleteMezzo);
-          unsubscribeMezzi = stopShared;
+  function ensureListener() {
+    if (registry.unsubscribe) return;
+    if (typeof db === "undefined" || !db?.collection) {
+      [...registry.active].forEach((kind) => useOriginal(kind, "firestore-non-disponibile"));
+      return;
+    }
+    registry.unsubscribe = db.collection("sharedStaticViews").doc("registri__corrente")
+      .onSnapshot((snapshot) => {
+        if (!snapshot.exists) {
+          [...registry.active].forEach((kind) => useOriginal(kind, "documento-mancante"));
+          return;
         }
-        console.debug("[SHARED VIEWS] registri", { kind, records: records.length, source: metadata.source });
-        renderTodaySummary(); updateSquadraHintFromSources(); updateSuggestionLists();
-        resolve(true);
+        applyView({ id: snapshot.id, ...(snapshot.data() || {}) }, {
+          source: snapshot.metadata?.fromCache ? "firestore-cache" : "firestore"
+        });
+      }, (error) => {
+        console.warn("[SHARED REGISTRIES] vista non disponibile", error);
+        [...registry.active].forEach((kind) => useOriginal(kind, "errore-listener"));
       });
-    })).catch(() => original[kind]());
   }
 
-  subscribePersonale = () => registry("personale");
-  subscribeMezzi = () => registry("mezzi");
-
-  subscribeSquadre = function subscribeSquadreSafe() {
+  function subscribe(kind) {
     if (!currentUser) return Promise.resolve(false);
-    stopSquadreSubscription();
-    const dates = [...new Set([getActiveSquadreDateKey(), getTodayDateKey()].filter(Boolean))];
-    return apiReady().then((api) => new Promise((resolve) => {
-      let completed = 0;
-      let usedShared = false;
-      let settled = false;
-      const stops = [];
-      const fallback = () => {
-        if (settled) return;
-        settled = true;
-        stops.forEach((stop) => stop?.());
-        console.warn("[SHARED VIEWS] fallback squadre mirato", { dates });
-        Promise.resolve(original.squadre()).then(resolve);
-      };
-      const timer = setTimeout(fallback, FALLBACK_MS);
-      dates.forEach((dateKey) => {
-        stops.push(api.subscribe("squadre", dateKey, (view, metadata = {}) => {
-          const items = Array.isArray(view?.payload?.squadre) ? view.payload.squadre : [];
-          if (!items.length) return fallback();
-          usedShared = true;
-          const history = new Map();
-          items.forEach((item) => {
-            const commessaId = String(item?.commessaId || item?.commessa || "");
-            if (!commessaId) return;
-            if (Array.isArray(item.squadre)) history.set(commessaId, { ...item, dateKey, commessaId });
-            else {
-              const current = history.get(commessaId) || { dateKey, commessaId, squadre: [] };
-              current.squadre.push(item); history.set(commessaId, current);
-            }
-          });
-          squadreHistoryByDate.set(dateKey, history);
-          squadreLoadState = { status: "loaded", message: "" };
-          console.debug("[SHARED VIEWS] squadre", { dateKey, records: items.length, source: metadata.source });
-          renderTodaySummary(); renderSquadre(); updateCommessaDashboard(); renderCommesseHomeList(); autofillSquadraForm();
-          completed += 1;
-          if (!settled && usedShared && completed >= dates.length) {
-            settled = true; clearTimeout(timer);
-            unsubscribeSquadreHistory = () => stops.forEach((stop) => stop?.());
-            resolve(true);
-          }
-        }));
-      });
-    })).catch(() => original.squadre());
+    if (kind === "personale") stopPersonaleSubscription();
+    else stopMezziSubscription();
+
+    registry.active.add(kind);
+    registry.sourceFallback.delete(kind);
+    const promise = new Promise((resolve) => {
+      const pending = registry.pending.get(kind) || [];
+      pending.push(resolve);
+      registry.pending.set(kind, pending);
+    });
+
+    if (kind === "personale") unsubscribePersonale = () => release(kind);
+    else unsubscribeMezzi = () => release(kind);
+
+    registry.timers.set(kind, setTimeout(
+      () => useOriginal(kind, "timeout"),
+      FALLBACK_MS
+    ));
+
+    if (registry.lastView) applyView(registry.lastView, { source: "memory" });
+    else ensureListener();
+    return promise;
+  }
+
+  subscribePersonale = () => subscribe("personale");
+  subscribeMezzi = () => subscribe("mezzi");
+
+  window.HeraSharedRegistries = {
+    installed: true,
+    getState: () => ({
+      active: [...registry.active],
+      fallback: [...registry.sourceFallback],
+      listening: Boolean(registry.unsubscribe)
+    })
   };
-
-  subscribeHoursStats = function subscribeHoursSafe() {
-    if (unsubscribeHoursStats || !currentUser) return;
-    const month = visibleMonth();
-    let received = false;
-    const apply = (reports, source) => {
-      allHoursReports = reports.filter((item) => String(item.sourceCollection || "oreReports") === "oreReports");
-      allHoursApprovalRequests = reports.filter((item) => String(item.sourceCollection || "") === "oreApprovalRequests");
-      hoursApprovalRequests = allHoursApprovalRequests;
-      hoursReportsLoaded = true; hoursApprovalsLoaded = true;
-      console.debug("[SHARED VIEWS] calendario", { month, reports: reports.length, source });
-      renderTodaySummary(); recalculateCommessaWorkSummaries(); renderParentCommessaOverview();
-      renderHoursApprovalRequests(); renderSquadre(); updateCommessaDashboard();
-      if (!ui.calendarPage?.classList.contains("hidden") && calendarMode === "hours") renderCalendar();
-    };
-    const fallback = async () => {
-      if (received) return;
-      const meta = getMonthMeta(month);
-      const reports = await fetchHoursReportsForMonth(month, meta, { includePendingApprovals: true });
-      apply(reports, "source-month-fallback");
-    };
-    apiReady().then((api) => {
-      unsubscribeHoursStats = api.subscribe("calendario", month, (view, metadata = {}) => {
-        const reports = Array.isArray(view?.payload?.reports) ? view.payload.reports : [];
-        if (!reports.length) return void fallback();
-        received = true; apply(reports, metadata.source);
-      });
-      unsubscribeHoursApprovals = () => {};
-      setTimeout(() => void fallback(), FALLBACK_MS);
-    }).catch(() => void fallback());
-  };
-
-  ui?.squadraForm?.addEventListener("submit", () => {
-    setTimeout(() => {
-      stopSquadreSubscription();
-      void original.squadre();
-      renderSquadre();
-      renderTodaySummary();
-      updateCommessaDashboard();
-      renderCommesseHomeList();
-    }, 900);
-  });
-
-  window.HeraSharedViewFallback = { installed: true, romeDateKey, visibleMonth };
 })();

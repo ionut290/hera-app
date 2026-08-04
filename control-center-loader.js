@@ -1,0 +1,27 @@
+(function () {
+  "use strict";
+
+  const STYLE_ID = "control-center-accordion-style";
+  const SCRIPT_ID = "control-center-accordion-script";
+
+  function addStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const link = document.createElement("link");
+    link.id = STYLE_ID;
+    link.rel = "stylesheet";
+    link.href = "./control-center-accordion.css?v=20260804a";
+    document.head.appendChild(link);
+  }
+
+  function addScript() {
+    if (document.getElementById(SCRIPT_ID)) return;
+    const script = document.createElement("script");
+    script.id = SCRIPT_ID;
+    script.src = "./control-center-accordion.js?v=20260804a";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
+  addStyle();
+  addScript();
+})();

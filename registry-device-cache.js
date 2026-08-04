@@ -14,7 +14,7 @@
   }
 
   function recordId(record) {
-    return String(record?.id || record?.docId || record?._id || "").trim();
+    return String(record?.__heraDocId || record?.id || record?.docId || record?._id || "").trim();
   }
 
   function openDb() {

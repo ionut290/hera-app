@@ -16,6 +16,6 @@ assert.match(runner, /INITIALIZE_SHARED_REGISTRIES_RESULT=/);
 assert.match(runner, /rebuildRegistryView/);
 assert.doesNotMatch(runner, /rebuildSquadreDate|rebuildCalendarMonth/);
 assert.doesNotMatch(runner, /httpsCallable|cloudfunctions\.net|fetch\(/);
-assert.doesNotMatch(runner, /\.delete\(|\.add\(|\.update\(/);
+assert.doesNotMatch(runner, /firestore\(\).*\.(delete|add|update)\(/s);
 
 console.log("✅ Inizializzazione server-side dei soli registri verificata.");

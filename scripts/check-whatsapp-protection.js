@@ -117,7 +117,9 @@ for (const marker of loaderMarkers) {
   if (!loaderSource.includes(marker)) fail(`Il blocco WhatsApp PWA non viene caricato all’avvio: ${marker}`);
 }
 
-if (!serviceWorkerSource.includes('varga-cantieri-shell-v94')) {
+const cacheVersionMatch = serviceWorkerSource.match(/varga-cantieri-shell-v(\d+)/);
+const cacheVersion = Number(cacheVersionMatch?.[1] || 0);
+if (cacheVersion < 94) {
   fail('La cache PWA non è aggiornata alla versione che rimuove il vecchio fallback WhatsApp Web.');
 }
 if (!serviceWorkerSource.includes('./whazzup-preload-cache.js?v=20260803-installed-only2')) {
@@ -125,5 +127,5 @@ if (!serviceWorkerSource.includes('./whazzup-preload-cache.js?v=20260803-install
 }
 
 console.log('✅ WhatsApp/WHAZZUP protetto su Android e PWA: solo app installata, nessun fallback web.');
-console.log('✅ Il blocco PWA viene caricato all’avvio ed è incluso nella cache corrente.');
+console.log(`✅ Il blocco PWA viene caricato all’avvio ed è incluso nella cache corrente v${cacheVersion}.`);
 protectedFiles.forEach((file) => console.log(`✅ ${file.path}: ${file.sha}`));

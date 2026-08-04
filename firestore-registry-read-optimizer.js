@@ -311,25 +311,43 @@
     return originalOnSnapshot.apply(this, args);
   };
 
-  function stableProfilePatchSignature(data) {
-    if (!data || typeof data !== "object" || Array.isArray(data)) return "";
+  function profilePatchPayload(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
     const keys = Object.keys(data);
-    if (!keys.length || keys.some((key) => !PROFILE_FIELDS.has(key))) return "";
-    if (!keys.some((key) => key === "name" || key === "email" || key === "photoURL")) return "";
-    return JSON.stringify({
-      name: String(data.name || "").trim(),
-      email: String(data.email || "").trim().toLowerCase(),
-      photoURL: String(data.photoURL || "").trim()
-    });
+    if (!keys.length || keys.some((key) => !PROFILE_FIELDS.has(key))) return null;
+
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(data, "name")) patch.name = String(data.name || "").trim();
+    if (Object.prototype.hasOwnProperty.call(data, "email")) patch.email = String(data.email || "").trim();
+    if (Object.prototype.hasOwnProperty.call(data, "photoURL")) patch.photoURL = String(data.photoURL || "").trim();
+    return Object.keys(patch).length ? patch : null;
   }
 
   function profileSyncMutation(ref, method, args) {
     if (method !== "set" || documentTarget(ref) !== "personale") return null;
     const options = args[1];
     if (!options || options.merge !== true) return null;
-    const signature = stableProfilePatchSignature(args[0]);
-    if (!signature) return null;
-    return { path: documentPath(ref), signature };
+    const patch = profilePatchPayload(args[0]);
+    if (!patch) return null;
+    return {
+      path: documentPath(ref),
+      signature: JSON.stringify(patch),
+      patch
+    };
+  }
+
+  function updateProfileDeviceCache(profileMutation) {
+    const cache = window.HeraRegistryDeviceCache;
+    if (!cache || typeof cache.patchRecord !== "function") return;
+    const id = profileMutation.path.split("/")[1] || "";
+    if (!id) return;
+    Promise.resolve(cache.patchRecord("personale", id, profileMutation.patch))
+      .then((changed) => {
+        if (changed) stats.deviceCacheWrites += 1;
+      })
+      .catch((error) => {
+        console.warn("Aggiornamento profilo nella cache locale non riuscito:", error);
+      });
   }
 
   function wrapMutation(proto, method) {
@@ -346,25 +364,33 @@
         if (previous && previous.signature === profileMutation.signature &&
             Date.now() - previous.savedAt <= PROFILE_WRITE_DEDUPE_MS) {
           stats.profileWritesSkipped += 1;
-          return Promise.resolve();
+          return previous.promise || Promise.resolve();
         }
+
+        stats.profileWritesPassed += 1;
+        const request = Promise.resolve(original.apply(ref, args))
+          .then((value) => {
+            updateProfileDeviceCache(profileMutation);
+            return value;
+          })
+          .catch((error) => {
+            const current = recentProfileWrites.get(profileMutation.path);
+            if (current?.signature === profileMutation.signature) {
+              recentProfileWrites.delete(profileMutation.path);
+            }
+            throw error;
+          });
 
         recentProfileWrites.set(profileMutation.path, {
           signature: profileMutation.signature,
-          savedAt: Date.now()
+          savedAt: Date.now(),
+          promise: request
         });
-        stats.profileWritesPassed += 1;
 
         // Nome, email e foto vengono già propagati dal listener `personale`.
         // Non svuotiamo la cache dell'intera collezione per questa sola patch:
         // il prossimo snapshot sostituirà automaticamente la copia recente.
-        return Promise.resolve(original.apply(ref, args)).catch((error) => {
-          const current = recentProfileWrites.get(profileMutation.path);
-          if (current?.signature === profileMutation.signature) {
-            recentProfileWrites.delete(profileMutation.path);
-          }
-          throw error;
-        });
+        return request;
       }
 
       const result = original.apply(ref, args);

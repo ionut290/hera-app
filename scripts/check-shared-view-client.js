@@ -13,7 +13,7 @@ assert.match(client, /Array\.isArray\(view\.payload\.personale\)/);
 assert.match(client, /Array\.isArray\(view\.payload\.mezzi\)/);
 assert.match(client, /documento-mancante/);
 assert.match(client, /payload-non-valido/);
-assert.match(client, /timeout/);
+assert.match(client, /const FALLBACK_MS = 9000/);\nassert.match(client, /timeout/);
 assert.doesNotMatch(client, /subscribeSquadre\s*=/);
 assert.doesNotMatch(client, /subscribeHoursStats\s*=/);
 assert.doesNotMatch(client, /subscribeHoursApprovals\s*=/);

@@ -10,19 +10,14 @@ window.firebaseConfig = {
 // Carica il bridge Android prima di app.js, così la mappa usa subito
 // Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
-const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804b";
-const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260804a";
-const HERA_REGISTRY_DEVICE_CACHE_SRC = "registry-device-cache.js?v=20260804c";
-const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804a";
+const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260804b";
+const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
 
 if (document.readyState === "loading") {
-  // IndexedDB deve essere disponibile prima che app.js chieda personale e mezzi.
-  document.write(`<script src="${HERA_REGISTRY_DEVICE_CACHE_SRC}"><\/script>`);
-  // Mantiene l'ottimizzatore stabile esistente senza cambiare gli snapshot Firestore reali.
-  document.write(`<script src="${HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC}"><\/script>`);
-  // Condivide esclusivamente richieste identiche ancora in corso tramite runFirestoreGetWithRetry.
+  // Condivide soltanto richieste identiche ancora in corso e restituisce
+  // sempre lo stesso QuerySnapshot originale ricevuto da Firestore.
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
-  // Aggiunge alla diagnostica i contatori dell'ottimizzatore senza interrogare Firestore.
+  // Mantiene disponibili i contatori diagnostici del coalescer.
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
@@ -30,34 +25,12 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
 } else {
-  function loadInflightCoalescer() {
-    if (window.HeraFirestoreInflightReadCoalescer?.installed ||
-        document.querySelector('script[data-hera-firestore-inflight-coalescer="true"]')) return;
+  if (!window.HeraFirestoreInflightReadCoalescer?.installed &&
+      !document.querySelector('script[data-hera-firestore-inflight-coalescer="true"]')) {
     const script = document.createElement("script");
     script.src = HERA_FIRESTORE_INFLIGHT_COALESCER_SRC;
     script.dataset.heraFirestoreInflightCoalescer = "true";
     document.head.appendChild(script);
-  }
-
-  function loadRegistryOptimizer() {
-    loadInflightCoalescer();
-    if (window.HeraFirestoreRegistryOptimizer?.installed ||
-        document.querySelector('script[data-hera-firestore-registry-optimizer="true"]')) return;
-    const optimizerScript = document.createElement("script");
-    optimizerScript.src = HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC;
-    optimizerScript.dataset.heraFirestoreRegistryOptimizer = "true";
-    document.head.appendChild(optimizerScript);
-  }
-
-  if (!window.HeraRegistryDeviceCache &&
-      !document.querySelector('script[data-hera-registry-device-cache="true"]')) {
-    const cacheScript = document.createElement("script");
-    cacheScript.src = HERA_REGISTRY_DEVICE_CACHE_SRC;
-    cacheScript.dataset.heraRegistryDeviceCache = "true";
-    cacheScript.addEventListener("load", loadRegistryOptimizer, { once: true });
-    document.head.appendChild(cacheScript);
-  } else {
-    loadRegistryOptimizer();
   }
 
   if (!window.__vargaFsOptimizerDiagnosticsExtension &&

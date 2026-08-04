@@ -387,6 +387,9 @@
           promise: request
         });
 
+        // Nome, email e foto vengono già propagati dal listener `personale`.
+        // Non svuotiamo la cache dell'intera collezione per questa sola patch:
+        // il prossimo snapshot sostituirà automaticamente la copia recente.
         return request;
       }
 

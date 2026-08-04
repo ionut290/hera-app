@@ -5,6 +5,11 @@
     personale: subscribePersonale,
     mezzi: subscribeMezzi
   };
+  const sourceSubscriptions = {
+    users: typeof subscribeUsers === "function" ? subscribeUsers : null,
+    hoursStats: typeof subscribeHoursStats === "function" ? subscribeHoursStats : null,
+    commessaStats: typeof subscribeStatsForCommesse === "function" ? subscribeStatsForCommesse : null
+  };
   const FALLBACK_MS = 9000;
   const registry = {
     unsubscribe: null,
@@ -13,6 +18,19 @@
     timers: new Map(),
     pending: new Map(),
     lastView: null
+  };
+  const lazyStartup = {
+    installed: true,
+    version: "1.0.0",
+    fullUsersEnabled: false,
+    fullUsersStarted: false,
+    lightUsersUid: "",
+    hoursSourceEnabled: false,
+    commessaStatsEnabled: false,
+    blockedHoursStarts: 0,
+    blockedCommessaStatsStarts: 0,
+    calendarUnsubscribe: null,
+    calendarMonth: ""
   };
 
   function settle(kind, value) {
@@ -159,11 +177,177 @@
     return promise;
   }
 
+  function runSafely(callback, label) {
+    try {
+      return callback?.();
+    } catch (error) {
+      console.error(`[LIGHT STARTUP] ${label}`, error);
+      return null;
+    }
+  }
+
+  function subscribeCurrentPlatformUserOnly() {
+    if (!sourceSubscriptions.users || !currentUser?.uid) return null;
+    const uid = String(currentUser.uid);
+
+    if (lazyStartup.fullUsersEnabled) {
+      if (lazyStartup.fullUsersStarted && typeof unsubscribeUsers === "function") return unsubscribeUsers;
+      lazyStartup.fullUsersStarted = true;
+      return sourceSubscriptions.users();
+    }
+
+    if (lazyStartup.lightUsersUid === uid && typeof unsubscribeUsers === "function") {
+      return unsubscribeUsers;
+    }
+
+    const originalCanManageData = canManageData;
+    try {
+      // subscribeUsers sceglie la query in modo sincrono. Per l'avvio la forziamo
+      // alla sola scheda dell'utente corrente, senza togliere i permessi admin.
+      canManageData = () => false;
+      const result = sourceSubscriptions.users();
+      lazyStartup.lightUsersUid = uid;
+      console.debug("[LIGHT STARTUP] platformUsers limitato all'utente corrente", { uid });
+      return result;
+    } finally {
+      canManageData = originalCanManageData;
+    }
+  }
+
+  function enableFullUsers() {
+    if (!sourceSubscriptions.users || lazyStartup.fullUsersStarted) return;
+    lazyStartup.fullUsersEnabled = true;
+    lazyStartup.fullUsersStarted = true;
+    lazyStartup.lightUsersUid = "";
+    runSafely(() => sourceSubscriptions.users(), "caricamento completo utenti");
+    console.debug("[LIGHT STARTUP] elenco utenti completo attivato dalla sezione Gestione utenti");
+  }
+
+  function gatedHoursStats() {
+    if (!lazyStartup.hoursSourceEnabled) {
+      lazyStartup.blockedHoursStarts += 1;
+      console.debug("[LIGHT STARTUP] oreReports rinviato", {
+        tentativiBloccati: lazyStartup.blockedHoursStarts
+      });
+      return null;
+    }
+    return sourceSubscriptions.hoursStats?.();
+  }
+
+  function enableHoursSource() {
+    if (!sourceSubscriptions.hoursStats || lazyStartup.hoursSourceEnabled) return;
+    lazyStartup.hoursSourceEnabled = true;
+    runSafely(() => sourceSubscriptions.hoursStats(), "caricamento ore");
+    console.debug("[LIGHT STARTUP] oreReports attivato su richiesta");
+  }
+
+  function gatedCommessaStats() {
+    if (!lazyStartup.commessaStatsEnabled) {
+      lazyStartup.blockedCommessaStatsStarts += 1;
+      console.debug("[LIGHT STARTUP] statistiche impianti rinviate", {
+        tentativiBloccati: lazyStartup.blockedCommessaStatsStarts
+      });
+      return null;
+    }
+    return sourceSubscriptions.commessaStats?.();
+  }
+
+  function enableCommessaStats() {
+    if (!sourceSubscriptions.commessaStats || lazyStartup.commessaStatsEnabled) return;
+    lazyStartup.commessaStatsEnabled = true;
+    runSafely(() => sourceSubscriptions.commessaStats(), "caricamento statistiche commesse");
+    console.debug("[LIGHT STARTUP] statistiche impianti attivate su richiesta");
+  }
+
+  function currentRomeMonth() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Rome",
+      year: "numeric",
+      month: "2-digit"
+    }).format(new Date()).slice(0, 7);
+  }
+
+  function normalizeStaticReport(record) {
+    if (!record || typeof record !== "object") return null;
+    const copy = { ...record };
+    delete copy.sourceCollection;
+    delete copy.sourceKey;
+    return copy;
+  }
+
+  function applyStaticCalendar(view, metadata = {}) {
+    const reports = Array.isArray(view?.payload?.reports) ? view.payload.reports : [];
+    const directReports = reports
+      .filter((record) => record?.sourceCollection === "oreReports")
+      .map(normalizeStaticReport)
+      .filter(Boolean);
+    const approvalReports = reports
+      .filter((record) => record?.sourceCollection === "oreApprovalRequests")
+      .map(normalizeStaticReport)
+      .filter(Boolean);
+
+    allHoursReports = directReports;
+    allHoursApprovalRequests = approvalReports;
+    hoursReportsLoaded = true;
+
+    runSafely(() => renderTodaySummary(), "render riepilogo ore statiche");
+    runSafely(() => recalculateCommessaWorkSummaries(), "ricalcolo riepiloghi statici");
+    runSafely(() => renderCommesseHomeList(), "render commesse con ore statiche");
+    if (!ui.calendarPage?.classList.contains("hidden") && calendarMode === "hours") {
+      runSafely(() => renderCalendar(), "render calendario statico");
+    }
+
+    console.debug("[LIGHT STARTUP] calendario condiviso applicato", {
+      mese: view?.payload?.month || lazyStartup.calendarMonth,
+      ore: directReports.length,
+      richieste: approvalReports.length,
+      source: metadata.source || "shared-view"
+    });
+  }
+
+  function subscribeStaticCalendar() {
+    const api = window.HeraSharedStaticViews;
+    if (!api?.subscribe || lazyStartup.calendarUnsubscribe) return;
+    lazyStartup.calendarMonth = currentRomeMonth();
+    lazyStartup.calendarUnsubscribe = api.subscribe(
+      "calendario",
+      lazyStartup.calendarMonth,
+      applyStaticCalendar
+    );
+  }
+
+  function bindCapture(id, handler) {
+    const node = document.getElementById(id);
+    if (!node || node.dataset.lightStartupBound === "true") return false;
+    node.dataset.lightStartupBound = "true";
+    node.addEventListener("click", handler, true);
+    return true;
+  }
+
+  function installLazyTriggers() {
+    bindCapture("open-panel-utenti", enableFullUsers);
+
+    bindCapture("open-hours-btn", enableHoursSource);
+    bindCapture("today-hours-btn", enableHoursSource);
+    bindCapture("calendar-choice-hours-btn", enableHoursSource);
+    bindCapture("calendar-hours-tab", enableHoursSource);
+
+    bindCapture("open-panel-commesse", enableCommessaStats);
+    bindCapture("toggle-commesse-home-btn", enableCommessaStats);
+
+    subscribeStaticCalendar();
+  }
+
   subscribePersonale = () => subscribe("personale");
   subscribeMezzi = () => subscribe("mezzi");
 
+  if (sourceSubscriptions.users) subscribeUsers = subscribeCurrentPlatformUserOnly;
+  if (sourceSubscriptions.hoursStats) subscribeHoursStats = gatedHoursStats;
+  if (sourceSubscriptions.commessaStats) subscribeStatsForCommesse = gatedCommessaStats;
+
   window.HeraSharedRegistries = {
     installed: true,
+    version: "4.0.0",
     getRecords: (kind) => {
       const records = registry.lastView?.payload?.[kind];
       return Array.isArray(records) ? records.slice() : null;
@@ -174,4 +358,29 @@
       listening: Boolean(registry.unsubscribe)
     })
   };
+
+  window.HeraLightStartup = {
+    installed: true,
+    version: lazyStartup.version,
+    enableFullUsers,
+    enableHoursSource,
+    enableCommessaStats,
+    getState: () => ({
+      fullUsersEnabled: lazyStartup.fullUsersEnabled,
+      fullUsersStarted: lazyStartup.fullUsersStarted,
+      lightUsersUid: lazyStartup.lightUsersUid,
+      hoursSourceEnabled: lazyStartup.hoursSourceEnabled,
+      commessaStatsEnabled: lazyStartup.commessaStatsEnabled,
+      blockedHoursStarts: lazyStartup.blockedHoursStarts,
+      blockedCommessaStatsStarts: lazyStartup.blockedCommessaStatsStarts,
+      calendarMonth: lazyStartup.calendarMonth,
+      calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe)
+    })
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installLazyTriggers, { once: true });
+  } else {
+    installLazyTriggers();
+  }
 })();

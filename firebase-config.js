@@ -7,15 +7,21 @@ window.firebaseConfig = {
   appId: "1:645390631375:web:df3659a23812560e4012ba"
 };
 
-// Carica il bridge Android prima di app.js, così la mappa usa subito
-// Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
+// Carica diagnostica, protezioni Firestore e bridge Android prima di app.js.
+// La diagnostica viene installata per prima: l'ottimizzatore la richiama solo
+// quando apre un listener fisico, così il report non conta due volte gli
+// abbonati logici che condividono la stessa query.
+const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260805a";
+const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
-const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260804b";
+const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
 const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 
 if (document.readyState === "loading") {
+  document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
+  document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}"><\/script>`);
@@ -26,13 +32,36 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
 } else {
-  function loadOnce(src, dataName, ready) {
-    if (ready?.() || document.querySelector(`script[data-${dataName}="true"]`)) return;
+  function loadOnce(src, dataName, ready, onLoad) {
+    if (ready?.()) {
+      onLoad?.();
+      return;
+    }
+    const existing = document.querySelector(`script[data-${dataName}="true"], script[data-${dataName}="1"]`);
+    if (existing) {
+      if (onLoad) existing.addEventListener("load", onLoad, { once: true });
+      return;
+    }
     const script = document.createElement("script");
     script.src = src;
     script.setAttribute(`data-${dataName}`, "true");
+    if (onLoad) script.addEventListener("load", onLoad, { once: true });
     document.head.appendChild(script);
   }
+
+  const loadSafeOptimizer = () => loadOnce(
+    HERA_FIRESTORE_SAFE_OPTIMIZER_SRC,
+    "firestore-safe-optimizer",
+    () => window.VargaFirestoreSafeOptimizer?.installed
+  );
+
+  loadOnce(
+    HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC,
+    "firestore-operation-diagnostics",
+    () => window.__vargaFsDiagV3,
+    loadSafeOptimizer
+  );
+  window.setTimeout(loadSafeOptimizer, 100);
 
   loadOnce(HERA_FIRESTORE_INFLIGHT_COALESCER_SRC, "hera-firestore-inflight-coalescer", () => window.HeraFirestoreInflightReadCoalescer?.installed);
   loadOnce(HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC, "hera-firestore-diagnostics-optimizer", () => window.__vargaFsOptimizerDiagnosticsExtension);

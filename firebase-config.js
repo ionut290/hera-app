@@ -12,12 +12,15 @@ window.firebaseConfig = {
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
 const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804b";
 const HERA_REGISTRY_DEVICE_CACHE_SRC = "registry-device-cache.js?v=20260804c";
+const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804a";
 
 if (document.readyState === "loading") {
   // IndexedDB deve essere disponibile prima che app.js chieda personale e mezzi.
   document.write(`<script src="${HERA_REGISTRY_DEVICE_CACHE_SRC}"><\/script>`);
   // Intercetta soltanto le query duplicate delle collezioni personale e mezzi.
   document.write(`<script src="${HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC}"><\/script>`);
+  // Aggiunge alla diagnostica i contatori dell'ottimizzatore senza interrogare Firestore.
+  document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
@@ -42,6 +45,14 @@ if (document.readyState === "loading") {
     document.head.appendChild(cacheScript);
   } else {
     loadRegistryOptimizer();
+  }
+
+  if (!window.__vargaFsOptimizerDiagnosticsExtension &&
+      !document.querySelector('script[data-hera-firestore-diagnostics-optimizer="true"]')) {
+    const diagnosticsOptimizerScript = document.createElement("script");
+    diagnosticsOptimizerScript.src = HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC;
+    diagnosticsOptimizerScript.dataset.heraFirestoreDiagnosticsOptimizer = "true";
+    document.head.appendChild(diagnosticsOptimizerScript);
   }
 
   if (!document.querySelector('script[data-hera-native-runtime="true"]')) {

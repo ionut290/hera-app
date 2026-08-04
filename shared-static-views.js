@@ -182,27 +182,43 @@
     const firestore = db();
     if (!firestore) return () => {};
     const subscriptionKey = `${type}:${key}`;
-    if (subscriptions.has(subscriptionKey)) return subscriptions.get(subscriptionKey).unsubscribe;
+    const existing = subscriptions.get(subscriptionKey);
+    if (existing) {
+      if (typeof callback === "function") existing.callbacks.add(callback);
+      const cachedExisting = readLocal(type, key);
+      if (cachedExisting) callback?.(cachedExisting, { source: "memory" });
+      return () => {
+        existing.callbacks.delete(callback);
+        if (existing.callbacks.size) return;
+        existing.unsubscribeFirestore?.();
+        subscriptions.delete(subscriptionKey);
+      };
+    }
 
     const cached = readLocal(type, key);
     if (cached) callback?.(cached, { source: "local" });
+    const callbacks = new Set(typeof callback === "function" ? [callback] : []);
     stats.reads += 1;
+    console.debug("[SHARED VIEWS] listener", { type, key, reads: stats.reads });
     const unsubscribeFirestore = firestore.collection(COLLECTION).doc(docId(type, key)).onSnapshot((snapshot) => {
       if (!snapshot.exists) return;
       const value = { id: snapshot.id, ...(snapshot.data() || {}) };
       writeLocal(type, key, value);
       stats.snapshotsReceived += 1;
-      callback?.(value, { source: snapshot.metadata?.fromCache ? "firestore-cache" : "firestore" });
+      const metadata = { source: snapshot.metadata?.fromCache ? "firestore-cache" : "firestore" };
+      callbacks.forEach((handler) => handler(value, metadata));
       window.dispatchEvent(new CustomEvent("hera-shared-static-view-updated", { detail: { type, key, value } }));
     }, (error) => {
       console.warn(`Vista condivisa ${type}/${key} non disponibile`, error);
     });
 
     const unsubscribe = () => {
+      callbacks.delete(callback);
+      if (callbacks.size) return;
       unsubscribeFirestore?.();
       subscriptions.delete(subscriptionKey);
     };
-    subscriptions.set(subscriptionKey, { unsubscribe });
+    subscriptions.set(subscriptionKey, { unsubscribe, unsubscribeFirestore, callbacks });
     return unsubscribe;
   }
 

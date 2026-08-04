@@ -5,7 +5,7 @@
     personale: subscribePersonale,
     mezzi: subscribeMezzi
   };
-  const FALLBACK_MS = 1400;
+  const FALLBACK_MS = 9000;
   const registry = {
     unsubscribe: null,
     active: new Set(),

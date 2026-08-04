@@ -216,7 +216,7 @@
       if (!id || typeof document?.data !== "function") return null;
       const data = document.data();
       if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-      records.push({ ...data, __heraDocId: id, id });
+      records.push({ id, ...data });
     }
     return records;
   }

@@ -1,0 +1,64 @@
+name: Backfill Shared Static Views
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: Data squadre da ricostruire (YYYY-MM-DD)
+        required: true
+        default: "2026-08-04"
+        type: string
+      month:
+        description: Mese calendario da ricostruire (YYYY-MM)
+        required: true
+        default: "2026-08"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backfill-shared-static-views
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Rebuild sharedStaticViews
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GCLOUD_PROJECT: hera-app-6cd2b
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Configure Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B mancante."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Rebuild shared static views server-side
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          BACKFILL_DATE: ${{ inputs.date }}
+          BACKFILL_MONTH: ${{ inputs.month }}
+        run: |
+          node functions/scripts/backfill-shared-static-views.js "$BACKFILL_DATE" "$BACKFILL_MONTH"

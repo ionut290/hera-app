@@ -134,3 +134,4 @@ exports.syncSharedSquadreFromHistory = onDocumentWritten({ document: "squadreSto
 exports.syncSharedSquadreFromCurrent = onDocumentWritten({ document: "squadreCommesse/{documentId}", region: REGION }, rebuildSquadreFromWrite);
 
 exports.__test = { dateKey, dataDateKey };
+exports.__server = { rebuildRegistryView, rebuildSquadreDate, rebuildCalendarMonth };

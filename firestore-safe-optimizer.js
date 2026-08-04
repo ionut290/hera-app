@@ -4,9 +4,10 @@
   const GLOBAL_NAME = "VargaFirestoreSafeOptimizer";
   const WRAPPED_FLAG = "__vargaSharedListenerOptimizerWrapped";
   const ORIGINAL_FLAG = "__vargaSharedListenerOptimizerOriginal";
-  const VERSION = "3.0.0";
+  const VERSION = "3.0.1";
   const RETRY_MS = 25;
   const RETRY_LIMIT = 800;
+  const DIAGNOSTIC_WAIT_ATTEMPTS = 24;
   const RELEASE_GRACE_MS = 2500;
 
   // Solo raccolte per le quali il report diagnostico ha mostrato aperture
@@ -37,6 +38,14 @@
     errorsDelivered: 0,
     bypassedSubscriptions: 0
   };
+
+  function scheduleInstall() {
+    if (installAttempts >= RETRY_LIMIT || installTimer) return;
+    installTimer = window.setTimeout(() => {
+      installTimer = null;
+      install();
+    }, RETRY_MS);
+  }
 
   function canonicalPath(value) {
     if (!value) return "";
@@ -331,12 +340,7 @@
     const firestoreApi = window.firebase?.firestore;
     const QueryProto = firestoreApi?.Query?.prototype;
     if (!QueryProto || typeof QueryProto.onSnapshot !== "function") {
-      if (installAttempts < RETRY_LIMIT && !installTimer) {
-        installTimer = window.setTimeout(() => {
-          installTimer = null;
-          install();
-        }, RETRY_MS);
-      }
+      scheduleInstall();
       return false;
     }
 
@@ -345,6 +349,18 @@
       api.installed = true;
       ensureRegistryOptimizerLoaded();
       return true;
+    }
+
+    // Se la diagnostica V3 è stata caricata, le concediamo fino a 600 ms per
+    // avvolgere Firestore per prima. In questo modo registra soltanto il
+    // listener fisico aperto dal multiplexer, non ogni abbonato logico.
+    if (
+      window.__vargaFsDiagV3 &&
+      !current.__vargaDiagV3 &&
+      installAttempts < DIAGNOSTIC_WAIT_ATTEMPTS
+    ) {
+      scheduleInstall();
+      return false;
     }
 
     const originalOnSnapshot = current[ORIGINAL_FLAG] || current;

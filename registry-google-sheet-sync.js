@@ -1,3 +1,209 @@
+(function installFirestoreStartupReadOptimizer() {
+  "use strict";
+
+  if (window.HeraFirestoreStartupReadOptimizer?.installed) return;
+  if (typeof db === "undefined" || !db || typeof firebase === "undefined" || !firebase.firestore) return;
+
+  const state = {
+    installed: true,
+    version: "1.0.0",
+    commesseInitialReadsCoalesced: 0,
+    posDuplicateStartsSkipped: 0
+  };
+
+  function queryPath(query) {
+    if (typeof query?.path === "string") return query.path;
+    const path = query?._query?.path || query?._delegate?._query?.path;
+    if (path && typeof path.canonicalString === "function") return path.canonicalString();
+    return path ? String(path) : "";
+  }
+
+  function observerFromArgs(args) {
+    let index = 0;
+    let options = null;
+    const first = args[0];
+    const firstIsObserver = first && typeof first === "object"
+      && (typeof first.next === "function" || typeof first.error === "function" || typeof first.complete === "function");
+    if (first && typeof first === "object" && !firstIsObserver) {
+      options = first;
+      index = 1;
+    }
+    const candidate = args[index];
+    if (candidate && typeof candidate === "object") {
+      return {
+        options,
+        next: typeof candidate.next === "function" ? candidate.next.bind(candidate) : null,
+        error: typeof candidate.error === "function" ? candidate.error.bind(candidate) : null,
+        complete: typeof candidate.complete === "function" ? candidate.complete.bind(candidate) : null
+      };
+    }
+    return {
+      options,
+      next: typeof args[index] === "function" ? args[index] : null,
+      error: typeof args[index + 1] === "function" ? args[index + 1] : null,
+      complete: typeof args[index + 2] === "function" ? args[index + 2] : null
+    };
+  }
+
+  const QueryPrototype = firebase.firestore.Query?.prototype;
+  const sharedCommesse = new WeakMap();
+
+  if (QueryPrototype && !QueryPrototype.__heraStartupDedupOriginalOnSnapshot) {
+    const sourceOnSnapshot = QueryPrototype.onSnapshot;
+    Object.defineProperty(QueryPrototype, "__heraStartupDedupOriginalOnSnapshot", {
+      value: sourceOnSnapshot,
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
+
+    QueryPrototype.onSnapshot = function startupDedupOnSnapshot(...args) {
+      if (queryPath(this) !== "commesse") {
+        return sourceOnSnapshot.apply(this, args);
+      }
+
+      const subscriber = observerFromArgs(args);
+      let entry = sharedCommesse.get(this);
+      if (!entry) {
+        entry = {
+          query: this,
+          subscribers: new Set(),
+          backendUnsubscribe: null,
+          closeTimer: null,
+          options: subscriber.options
+        };
+        sharedCommesse.set(this, entry);
+
+        const backendObserver = {
+          next(snapshot) {
+            [...entry.subscribers].forEach((item) => {
+              try { item.next?.(snapshot); } catch (error) { console.error("Errore callback commesse condivisa:", error); }
+            });
+          },
+          error(error) {
+            [...entry.subscribers].forEach((item) => {
+              try { item.error?.(error); } catch (callbackError) { console.error("Errore callback errore commesse:", callbackError); }
+            });
+            entry.subscribers.clear();
+            sharedCommesse.delete(entry.query);
+          },
+          complete() {
+            [...entry.subscribers].forEach((item) => {
+              try { item.complete?.(); } catch (error) { console.error("Errore callback completamento commesse:", error); }
+            });
+            entry.subscribers.clear();
+            sharedCommesse.delete(entry.query);
+          }
+        };
+
+        entry.backendUnsubscribe = entry.options
+          ? sourceOnSnapshot.call(this, entry.options, backendObserver)
+          : sourceOnSnapshot.call(this, backendObserver);
+      } else if (entry.closeTimer) {
+        clearTimeout(entry.closeTimer);
+        entry.closeTimer = null;
+      }
+
+      entry.subscribers.add(subscriber);
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        entry.subscribers.delete(subscriber);
+        if (entry.subscribers.size || entry.closeTimer) return;
+        entry.closeTimer = setTimeout(() => {
+          entry.closeTimer = null;
+          if (entry.subscribers.size) return;
+          try { entry.backendUnsubscribe?.(); } catch (error) { console.warn("Errore chiusura listener commesse condiviso:", error); }
+          sharedCommesse.delete(entry.query);
+        }, 1500);
+      };
+    };
+  }
+
+  if (typeof runFirestoreGetWithRetry === "function" && !runFirestoreGetWithRetry.__heraStartupDedupWrapped) {
+    const sourceRunFirestoreGetWithRetry = runFirestoreGetWithRetry;
+    const optimizedRunFirestoreGetWithRetry = function optimizedRunFirestoreGetWithRetry(query, options = {}) {
+      if (queryPath(query) !== "commesse" || String(options?.label || "") !== "LOAD COMMESSE") {
+        return sourceRunFirestoreGetWithRetry(query, options);
+      }
+
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        let unsubscribe = () => {};
+        const timeoutMs = Math.max(3000, Number(options?.timeoutMs) || 9000);
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { unsubscribe(); } catch (_) {}
+          sourceRunFirestoreGetWithRetry(query, options).then(resolve, reject);
+        }, timeoutMs);
+
+        try {
+          unsubscribe = query.onSnapshot((snapshot) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            state.commesseInitialReadsCoalesced += Number(snapshot?.size || snapshot?.docs?.length || 0);
+            resolve(snapshot);
+            queueMicrotask(() => {
+              try { unsubscribe(); } catch (_) {}
+            });
+          }, (error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { unsubscribe(); } catch (_) {}
+            sourceRunFirestoreGetWithRetry(query, options).then(resolve, reject).catch(reject);
+          });
+        } catch (error) {
+          clearTimeout(timer);
+          sourceRunFirestoreGetWithRetry(query, options).then(resolve, reject).catch(reject);
+        }
+      });
+    };
+    Object.defineProperty(optimizedRunFirestoreGetWithRetry, "__heraStartupDedupWrapped", { value: true });
+    runFirestoreGetWithRetry = optimizedRunFirestoreGetWithRetry;
+  }
+
+  if (typeof subscribePosDocuments === "function" && typeof stopPosDocumentsSubscription === "function") {
+    const sourceSubscribePosDocuments = subscribePosDocuments;
+    const sourceStopPosDocumentsSubscription = stopPosDocumentsSubscription;
+    let activePosKey = "";
+    let internalRestart = false;
+
+    subscribePosDocuments = function subscribePosDocumentsDeduplicated() {
+      const key = `${String(currentUser?.uid || "anonymous")}|${canManageData() ? "admin" : "user"}`;
+      if (activePosKey === key && typeof unsubscribePosDocuments === "function") {
+        state.posDuplicateStartsSkipped += 1;
+        renderPosDocuments?.();
+        return unsubscribePosDocuments;
+      }
+
+      internalRestart = true;
+      try {
+        const result = sourceSubscribePosDocuments();
+        activePosKey = typeof unsubscribePosDocuments === "function" ? key : "";
+        return result;
+      } finally {
+        internalRestart = false;
+      }
+    };
+
+    stopPosDocumentsSubscription = function stopPosDocumentsSubscriptionDeduplicated() {
+      const result = sourceStopPosDocumentsSubscription();
+      if (!internalRestart) activePosKey = "";
+      return result;
+    };
+  }
+
+  window.HeraFirestoreStartupReadOptimizer = {
+    installed: true,
+    version: state.version,
+    getState: () => ({ ...state })
+  };
+})();
+
 (function () {
   "use strict";
   const TECHNICAL_COLUMNS = ["RECORD_ID", "UPDATED_AT", "UPDATED_BY", "SYNC_VERSION", "SYNC_SOURCE", "ROW_STATUS"];
@@ -7,6 +213,8 @@
   const configs = new Map();
   const syncInFlight = new Map();
   const autoSyncChecked = new Set();
+  let configDocumentPromise = null;
+  let configDocumentCache = null;
   const clean = (value) => String(value == null ? "" : value).trim();
   const configDocRef = () => db.collection("appConfig").doc("driveBridge");
   const timestamp = (value) => value?.toDate instanceof Function ? value.toDate().toISOString() : clean(value) || new Date(0).toISOString();
@@ -24,10 +232,23 @@
     return message || "Operazione sul Foglio Google non riuscita.";
   }
 
+  async function readConfigDocument(force = false) {
+    if (!force && configDocumentCache) return configDocumentCache;
+    if (!force && configDocumentPromise) return configDocumentPromise;
+    configDocumentPromise = configDocRef().get()
+      .then((snap) => {
+        configDocumentCache = snap.exists ? snap.data() || {} : {};
+        return configDocumentCache;
+      })
+      .finally(() => {
+        configDocumentPromise = null;
+      });
+    return configDocumentPromise;
+  }
+
   async function load(type, force = false) {
     if (!force && configs.has(type)) return configs.get(type);
-    const snap = await configDocRef().get();
-    const data = snap.exists ? snap.data() : {};
+    const data = await readConfigDocument(force);
     const links = data && typeof data[CONFIG_FIELD] === "object" ? data[CONFIG_FIELD] : {};
     const config = links && typeof links[type] === "object" ? links[type] : {};
     configs.set(type, config);
@@ -38,6 +259,13 @@
     const existing = await load(type);
     const next = { ...existing, ...patch };
     await configDocRef().set({ [CONFIG_FIELD]: { [type]: next } }, { merge: true });
+    const previousLinks = configDocumentCache && typeof configDocumentCache[CONFIG_FIELD] === "object"
+      ? configDocumentCache[CONFIG_FIELD]
+      : {};
+    configDocumentCache = {
+      ...(configDocumentCache || {}),
+      [CONFIG_FIELD]: { ...previousLinks, [type]: next }
+    };
     configs.set(type, next);
     return next;
   }
@@ -49,6 +277,11 @@
       if (clean(error?.code).toLowerCase() !== "not-found") throw error;
     }
     configs.delete(type);
+    if (configDocumentCache && typeof configDocumentCache[CONFIG_FIELD] === "object") {
+      const links = { ...configDocumentCache[CONFIG_FIELD] };
+      delete links[type];
+      configDocumentCache = { ...configDocumentCache, [CONFIG_FIELD]: links };
+    }
     autoSyncChecked.delete(type);
     try { sessionStorage.removeItem(autoSyncKey(type)); } catch (_) {}
   }
@@ -91,7 +324,7 @@
       const last = Number(sessionStorage.getItem(autoSyncKey(type)) || 0);
       if (last && Date.now() - last < AUTO_SYNC_MIN_INTERVAL_MS) return false;
       sessionStorage.setItem(autoSyncKey(type), String(Date.now()));
-    } catch (_) { /* la memoria in sessione è facoltativa */ }
+    } catch (_) {}
     return true;
   }
 

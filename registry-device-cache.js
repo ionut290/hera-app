@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  if (window.HeraRegistryDeviceCache) return;
+
   const DB_NAME = "hera-registry-cache";
   const DB_VERSION = 1;
   const STORE = "datasets";
@@ -54,11 +56,14 @@
   async function restore() {
     try {
       const [personale, mezzi] = await Promise.all([read(KEYS.personale), read(KEYS.mezzi)]);
-      if (personale?.records?.length && Date.now() - personale.savedAt <= MAX_AGE_MS) {
+      const personaleCorrente = Array.isArray(window.personaleRecords) ? window.personaleRecords : [];
+      const mezziCorrenti = Array.isArray(window.mezziRecords) ? window.mezziRecords : [];
+
+      if (!personaleCorrente.length && personale?.records?.length && Date.now() - personale.savedAt <= MAX_AGE_MS) {
         window.personaleRecords = personale.records;
         notify("personale", personale.records.length);
       }
-      if (mezzi?.records?.length && Date.now() - mezzi.savedAt <= MAX_AGE_MS) {
+      if (!mezziCorrenti.length && mezzi?.records?.length && Date.now() - mezzi.savedAt <= MAX_AGE_MS) {
         window.mezziRecords = mezzi.records;
         notify("mezzi", mezzi.records.length);
       }
@@ -70,11 +75,11 @@
   async function persistCurrent() {
     try {
       const tasks = [];
-      if (Array.isArray(window.personaleRecords)) {
+      if (Array.isArray(window.personaleRecords) && window.personaleRecords.length) {
         const cached = await read(KEYS.personale).catch(() => null);
         if (!cached || !sameDataset(cached.records, window.personaleRecords)) tasks.push(write(KEYS.personale, window.personaleRecords));
       }
-      if (Array.isArray(window.mezziRecords)) {
+      if (Array.isArray(window.mezziRecords) && window.mezziRecords.length) {
         const cached = await read(KEYS.mezzi).catch(() => null);
         if (!cached || !sameDataset(cached.records, window.mezziRecords)) tasks.push(write(KEYS.mezzi, window.mezziRecords));
       }
@@ -84,6 +89,7 @@
     }
   }
 
+  window.HeraRegistryDeviceCache = { restore, persistCurrent, read, write };
   restore();
 
   const observer = new MutationObserver(() => {
@@ -95,6 +101,4 @@
     observer.observe(document.body, { childList: true, subtree: true });
     setTimeout(persistCurrent, 1500);
   }, { once: true });
-
-  window.HeraRegistryDeviceCache = { restore, persistCurrent, read, write };
 })();

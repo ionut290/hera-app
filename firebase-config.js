@@ -10,9 +10,9 @@ window.firebaseConfig = {
 // Carica il bridge Android prima di app.js, così la mappa usa subito
 // Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
-const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804b";
+const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804-registry-cache-2";
 const HERA_REGISTRY_DEVICE_CACHE_SRC = "registry-device-cache.js?v=20260804c";
-const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804a";
+const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804-registry-cache-2";
 
 if (document.readyState === "loading") {
   // IndexedDB deve essere disponibile prima che app.js chieda personale e mezzi.

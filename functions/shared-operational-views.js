@@ -107,7 +107,7 @@ async function assertAdmin(request) {
   throw new HttpsError("permission-denied", "Permessi amministratore richiesti.");
 }
 
-exports.rebuildAllSharedStaticViews = onCall({ region: REGION, timeoutSeconds: 300 }, async (request) => {
+exports.rebuildAllSharedStaticViews = onCall({ region: REGION, timeoutSeconds: 300, invoker: "public" }, async (request) => {
   await assertAdmin(request);
   const requestedDate = dateKey(request.data?.date || "2026-08-04") || "2026-08-04";
   const requestedMonth = String(request.data?.month || requestedDate.slice(0, 7));

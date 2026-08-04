@@ -164,6 +164,10 @@
 
   window.HeraSharedRegistries = {
     installed: true,
+    getRecords: (kind) => {
+      const records = registry.lastView?.payload?.[kind];
+      return Array.isArray(records) ? records.slice() : null;
+    },
     getState: () => ({
       active: [...registry.active],
       fallback: [...registry.sourceFallback],

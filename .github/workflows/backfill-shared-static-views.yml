@@ -42,7 +42,7 @@ jobs:
 
       - name: Install Functions dependencies
         working-directory: functions
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Configure Firebase service account
         shell: bash

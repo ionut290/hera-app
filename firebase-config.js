@@ -11,6 +11,7 @@ window.firebaseConfig = {
 // Capacitor Geolocation e la PWA installa subito il blocco WhatsApp Web.
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
 const HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC = "firestore-registry-read-optimizer.js?v=20260804-registry-cache-2";
+const HERA_FIRESTORE_REGISTRY_ORDERED_QUERY_FIX_SRC = "firestore-registry-ordered-query-fix.js?v=20260804-registry-cache-3";
 const HERA_REGISTRY_DEVICE_CACHE_SRC = "registry-device-cache.js?v=20260804c";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804-registry-cache-2";
 
@@ -19,6 +20,8 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_REGISTRY_DEVICE_CACHE_SRC}"><\/script>`);
   // Intercetta soltanto le query duplicate delle collezioni personale e mezzi.
   document.write(`<script src="${HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC}"><\/script>`);
+  // Supporta in sicurezza le query complete ordinate per createdAt usate dall'app.
+  document.write(`<script src="${HERA_FIRESTORE_REGISTRY_ORDERED_QUERY_FIX_SRC}"><\/script>`);
   // Aggiunge alla diagnostica i contatori dell'ottimizzatore senza interrogare Firestore.
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
@@ -27,12 +30,29 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
 } else {
+  function loadRegistryOrderedQueryFix() {
+    if (window.HeraFirestoreRegistryOrderedQueryFix?.installed ||
+        document.querySelector('script[data-hera-firestore-registry-ordered-query-fix="true"]')) return;
+    const orderedQueryFixScript = document.createElement("script");
+    orderedQueryFixScript.src = HERA_FIRESTORE_REGISTRY_ORDERED_QUERY_FIX_SRC;
+    orderedQueryFixScript.dataset.heraFirestoreRegistryOrderedQueryFix = "true";
+    document.head.appendChild(orderedQueryFixScript);
+  }
+
   function loadRegistryOptimizer() {
-    if (window.HeraFirestoreRegistryOptimizer?.installed ||
-        document.querySelector('script[data-hera-firestore-registry-optimizer="true"]')) return;
+    if (window.HeraFirestoreRegistryOptimizer) {
+      loadRegistryOrderedQueryFix();
+      return;
+    }
+    const existingOptimizerScript = document.querySelector('script[data-hera-firestore-registry-optimizer="true"]');
+    if (existingOptimizerScript) {
+      loadRegistryOrderedQueryFix();
+      return;
+    }
     const optimizerScript = document.createElement("script");
     optimizerScript.src = HERA_FIRESTORE_REGISTRY_OPTIMIZER_SRC;
     optimizerScript.dataset.heraFirestoreRegistryOptimizer = "true";
+    optimizerScript.addEventListener("load", loadRegistryOrderedQueryFix, { once: true });
     document.head.appendChild(optimizerScript);
   }
 

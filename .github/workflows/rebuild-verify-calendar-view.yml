@@ -1,0 +1,63 @@
+name: Rebuild and Verify Calendar View
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: Mese da ricostruire in formato YYYY-MM
+        required: true
+        default: "2026-08"
+  push:
+    branches:
+      - main
+    paths:
+      - "functions/scripts/rebuild-and-verify-calendar-view.js"
+      - ".github/workflows/rebuild-verify-calendar-view.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rebuild-verify-calendar-view
+  cancel-in-progress: false
+
+jobs:
+  rebuild-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GCLOUD_PROJECT: hera-app-6cd2b
+      CALENDAR_MONTH: ${{ github.event.inputs.month || '2026-08' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Configure Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B mancante."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Validate verification script
+        run: node --check functions/scripts/rebuild-and-verify-calendar-view.js
+
+      - name: Rebuild and verify shared calendar view
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: node functions/scripts/rebuild-and-verify-calendar-view.js

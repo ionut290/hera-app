@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v107";
+const CACHE_NAME = "varga-cantieri-shell-v108";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -58,6 +58,7 @@ const APP_SHELL = [
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
+const NETWORK_FIRST_ASSET_PATHS = new Set(["/shared-static-views-client.js"]);
 
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
   .some((pattern) => pattern.test(url.pathname));
@@ -97,6 +98,19 @@ const networkFirstForDocument = async (request) => {
   }
 };
 
+const networkFirstForCriticalAsset = async (request) => {
+  try {
+    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
+    if (canCacheResponse(request, response)) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (_) {
+    return caches.match(request);
+  }
+};
+
 const staleWhileRevalidateForAsset = async (event) => {
   const cached = await caches.match(event.request);
   const networkUpdate = fetch(event.request).then(async (response) => {
@@ -132,6 +146,10 @@ self.addEventListener("fetch", (event) => {
   if (!shouldHandleRequest(event.request, url)) return;
   if (event.request.destination === "document") {
     event.respondWith(networkFirstForDocument(event.request));
+    return;
+  }
+  if (NETWORK_FIRST_ASSET_PATHS.has(url.pathname)) {
+    event.respondWith(networkFirstForCriticalAsset(event.request));
     return;
   }
   event.respondWith(staleWhileRevalidateForAsset(event));

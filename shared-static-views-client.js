@@ -11,7 +11,6 @@
     commessaStats: typeof subscribeStatsForCommesse === "function" ? subscribeStatsForCommesse : null
   };
   const FALLBACK_MS = 9000;
-  const CALENDAR_VIEW_FALLBACK_MS = 5000;
   const registry = {
     unsubscribe: null,
     active: new Set(),
@@ -22,7 +21,7 @@
   };
   const lazyStartup = {
     installed: true,
-    version: "1.2.0",
+    version: "1.1.0",
     fullUsersEnabled: false,
     fullUsersStarted: false,
     usersSessionUid: "",
@@ -33,10 +32,7 @@
     blockedProgrammaticHoursStarts: 0,
     blockedCommessaStatsStarts: 0,
     calendarUnsubscribe: null,
-    calendarMonth: "",
-    calendarFallbackTimer: null,
-    calendarLoadToken: 0,
-    calendarFallbackLoads: 0
+    calendarMonth: ""
   };
 
   function settle(kind, value) {
@@ -215,8 +211,6 @@
 
     const originalCanManageData = canManageData;
     try {
-      // subscribeUsers sceglie la query in modo sincrono. Per l'avvio la forziamo
-      // alla sola scheda dell'utente corrente, senza togliere i permessi admin.
       canManageData = () => false;
       const result = sourceSubscriptions.users();
       lazyStartup.lightUsersUid = uid;
@@ -240,7 +234,7 @@
   function gatedHoursStats() {
     if (!lazyStartup.hoursSourceEnabled) {
       lazyStartup.blockedHoursStarts += 1;
-      console.debug("[LIGHT STARTUP] oreReports completi bloccati", {
+      console.debug("[LIGHT STARTUP] oreReports rinviato", {
         tentativiBloccati: lazyStartup.blockedHoursStarts
       });
       return null;
@@ -255,12 +249,9 @@
       "isTrusted" in trigger
     );
 
-    // Il listener completo resta disponibile solo come fallback diagnostico
-    // esplicito. L'apertura di Gestione ore usa sempre la vista mensile.
-    if (isClickEvent) {
+    if (isClickEvent && trigger.isTrusted !== true) {
       lazyStartup.blockedProgrammaticHoursStarts += 1;
-      console.debug("[LIGHT STARTUP] avvio oreReports da interfaccia bloccato", {
-        trusted: trigger.isTrusted === true,
+      console.debug("[LIGHT STARTUP] avvio automatico oreReports bloccato", {
         tentativiBloccati: lazyStartup.blockedProgrammaticHoursStarts
       });
       return;
@@ -268,8 +259,8 @@
 
     if (!sourceSubscriptions.hoursStats || lazyStartup.hoursSourceEnabled) return;
     lazyStartup.hoursSourceEnabled = true;
-    runSafely(() => sourceSubscriptions.hoursStats(), "caricamento ore completo diagnostico");
-    console.debug("[LIGHT STARTUP] oreReports completi attivati manualmente");
+    runSafely(() => sourceSubscriptions.hoursStats(), "caricamento ore");
+    console.debug("[LIGHT STARTUP] oreReports attivato da azione esplicita");
   }
 
   function gatedCommessaStats() {
@@ -298,13 +289,6 @@
     }).format(new Date()).slice(0, 7);
   }
 
-  function visibleCalendarMonth() {
-    const value = calendarVisibleMonth instanceof Date && !Number.isNaN(calendarVisibleMonth.getTime())
-      ? calendarVisibleMonth
-      : new Date();
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
-  }
-
   function normalizeStaticReport(record) {
     if (!record || typeof record !== "object") return null;
     const copy = { ...record };
@@ -326,14 +310,9 @@
 
     allHoursReports = directReports;
     allHoursApprovalRequests = approvalReports;
-    hoursApprovalRequests = approvalReports;
     hoursReportsLoaded = true;
-    hoursApprovalsLoaded = true;
 
-    // La vista contiene un solo mese: aggiorna calendario, riepilogo giornaliero
-    // e richieste, senza ricalcolare i totali storici delle commesse.
     runSafely(() => renderTodaySummary(), "render riepilogo ore statiche");
-    runSafely(() => renderHoursApprovalRequests(), "render richieste ore statiche");
     if (!ui.calendarPage?.classList.contains("hidden") && calendarMode === "hours") {
       runSafely(() => renderCalendar(), "render calendario statico");
     }
@@ -346,108 +325,15 @@
     });
   }
 
-  function clearCalendarFallbackTimer() {
-    if (lazyStartup.calendarFallbackTimer) clearTimeout(lazyStartup.calendarFallbackTimer);
-    lazyStartup.calendarFallbackTimer = null;
-  }
-
-  async function loadCalendarMonthFallback(month, token) {
-    if (!db?.collection || token !== lazyStartup.calendarLoadToken) return;
-    const from = `${month}-01`;
-    const to = `${month}-31`;
-    try {
-      const [reportsSnapshot, approvalsSnapshot] = await Promise.all([
-        db.collection(getOreReportsCollectionName())
-          .where("date", ">=", from)
-          .where("date", "<=", to)
-          .get(),
-        db.collection(getOreApprovalRequestsCollectionName())
-          .where("date", ">=", from)
-          .where("date", "<=", to)
-          .get()
-      ]);
-      if (token !== lazyStartup.calendarLoadToken || month !== lazyStartup.calendarMonth) return;
-      lazyStartup.calendarFallbackLoads += 1;
-      const rows = [
-        ...reportsSnapshot.docs.map((doc) => ({ id: doc.id, sourceCollection: "oreReports", ...doc.data() })),
-        ...approvalsSnapshot.docs.map((doc) => ({ id: doc.id, sourceCollection: "oreApprovalRequests", ...doc.data() }))
-      ];
-      applyStaticCalendar({ payload: { month, reports: rows } }, { source: "monthly-query-fallback" });
-      console.warn("[LIGHT STARTUP] vista calendario mancante: usata query limitata al mese", {
-        mese: month,
-        ore: reportsSnapshot.size,
-        richieste: approvalsSnapshot.size
-      });
-    } catch (error) {
-      console.error("[LIGHT STARTUP] caricamento mensile ore non riuscito", { month, error });
-    }
-  }
-
-  function subscribeStaticCalendar(month = visibleCalendarMonth()) {
+  function subscribeStaticCalendar() {
     const api = window.HeraSharedStaticViews;
-    if (!api?.subscribe) return;
-    const normalizedMonth = /^\d{4}-\d{2}$/.test(String(month || ""))
-      ? String(month)
-      : currentRomeMonth();
-    if (lazyStartup.calendarUnsubscribe && lazyStartup.calendarMonth === normalizedMonth) return;
-
-    clearCalendarFallbackTimer();
-    lazyStartup.calendarUnsubscribe?.();
-    lazyStartup.calendarUnsubscribe = null;
-    lazyStartup.calendarMonth = normalizedMonth;
-    lazyStartup.calendarLoadToken += 1;
-    const token = lazyStartup.calendarLoadToken;
-    let sharedViewApplied = false;
-
+    if (!api?.subscribe || lazyStartup.calendarUnsubscribe) return;
+    lazyStartup.calendarMonth = currentRomeMonth();
     lazyStartup.calendarUnsubscribe = api.subscribe(
       "calendario",
-      normalizedMonth,
-      (view, metadata) => {
-        if (token !== lazyStartup.calendarLoadToken) return;
-        sharedViewApplied = true;
-        clearCalendarFallbackTimer();
-        applyStaticCalendar(view, metadata);
-      }
+      lazyStartup.calendarMonth,
+      applyStaticCalendar
     );
-
-    lazyStartup.calendarFallbackTimer = setTimeout(() => {
-      lazyStartup.calendarFallbackTimer = null;
-      if (!sharedViewApplied && token === lazyStartup.calendarLoadToken) {
-        loadCalendarMonthFallback(normalizedMonth, token);
-      }
-    }, CALENDAR_VIEW_FALLBACK_MS);
-  }
-
-  function installCalendarMonthHooks() {
-    if (typeof changeCalendarMonth === "function" && !changeCalendarMonth.__sharedStaticViewWrapped) {
-      const originalChangeCalendarMonth = changeCalendarMonth;
-      changeCalendarMonth = function (...args) {
-        const result = originalChangeCalendarMonth.apply(this, args);
-        subscribeStaticCalendar(visibleCalendarMonth());
-        return result;
-      };
-      changeCalendarMonth.__sharedStaticViewWrapped = true;
-    }
-
-    if (typeof showCalendarToday === "function" && !showCalendarToday.__sharedStaticViewWrapped) {
-      const originalShowCalendarToday = showCalendarToday;
-      showCalendarToday = function (...args) {
-        const result = originalShowCalendarToday.apply(this, args);
-        subscribeStaticCalendar(visibleCalendarMonth());
-        return result;
-      };
-      showCalendarToday.__sharedStaticViewWrapped = true;
-    }
-
-    if (typeof selectCalendarDate === "function" && !selectCalendarDate.__sharedStaticViewWrapped) {
-      const originalSelectCalendarDate = selectCalendarDate;
-      selectCalendarDate = function (...args) {
-        const result = originalSelectCalendarDate.apply(this, args);
-        subscribeStaticCalendar(visibleCalendarMonth());
-        return result;
-      };
-      selectCalendarDate.__sharedStaticViewWrapped = true;
-    }
   }
 
   function bindCapture(id, handler) {
@@ -468,16 +354,12 @@
       "documents-new-btn"
     ].forEach((id) => bindCapture(id, enableFullUsers));
 
-    // Gestione ore non attiva più i listener completi. Ogni mese usa un solo
-    // documento sharedStaticViews/calendario__YYYY-MM; solo se manca viene fatta
-    // una query una tantum limitata a quel mese.
-    bindCapture("open-hours-btn", () => subscribeStaticCalendar(visibleCalendarMonth()));
+    bindCapture("open-hours-btn", enableHoursSource);
 
     bindCapture("open-panel-commesse", enableCommessaStats);
     bindCapture("toggle-commesse-home-btn", enableCommessaStats);
 
-    installCalendarMonthHooks();
-    subscribeStaticCalendar(currentRomeMonth());
+    subscribeStaticCalendar();
   }
 
   subscribePersonale = () => subscribe("personale");
@@ -507,7 +389,6 @@
     enableFullUsers,
     enableHoursSource,
     enableCommessaStats,
-    subscribeStaticCalendar,
     getState: () => ({
       fullUsersEnabled: lazyStartup.fullUsersEnabled,
       fullUsersStarted: lazyStartup.fullUsersStarted,
@@ -519,8 +400,7 @@
       blockedProgrammaticHoursStarts: lazyStartup.blockedProgrammaticHoursStarts,
       blockedCommessaStatsStarts: lazyStartup.blockedCommessaStatsStarts,
       calendarMonth: lazyStartup.calendarMonth,
-      calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe),
-      calendarFallbackLoads: lazyStartup.calendarFallbackLoads
+      calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe)
     })
   };
 

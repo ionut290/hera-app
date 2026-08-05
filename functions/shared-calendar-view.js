@@ -7,6 +7,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const REGION = "europe-west1";
 const SHARED_COLLECTION = "sharedStaticViews";
 const MAX_PAYLOAD_BYTES = 700000;
+const CALENDAR_SCHEMA_VERSION = 2;
 const SOURCE_COLLECTIONS = new Set(["oreReports", "oreApprovalRequests"]);
 
 function text(value) {
@@ -70,19 +71,26 @@ function compactRecord(sourceCollection, sourceId, data = {}) {
   const date = dateKeyFromData(data);
   if (!date) return null;
   const status = text(data.status || data.stato);
-  if (["rejected", "rifiutato", "rifiutata", "annullato", "annullata"].includes(normalizeStatus(status))) return null;
+  if ([
+    "rejected",
+    "rifiutato",
+    "rifiutata",
+    "cancelled",
+    "canceled",
+    "annullato",
+    "annullata"
+  ].includes(normalizeStatus(status))) return null;
 
+  // La vista condivisa deve conservare lo stesso schema letto dal calendario.
+  // I campi originali restano intatti; vengono aggiunti soltanto i metadati
+  // necessari per distinguere la raccolta sorgente e normalizzare la data.
   return {
+    ...data,
     id: sourceId,
     sourceCollection,
     sourceKey: `${sourceCollection}/${sourceId}`,
     date,
-    status,
-    commessaId: text(data.commessaId || data.commessa || data.projectId),
-    operatoreId: text(data.operatoreId || data.operatorId || data.userId || data.uid),
-    operatore: text(data.operatore || data.operatorName || data.userName || data.nomeOperatore),
-    entries: Array.isArray(data.entries) ? data.entries : [],
-    updatedAtClient: text(data.updatedAtClient || data.modifiedAtClient || "")
+    status
   };
 }
 
@@ -96,8 +104,13 @@ function buildNextPayload(existingPayload, month, sourceCollection, sourceId, ne
   const reports = current.filter((item) => text(item?.sourceKey || `${item?.sourceCollection || ""}/${item?.id || ""}`) !== sourceKey);
   const nextRecord = nextData ? compactRecord(sourceCollection, sourceId, nextData) : null;
   if (nextRecord && nextRecord.date.startsWith(month)) reports.push(nextRecord);
-  reports.sort((a, b) => `${a.date}|${a.operatore}|${a.sourceKey}`.localeCompare(`${b.date}|${b.operatore}|${b.sourceKey}`, "it"));
-  return { month, reports };
+  reports.sort((a, b) => `${a.date}|${a.operatore || a.operatorName || ""}|${a.sourceKey}`.localeCompare(`${b.date}|${b.operatore || b.operatorName || ""}|${b.sourceKey}`, "it"));
+  return {
+    month,
+    schemaVersion: CALENDAR_SCHEMA_VERSION,
+    completeRecords: true,
+    reports
+  };
 }
 
 async function updateMonthView({ month, sourceCollection, sourceId, nextData }) {
@@ -122,14 +135,17 @@ async function updateMonthView({ month, sourceCollection, sourceId, nextData }) 
       type: "calendario",
       key: month,
       version: Number(previous.version || 0) + 1,
+      schemaVersion: CALENDAR_SCHEMA_VERSION,
+      completeRecords: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAtClient: new Date().toISOString(),
       updatedBy: "cloud-function:hours-write",
       authorName: "Aggiornamento automatico ore",
       contentHash,
+      payloadBytes: bytes,
       payload
     }, { merge: false });
-    return { updated: true, month, reports: payload.reports.length };
+    return { updated: true, month, reports: payload.reports.length, bytes };
   });
 }
 
@@ -163,6 +179,7 @@ exports.syncSharedCalendarFromOreApprovalRequests = onDocumentWritten(
 );
 
 exports.__test = {
+  CALENDAR_SCHEMA_VERSION,
   dateKeyFromData,
   monthKeyFromData,
   compactRecord,

@@ -12,6 +12,7 @@ window.firebaseConfig = {
 // quando apre un listener fisico, così il report non conta due volte gli
 // abbonati logici che condividono la stessa query.
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260805a";
+const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805a";
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
 const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260805a";
@@ -22,6 +23,7 @@ const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
+  document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_SRC}" data-firestore-diagnostics-v4="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
@@ -57,13 +59,21 @@ if (document.readyState === "loading") {
     () => window.VargaFirestoreSafeOptimizer?.installed
   );
 
+  const loadDiagnosticsV4 = () => loadOnce(
+    HERA_FIRESTORE_DIAGNOSTICS_V4_SRC,
+    "firestore-diagnostics-v4",
+    () => window.VargaFirestoreDiagnosticsV4?.installed,
+    loadSafeOptimizer
+  );
+
   loadOnce(
     HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC,
     "firestore-operation-diagnostics",
     () => window.__vargaFsDiagV3,
-    loadSafeOptimizer
+    loadDiagnosticsV4
   );
-  window.setTimeout(loadSafeOptimizer, 100);
+  window.setTimeout(loadDiagnosticsV4, 100);
+  window.setTimeout(loadSafeOptimizer, 250);
 
   loadOnce(HERA_FIRESTORE_INFLIGHT_COALESCER_SRC, "hera-firestore-inflight-coalescer", () => window.HeraFirestoreInflightReadCoalescer?.installed);
   loadOnce(HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC, "hera-firestore-diagnostics-optimizer", () => window.__vargaFsOptimizerDiagnosticsExtension);

@@ -17,6 +17,7 @@ const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-e
 const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
 const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
+const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 
 if (document.readyState === "loading") {
@@ -25,6 +26,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC}"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}"><\/script>`);
+  document.write(`<script src="${HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC}" data-firestore-startup-cost-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_UI_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
@@ -66,6 +68,7 @@ if (document.readyState === "loading") {
   loadOnce(HERA_FIRESTORE_INFLIGHT_COALESCER_SRC, "hera-firestore-inflight-coalescer", () => window.HeraFirestoreInflightReadCoalescer?.installed);
   loadOnce(HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC, "hera-firestore-diagnostics-optimizer", () => window.__vargaFsOptimizerDiagnosticsExtension);
   loadOnce(HERA_SHARED_STATIC_VIEWS_SRC, "hera-shared-static-views", () => window.HeraSharedStaticViews?.installed);
+  loadOnce(HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC, "firestore-startup-cost-optimizer", () => window.HeraFirestoreStartupCostOptimizer?.installed);
   loadOnce(HERA_SHARED_STATIC_VIEWS_UI_SRC, "hera-shared-static-views-ui", () => window.__heraSharedStaticViewsUiInstalled);
   loadOnce(HERA_NATIVE_RUNTIME_SRC, "hera-native-runtime", () => false);
   loadOnce("notification-session-enhancements.js?v=20260727b", "hera-notification-session", () => false);

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v106";
+const CACHE_NAME = "varga-cantieri-shell-v107";
 const APP_SHELL = [
   "./",
   "./index.html",

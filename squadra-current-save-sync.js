@@ -80,3 +80,41 @@
 
   window.HeraSquadraCurrentSaveSync = { installed: true };
 })();
+
+// Quando l'utente entra in “Le mie ore” dal calendario, usa la sorgente completa
+// oreReports e riporta sempre mese e giorno alla data odierna. La vista statica
+// mensile resta disponibile all'avvio, ma non può più nascondere giornate già salvate.
+(() => {
+  "use strict";
+
+  if (window.HeraPersonalHoursCalendarEntryFix?.installed) return;
+
+  const targetIds = ["calendar-choice-hours-btn", "calendar-hours-tab"];
+
+  function openPersonalHoursOnToday(event) {
+    try {
+      window.HeraLightStartup?.enableHoursSource?.(event);
+    } catch (error) {
+      console.error("[LE MIE ORE] attivazione sorgente completa non riuscita", error);
+    }
+
+    try {
+      if (typeof showCalendarToday === "function") showCalendarToday();
+    } catch (error) {
+      console.error("[LE MIE ORE] apertura sulla data odierna non riuscita", error);
+    }
+  }
+
+  targetIds.forEach((id) => {
+    const button = document.getElementById(id);
+    if (!button || button.dataset.personalHoursEntryFixBound === "true") return;
+    button.dataset.personalHoursEntryFixBound = "true";
+    button.addEventListener("click", openPersonalHoursOnToday, true);
+  });
+
+  window.HeraPersonalHoursCalendarEntryFix = {
+    installed: true,
+    version: "1.0.0",
+    targets: targetIds.slice()
+  };
+})();

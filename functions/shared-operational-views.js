@@ -7,6 +7,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const REGION = "europe-west1";
 const SHARED_COLLECTION = "sharedStaticViews";
 const MAX_PAYLOAD_BYTES = 700000;
+const CALENDAR_SCHEMA_VERSION = 2;
 
 const cleanRecord = (snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) });
 
@@ -29,13 +30,19 @@ function dataDateKey(data = {}) {
   return "";
 }
 
-async function writeSharedView(id, type, key, payload, updatedBy) {
+async function writeSharedView(id, type, key, payload, updatedBy, extra = {}) {
   const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
   if (bytes > MAX_PAYLOAD_BYTES) throw new Error(`Vista ${id} troppo grande: ${bytes} byte`);
   await admin.firestore().collection(SHARED_COLLECTION).doc(id).set({
-    type, key, version: Date.now(),
+    type,
+    key,
+    version: Date.now(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedBy, payload, payloadBytes: bytes
+    updatedAtClient: new Date().toISOString(),
+    updatedBy,
+    payload,
+    payloadBytes: bytes,
+    ...extra
   }, { merge: false });
   return { id, count: Object.values(payload).find(Array.isArray)?.length || 0, bytes };
 }
@@ -89,11 +96,32 @@ async function rebuildCalendarMonth(month) {
     db.collection("oreApprovalRequests").where("date", ">=", from).where("date", "<=", to).get()
   ]);
   const rows = [
-    ...reports.docs.map((doc) => ({ ...cleanRecord(doc), sourceCollection: "oreReports" })),
-    ...approvals.docs.map((doc) => ({ ...cleanRecord(doc), sourceCollection: "oreApprovalRequests" }))
-      .filter((row) => !["rejected", "rifiutato", "rifiutata", "cancelled", "annullato", "annullata"].includes(String(row.status || row.stato || "").toLowerCase()))
+    ...reports.docs.map((doc) => ({ ...cleanRecord(doc), sourceCollection: "oreReports", sourceKey: `oreReports/${doc.id}` })),
+    ...approvals.docs.map((doc) => ({ ...cleanRecord(doc), sourceCollection: "oreApprovalRequests", sourceKey: `oreApprovalRequests/${doc.id}` }))
+      .filter((row) => ![
+        "rejected",
+        "rifiutato",
+        "rifiutata",
+        "cancelled",
+        "canceled",
+        "annullato",
+        "annullata"
+      ].includes(String(row.status || row.stato || "").toLowerCase()))
   ];
-  return writeSharedView(`calendario__${month}`, "calendario", month, { month, reports: rows }, "callable:shared-view-backfill");
+  const payload = {
+    month,
+    schemaVersion: CALENDAR_SCHEMA_VERSION,
+    completeRecords: true,
+    reports: rows
+  };
+  return writeSharedView(
+    `calendario__${month}`,
+    "calendario",
+    month,
+    payload,
+    "callable:shared-view-backfill",
+    { schemaVersion: CALENDAR_SCHEMA_VERSION, completeRecords: true }
+  );
 }
 
 async function assertAdmin(request) {
@@ -133,5 +161,5 @@ exports.syncSharedRegistriesFromMezzi = onDocumentWritten({ document: "mezzi/{do
 exports.syncSharedSquadreFromHistory = onDocumentWritten({ document: "squadreStorico/{documentId}", region: REGION }, rebuildSquadreFromWrite);
 exports.syncSharedSquadreFromCurrent = onDocumentWritten({ document: "squadreCommesse/{documentId}", region: REGION }, rebuildSquadreFromWrite);
 
-exports.__test = { dateKey, dataDateKey };
-exports.__server = { rebuildRegistryView };
+exports.__test = { CALENDAR_SCHEMA_VERSION, dateKey, dataDateKey };
+exports.__server = { rebuildRegistryView, rebuildCalendarMonth };

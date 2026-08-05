@@ -5,12 +5,8 @@
     loadActiveUsersLogs = async function loadActiveUsersLogsDisabled() {
       activeUsersLogs = [];
 
-      if (ui.activeUsersFilterOperator) {
-        ui.activeUsersFilterOperator.innerHTML = '<option value="">Tutti operatori</option>';
-      }
-      if (ui.activeUsersFilterAction) {
-        ui.activeUsersFilterAction.innerHTML = '<option value="">Tutte azioni</option>';
-      }
+      if (ui.activeUsersFilterOperator) ui.activeUsersFilterOperator.innerHTML = '<option value="">Tutti operatori</option>';
+      if (ui.activeUsersFilterAction) ui.activeUsersFilterAction.innerHTML = '<option value="">Tutte azioni</option>';
       if (ui.activeUsersLogList) {
         ui.activeUsersLogList.classList.remove("hidden");
         ui.activeUsersLogList.innerHTML = '<p class="muted">Registro attività disattivato per evitare letture Firestore.</p>';
@@ -39,7 +35,8 @@
     explicit: false,
     activeIds: new Set(),
     ready: null,
-    lastError: null
+    lastError: null,
+    savingIds: new Set()
   };
 
   function normalizeIds(value) {
@@ -148,25 +145,47 @@
   async function saveActiveIds(ids) {
     const normalized = normalizeIds(ids);
     const user = firebase.auth?.().currentUser;
-    await db.collection("appConfig").doc("activeCommesse").set({
+    const ref = db.collection("appConfig").doc("activeCommesse");
+
+    await ref.set({
       ids: normalized,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedByUid: user?.uid || "",
       updatedByEmail: user?.email || "",
-      mode: "non-destructive-listener-filter-v1"
+      mode: "non-destructive-listener-filter-v2"
     }, { merge: true });
+
+    const verification = await ref.get({ source: "server" });
+    const savedIds = normalizeIds(verification.data()?.ids);
+    if (savedIds.length !== normalized.length || savedIds.some((id, index) => id !== normalized[index])) {
+      throw new Error("Verifica salvataggio non riuscita. Lo stato non è stato applicato.");
+    }
+
     state.explicit = true;
-    state.activeIds = new Set(normalized);
+    state.activeIds = new Set(savedIds);
+    state.lastError = null;
   }
 
-  function hideInactiveHomeCards() {
+  function syncOperationalCards() {
     if (!state.explicit) return;
-    const home = document.getElementById("home-page");
-    if (!home) return;
-    home.querySelectorAll("[data-commessa-id]").forEach((node) => {
-      const id = node.getAttribute("data-commessa-id");
-      if (id && !isActive(id)) node.classList.add("hidden");
+    document.querySelectorAll("[data-commessa-id]").forEach((node) => {
+      const id = String(node.getAttribute("data-commessa-id") || "");
+      if (!id || node.closest("#active-commesse-manager")) return;
+      node.classList.toggle("hidden", !isActive(id));
     });
+  }
+
+  function updateManagerRow(row, commessa) {
+    const active = isActive(commessa.id);
+    const button = row.querySelector("button[data-active-commessa-toggle]");
+    const status = row.querySelector("[data-active-commessa-status]");
+    if (status) status.textContent = `${commessa.codice ? `${commessa.codice} · ` : ""}${active ? "Attiva" : "Disattivata"}`;
+    if (button) {
+      button.textContent = active ? "Disattiva" : "Riattiva";
+      button.classList.toggle("btn-primary", !active);
+      button.setAttribute("aria-pressed", String(!active));
+      button.disabled = state.savingIds.has(commessa.id);
+    }
   }
 
   function renderManager() {
@@ -188,7 +207,7 @@
         </div>
       </div>
       <div id="active-commesse-manager-list" class="simple-list"></div>
-      <p id="active-commesse-manager-feedback" class="muted" role="status"></p>
+      <p id="active-commesse-manager-feedback" class="muted" role="status" aria-live="polite"></p>
     `;
     host.parentNode.insertBefore(section, host);
     const list = section.querySelector("#active-commesse-manager-list");
@@ -196,34 +215,48 @@
     commesse.forEach((commessa) => {
       const row = document.createElement("div");
       row.className = "simple-list-item";
+      row.dataset.activeCommessaId = commessa.id;
       row.style.display = "flex";
       row.style.alignItems = "center";
       row.style.justifyContent = "space-between";
       row.style.gap = "12px";
-      const active = isActive(commessa.id);
       row.innerHTML = `
-        <div><strong></strong><div class="muted"></div></div>
-        <button type="button" class="btn ${active ? "" : "btn-primary"}">${active ? "Disattiva" : "Riattiva"}</button>
+        <div><strong></strong><div class="muted" data-active-commessa-status></div></div>
+        <button type="button" class="btn" data-active-commessa-toggle></button>
       `;
       row.querySelector("strong").textContent = commessa.nome;
-      row.querySelector(".muted").textContent = `${commessa.codice ? `${commessa.codice} · ` : ""}${active ? "Attiva" : "Disattivata"}`;
-      row.querySelector("button").addEventListener("click", async () => {
+      updateManagerRow(row, commessa);
+
+      row.querySelector("button").addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (state.savingIds.has(commessa.id)) return;
+
         const feedback = section.querySelector("#active-commesse-manager-feedback");
-        const button = row.querySelector("button");
-        button.disabled = true;
+        state.savingIds.add(commessa.id);
+        updateManagerRow(row, commessa);
         feedback.textContent = "Salvataggio in corso…";
+
         try {
           const current = state.explicit
             ? new Set(state.activeIds)
             : new Set(commesse.map((item) => item.id));
           if (current.has(commessa.id)) current.delete(commessa.id);
           else current.add(commessa.id);
+
           await saveActiveIds([...current]);
-          feedback.textContent = "Stato salvato. Ricarico l’app per applicare i listener corretti…";
-          setTimeout(() => window.location.reload(), 350);
+          updateManagerRow(row, commessa);
+          syncOperationalCards();
+          feedback.textContent = isActive(commessa.id)
+            ? `Commessa “${commessa.nome}” riattivata correttamente.`
+            : `Commessa “${commessa.nome}” disattivata correttamente. Le ore storiche restano disponibili.`;
         } catch (error) {
-          button.disabled = false;
+          state.lastError = error;
           feedback.textContent = `Salvataggio non riuscito: ${error?.message || error}`;
+          console.error("Cambio stato commessa non riuscito:", commessa.id, error);
+        } finally {
+          state.savingIds.delete(commessa.id);
+          updateManagerRow(row, commessa);
         }
       });
       list.appendChild(row);
@@ -233,20 +266,22 @@
   state.ready.finally(() => {
     const observer = new MutationObserver(() => {
       renderManager();
-      hideInactiveHomeCards();
+      syncOperationalCards();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
     renderManager();
-    hideInactiveHomeCards();
+    syncOperationalCards();
   });
 
   window.HeraActiveCommesse = {
     installed: true,
     indexPath: INDEX_PATH,
     isActive,
+    refreshUi: syncOperationalCards,
     getState: () => ({
       explicit: state.explicit,
       activeIds: [...state.activeIds],
+      savingIds: [...state.savingIds],
       lastError: state.lastError ? String(state.lastError?.message || state.lastError) : ""
     })
   };

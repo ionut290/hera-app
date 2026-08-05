@@ -21,7 +21,7 @@
   };
   const lazyStartup = {
     installed: true,
-    version: "1.1.0",
+    version: "1.1.1",
     fullUsersEnabled: false,
     fullUsersStarted: false,
     usersSessionUid: "",
@@ -31,6 +31,7 @@
     blockedHoursStarts: 0,
     blockedProgrammaticHoursStarts: 0,
     blockedCommessaStatsStarts: 0,
+    ignoredStaticCalendarUpdates: 0,
     calendarUnsubscribe: null,
     calendarMonth: ""
   };
@@ -242,6 +243,13 @@
     return sourceSubscriptions.hoursStats?.();
   }
 
+  function stopStaticCalendarForFullHours() {
+    if (!lazyStartup.calendarUnsubscribe) return;
+    lazyStartup.calendarUnsubscribe();
+    lazyStartup.calendarUnsubscribe = null;
+    console.debug("[LIGHT STARTUP] vista calendario ridotta fermata: priorità alle ore complete");
+  }
+
   function enableHoursSource(trigger = null) {
     const isClickEvent = Boolean(
       trigger &&
@@ -259,6 +267,7 @@
 
     if (!sourceSubscriptions.hoursStats || lazyStartup.hoursSourceEnabled) return;
     lazyStartup.hoursSourceEnabled = true;
+    stopStaticCalendarForFullHours();
     runSafely(() => sourceSubscriptions.hoursStats(), "caricamento ore");
     console.debug("[LIGHT STARTUP] oreReports attivato da azione esplicita");
   }
@@ -298,6 +307,15 @@
   }
 
   function applyStaticCalendar(view, metadata = {}) {
+    if (lazyStartup.hoursSourceEnabled) {
+      lazyStartup.ignoredStaticCalendarUpdates += 1;
+      console.debug("[LIGHT STARTUP] aggiornamento calendario ridotto ignorato: ore complete attive", {
+        ignorati: lazyStartup.ignoredStaticCalendarUpdates,
+        source: metadata.source || "shared-view"
+      });
+      return;
+    }
+
     const reports = Array.isArray(view?.payload?.reports) ? view.payload.reports : [];
     const directReports = reports
       .filter((record) => !record?.sourceCollection || record.sourceCollection === "oreReports")
@@ -327,7 +345,7 @@
 
   function subscribeStaticCalendar() {
     const api = window.HeraSharedStaticViews;
-    if (!api?.subscribe || lazyStartup.calendarUnsubscribe) return;
+    if (lazyStartup.hoursSourceEnabled || !api?.subscribe || lazyStartup.calendarUnsubscribe) return;
     lazyStartup.calendarMonth = currentRomeMonth();
     lazyStartup.calendarUnsubscribe = api.subscribe(
       "calendario",
@@ -399,6 +417,7 @@
       blockedHoursStarts: lazyStartup.blockedHoursStarts,
       blockedProgrammaticHoursStarts: lazyStartup.blockedProgrammaticHoursStarts,
       blockedCommessaStatsStarts: lazyStartup.blockedCommessaStatsStarts,
+      ignoredStaticCalendarUpdates: lazyStartup.ignoredStaticCalendarUpdates,
       calendarMonth: lazyStartup.calendarMonth,
       calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe)
     })

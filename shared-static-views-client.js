@@ -21,7 +21,7 @@
   };
   const lazyStartup = {
     installed: true,
-    version: "1.0.0",
+    version: "1.1.0",
     fullUsersEnabled: false,
     fullUsersStarted: false,
     usersSessionUid: "",
@@ -29,6 +29,7 @@
     hoursSourceEnabled: false,
     commessaStatsEnabled: false,
     blockedHoursStarts: 0,
+    blockedProgrammaticHoursStarts: 0,
     blockedCommessaStatsStarts: 0,
     calendarUnsubscribe: null,
     calendarMonth: ""
@@ -243,11 +244,27 @@
     return sourceSubscriptions.hoursStats?.();
   }
 
-  function enableHoursSource() {
+  function enableHoursSource(trigger = null) {
+    const isClickEvent = Boolean(
+      trigger &&
+      typeof trigger === "object" &&
+      "isTrusted" in trigger
+    );
+
+    // L'interfaccia usa anche click() automatici per ripristinare alcune viste.
+    // Questi eventi non devono mai attivare i listener completi di oreReports.
+    if (isClickEvent && trigger.isTrusted !== true) {
+      lazyStartup.blockedProgrammaticHoursStarts += 1;
+      console.debug("[LIGHT STARTUP] avvio automatico oreReports bloccato", {
+        tentativiBloccati: lazyStartup.blockedProgrammaticHoursStarts
+      });
+      return;
+    }
+
     if (!sourceSubscriptions.hoursStats || lazyStartup.hoursSourceEnabled) return;
     lazyStartup.hoursSourceEnabled = true;
     runSafely(() => sourceSubscriptions.hoursStats(), "caricamento ore");
-    console.debug("[LIGHT STARTUP] oreReports attivato su richiesta");
+    console.debug("[LIGHT STARTUP] oreReports attivato da azione esplicita");
   }
 
   function gatedCommessaStats() {
@@ -343,10 +360,10 @@
       "documents-new-btn"
     ].forEach((id) => bindCapture(id, enableFullUsers));
 
+    // Il caricamento completo delle ore serve solo entrando esplicitamente in
+    // Gestione ore. Inserimento rapido e calendario continuano a usare la vista
+    // condivisa mensile, evitando centinaia di letture.
     bindCapture("open-hours-btn", enableHoursSource);
-    bindCapture("today-hours-btn", enableHoursSource);
-    bindCapture("calendar-choice-hours-btn", enableHoursSource);
-    bindCapture("calendar-hours-tab", enableHoursSource);
 
     bindCapture("open-panel-commesse", enableCommessaStats);
     bindCapture("toggle-commesse-home-btn", enableCommessaStats);
@@ -389,6 +406,7 @@
       hoursSourceEnabled: lazyStartup.hoursSourceEnabled,
       commessaStatsEnabled: lazyStartup.commessaStatsEnabled,
       blockedHoursStarts: lazyStartup.blockedHoursStarts,
+      blockedProgrammaticHoursStarts: lazyStartup.blockedProgrammaticHoursStarts,
       blockedCommessaStatsStarts: lazyStartup.blockedCommessaStatsStarts,
       calendarMonth: lazyStartup.calendarMonth,
       calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe)

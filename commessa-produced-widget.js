@@ -1,4 +1,4 @@
-/* Riepilogo economico live della commessa, basato sul calcolo condiviso della contabilità. */
+/* Riepilogo economico della commessa, caricato solo quando l'utente apre PRODOTTO. */
 (() => {
   "use strict";
 
@@ -16,6 +16,7 @@
   let prices = [];
   let generalDiscount = 0;
   let selectedId = "";
+  let listenersStarted = false;
 
   function close() {
     toggle.setAttribute("aria-expanded", "false");
@@ -40,7 +41,7 @@
 
   function render() {
     const core = window.InreteWorkItemsV2;
-    if (!core) return;
+    if (!core || !listenersStarted) return;
     const sourceItems = workItems.length
       ? workItems
       : legacyPlants.flatMap((plant) => core.adaptLegacyPlantToWorkItems(plant));
@@ -49,7 +50,7 @@
     value.textContent = money.format(core.calculateCompletedSubtotal(items));
   }
 
-  function stop() {
+  function stopListeners() {
     unsubscribeWork?.();
     unsubscribeLegacy?.();
     unsubscribePrices?.();
@@ -58,21 +59,25 @@
     unsubscribeLegacy = null;
     unsubscribePrices = null;
     unsubscribeCommessa = null;
+    listenersStarted = false;
     workItems = [];
     legacyPlants = [];
     prices = [];
     generalDiscount = 0;
+  }
+
+  function stop() {
+    stopListeners();
+    selectedId = "";
+    widget.hidden = true;
+    value.textContent = "—";
     close();
   }
 
-  function select(commessaId) {
-    const nextId = String(commessaId || "").trim();
-    if (nextId === selectedId && unsubscribeWork) return;
-    stop();
-    selectedId = nextId;
-    widget.hidden = !selectedId;
-    value.textContent = money.format(0);
-    if (!selectedId) return;
+  function startListeners() {
+    if (!selectedId || listenersStarted) return;
+    listenersStarted = true;
+    value.textContent = "…";
     const ref = db.collection(getCommesseCollectionName()).doc(selectedId);
     unsubscribeWork = ref.collection("lavorazioni").onSnapshot((snapshot) => {
       workItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -92,10 +97,21 @@
     }, (error) => console.error("Aggiornamento ribasso del valore prodotto non riuscito:", error));
   }
 
+  function select(commessaId) {
+    const nextId = String(commessaId || "").trim();
+    if (nextId === selectedId) return;
+    stopListeners();
+    selectedId = nextId;
+    widget.hidden = !selectedId;
+    value.textContent = selectedId ? "—" : money.format(0);
+    close();
+  }
+
   toggle.addEventListener("click", (event) => {
     event.stopPropagation();
     const opening = toggle.getAttribute("aria-expanded") !== "true";
     if (!opening) return close();
+    startListeners();
     positionPopover();
     toggle.setAttribute("aria-expanded", "true");
     popover.setAttribute("aria-hidden", "false");

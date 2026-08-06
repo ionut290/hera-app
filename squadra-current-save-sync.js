@@ -269,3 +269,78 @@
     retryDeletion: deleteStoredMessagesOnce
   };
 })();
+
+// Il salvataggio FATTO ha già completato il batch prima di questa verifica.
+// La verifica successiva deve leggere soltanto cache/listener già caricati: una
+// nuova lettura di rete può bloccarsi a lungo e invitare l'operatore a ripremere.
+(() => {
+  "use strict";
+
+  if (window.HeraFattoPersistenceReadGuard?.installed) return;
+  if (typeof isImpiantoPersistedAsDone !== "function") return;
+
+  function getLocalImpianti(commessaId) {
+    try {
+      if (String(selectedCommessaId || "") === commessaId && Array.isArray(currentImpianti)) {
+        return currentImpianti;
+      }
+    } catch (_) {}
+
+    try {
+      if (impiantiByCommessaId instanceof Map) {
+        const cached = impiantiByCommessaId.get(commessaId);
+        if (Array.isArray(cached)) return cached;
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  function isDone(item) {
+    try {
+      if (typeof isImpiantoDoneState === "function") return isImpiantoDoneState(item || {});
+    } catch (_) {}
+    const status = String(item?.stato || item?.status || "").trim().toUpperCase();
+    return item?.done === true || status === "FATTO" || status === "COMPLETATO";
+  }
+
+  isImpiantoPersistedAsDone = async function isImpiantoPersistedAsDoneFromCache(
+    impianto,
+    commessaIdOverride = selectedCommessaId
+  ) {
+    const commessaId = String(commessaIdOverride || "").trim();
+    const impiantoIds = typeof getImpiantoDocIds === "function"
+      ? getImpiantoDocIds(impianto).filter(Boolean)
+      : [];
+    if (!commessaId || !impiantoIds.length) return false;
+
+    // Firestore cache-only: non apre una richiesta di rete e non genera una
+    // lettura documentale fatturabile. I documenti sono già presenti perché la
+    // commessa è caricata dal listener impianti.
+    try {
+      const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
+      const snapshots = await Promise.all(
+        impiantoIds.map((impiantoId) => ref.doc(impiantoId).get({ source: "cache" }))
+      );
+      if (snapshots.every((snapshot) => snapshot.exists && isDone(snapshot.data() || {}))) return true;
+    } catch (error) {
+      console.debug("[FATTO] cache Firestore non disponibile, uso lo stato del listener", {
+        commessaId,
+        impiantoIds,
+        error: String(error?.message || error || "")
+      });
+    }
+
+    const localImpianti = getLocalImpianti(commessaId);
+    return impiantoIds.every((impiantoId) => localImpianti.some((item) => {
+      const itemIds = typeof getImpiantoDocIds === "function" ? getImpiantoDocIds(item) : [];
+      return itemIds.includes(impiantoId) && isDone(item);
+    }));
+  };
+
+  window.HeraFattoPersistenceReadGuard = {
+    installed: true,
+    version: "1.0.0",
+    mode: "cache-listener-no-network-get"
+  };
+})();

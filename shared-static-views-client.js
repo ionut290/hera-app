@@ -1,19 +1,23 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v3";
-  const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806b";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v4";
+  const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806c";
   const api = window.HeraSharedStaticViews;
   const prematureHoursState = {
     stoppedHoursListener: false,
     stoppedApprovalsListener: false,
+    completeCalendarViews: 0,
+    legacyCalendarViewsAccepted: 0,
+    invalidCalendarViewsIgnored: 0,
+    automaticFallbacksBlocked: 0,
     errors: []
   };
 
   // app.js viene eseguito prima di questo client e può aprire i listener completi
   // delle ore durante l'avvio. Li chiudiamo prima che consegnino l'intero storico;
   // la vista mensile condivisa alimenterà Home e calendario. La sorgente completa
-  // potrà essere riaperta dal core soltanto dopo un'azione esplicita dell'utente.
+  // potrà essere riaperta soltanto da una vera azione dell'utente.
   function stopPrematureHoursSubscriptions() {
     try {
       if (typeof unsubscribeHoursStats === "function") {
@@ -41,6 +45,34 @@
         approvazioni: prematureHoursState.stoppedApprovalsListener
       });
     }
+  }
+
+  function isCompleteCalendarView(view) {
+    return Boolean(
+      view &&
+      view.schemaVersion === 2 &&
+      view.completeRecords === true &&
+      view.payload &&
+      view.payload.schemaVersion === 2 &&
+      view.payload.completeRecords === true &&
+      Array.isArray(view.payload.reports)
+    );
+  }
+
+  function hasUsableLegacyCalendar(view) {
+    return Boolean(
+      view &&
+      view.payload &&
+      Array.isArray(view.payload.reports)
+    );
+  }
+
+  function markStaticApprovalsReady() {
+    try { hoursApprovalsLoaded = true; } catch (_) {}
+  }
+
+  function syncStaticApprovalList() {
+    try { hoursApprovalRequests = allHoursApprovalRequests; } catch (_) {}
   }
 
   function loadHoursGuard(callback) {
@@ -88,45 +120,48 @@
     }
 
     return originalSubscribe(type, key, (view, metadata = {}) => {
-      const complete = Boolean(
-        view &&
-        view.schemaVersion === 2 &&
-        view.completeRecords === true &&
-        view.payload &&
-        view.payload.schemaVersion === 2 &&
-        view.payload.completeRecords === true &&
-        Array.isArray(view.payload.reports)
-      );
-
-      if (complete) {
+      if (isCompleteCalendarView(view)) {
+        prematureHoursState.completeCalendarViews += 1;
+        markStaticApprovalsReady();
         callback(view, metadata);
+        syncStaticApprovalList();
         return;
       }
 
-      console.warn("[SAFE CALENDAR GUARD] Vista calendario non completa: attivo il fallback Firestore originale.", {
+      // Le versioni precedenti salvavano nel telefono una vista ridotta senza
+      // schemaVersion/completeRecords. La usiamo solo come dato temporaneo e
+      // continuiamo ad attendere il documento completo dal listener Firestore.
+      // Non deve mai aprire automaticamente oreReports/oreApprovalRequests.
+      if (hasUsableLegacyCalendar(view)) {
+        prematureHoursState.legacyCalendarViewsAccepted += 1;
+        prematureHoursState.automaticFallbacksBlocked += 1;
+        markStaticApprovalsReady();
+        callback(view, { ...metadata, legacyReduced: true });
+        syncStaticApprovalList();
+        console.warn("[SAFE CALENDAR GUARD] Vista calendario legacy accettata temporaneamente; fallback completo bloccato.", {
+          key,
+          source: metadata.source || "sconosciuta",
+          reports: view.payload.reports.length
+        });
+        return;
+      }
+
+      prematureHoursState.invalidCalendarViewsIgnored += 1;
+      prematureHoursState.automaticFallbacksBlocked += 1;
+      console.warn("[SAFE CALENDAR GUARD] Vista calendario non valida ignorata; ore complete disponibili solo da Gestione ore.", {
         key,
+        source: metadata.source || "sconosciuta",
         schemaVersion: view?.schemaVersion,
         completeRecords: view?.completeRecords,
         payloadSchemaVersion: view?.payload?.schemaVersion,
         payloadCompleteRecords: view?.payload?.completeRecords
-      });
-
-      queueMicrotask(() => {
-        const fallback = window.HeraLightStartup?.enableHoursSource;
-        if (typeof fallback === "function") {
-          fallback({
-            forceSharedCalendarFallback: true,
-            reason: "shared-calendar-incomplete",
-            month: key
-          });
-        }
       });
     }, ...rest);
   };
 
   window.HeraSafeCalendarGuard = {
     installed: true,
-    version: "1.3.0",
+    version: "1.4.0",
     getState: () => ({ ...prematureHoursState, errors: prematureHoursState.errors.slice() })
   };
 

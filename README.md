@@ -236,3 +236,4 @@ npx cap open android
 In Android Studio eseguire la sincronizzazione Gradle e provare su un dispositivo reale con
 blocco schermo e almeno un'impronta o volto configurato.
 Test workflow GitHub Actions.
+Test workflow GitHub Actions.

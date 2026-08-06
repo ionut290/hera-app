@@ -11,7 +11,7 @@ window.firebaseConfig = {
 // La diagnostica viene installata per prima: l'ottimizzatore la richiama solo
 // quando apre un listener fisico, così il report non conta due volte gli
 // abbonati logici che condividono la stessa query.
-const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260805a";
+const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC = "firestore-diagnostics-v4-session-cleanup.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";

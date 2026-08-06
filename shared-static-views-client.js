@@ -1,30 +1,37 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v1";
-  const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806a";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v2";
+  const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806b";
   const api = window.HeraSharedStaticViews;
 
-  function loadHoursGuard() {
-    if (document.querySelector('script[data-hours-source-explicit-guard]')) return;
+  function loadHoursGuard(callback) {
+    const existing = document.querySelector('script[data-hours-source-explicit-guard]');
+    if (existing) {
+      if (window.HeraHoursSourceExplicitGuard?.installed) callback?.();
+      else existing.addEventListener("load", () => callback?.(), { once: true });
+      return;
+    }
     const script = document.createElement("script");
     script.src = HOURS_GUARD_URL;
     script.async = false;
     script.dataset.hoursSourceExplicitGuard = "1";
+    script.addEventListener("load", () => callback?.(), { once: true });
     document.head.appendChild(script);
   }
 
   function loadCore() {
     if (document.readyState === "loading") {
-      document.write(`<script src="${CORE_URL}"><\/script>`);
       document.write(`<script src="${HOURS_GUARD_URL}" data-hours-source-explicit-guard="1"><\/script>`);
+      document.write(`<script src="${CORE_URL}"><\/script>`);
       return;
     }
-    const script = document.createElement("script");
-    script.src = CORE_URL;
-    script.async = false;
-    script.addEventListener("load", loadHoursGuard, { once: true });
-    document.head.appendChild(script);
+    loadHoursGuard(() => {
+      const script = document.createElement("script");
+      script.src = CORE_URL;
+      script.async = false;
+      document.head.appendChild(script);
+    });
   }
 
   if (!api || typeof api.subscribe !== "function") {
@@ -79,7 +86,7 @@
 
   window.HeraSafeCalendarGuard = {
     installed: true,
-    version: "1.1.0"
+    version: "1.2.0"
   };
 
   loadCore();

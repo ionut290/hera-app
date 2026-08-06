@@ -83,6 +83,9 @@ jobs:
       - name: Verifica admin Functions import notifiche e offline
         run: node scripts/check-safety-admin-functions-import.js
 
+      - name: Verifica prestazioni listener cache e indici
+        run: node scripts/check-safety-performance-listeners-cache.js
+
       - name: Verifica JSON e configurazione Netlify
         shell: bash
         run: |

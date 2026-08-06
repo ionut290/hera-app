@@ -80,6 +80,9 @@ jobs:
       - name: Verifica ore mappa PWA e protezioni Firestore
         run: node scripts/check-safety-extended.js
 
+      - name: Verifica admin Functions import notifiche e offline
+        run: node scripts/check-safety-admin-functions-import.js
+
       - name: Verifica JSON e configurazione Netlify
         shell: bash
         run: |

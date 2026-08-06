@@ -77,6 +77,9 @@ jobs:
           npm run check:weather
           npm run check:google-sheet-sync
 
+      - name: Verifica ore mappa PWA e protezioni Firestore
+        run: node scripts/check-safety-extended.js
+
       - name: Verifica JSON e configurazione Netlify
         shell: bash
         run: |

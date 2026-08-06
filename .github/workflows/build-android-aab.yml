@@ -20,31 +20,16 @@ on:
       - "android/**"
       - "android-resources/**"
       - ".github/workflows/build-android-aab.yml"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "*.html"
-      - "*.js"
-      - "*.css"
-      - "*.webmanifest"
-      - "assets/**"
-      - "icons/**"
-      - "functions/**"
-      - "scripts/**"
-      - "package.json"
-      - "package-lock.json"
-      - "capacitor.config.json"
-      - "android/**"
-      - "android-resources/**"
-      - ".github/workflows/build-android-aab.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: android-aab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-aab:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

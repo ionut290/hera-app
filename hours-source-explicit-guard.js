@@ -5,11 +5,11 @@
 
   const state = {
     installed: true,
-    version: "2.0.0",
+    version: "2.1.0",
     wrapped: false,
     blockedAutomaticStarts: 0,
+    blockedFallbackStarts: 0,
     allowedTrustedStarts: 0,
-    allowedFallbackStarts: 0,
     assignmentsIntercepted: 0
   };
 
@@ -29,22 +29,23 @@
         "isTrusted" in trigger &&
         trigger.isTrusted === true
       );
-      const verifiedSharedViewFallback = Boolean(
+      const requestedAutomaticFallback = Boolean(
         trigger &&
         typeof trigger === "object" &&
         trigger.forceSharedCalendarFallback === true
       );
 
-      if (!trustedUserAction && !verifiedSharedViewFallback) {
+      if (!trustedUserAction) {
         state.blockedAutomaticStarts += 1;
+        if (requestedAutomaticFallback) state.blockedFallbackStarts += 1;
         console.debug("[HOURS SOURCE GUARD] avvio automatico delle ore complete bloccato", {
-          blockedAutomaticStarts: state.blockedAutomaticStarts
+          blockedAutomaticStarts: state.blockedAutomaticStarts,
+          blockedFallbackStarts: state.blockedFallbackStarts
         });
         return null;
       }
 
-      if (trustedUserAction) state.allowedTrustedStarts += 1;
-      if (verifiedSharedViewFallback) state.allowedFallbackStarts += 1;
+      state.allowedTrustedStarts += 1;
       return original(trigger);
     }
 

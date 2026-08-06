@@ -1,9 +1,10 @@
 (() => {
   "use strict";
 
+  const startupGate = window.HeraRegistryStartupGate;
   const original = {
-    personale: subscribePersonale,
-    mezzi: subscribeMezzi
+    personale: startupGate?.originals?.personale || subscribePersonale,
+    mezzi: startupGate?.originals?.mezzi || subscribeMezzi
   };
   const sourceSubscriptions = {
     users: typeof subscribeUsers === "function" ? subscribeUsers : null,
@@ -389,7 +390,7 @@
 
   window.HeraSharedRegistries = {
     installed: true,
-    version: "4.0.0",
+    version: "4.0.1",
     getRecords: (kind) => {
       const records = registry.lastView?.payload?.[kind];
       return Array.isArray(records) ? records.slice() : null;
@@ -422,6 +423,11 @@
       calendarSharedViewActive: Boolean(lazyStartup.calendarUnsubscribe)
     })
   };
+
+  startupGate?.release?.({
+    personale: subscribePersonale,
+    mezzi: subscribeMezzi
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", installLazyTriggers, { once: true });

@@ -31,12 +31,17 @@
   if (typeof db === "undefined" || !db || typeof firebase === "undefined" || !firebase.firestore) return;
 
   const INDEX_PATH = "appConfig/activeCommesse";
+  const MAX_ACTIVE_IDS_PER_QUERY = 30;
   const state = {
     explicit: false,
     activeIds: new Set(),
     ready: null,
     lastError: null,
-    savingIds: new Set()
+    savingIds: new Set(),
+    managerRequested: false,
+    managerLoaded: false,
+    managerLoading: null,
+    managerCommesse: new Map()
   };
 
   function normalizeIds(value) {
@@ -54,6 +59,10 @@
     const path = query?._query?.path || query?._delegate?._query?.path;
     if (path && typeof path.canonicalString === "function") return path.canonicalString();
     return path ? String(path) : "";
+  }
+
+  function isRootCommesseQuery(path) {
+    return String(path || "") === "commesse";
   }
 
   function extractImpiantiCommessaId(path) {
@@ -81,6 +90,24 @@
     };
   }
 
+  function buildActiveCommesseQuery() {
+    if (!state.explicit) return null;
+    const ids = [...state.activeIds];
+    if (!ids.length) return false;
+    if (ids.length > MAX_ACTIVE_IDS_PER_QUERY) {
+      console.warn(
+        `Indice commesse attive con ${ids.length} ID: superato il limite di ${MAX_ACTIVE_IDS_PER_QUERY}. `
+        + "Mantengo temporaneamente la query completa per non interrompere l'app."
+      );
+      return null;
+    }
+    return db.collection("commesse").where(
+      firebase.firestore.FieldPath.documentId(),
+      "in",
+      ids
+    );
+  }
+
   state.ready = db.collection("appConfig").doc("activeCommesse").get()
     .then((snapshot) => {
       if (!snapshot.exists) return;
@@ -106,13 +133,31 @@
     });
 
     QueryPrototype.onSnapshot = function activeCommesseOnSnapshotGuard(...args) {
-      const commessaId = extractImpiantiCommessaId(getQueryPath(this));
-      if (!commessaId) return originalOnSnapshot.apply(this, args);
+      const path = getQueryPath(this);
+      const commessaId = extractImpiantiCommessaId(path);
+      const rootCommesse = isRootCommesseQuery(path);
+      if (!commessaId && !rootCommesse) return originalOnSnapshot.apply(this, args);
 
       let cancelled = false;
       let unsubscribe = () => {};
       state.ready.finally(() => {
         if (cancelled) return;
+
+        if (rootCommesse) {
+          const activeQuery = buildActiveCommesseQuery();
+          if (activeQuery === false) {
+            const next = findNextCallback(args);
+            if (next) queueMicrotask(() => !cancelled && next(emptySnapshot(this)));
+            console.info("Listener commesse iniziale evitato: nessuna commessa attiva nell'indice.");
+            return;
+          }
+          unsubscribe = originalOnSnapshot.apply(activeQuery || this, args);
+          if (activeQuery) {
+            console.info("Listener commesse iniziale limitato agli ID attivi:", [...state.activeIds]);
+          }
+          return;
+        }
+
         if (isActive(commessaId)) {
           unsubscribe = originalOnSnapshot.apply(this, args);
           return;
@@ -129,17 +174,53 @@
     };
   }
 
+  function normalizeCommessaRecord(id, value) {
+    return {
+      id: String(id || ""),
+      nome: String(value?.nome || value?.name || id || "Commessa"),
+      codice: String(value?.codice || value?.code || "")
+    };
+  }
+
+  function rememberManagerCommesse(snapshot) {
+    snapshot?.docs?.forEach((doc) => {
+      state.managerCommesse.set(String(doc.id), normalizeCommessaRecord(doc.id, doc.data() || {}));
+    });
+  }
+
   function allKnownCommesse() {
+    const merged = new Map(state.managerCommesse);
     try {
-      if (!(commesseById instanceof Map)) return [];
-      return [...commesseById.entries()].map(([id, value]) => ({
-        id: String(id),
-        nome: String(value?.nome || value?.name || id),
-        codice: String(value?.codice || value?.code || "")
-      })).sort((a, b) => a.nome.localeCompare(b.nome, "it"));
-    } catch (_) {
-      return [];
-    }
+      if (commesseById instanceof Map) {
+        [...commesseById.entries()].forEach(([id, value]) => {
+          merged.set(String(id), normalizeCommessaRecord(id, value));
+        });
+      }
+    } catch (_) {}
+    return [...merged.values()].sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+  }
+
+  async function loadAllCommesseForManager() {
+    if (state.managerLoaded) return allKnownCommesse();
+    if (state.managerLoading) return state.managerLoading;
+
+    state.managerLoading = db.collection("commesse").get()
+      .then((snapshot) => {
+        rememberManagerCommesse(snapshot);
+        state.managerLoaded = true;
+        state.lastError = null;
+        return allKnownCommesse();
+      })
+      .catch((error) => {
+        state.lastError = error;
+        console.error("Caricamento amministrativo completo delle commesse non riuscito:", error);
+        throw error;
+      })
+      .finally(() => {
+        state.managerLoading = null;
+      });
+
+    return state.managerLoading;
   }
 
   async function saveActiveIds(ids) {
@@ -152,7 +233,7 @@
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedByUid: user?.uid || "",
       updatedByEmail: user?.email || "",
-      mode: "non-destructive-listener-filter-v2"
+      mode: "active-commesse-startup-query-filter-v3"
     }, { merge: true });
 
     const verification = await ref.get({ source: "server" });
@@ -188,22 +269,33 @@
     }
   }
 
+  function managerSignature(commesse) {
+    return commesse.map((item) => `${item.id}:${item.nome}:${item.codice}:${isActive(item.id) ? 1 : 0}`).join("|");
+  }
+
   function renderManager() {
+    if (!state.managerRequested) return;
     const panel = document.getElementById("panel-commesse");
     const host = document.getElementById("commesse-manage-list");
-    if (!panel || !host || document.getElementById("active-commesse-manager")) return;
+    if (!panel || !host) return;
+
     const commesse = allKnownCommesse();
-    if (!commesse.length) return;
+    const signature = managerSignature(commesse);
+    const existing = document.getElementById("active-commesse-manager");
+    if (existing?.dataset.signature === signature && existing?.dataset.loaded === String(state.managerLoaded)) return;
+    existing?.remove();
 
     const section = document.createElement("section");
     section.id = "active-commesse-manager";
     section.className = "card";
     section.style.margin = "12px 0";
+    section.dataset.signature = signature;
+    section.dataset.loaded = String(state.managerLoaded);
     section.innerHTML = `
       <div class="section-head">
         <div>
           <h3>Commesse caricate all'avvio</h3>
-          <p class="muted">Disattivare una commessa non elimina, sposta o modifica alcun dato. Le ore storiche restano nel calendario personale.</p>
+          <p class="muted">All'avvio vengono lette soltanto le commesse attive. L'elenco completo viene letto esclusivamente quando apri questa gestione. Le ore storiche restano nel calendario personale.</p>
         </div>
       </div>
       <div id="active-commesse-manager-list" class="simple-list"></div>
@@ -211,6 +303,18 @@
     `;
     host.parentNode.insertBefore(section, host);
     const list = section.querySelector("#active-commesse-manager-list");
+    const feedback = section.querySelector("#active-commesse-manager-feedback");
+
+    if (!state.managerLoaded) {
+      feedback.textContent = state.managerLoading
+        ? "Caricamento dell'elenco completo delle commesse…"
+        : "Apro l'elenco amministrativo completo…";
+    }
+
+    if (!commesse.length) {
+      list.innerHTML = '<p class="muted">Nessuna commessa disponibile.</p>';
+      return;
+    }
 
     commesse.forEach((commessa) => {
       const row = document.createElement("div");
@@ -232,7 +336,15 @@
         event.stopPropagation();
         if (state.savingIds.has(commessa.id)) return;
 
-        const feedback = section.querySelector("#active-commesse-manager-feedback");
+        const currentlyActive = isActive(commessa.id);
+        if (currentlyActive) {
+          const confirmed = window.confirm(
+            "La commessa verrà nascosta dalle attività operative e i suoi impianti non saranno caricati automaticamente. "
+            + "Le ore già registrate resteranno visibili nel calendario personale. Nessun dato verrà eliminato."
+          );
+          if (!confirmed) return;
+        }
+
         state.savingIds.add(commessa.id);
         updateManagerRow(row, commessa);
         feedback.textContent = "Salvataggio in corso…";
@@ -240,7 +352,7 @@
         try {
           const current = state.explicit
             ? new Set(state.activeIds)
-            : new Set(commesse.map((item) => item.id));
+            : new Set(allKnownCommesse().map((item) => item.id));
           if (current.has(commessa.id)) current.delete(commessa.id);
           else current.add(commessa.id);
 
@@ -248,8 +360,9 @@
           updateManagerRow(row, commessa);
           syncOperationalCards();
           feedback.textContent = isActive(commessa.id)
-            ? `Commessa “${commessa.nome}” riattivata correttamente.`
-            : `Commessa “${commessa.nome}” disattivata correttamente. Le ore storiche restano disponibili.`;
+            ? `Commessa “${commessa.nome}” riattivata correttamente. Ricarico i dati operativi…`
+            : `Commessa “${commessa.nome}” disattivata correttamente. Le ore storiche restano disponibili. Ricarico i dati operativi…`;
+          setTimeout(() => window.location.reload(), 350);
         } catch (error) {
           state.lastError = error;
           feedback.textContent = `Salvataggio non riuscito: ${error?.message || error}`;
@@ -263,13 +376,24 @@
     });
   }
 
+  function requestManagerLoad() {
+    state.managerRequested = true;
+    renderManager();
+    loadAllCommesseForManager()
+      .then(() => renderManager())
+      .catch(() => renderManager());
+  }
+
   state.ready.finally(() => {
     const observer = new MutationObserver(() => {
       renderManager();
       syncOperationalCards();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    renderManager();
+
+    const openButton = document.getElementById("open-panel-commesse");
+    openButton?.addEventListener("click", () => queueMicrotask(requestManagerLoad));
+
     syncOperationalCards();
   });
 
@@ -277,11 +401,15 @@
     installed: true,
     indexPath: INDEX_PATH,
     isActive,
+    ready: state.ready,
     refreshUi: syncOperationalCards,
+    loadAllForManager: requestManagerLoad,
     getState: () => ({
       explicit: state.explicit,
       activeIds: [...state.activeIds],
       savingIds: [...state.savingIds],
+      managerLoaded: state.managerLoaded,
+      managerCount: state.managerCommesse.size,
       lastError: state.lastError ? String(state.lastError?.message || state.lastError) : ""
     })
   };

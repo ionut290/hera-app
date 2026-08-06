@@ -5,29 +5,23 @@
 
   const state = {
     installed: true,
-    version: "1.0.0",
+    version: "2.0.0",
     wrapped: false,
     blockedAutomaticStarts: 0,
     allowedTrustedStarts: 0,
-    allowedFallbackStarts: 0
+    allowedFallbackStarts: 0,
+    assignmentsIntercepted: 0
   };
 
-  function install(attempt = 0) {
-    const api = window.HeraLightStartup;
-    const current = api?.enableHoursSource;
-
-    if (!api || typeof current !== "function") {
-      if (attempt < 120) window.setTimeout(() => install(attempt + 1), 50);
-      return;
-    }
-
+  function wrapApi(api) {
+    if (!api || typeof api.enableHoursSource !== "function") return api;
+    const current = api.enableHoursSource;
     if (current.__explicitHoursSourceGuard) {
       state.wrapped = true;
-      return;
+      return api;
     }
 
     const original = current.bind(api);
-
     function guardedEnableHoursSource(trigger = null) {
       const trustedUserAction = Boolean(
         trigger &&
@@ -43,7 +37,7 @@
 
       if (!trustedUserAction && !verifiedSharedViewFallback) {
         state.blockedAutomaticStarts += 1;
-        console.debug("[HOURS SOURCE GUARD] caricamento completo ore bloccato perché non richiesto dall’utente", {
+        console.debug("[HOURS SOURCE GUARD] avvio automatico delle ore complete bloccato", {
           blockedAutomaticStarts: state.blockedAutomaticStarts
         });
         return null;
@@ -58,12 +52,41 @@
     guardedEnableHoursSource.__original = current;
     api.enableHoursSource = guardedEnableHoursSource;
     state.wrapped = true;
+    return api;
+  }
 
-    console.info("[HOURS SOURCE GUARD] oreReports completi disponibili solo da azione esplicita o fallback verificato.");
+  let storedApi = window.HeraLightStartup;
+  const existingDescriptor = Object.getOwnPropertyDescriptor(window, "HeraLightStartup");
+
+  if (!existingDescriptor || existingDescriptor.configurable !== false) {
+    Object.defineProperty(window, "HeraLightStartup", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return storedApi;
+      },
+      set(value) {
+        state.assignmentsIntercepted += 1;
+        storedApi = wrapApi(value);
+      }
+    });
+    if (storedApi) storedApi = wrapApi(storedApi);
+  } else {
+    storedApi = wrapApi(storedApi);
+  }
+
+  function install(attempt = 0) {
+    const api = window.HeraLightStartup;
+    if (api && typeof api.enableHoursSource === "function") {
+      wrapApi(api);
+      return;
+    }
+    if (attempt < 200) window.setTimeout(() => install(attempt + 1), 25);
   }
 
   window.HeraHoursSourceExplicitGuard = {
-    ...state,
+    installed: true,
+    version: state.version,
     getState: () => ({ ...state })
   };
 

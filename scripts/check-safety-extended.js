@@ -12,6 +12,7 @@ const sw = read('sw.js');
 const manifest = JSON.parse(read('manifest.webmanifest'));
 const firebaseConfig = read('firebase-config.js');
 const app = read('app.js');
+const bootstrapSources = [index, sw, firebaseConfig, app].join('\n');
 
 // Gestione ore: protegge la presenza del comando e dei contenitori principali.
 assert(/id=["']open-hours-btn["']/.test(index), 'Il pulsante Gestione ore esiste');
@@ -48,8 +49,10 @@ const optimizerFiles = [
   'firestore-nested-listener-optimizer.js'
 ];
 for (const file of optimizerFiles) {
-  assert(fs.existsSync(path.join(process.cwd(), file)), `Esiste la protezione ${file}`);
-  assert(index.includes(file), `${file} è caricato da index.html`);
+  const filePath = path.join(process.cwd(), file);
+  assert(fs.existsSync(filePath), `Esiste la protezione ${file}`);
+  assert(fs.statSync(filePath).size > 0, `${file} non è vuoto`);
+  assert(bootstrapSources.includes(file), `${file} è referenziato dal bootstrap o dalla cache dell’app`);
 }
 
 console.log('\nControlli estesi completati senza collegarsi a Firestore o modificare dati.');

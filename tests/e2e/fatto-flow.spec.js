@@ -1,11 +1,14 @@
 const { test, expect } = require('@playwright/test');
 
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080';
+const appUrl = (path) => new URL(path, `${baseUrl.replace(/\/$/, '')}/`).toString();
+
 test.describe('Hera App - protezioni E2E', () => {
   test('l’app reale espone gli elementi principali senza errori HTML bloccanti', async ({ page }) => {
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
-    await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+    await page.goto(appUrl('index.html'), { waitUntil: 'domcontentloaded' });
 
     await expect(page).toHaveTitle(/Hera App/i);
     await expect(page.locator('#home-page')).toHaveCount(1);
@@ -19,7 +22,7 @@ test.describe('Hera App - protezioni E2E', () => {
   });
 
   test('FATTO diventa giallo, mostra la data, salva una sola operazione e apre WhatsApp', async ({ page }) => {
-    await page.goto('/tests/e2e/fatto-harness.html', { waitUntil: 'domcontentloaded' });
+    await page.goto(appUrl('tests/e2e/fatto-harness.html'), { waitUntil: 'domcontentloaded' });
 
     await page.waitForFunction(() =>
       window.handleImpiantoWhatsAppClick &&

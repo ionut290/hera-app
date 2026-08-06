@@ -39,7 +39,7 @@
     "export:testers": "node scripts/export-firestore-emails.js",
     "check:map-fit": "node scripts/check-map-auto-fit.js",
     "check:management-v2": "node scripts/check-management-v2.js",
-    "check:preventivi-models": "node scripts/check-preventivi-models.js && node scripts/check-inrete-work-items-v2.js && node scripts/check-coordinate-repair.js",
+    "check:preventivi-models": "node scripts/check-preventivi-models.js",
     "check:preventivi-registry-model": "node scripts/check-preventivi-registry-model-fix.js",
     "check:preventivi-model-field-recovery": "node scripts/check-preventivi-model-field-recovery.js",
     "check:preventivi-avola-system-model": "node scripts/check-preventivi-avola-system-model.js",

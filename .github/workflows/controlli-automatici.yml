@@ -92,4 +92,5 @@ jobs:
           PY
 
       - name: Riepilogo
-        run: echo "Controlli completati: la Pull Request può essere revisionata."
+        run: |
+          echo "Controlli completati: la Pull Request può essere revisionata."

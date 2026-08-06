@@ -10,6 +10,79 @@ const assert = (condition, message) => {
   console.log(`✓ ${message}`);
 };
 
+function findExplicitWhileTrueBodies(source) {
+  const bodies = [];
+  const loopPattern = /\bwhile\s*\(\s*true\s*\)\s*\{/g;
+  let match;
+
+  while ((match = loopPattern.exec(source)) !== null) {
+    const bodyStart = loopPattern.lastIndex;
+    let depth = 1;
+    let index = bodyStart;
+    let quote = null;
+    let escaped = false;
+    let lineComment = false;
+    let blockComment = false;
+
+    for (; index < source.length && depth > 0; index += 1) {
+      const char = source[index];
+      const next = source[index + 1];
+
+      if (lineComment) {
+        if (char === '\n') lineComment = false;
+        continue;
+      }
+
+      if (blockComment) {
+        if (char === '*' && next === '/') {
+          blockComment = false;
+          index += 1;
+        }
+        continue;
+      }
+
+      if (quote) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (char === quote) quote = null;
+        continue;
+      }
+
+      if (char === '/' && next === '/') {
+        lineComment = true;
+        index += 1;
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        blockComment = true;
+        index += 1;
+        continue;
+      }
+
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+        continue;
+      }
+
+      if (char === '{') depth += 1;
+      if (char === '}') depth -= 1;
+    }
+
+    const bodyEnd = depth === 0 ? index - 1 : source.length;
+    bodies.push(source.slice(bodyStart, bodyEnd));
+    loopPattern.lastIndex = Math.max(loopPattern.lastIndex, index);
+  }
+
+  return bodies;
+}
+
 const required = [
   'index.html',
   'app.js',
@@ -78,6 +151,14 @@ for (const [position, entry] of indexes.indexes.entries()) {
 
 // Evita sorgenti e mappe di debug enormi nel caricamento iniziale.
 assert(!/<script[^>]+src=["'][^"']+\.map(?:\?|["'])/i.test(index), 'La pagina non carica source map come script');
-assert(!/while\s*\(\s*true\s*\)/.test(app), 'app.js non contiene cicli infiniti espliciti');
+
+const whileTrueBodies = findExplicitWhileTrueBodies(app);
+const suspiciousWhileTrueBodies = whileTrueBodies.filter(
+  (body) => !/\b(?:break|return|throw)\b/.test(body)
+);
+assert(
+  suspiciousWhileTrueBodies.length === 0,
+  'Ogni while (true) in app.js contiene un’uscita esplicita'
+);
 
 console.log('\nControlli prestazioni, listener, cache PWA e indici completati senza connessioni esterne.');

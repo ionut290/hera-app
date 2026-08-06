@@ -5,7 +5,7 @@
 
   const PREFIX_V3 = 'varga_fs_diag_v3_';
   const PREFIX_V2 = 'varga_fs_diag_v2_';
-  const SCRIPT_VERSION = '3.0.0';
+  const SCRIPT_VERSION = '3.1.0';
   const DETAIL_LIMIT = 2000;
   const batchOps = new WeakMap();
   const liveListeners = new Map();
@@ -190,6 +190,15 @@
       ? (snapshot.exists ? 1 : 0)
       : 1;
 
+  function listenerQuantity(snapshot, deliveryNumber) {
+    if (deliveryNumber <= 1 || typeof snapshot?.docChanges !== 'function') return quantity(snapshot);
+    try {
+      return snapshot.docChanges().length;
+    } catch (_) {
+      return quantity(snapshot);
+    }
+  }
+
   function addDetail(value, detail) {
     value.details.unshift(detail);
     if (value.details.length > DETAIL_LIMIT) {
@@ -330,7 +339,7 @@
       const wrappedArgs = wrapSnapshotArgs(args, (snapshot) => {
         deliveryNumber += 1;
         const durationMs = deliveryNumber === 1 ? Date.now() - openedAtMs : 0;
-        record('listener-delivery', `${method}.delivery`, path, quantity(snapshot), stack, {
+        record('listener-delivery', `${method}.delivery`, path, listenerQuantity(snapshot, deliveryNumber), stack, {
           listenerId, caller, functionName, screen, durationMs,
           deliveryNumber, initialDelivery: deliveryNumber === 1, openedAt, active: true
         });

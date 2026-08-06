@@ -4,9 +4,15 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - test
+    paths:
+      - "index.html"
+      - "app.js"
+      - "firebase-config.js"
+      - "sw.js"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/**"
+      - "tests/e2e/**"
   workflow_dispatch:
 
 permissions:
@@ -58,6 +64,14 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         run: npx playwright test tests/e2e/fatto-flow.spec.js --browser=chromium --reporter=line
+
+      - name: Arresta server locale
+        if: always()
+        run: |
+          if [ -f /tmp/hera-e2e-server.pid ]; then
+            kill "$(cat /tmp/hera-e2e-server.pid)" 2>/dev/null || true
+            rm -f /tmp/hera-e2e-server.pid
+          fi
 
       - name: Carica report in caso di errore
         if: failure()

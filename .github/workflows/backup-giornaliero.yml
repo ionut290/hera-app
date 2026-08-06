@@ -1,0 +1,34 @@
+name: Backup giornaliero repository
+
+on:
+  schedule:
+    - cron: "15 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Crea archivio completo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Crea archivio ZIP
+        run: |
+          mkdir -p backup
+          zip -r "backup/hera-app-${GITHUB_SHA}.zip" . \
+            -x ".git/*" \
+            -x "backup/*"
+
+      - name: Conserva il backup per 30 giorni
+        uses: actions/upload-artifact@v4
+        with:
+          name: hera-app-backup-${{ github.run_number }}
+          path: backup/*.zip
+          retention-days: 30
+          if-no-files-found: error

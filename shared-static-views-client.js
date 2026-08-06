@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v4";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-registry-startup-guard1";
   const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806c";
   const api = window.HeraSharedStaticViews;
   const prematureHoursState = {
@@ -13,6 +13,151 @@
     automaticFallbacksBlocked: 0,
     errors: []
   };
+
+  // Blocca immediatamente le vecchie sottoscrizioni complete di personale e
+  // mezzi mentre viene caricato il client delle viste condivise. Su dispositivi
+  // veloci l'autenticazione può completarsi prima del caricamento del core:
+  // senza questa guardia app.js apre i listener originali e scarica entrambe le
+  // collezioni complete. Le chiamate vengono accodate e riprodotte dal core.
+  const registryStartupGate = (() => {
+    const originals = {
+      personale: typeof subscribePersonale === "function" ? subscribePersonale : null,
+      mezzi: typeof subscribeMezzi === "function" ? subscribeMezzi : null
+    };
+    const pending = new Map([
+      ["personale", []],
+      ["mezzi", []]
+    ]);
+    const state = {
+      installed: false,
+      released: false,
+      queuedCalls: 0,
+      replayedCalls: 0,
+      fallbackCalls: 0,
+      errors: []
+    };
+    let fallbackTimer = null;
+
+    function stopNative(kind) {
+      try {
+        const stop = kind === "personale"
+          ? (typeof stopPersonaleSubscription === "function" ? stopPersonaleSubscription : null)
+          : (typeof stopMezziSubscription === "function" ? stopMezziSubscription : null);
+        if (stop) {
+          stop();
+          return;
+        }
+
+        const unsubscribe = kind === "personale"
+          ? (typeof unsubscribePersonale === "function" ? unsubscribePersonale : null)
+          : (typeof unsubscribeMezzi === "function" ? unsubscribeMezzi : null);
+        unsubscribe?.();
+        if (kind === "personale" && typeof unsubscribePersonale !== "undefined") unsubscribePersonale = null;
+        if (kind === "mezzi" && typeof unsubscribeMezzi !== "undefined") unsubscribeMezzi = null;
+      } catch (error) {
+        state.errors.push(`${kind}: ${error?.message || error}`);
+      }
+    }
+
+    function settle(kind, value) {
+      const resolvers = pending.get(kind) || [];
+      pending.set(kind, []);
+      resolvers.forEach((resolve) => resolve(value));
+    }
+
+    function queue(kind) {
+      state.queuedCalls += 1;
+      stopNative(kind);
+      return new Promise((resolve) => {
+        const resolvers = pending.get(kind) || [];
+        resolvers.push(resolve);
+        pending.set(kind, resolvers);
+      });
+    }
+
+    function restoreAndReplay() {
+      if (state.released) return;
+      state.released = true;
+      state.fallbackCalls += 1;
+      if (originals.personale) subscribePersonale = originals.personale;
+      if (originals.mezzi) subscribeMezzi = originals.mezzi;
+
+      for (const kind of ["personale", "mezzi"]) {
+        const resolvers = pending.get(kind) || [];
+        if (!resolvers.length) continue;
+        const original = originals[kind];
+        if (!original) {
+          settle(kind, false);
+          continue;
+        }
+        Promise.resolve(original())
+          .then((value) => settle(kind, value))
+          .catch((error) => {
+            state.errors.push(`${kind}-fallback: ${error?.message || error}`);
+            settle(kind, false);
+          });
+      }
+    }
+
+    function install() {
+      stopNative("personale");
+      stopNative("mezzi");
+      if (originals.personale) subscribePersonale = () => queue("personale");
+      if (originals.mezzi) subscribeMezzi = () => queue("mezzi");
+      state.installed = Boolean(originals.personale || originals.mezzi);
+
+      if (state.installed && typeof window.setTimeout === "function") {
+        fallbackTimer = window.setTimeout(restoreAndReplay, 12000);
+      }
+      return state.installed;
+    }
+
+    function release(sharedSubscriptions = {}) {
+      if (state.released) return;
+      state.released = true;
+      if (fallbackTimer && typeof window.clearTimeout === "function") {
+        window.clearTimeout(fallbackTimer);
+      }
+      fallbackTimer = null;
+
+      if (typeof sharedSubscriptions.personale === "function") {
+        subscribePersonale = sharedSubscriptions.personale;
+      }
+      if (typeof sharedSubscriptions.mezzi === "function") {
+        subscribeMezzi = sharedSubscriptions.mezzi;
+      }
+
+      for (const kind of ["personale", "mezzi"]) {
+        const resolvers = pending.get(kind) || [];
+        if (!resolvers.length) continue;
+        const shared = sharedSubscriptions[kind];
+        if (typeof shared !== "function") {
+          settle(kind, false);
+          continue;
+        }
+        state.replayedCalls += 1;
+        Promise.resolve(shared())
+          .then((value) => settle(kind, value))
+          .catch((error) => {
+            state.errors.push(`${kind}-shared: ${error?.message || error}`);
+            settle(kind, false);
+          });
+      }
+    }
+
+    return {
+      installed: true,
+      version: "1.0.0",
+      originals,
+      install,
+      release,
+      failOpen: restoreAndReplay,
+      getState: () => ({ ...state, errors: state.errors.slice() })
+    };
+  })();
+
+  window.HeraRegistryStartupGate = registryStartupGate;
+  registryStartupGate.install();
 
   // app.js viene eseguito prima di questo client e può aprire i listener completi
   // delle ore durante l'avvio. Li chiudiamo prima che consegnino l'intero storico;
@@ -161,7 +306,7 @@
 
   window.HeraSafeCalendarGuard = {
     installed: true,
-    version: "1.4.0",
+    version: "1.4.1",
     getState: () => ({ ...prematureHoursState, errors: prematureHoursState.errors.slice() })
   };
 

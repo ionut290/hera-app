@@ -5,6 +5,7 @@
   const COLLECTION = "sharedStaticViews";
   const CACHE_PREFIX = "hera-shared-static-view:";
   const MAX_PAYLOAD_BYTES = 700000;
+  const CALENDAR_SCHEMA_VERSION = 2;
   const subscriptions = new Map();
   const memory = new Map();
   const stats = {
@@ -13,7 +14,9 @@
     snapshotsReceived: 0,
     publishes: 0,
     publishSkippedUnchanged: 0,
-    publishErrors: 0
+    publishErrors: 0,
+    invalidCalendarCacheDropped: 0,
+    invalidCalendarSnapshotsIgnored: 0
   };
 
   if (window[GLOBAL]?.installed) return;
@@ -51,6 +54,23 @@
       if (item instanceof Map) return Object.fromEntries(item);
       return item;
     }));
+  }
+
+  function isCompleteCalendarView(value) {
+    return Boolean(
+      value &&
+      value.schemaVersion === CALENDAR_SCHEMA_VERSION &&
+      value.completeRecords === true &&
+      value.payload &&
+      value.payload.schemaVersion === CALENDAR_SCHEMA_VERSION &&
+      value.payload.completeRecords === true &&
+      Array.isArray(value.payload.reports)
+    );
+  }
+
+  function dropLocal(type, key) {
+    memory.delete(`${type}:${key}`);
+    try { localStorage.removeItem(cacheKey(type, key)); } catch (_) {}
   }
 
   function trimSquadraRow(row) {
@@ -94,40 +114,72 @@
     const key = monthKey(month);
     const reports = [];
     const seen = new Set();
-    const append = (items) => {
+    const append = (items, sourceCollection) => {
       if (!Array.isArray(items)) return;
       items.forEach((item) => {
         if (!item || String(item.status || "").toLowerCase() === "rejected") return;
         const date = normalizeDateKey(item.date || item.data || item.giorno || "");
         if (!date.startsWith(key)) return;
-        const id = String(item.id || `${date}:${reports.length}`);
-        if (seen.has(id)) return;
-        seen.add(id);
+        const id = String(item.id || `${sourceCollection}:${date}:${reports.length}`);
+        const sourceKey = `${sourceCollection}/${id}`;
+        if (seen.has(sourceKey)) return;
+        seen.add(sourceKey);
         reports.push({
+          ...safeClone(item),
           id,
           date,
           status: item.status || "",
-          commessaId: item.commessaId || item.commessa || "",
-          entries: safeClone(Array.isArray(item.entries) ? item.entries : [])
+          sourceCollection,
+          sourceKey
         });
       });
     };
-    try { append(window.allHoursReports); } catch (_) {}
-    try { append(window.allHoursApprovalRequests); } catch (_) {}
-    return { month: key, reports };
+
+    // allHoursReports/allHoursApprovalRequests sono global lexical bindings
+    // dichiarati con `let` in app.js: non sono proprietà di window.
+    try { append(typeof allHoursReports !== "undefined" ? allHoursReports : [], "oreReports"); } catch (_) {}
+    try { append(typeof allHoursApprovalRequests !== "undefined" ? allHoursApprovalRequests : [], "oreApprovalRequests"); } catch (_) {}
+
+    reports.sort((a, b) => `${a.date}|${a.operatore || a.operatorName || ""}|${a.sourceKey}`
+      .localeCompare(`${b.date}|${b.operatore || b.operatorName || ""}|${b.sourceKey}`, "it"));
+
+    return {
+      month: key,
+      schemaVersion: CALENDAR_SCHEMA_VERSION,
+      completeRecords: true,
+      reports
+    };
   }
 
   function writeLocal(type, key, value) {
+    if (type === "calendario" && !isCompleteCalendarView(value)) {
+      dropLocal(type, key);
+      stats.invalidCalendarCacheDropped += 1;
+      return false;
+    }
     memory.set(`${type}:${key}`, value);
     try { localStorage.setItem(cacheKey(type, key), JSON.stringify(value)); } catch (_) {}
+    return true;
   }
 
   function readLocal(type, key) {
     const id = `${type}:${key}`;
-    if (memory.has(id)) return memory.get(id);
+    if (memory.has(id)) {
+      const value = memory.get(id);
+      if (type !== "calendario" || isCompleteCalendarView(value)) return value;
+      dropLocal(type, key);
+      stats.invalidCalendarCacheDropped += 1;
+      return null;
+    }
     try {
       const value = JSON.parse(localStorage.getItem(cacheKey(type, key)) || "null");
       if (value) {
+        if (type === "calendario" && !isCompleteCalendarView(value)) {
+          dropLocal(type, key);
+          stats.invalidCalendarCacheDropped += 1;
+          console.warn("[SHARED VIEWS] cache calendario legacy eliminata", { key });
+          return null;
+        }
         memory.set(id, value);
         stats.cacheHits += 1;
         return value;
@@ -154,10 +206,17 @@
       return previous;
     }
 
+    const calendarMetadata = type === "calendario"
+      ? {
+          schemaVersion: CALENDAR_SCHEMA_VERSION,
+          completeRecords: clean.schemaVersion === CALENDAR_SCHEMA_VERSION && clean.completeRecords === true
+        }
+      : {};
     const value = {
       type,
       key,
       version: Number(previous?.version || 0) + 1,
+      ...calendarMetadata,
       updatedAt: window.firebase.firestore.FieldValue.serverTimestamp(),
       updatedAtClient: new Date().toISOString(),
       updatedBy: window.firebase?.auth?.()?.currentUser?.email || "",
@@ -203,6 +262,16 @@
     const unsubscribeFirestore = firestore.collection(COLLECTION).doc(docId(type, key)).onSnapshot((snapshot) => {
       if (!snapshot.exists) return;
       const value = { id: snapshot.id, ...(snapshot.data() || {}) };
+      if (type === "calendario" && !isCompleteCalendarView(value)) {
+        dropLocal(type, key);
+        stats.invalidCalendarSnapshotsIgnored += 1;
+        console.warn("[SHARED VIEWS] snapshot calendario incompleto ignorato; attendo la Cloud Function", {
+          key,
+          schemaVersion: value.schemaVersion,
+          completeRecords: value.completeRecords
+        });
+        return;
+      }
       writeLocal(type, key, value);
       stats.snapshotsReceived += 1;
       const metadata = { source: snapshot.metadata?.fromCache ? "firestore-cache" : "firestore" };
@@ -251,8 +320,12 @@
   window.addEventListener("hera-squadre-saved", (event) => {
     api.publishSquadre(event?.detail?.date).catch((error) => console.warn("Vista squadre non pubblicata", error));
   });
-  window.addEventListener("hera-hours-saved", (event) => {
-    api.publishCalendar(event?.detail?.month || event?.detail?.date).catch((error) => console.warn("Vista calendario non pubblicata", error));
+
+  // Il calendario è aggiornato dalla Cloud Function transazionale su ogni write
+  // a oreReports/oreApprovalRequests. Il browser non deve sovrascrivere quella
+  // vista con uno snapshot locale potenzialmente non ancora aggiornato.
+  window.addEventListener("hera-hours-saved", () => {
+    console.debug("[SHARED VIEWS] aggiornamento calendario affidato alla Cloud Function");
   });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });

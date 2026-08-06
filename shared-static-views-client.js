@@ -1,17 +1,29 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260805-safe-calendar-v1";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v1";
+  const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806a";
   const api = window.HeraSharedStaticViews;
+
+  function loadHoursGuard() {
+    if (document.querySelector('script[data-hours-source-explicit-guard]')) return;
+    const script = document.createElement("script");
+    script.src = HOURS_GUARD_URL;
+    script.async = false;
+    script.dataset.hoursSourceExplicitGuard = "1";
+    document.head.appendChild(script);
+  }
 
   function loadCore() {
     if (document.readyState === "loading") {
       document.write(`<script src="${CORE_URL}"><\/script>`);
+      document.write(`<script src="${HOURS_GUARD_URL}" data-hours-source-explicit-guard="1"><\/script>`);
       return;
     }
     const script = document.createElement("script");
     script.src = CORE_URL;
     script.async = false;
+    script.addEventListener("load", loadHoursGuard, { once: true });
     document.head.appendChild(script);
   }
 
@@ -54,14 +66,20 @@
 
       queueMicrotask(() => {
         const fallback = window.HeraLightStartup?.enableHoursSource;
-        if (typeof fallback === "function") fallback();
+        if (typeof fallback === "function") {
+          fallback({
+            forceSharedCalendarFallback: true,
+            reason: "shared-calendar-incomplete",
+            month: key
+          });
+        }
       });
     }, ...rest);
   };
 
   window.HeraSafeCalendarGuard = {
     installed: true,
-    version: "1.0.0"
+    version: "1.1.0"
   };
 
   loadCore();

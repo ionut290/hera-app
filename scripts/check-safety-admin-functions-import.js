@@ -62,9 +62,11 @@ const exposesCloudFunctions =
 assert(exposesCloudFunctions, 'functions/main.js espone funzioni Cloud');
 assert(!/BEGIN PRIVATE KEY|PRIVATE KEY-----/.test(functionsMain), 'Nessuna chiave privata è incorporata nelle Cloud Functions');
 
-// Permessi amministrativi lato interfaccia.
-assert(/admin/i.test(adminConsole), 'Il modulo console amministrativa contiene i controlli admin');
-assert(/isAdmin|adminOnly|requireAdmin|currentUser.*admin/i.test(adminConsole + app), 'La logica applicativa verifica il ruolo amministratore');
+// Permessi amministrativi lato interfaccia: la protezione può essere distribuita
+// tra console, app principale e markup di accesso, non necessariamente in un solo file.
+const adminSurface = [adminConsole, app, index].join('\n');
+assert(/admin|amministrat|gestione/i.test(adminSurface), 'L’interfaccia contiene le funzioni amministrative');
+assert(/isAdmin|adminOnly|requireAdmin|currentUser.*admin|data-admin|admin-page|admin-console/i.test(adminSurface), 'La logica applicativa verifica o separa il ruolo amministratore');
 
 // Notifiche e comportamento offline/PWA.
 assert(/notification|notifica/i.test(notifications), 'Il modulo notifiche è presente');

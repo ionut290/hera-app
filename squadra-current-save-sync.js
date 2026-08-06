@@ -118,3 +118,154 @@
     targets: targetIds.slice()
   };
 })();
+
+// La chat operatori non viene più utilizzata. Questo guard viene caricato subito
+// dopo app.js: blocca il listener chat e la pulizia oraria prima che l'avvio
+// autenticato possa eseguirli. I messaggi già presenti vengono eliminati una sola
+// volta dal primo amministratore che apre l'app dopo questo aggiornamento.
+(() => {
+  "use strict";
+
+  if (window.HeraChatDisabledGuard?.installed) return;
+
+  const DELETE_MARKER_KEY = "heraChatMessagesDeletedV1";
+  const state = {
+    listenerStopped: false,
+    retentionStopped: false,
+    deletionAttempted: false,
+    deletedMessages: 0,
+    deletionComplete: false,
+    lastError: null
+  };
+
+  function stopChatRuntime() {
+    try {
+      if (typeof unsubscribeChat === "function") {
+        unsubscribeChat();
+        state.listenerStopped = true;
+      }
+      if (typeof unsubscribeChat !== "undefined") unsubscribeChat = null;
+    } catch (error) {
+      state.lastError = error;
+      console.warn("[CHAT DISATTIVATA] chiusura listener non riuscita", error);
+    }
+
+    try {
+      if (typeof chatRetentionTimer !== "undefined" && chatRetentionTimer) {
+        clearInterval(chatRetentionTimer);
+        chatRetentionTimer = null;
+        state.retentionStopped = true;
+      }
+    } catch (error) {
+      state.lastError = error;
+      console.warn("[CHAT DISATTIVATA] chiusura timer non riuscita", error);
+    }
+  }
+
+  function hideChatInterface() {
+    ["chat-open-btn", "chat-modal", "chat-clear-confirm-modal"].forEach((id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.classList.add("hidden");
+      node.setAttribute("aria-hidden", "true");
+      node.style.display = "none";
+    });
+  }
+
+  function disableChatFunctions() {
+    try {
+      if (typeof subscribeChat === "function") {
+        subscribeChat = function subscribeChatDisabled() {
+          stopChatRuntime();
+          try { chatMessages = []; } catch (_) {}
+          return () => {};
+        };
+      }
+      if (typeof startChatRetentionLoop === "function") {
+        startChatRetentionLoop = function startChatRetentionLoopDisabled() {
+          stopChatRuntime();
+          return false;
+        };
+      }
+      if (typeof stopChatRetentionLoop === "function") {
+        stopChatRetentionLoop = function stopChatRetentionLoopDisabled() {
+          stopChatRuntime();
+          return true;
+        };
+      }
+      if (typeof purgeOldChatMessages === "function") {
+        purgeOldChatMessages = async function purgeOldChatMessagesDisabled() {
+          return { disabled: true, deleted: 0 };
+        };
+      }
+    } catch (error) {
+      state.lastError = error;
+      console.error("[CHAT DISATTIVATA] sostituzione funzioni non riuscita", error);
+    }
+  }
+
+  async function deleteStoredMessagesOnce() {
+    if (state.deletionAttempted) return;
+    try {
+      if (localStorage.getItem(DELETE_MARKER_KEY) === "done") {
+        state.deletionComplete = true;
+        return;
+      }
+    } catch (_) {}
+
+    if (typeof canManageData !== "function" || !canManageData()) return;
+    if (typeof db === "undefined" || !db) return;
+
+    state.deletionAttempted = true;
+    try {
+      const snapshot = await db.collection("chatMessages").get();
+      const docs = snapshot.docs || [];
+      for (let index = 0; index < docs.length; index += 450) {
+        const batch = db.batch();
+        docs.slice(index, index + 450).forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      state.deletedMessages = docs.length;
+      state.deletionComplete = true;
+      try { chatMessages = []; } catch (_) {}
+      try { localStorage.setItem(DELETE_MARKER_KEY, "done"); } catch (_) {}
+      console.info(`[CHAT DISATTIVATA] eliminati definitivamente ${docs.length} messaggi.`);
+    } catch (error) {
+      state.lastError = error;
+      state.deletionAttempted = false;
+      console.warn("[CHAT DISATTIVATA] eliminazione messaggi rinviata: serve un amministratore autorizzato", error);
+    }
+  }
+
+  stopChatRuntime();
+  disableChatFunctions();
+  hideChatInterface();
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", hideChatInterface, { once: true });
+  }
+
+  try {
+    const authInstance = typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null;
+    authInstance?.onAuthStateChanged((user) => {
+      if (!user) return;
+      window.setTimeout(() => {
+        stopChatRuntime();
+        disableChatFunctions();
+        hideChatInterface();
+        deleteStoredMessagesOnce();
+      }, 1200);
+    });
+  } catch (error) {
+    state.lastError = error;
+    console.warn("[CHAT DISATTIVATA] controllo autenticazione non disponibile", error);
+  }
+
+  window.HeraChatDisabledGuard = {
+    installed: true,
+    version: "1.0.0",
+    collection: "chatMessages",
+    getState: () => ({ ...state, lastError: state.lastError ? String(state.lastError?.message || state.lastError) : null }),
+    retryDeletion: deleteStoredMessagesOnce
+  };
+})();

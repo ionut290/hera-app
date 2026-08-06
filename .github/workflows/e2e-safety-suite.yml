@@ -4,9 +4,15 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - test
+    paths:
+      - "index.html"
+      - "app.js"
+      - "firebase-config.js"
+      - "sw.js"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/**"
+      - "tests/e2e/**"
   workflow_dispatch:
 
 permissions:

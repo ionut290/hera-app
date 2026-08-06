@@ -81,6 +81,16 @@
     }
   }
 
+  function loadSquadValidationPersonnelCompat() {
+    loadScriptOnce(
+      'script[data-squad-validation-personnel-compat]',
+      './squad-validation-personnel-compat.js?v=20260806a',
+      'squadValidationPersonnelCompat',
+      null,
+      'Compatibilità controllo squadra non caricata; resta attivo il controllo originale.'
+    );
+  }
+
   function loadWhatsAppInstalledOnlyGuard() {
     loadScriptOnce(
       'script[data-whazzup-installed-only-guard]',
@@ -144,6 +154,7 @@
 
   function init() {
     disableAutomaticHoursRepair();
+    loadSquadValidationPersonnelCompat();
     loadWhatsAppInstalledOnlyGuard();
     loadFirestoreSafeOptimizer();
     applyBranding();
@@ -153,6 +164,7 @@
   }
 
   disableAutomaticHoursRepair();
+  loadSquadValidationPersonnelCompat();
   loadWhatsAppInstalledOnlyGuard();
   loadFirestoreSafeOptimizer();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once:true });

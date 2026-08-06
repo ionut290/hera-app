@@ -55,7 +55,11 @@ assert(/match\s+\/privateDocuments\//.test(rules) && /request\.auth\.uid\s*==\s*
 assert(firebaseJson && typeof firebaseJson === 'object', 'firebase.json è valido');
 assert(firebaseJson.functions || firebaseJson.firestore, 'firebase.json collega Functions o Firestore');
 assert(functionsPackage.dependencies && Object.keys(functionsPackage.dependencies).some((name) => /firebase-functions/.test(name)), 'Functions dichiara firebase-functions');
-assert(/exports\.|module\.exports|onCall|onRequest|onDocument|functions\./.test(functionsMain), 'functions/main.js espone funzioni Cloud');
+const exposesCloudFunctions =
+  /exports\.|module\.exports|onCall|onRequest|onDocument|functions\./.test(functionsMain)
+  || (/Object\.assign\s*\(\s*exports\s*,/.test(functionsMain)
+    && /require\s*\(\s*["']\.\//.test(functionsMain));
+assert(exposesCloudFunctions, 'functions/main.js espone funzioni Cloud');
 assert(!/BEGIN PRIVATE KEY|PRIVATE KEY-----/.test(functionsMain), 'Nessuna chiave privata è incorporata nelle Cloud Functions');
 
 // Permessi amministrativi lato interfaccia.

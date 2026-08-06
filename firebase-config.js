@@ -22,6 +22,7 @@ const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
+const HERA_FATTO_EMBEDDED_OPTIMIZER_SRC = "fatto-visual-evidence-embedded.js?v=20260806a";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
@@ -35,6 +36,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC}" data-firestore-startup-cost-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_UI_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
+  document.write(`<script src="${HERA_FATTO_EMBEDDED_OPTIMIZER_SRC}" data-fatto-embedded-optimizer="1"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260727a"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
@@ -94,6 +96,7 @@ if (document.readyState === "loading") {
   loadOnce(HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC, "firestore-startup-cost-optimizer", () => window.HeraFirestoreStartupCostOptimizer?.installed);
   loadOnce(HERA_SHARED_STATIC_VIEWS_UI_SRC, "hera-shared-static-views-ui", () => window.__heraSharedStaticViewsUiInstalled);
   loadOnce(HERA_NATIVE_RUNTIME_SRC, "hera-native-runtime", () => false);
+  loadOnce(HERA_FATTO_EMBEDDED_OPTIMIZER_SRC, "fatto-embedded-optimizer", () => window.HeraFattoEmbeddedOptimizer?.installed);
   loadOnce("notification-session-enhancements.js?v=20260727b", "hera-notification-session", () => false);
   loadOnce("update-app-feature.js?v=20260727a", "hera-app-update", () => false);
   loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);

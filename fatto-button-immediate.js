@@ -5,6 +5,8 @@
   const STORE = "operations";
   const MAX_ATTEMPTS = 12;
   const STALE_MS = 120000;
+  const YELLOW = "#f4c542";
+  const YELLOW_BORDER = "#c99700";
   let processing = false;
 
   const text = (value) => String(value ?? "").trim();
@@ -111,6 +113,62 @@
     return updated;
   }
 
+  function formatDoneLabel(doneAt) {
+    const date = new Date(doneAt);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  }
+
+  function findPressedFattoButton() {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return null;
+    const button = active.closest("button, [role='button'], input[type='button'], input[type='submit']");
+    if (!(button instanceof HTMLElement)) return null;
+    const label = text(button.textContent || button.getAttribute("value") || button.getAttribute("aria-label"));
+    return /fatto|whazzup|whatsapp/i.test(label) ? button : null;
+  }
+
+  function applyPermanentYellowFeedback(button, doneAt) {
+    if (!(button instanceof HTMLElement)) return;
+    const label = formatDoneLabel(doneAt);
+    button.dataset.fattoImmediate = "true";
+    button.dataset.fattoDoneAt = doneAt;
+    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+    button.style.setProperty("background", YELLOW, "important");
+    button.style.setProperty("background-color", YELLOW, "important");
+    button.style.setProperty("border-color", YELLOW_BORDER, "important");
+    button.style.setProperty("color", "#1d1d1d", "important");
+    button.style.setProperty("opacity", "1", "important");
+    button.style.setProperty("pointer-events", "none", "important");
+    button.style.setProperty("cursor", "default", "important");
+
+    let dateNode = button.previousElementSibling;
+    if (!(dateNode instanceof HTMLElement) || dateNode.dataset.fattoImmediateDate !== "true") {
+      dateNode = document.createElement("div");
+      dateNode.dataset.fattoImmediateDate = "true";
+      dateNode.style.fontWeight = "700";
+      dateNode.style.fontSize = "0.82rem";
+      dateNode.style.marginBottom = "4px";
+      dateNode.style.textAlign = "center";
+      button.parentNode?.insertBefore(dateNode, button);
+    }
+    dateNode.textContent = label;
+
+    if ("value" in button && /^(INPUT|BUTTON)$/i.test(button.tagName)) {
+      if (button.tagName === "INPUT") button.value = "FATTO";
+      else button.textContent = "FATTO";
+    } else {
+      button.textContent = "FATTO";
+    }
+  }
+
   async function syncOperation(operation) {
     const options = {
       source: "resume-persistent-queue",
@@ -171,9 +229,6 @@
       }
     }
 
-    // openWhatsApp viene chiamata con (impianto, options), non con il testo.
-    // Genera quindi lo stesso payload precompilato usato dal flusso web prima
-    // di passarlo al plugin Android. Vale sia per FATTO sia per FATTO DAL.
     const impianto = args[0];
     const options = args[1] && typeof args[1] === "object" ? args[1] : {};
     if (impianto && typeof impianto === "object" && typeof window.buildImpiantoWhatsAppPayload === "function") {
@@ -200,8 +255,6 @@
       const plugin = window.Capacitor?.Plugins?.HeraWhatsApp;
       if (isAndroidNative() && plugin?.open) {
         const nativeUrl = buildNativeWhatsAppUrl(args);
-        // Non aprire mai WhatsApp con un payload vuoto. Se il messaggio non
-        // può essere preparato, conserva il comportamento web originale.
         if (!nativeUrl) return original.apply(this, args);
         plugin.open({ url: nativeUrl }).catch((error) => {
           const message = text(error?.message || error || "WhatsApp non è installato sul dispositivo.");
@@ -221,7 +274,14 @@
     const original = window.handleImpiantoWhatsAppClick;
     if (typeof original !== "function" || original.__heraQueueWrapped) return;
     const wrapped = async function (impianto, ...args) {
-      const operation = await enqueue(impianto, { commessaId: window.selectedCommessaId });
+      const pressedButton = findPressedFattoButton();
+      const doneAt = new Date().toISOString();
+      applyPermanentYellowFeedback(pressedButton, doneAt);
+
+      const operation = await enqueue(impianto, {
+        commessaId: window.selectedCommessaId,
+        doneAt
+      });
       try {
         const result = await original.call(this, impianto, ...args);
         if (result === true) await remove(operation.operationId);

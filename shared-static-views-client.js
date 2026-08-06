@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-registry-startup-guard1";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v4-registry1";
   const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806c";
   const api = window.HeraSharedStaticViews;
   const prematureHoursState = {
@@ -306,7 +306,7 @@
 
   window.HeraSafeCalendarGuard = {
     installed: true,
-    version: "1.4.1",
+    version: "1.4.0",
     getState: () => ({ ...prematureHoursState, errors: prematureHoursState.errors.slice() })
   };
 

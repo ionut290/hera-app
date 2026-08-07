@@ -21,7 +21,7 @@ const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
-const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260807a";
+const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260807b";
 
 function loadOnce(src, dataName, ready, onLoad) {
   if (ready?.()) {
@@ -58,11 +58,6 @@ function scheduleDeferredStartupModules() {
   window.__heraDeferredStartupModulesScheduled = true;
 
   const loadDeferredModules = () => {
-    // V4 non viene più caricato automaticamente.
-    // V3 resta l'unico osservatore Firestore durante l'uso normale dell'app:
-    // in questo modo il report attribuisce le letture al vero chiamante invece
-    // di vedere il wrapper V4 come sorgente, senza cambiare query o listener reali.
-
     loadOnce(
       HERA_SHARED_STATIC_VIEWS_UI_SRC,
       "hera-shared-static-views-ui",
@@ -98,8 +93,6 @@ function scheduleDeferredStartupModules() {
 }
 
 if (document.readyState === "loading") {
-  // Mantiene l'ordine necessario prima di app.js, ma elimina dal percorso
-  // critico diagnostica grafica, UI accessorie, Google Sheet e formazione.
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}" data-hera-firestore-inflight-coalescer="1"><\/script>`);
@@ -120,7 +113,6 @@ if (document.readyState === "loading") {
         () => window.VargaFirestoreSafeOptimizer?.installed
       )
     );
-
     loadOnce(
       HERA_FIRESTORE_INFLIGHT_COALESCER_SRC,
       "hera-firestore-inflight-coalescer",

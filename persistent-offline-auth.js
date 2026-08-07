@@ -2,6 +2,7 @@
   "use strict";
 
   const AUTHZ_PREFIX = "hera-offline-authz:";
+  const APP_SESSION_KEY = "heraPersistedUserSession";
   const ACTIVE_STATUSES = new Set(["attivo", "active", "approved", "autorizzato", "abilitato"]);
 
   function normalizeStatus(value) {
@@ -10,6 +11,19 @@
 
   function cacheKey(uid) {
     return `${AUTHZ_PREFIX}${String(uid || "").trim()}`;
+  }
+
+  function readPersistedAppSession() {
+    try {
+      const raw = localStorage.getItem(APP_SESSION_KEY);
+      if (!raw) return null;
+      const value = JSON.parse(raw);
+      if (!value || !String(value.uid || "").trim()) return null;
+      if (value.banned === true) return null;
+      return value;
+    } catch (_) {
+      return null;
+    }
   }
 
   function rememberAllowed(user, result) {
@@ -48,20 +62,48 @@
     document.getElementById("access-approval-screen")?.classList.add("hidden");
   }
 
-  function releaseOfflineStartupGate(firebaseUser, result) {
-    if (navigator.onLine || !firebaseUser?.uid || !result?.allowed) return false;
+  function releaseOfflineStartupGate(user, result) {
+    if (navigator.onLine || !user?.uid || !result?.allowed) return false;
     hideApprovalGate();
     document.body?.classList.remove("auth-pending");
     document.getElementById("auth-gate")?.classList.add("hidden");
     const startup = document.getElementById("app-startup-loading");
     if (startup) {
       startup.classList.add("hidden");
+      startup.style.display = "none";
       startup.setAttribute("aria-hidden", "true");
     }
+    const home = document.getElementById("home-page");
+    if (home) home.classList.remove("hidden");
     document.dispatchEvent(new CustomEvent("hera:offline-session-ready", {
-      detail: { uid: firebaseUser.uid, source: result.source || "device-session" }
+      detail: { uid: user.uid, email: user.email || "", source: result.source || "device-session" }
     }));
     return true;
+  }
+
+  function bootstrapFromSavedSession() {
+    if (navigator.onLine) return false;
+    const session = readPersistedAppSession();
+    if (!session?.uid) return false;
+
+    const cachedAuthorization = readAllowed(session.uid);
+    const sessionApproved = session.accessApproved === true || ACTIVE_STATUSES.has(normalizeStatus(session.statoAccount || session.accountStatus || session.role));
+    if (!cachedAuthorization && !sessionApproved) return false;
+
+    const user = {
+      uid: String(session.uid),
+      email: String(session.email || cachedAuthorization?.email || ""),
+      displayName: String(session.displayName || session.userName || cachedAuthorization?.displayName || "Utente")
+    };
+    const result = {
+      allowed: true,
+      offline: true,
+      source: cachedAuthorization ? "device-authorization" : "persisted-app-session",
+      status: cachedAuthorization?.status || "attivo",
+      profile: session
+    };
+    window.__heraOfflineBootSession = { ...session, offline: true };
+    return releaseOfflineStartupGate(user, result);
   }
 
   async function verifyOfflineFromCache(firebaseUser) {
@@ -69,17 +111,13 @@
 
     if (window.firebase && typeof firebase.firestore === "function") {
       try {
-        const snapshot = await firebase.firestore()
-          .collection("platformUsers")
-          .doc(firebaseUser.uid)
-          .get({ source: "cache" });
+        const snapshot = await firebase.firestore().collection("platformUsers").doc(firebaseUser.uid).get({ source: "cache" });
         if (snapshot.exists) {
           const profile = { id: snapshot.id, ...(snapshot.data() || {}) };
           const status = normalizeStatus(profile.banned === true ? "bloccato" : (profile.statoAccount || profile.accountStatus || "attivo"));
           if (ACTIVE_STATUSES.has(status)) {
             const result = { allowed: true, profile, status, offline: true, source: "firestore-cache" };
             rememberAllowed(firebaseUser, result);
-            hideApprovalGate();
             releaseOfflineStartupGate(firebaseUser, result);
             return result;
           }
@@ -91,7 +129,6 @@
 
     const saved = readAllowed(firebaseUser.uid);
     if (!saved) return null;
-    hideApprovalGate();
     const result = {
       allowed: true,
       status: saved.status,
@@ -119,7 +156,6 @@
         const cached = await verifyOfflineFromCache(firebaseUser);
         if (cached) return cached;
       }
-
       try {
         const result = await originalVerify(firebaseUser);
         if (result?.allowed) rememberAllowed(firebaseUser, result);
@@ -171,17 +207,21 @@
   }
 
   function tryReleasePersistedOfflineUser() {
-    if (navigator.onLine || !window.firebase || typeof firebase.auth !== "function") return;
-    const currentUser = firebase.auth().currentUser;
-    if (!currentUser?.uid) return;
-    void verifyOfflineFromCache(currentUser);
+    if (navigator.onLine) return;
+    if (bootstrapFromSavedSession()) return;
+    try {
+      if (!window.firebase || typeof firebase.auth !== "function") return;
+      const currentUser = firebase.auth().currentUser;
+      if (currentUser?.uid) void verifyOfflineFromCache(currentUser);
+    } catch (_) {}
   }
 
   let attempts = 0;
   const persistenceTimer = window.setInterval(() => {
     attempts += 1;
-    if (ensureLocalAuthPersistence() || attempts >= 40) window.clearInterval(persistenceTimer);
+    ensureLocalAuthPersistence();
     if (!navigator.onLine) tryReleasePersistedOfflineUser();
+    if (attempts >= 40 || (navigator.onLine && ensureLocalAuthPersistence())) window.clearInterval(persistenceTimer);
   }, 250);
 
   window.addEventListener("online", () => {
@@ -191,13 +231,23 @@
       void window.HeraAccessApproval.verify(currentUser);
     } catch (_) {}
   });
+  window.addEventListener("offline", tryReleasePersistedOfflineUser);
 
-  document.addEventListener("DOMContentLoaded", tryReleasePersistedOfflineUser, { once: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tryReleasePersistedOfflineUser, { once: true });
+  } else {
+    tryReleasePersistedOfflineUser();
+  }
+  window.setTimeout(tryReleasePersistedOfflineUser, 50);
+  window.setTimeout(tryReleasePersistedOfflineUser, 500);
+  window.setTimeout(tryReleasePersistedOfflineUser, 1500);
 
   window.HeraPersistentOfflineAuth = {
     installed: true,
     readAllowed,
     forgetAllowed,
+    readPersistedAppSession,
+    bootstrapFromSavedSession,
     verifyOfflineFromCache,
     releaseOfflineStartupGate
   };

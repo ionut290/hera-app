@@ -98,7 +98,11 @@ async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
   let created = false;
 
   if (user) {
-    const update = { displayName, disabled: false };
+    const update = {
+      password: DEFAULT_PASSWORD,
+      displayName,
+      disabled: false
+    };
     if (!user.email) update.email = loginEmail;
     user = await admin.auth().updateUser(user.uid, update);
   } else {
@@ -120,11 +124,9 @@ async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
     displayName,
     loginUsername,
     generatedInternalLogin,
-    ...(created ? {
-      mustChangePassword: false,
-      defaultOperatorPasswordProvisioned: true,
-      defaultOperatorPasswordProvisionedAt: admin.firestore.FieldValue.serverTimestamp()
-    } : {}),
+    mustChangePassword: false,
+    defaultOperatorPasswordProvisioned: true,
+    defaultOperatorPasswordProvisionedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 

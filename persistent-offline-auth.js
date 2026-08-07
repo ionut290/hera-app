@@ -48,6 +48,22 @@
     document.getElementById("access-approval-screen")?.classList.add("hidden");
   }
 
+  function releaseOfflineStartupGate(firebaseUser, result) {
+    if (navigator.onLine || !firebaseUser?.uid || !result?.allowed) return false;
+    hideApprovalGate();
+    document.body?.classList.remove("auth-pending");
+    document.getElementById("auth-gate")?.classList.add("hidden");
+    const startup = document.getElementById("app-startup-loading");
+    if (startup) {
+      startup.classList.add("hidden");
+      startup.setAttribute("aria-hidden", "true");
+    }
+    document.dispatchEvent(new CustomEvent("hera:offline-session-ready", {
+      detail: { uid: firebaseUser.uid, source: result.source || "device-session" }
+    }));
+    return true;
+  }
+
   async function verifyOfflineFromCache(firebaseUser) {
     if (!firebaseUser?.uid) return null;
 
@@ -64,6 +80,7 @@
             const result = { allowed: true, profile, status, offline: true, source: "firestore-cache" };
             rememberAllowed(firebaseUser, result);
             hideApprovalGate();
+            releaseOfflineStartupGate(firebaseUser, result);
             return result;
           }
           forgetAllowed(firebaseUser.uid);
@@ -75,7 +92,7 @@
     const saved = readAllowed(firebaseUser.uid);
     if (!saved) return null;
     hideApprovalGate();
-    return {
+    const result = {
       allowed: true,
       status: saved.status,
       offline: true,
@@ -89,6 +106,8 @@
         accountStatus: saved.status
       }
     };
+    releaseOfflineStartupGate(firebaseUser, result);
+    return result;
   }
 
   function wrapApprovalApi(api) {
@@ -151,10 +170,18 @@
     }
   }
 
+  function tryReleasePersistedOfflineUser() {
+    if (navigator.onLine || !window.firebase || typeof firebase.auth !== "function") return;
+    const currentUser = firebase.auth().currentUser;
+    if (!currentUser?.uid) return;
+    void verifyOfflineFromCache(currentUser);
+  }
+
   let attempts = 0;
   const persistenceTimer = window.setInterval(() => {
     attempts += 1;
     if (ensureLocalAuthPersistence() || attempts >= 40) window.clearInterval(persistenceTimer);
+    if (!navigator.onLine) tryReleasePersistedOfflineUser();
   }, 250);
 
   window.addEventListener("online", () => {
@@ -165,10 +192,13 @@
     } catch (_) {}
   });
 
+  document.addEventListener("DOMContentLoaded", tryReleasePersistedOfflineUser, { once: true });
+
   window.HeraPersistentOfflineAuth = {
     installed: true,
     readAllowed,
     forgetAllowed,
-    verifyOfflineFromCache
+    verifyOfflineFromCache,
+    releaseOfflineStartupGate
   };
 })();

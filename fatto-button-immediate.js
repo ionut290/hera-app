@@ -5,58 +5,70 @@
   const STORE = "operations";
   const MAX_ATTEMPTS = 12;
   const STALE_MS = 120000;
+  const PROCESS_DEBOUNCE_MS = 180;
   const YELLOW = "#f4c542";
   const YELLOW_BORDER = "#c99700";
   let processing = false;
+  let processTimer = 0;
+  let dbPromise = null;
 
   const text = (value) => String(value ?? "").trim();
   const clone = (value) => JSON.parse(JSON.stringify(value || {}));
 
   function openDb() {
-    return new Promise((resolve, reject) => {
-      if (!("indexedDB" in window)) return reject(new Error("IndexedDB non disponibile"));
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      if (!("indexedDB" in window)) {
+        reject(new Error("IndexedDB non disponibile"));
+        return;
+      }
       const request = indexedDB.open(DB_NAME, 1);
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE)) {
           request.result.createObjectStore(STORE, { keyPath: "operationId" });
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Coda FATTO non disponibile"));
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        resolve(db);
+      };
+      request.onerror = () => {
+        dbPromise = null;
+        reject(request.error || new Error("Coda FATTO non disponibile"));
+      };
+      request.onblocked = () => {
+        dbPromise = null;
+        reject(new Error("Coda FATTO temporaneamente bloccata"));
+      };
     });
+    return dbPromise;
   }
 
   async function transact(mode, callback) {
     const db = await openDb();
-    try {
-      return await new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE, mode);
-        const store = transaction.objectStore(STORE);
-        const result = callback(store);
-        transaction.oncomplete = () => resolve(result);
-        transaction.onerror = () => reject(transaction.error || new Error("Errore coda FATTO"));
-        transaction.onabort = () => reject(transaction.error || new Error("Coda FATTO annullata"));
-      });
-    } finally {
-      db.close();
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE, mode);
+      const store = transaction.objectStore(STORE);
+      let request;
+      try {
+        request = callback(store);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      transaction.oncomplete = () => resolve(request?.result);
+      transaction.onerror = () => reject(transaction.error || request?.error || new Error("Errore coda FATTO"));
+      transaction.onabort = () => reject(transaction.error || new Error("Coda FATTO annullata"));
+    });
   }
 
   const put = (operation) => transact("readwrite", (store) => store.put(operation));
   const remove = (operationId) => transact("readwrite", (store) => store.delete(operationId));
-
-  async function list() {
-    const db = await openDb();
-    try {
-      return await new Promise((resolve, reject) => {
-        const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
-        request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-        request.onerror = () => reject(request.error || new Error("Lettura coda FATTO fallita"));
-      });
-    } finally {
-      db.close();
-    }
-  }
+  const list = () => transact("readonly", (store) => store.getAll()).then((items) => Array.isArray(items) ? items : []);
 
   function publishStatus(items) {
     const pending = items.filter((item) => item.status !== "COMPLETED");
@@ -72,6 +84,11 @@
 
   async function refreshStatus() {
     try { publishStatus(await list()); } catch (_) {}
+  }
+
+  function scheduleStatusRefresh() {
+    window.clearTimeout(scheduleStatusRefresh.timer);
+    scheduleStatusRefresh.timer = window.setTimeout(refreshStatus, 80);
   }
 
   function createOperationId(impianto) {
@@ -98,7 +115,7 @@
       lastError: ""
     };
     await put(operation);
-    await refreshStatus();
+    scheduleStatusRefresh();
     return operation;
   }
 
@@ -110,6 +127,7 @@
       lastError: text(error?.message || error)
     };
     await put(updated);
+    scheduleStatusRefresh();
     return updated;
   }
 
@@ -209,11 +227,16 @@
           if (/non ancora pronta/i.test(text(error?.message))) break;
         }
       }
-      await refreshStatus();
+      scheduleStatusRefresh();
       return true;
     } finally {
       processing = false;
     }
+  }
+
+  function scheduleProcessQueue(reason = "manual") {
+    window.clearTimeout(processTimer);
+    processTimer = window.setTimeout(() => processQueue(reason), PROCESS_DEBOUNCE_MS);
   }
 
   function isAndroidNative() {
@@ -278,19 +301,30 @@
       const doneAt = new Date().toISOString();
       applyPermanentYellowFeedback(pressedButton, doneAt);
 
-      const operation = await enqueue(impianto, {
+      // Avvia immediatamente il flusso originale nello stesso gesto utente.
+      // La coda persistente viene scritta in parallelo, senza ritardare Whazzup.
+      const originalPromise = Promise.resolve().then(() => original.call(this, impianto, ...args));
+      const enqueuePromise = enqueue(impianto, {
         commessaId: window.selectedCommessaId,
         doneAt
       });
+
+      let operation;
       try {
-        const result = await original.call(this, impianto, ...args);
-        if (result === true) await remove(operation.operationId);
-        else await setStatus(operation, "FAILED", "Flusso FATTO non completato");
-        await refreshStatus();
+        const [queuedOperation, result] = await Promise.all([enqueuePromise, originalPromise]);
+        operation = queuedOperation;
+        if (result === true) {
+          await remove(operation.operationId);
+          scheduleStatusRefresh();
+        } else {
+          await setStatus(operation, "FAILED", "Flusso FATTO non completato");
+        }
         return result;
       } catch (error) {
-        await setStatus(operation, "FAILED", error);
-        await refreshStatus();
+        try {
+          operation = operation || await enqueuePromise;
+          await setStatus(operation, "FAILED", error);
+        } catch (_) {}
         throw error;
       }
     };
@@ -302,7 +336,7 @@
   function resume(reason) {
     installWhatsAppWrapper();
     installFattoWrapper();
-    window.setTimeout(() => processQueue(reason), 100);
+    scheduleProcessQueue(reason);
   }
 
   window.addEventListener("online", () => resume("online"));

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v111";
+const CACHE_NAME = "varga-cantieri-shell-v112";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
@@ -8,6 +8,11 @@ const CORE_SHELL = [
   "./style.css?v=20260727-update2",
   "./app.js?v=20260804-squadre-restore1",
   "./firebase-config.js",
+  "./auth-login-fix.js?v=20260731-legacy1",
+  "./approval-access.js?v=20260731-legacy1",
+  "./first-login-password.js?v=20260726b",
+  "./login-retry-fix.js?v=20260726f",
+  "./persistent-offline-auth.js?v=20260807a",
   "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
@@ -19,6 +24,17 @@ const CORE_SHELL = [
   "./icons/varga-cantieri-512.png",
   "./icons/varga-cantieri-maskable-512.png"
 ];
+
+const FIREBASE_EXTERNAL_SHELL = [
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js",
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js",
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js",
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js",
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js",
+  "https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"
+];
+
+const EXTERNAL_CACHE_ORIGINS = new Set(["https://www.gstatic.com"]);
 
 // Questi file restano disponibili offline, ma vengono memorizzati senza rallentare
 // l'attivazione iniziale e senza far fallire tutto se un singolo asset non risponde.
@@ -76,14 +92,22 @@ const hasNoStoreDirective = (headers) => {
   return typeof value === "string" && value.toLowerCase().includes("no-store");
 };
 
-const shouldHandleRequest = (request, url) => request.method === "GET"
-  && url.origin === self.location.origin
-  && CACHEABLE_DESTINATIONS.has(request.destination)
-  && !hasNoStoreDirective(request.headers)
-  && !isDynamicEndpoint(url);
+const isAllowedExternalAsset = (request, url) => request.method === "GET"
+  && request.destination === "script"
+  && EXTERNAL_CACHE_ORIGINS.has(url.origin)
+  && FIREBASE_EXTERNAL_SHELL.includes(url.href);
 
-const canCacheResponse = (request, response) => response?.ok
-  && response.type !== "opaque"
+const shouldHandleRequest = (request, url) => request.method === "GET"
+  && (
+    (url.origin === self.location.origin
+      && CACHEABLE_DESTINATIONS.has(request.destination)
+      && !hasNoStoreDirective(request.headers)
+      && !isDynamicEndpoint(url))
+    || isAllowedExternalAsset(request, url)
+  );
+
+const canCacheResponse = (request, response) => Boolean(response)
+  && (response.ok || response.type === "opaque")
   && !hasNoStoreDirective(response.headers)
   && CACHEABLE_DESTINATIONS.has(request.destination);
 
@@ -151,6 +175,16 @@ const staleWhileRevalidateForAsset = async (event) => {
       : caches.match("./index.html"));
 };
 
+const cacheFirstForExternalAsset = async (event) => {
+  const cached = await caches.match(event.request);
+  const networkUpdate = updateCache(event.request);
+  if (cached) {
+    event.waitUntil(networkUpdate);
+    return cached;
+  }
+  return (await networkUpdate) || Response.error();
+};
+
 async function cacheOptionalAssets(cache) {
   await Promise.allSettled(OPTIONAL_SHELL.map(async (url) => {
     const request = new Request(url, { cache: "reload" });
@@ -159,12 +193,25 @@ async function cacheOptionalAssets(cache) {
   }));
 }
 
+async function cacheFirebaseExternalAssets(cache) {
+  await Promise.allSettled(FIREBASE_EXTERNAL_SHELL.map(async (url) => {
+    const request = new Request(url, { mode: "no-cors", cache: "reload" });
+    const response = await fetch(request);
+    if (response && (response.ok || response.type === "opaque")) {
+      await cache.put(request, response);
+    }
+  }));
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await cache.addAll(CORE_SHELL);
     self.skipWaiting();
-    await cacheOptionalAssets(cache);
+    await Promise.all([
+      cacheOptionalAssets(cache),
+      cacheFirebaseExternalAssets(cache)
+    ]);
   })());
 });
 
@@ -182,6 +229,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (!shouldHandleRequest(event.request, url)) return;
+
+  if (isAllowedExternalAsset(event.request, url)) {
+    event.respondWith(cacheFirstForExternalAsset(event));
+    return;
+  }
 
   if (event.request.destination === "document") {
     event.respondWith(cacheFirstForDocument(event));

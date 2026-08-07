@@ -3,13 +3,14 @@ name: Correggi caricamento iniziale Home
 on:
   push:
     branches:
-      - fix/startup-home-unblock
+      - main
     paths:
       - '.github/workflows/fix-startup-loading.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   patch:
@@ -19,9 +20,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Crea ramo di correzione
+        run: git checkout -b automated/startup-home-fix
+
       - name: Applica correzione mirata
-        shell: python
         run: |
+          python <<'PY'
           from pathlib import Path
 
           path = Path('app.js')
@@ -31,29 +35,24 @@ jobs:
           if function_start < 0:
               raise SystemExit('Funzione loadStartupCoreCollections non trovata')
 
-          next_function = source.find('\nasync function ', function_start + len(function_marker))
-          if next_function < 0:
-              next_function = source.find('\nfunction ', function_start + len(function_marker))
-          if next_function < 0:
-              next_function = len(source)
-
+          next_async = source.find('\nasync function ', function_start + len(function_marker))
+          next_plain = source.find('\nfunction ', function_start + len(function_marker))
+          candidates = [position for position in (next_async, next_plain) if position >= 0]
+          next_function = min(candidates) if candidates else len(source)
           block = source[function_start:next_function]
+
           marker = 'await Promise.all(['
           marker_pos = block.find(marker)
           if marker_pos < 0:
-              if '[Startup] caricamento parziale, sezione lenta:' in block:
-                  print('Correzione già presente: nessuna modifica necessaria')
-                  raise SystemExit(0)
               raise SystemExit('Promise.all iniziale non trovata nella funzione')
 
           array_open = marker_pos + len('await Promise.all(')
           depth = 0
           array_close = None
           for index in range(array_open, len(block)):
-              char = block[index]
-              if char == '[':
+              if block[index] == '[':
                   depth += 1
-              elif char == ']':
+              elif block[index] == ']':
                   depth -= 1
                   if depth == 0:
                       array_close = index
@@ -107,18 +106,23 @@ jobs:
 
           updated_block = block[:marker_pos] + replacement + block[statement_end:]
           updated = source[:function_start] + updated_block + source[next_function:]
-          if updated == source:
-              raise SystemExit('Nessuna modifica applicata')
           path.write_text(updated, encoding='utf-8')
           print('Patch applicata a loadStartupCoreCollections')
+          PY
 
       - name: Controllo sintattico JavaScript
         run: node --check app.js
 
-      - name: Commit della correzione
+      - name: Prepara pull request finale
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          rm .github/workflows/fix-startup-loading.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js
+          git add app.js .github/workflows/fix-startup-loading.yml
           git commit -m "Sblocca la Home se un listener iniziale è lento"
-          git push
+          git push --force-with-lease origin automated/startup-home-fix
+          gh pr create --base main --head automated/startup-home-fix \
+            --title "Sblocca caricamento iniziale della Home" \
+            --body "Correzione mirata: i listener iniziali lenti non bloccano più la visualizzazione delle commesse. Include controllo sintattico di app.js e rimuove questo workflow temporaneo."

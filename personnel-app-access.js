@@ -60,7 +60,7 @@
       username = email.slice(0, -"@operatori.vargacantieri.app".length);
     }
 
-    const displayUsername = username || (email ? "" : slugFromName(displayName(person)));
+    const displayUsername = username || (email ? slugFromName(displayName(person)) : slugFromName(displayName(person)));
     const primary = displayUsername || email || "Non configurato";
     const showEmail = Boolean(email && normalize(email) !== normalize(primary));
 
@@ -76,6 +76,47 @@
   function findPerson(id) {
     const records = Array.isArray(window.personaleRecords) ? window.personaleRecords : [];
     return records.find((person) => String(person?.id) === String(id)) || null;
+  }
+
+  function findPersonForAccountModal(account) {
+    const records = Array.isArray(window.personaleRecords) ? window.personaleRecords : [];
+    if (!records.length || !account) return null;
+    const text = normalize(account.textContent || "");
+
+    const byEmail = records.find((person) => {
+      const info = accessInfo(person);
+      return Boolean(info.email && text.includes(normalize(info.email)));
+    });
+    if (byEmail) return byEmail;
+
+    return records.find((person) => {
+      const name = normalize(displayName(person));
+      return Boolean(name && text.includes(name));
+    }) || null;
+  }
+
+  function decorateAccountModal() {
+    const account = document.querySelector("#registry-modal .registry-account");
+    if (!account) return;
+    const person = findPersonForAccountModal(account);
+    if (!person) return;
+    const info = accessInfo(person);
+    if (!info.username) return;
+
+    let row = account.querySelector("[data-account-login-username]");
+    if (!row) {
+      row = document.createElement("small");
+      row.setAttribute("data-account-login-username", "1");
+      const summary = account.querySelector(".registry-account-summary > div");
+      if (summary) {
+        const firstSmall = summary.querySelector("small");
+        if (firstSmall) summary.insertBefore(row, firstSmall);
+        else summary.appendChild(row);
+      } else {
+        account.appendChild(row);
+      }
+    }
+    row.innerHTML = `<strong>Username app:</strong> ${escapeHtml(info.username)}`;
   }
 
   function decorateCards(root) {
@@ -131,10 +172,12 @@
 
   function enhance() {
     const root = document.getElementById("personnel-v2");
-    if (!root) return;
-    decorateCards(root);
-    enhanceSearch(root);
-    applySearch(root);
+    if (root) {
+      decorateCards(root);
+      enhanceSearch(root);
+      applySearch(root);
+    }
+    decorateAccountModal();
   }
 
   function scheduleEnhance() {

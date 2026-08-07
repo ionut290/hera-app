@@ -21,6 +21,7 @@ const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
+const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260807a";
 
 function loadOnce(src, dataName, ready, onLoad) {
   if (ready?.()) {
@@ -99,6 +100,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}" data-hera-shared-static-views="1"><\/script>`);
   document.write(`<script src="${HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC}" data-active-commesse-first-boot-guard="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC}" data-firestore-startup-cost-optimizer="1"><\/script>`);
+  document.write(`<script src="${HERA_PERSISTENT_OFFLINE_AUTH_SRC}" data-hera-persistent-offline-auth="1"><\/script>`);
   scheduleDeferredStartupModules();
 } else {
   const loadCriticalModules = () => {
@@ -132,6 +134,11 @@ if (document.readyState === "loading") {
       HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC,
       "firestore-startup-cost-optimizer",
       () => window.HeraFirestoreStartupCostOptimizer?.installed
+    );
+    loadOnce(
+      HERA_PERSISTENT_OFFLINE_AUTH_SRC,
+      "hera-persistent-offline-auth",
+      () => window.HeraPersistentOfflineAuth?.installed === true
     );
   };
 

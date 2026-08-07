@@ -71,6 +71,11 @@ function scheduleDeferredStartupModules() {
     loadOnce("update-app-feature.js?v=20260727a", "hera-app-update", () => false);
     loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
     loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
+    loadOnce(
+      "operator-account-admin.js?v=20260807a",
+      "hera-operator-account-admin",
+      () => window.__heraOperatorAccountAdminInstalled === true
+    );
   };
 
   const scheduleIdle = () => {

@@ -2,7 +2,25 @@
   "use strict";
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
+  const INTERNAL_OPERATOR_DOMAIN = "operatori.vargacantieri.app";
   let registrationPending = false;
+
+  function normalizeLoginIdentifier(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return { raw: "", email: "", operatorUsername: false };
+    if (raw.includes("@")) return { raw, email: raw, operatorUsername: false };
+    const username = raw
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9._-]+/g, ".")
+      .replace(/^\.+|\.+$/g, "")
+      .replace(/\.{2,}/g, ".");
+    return {
+      raw,
+      email: username ? `${username}@${INTERNAL_OPERATOR_DOMAIN}` : "",
+      operatorUsername: Boolean(username)
+    };
+  }
 
   function friendlyLoginError(error) {
     const code = String(error?.code || "").toLowerCase();
@@ -11,7 +29,7 @@
       ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(code)
       || /INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/i.test(message)
     ) {
-      return "Email o password non corretta. Controlla i dati e riprova.";
+      return "Username/email o password non corretti. Controlla i dati e riprova.";
     }
     if (code === "auth/too-many-requests") {
       return "Troppi tentativi. Attendi qualche minuto e riprova.";
@@ -22,7 +40,7 @@
     if (code === "auth/email-not-verified") {
       return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
     }
-    return "Accesso non riuscito. Controlla email e password e riprova.";
+    return "Accesso non riuscito. Controlla username/email e password e riprova.";
   }
 
   function registrationElements() {
@@ -214,7 +232,7 @@
     const password = String(passwordInput?.value || "");
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      if (feedback) feedback.textContent = "Inserisci prima un indirizzo email valido.";
+      if (feedback) feedback.textContent = "Per creare un nuovo account inserisci un indirizzo email completo e valido.";
       emailInput?.focus();
       return;
     }
@@ -252,11 +270,12 @@
     const passwordInput = document.getElementById("auth-password-input");
     const loginButton = document.getElementById("auth-email-login-btn");
     const feedback = document.getElementById("auth-email-feedback");
-    const email = String(emailInput?.value || "").trim().toLowerCase();
+    const identifier = normalizeLoginIdentifier(emailInput?.value);
+    const email = identifier.email;
     const password = String(passwordInput?.value || "");
 
     if (!email || !password) {
-      if (feedback) feedback.textContent = "Inserisci email e password.";
+      if (feedback) feedback.textContent = "Inserisci username/email e password.";
       return;
     }
 
@@ -280,6 +299,7 @@
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
         if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
+        if (identifier.operatorUsername) throw loginError;
         if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
         const registration = await openRegistrationDialog(email, password);
         if (passwordInput) passwordInput.value = "";
@@ -310,7 +330,23 @@
     }
   }
 
+  function configureUsernameLoginField() {
+    const input = document.getElementById("auth-email-input");
+    if (!input) return;
+    input.type = "text";
+    input.inputMode = "email";
+    input.placeholder = "nome.cognome oppure email@azienda.it";
+    input.setAttribute("aria-label", "Username o email");
+    const label = document.querySelector('label[for="auth-email-input"]');
+    if (label) label.textContent = "Username o email";
+    const gateMessage = document.getElementById("auth-gate-message");
+    if (gateMessage && /email e password/i.test(gateMessage.textContent || "")) {
+      gateMessage.textContent = (gateMessage.textContent || "").replace(/email e password/i, "username/email e password");
+    }
+  }
+
   function initialize() {
+    configureUsernameLoginField();
     document.addEventListener("submit", handleLogin, true);
     document.getElementById("auth-create-account-btn")
       ?.addEventListener("click", startRegistrationFromLogin);

@@ -57,21 +57,10 @@ function scheduleDeferredStartupModules() {
   window.__heraDeferredStartupModulesScheduled = true;
 
   const loadDeferredModules = () => {
-    loadOnce(
-      HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC,
-      "firestore-diagnostics-v4-cleanup",
-      () => false,
-      () => loadOnce(
-        HERA_FIRESTORE_DIAGNOSTICS_V4_SRC,
-        "firestore-diagnostics-v4",
-        () => window.VargaFirestoreDiagnosticsV4?.installed,
-        () => loadOnce(
-          HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC,
-          "hera-firestore-diagnostics-optimizer",
-          () => window.__vargaFsOptimizerDiagnosticsExtension
-        )
-      )
-    );
+    // V4 non viene più caricato automaticamente.
+    // V3 resta l'unico osservatore Firestore durante l'uso normale dell'app:
+    // in questo modo il report attribuisce le letture al vero chiamante invece
+    // di vedere il wrapper V4 come sorgente, senza cambiare query o listener reali.
 
     loadOnce(
       HERA_SHARED_STATIC_VIEWS_UI_SRC,

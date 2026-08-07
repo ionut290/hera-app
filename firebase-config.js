@@ -77,6 +77,11 @@ function scheduleDeferredStartupModules() {
       "hera-operator-account-admin",
       () => window.__heraOperatorAccountAdminInstalled === true
     );
+    loadOnce(
+      "personnel-app-access.js?v=20260807a",
+      "hera-personnel-app-access",
+      () => window.HeraPersonnelAppAccess?.installed === true
+    );
   };
 
   const scheduleIdle = () => {

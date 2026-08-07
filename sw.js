@@ -1,7 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v112";
+const CACHE_NAME = "varga-cantieri-shell-v113";
 
-// Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
-// Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
 const CORE_SHELL = [
   "./",
   "./index.html",
@@ -13,8 +11,9 @@ const CORE_SHELL = [
   "./first-login-password.js?v=20260726b",
   "./login-retry-fix.js?v=20260726f",
   "./persistent-offline-auth.js?v=20260807a",
+  "./offline-first-runtime.js?v=20260807a",
   "./firestore-safe-optimizer.js?v=20260805b",
-  "./firestore-inflight-read-coalescer.js?v=20260804a",
+  "./firestore-inflight-read-coalescer.js?v=20260805a",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
   "./fatto-button-immediate.js?v=20260727-fatto2",
   "./manifest.webmanifest",
@@ -35,9 +34,6 @@ const FIREBASE_EXTERNAL_SHELL = [
 ];
 
 const EXTERNAL_CACHE_ORIGINS = new Set(["https://www.gstatic.com"]);
-
-// Questi file restano disponibili offline, ma vengono memorizzati senza rallentare
-// l'attivazione iniziale e senza far fallire tutto se un singolo asset non risponde.
 const OPTIONAL_SHELL = [
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
@@ -48,7 +44,6 @@ const OPTIONAL_SHELL = [
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
-  "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
   "./accounting-v2.js?v=20260728e",
@@ -84,28 +79,19 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_TIMEOUT_MS = 3500;
 const NETWORK_FIRST_ASSET_PATHS = new Set(["/shared-static-views-client.js"]);
 
-const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
-  .some((pattern) => pattern.test(url.pathname));
-
+const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/].some((pattern) => pattern.test(url.pathname));
 const hasNoStoreDirective = (headers) => {
   const value = headers.get("cache-control");
   return typeof value === "string" && value.toLowerCase().includes("no-store");
 };
-
 const isAllowedExternalAsset = (request, url) => request.method === "GET"
   && request.destination === "script"
   && EXTERNAL_CACHE_ORIGINS.has(url.origin)
   && FIREBASE_EXTERNAL_SHELL.includes(url.href);
-
-const shouldHandleRequest = (request, url) => request.method === "GET"
-  && (
-    (url.origin === self.location.origin
-      && CACHEABLE_DESTINATIONS.has(request.destination)
-      && !hasNoStoreDirective(request.headers)
-      && !isDynamicEndpoint(url))
-    || isAllowedExternalAsset(request, url)
-  );
-
+const shouldHandleRequest = (request, url) => request.method === "GET" && (
+  (url.origin === self.location.origin && CACHEABLE_DESTINATIONS.has(request.destination) && !hasNoStoreDirective(request.headers) && !isDynamicEndpoint(url))
+  || isAllowedExternalAsset(request, url)
+);
 const canCacheResponse = (request, response) => Boolean(response)
   && (response.ok || response.type === "opaque")
   && !hasNoStoreDirective(response.headers)
@@ -130,21 +116,14 @@ async function updateCache(request) {
   }
 }
 
-// Dalla seconda apertura restituisce subito la pagina salvata e aggiorna in background.
-// Alla prima apertura, quando la cache non esiste, usa normalmente la rete.
 const cacheFirstForDocument = async (event) => {
-  const cached = await caches.match(event.request) || await caches.match("./index.html");
+  const cached = await caches.match(event.request) || await caches.match("./index.html") || await caches.match("./");
   const networkUpdate = updateCache(event.request);
-
   if (cached) {
     event.waitUntil(networkUpdate);
     return cached;
   }
-
-  return (await networkUpdate) || new Response(
-    "App temporaneamente non disponibile. Controlla la connessione e riprova.",
-    { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
-  );
+  return (await networkUpdate) || new Response("App offline non ancora preparata. Apri una volta l'app con Internet e riprova.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 };
 
 const networkFirstForCriticalAsset = async (request) => {
@@ -163,16 +142,11 @@ const networkFirstForCriticalAsset = async (request) => {
 const staleWhileRevalidateForAsset = async (event) => {
   const cached = await caches.match(event.request);
   const networkUpdate = updateCache(event.request);
-
   if (cached) {
     event.waitUntil(networkUpdate);
     return cached;
   }
-
-  return (await networkUpdate)
-    || (event.request.destination === "image"
-      ? caches.match("./icons/varga-cantieri-192.png")
-      : caches.match("./index.html"));
+  return (await networkUpdate) || (event.request.destination === "image" ? caches.match("./icons/varga-cantieri-192.png") : Response.error());
 };
 
 const cacheFirstForExternalAsset = async (event) => {
@@ -185,33 +159,45 @@ const cacheFirstForExternalAsset = async (event) => {
   return (await networkUpdate) || Response.error();
 };
 
-async function cacheOptionalAssets(cache) {
-  await Promise.allSettled(OPTIONAL_SHELL.map(async (url) => {
+async function cacheOne(cache, url) {
+  try {
     const request = new Request(url, { cache: "reload" });
     const response = await fetch(request);
-    if (response.ok && response.type !== "opaque") await cache.put(url, response);
-  }));
+    if (response && response.ok) {
+      await cache.put(request, response.clone());
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+async function cacheCoreAssets(cache) {
+  const results = await Promise.allSettled(CORE_SHELL.map((url) => cacheOne(cache, url)));
+  const indexCached = await caches.match("./index.html") || await caches.match("./");
+  if (!indexCached) throw new Error("Impossibile preparare index.html per l'avvio offline");
+  return results;
+}
+
+async function cacheOptionalAssets(cache) {
+  await Promise.allSettled(OPTIONAL_SHELL.map((url) => cacheOne(cache, url)));
 }
 
 async function cacheFirebaseExternalAssets(cache) {
   await Promise.allSettled(FIREBASE_EXTERNAL_SHELL.map(async (url) => {
-    const request = new Request(url, { mode: "no-cors", cache: "reload" });
-    const response = await fetch(request);
-    if (response && (response.ok || response.type === "opaque")) {
-      await cache.put(request, response);
-    }
+    try {
+      const request = new Request(url, { mode: "no-cors", cache: "reload" });
+      const response = await fetch(request);
+      if (response && (response.ok || response.type === "opaque")) await cache.put(request, response);
+    } catch (_) {}
   }));
 }
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(CORE_SHELL);
+    await cacheCoreAssets(cache);
+    await Promise.allSettled([cacheOptionalAssets(cache), cacheFirebaseExternalAssets(cache)]);
     self.skipWaiting();
-    await Promise.all([
-      cacheOptionalAssets(cache),
-      cacheFirebaseExternalAssets(cache)
-    ]);
   })());
 });
 
@@ -229,32 +215,25 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (!shouldHandleRequest(event.request, url)) return;
-
   if (isAllowedExternalAsset(event.request, url)) {
     event.respondWith(cacheFirstForExternalAsset(event));
     return;
   }
-
   if (event.request.destination === "document") {
     event.respondWith(cacheFirstForDocument(event));
     return;
   }
-
   if (NETWORK_FIRST_ASSET_PATHS.has(url.pathname)) {
     event.respondWith(networkFirstForCriticalAsset(event.request));
     return;
   }
-
   event.respondWith(staleWhileRevalidateForAsset(event));
 });
 
 function normalizePushPayload(event) {
   let payload = {};
-  try {
-    payload = event.data ? event.data.json() : {};
-  } catch (_) {
-    payload = { body: event.data ? event.data.text() : "" };
-  }
+  try { payload = event.data ? event.data.json() : {}; }
+  catch (_) { payload = { body: event.data ? event.data.text() : "" }; }
   const notification = payload.notification || {};
   const data = payload.data || {};
   return {
@@ -269,32 +248,26 @@ function normalizePushPayload(event) {
 
 self.addEventListener("push", (event) => {
   const message = normalizePushPayload(event);
-  const options = {
+  event.waitUntil(self.registration.showNotification(message.title, {
     body: message.body,
     icon: "./icons/varga-cantieri-192.png",
     badge: "./icons/varga-cantieri-192.png",
     tag: message.id || "hera-push-default",
     renotify: true,
-    actions: [
-      { action: "read", title: "LEGGI" },
-      { action: "open_app", title: "APRI NELL’APP" }
-    ],
+    actions: [{ action: "read", title: "LEGGI" }, { action: "open_app", title: "APRI NELL’APP" }],
     data: message
-  };
-  event.waitUntil(self.registration.showNotification(message.title, options));
+  }));
 });
 
 self.addEventListener("notificationclick", (event) => {
   const message = event.notification.data || {};
   event.notification.close();
-
   if (event.action === "read" || event.action === "") {
     event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
       for (const client of windows) client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
     }));
     return;
   }
-
   if (event.action === "open_app") {
     const targetUrl = new URL(message.url || "./index.html", self.location.origin);
     targetUrl.searchParams.set("notification", "open");

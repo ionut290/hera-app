@@ -11,6 +11,7 @@ window.firebaseConfig = {
 // del primo caricamento delle commesse. Tutto il resto viene caricato dopo che
 // la pagina è pronta, così l'avvio non resta bloccato da strumenti diagnostici
 // o funzioni amministrative non necessarie alla home.
+const HERA_NOTIFICATIONS_DISABLED_SRC = "notifications-disabled.js?v=20260807a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC = "firestore-diagnostics-v4-session-cleanup.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
@@ -67,7 +68,6 @@ function scheduleDeferredStartupModules() {
       "hera-shared-static-views-ui",
       () => window.__heraSharedStaticViewsUiInstalled
     );
-    loadOnce("notification-session-enhancements.js?v=20260727b", "hera-notification-session", () => false);
     loadOnce("update-app-feature.js?v=20260727a", "hera-app-update", () => false);
     loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
     loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
@@ -86,6 +86,9 @@ function scheduleDeferredStartupModules() {
 }
 
 if (document.readyState === "loading") {
+  // Il blocco notifiche viene installato per primo, prima di app.js e prima di
+  // qualunque listener Firestore dell'app.
+  document.write(`<script src="${HERA_NOTIFICATIONS_DISABLED_SRC}" data-hera-notifications-disabled="1"><\/script>`);
   // Mantiene l'ordine necessario prima di app.js, ma elimina dal percorso
   // critico diagnostica grafica, UI accessorie, Google Sheet e formazione.
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
@@ -97,6 +100,11 @@ if (document.readyState === "loading") {
   scheduleDeferredStartupModules();
 } else {
   const loadCriticalModules = () => {
+    loadOnce(
+      HERA_NOTIFICATIONS_DISABLED_SRC,
+      "hera-notifications-disabled",
+      () => window.HeraNotificationsDisabled?.installed
+    );
     loadOnce(
       HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC,
       "firestore-operation-diagnostics",

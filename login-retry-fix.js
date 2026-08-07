@@ -2,24 +2,20 @@
   "use strict";
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
-  const INTERNAL_OPERATOR_DOMAIN = "operatori.vargacantieri.app";
+  const OPERATOR_USERNAME_LOGIN_URL = "https://europe-west1-hera-app-6cd2b.cloudfunctions.net/loginWithOperatorUsername";
   let registrationPending = false;
 
   function normalizeLoginIdentifier(value) {
     const raw = String(value || "").trim().toLowerCase();
-    if (!raw) return { raw: "", email: "", operatorUsername: false };
-    if (raw.includes("@")) return { raw, email: raw, operatorUsername: false };
+    if (!raw) return { raw: "", email: "", username: "", operatorUsername: false };
+    if (raw.includes("@")) return { raw, email: raw, username: "", operatorUsername: false };
     const username = raw
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9._-]+/g, ".")
       .replace(/^\.+|\.+$/g, "")
       .replace(/\.{2,}/g, ".");
-    return {
-      raw,
-      email: username ? `${username}@${INTERNAL_OPERATOR_DOMAIN}` : "",
-      operatorUsername: Boolean(username)
-    };
+    return { raw, email: "", username, operatorUsername: Boolean(username) };
   }
 
   function friendlyLoginError(error) {
@@ -27,7 +23,7 @@
     const message = String(error?.message || error || "");
     if (
       ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(code)
-      || /INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/i.test(message)
+      || /INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND|USERNAME O PASSWORD NON CORRETTI/i.test(message)
     ) {
       return "Username/email o password non corretti. Controlla i dati e riprova.";
     }
@@ -259,6 +255,34 @@
     }
   }
 
+  async function signInWithOperatorUsername(auth, username, password) {
+    let response;
+    try {
+      response = await fetch(OPERATOR_USERNAME_LOGIN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: { username, password } })
+      });
+    } catch (networkError) {
+      const error = new Error("Connessione non disponibile.");
+      error.code = "auth/network-request-failed";
+      throw error;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const token = payload?.result?.token;
+    if (!response.ok || !token) {
+      const status = String(payload?.error?.status || "").toUpperCase();
+      const error = new Error(payload?.error?.message || "Username o password non corretti.");
+      error.code = status === "RESOURCE_EXHAUSTED"
+        ? "auth/too-many-requests"
+        : (status === "UNAVAILABLE" ? "auth/network-request-failed" : "auth/invalid-credential");
+      throw error;
+    }
+
+    return auth.signInWithCustomToken(token);
+  }
+
   async function handleLogin(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || form.id !== "auth-email-form") return;
@@ -271,10 +295,9 @@
     const loginButton = document.getElementById("auth-email-login-btn");
     const feedback = document.getElementById("auth-email-feedback");
     const identifier = normalizeLoginIdentifier(emailInput?.value);
-    const email = identifier.email;
     const password = String(passwordInput?.value || "");
 
-    if (!email || !password) {
+    if ((!identifier.email && !identifier.username) || !password) {
       if (feedback) feedback.textContent = "Inserisci username/email e password.";
       return;
     }
@@ -289,7 +312,9 @@
       const auth = firebase.auth();
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       try {
-        const credential = await auth.signInWithEmailAndPassword(email, password);
+        const credential = identifier.operatorUsername
+          ? await signInWithOperatorUsername(auth, identifier.username, password)
+          : await auth.signInWithEmailAndPassword(identifier.email, password);
         if (credential.user && credential.user.emailVerified === false) {
           await auth.signOut();
           const verificationError = new Error("Email non verificata.");
@@ -298,10 +323,10 @@
         }
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
-        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
         if (identifier.operatorUsername) throw loginError;
+        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
         if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
-        const registration = await openRegistrationDialog(email, password);
+        const registration = await openRegistrationDialog(identifier.email, password);
         if (passwordInput) passwordInput.value = "";
         if (registration.verificationRequired && feedback) {
           feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
@@ -311,7 +336,7 @@
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
     } catch (error) {
-      console.error("Errore login email/password:", error);
+      console.error("Errore login username/email:", error);
       if (feedback) {
         feedback.textContent = error?.message === "Creazione account annullata."
           ? "Creazione account annullata. Puoi riprovare quando vuoi."

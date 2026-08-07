@@ -5,6 +5,7 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 const DEFAULT_PASSWORD = String(process.env.OPERATOR_DEFAULT_PASSWORD || "12345678");
+const INTERNAL_LOGIN_DOMAIN = "operatori.vargacantieri.app";
 
 if (DEFAULT_PASSWORD.length < 6) {
   throw new Error("Password predefinita non valida: Firebase richiede almeno 6 caratteri.");
@@ -44,6 +45,27 @@ function getLinkedUid(data) {
   return firstValue(data, ["linkedUserId", "LINKED_USER_ID"]);
 }
 
+function loginSlug(value) {
+  return text(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .replace(/\.{2,}/g, ".")
+    || "operatore";
+}
+
+function buildInternalLogin(displayName, personnelId, duplicateCount) {
+  const base = loginSlug(displayName);
+  const suffix = duplicateCount > 1 ? `.${loginSlug(personnelId).slice(0, 6)}` : "";
+  const username = `${base}${suffix}`;
+  return {
+    username,
+    email: `${username}@${INTERNAL_LOGIN_DOMAIN}`
+  };
+}
+
 async function resolveAuthUser(data, email) {
   const linkedUid = getLinkedUid(data);
   if (linkedUid) {
@@ -63,25 +85,24 @@ async function resolveAuthUser(data, email) {
   return { user: null, matchedBy: "" };
 }
 
-async function provisionPersonnelAccount(db, personnelDoc) {
+async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
   const data = personnelDoc.data() || {};
   const displayName = getDisplayName(data);
-  const personnelEmail = getPersonnelEmail(data);
-  const resolved = await resolveAuthUser(data, personnelEmail);
+  const realEmail = getPersonnelEmail(data);
+  const internalLogin = buildInternalLogin(displayName, personnelDoc.id, duplicateCount);
+  const loginEmail = validEmail(realEmail) ? realEmail : internalLogin.email;
+  const generatedInternalLogin = !validEmail(realEmail);
+  const resolved = await resolveAuthUser(data, loginEmail);
   let user = resolved.user;
   let created = false;
 
-  if (!user && !validEmail(personnelEmail)) {
-    return { status: "skipped", personnelId: personnelDoc.id, displayName, reason: "email-mancante-o-non-valida" };
-  }
-
   if (user) {
     const update = { password: DEFAULT_PASSWORD, displayName, disabled: false };
-    if (!user.email && validEmail(personnelEmail)) update.email = personnelEmail;
+    if (!user.email) update.email = loginEmail;
     user = await admin.auth().updateUser(user.uid, update);
   } else {
     user = await admin.auth().createUser({
-      email: personnelEmail,
+      email: loginEmail,
       password: DEFAULT_PASSWORD,
       displayName,
       emailVerified: true,
@@ -90,11 +111,14 @@ async function provisionPersonnelAccount(db, personnelDoc) {
     created = true;
   }
 
-  const effectiveEmail = normalizeEmail(user.email || personnelEmail);
+  const effectiveEmail = normalizeEmail(user.email || loginEmail);
+  const loginUsername = generatedInternalLogin ? internalLogin.username : "";
+
   await db.collection("platformUsers").doc(user.uid).set({
     uid: user.uid,
     email: effectiveEmail,
     displayName,
+    ...(loginUsername ? { loginUsername, generatedInternalLogin: true } : {}),
     mustChangePassword: false,
     defaultOperatorPasswordProvisioned: true,
     defaultOperatorPasswordProvisionedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -112,6 +136,10 @@ async function provisionPersonnelAccount(db, personnelDoc) {
     personnelPatch.emailAccessoApp = effectiveEmail;
     personnelPatch.EMAIL_ACCESSO_APP = effectiveEmail;
   }
+  if (loginUsername) {
+    personnelPatch.loginUsername = loginUsername;
+    personnelPatch.generatedInternalLogin = true;
+  }
   await personnelDoc.ref.set(personnelPatch, { merge: true });
 
   return {
@@ -120,6 +148,8 @@ async function provisionPersonnelAccount(db, personnelDoc) {
     uid: user.uid,
     email: effectiveEmail,
     displayName,
+    loginUsername,
+    generatedInternalLogin,
     matchedBy: created ? "new" : resolved.matchedBy
   };
 }
@@ -127,11 +157,18 @@ async function provisionPersonnelAccount(db, personnelDoc) {
 async function main() {
   const db = admin.firestore();
   const snapshot = await db.collection("personale").get();
-  const results = [];
+  const nameCounts = new Map();
 
+  for (const doc of snapshot.docs) {
+    const key = loginSlug(getDisplayName(doc.data() || {}));
+    nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+  }
+
+  const results = [];
   for (const personnelDoc of snapshot.docs) {
     try {
-      results.push(await provisionPersonnelAccount(db, personnelDoc));
+      const displayKey = loginSlug(getDisplayName(personnelDoc.data() || {}));
+      results.push(await provisionPersonnelAccount(db, personnelDoc, nameCounts.get(displayKey) || 1));
     } catch (error) {
       results.push({
         status: "error",
@@ -145,8 +182,9 @@ async function main() {
 
   const summary = results.reduce((acc, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
+    if (item.generatedInternalLogin) acc.generatedInternalLogin += 1;
     return acc;
-  }, { total: results.length, created: 0, updated: 0, skipped: 0, error: 0 });
+  }, { total: results.length, created: 0, updated: 0, error: 0, generatedInternalLogin: 0 });
 
   console.log("Provisioning account operatori completato:", JSON.stringify(summary));
   for (const item of results) console.log(JSON.stringify(item));

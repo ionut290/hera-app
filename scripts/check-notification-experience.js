@@ -1,51 +1,53 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const disabled = fs.readFileSync("notifications-disabled.js", "utf8");
-const firebaseConfig = fs.readFileSync("firebase-config.js", "utf8");
+const app = fs.readFileSync("app.js", "utf8");
 const reader = fs.readFileSync("notification-session-enhancements.js", "utf8");
 const center = fs.readFileSync("notification-center.js", "utf8");
-const css = fs.readFileSync("notification-center.css", "utf8");
+const serviceWorker = fs.readFileSync("sw.js", "utf8");
+const index = fs.readFileSync("index.html", "utf8");
+const userNotifications = fs.readFileSync("functions/user-notifications.js", "utf8");
+const doneNotifications = fs.readFileSync("functions/index.js", "utf8");
 
 const mergeConflictMarker = /^(?:<<<<<<<|=======|>>>>>>>)(?: .*)?$/m;
-[disabled, firebaseConfig, reader, center, css].forEach((source) => {
+[app, reader, center, serviceWorker, index, userNotifications, doneNotifications].forEach((source) => {
   assert.doesNotMatch(source, mergeConflictMarker);
 });
 
-// Il blocco deve essere installato prima di app.js e impedire traffico Firestore
-// sulle raccolte appartenenti al vecchio sistema notifiche.
-assert.match(firebaseConfig, /HERA_NOTIFICATIONS_DISABLED_SRC/);
-assert.match(firebaseConfig, /notifications-disabled\.js\?v=/);
-assert.doesNotMatch(firebaseConfig, /loadOnce\("notification-session-enhancements\.js/);
+assert.match(app, /dismissedByUserIds\.\$\{currentUser\.uid\}/);
+assert.match(app, /Boolean\(item\?\.dismissedByUserIds\?\.\[currentUser\.uid\]\)/);
+assert.match(app, /HeraNotificationReader\?\.archive/);
 
-for (const collection of ["notifications", "userAlerts", "appNotifications", "userAlertAcknowledgements"]) {
-  assert.match(disabled, new RegExp(`\\"${collection}\\"`));
-}
-assert.match(disabled, /QueryProto\.onSnapshot/);
-assert.match(disabled, /QueryProto\.get/);
-assert.match(disabled, /DocumentProto\.onSnapshot/);
-assert.match(disabled, /DocumentProto\.get/);
-assert.match(disabled, /CollectionProto\.add/);
-assert.match(disabled, /return Promise\.resolve\(null\)/);
-assert.match(disabled, /unsubscribeBrowserPush/);
-assert.match(disabled, /open-panel-notifiche/);
-assert.match(disabled, /panel-notifiche/);
-assert.match(disabled, /today-alerts-btn/);
+assert.match(reader, /hera_notification_history_v1/);
+assert.match(reader, /showNotificationInbox/);
+assert.doesNotMatch(reader, /dialog\.id\s*=\s*"received-notification-dialog"/);
+assert.match(reader, /HeraNotificationCenter\?\.open/);
+assert.match(reader, /data\.fullMessage/);
 
-// I vecchi asset restano soltanto come stub per compatibilità con index/build.
-assert.doesNotMatch(center, /\.collection\(/);
-assert.doesNotMatch(center, /\.onSnapshot\(/);
-assert.doesNotMatch(center, /HeraNotificationCenter\s*=\s*\{/);
-assert.match(center, /HeraNotificationCenter = undefined/);
-assert.match(center, /heraPushFcmToken/);
-assert.match(center, /unsubscribePush/);
+assert.match(center, /L="userAlerts"/);
+assert.match(center, /C="notifications"/);
+assert.match(center, /data-central-notification-bell/);
+assert.match(center, /userAlertAcknowledgements/);
+assert.match(center, /OK, HO CAPITO/);
 
-assert.doesNotMatch(reader, /addEventListener\("message"/);
-assert.doesNotMatch(reader, /pushNotificationReceived/);
-assert.match(reader, /HeraNotificationReader = undefined/);
+// Verifica che il service worker usi una cache versionata senza bloccare gli aggiornamenti futuri.
+assert.match(serviceWorker, /const CACHE_NAME = "[a-z0-9-]+-shell-v\d+";/i);
+assert.doesNotMatch(serviceWorker, /notification-session-enhancements\.js\?v=/);
 
-for (const id of ["open-panel-notifiche", "panel-notifiche", "user-alert-modal", "notification-doc-viewer-modal", "pwa-notification-status", "enable-notifications-btn", "test-notification-btn", "today-alerts-btn"]) {
-  assert.match(css, new RegExp(`#${id}`));
-}
+// Confronta la versione realmente caricata, indipendentemente dal prefisso relativo.
+const notificationAssetPattern = /["'](?:\.\/)?notification-center\.js\?v=([^"']+)["']/;
+const indexNotificationCenter = index.match(notificationAssetPattern);
+const serviceWorkerNotificationCenter = serviceWorker.match(notificationAssetPattern);
+assert.ok(indexNotificationCenter, "index.html non carica notification-center.js con cache-busting");
+assert.ok(serviceWorkerNotificationCenter, "sw.js non precarica notification-center.js con cache-busting");
+assert.equal(
+  serviceWorkerNotificationCenter[1],
+  indexNotificationCenter[1],
+  "index.html e sw.js usano versioni diverse di notification-center.js"
+);
 
-console.log("Notification removal checks passed: UI, push and Firestore traffic are disabled.");
+assert.match(userNotifications, /ti ha segnato/);
+assert.match(userNotifications, /fullMessage/);
+assert.match(doneNotifications, /fullMessage/);
+
+console.log("Notification experience checks passed.");

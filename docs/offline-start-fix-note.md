@@ -1,0 +1,1 @@
+Fix temporaneo documentato: Service Worker v113 rende tollerante agli errori la preparazione della cache offline. File operativo modificato: sw.js.

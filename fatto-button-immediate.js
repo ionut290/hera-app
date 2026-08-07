@@ -301,9 +301,16 @@
       const doneAt = new Date().toISOString();
       applyPermanentYellowFeedback(pressedButton, doneAt);
 
-      // Avvia immediatamente il flusso originale nello stesso gesto utente.
-      // La coda persistente viene scritta in parallelo, senza ritardare Whazzup.
-      const originalPromise = Promise.resolve().then(() => original.call(this, impianto, ...args));
+      // Su iPhone/Safari l'apertura di WhatsApp deve partire direttamente dal tocco.
+      // Chiamiamo quindi il flusso originale in modo sincrono e trasformiamo solo
+      // il suo risultato in Promise; la coda IndexedDB continua in parallelo.
+      let originalPromise;
+      try {
+        originalPromise = Promise.resolve(original.call(this, impianto, ...args));
+      } catch (error) {
+        originalPromise = Promise.reject(error);
+      }
+
       const enqueuePromise = enqueue(impianto, {
         commessaId: window.selectedCommessaId,
         doneAt

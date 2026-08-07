@@ -92,12 +92,13 @@ async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
   const internalLogin = buildInternalLogin(displayName, personnelDoc.id, duplicateCount);
   const loginEmail = validEmail(realEmail) ? realEmail : internalLogin.email;
   const generatedInternalLogin = !validEmail(realEmail);
+  const loginUsername = internalLogin.username;
   const resolved = await resolveAuthUser(data, loginEmail);
   let user = resolved.user;
   let created = false;
 
   if (user) {
-    const update = { password: DEFAULT_PASSWORD, displayName, disabled: false };
+    const update = { displayName, disabled: false };
     if (!user.email) update.email = loginEmail;
     user = await admin.auth().updateUser(user.uid, update);
   } else {
@@ -112,16 +113,18 @@ async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
   }
 
   const effectiveEmail = normalizeEmail(user.email || loginEmail);
-  const loginUsername = generatedInternalLogin ? internalLogin.username : "";
 
   await db.collection("platformUsers").doc(user.uid).set({
     uid: user.uid,
     email: effectiveEmail,
     displayName,
-    ...(loginUsername ? { loginUsername, generatedInternalLogin: true } : {}),
-    mustChangePassword: false,
-    defaultOperatorPasswordProvisioned: true,
-    defaultOperatorPasswordProvisionedAt: admin.firestore.FieldValue.serverTimestamp(),
+    loginUsername,
+    generatedInternalLogin,
+    ...(created ? {
+      mustChangePassword: false,
+      defaultOperatorPasswordProvisioned: true,
+      defaultOperatorPasswordProvisionedAt: admin.firestore.FieldValue.serverTimestamp()
+    } : {}),
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 
@@ -130,15 +133,13 @@ async function provisionPersonnelAccount(db, personnelDoc, duplicateCount) {
     LINKED_USER_ID: user.uid,
     linkedUserEmail: effectiveEmail,
     LINKED_USER_EMAIL: effectiveEmail,
+    loginUsername,
+    generatedInternalLogin,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   };
   if (!text(data.emailAccessoApp) && !text(data.EMAIL_ACCESSO_APP)) {
     personnelPatch.emailAccessoApp = effectiveEmail;
     personnelPatch.EMAIL_ACCESSO_APP = effectiveEmail;
-  }
-  if (loginUsername) {
-    personnelPatch.loginUsername = loginUsername;
-    personnelPatch.generatedInternalLogin = true;
   }
   await personnelDoc.ref.set(personnelPatch, { merge: true });
 

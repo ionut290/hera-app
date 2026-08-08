@@ -1,0 +1,52 @@
+name: Optimize app notifications once
+
+on:
+  push:
+    branches:
+      - optimize-app-notifications-reads
+    paths:
+      - '.github/workflows/optimize-app-notifications-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reduce appNotifications initial listener limit safely
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app.js')
+          text = path.read_text(encoding='utf-8')
+          old = 'db.collection("appNotifications").orderBy("createdAt", "desc").limit(40)'
+          new = 'db.collection("appNotifications").orderBy("createdAt", "desc").limit(10)'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Safety check failed: expected exactly 1 target, found {count}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- app.js
+
+      - name: Commit only the intended app.js change
+        shell: bash
+        run: |
+          if git diff --quiet -- app.js; then
+            echo 'No app.js change detected; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js
+          git commit -m 'Optimize app notification listener reads'
+          git push origin HEAD:optimize-app-notifications-reads

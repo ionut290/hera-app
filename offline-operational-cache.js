@@ -2,8 +2,9 @@
   "use strict";
 
   const GLOBAL = "HeraOperationalOfflineCache";
-  const VERSION = "1.0.1";
-  const CACHE_PREFIX = "hera-offline-root-commesse-v1:";
+  const VERSION = "1.1.0";
+  const COMMESSE_CACHE_PREFIX = "hera-offline-root-commesse-v1:";
+  const IMPIANTI_CACHE_PREFIX = "hera-offline-impianti-v1:";
   const WEATHER_PREFIX = "hera-offline-weather-v1:";
   const SESSION_KEY = "heraPersistedUserSession";
   const PROBE_TIMEOUT_MS = 2200;
@@ -18,6 +19,8 @@
     lastProbeAt: null,
     cachedCommesseDelivered: 0,
     cachedCommesseSaved: 0,
+    cachedImpiantiDelivered: 0,
+    cachedImpiantiSaved: 0,
     firestoreListenersSkippedOffline: 0,
     errors: []
   };
@@ -48,9 +51,10 @@
     return String(saved?.uid || saved?.user?.uid || "").trim();
   }
 
-  function userCacheKey(prefix) {
+  function userCacheKey(prefix, suffix = "") {
     const uid = persistedUid();
-    return uid ? `${prefix}${uid}` : "";
+    if (!uid) return "";
+    return `${prefix}${uid}${suffix ? `:${suffix}` : ""}`;
   }
 
   function safeClone(value) {
@@ -91,6 +95,11 @@
     return "";
   }
 
+  function impiantiCommessaId(path) {
+    const match = String(path || "").match(/^commesse\/([^/]+)\/impianti$/);
+    return match ? match[1] : "";
+  }
+
   function snapshotOptions(value) {
     return Boolean(value && typeof value === "object" && typeof value.next !== "function"
       && Object.prototype.hasOwnProperty.call(value, "includeMetadataChanges"));
@@ -120,13 +129,24 @@
     return String(fieldPath || "").split(".").reduce((value, part) => value == null ? undefined : value[part], data);
   }
 
-  function buildCachedSnapshot(query, stored) {
+  function documentRefForPath(query, path, id) {
+    try {
+      const firestore = query?.firestore;
+      if (!firestore?.collection) return null;
+      if (path === "commesse") return firestore.collection("commesse").doc(id);
+      const commessaId = impiantiCommessaId(path);
+      if (commessaId) return firestore.collection("commesse").doc(commessaId).collection("impianti").doc(id);
+    } catch (_) {}
+    return null;
+  }
+
+  function buildCachedSnapshot(query, path, stored) {
     const metadata = Object.freeze({ fromCache: true, hasPendingWrites: false });
     const rows = Array.isArray(stored?.docs) ? stored.docs : [];
     const docs = rows.map((row) => {
       const data = row?.data && typeof row.data === "object" ? row.data : {};
       const id = String(row?.id || "");
-      const ref = query?.firestore?.collection?.("commesse")?.doc?.(id) || null;
+      const ref = documentRefForPath(query, path, id);
       return Object.freeze({
         id, ref, exists: true, metadata,
         data: () => safeClone(data) || { ...data },
@@ -143,18 +163,40 @@
     return Object.freeze(snapshot);
   }
 
-  function readCachedCommesse() {
-    const key = userCacheKey(CACHE_PREFIX);
-    return key ? safeRead(key) : null;
+  function cacheDescriptor(path) {
+    if (path === "commesse") {
+      return {
+        key: userCacheKey(COMMESSE_CACHE_PREFIX),
+        kind: "commesse"
+      };
+    }
+    const commessaId = impiantiCommessaId(path);
+    if (commessaId) {
+      return {
+        key: userCacheKey(IMPIANTI_CACHE_PREFIX, commessaId),
+        kind: "impianti",
+        commessaId
+      };
+    }
+    return null;
   }
 
-  function saveCommesseSnapshot(snapshot) {
-    const key = userCacheKey(CACHE_PREFIX);
-    if (!key || !snapshot?.docs) return;
+  function readCachedSnapshot(path) {
+    const descriptor = cacheDescriptor(path);
+    return descriptor?.key ? safeRead(descriptor.key) : null;
+  }
+
+  function saveSnapshot(path, snapshot) {
+    const descriptor = cacheDescriptor(path);
+    if (!descriptor?.key || !snapshot?.docs) return;
     if (snapshot.empty && snapshot.metadata?.fromCache) return;
-    const docs = snapshot.docs.map((doc) => ({ id: String(doc.id || ""), data: safeClone(doc.data?.() || {}) || {} }))
+    const docs = snapshot.docs
+      .map((doc) => ({ id: String(doc.id || ""), data: safeClone(doc.data?.() || {}) || {} }))
       .filter((row) => row.id);
-    if (safeWrite(key, { savedAt: new Date().toISOString(), docs })) state.cachedCommesseSaved += 1;
+    const payload = { savedAt: new Date().toISOString(), path, docs };
+    if (!safeWrite(descriptor.key, payload)) return;
+    if (descriptor.kind === "commesse") state.cachedCommesseSaved += 1;
+    else state.cachedImpiantiSaved += 1;
   }
 
   function renderConnectionUi() {
@@ -162,9 +204,9 @@
     const offline = document.getElementById("offline-mode-indicator");
     if (!indicator && !offline) return;
     if (state.verified && !state.online) {
-      setText(indicator, "🟠 Offline • Dati salvati sul dispositivo");
+      setText(indicator, "🔴 Offline");
       if (offline) {
-        setText(offline, "📦 Modalità offline attiva • verrà sincronizzato al ritorno della rete");
+        setText(offline, "📦 Modalità offline attiva");
         offline.classList.remove("hidden");
       }
     } else if (state.verified && state.online) {
@@ -241,16 +283,20 @@
     return request;
   }
 
-  function installCommesseReadCache() {
+  function installOperationalReadCache() {
     const QueryPrototype = window.firebase?.firestore?.Query?.prototype;
     if (!QueryPrototype || typeof QueryPrototype.onSnapshot !== "function") return false;
     if (QueryPrototype.onSnapshot.__heraOperationalOfflineCacheWrapped) return true;
     const originalOnSnapshot = QueryPrototype.onSnapshot;
+
     const wrapped = function offlineAwareOnSnapshot() {
-      if (queryPath(this) !== "commesse") return originalOnSnapshot.apply(this, arguments);
+      const path = queryPath(this);
+      const descriptor = cacheDescriptor(path);
+      if (!descriptor) return originalOnSnapshot.apply(this, arguments);
+
       const query = this;
       const originalArgs = Array.from(arguments);
-      const cached = readCachedCommesse();
+      const cached = readCachedSnapshot(path);
       let cancelled = false;
       let unsubscribe = () => {};
       let cachedDelivered = false;
@@ -259,7 +305,7 @@
         const wrappedArgs = wrapNext(originalArgs, (snapshot, next, context) => invokeNext(next, context, snapshot));
         const index = snapshotOptions(wrappedArgs[0]) ? 1 : 0;
         const candidate = wrappedArgs[index];
-        const snapshot = buildCachedSnapshot(query, stored);
+        const snapshot = buildCachedSnapshot(query, path, stored);
         if (typeof candidate === "function") candidate(snapshot);
         else candidate?.next?.(snapshot);
       };
@@ -267,7 +313,8 @@
       if (cached?.docs?.length) {
         deliver(cached);
         cachedDelivered = true;
-        state.cachedCommesseDelivered += 1;
+        if (descriptor.kind === "commesse") state.cachedCommesseDelivered += 1;
+        else state.cachedImpiantiDelivered += 1;
       }
 
       Promise.resolve(probeConnectivity()).then((online) => {
@@ -278,7 +325,7 @@
           return;
         }
         const args = wrapNext(originalArgs, (snapshot, next, context) => {
-          saveCommesseSnapshot(snapshot);
+          saveSnapshot(path, snapshot);
           invokeNext(next, context, snapshot);
         });
         unsubscribe = originalOnSnapshot.apply(query, args);
@@ -286,6 +333,7 @@
 
       return () => { cancelled = true; try { unsubscribe?.(); } catch (_) {} };
     };
+
     Object.defineProperty(wrapped, "__heraOperationalOfflineCacheWrapped", { value: true });
     Object.defineProperty(wrapped, "__heraOperationalOfflineCacheOriginal", { value: originalOnSnapshot });
     QueryPrototype.onSnapshot = wrapped;
@@ -315,9 +363,9 @@
   }
 
   function install() {
-    const commesseReady = installCommesseReadCache();
+    const cacheReady = installOperationalReadCache();
     installUiObservers();
-    state.installed = commesseReady;
+    state.installed = cacheReady;
     return state.installed;
   }
 
@@ -337,6 +385,8 @@
     version: VERSION,
     probe: probeConnectivity,
     isOffline: () => state.verified ? !state.online : navigator.onLine === false,
+    getCachedCommesse: () => readCachedSnapshot("commesse"),
+    getCachedImpianti: (commessaId) => readCachedSnapshot(`commesse/${String(commessaId || "")}/impianti`),
     getState: () => ({ ...state, errors: state.errors.slice() })
   };
 

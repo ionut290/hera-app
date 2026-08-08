@@ -1,4 +1,4 @@
-name: Optimize app notifications once
+name: Inspect app notifications target once
 
 on:
   push:
@@ -8,10 +8,10 @@ on:
       - '.github/workflows/optimize-app-notifications-once.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,35 +19,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Reduce appNotifications initial listener limit safely
+      - name: Show exact appNotifications source contexts
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          path = Path('app.js')
-          text = path.read_text(encoding='utf-8')
-          pattern = r'db\.collection\("appNotifications"\)\.orderBy\("createdAt"\s*,\s*"desc"\)\.limit\(40\)'
-          matches = list(re.finditer(pattern, text))
-          if len(matches) != 1:
-              raise SystemExit(f'Safety check failed: expected exactly 1 target, found {len(matches)}')
-          updated = re.sub(pattern, 'db.collection("appNotifications").orderBy("createdAt","desc").limit(10)', text, count=1)
-          path.write_text(updated, encoding='utf-8')
+          text = Path('app.js').read_text(encoding='utf-8')
+          needle = 'appNotifications'
+          positions = []
+          start = 0
+          while True:
+              idx = text.find(needle, start)
+              if idx < 0:
+                  break
+              positions.append(idx)
+              start = idx + len(needle)
+
+          print(f'FOUND {len(positions)} occurrences of {needle!r}')
+          if not positions:
+              raise SystemExit('No appNotifications occurrence found in current branch app.js')
+
+          for n, idx in enumerate(positions, 1):
+              left = max(0, idx - 350)
+              right = min(len(text), idx + 900)
+              print(f'\n--- OCCURRENCE {n} at byte {idx} ---')
+              print(text[left:right].replace('\r', '\\r'))
           PY
-
-          git diff --check
-          git diff -- app.js
-
-      - name: Commit only the intended app.js change
-        shell: bash
-        run: |
-          if git diff --quiet -- app.js; then
-            echo 'No app.js change detected; nothing to commit.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app.js
-          git commit -m 'Optimize app notification listener reads'
-          git push origin HEAD:optimize-app-notifications-reads

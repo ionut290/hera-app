@@ -24,15 +24,16 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('app.js')
           text = path.read_text(encoding='utf-8')
-          old = 'db.collection("appNotifications").orderBy("createdAt", "desc").limit(40)'
-          new = 'db.collection("appNotifications").orderBy("createdAt", "desc").limit(10)'
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f'Safety check failed: expected exactly 1 target, found {count}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          pattern = r'db\.collection\("appNotifications"\)\.orderBy\("createdAt"\s*,\s*"desc"\)\.limit\(40\)'
+          matches = list(re.finditer(pattern, text))
+          if len(matches) != 1:
+              raise SystemExit(f'Safety check failed: expected exactly 1 target, found {len(matches)}')
+          updated = re.sub(pattern, 'db.collection("appNotifications").orderBy("createdAt","desc").limit(10)', text, count=1)
+          path.write_text(updated, encoding='utf-8')
           PY
 
           git diff --check

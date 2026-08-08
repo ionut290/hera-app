@@ -17,6 +17,7 @@ const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
 const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
+const HERA_OFFLINE_SHARED_STATIC_VIEWS_BRIDGE_SRC = "offline-shared-static-views-bridge.js?v=20260808a";
 const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
 const HERA_OPERATIONAL_OFFLINE_CACHE_SRC = "offline-operational-cache.js?v=20260808b";
@@ -97,6 +98,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}" data-hera-firestore-inflight-coalescer="1"><\/script>`);
+  document.write(`<script src="${HERA_OFFLINE_SHARED_STATIC_VIEWS_BRIDGE_SRC}" data-hera-offline-shared-static-views-bridge="1"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}" data-hera-shared-static-views="1"><\/script>`);
   document.write(`<script src="${HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC}" data-active-commesse-first-boot-guard="1"><\/script>`);
   document.write(`<script src="${HERA_OPERATIONAL_OFFLINE_CACHE_SRC}" data-hera-operational-offline-cache="1"><\/script>`);
@@ -121,9 +123,14 @@ if (document.readyState === "loading") {
       () => window.HeraFirestoreInflightReadCoalescer?.installed
     );
     loadOnce(
-      HERA_SHARED_STATIC_VIEWS_SRC,
-      "hera-shared-static-views",
-      () => window.HeraSharedStaticViews?.installed
+      HERA_OFFLINE_SHARED_STATIC_VIEWS_BRIDGE_SRC,
+      "hera-offline-shared-static-views-bridge",
+      () => window.HeraOfflineSharedStaticViewsBridge?.installed === true,
+      () => loadOnce(
+        HERA_SHARED_STATIC_VIEWS_SRC,
+        "hera-shared-static-views",
+        () => window.HeraSharedStaticViews?.installed
+      )
     );
     loadOnce(
       HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC,

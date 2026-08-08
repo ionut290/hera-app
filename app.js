@@ -2907,7 +2907,7 @@ function subscribeGlobalNotifications() {
   globalNotificationsInitialized = false;
   unsubscribeGlobalNotifications = db.collection("appNotifications")
     .orderBy("createdAt", "desc")
-    .limit(40)
+    .limit(10)
     .onSnapshot(async (snapshot) => {
       if (!globalNotificationsInitialized) {
         globalNotificationsInitialized = true;

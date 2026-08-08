@@ -19,6 +19,7 @@ const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
 const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
+const HERA_OPERATIONAL_OFFLINE_CACHE_SRC = "offline-operational-cache.js?v=20260808a";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260807b";
@@ -98,6 +99,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}" data-hera-firestore-inflight-coalescer="1"><\/script>`);
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_SRC}" data-hera-shared-static-views="1"><\/script>`);
   document.write(`<script src="${HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC}" data-active-commesse-first-boot-guard="1"><\/script>`);
+  document.write(`<script src="${HERA_OPERATIONAL_OFFLINE_CACHE_SRC}" data-hera-operational-offline-cache="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC}" data-firestore-startup-cost-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_PERSISTENT_OFFLINE_AUTH_SRC}" data-hera-persistent-offline-auth="1"><\/script>`);
   scheduleDeferredStartupModules();
@@ -127,6 +129,11 @@ if (document.readyState === "loading") {
       HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC,
       "active-commesse-first-boot-guard",
       () => window.HeraActiveCommesseFirstBootGuard?.installed
+    );
+    loadOnce(
+      HERA_OPERATIONAL_OFFLINE_CACHE_SRC,
+      "hera-operational-offline-cache",
+      () => window.HeraOperationalOfflineCache?.installed === true
     );
     loadOnce(
       HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC,

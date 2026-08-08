@@ -2,7 +2,7 @@
   "use strict";
 
   const GLOBAL = "HeraOperationalOfflineCache";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const CACHE_PREFIX = "hera-offline-root-commesse-v1:";
   const WEATHER_PREFIX = "hera-offline-weather-v1:";
   const SESSION_KEY = "heraPersistedUserSession";
@@ -25,19 +25,18 @@
   let probePromise = null;
   let connectionObserver = null;
   let weatherObserver = null;
-  let forcingConnectionUi = false;
 
   function safeRead(key) {
     try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { return null; }
   }
 
   function safeWrite(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (_) {
-      return false;
-    }
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (_) { return false; }
+  }
+
+  function setText(node, value) {
+    if (node && node.textContent !== value) node.textContent = value;
   }
 
   function persistedUid() {
@@ -62,9 +61,7 @@
         }
         return item;
       }));
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
   function canonicalPath(value) {
@@ -85,15 +82,8 @@
   }
 
   function queryPath(query) {
-    const candidates = [
-      query?.path,
-      query?._query?.path,
-      query?._query?._path,
-      query?._delegate?._query?.path,
-      query?._delegate?._query?._path,
-      query?.Ae?.path,
-      query?.je?.path
-    ];
+    const candidates = [query?.path, query?._query?.path, query?._query?._path,
+      query?._delegate?._query?.path, query?._delegate?._query?._path, query?.Ae?.path, query?.je?.path];
     for (const candidate of candidates) {
       const path = canonicalPath(candidate).replace(/^\/+|\/+$/g, "");
       if (path) return path;
@@ -102,8 +92,7 @@
   }
 
   function snapshotOptions(value) {
-    return Boolean(value && typeof value === "object"
-      && typeof value.next !== "function"
+    return Boolean(value && typeof value === "object" && typeof value.next !== "function"
       && Object.prototype.hasOwnProperty.call(value, "includeMetadataChanges"));
   }
 
@@ -118,17 +107,13 @@
     }
     if (candidate && typeof candidate === "object" && typeof candidate.next === "function") {
       const observer = candidate;
-      args[index] = {
-        ...observer,
-        next(snapshot) { return wrapper(snapshot, observer.next, observer); }
-      };
+      args[index] = { ...observer, next(snapshot) { return wrapper(snapshot, observer.next, observer); } };
     }
     return args;
   }
 
   function invokeNext(next, context, snapshot) {
-    if (typeof next !== "function") return;
-    next.call(context || undefined, snapshot);
+    if (typeof next === "function") next.call(context || undefined, snapshot);
   }
 
   function nestedValue(data, fieldPath) {
@@ -143,21 +128,14 @@
       const id = String(row?.id || "");
       const ref = query?.firestore?.collection?.("commesse")?.doc?.(id) || null;
       return Object.freeze({
-        id,
-        ref,
-        exists: true,
-        metadata,
+        id, ref, exists: true, metadata,
         data: () => safeClone(data) || { ...data },
         get: (fieldPath) => nestedValue(data, fieldPath),
         isEqual: (other) => Boolean(other && other.id === id)
       });
     });
     const snapshot = {
-      query,
-      docs: Object.freeze(docs),
-      size: docs.length,
-      empty: docs.length === 0,
-      metadata,
+      query, docs: Object.freeze(docs), size: docs.length, empty: docs.length === 0, metadata,
       forEach(callback, thisArg) { docs.forEach((doc) => callback.call(thisArg, doc)); },
       docChanges() { return docs.map((doc, index) => ({ type: "added", doc, oldIndex: -1, newIndex: index })); },
       isEqual(other) { return other === snapshot; }
@@ -174,35 +152,26 @@
     const key = userCacheKey(CACHE_PREFIX);
     if (!key || !snapshot?.docs) return;
     if (snapshot.empty && snapshot.metadata?.fromCache) return;
-    const docs = snapshot.docs.map((doc) => ({
-      id: String(doc.id || ""),
-      data: safeClone(doc.data?.() || {}) || {}
-    })).filter((row) => row.id);
-    if (safeWrite(key, { savedAt: new Date().toISOString(), docs })) {
-      state.cachedCommesseSaved += 1;
-    }
+    const docs = snapshot.docs.map((doc) => ({ id: String(doc.id || ""), data: safeClone(doc.data?.() || {}) || {} }))
+      .filter((row) => row.id);
+    if (safeWrite(key, { savedAt: new Date().toISOString(), docs })) state.cachedCommesseSaved += 1;
   }
 
   function renderConnectionUi() {
     const indicator = document.getElementById("connection-indicator");
     const offline = document.getElementById("offline-mode-indicator");
     if (!indicator && !offline) return;
-    forcingConnectionUi = true;
-    try {
-      if (state.verified && !state.online) {
-        if (indicator) indicator.textContent = "🟠 Offline • Dati salvati sul dispositivo";
-        if (offline) {
-          offline.textContent = "📦 Modalità offline attiva • verrà sincronizzato al ritorno della rete";
-          offline.classList.remove("hidden");
-        }
-      } else if (state.verified && state.online) {
-        if (indicator) indicator.textContent = "🟢 Online • Connessione disponibile";
-        if (offline) offline.classList.add("hidden");
-      } else if (indicator) {
-        indicator.textContent = "🟡 Connessione in verifica…";
+    if (state.verified && !state.online) {
+      setText(indicator, "🟠 Offline • Dati salvati sul dispositivo");
+      if (offline) {
+        setText(offline, "📦 Modalità offline attiva • verrà sincronizzato al ritorno della rete");
+        offline.classList.remove("hidden");
       }
-    } finally {
-      forcingConnectionUi = false;
+    } else if (state.verified && state.online) {
+      setText(indicator, "🟢 Online • Connessione disponibile");
+      offline?.classList.add("hidden");
+    } else {
+      setText(indicator, "🟡 Connessione in verifica…");
     }
   }
 
@@ -214,16 +183,15 @@
     const saved = key ? safeRead(key) : null;
     if (saved?.summary) {
       const when = saved.savedAt ? new Date(saved.savedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "precedentemente";
-      summary.textContent = `📦 Offline. Ultimo dato online (${when}): ${saved.summary} — dato non aggiornato, non usare per decisioni di sicurezza.`;
+      setText(summary, `📦 Offline. Ultimo dato online (${when}): ${saved.summary} — dato non aggiornato, non usare per decisioni di sicurezza.`);
     } else {
-      summary.textContent = "📦 Offline. Meteo live non disponibile.";
+      setText(summary, "📦 Offline. Meteo live non disponibile.");
     }
   }
 
   function rememberWeatherIfUseful() {
     if (!state.verified || !state.online) return;
-    const summary = document.getElementById("weather-summary");
-    const text = String(summary?.textContent || "").trim();
+    const text = String(document.getElementById("weather-summary")?.textContent || "").trim();
     if (!text || /caricamento|non disponibile|offline/i.test(text)) return;
     const key = userCacheKey(WEATHER_PREFIX);
     if (key) safeWrite(key, { savedAt: new Date().toISOString(), summary: text });
@@ -247,7 +215,6 @@
       emitConnectivity();
       return false;
     }
-
     state.probing = true;
     renderConnectionUi();
     const request = (async () => {
@@ -256,12 +223,7 @@
       try {
         const url = new URL("./manifest.webmanifest", window.location.href);
         url.searchParams.set("hera_connectivity", String(Date.now()));
-        const response = await fetch(url.href, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          signal: controller.signal
-        });
+        const response = await fetch(url.href, { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
         state.online = Boolean(response?.ok);
       } catch (_) {
         state.online = false;
@@ -283,11 +245,9 @@
     const QueryPrototype = window.firebase?.firestore?.Query?.prototype;
     if (!QueryPrototype || typeof QueryPrototype.onSnapshot !== "function") return false;
     if (QueryPrototype.onSnapshot.__heraOperationalOfflineCacheWrapped) return true;
-
     const originalOnSnapshot = QueryPrototype.onSnapshot;
     const wrapped = function offlineAwareOnSnapshot() {
       if (queryPath(this) !== "commesse") return originalOnSnapshot.apply(this, arguments);
-
       const query = this;
       const originalArgs = Array.from(arguments);
       const cached = readCachedCommesse();
@@ -295,50 +255,37 @@
       let unsubscribe = () => {};
       let cachedDelivered = false;
 
-      const deliverCached = () => {
-        if (cancelled || cachedDelivered || !cached?.docs?.length) return;
+      const deliver = (stored) => {
         const wrappedArgs = wrapNext(originalArgs, (snapshot, next, context) => invokeNext(next, context, snapshot));
         const index = snapshotOptions(wrappedArgs[0]) ? 1 : 0;
         const candidate = wrappedArgs[index];
-        const snapshot = buildCachedSnapshot(query, cached);
+        const snapshot = buildCachedSnapshot(query, stored);
         if (typeof candidate === "function") candidate(snapshot);
         else candidate?.next?.(snapshot);
-        cachedDelivered = true;
-        state.cachedCommesseDelivered += 1;
       };
 
-      deliverCached();
+      if (cached?.docs?.length) {
+        deliver(cached);
+        cachedDelivered = true;
+        state.cachedCommesseDelivered += 1;
+      }
 
       Promise.resolve(probeConnectivity()).then((online) => {
         if (cancelled) return;
         if (!online) {
           state.firestoreListenersSkippedOffline += 1;
-          if (!cachedDelivered) {
-            const empty = buildCachedSnapshot(query, { docs: [] });
-            const wrappedArgs = wrapNext(originalArgs, (snapshot, next, context) => invokeNext(next, context, snapshot));
-            const index = snapshotOptions(wrappedArgs[0]) ? 1 : 0;
-            const candidate = wrappedArgs[index];
-            if (typeof candidate === "function") candidate(empty);
-            else candidate?.next?.(empty);
-          }
+          if (!cachedDelivered) deliver({ docs: [] });
           return;
         }
-
         const args = wrapNext(originalArgs, (snapshot, next, context) => {
           saveCommesseSnapshot(snapshot);
           invokeNext(next, context, snapshot);
         });
         unsubscribe = originalOnSnapshot.apply(query, args);
-      }).catch((error) => {
-        state.errors.push(String(error?.message || error || "probe-error"));
-      });
+      }).catch((error) => state.errors.push(String(error?.message || error || "probe-error")));
 
-      return () => {
-        cancelled = true;
-        try { unsubscribe?.(); } catch (_) {}
-      };
+      return () => { cancelled = true; try { unsubscribe?.(); } catch (_) {} };
     };
-
     Object.defineProperty(wrapped, "__heraOperationalOfflineCacheWrapped", { value: true });
     Object.defineProperty(wrapped, "__heraOperationalOfflineCacheOriginal", { value: originalOnSnapshot });
     QueryPrototype.onSnapshot = wrapped;
@@ -349,9 +296,7 @@
     const bind = () => {
       const indicator = document.getElementById("connection-indicator");
       if (indicator && !connectionObserver) {
-        connectionObserver = new MutationObserver(() => {
-          if (!forcingConnectionUi && state.verified) renderConnectionUi();
-        });
+        connectionObserver = new MutationObserver(() => { if (state.verified) renderConnectionUi(); });
         connectionObserver.observe(indicator, { childList: true, characterData: true, subtree: true });
       }
       const summary = document.getElementById("weather-summary");

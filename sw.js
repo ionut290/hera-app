@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v113";
+const CACHE_NAME = "varga-cantieri-shell-v114";
 
 const CORE_SHELL = [
   "./",
@@ -33,7 +33,25 @@ const FIREBASE_EXTERNAL_SHELL = [
   "https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"
 ];
 
-const EXTERNAL_CACHE_ORIGINS = new Set(["https://www.gstatic.com"]);
+const THIRD_PARTY_EXTERNAL_SHELL = [
+  "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+  "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
+  "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+  "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+];
+
+const EXTERNAL_SHELL = [...FIREBASE_EXTERNAL_SHELL, ...THIRD_PARTY_EXTERNAL_SHELL];
+const EXTERNAL_CACHE_ORIGINS = new Set([
+  "https://www.gstatic.com",
+  "https://cdn.jsdelivr.net",
+  "https://unpkg.com"
+]);
+const OFFLINE_BOOTSTRAP_SCRIPTS = [
+  "./persistent-offline-auth.js?v=20260807a",
+  "./offline-first-runtime.js?v=20260807a"
+];
 const OPTIONAL_SHELL = [
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
@@ -85,9 +103,9 @@ const hasNoStoreDirective = (headers) => {
   return typeof value === "string" && value.toLowerCase().includes("no-store");
 };
 const isAllowedExternalAsset = (request, url) => request.method === "GET"
-  && request.destination === "script"
+  && (request.destination === "script" || request.destination === "style")
   && EXTERNAL_CACHE_ORIGINS.has(url.origin)
-  && FIREBASE_EXTERNAL_SHELL.includes(url.href);
+  && EXTERNAL_SHELL.includes(url.href);
 const shouldHandleRequest = (request, url) => request.method === "GET" && (
   (url.origin === self.location.origin && CACHEABLE_DESTINATIONS.has(request.destination) && !hasNoStoreDirective(request.headers) && !isDynamicEndpoint(url))
   || isAllowedExternalAsset(request, url)
@@ -116,14 +134,43 @@ async function updateCache(request) {
   }
 }
 
+async function withOfflineBootstrap(response) {
+  if (!response) return response;
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return response;
+
+  try {
+    let html = await response.clone().text();
+    const missingScripts = OFFLINE_BOOTSTRAP_SCRIPTS.filter((src) => !html.includes(src.split("?")[0]));
+    if (!missingScripts.length) return response;
+
+    const tags = missingScripts.map((src) => `<script src="${src}"></script>`).join("\n  ");
+    html = html.includes("</body>")
+      ? html.replace("</body>", `  ${tags}\n</body>`)
+      : `${html}\n${tags}`;
+
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    return new Response(html, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    });
+  } catch (_) {
+    return response;
+  }
+}
+
 const cacheFirstForDocument = async (event) => {
   const cached = await caches.match(event.request) || await caches.match("./index.html") || await caches.match("./");
   const networkUpdate = updateCache(event.request);
   if (cached) {
     event.waitUntil(networkUpdate);
-    return cached;
+    return withOfflineBootstrap(cached);
   }
-  return (await networkUpdate) || new Response("App offline non ancora preparata. Apri una volta l'app con Internet e riprova.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const networkResponse = await networkUpdate;
+  if (networkResponse) return withOfflineBootstrap(networkResponse);
+  return new Response("App offline non ancora preparata. Apri una volta l'app con Internet e riprova.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 };
 
 const networkFirstForCriticalAsset = async (request) => {
@@ -182,8 +229,8 @@ async function cacheOptionalAssets(cache) {
   await Promise.allSettled(OPTIONAL_SHELL.map((url) => cacheOne(cache, url)));
 }
 
-async function cacheFirebaseExternalAssets(cache) {
-  await Promise.allSettled(FIREBASE_EXTERNAL_SHELL.map(async (url) => {
+async function cacheExternalAssets(cache) {
+  await Promise.allSettled(EXTERNAL_SHELL.map(async (url) => {
     try {
       const request = new Request(url, { mode: "no-cors", cache: "reload" });
       const response = await fetch(request);
@@ -196,7 +243,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await cacheCoreAssets(cache);
-    await Promise.allSettled([cacheOptionalAssets(cache), cacheFirebaseExternalAssets(cache)]);
+    await Promise.allSettled([cacheOptionalAssets(cache), cacheExternalAssets(cache)]);
     self.skipWaiting();
   })());
 });

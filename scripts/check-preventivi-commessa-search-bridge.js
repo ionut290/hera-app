@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const cp = require('node:child_process');
 
 const bridge = fs.readFileSync('preventivi-commessa-search-bridge.js', 'utf8');
-const header = fs.readFileSync('header-menu-runtime.js', 'utf8');
+const header = fs.readFileSync('preventivi-lazy-loader.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
 
 cp.execFileSync(process.execPath, ['--check', 'preventivi-commessa-search-bridge.js']);
@@ -26,7 +26,7 @@ cp.execFileSync(process.execPath, ['--check', 'preventivi-commessa-search-bridge
 
 assert(header.includes("['commessa-search-bridge', './preventivi-commessa-search-bridge.js?v=20260801a']"), 'Bridge non caricato dal runtime.');
 assert(header.indexOf("['commessa-search-bridge'") > header.indexOf("['draft-preserver'"), 'Il bridge deve essere caricato dopo la protezione della bozza.');
-assert(sw.includes('varga-cantieri-shell-v87'), 'Cache PWA non aggiornata a v87.');
-assert(sw.includes('./preventivi-commessa-search-bridge.js?v=20260801a'), 'Bridge non presente nella cache PWA.');
+assert(sw.includes('varga-cantieri-shell-v114'), 'Cache PWA non aggiornata.');
+assert(header.includes('./preventivi-commessa-search-bridge.js?v=20260801a'), 'Bridge non presente nel caricamento su richiesta.');
 
 console.log('check-preventivi-commessa-search-bridge: OK');

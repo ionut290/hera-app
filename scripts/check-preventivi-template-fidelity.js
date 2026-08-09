@@ -12,7 +12,7 @@ const files = {
   consuntivi: path.join(root, 'preventivi-consuntivi.js'),
   exact: path.join(root, 'preventivi-exact-xlsx.js'),
   followup: path.join(root, 'preventivi-registry-model-followup.js'),
-  header: path.join(root, 'header-menu-runtime.js'),
+  header: path.join(root, 'preventivi-lazy-loader.js'),
   sw: path.join(root, 'sw.js')
 };
 
@@ -45,7 +45,7 @@ assert(!source.exact.includes('fallback)=>pos((find(heads,labels)||fallback)'), 
 assert(source.followup.includes('preventivi-exact-xlsx.js?v=20260801b'), 'Il compilatore XLSX aggiornato non viene caricato.');
 assert(source.header.includes('preventivi-models-documents.js?v=20260801d'), 'Il modulo documenti aggiornato non viene caricato.');
 assert(source.header.includes('preventivi-models-export.js?v=20260801c'), 'Il modulo esportazione aggiornato non viene caricato.');
-assert(source.sw.includes('varga-cantieri-shell-v87'), 'Cache PWA non aggiornata.');
-assert(source.sw.includes('preventivi-exact-xlsx.js?v=20260801b'), 'Compilatore XLSX aggiornato assente dalla cache.');
+assert(source.sw.includes('varga-cantieri-shell-v114'), 'Cache PWA non aggiornata.');
+assert(source.followup.includes('preventivi-exact-xlsx.js?v=20260801b'), 'Compilatore XLSX aggiornato assente dal caricamento su richiesta.');
 
 console.log('check-preventivi-template-fidelity: OK');

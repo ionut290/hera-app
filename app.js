@@ -2904,15 +2904,12 @@ async function publishGlobalNotificationEvent(eventType, payload = {}) {
 
 function subscribeGlobalNotifications() {
   stopGlobalNotificationsSubscription();
-  globalNotificationsInitialized = false;
+  const listenFrom = firebase.firestore.Timestamp.now();
   unsubscribeGlobalNotifications = db.collection("appNotifications")
+    .where("createdAt", ">", listenFrom)
     .orderBy("createdAt", "desc")
     .limit(10)
     .onSnapshot(async (snapshot) => {
-      if (!globalNotificationsInitialized) {
-        globalNotificationsInitialized = true;
-        return;
-      }
       const added = snapshot.docChanges().filter((change) => change.type === "added");
       for (const change of added) {
         const data = change.doc.data() || {};

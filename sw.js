@@ -6,7 +6,7 @@ const CORE_SHELL = [
   "./style.css?v=20260727-update2",
   "./app.js?v=20260804-squadre-restore1",
   "./firebase-config.js",
-  "./auth-login-fix.js?v=20260731-legacy1",
+  "./auth-login-fix.js?v=20260809-android-google1",
   "./approval-access.js?v=20260731-legacy1",
   "./first-login-password.js?v=20260726b",
   "./login-retry-fix.js?v=20260726f",

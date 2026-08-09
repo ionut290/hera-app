@@ -1,7 +1,7 @@
 (function installGoogleLoginFix() {
   "use strict";
 
-  const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn", "auth-google-register-btn"]);
+  const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn"]);
   let loginInProgress = false;
 
   function normalizeEmail(value) {
@@ -164,11 +164,14 @@
 
   function configurePlatformLoginOptions() {
     const nativeAndroid = isNativeAndroid();
+    const webGoogleEnabled = !nativeAndroid;
+
+    document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
 
     const message = document.getElementById("auth-gate-message");
     if (message) {
       message.textContent = nativeAndroid
-        ? "Accedi con Google oppure con username/email e password."
+        ? "Accedi con la tua email e password."
         : "Accedi con Google oppure con la tua email e password.";
     }
 
@@ -179,23 +182,17 @@
 
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
     if (googleLoginButton) {
-      googleLoginButton.hidden = false;
-      googleLoginButton.tabIndex = 0;
-      googleLoginButton.removeAttribute("aria-hidden");
-      googleLoginButton.textContent = nativeAndroid ? "Accedi con Google" : "Login con Google";
-    }
-
-    const googleRegisterButton = document.getElementById("auth-google-register-btn");
-    if (googleRegisterButton) {
-      googleRegisterButton.hidden = false;
-      googleRegisterButton.tabIndex = 0;
-      googleRegisterButton.removeAttribute("aria-hidden");
+      googleLoginButton.hidden = !webGoogleEnabled;
+      googleLoginButton.tabIndex = webGoogleEnabled ? 0 : -1;
+      if (webGoogleEnabled) googleLoginButton.removeAttribute("aria-hidden");
+      else googleLoginButton.setAttribute("aria-hidden", "true");
     }
 
     const divider = document.querySelector(".auth-gate-divider");
     if (divider) {
-      divider.hidden = false;
-      divider.removeAttribute("aria-hidden");
+      divider.hidden = !webGoogleEnabled;
+      if (webGoogleEnabled) divider.removeAttribute("aria-hidden");
+      else divider.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -226,12 +223,15 @@
   }
 
   async function signInWithNativeGoogle() {
+    if (isNativeAndroid()) {
+      throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
+    }
+
     const nativeAuth = getNativeFirebaseAuthentication();
     if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") {
       throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
     }
 
-    await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
     if (!idToken) {
@@ -239,16 +239,19 @@
     }
 
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
-    const signedIn = await firebase.auth().signInWithCredential(credential);
-    if (!signedIn?.user?.uid) throw new Error("Accesso Google completato senza un utente valido.");
-    return signedIn;
+    return firebase.auth().signInWithCredential(credential);
   }
 
   window.HeraNativeGoogleLogin = signInWithNativeGoogle;
 
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      return isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle();
+      if (isNativeAndroid()) {
+        return Promise.reject(
+          new Error("Nell'app Android è disponibile solo l'accesso con email e password.")
+        );
+      }
+      return signInWithWebGoogle();
     };
   });
 
@@ -269,9 +272,14 @@
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    if (loginInProgress) return;
+    if (isNativeAndroid()) {
+      configurePlatformLoginOptions();
+      const emailInput = document.getElementById("auth-email-input");
+      if (emailInput) emailInput.focus();
+      return;
+    }
 
-    const registrationMode = button.dataset.googleMode === "register";
+    if (loginInProgress) return;
 
     if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
       alert("Login Google non disponibile: configurazione Firebase non caricata.");
@@ -281,15 +289,10 @@
     loginInProgress = true;
     button.disabled = true;
     const previousText = button.textContent;
-    button.textContent = registrationMode ? "Registrazione Google..." : "Accesso Google...";
+    button.textContent = "Accesso Google...";
 
     try {
-      const result = await (isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle());
-      if (registrationMode && result?.user) {
-        await ensurePlatformProfileForAuthenticatedUser(result.user);
-        const feedback = document.getElementById("auth-email-feedback");
-        if (feedback) feedback.textContent = "Account Google registrato. Se è nuovo, attendi l’approvazione dell’amministratore.";
-      }
+      await signInWithWebGoogle();
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));

@@ -1,60 +1,166 @@
 const fs = require("fs");
+const path = require("path");
 
-const html = fs.readFileSync("index.html", "utf8");
-const app = fs.readFileSync("app.js", "utf8");
-const rules = fs.readFileSync("firestore.rules", "utf8");
-const capacitor = fs.readFileSync("capacitor.config.json", "utf8");
-const packageJson = fs.readFileSync("package.json", "utf8");
-const androidBundle = fs.readFileSync("scripts/prepare-capacitor-web.js", "utf8");
+const root = path.join(__dirname, "..");
+const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const fixSource = fs.readFileSync(path.join(root, "auth-login-fix.js"), "utf8");
+const workflowSource = fs.readFileSync(
+  path.join(root, ".github", "workflows", "build-android-aab.yml"),
+  "utf8"
+);
+const capacitorBundleSource = fs.readFileSync(
+  path.join(root, "scripts", "prepare-capacitor-web.js"),
+  "utf8"
+);
 
-for (const forbidden of [
-  "Login con Google",
-  "REGISTRATI CON GOOGLE",
-  'id="auth-create-account-btn"',
-  'id="auth-request-password-btn"',
-  'src="auth-login-fix.js',
-  'src="first-login-password.js',
-  'src="login-retry-fix.js'
-]) {
-  if (html.includes(forbidden)) throw new Error(`Accesso legacy ancora presente in index.html: ${forbidden}`);
+const rulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const rulesDeployWorkflowSource = fs.readFileSync(
+  path.join(root, ".github", "workflows", "deploy-self-registration.yml"),
+  "utf8"
+);
+
+if (!/<script\s+src=["'](?:\.\/)?auth-login-fix\.js\?v=[^"']+["']><\/script>/.test(indexSource)) {
+  throw new Error("auth-login-fix.js non viene caricato da index.html con cache-busting.");
+}
+
+if (!fixSource.includes("configurePlatformLoginOptions")) {
+  throw new Error("Le opzioni login non vengono configurate in base alla piattaforma.");
+}
+
+if (!rulesSource.includes('.data.get("banned", false) == true')) {
+  throw new Error("Le regole negano i dati quando il nuovo profilo non contiene banned.");
+}
+
+if (rulesSource.includes(".data.banned == true")) {
+  throw new Error("Le regole leggono ancora direttamente il campo banned opzionale.");
+}
+
+if (!rulesDeployWorkflowSource.includes("--only firestore:rules")) {
+  throw new Error("Il workflow non distribuisce le regole Firestore.");
+}
+
+for (const obsolete of ["TESTER_TEMP_PASSWORD", "functions:registerTester"]) {
+  if (rulesDeployWorkflowSource.includes(obsolete)) {
+    throw new Error(`Il deploy regole dipende ancora dalla registrazione legacy: ${obsolete}`);
+  }
+}
+
+if (!fixSource.includes('googleLoginButton.hidden = !webGoogleEnabled')) {
+  throw new Error("La visibilità del pulsante Google non dipende correttamente dalla piattaforma.");
+}
+
+if (!fixSource.includes('divider.hidden = !webGoogleEnabled')) {
+  throw new Error("Il separatore Google non viene ripristinato sul web.");
+}
+
+if (!fixSource.includes('Accedi con Google oppure con la tua email e password.')) {
+  throw new Error("Il login web non comunica chiaramente l’accesso Google.");
+}
+
+if (!fixSource.includes('emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra"')) {
+  throw new Error("Il pulsante email/password non cambia testo correttamente in base alla piattaforma.");
+}
+
+if (
+  !fixSource.includes("message.textContent = nativeAndroid")
+  || !fixSource.includes('"Accedi con la tua email e password."')
+) {
+  throw new Error("Il messaggio login Android non richiede email e password.");
+}
+
+if (!fixSource.includes("Nell'app Android è disponibile solo l'accesso con email e password.")) {
+  throw new Error("Il login Google non è bloccato esplicitamente su Android.");
+}
+
+if (!fixSource.includes("installProfileAccessGuard")) {
+  throw new Error("Il controllo profilo per accesso email/password non viene installato.");
+}
+
+if (!fixSource.includes("ensurePlatformProfileForAuthenticatedUser")) {
+  throw new Error("Il profilo platformUsers non viene preparato prima dell'avvio app.");
+}
+
+if (!fixSource.includes('collection("platformUsers")')) {
+  throw new Error("La correzione non usa la raccolta platformUsers.");
+}
+
+if (!fixSource.includes('where("email", "==", email)')) {
+  throw new Error("La correzione non recupera il profilo esistente tramite email.");
+}
+
+if (!fixSource.includes("profileMigratedByEmail")) {
+  throw new Error("La migrazione del profilo tramite email non viene registrata.");
+}
+
+if (!fixSource.includes("catch (lookupError)")) {
+  throw new Error("La ricerca del profilo per email può ancora bloccare il primo accesso.");
 }
 
 for (const expected of [
-  'id="login-btn" class="btn btn-primary" type="button">Accesso amministratore</button>',
-  'id="auth-email-input" type="text" autocomplete="username"',
-  'id="auth-password-input" type="password"',
-  'id="auth-admin-cancel-btn"',
-  "Continua con accesso libero"
+  'role: "user"',
+  'ruolo: "user"',
+  "isAdmin: false",
+  "admin: false"
 ]) {
-  if (!html.includes(expected)) throw new Error(`Interfaccia accesso libero/admin incompleta: ${expected}`);
+  if (!fixSource.includes(expected)) {
+    throw new Error(`Il profilo automatico non è un utente normale: ${expected}`);
+  }
+}
+
+if (fixSource.includes("banned: false")) {
+  throw new Error("Il profilo automatico contiene un campo vietato dalle regole Firestore.");
+}
+
+if (!fixSource.includes("authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile")) {
+  throw new Error("app.js potrebbe controllare il profilo prima della sua preparazione.");
 }
 
 for (const expected of [
-  "await auth.signInAnonymously()",
-  "function isPublicAccessUser",
-  "function openAdminLogin",
-  "await auth.signInWithEmailAndPassword(email, password)",
-  "Username amministratore non riconosciuto",
-  "Accesso libero attivo"
+  "isPersistedApprovalValid",
+  "session.accessApproved !== false",
+  "const hasSavedApproval = isPersistedApprovalValid(savedSession, user)",
+  "if (!hasSavedApproval)",
+  'currentAccountStatus !== "attivo"'
 ]) {
-  if (!app.includes(expected)) throw new Error(`Logica accesso libero/admin incompleta: ${expected}`);
+  if (!appSource.includes(expected)) {
+    throw new Error(`L'accesso rapido per un utente gia autorizzato non e protetto correttamente: ${expected}`);
+  }
 }
 
-for (const forbidden of ["function loginWithGoogle", "function switchGoogleAccount", "ui.authGateLoginBtn?.addEventListener"]) {
-  if (app.includes(forbidden)) throw new Error(`Login Google ancora attivo in app.js: ${forbidden}`);
+for (const expected of [
+  "requiresEmailVerification",
+  "user.emailVerified === false",
+  "effectiveUser = emailVerificationRequired ? null : user",
+  "showEmailVerificationRequired",
+  "Prima di accedere ai dati, apri l’email di verifica"
+]) {
+  if (!fixSource.includes(expected)) {
+    throw new Error(`Il caricamento dati non attende la verifica email: ${expected}`);
+  }
 }
 
-if (!rules.includes('request.auth.token.firebase.sign_in_provider == "anonymous"')) {
-  throw new Error("Le regole Firestore non riconoscono l'operatore pubblico anonimo.");
-}
-if (!rules.includes("isAdmin() || isPublicOperator()")) {
-  throw new Error("L'accesso pubblico non è incluso nella funzione signedIn().");
-}
-if (capacitor.includes("google.com") || packageJson.includes("@capacitor-firebase/authentication")) {
-  throw new Error("La configurazione Android contiene ancora il provider Google.");
-}
-for (const obsolete of ["auth-login-fix.js", "approval-access.js", "first-login-password.js", "login-retry-fix.js"]) {
-  if (androidBundle.includes(`\"${obsolete}\"`)) throw new Error(`Asset login legacy ancora obbligatorio nel bundle Android: ${obsolete}`);
+if (!fixSource.includes("signInWithPopup(provider)")) {
+  throw new Error("Il login web non mantiene signInWithPopup.");
 }
 
-console.log("Access check passed: ingresso libero anonimo e credenziali riservate agli amministratori.");
+if (/signInWithRedirect\s*\(/.test(fixSource)) {
+  throw new Error("La correzione login contiene signInWithRedirect.");
+}
+
+if (!fixSource.includes("window.loginWithGoogle = function loginWithGoogleFixed()")) {
+  throw new Error("La funzione centrale loginWithGoogle non viene sostituita.");
+}
+
+if (!fixSource.includes("stopImmediatePropagation")) {
+  throw new Error("La correzione non intercetta il vecchio gestore login.");
+}
+
+if (
+  !workflowSource.includes("npm run android:aab:prepare")
+  || !capacitorBundleSource.includes('"auth-login-fix.js"')
+) {
+  throw new Error("Il workflow Android non include auth-login-fix.js.");
+}
+
+console.log("Login check passed: web keeps Google; Android remains email/password-only.");

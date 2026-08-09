@@ -7,8 +7,6 @@ on:
       - main
     paths:
       - "functions/index.js"
-      - "functions/main.js"
-      - "functions/operator-login-register-tester.js"
       - "functions/package.json"
       - ".github/workflows/deploy-register-tester.yml"
 
@@ -43,9 +41,6 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
 
-      - name: Set up Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -57,22 +52,9 @@ jobs:
         working-directory: functions
         run: npm install --no-audit --no-fund
 
-      - name: Validate Firebase functions
-        run: node -e "require('./functions/main.js'); console.log('Functions loaded successfully')"
-
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
 
       - name: Deploy registerTester
         run: firebase deploy --only functions:registerTester --project hera-app-6cd2b --non-interactive
 
-      # loginUsername e requestAccessLookup devono essere raggiungibili prima
-      # dell'autenticazione Firebase. Le azioni amministrative continuano a
-      # essere protette da requireAdmin nella Cloud Function.
-      - name: Allow unauthenticated invocation for login
-        run: |
-          gcloud functions add-iam-policy-binding registerTester \
-            --project=hera-app-6cd2b \
-            --region=europe-west1 \
-            --member=allUsers \
-            --role=roles/cloudfunctions.invoker

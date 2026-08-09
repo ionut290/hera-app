@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Google Login Harness</title>
+</head>
+<body>
+  <section id="auth-gate">
+    <div class="auth-gate-card">
+      <p id="auth-email-feedback"></p>
+      <button id="auth-gate-login-btn" type="button">Login con Google</button>
+      <button id="auth-force-update-btn" type="button">Aggiorna</button>
+    </div>
+  </section>
+  <main id="home-screen"></main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const scenario = params.get('case') || 'success';
+    const platform = params.get('platform') || 'web';
+
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      get: () => scenario !== 'offline'
+    });
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        controller: {},
+        getRegistration: async () => ({
+          waiting: null,
+          installing: null,
+          scope: location.origin + '/',
+          addEventListener() {},
+          update: async () => {}
+        }),
+        getRegistrations: async () => []
+      }
+    });
+
+    window.Capacitor = {
+      getPlatform: () => platform === 'android' ? 'android' : 'web'
+    };
+
+    const state = window.__googleE2E = {
+      persistence: [],
+      popupCalls: 0,
+      redirectCalls: 0,
+      redirectResultCalls: 0,
+      providerScopes: [],
+      providerParams: null,
+      legacyClickCalls: 0
+    };
+
+    class GoogleAuthProvider {
+      addScope(scope) { state.providerScopes.push(scope); }
+      setCustomParameters(params) { state.providerParams = params; }
+    }
+
+    const fakeUser = { uid: 'google-user-1', email: 'google@example.test' };
+    const authInstance = {
+      currentUser: scenario === 'redirect-result' ? fakeUser : null,
+      setPersistence: async (value) => state.persistence.push(value),
+      signInWithPopup: async () => {
+        state.popupCalls += 1;
+        if (scenario === 'blocked') {
+          const error = new Error('popup blocked');
+          error.code = 'auth/popup-blocked';
+          throw error;
+        }
+        if (scenario === 'network') {
+          const error = new Error('network failed');
+          error.code = 'auth/network-request-failed';
+          throw error;
+        }
+        return { user: fakeUser };
+      },
+      signInWithRedirect: async () => {
+        state.redirectCalls += 1;
+      },
+      getRedirectResult: async () => {
+        state.redirectResultCalls += 1;
+        return scenario === 'redirect-result' ? { user: fakeUser } : { user: null };
+      }
+    };
+
+    function auth() { return authInstance; }
+    auth.GoogleAuthProvider = GoogleAuthProvider;
+    auth.Auth = { Persistence: { LOCAL: 'LOCAL' } };
+    auth.browserLocalPersistence = 'LOCAL_BROWSER';
+
+    window.firebase = { auth };
+
+    document.getElementById('auth-gate-login-btn').addEventListener('click', () => {
+      state.legacyClickCalls += 1;
+    });
+  </script>
+  <script src="../../pwa-login-force-update.js"></script>
+</body>
+</html>

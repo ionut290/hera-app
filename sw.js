@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v116";
+const CACHE_NAME = "varga-cantieri-shell-v117";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
@@ -68,7 +68,7 @@ const OPTIONAL_SHELL = [
 ];
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
-const NETWORK_TIMEOUT_MS = 3500;
+const NETWORK_TIMEOUT_MS = 8000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/shared-static-views-client.js",
   "/firebase-config.js",
@@ -135,8 +135,22 @@ const networkFirstForDocument = async (event) => {
     return (await caches.match(event.request))
       || (await caches.match("./index.html"))
       || new Response(
-        "App temporaneamente non disponibile. Controlla la connessione e riprova.",
-        { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+        `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>VARGA CANTIERI</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:32px 20px;background:#f6f8f7;color:#163d32}
+    main{max-width:440px;margin:15vh auto;background:#fff;padding:28px;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.08);text-align:center}
+    h1{font-size:1.35rem;margin:0 0 12px}p{line-height:1.45;color:#4b625c}
+    button{width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;background:#176b50;color:#fff;font-weight:700;font-size:1rem}
+  </style>
+</head>
+<body><main><h1>Connessione temporaneamente non disponibile</h1><p>La versione precedente dell’app resta protetta. Controlla la rete e riprova.</p><button onclick="location.reload()">RIPROVA</button></main></body>
+</html>`,
+        { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
       );
   }
 };

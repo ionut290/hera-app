@@ -3,6 +3,7 @@
 
   const CACHE_PREFIX = "varga-cantieri-";
   const APP_VERSION = "v116";
+  const SERVICE_WORKER_URL = "./sw.js";
   let updating = false;
 
   function mountVersionBadges() {
@@ -37,10 +38,24 @@
     });
   }
 
+  async function ensureServiceWorkerRegistration() {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      const existing = await navigator.serviceWorker.getRegistration();
+      if (existing) return existing;
+      const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);
+      console.log("PWA SERVICE WORKER REGISTERED", registration.scope);
+      return registration;
+    } catch (error) {
+      console.warn("Registrazione Service Worker PWA non riuscita:", error);
+      return null;
+    }
+  }
+
   async function watchForUpdates() {
     if (!("serviceWorker" in navigator)) return;
     try {
-      const registration = await navigator.serviceWorker.getRegistration();
+      const registration = await ensureServiceWorkerRegistration();
       if (!registration) return;
       if (registration.waiting) setUpdateAvailable();
       registration.addEventListener("updatefound", () => {
@@ -78,6 +93,7 @@
 
     try {
       if ("serviceWorker" in navigator) {
+        await ensureServiceWorkerRegistration();
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.allSettled(registrations.map(async (registration) => {
           await registration.update();

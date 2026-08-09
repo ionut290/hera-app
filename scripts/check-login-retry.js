@@ -16,7 +16,7 @@ if (script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
 }
 
 for (const expected of [
-  "Email o password non corretta.",
+  "Username/email o password non corretti.",
   "Email non ancora verificata.",
   "event.stopImmediatePropagation()",
   "loginButton.disabled = false",
@@ -80,17 +80,15 @@ if (!style.includes(".registration-dialog form")) {
   throw new Error("Stile finestra registrazione mancante.");
 }
 
-if (!deployWorkflow.includes("firebase deploy --only functions:registerTester")) {
-  throw new Error("Deploy della funzione legacy non configurato.");
-}
-for (const forbidden of [
-  "google-github-actions/setup-gcloud",
+for (const expected of [
+  "firebase deploy --only functions:registerTester",
+  "google-github-actions/setup-gcloud@v2",
   "gcloud functions add-iam-policy-binding registerTester",
   "--member=allUsers",
-  "roles/cloudfunctions.invoker"
+  "--role=roles/cloudfunctions.invoker"
 ]) {
-  if (deployWorkflow.includes(forbidden)) {
-    throw new Error(`Permesso pubblico legacy ancora presente nel workflow: ${forbidden}`);
+  if (!deployWorkflow.includes(expected)) {
+    throw new Error(`Deploy login username incompleto: ${expected}`);
   }
 }
 

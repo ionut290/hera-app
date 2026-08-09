@@ -58,7 +58,9 @@
     const dialog = document.getElementById("access-request-login-dialog");
     if (!dialog) return;
     const feedback = dialog.querySelector("#access-request-feedback");
+    const submit = dialog.querySelector("#access-request-submit-btn");
     if (feedback) feedback.textContent = "";
+    if (submit) submit.textContent = "CONTINUA";
     if (!dialog.open) dialog.showModal();
     window.setTimeout(() => dialog.querySelector("#access-request-first-name")?.focus(), 0);
   }
@@ -156,13 +158,13 @@
   }
 
   function installAuthSuccessListener() {
-    const auth = window.firebase?.auth?.();
-    if (!auth || auth.__heraAccessRequestCredentialListener) return;
-    auth.onAuthStateChanged((user) => {
+    const firebaseAuth = window.firebase?.auth?.();
+    if (!firebaseAuth || firebaseAuth.__heraAccessRequestCredentialListener) return;
+    firebaseAuth.onAuthStateChanged((user) => {
       if (user && pendingCredential) void saveCredentialSecurely();
     });
     try {
-      Object.defineProperty(auth, "__heraAccessRequestCredentialListener", { value: true });
+      Object.defineProperty(firebaseAuth, "__heraAccessRequestCredentialListener", { value: true });
     } catch (_) {}
   }
 

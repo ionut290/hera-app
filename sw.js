@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v112";
+const CACHE_NAME = "varga-cantieri-shell-v113";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
@@ -8,6 +8,8 @@ const CORE_SHELL = [
   "./style.css?v=20260727-update2",
   "./app.js?v=20260804-squadre-restore1",
   "./firebase-config.js",
+  "./auth-login-fix.js?v=20260731-legacy1",
+  "./login-retry-fix.js?v=20260809-remember1",
   "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
@@ -66,7 +68,13 @@ const OPTIONAL_SHELL = [
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const NETWORK_TIMEOUT_MS = 3500;
-const NETWORK_FIRST_ASSET_PATHS = new Set(["/shared-static-views-client.js"]);
+const NETWORK_FIRST_ASSET_PATHS = new Set([
+  "/shared-static-views-client.js",
+  "/firebase-config.js",
+  "/auth-login-fix.js",
+  "/login-retry-fix.js",
+  "/app.js"
+]);
 
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
   .some((pattern) => pattern.test(url.pathname));
@@ -106,21 +114,26 @@ async function updateCache(request) {
   }
 }
 
-// Dalla seconda apertura restituisce subito la pagina salvata e aggiorna in background.
-// Alla prima apertura, quando la cache non esiste, usa normalmente la rete.
-const cacheFirstForDocument = async (event) => {
-  const cached = await caches.match(event.request) || await caches.match("./index.html");
-  const networkUpdate = updateCache(event.request);
-
-  if (cached) {
-    event.waitUntil(networkUpdate);
-    return cached;
+// La PWA deve ricevere subito la pagina di login più recente quando è online.
+// Se la rete non risponde, usa la copia locale per conservare l'avvio offline.
+const networkFirstForDocument = async (event) => {
+  try {
+    const preload = await event.preloadResponse;
+    const response = preload || await fetchWithTimeout(event.request);
+    if (canCacheResponse(event.request, response)) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(event.request, response.clone());
+      await cache.put("./index.html", response.clone());
+    }
+    return response;
+  } catch (_) {
+    return (await caches.match(event.request))
+      || (await caches.match("./index.html"))
+      || new Response(
+        "App temporaneamente non disponibile. Controlla la connessione e riprova.",
+        { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
   }
-
-  return (await networkUpdate) || new Response(
-    "App temporaneamente non disponibile. Controlla la connessione e riprova.",
-    { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
-  );
 };
 
 const networkFirstForCriticalAsset = async (request) => {
@@ -184,7 +197,7 @@ self.addEventListener("fetch", (event) => {
   if (!shouldHandleRequest(event.request, url)) return;
 
   if (event.request.destination === "document") {
-    event.respondWith(cacheFirstForDocument(event));
+    event.respondWith(networkFirstForDocument(event));
     return;
   }
 

@@ -59,10 +59,17 @@ for (const expected of [
   'id="registration-last-name"',
   'id="registration-password-confirm"',
   'minlength="10" autocomplete="new-password"',
-  "ti invieremo un’email per verificare il nuovo account",
-  "login-retry-fix.js?v=20260726f"
+  "ti invieremo un’email per verificare il nuovo account"
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
+}
+
+const loginRetryScriptTag = html.match(/<script[^>]+src=["']login-retry-fix\.js\?v=([^"']+)["'][^>]*><\/script>/i);
+if (!loginRetryScriptTag) {
+  throw new Error("Registrazione HTML incompleta: login-retry-fix.js non è caricato con una versione esplicita.");
+}
+if (!String(loginRetryScriptTag[1] || "").trim()) {
+  throw new Error("Registrazione HTML incompleta: versione login-retry-fix.js vuota.");
 }
 
 if (!style.includes("overflow-wrap: anywhere") || !style.includes("max-width: 100vw")) {

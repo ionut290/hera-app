@@ -18,7 +18,6 @@
     "check:shared-view-client": "node scripts/check-shared-view-client.js",
     "check:app-update": "node scripts/check-app-update.js",
     "check:notifications": "node scripts/check-notification-experience.js",
-    "check:notification-reads": "node scripts/check-global-notification-reads.js",
     "check:auth-login": "node scripts/check-auth-login.js",
     "check:first-login-password": "node scripts/check-first-login-password.js",
     "check:login-retry": "node scripts/check-login-retry.js",
@@ -53,6 +52,7 @@
     "@capacitor/cli": "^7.2.0"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/android": "^7.2.0",
     "@capacitor/core": "^7.2.0",
     "@capacitor/geolocation": "^7.1.0",

@@ -8,15 +8,7 @@ service cloud.firestore {
 
     function signedIn() {
       return authPresent()
-        && (isAdmin() || isPublicOperator() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
-    }
-
-    // L'accesso pubblico usa Firebase Anonymous Auth soltanto come sessione
-    // tecnica. Non richiede profili, email, password o approvazione.
-    // Questa regola viene distribuita insieme agli aggiornamenti dell'accesso libero.
-    function isPublicOperator() {
-      return authPresent()
-        && request.auth.token.firebase.sign_in_provider == "anonymous";
+        && (isAdmin() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
     }
 
     // I profili storici senza stato restano autorizzati; ogni nuovo profilo nasce in_attesa.

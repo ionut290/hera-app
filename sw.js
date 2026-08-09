@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v115";
+const CACHE_NAME = "varga-cantieri-shell-v116";
 
 const CORE_SHELL = [
   "./",
@@ -156,16 +156,19 @@ async function withOfflineBootstrap(response) {
   }
 }
 
-const cacheFirstForDocument = async (event) => {
-  const cached = await caches.match(event.request) || await caches.match("./index.html") || await caches.match("./");
-  const networkUpdate = updateCache(event.request);
-  if (cached) {
-    event.waitUntil(networkUpdate);
-    return withOfflineBootstrap(cached);
+const networkFirstForDocument = async (event) => {
+  try {
+    const networkResponse = await fetchWithTimeout(event.request);
+    if (canCacheResponse(event.request, networkResponse)) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(event.request, networkResponse.clone());
+    }
+    return withOfflineBootstrap(networkResponse);
+  } catch (_) {
+    const cached = await caches.match(event.request) || await caches.match("./index.html") || await caches.match("./");
+    if (cached) return withOfflineBootstrap(cached);
+    return new Response("App offline non ancora preparata. Apri una volta l'app con Internet e riprova.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
-  const networkResponse = await networkUpdate;
-  if (networkResponse) return withOfflineBootstrap(networkResponse);
-  return new Response("App offline non ancora preparata. Apri una volta l'app con Internet e riprova.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 };
 
 const networkFirstForCriticalAsset = async (request) => {
@@ -262,7 +265,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (event.request.destination === "document") {
-    event.respondWith(cacheFirstForDocument(event));
+    event.respondWith(networkFirstForDocument(event));
     return;
   }
   if (NETWORK_FIRST_ASSET_PATHS.has(url.pathname)) {

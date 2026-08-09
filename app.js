@@ -113,7 +113,7 @@ function readLocalPersistedSession() {
     const parsed = JSON.parse(raw);
     return isValidPersistedSession(parsed) ? parsed : null;
   } catch (error) {
-    console.warn("Sessione locale corrotta: verrÃ  ignorata.", error);
+    console.warn("Sessione locale corrotta: verrà ignorata.", error);
     return null;
   }
 }
@@ -337,7 +337,7 @@ function recoverFirestorePersistence(error) {
 
   if (code === "failed-precondition") {
     if (markFirestorePersistenceRecovery("failed-precondition")) {
-      console.warn("Persistenza Firestore disattivata: l'app sembra aperta in piÃ¹ schede.", error);
+      console.warn("Persistenza Firestore disattivata: l'app sembra aperta in più schede.", error);
     }
     return;
   }
@@ -352,7 +352,7 @@ function recoverFirestorePersistence(error) {
   if (!isFirestoreInternalError(error)) return;
 
   if (!markFirestorePersistenceRecovery("internal")) {
-    console.warn("Recovery Firestore interna giÃ  tentata in questa sessione, evito un nuovo reload.", error);
+    console.warn("Recovery Firestore interna già tentata in questa sessione, evito un nuovo reload.", error);
     return;
   }
 
@@ -1417,49 +1417,49 @@ const HOWTO_UPDATED_AT = "2026-04-11";
 const PERSONAL_SERVICE_CATEGORIES = {
   breakfast: {
     title: "Colazione (bar e caffetterie)",
-    icon: "â",
+    icon: "☕",
     query: "node[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});way[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});relation[\"amenity\"~\"^(cafe|bar|pub)$\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "cuisine", "takeaway", "delivery", "contact:phone", "website", "outdoor_seating"]
   },
   lunch: {
     title: "Pranzo (ristoranti, mense, circoli ARCI)",
-    icon: "ð½ï¸",
+    icon: "🍽️",
     query: "node[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});way[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});relation[\"amenity\"~\"^(restaurant|fast_food|food_court|canteen|biergarten|pub)$\"](around:{radius},{lat},{lng});node[\"club\"=\"social\"](around:{radius},{lat},{lng});way[\"club\"=\"social\"](around:{radius},{lat},{lng});relation[\"club\"=\"social\"](around:{radius},{lat},{lng});node[\"social_facility\"=\"canteen\"](around:{radius},{lat},{lng});way[\"social_facility\"=\"canteen\"](around:{radius},{lat},{lng});",
     detailFields: ["cuisine", "opening_hours", "opening_hours:covid19", "payment:meal_voucher", "payment:sodexo", "payment:edenred", "payment:ticket_restaurant", "payment:cash", "payment:credit_cards", "diet:vegetarian", "diet:vegan", "takeaway", "delivery", "contact:phone", "website", "addr:street", "addr:housenumber", "addr:city"]
   },
   supermarket: {
     title: "Supermarket",
-    icon: "ð",
+    icon: "🛒",
     query: "node[\"shop\"~\"supermarket|convenience\"](around:{radius},{lat},{lng});way[\"shop\"~\"supermarket|convenience\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "brand", "contact:phone", "website"]
   },
   tobacco: {
     title: "Tabaccherie",
-    icon: "ð¬",
+    icon: "🚬",
     query: "node[\"shop\"=\"tobacco\"](around:{radius},{lat},{lng});way[\"shop\"=\"tobacco\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "contact:phone", "website"]
   },
   wc: {
     title: "WC pubblici",
-    icon: "ð»",
+    icon: "🚻",
     query: "node[\"amenity\"=\"toilets\"](around:{radius},{lat},{lng});way[\"amenity\"=\"toilets\"](around:{radius},{lat},{lng});",
     detailFields: ["fee", "wheelchair", "opening_hours"]
   },
   atm: {
     title: "Bancomat / ATM",
-    icon: "ð§",
+    icon: "🏧",
     query: "node[\"amenity\"=\"atm\"](around:{radius},{lat},{lng});way[\"amenity\"=\"atm\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "operator", "cash_in", "contactless", "currency:EUR"]
   },
   pharmacy: {
     title: "Farmacie",
-    icon: "ð",
+    icon: "💊",
     query: "node[\"amenity\"=\"pharmacy\"](around:{radius},{lat},{lng});way[\"amenity\"=\"pharmacy\"](around:{radius},{lat},{lng});",
     detailFields: ["opening_hours", "dispensing", "contact:phone", "website"]
   },
   parking: {
     title: "Parcheggi",
-    icon: "ð¿ï¸",
+    icon: "🅿️",
     query: "node[\"amenity\"=\"parking\"](around:{radius},{lat},{lng});way[\"amenity\"=\"parking\"](around:{radius},{lat},{lng});",
     detailFields: ["access", "fee", "capacity", "opening_hours"]
   }
@@ -1519,7 +1519,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-commesse": {
     rispostaBreve: "Da qui gestisci commesse e impianti (aggiunta, import Excel e gestione lista).",
     passi: [
-      "Apri il menu (â®) e premi âGestione commesseâ.",
+      "Apri il menu (⋮) e premi “Gestione commesse”.",
       "Inserisci il nome commessa oppure seleziona una commessa per import/aggiunte impianto.",
       "Usa i form della pagina per completare l'operazione."
     ],
@@ -1528,9 +1528,9 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-squadre": {
     rispostaBreve: "Serve per creare e salvare la composizione giornaliera delle squadre.",
     passi: [
-      "Apri il menu (â®) e premi âComposizione squadreâ.",
+      "Apri il menu (⋮) e premi “Composizione squadre”.",
       "Scegli commessa e data, poi aggiungi le righe squadra.",
-      "Premi âSalva composizioneâ e verifica lo storico sotto al form."
+      "Premi “Salva composizione” e verifica lo storico sotto al form."
     ],
     tags: ["squadre", "operativo", "personale", "mezzi"]
   },
@@ -1538,7 +1538,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-personale": {
     rispostaBreve: "Da qui inserisci o importi l'anagrafica personale.",
     passi: [
-      "Apri il menu (â®) e premi âPersonaleâ.",
+      "Apri il menu (⋮) e premi “Personale”.",
       "Aggiungi un nominativo singolo o importa il file Excel.",
       "Controlla la lista aggiornata subito sotto."
     ],
@@ -1547,7 +1547,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-mezzi": {
     rispostaBreve: "Da qui inserisci o importi l'elenco mezzi disponibili.",
     passi: [
-      "Apri il menu (â®) e premi âMezziâ.",
+      "Apri il menu (⋮) e premi “Mezzi”.",
       "Aggiungi un mezzo manualmente o importa da Excel.",
       "Controlla che il mezzo compaia in elenco."
     ],
@@ -1556,7 +1556,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-utenti": {
     rispostaBreve: "Permette la gestione admin, permessi utente e app collegate.",
     passi: [
-      "Apri il menu (â®) e premi âGestione utentiâ.",
+      "Apri il menu (⋮) e premi “Gestione utenti”.",
       "Aggiungi/rimuovi admin oppure aggiorna i permessi azione per utente.",
       "Salva le modifiche e verifica l'elenco utenti."
     ],
@@ -1565,7 +1565,7 @@ const MENU_HOWTO_CONTENT = {
   "open-panel-info-utili": {
     rispostaBreve: "Consente di pubblicare risorse utili (contatti, note, documenti) per commessa.",
     passi: [
-      "Apri il menu (â®) e premi âInformazioni utiliâ.",
+      "Apri il menu (⋮) e premi “Informazioni utili”.",
       "Seleziona tipo risorsa, titolo e contenuto/link.",
       "Salva e verifica che la risorsa sia disponibile nella commessa."
     ],
@@ -1574,7 +1574,7 @@ const MENU_HOWTO_CONTENT = {
   "open-private-docs-btn": {
     rispostaBreve: "Area personale per caricare e consultare documenti individuali.",
     passi: [
-      "Apri il menu (â®) e premi âDocumentiâ.",
+      "Apri il menu (⋮) e premi “Documenti”.",
       "Compila nome/note e allega file o foto.",
       "Salva e verifica la presenza del documento nell'elenco."
     ],
@@ -1583,34 +1583,34 @@ const MENU_HOWTO_CONTENT = {
   "open-personal-services-btn": {
     rispostaBreve: "Trovi servizi vicini (colazione, pranzo, market, tabacchi, WC, bancomat e altri) con mappa e navigazione.",
     passi: [
-      "Apri il menu (â®) e premi âServizi personaliâ.",
+      "Apri il menu (⋮) e premi “Servizi personali”.",
       "Scegli una categoria (es. Colazione o Pranzo).",
-      "Apri un luogo dall'elenco o dalla mappa e usa âNavigaâ o âDettagliâ."
+      "Apri un luogo dall'elenco o dalla mappa e usa “Naviga” o “Dettagli”."
     ],
     tags: ["servizi", "mappa", "navigazione", "personale"]
   },
   "open-hours-btn": {
     rispostaBreve: "Compili ore per commessa e operatore, salvi il resoconto e invii WhatsApp.",
     passi: [
-      "Apri il menu (â®) e premi âGestione oreâ.",
-      "Aggiungi una o piÃ¹ commesse, poi operatori con ore e note.",
-      "Premi âFine: salva e inviaâ per salvare su Drive e aprire WhatsApp."
+      "Apri il menu (⋮) e premi “Gestione ore”.",
+      "Aggiungi una o più commesse, poi operatori con ore e note.",
+      "Premi “Fine: salva e invia” per salvare su Drive e aprire WhatsApp."
     ],
     tags: ["ore", "commesse", "operatori", "whatsapp", "drive"]
   },
   "open-pos-btn": {
     rispostaBreve: "Archivio documenti sicurezza: POS, PMS, schede lavorazioni, schede macchine e modulistica.",
     passi: [
-      "Apri il menu (â®) e premi âð POSâ.",
+      "Apri il menu (⋮) e premi “📄 POS”.",
       "Cerca il documento per titolo, descrizione o categoria.",
-      "Premi âApri documentoâ per consultare il link Google Drive in una nuova scheda."
+      "Premi “Apri documento” per consultare il link Google Drive in una nuova scheda."
     ],
     tags: ["pos", "documenti", "sicurezza", "drive"]
   },
   "open-segnalazioni-btn": {
     rispostaBreve: "Compili la segnalazione sicurezza e generi il PDF da condividere.",
     passi: [
-      "Apri il menu (â®) e premi âSegnalazioniâ.",
+      "Apri il menu (⋮) e premi “Segnalazioni”.",
       "Compila i campi obbligatori e scegli il tipo di segnalazione.",
       "Genera il PDF e condividilo via WhatsApp o email."
     ],
@@ -1619,9 +1619,9 @@ const MENU_HOWTO_CONTENT = {
   "open-book-pdf-btn": {
     rispostaBreve: "Apre il manuale completo dell'app in formato PDF in una nuova scheda.",
     passi: [
-      "Apri il menu (â®) e premi âLibro PDFâ.",
+      "Apri il menu (⋮) e premi “Libro PDF”.",
       "Attendi l'apertura del file PDF in una nuova scheda del browser.",
-      "Se il popup Ã¨ bloccato, abilita i popup oppure scarica il file dal link diretto."
+      "Se il popup è bloccato, abilita i popup oppure scarica il file dal link diretto."
     ],
     tags: ["manuale", "pdf", "guida"]
   }
@@ -1630,11 +1630,11 @@ const STATIC_HOWTO_ITEMS = [
   {
     id: "login-google",
     domanda: "Come faccio il login con Google?",
-    rispostaBreve: "Apri il pannello utente e premi âLogin con Googleâ.",
+    rispostaBreve: "Apri il pannello utente e premi “Login con Google”.",
     passi: [
-      "Nella home premi l'icona ð¤ in alto.",
-      "Tocca âLogin con Googleâ e scegli l'account aziendale.",
-      "Controlla che compaia âLoggatoâ con email e nome utente."
+      "Nella home premi l'icona 👤 in alto.",
+      "Tocca “Login con Google” e scegli l'account aziendale.",
+      "Controlla che compaia “Loggato” con email e nome utente."
     ],
     tags: ["login", "google", "accesso"],
     updatedAt: HOWTO_UPDATED_AT
@@ -1642,10 +1642,10 @@ const STATIC_HOWTO_ITEMS = [
   {
     id: "chat-operatori",
     domanda: "Come uso la chat operatori?",
-    rispostaBreve: "Apri la chat dal pulsante ð¬, scrivi e invia il messaggio al destinatario.",
+    rispostaBreve: "Apri la chat dal pulsante 💬, scrivi e invia il messaggio al destinatario.",
     passi: [
-      "Premi il pulsante ð¬ in basso a destra.",
-      "Scegli un destinatario o lascia âMessaggio per tuttiâ.",
+      "Premi il pulsante 💬 in basso a destra.",
+      "Scegli un destinatario o lascia “Messaggio per tutti”.",
       "Scrivi il testo (o allega media/vocale) e premi invio."
     ],
     tags: ["chat", "messaggi", "operatori"],
@@ -1654,10 +1654,10 @@ const STATIC_HOWTO_ITEMS = [
   {
     id: "google-drive",
     domanda: "Come collego Google Drive?",
-    rispostaBreve: "Solo lâamministratore collega Google Drive; per gli utenti il cloud Ã¨ automatico.",
+    rispostaBreve: "Solo l’amministratore collega Google Drive; per gli utenti il cloud è automatico.",
     passi: [
       "Esegui login con Google con un account autorizzato.",
-      "Solo lâamministratore apre il pannello utente e preme âCollega Google Driveâ.",
+      "Solo l’amministratore apre il pannello utente e preme “Collega Google Drive”.",
       "Gli utenti normali non devono autenticare Drive: vedono solo lo stato del cloud centralizzato."
     ],
     tags: ["drive", "google", "integrazione"],
@@ -1713,9 +1713,9 @@ const HELP_CENTER_FAQ_FALLBACK = {
     },
     {
       id: "faq-install-app",
-      domanda: "Come installare lâapp sul telefono?",
+      domanda: "Come installare l’app sul telefono?",
       risposta: "Dal menu laterale premi Installa app. Su iPhone o Safari usa il menu Condividi del browser e scegli Aggiungi alla schermata Home.",
-      passi: ["Apri il menu laterale", "Premi Installa app", "Se compare il prompt, conferma lâinstallazione", "Su iPhone/Safari: Apri Condividi â Aggiungi alla schermata Home"]
+      passi: ["Apri il menu laterale", "Premi Installa app", "Se compare il prompt, conferma l’installazione", "Su iPhone/Safari: Apri Condividi → Aggiungi alla schermata Home"]
     }
   ]
 };
@@ -1802,7 +1802,7 @@ const UserLocationControl = L.Control.extend({
     button.type = "button";
     button.title = "Vai alla mia posizione";
     button.setAttribute("aria-label", "Centra sulla mia posizione");
-    button.innerHTML = "ð";
+    button.innerHTML = "📍";
     L.DomEvent.disableClickPropagation(button);
     L.DomEvent.on(button, "click", (event) => {
       L.DomEvent.stop(event);
@@ -2327,7 +2327,7 @@ function setAuthenticationGateState(state, message = "") {
   ui.authGate?.classList.toggle("hidden", !(isRequired || isBanned));
   if (ui.authGateMessage) {
     ui.authGateMessage.textContent = isBanned
-      ? "Ti Ã¨ stato negato lâaccesso. Richiedi lâaccesso allâamministratore."
+      ? "Ti è stato negato l’accesso. Richiedi l’accesso all’amministratore."
       : (message || "Accedi con il tuo account Google per utilizzare l'app.");
   }
   if (ui.authGateLoginBtn) {
@@ -2421,7 +2421,7 @@ function clearFirestoreSlowWatch() {
 function getReadableFirestoreError(error, fallback = "Errore caricamento dati") {
   const code = getFirebaseErrorCode(error);
   if (code.includes("permission-denied")) {
-    return "Permesso negato: il tuo utente non Ã¨ autorizzato a leggere questi dati. Contatta un amministratore.";
+    return "Permesso negato: il tuo utente non è autorizzato a leggere questi dati. Contatta un amministratore.";
   }
   if (code.includes("unavailable")) {
     return "Firestore non raggiungibile. Controlla la connessione e riprova.";
@@ -2561,7 +2561,7 @@ function refreshResolvedUserIdentity() {
   if (!currentUser) return;
   const resolvedName = getCurrentUserResolvedName("Nome non disponibile");
   if (ui.userName) ui.userName.textContent = `Nome utente: ${resolvedName}`;
-  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `ð Ciao, ${resolvedName}`;
+  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${resolvedName}`;
 }
 
 function normalizeMezzoDocument(doc) {
@@ -2662,7 +2662,7 @@ function isIosOrSafariInstallFlow() {
 
 async function handleInstallAppClick() {
   if (isAppInstalled()) {
-    alert("L'app risulta giÃ  installata sul dispositivo.");
+    alert("L'app risulta già installata sul dispositivo.");
     closeSideMenu();
     return;
   }
@@ -2676,7 +2676,7 @@ async function handleInstallAppClick() {
       if (choice?.outcome === "accepted") {
         alert("Installazione app avviata.");
       } else {
-        alert("Installazione annullata. Puoi riprovare dal menu laterale quando il prompt sarÃ  disponibile.");
+        alert("Installazione annullata. Puoi riprovare dal menu laterale quando il prompt sarà disponibile.");
       }
     } catch (error) {
       console.warn("Risultato prompt installazione non disponibile:", error);
@@ -2686,9 +2686,9 @@ async function handleInstallAppClick() {
   }
 
   if (isIosOrSafariInstallFlow()) {
-    alert("Per installare l'app: Apri Condividi â Aggiungi alla schermata Home");
+    alert("Per installare l'app: Apri Condividi → Aggiungi alla schermata Home");
   } else {
-    alert("Installazione non disponibile in questo momento: l'app potrebbe essere giÃ  installata oppure il browser non ha ancora reso disponibile il prompt.");
+    alert("Installazione non disponibile in questo momento: l'app potrebbe essere già installata oppure il browser non ha ancora reso disponibile il prompt.");
   }
   closeSideMenu();
 }
@@ -2865,9 +2865,9 @@ async function showLocalNotification(title, options = {}) {
 async function publishGlobalNotificationEvent(eventType, payload = {}) {
   if (!currentUser) return;
   const centralTypes = {
-    "impianto-done": { type: "IMPIANTO_COMPLETATO", priority: "NORMALE", title: "â Impianto completato", actionType: "impianto" },
-    "impianto-navigate": { type: "NAVIGAZIONE", priority: "NORMALE", title: "ð Navigazione avviata", actionType: "impianto" },
-    "hours-inserted": { type: "ORE", priority: "NORMALE", title: "ð Ore inserite", actionType: "ore" }
+    "impianto-done": { type: "IMPIANTO_COMPLETATO", priority: "NORMALE", title: "✅ Impianto completato", actionType: "impianto" },
+    "impianto-navigate": { type: "NAVIGAZIONE", priority: "NORMALE", title: "📍 Navigazione avviata", actionType: "impianto" },
+    "hours-inserted": { type: "ORE", priority: "NORMALE", title: "🕒 Ore inserite", actionType: "ore" }
   };
   const central = centralTypes[eventType];
   if (central && window.HeraNotificationCenter) {
@@ -3013,14 +3013,14 @@ function getActiveWorkBannerMessage(config = {}) {
       const tomorrowNote = notes.find((entry) => entry.dateKey === tomorrowKey);
       if (tomorrowNote) {
         const tomorrowLabel = tomorrow.toLocaleDateString("it-IT");
-        return { text: `ð ${tomorrowLabel} Â· ${tomorrowNote.note}`, isScheduled: true };
+        return { text: `📅 ${tomorrowLabel} · ${tomorrowNote.note}`, isScheduled: true };
       }
     }
     const todayNote = notes.find((entry) => entry.dateKey === todayKey);
     if (todayNote) return { text: todayNote.note, isScheduled: false };
     const nextNote = notes.find((entry) => entry.dateKey >= todayKey) || notes[0];
     const dateLabel = new Date(`${nextNote.dateKey}T00:00:00`).toLocaleDateString("it-IT");
-    return { text: `ð ${dateLabel} Â· ${nextNote.note}`, isScheduled: true };
+    return { text: `📅 ${dateLabel} · ${nextNote.note}`, isScheduled: true };
   }
   return { text: String(config.text || "").trim(), isScheduled: false };
 }
@@ -3059,7 +3059,7 @@ function applyWorkBannerConfig(config = {}) {
     ui.workBannerText.textContent = "";
     return;
   }
-  ui.workBannerText.textContent = `${activeMessage.text}   â¢   ${activeMessage.text}   â¢   ${activeMessage.text}`;
+  ui.workBannerText.textContent = `${activeMessage.text}   •   ${activeMessage.text}   •   ${activeMessage.text}`;
   window.requestAnimationFrame(updateWorkBannerAnimationDuration);
 }
 
@@ -3074,7 +3074,7 @@ function subscribeWorkBanner() {
     }, (error) => {
       console.warn("Sottoscrizione banner home non disponibile:", error);
       if (ui.bannerFeedback && canManageData()) {
-        ui.bannerFeedback.textContent = "Errore lettura banner. Riprova piÃ¹ tardi.";
+        ui.bannerFeedback.textContent = "Errore lettura banner. Riprova più tardi.";
       }
     });
 }
@@ -3201,36 +3201,36 @@ async function disableWorkBanner() {
 function weatherCodeLabel(weatherCode) {
   const code = Number(weatherCode);
   const weatherMap = {
-    0: "âï¸ Sereno",
-    1: "â Poco nuvoloso",
-    2: "âï¸ Parzialmente nuvoloso",
-    3: "âï¸ Coperto",
-    45: "ð«ï¸ Nebbia",
-    48: "ð«ï¸ Nebbia con brina",
-    51: "ð¦ï¸ Pioviggine",
-    53: "ð¦ï¸ Pioviggine moderata",
-    55: "ð§ï¸ Pioviggine intensa",
-    56: "ð¨ï¸ Pioviggine gelata",
-    57: "ð¨ï¸ Pioggia gelata",
-    61: "ð§ï¸ Pioggia debole",
-    63: "ð§ï¸ Pioggia moderata",
-    65: "âï¸ Pioggia forte",
-    66: "ð§ Pioggia gelata debole",
-    67: "ð§ Pioggia gelata forte",
-    71: "ð¨ï¸ Neve debole",
-    73: "ð¨ï¸ Neve moderata",
-    75: "âï¸ Neve intensa",
-    77: "ð¨ï¸ Nevischio",
-    80: "ð§ï¸ Rovesci deboli",
-    81: "ð§ï¸ Rovesci moderati",
-    82: "âï¸ Rovesci forti",
-    85: "ð¨ï¸ Rovesci di neve",
-    86: "âï¸ Rovesci di neve forti",
-    95: "âï¸ Temporale",
-    96: "âï¸ Temporale con grandine",
-    99: "âï¸ Temporale forte con grandine"
+    0: "☀️ Sereno",
+    1: "⛅ Poco nuvoloso",
+    2: "☁️ Parzialmente nuvoloso",
+    3: "☁️ Coperto",
+    45: "🌫️ Nebbia",
+    48: "🌫️ Nebbia con brina",
+    51: "🌦️ Pioviggine",
+    53: "🌦️ Pioviggine moderata",
+    55: "🌧️ Pioviggine intensa",
+    56: "🌨️ Pioviggine gelata",
+    57: "🌨️ Pioggia gelata",
+    61: "🌧️ Pioggia debole",
+    63: "🌧️ Pioggia moderata",
+    65: "⛈️ Pioggia forte",
+    66: "🧊 Pioggia gelata debole",
+    67: "🧊 Pioggia gelata forte",
+    71: "🌨️ Neve debole",
+    73: "🌨️ Neve moderata",
+    75: "❄️ Neve intensa",
+    77: "🌨️ Nevischio",
+    80: "🌧️ Rovesci deboli",
+    81: "🌧️ Rovesci moderati",
+    82: "⛈️ Rovesci forti",
+    85: "🌨️ Rovesci di neve",
+    86: "❄️ Rovesci di neve forti",
+    95: "⛈️ Temporale",
+    96: "⛈️ Temporale con grandine",
+    99: "⛈️ Temporale forte con grandine"
   };
-  return weatherMap[code] || "â¹ï¸ Condizioni variabili";
+  return weatherMap[code] || "ℹ️ Condizioni variabili";
 }
 
 pendingImpiantoActions = loadPendingImpiantoActions();
@@ -3335,7 +3335,7 @@ if (!auth || firebaseInitError) {
         await clearPersistedSession();
         await auth.signOut();
         currentUser = null;
-        setAuthenticationGateState("required", "Sessione non piÃ¹ valida. Effettua di nuovo il login.");
+        setAuthenticationGateState("required", "Sessione non più valida. Effettua di nuovo il login.");
         hideStartupLoading();
         return;
       }
@@ -3773,7 +3773,7 @@ function updateAdminControls() {
   if (ui.squadraForm.querySelector("button[type='submit']")) ui.squadraForm.querySelector("button[type='submit']").disabled = !canManage;
   ui.squadraHint.textContent = canManage
     ? "Suggerimento: usa i nomi in Personale e i mezzi in Mezzi per compilare le squadre."
-    : "Solo l'admin puÃ² modificare personale, mezzi e composizione squadre.";
+    : "Solo l'admin può modificare personale, mezzi e composizione squadre.";
   updateResourceFormByType();
   renderUserPermissionList();
   renderNotificationTargetUsers();
@@ -3838,8 +3838,8 @@ async function openApplicationUpdate() {
     await registration?.update?.();
     if (ui.updateAppBtn) {
       ui.updateAppBtn.disabled = false;
-      ui.updateAppBtn.title = "Aggiornamento controllato. Le novitÃ  saranno attive alla prossima apertura.";
-      ui.updateAppBtn.setAttribute("aria-label", "App aggiornata; riapri l'app per applicare le novitÃ ");
+      ui.updateAppBtn.title = "Aggiornamento controllato. Le novità saranno attive alla prossima apertura.";
+      ui.updateAppBtn.setAttribute("aria-label", "App aggiornata; riapri l'app per applicare le novità");
     }
   } catch (error) {
     console.warn("Controllo aggiornamenti non riuscito:", error);
@@ -3862,7 +3862,7 @@ function openManagementPanel(panel) {
     banner: { el: ui.panelBanner, title: "Banner home" },
     infoUtili: { el: ui.panelInfoUtili, title: "Informazioni utili" },
     notifiche: { el: ui.panelNotifiche, title: "Gestione notifiche" },
-    programmazione: { el: ui.panelProgrammazione, title: "ð Programmazione" }
+    programmazione: { el: ui.panelProgrammazione, title: "📅 Programmazione" }
   };
   const target = panelMap[panel];
   if (!target) return;
@@ -3894,12 +3894,12 @@ function openMapFullscreenPage() {
   setFullscreenMapInteractivity(true);
   ui.impiantiPage.classList.add("hidden");
   ui.mapFullscreenPage.classList.remove("hidden");
-  ui.mapFullscreenBtn.textContent = "â¤¢ Mappa a schermo intero";
-  ui.mapDrawAreaBtn.textContent = "âï¸ Disegna";
+  ui.mapFullscreenBtn.textContent = "⤢ Mappa a schermo intero";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   const saveSnowRoadBtn = document.getElementById("map-save-snow-road-btn");
   saveSnowRoadBtn?.classList.toggle("hidden", !isSnowServiceContext());
   syncDrawAreaToolbarState();
-  setFullscreenFeedback(isSnowServiceContext() ? "Seleziona una via neve, premi Disegna e salva il tracciato della strada." : "Usa âDisegnaâ per definire il perimetro di lavoro.");
+  setFullscreenFeedback(isSnowServiceContext() ? "Seleziona una via neve, premi Disegna e salva il tracciato della strada." : "Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => {
     fullscreenMap.setView(mainMapViewState.center, mainMapViewState.zoom, { animate: false });
     refreshFullscreenMapLayout();
@@ -3920,10 +3920,10 @@ function closeMapFullscreenPage() {
   setFullscreenMapInteractivity(true);
   ui.mapFullscreenPage.classList.add("hidden");
   ui.impiantiPage.classList.remove("hidden");
-  ui.mapDrawAreaBtn.textContent = "âï¸ Disegna";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   document.getElementById("map-save-snow-road-btn")?.classList.add("hidden");
   syncDrawAreaToolbarState();
-  setFullscreenFeedback("Usa âDisegnaâ per definire il perimetro di lavoro.");
+  setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
 }
 
@@ -3941,65 +3941,65 @@ const WEATHER_TILE_PREVIEW_TIMEOUT_MS = 4500;
 const WEATHER_LAYER_DEFINITIONS = {
   rain: {
     id: "rain",
-    button: "ð§ Pioggia",
+    button: "🌧 Pioggia",
     title: "Pioggia / precipitazioni",
     label: "Pioggia",
     opacity: 0.6,
     providerLayers: { openweather: "PR0", rainviewer: "radar" },
-    legend: ["ð¦ Debole", "ð© Moderata", "ð¨ Forte", "ð¥ Molto forte"],
-    description: "Precipitazioni OpenWeatherMap Weather Maps 2.0; fallback RainViewer solo se il provider principale non Ã¨ configurato."
+    legend: ["🟦 Debole", "🟩 Moderata", "🟨 Forte", "🟥 Molto forte"],
+    description: "Precipitazioni OpenWeatherMap Weather Maps 2.0; fallback RainViewer solo se il provider principale non è configurato."
   },
   clouds: {
     id: "clouds",
-    button: "âï¸ Nuvole",
-    title: "NuvolositÃ ",
+    button: "☁️ Nuvole",
+    title: "Nuvolosità",
     label: "Nuvole",
     opacity: 0.52,
     providerLayers: { openweather: "CL", rainviewer: "satellite" },
-    legend: ["â¬ Sereno", "â¬ Nubi basse", "âï¸ Nubi dense", "ð© Celle compatte"],
+    legend: ["⬛ Sereno", "⬜ Nubi basse", "☁️ Nubi dense", "🌩 Celle compatte"],
     description: "Copertura nuvolosa da OpenWeatherMap Weather Maps 2.0."
   },
   temperature: {
     id: "temperature",
-    button: "ð¡ Temperatura",
+    button: "🌡 Temperatura",
     title: "Temperatura",
     label: "Temperatura",
     opacity: 0.46,
     providerLayers: { openweather: "TA2" },
-    legend: ["ð¦ Freddo", "ð© Mite", "ð¨ Caldo", "ð¥ Molto caldo"],
+    legend: ["🟦 Freddo", "🟩 Mite", "🟨 Caldo", "🟥 Molto caldo"],
     description: "Temperatura a 2 metri da OpenWeatherMap Weather Maps 2.0."
   },
   wind: {
     id: "wind",
-    button: "ð¨ Vento",
+    button: "💨 Vento",
     title: "Vento",
     label: "Vento",
     opacity: 0.44,
     providerLayers: { openweather: "WND" },
     openWeatherParams: { use_norm: "true", arrow_step: "32" },
-    legend: ["ð¦ Brezza", "ð© Moderato", "ð¨ Forte", "ð¥ Raffiche"],
-    description: "VelocitÃ  e direzione del vento da OpenWeatherMap Weather Maps 2.0."
+    legend: ["🟦 Brezza", "🟩 Moderato", "🟨 Forte", "🟥 Raffiche"],
+    description: "Velocità e direzione del vento da OpenWeatherMap Weather Maps 2.0."
   },
   storms: {
     id: "storms",
-    button: "â¡ Temporali",
+    button: "⚡ Temporali",
     title: "Temporali",
     label: "Temporali",
     opacity: 0.58,
     providerLayers: { openweather: "PAC0", rainviewer: "radar" },
     usesFallbackLayerMessage: true,
-    legend: ["ð¦ Rovesci", "ð© Pioggia", "ð¨ Celle intense", "ð¥ Possibile temporale"],
+    legend: ["🟦 Rovesci", "🟩 Pioggia", "🟨 Celle intense", "🟥 Possibile temporale"],
     description: "Temporali stimati dal layer di precipitazione convettiva OpenWeatherMap; se non disponibile usa il radar precipitazioni come fallback operativo."
   },
   alerts: {
     id: "alerts",
-    button: "â ï¸ Allerte",
+    button: "⚠️ Allerte",
     title: "Allerte meteo",
     label: "Allerte",
     opacity: 0.5,
     providerLayers: {},
     unavailable: true,
-    legend: ["â ï¸ Dato non disponibile"],
+    legend: ["⚠️ Dato non disponibile"],
     description: "Dato non disponibile: le allerte ufficiali non sono esposte come tile meteo in questo provider/piano. La mappa resta navigabile."
   }
 };
@@ -4009,7 +4009,7 @@ const WEATHER_PROVIDERS = {
     id: "openweather",
     label: "OpenWeatherMap",
     priority: 1,
-    attribution: "Meteo Â© OpenWeatherMap",
+    attribution: "Meteo © OpenWeatherMap",
     sourceUrl: "https://openweathermap.org/api/weather-map-2",
     maxNativeZoom: WEATHER_PROVIDER_DEFAULT_MAX_NATIVE_ZOOM,
     maxZoom: WEATHER_RADAR_MAX_ZOOM,
@@ -4042,7 +4042,7 @@ const WEATHER_PROVIDERS = {
     id: "rainviewer",
     label: "RainViewer fallback",
     priority: 2,
-    attribution: "Meteo Â© RainViewer",
+    attribution: "Meteo © RainViewer",
     sourceUrl: "https://www.rainviewer.com/",
     maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
     maxZoom: WEATHER_RADAR_MAX_ZOOM,
@@ -4242,7 +4242,7 @@ function syncRadarControls() {
   const timeLabel = radarControlsEl.querySelector("[data-radar-time]");
   const info = radarControlsEl.querySelector("[data-weather-layer-info]");
   if (playBtn) {
-    playBtn.textContent = radarPlaying ? "â¸" : "â¶";
+    playBtn.textContent = radarPlaying ? "⏸" : "▶";
     playBtn.setAttribute("aria-label", radarPlaying ? "Pausa radar meteo" : "Avvia radar meteo");
     playBtn.disabled = radarFrames.length < 2;
   }
@@ -4254,7 +4254,7 @@ function syncRadarControls() {
   if (timeLabel) {
     timeLabel.textContent = frame
       ? `${definition.label} ${formatRadarFrameTime(frame)}`
-      : `${definition.label} â ${WEATHER_UNAVAILABLE_MESSAGE}`;
+      : `${definition.label} — ${WEATHER_UNAVAILABLE_MESSAGE}`;
   }
   if (info) {
     const providerLabel = frame ? `Fonte: ${getWeatherProviderSourceLabel(frame)}. ` : "";
@@ -4332,7 +4332,7 @@ function createRadarControls() {
   radarControlsEl = document.createElement("div");
   radarControlsEl.className = "weather-radar-controls";
   radarControlsEl.innerHTML = `
-    <button class="weather-radar-play" type="button" data-radar-play aria-label="Pausa radar meteo">â¸</button>
+    <button class="weather-radar-play" type="button" data-radar-play aria-label="Pausa radar meteo">⏸</button>
     <div class="weather-radar-timeline">
       <span class="weather-radar-time" data-radar-time>Meteo --:--</span>
       <input type="range" min="0" max="0" value="0" step="1" data-radar-slider aria-label="Timeline radar meteo">
@@ -4489,7 +4489,7 @@ function toggleFullscreenSatelliteMode() {
 function updateFullscreenMapModeButton() {
   if (!ui.mapSatelliteToggleBtn) return;
   const isSatellite = fullscreenMapMode === "satellite";
-  ui.mapSatelliteToggleBtn.textContent = isSatellite ? "ðº Standard" : "ð° Satellite";
+  ui.mapSatelliteToggleBtn.textContent = isSatellite ? "🗺 Standard" : "🛰 Satellite";
   ui.mapSatelliteToggleBtn.setAttribute("aria-pressed", isSatellite ? "true" : "false");
   ui.mapSatelliteToggleBtn.classList.toggle("is-active", isSatellite);
 }
@@ -4513,13 +4513,13 @@ function toggleDrawAreaMode() {
     isDrawingStrokeActive = false;
     setFullscreenMapInteractivity(false);
     renderDrawnArea();
-    ui.mapDrawAreaBtn.textContent = "â Termina";
+    ui.mapDrawAreaBtn.textContent = "✅ Termina";
     syncDrawAreaToolbarState();
-    setFullscreenFeedback("ModalitÃ  disegno attiva: trascina il dito per tracciare l'area.");
+    setFullscreenFeedback("Modalità disegno attiva: trascina il dito per tracciare l'area.");
     return;
   }
   setFullscreenMapInteractivity(true);
-  ui.mapDrawAreaBtn.textContent = "âï¸ Disegna";
+  ui.mapDrawAreaBtn.textContent = "✏️ Disegna";
   isDrawingStrokeActive = false;
   syncDrawAreaToolbarState();
   if (drawnAreaPoints.length < 3) {
@@ -4593,7 +4593,7 @@ function onFullscreenMapPointerUp(event) {
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch (error) {
-      console.warn("Pointer capture giÃ  rilasciato", error);
+      console.warn("Pointer capture già rilasciato", error);
     }
   }
   isDrawingStrokeActive = false;
@@ -4622,7 +4622,7 @@ function undoDrawnArea() {
   drawnAreaPoints = [];
   syncDrawAreaToolbarState();
   renderDrawnArea();
-  setFullscreenFeedback("Disegno annullato. Premi âRifaiâ per ripristinarlo.");
+  setFullscreenFeedback("Disegno annullato. Premi “Rifai” per ripristinarlo.");
 }
 
 function redoDrawnArea() {
@@ -4672,7 +4672,7 @@ async function saveDrawnSnowRoadPath() {
     updatedBy: currentUser?.email || ""
   }, { merge: true });
   selectedImpiantoData = { ...selectedImpiantoData, routePath: path };
-  setFullscreenFeedback("Tracciato via neve salvato: la linea diventerÃ  verde quando lâoperatore passa sulla strada.");
+  setFullscreenFeedback("Tracciato via neve salvato: la linea diventerà verde quando l’operatore passa sulla strada.");
   renderMap();
 }
 
@@ -4681,10 +4681,10 @@ function shareDrawnAreaViaWhatsapp() {
     alert("Disegna almeno 3 punti per creare un'area condivisibile.");
     return;
   }
-  const vertices = drawnAreaPoints.map((point, idx) => `â¢ Punto ${idx + 1}: ${point[0].toFixed(6)}, ${point[1].toFixed(6)}`).join("\n");
+  const vertices = drawnAreaPoints.map((point, idx) => `• Punto ${idx + 1}: ${point[0].toFixed(6)}, ${point[1].toFixed(6)}`).join("\n");
   const areaCoords = drawnAreaPoints.map((point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`).join(" | ");
   const message = [
-    "ðºï¸ *Area lavoro commessa*",
+    "🗺️ *Area lavoro commessa*",
     `Commessa: ${selectedCommessaName || "-"}`,
     `Perimetro: ${drawnAreaPoints.length} punti`,
     "",
@@ -4842,7 +4842,7 @@ function applyRoute() {
       renderCommessaResourceViewer();
       ui.commessaResourceViewer.classList.remove("hidden");
       ui.commessaResourceViewer.classList.add("page-mode");
-      ui.commessaResourceViewerCloseBtn.textContent = "â Torna alla commessa";
+      ui.commessaResourceViewerCloseBtn.textContent = "← Torna alla commessa";
     } else {
       closeCommessaResourceViewer();
     }
@@ -5032,9 +5032,9 @@ function impiantoNextActionLabel(actionKey) {
 }
 
 function impiantoNextActionIcon(actionKey) {
-  if (actionKey === "navigate") return "ðºï¸";
-  if (actionKey === "done") return "â";
-  return "âï¸";
+  if (actionKey === "navigate") return "🗺️";
+  if (actionKey === "done") return "✅";
+  return "✉️";
 }
 
 function buildInlineActionButton(label, actionKey, compact = false) {
@@ -5129,7 +5129,7 @@ function getConnectionQuality() {
 function getNetworkTypeLabel() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   const type = String(connection?.effectiveType || connection?.type || "").toLowerCase();
-  if (type.includes("wifi")) return "WiâFi";
+  if (type.includes("wifi")) return "Wi‑Fi";
   if (type.includes("ethernet")) return "Ethernet";
   if (type.includes("5g")) return "5G";
   if (type.includes("4g")) return "4G";
@@ -5161,10 +5161,10 @@ function renderControlCenter() {
   ];
   const cloudRows = [["Firebase Authentication", auth ? "Operativo" : "Errore"], ["Cloud Firestore", db ? "Operativo" : "Errore"], ["Firebase Realtime Database", firebase?.database ? "Operativo" : "Non configurato"], ["Firebase Storage", firebase?.storage ? "Operativo" : "Non configurato"], ["Hosting", "Operativo"], ["Google Drive", driveBridgeState.configured || driveRootFolderId ? "Operativo" : "Non collegato"], ["Servizio notifiche", firebaseMessaging ? "Operativo" : "Non configurato"]];
   const dataRows = ["Commesse", "Impianti", "Squadre", "Ore lavorate", "Segnalazioni", "Note commessa", "Documenti POS", "Mezzi", "Utenti", "Notifiche", "Posizioni operatori"].map((name) => [name, "Ultimo aggiornamento: dati caricati nella sessione corrente"]);
-  const pendingExtra = `<div class="control-center-actions"><button class="btn btn-primary" type="button" onclick="syncPendingImpiantoActions(); syncPendingOfflineMutations(); renderControlCenter();">SINCRONIZZA TUTTO</button><button class="btn" type="button" onclick="syncPendingImpiantoActions(); renderControlCenter();">RIPROVA ERRORI</button><button class="btn" type="button">VISUALIZZA DETTAGLI</button>${isAdmin ? '<button class="btn" type="button">ELIMINA OPERAZIONE</button>' : ''}</div><ol class="control-center-list">${pending.map((item) => `<li><strong>${escapeHTML(item.controlType)}</strong><br><span>${escapeHTML(formatControlCenterDate(item.when))} â¢ ${escapeHTML(item.operator || "Operatore")}</span><br><em>${escapeHTML(item.status || "In attesa")}</em></li>`).join("") || "<li>Nessuna operazione in attesa.</li>"}</ol>`;
+  const pendingExtra = `<div class="control-center-actions"><button class="btn btn-primary" type="button" onclick="syncPendingImpiantoActions(); syncPendingOfflineMutations(); renderControlCenter();">SINCRONIZZA TUTTO</button><button class="btn" type="button" onclick="syncPendingImpiantoActions(); renderControlCenter();">RIPROVA ERRORI</button><button class="btn" type="button">VISUALIZZA DETTAGLI</button>${isAdmin ? '<button class="btn" type="button">ELIMINA OPERAZIONE</button>' : ''}</div><ol class="control-center-list">${pending.map((item) => `<li><strong>${escapeHTML(item.controlType)}</strong><br><span>${escapeHTML(formatControlCenterDate(item.when))} • ${escapeHTML(item.operator || "Operatore")}</span><br><em>${escapeHTML(item.status || "In attesa")}</em></li>`).join("") || "<li>Nessuna operazione in attesa.</li>"}</ol>`;
   const usageRows = [["Utenti registrati", platformUsers.length], ["Utenti attivi oggi", platformUsers.filter((u) => String(u.lastSeenAt || u.lastLoginAt || "").includes(todayKey)).length], ["Utenti online ora", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Dispositivi collegati", platformUsers.length], ["Numero commesse", commesseById.size], ["Numero impianti", impiantiCount], ["Impianti fatti oggi", currentImpianti.filter((i) => String(i.doneAt || "").includes(todayKey)).length], ["Ore inserite oggi", allHoursReports.filter((r) => String(r.date || r.createdAt || "").includes(todayKey)).length], ["Segnalazioni aperte", "Verifica da archivio segnalazioni"], ["Notifiche non confermate", "Verifica da notifiche"], ["Dati offline in attesa", pending.length]];
-  const operatorCards = [buildControlCenterCard("Stato generale dellâapp", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["VelocitÃ  indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["QualitÃ ", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "Lâapp risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
-  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da piÃ¹ di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dellâapp", usageRows, { color: "green" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} â¢ ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} â¢ ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÃ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
+  const operatorCards = [buildControlCenterCard("Stato generale dell’app", appRows, { color: firebaseInitError ? "yellow" : "green" }), buildControlCenterCard("Stato connessione", [["Stato", quality.status], ["Tipo rete", getNetworkTypeLabel()], ["Velocità indicativa", `${navigator.connection?.downlink || "n/d"} Mbps`], ["Qualità", quality.label], ["Tempo risposta server", db ? "In verifica" : "Non disponibile"], ["Ultimo online", localStorage.getItem("heraLastOnlineAt") || "Sessione corrente"]], { color: quality.color }), buildControlCenterCard("Dati da sincronizzare", [["Operazioni totali in attesa", pending.length], ["Impianti FATTO offline", pending.filter((i) => i.controlType.includes("Impianto")).length], ["Ore inserite offline", pending.filter((i) => i.controlType.includes("Ore")).length], ["Note salvate offline", pending.filter((i) => i.controlType.includes("Nota")).length], ["Foto da caricare", 0], ["WhatsApp da preparare", pending.filter((i) => i.whatsappStatus !== "sent").length]], { color: pending.length ? "blue" : "green", extra: pendingExtra }), buildControlCenterCard("Controllo aggiornamenti", [["Versione installata", installedVersion], ["Versione disponibile", installedVersion], ["Ultima pubblicazione", "Non configurata"], ["Tipo aggiornamento", "Facoltativo"], ["Note", "L’app risulta allineata alla versione configurata"]], { color: "green", extra: '<div class="control-center-actions"><button class="btn" type="button">AGGIORNA APP</button></div>' })];
+  const adminCards = isAdmin ? [buildControlCenterCard("Stato cloud", cloudRows, { color: db && auth ? "green" : "red" }), buildControlCenterCard("Ultimo aggiornamento dati", dataRows, { color: "yellow", extra: '<p class="control-center-warning">Attenzione: questi dati non vengono aggiornati da più di 24 ore se la relativa sincronizzazione resta ferma.</p>' }), buildControlCenterCard("Utilizzo dell’app", usageRows, { color: "green" }), buildControlCenterCard("Utenti e dispositivi", platformUsers.slice(0, 12).map((u) => [u.displayName || u.email || u.id, `${u.email || "-"} • ${adminEmails.has(normalizeEmail(u.email)) ? "Amministratore" : "Operatore"} • ${Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000 ? "Online" : "Offline"}`]), { color: "green" }), buildControlCenterCard("Errori e segnalazioni tecniche", [["Errori salvataggio / Firestore / login / sync", firebaseInitError?.message || "Nessun errore critico registrato"], ["Livelli", "Informazione, Attenzione, Errore, Errore grave"]], { color: firebaseInitError ? "red" : "green", extra: '<div class="control-center-actions"><button class="btn" type="button">RIPROVA</button><button class="btn" type="button">SEGNA COME RISOLTO</button><button class="btn" type="button">COPIA ERRORE</button><button class="btn" type="button">INVIA ASSISTENZA</button><button class="btn" type="button">CANCELLA REGISTRO</button></div>' }), buildControlCenterCard("Controllo sicurezza", [["Tentativi accesso falliti", "Registro non configurato"], ["Utenti bannati", platformUsers.filter((u) => u.banned).length], ["Utenti in attesa", platformUsers.filter((u) => u.pendingApproval).length], ["Sessioni attive", platformUsers.filter((u) => Date.now() - firestoreDateToMillis(u.lastSeenAt) <= 10 * 60 * 1000).length], ["Ultimo backup", "Non configurato"]], { color: "yellow", extra: '<div class="control-center-actions"><button class="btn">GESTISCI UTENTI</button><button class="btn">UTENTI BANNATI</button><button class="btn">RICHIESTE DI ACCESSO</button><button class="btn">SESSIONI ATTIVE</button><button class="btn">REGISTRO ATTIVITÀ</button></div>' }), buildControlCenterCard("Backup dati", [["Ultimo backup", "Non configurato"], ["Stato", "Da configurare"], ["Dimensione dati", "n/d"], ["Record salvati", commesseById.size + impiantiCount], ["Destinazione", "Cloud amministratore"], ["Errori", "Nessuno"]], { color: "gray", extra: '<div class="control-center-actions"><button class="btn">ESEGUI BACKUP</button><button class="btn">SCARICA BACKUP</button><button class="btn">RIPRISTINA BACKUP</button><button class="btn">VISUALIZZA BACKUP PRECEDENTI</button></div>' })] : [];
   ui.controlCenterContent.innerHTML = [...operatorCards, ...adminCards].join("");
 }
 
@@ -5182,7 +5182,7 @@ function closeControlCenterPage() {
 
 function runControlCenterCheck() {
   const problems = [];
-  if (navigator.onLine === false) problems.push("Connessione Internet assente: verifica WiâFi o rete mobile.");
+  if (navigator.onLine === false) problems.push("Connessione Internet assente: verifica Wi‑Fi o rete mobile.");
   if (!auth) problems.push("Firebase Authentication non disponibile: controlla configurazione Firebase.");
   if (!db) problems.push("Cloud Firestore non disponibile: controlla SDK e regole.");
   if (firebaseInitError) problems.push(`Errore Firebase: ${firebaseInitError.message}`);
@@ -5211,14 +5211,14 @@ function buildHowtoFaqItems() {
     const menuTitle = (button.textContent || "").trim() || "Voce menu";
     const config = MENU_HOWTO_CONTENT[buttonId] || {};
     const fallbackPassi = [
-      "Apri il menu (â®) nella home.",
-      `Premi â${menuTitle}â.`,
+      "Apri il menu (⋮) nella home.",
+      `Premi “${menuTitle}”.`,
       "Segui i campi/pulsanti del pannello e conferma l'azione."
     ];
     return {
       id: `menu-${buttonId}`,
-      domanda: `Come si usa â${menuTitle}â?`,
-      rispostaBreve: config.rispostaBreve || `Questa voce apre â${menuTitle}â con tutte le azioni disponibili.`,
+      domanda: `Come si usa “${menuTitle}”?`,
+      rispostaBreve: config.rispostaBreve || `Questa voce apre “${menuTitle}” con tutte le azioni disponibili.`,
       passi: config.passi || fallbackPassi,
       tags: config.tags || ["menu", "funzione"],
       updatedAt: HOWTO_UPDATED_AT
@@ -5254,14 +5254,14 @@ function closePrivateDocsPage() {
 }
 
 const CALENDAR_EVENT_TYPES = {
-  ferie: { label: "Ferie", icon: "ðï¸" },
-  permesso: { label: "Permesso", icon: "ð" },
-  malattia: { label: "Malattia", icon: "ð¤" },
-  intervento: { label: "Programmazione intervento", icon: "ð ï¸" },
-  riunione: { label: "Riunione", icon: "ð¥" },
-  formazione: { label: "Formazione", icon: "ð" },
-  scadenza: { label: "Scadenza", icon: "â°" },
-  altro: { label: "Altro", icon: "ð" }
+  ferie: { label: "Ferie", icon: "🏖️" },
+  permesso: { label: "Permesso", icon: "🕒" },
+  malattia: { label: "Malattia", icon: "🤒" },
+  intervento: { label: "Programmazione intervento", icon: "🛠️" },
+  riunione: { label: "Riunione", icon: "👥" },
+  formazione: { label: "Formazione", icon: "🎓" },
+  scadenza: { label: "Scadenza", icon: "⏰" },
+  altro: { label: "Altro", icon: "📌" }
 };
 
 function formatCalendarDateKey(date) {
@@ -5325,7 +5325,7 @@ function renderCalendarMode() {
   ui.calendarSharedTab?.classList.toggle("is-active", calendarMode === "shared");
   ui.calendarHoursTab?.setAttribute("aria-selected", String(isHours));
   ui.calendarSharedTab?.setAttribute("aria-selected", String(calendarMode === "shared"));
-  if (ui.calendarPageHeading) ui.calendarPageHeading.textContent = isHours ? "ð Le mie ore" : "ðï¸ Calendario condiviso";
+  if (ui.calendarPageHeading) ui.calendarPageHeading.textContent = isHours ? "🕒 Le mie ore" : "🗓️ Calendario condiviso";
   if (ui.calendarPageDescription) {
     ui.calendarPageDescription.textContent = isHours
       ? "Ore lavorate personali recuperate dalla Gestione ore."
@@ -5505,7 +5505,7 @@ function renderPersonalHoursCalendar() {
   });
   if (ui.calendarFeedback) {
     ui.calendarFeedback.textContent = hoursReportsLoaded
-      ? "Sono mostrate esclusivamente le ore dellâoperatore connesso."
+      ? "Sono mostrate esclusivamente le ore dell’operatore connesso."
       : "Caricamento delle ore personali...";
   }
   renderPersonalHoursSelectedDay();
@@ -5522,13 +5522,13 @@ function renderPersonalHoursSelectedDay() {
       : "Nessuna ora personale inserita";
   }
   if (!rows.length) {
-    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>ð</span><p>Non risultano ore personali per questa giornata.</p></div>";
+    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>🕒</span><p>Non risultano ore personali per questa giornata.</p></div>";
     return;
   }
   ui.calendarDayEvents.innerHTML = rows.map(({ entry, row, hours }) => `
     <article class="calendar-event-card personal-hours-detail">
       <div class="calendar-event-heading">
-        <span class="calendar-event-icon" aria-hidden="true">ð</span>
+        <span class="calendar-event-icon" aria-hidden="true">🕒</span>
         <div><h3>${escapeHTML(entry.commessaName || commesseById.get(entry.commessaId)?.nome || "Ore lavorate")}</h3>
         <p>${formatPersonalHours(hours)} ore</p></div>
       </div>
@@ -5570,8 +5570,8 @@ function formatCalendarEventPeriod(event) {
   const startDate = String(event.startDate || "");
   const endDate = String(event.endDate || startDate);
   if (allDay) return startDate === endDate ? "Tutto il giorno" : `Dal ${startDate} al ${endDate}`;
-  const time = [event.startTime, event.endTime].filter(Boolean).join("â");
-  return startDate === endDate ? (time || "Orario da definire") : `Dal ${startDate} al ${endDate}${time ? ` â¢ ${time}` : ""}`;
+  const time = [event.startTime, event.endTime].filter(Boolean).join("–");
+  return startDate === endDate ? (time || "Orario da definire") : `Dal ${startDate} al ${endDate}${time ? ` • ${time}` : ""}`;
 }
 
 function renderCalendarSelectedDay() {
@@ -5584,12 +5584,12 @@ function renderCalendarSelectedDay() {
       : "Nessun evento in questo giorno";
   }
   if (!events.length) {
-    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>ðï¸</span><p>Nessun evento. Premi âAggiungiâ per inserirne uno.</p></div>";
+    ui.calendarDayEvents.innerHTML = "<div class='calendar-empty-day'><span>🗓️</span><p>Nessun evento. Premi “Aggiungi” per inserirne uno.</p></div>";
     return;
   }
   ui.calendarDayEvents.innerHTML = events.map((event) => {
     const isDocumentExpiration = event.type === "SCADENZA_DOCUMENTO";
-    const type = isDocumentExpiration ? { icon: "ð", label: "Scadenza documento" } : (CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro);
+    const type = isDocumentExpiration ? { icon: "📄", label: "Scadenza documento" } : (CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro);
     const mayModify = canModifyCalendarEvent(event);
     const safeLink = /^https?:\/\//i.test(String(event.link || "")) ? String(event.link) : "";
     const detailRows = [
@@ -5597,7 +5597,7 @@ function renderCalendarSelectedDay() {
       event.location ? `<p><strong>Luogo:</strong> ${escapeHTML(event.location)}</p>` : "",
       event.participants ? `<p><strong>Persone:</strong> ${escapeHTML(event.participants)}</p>` : "",
       event.description ? `<p class="calendar-event-description">${escapeHTML(event.description)}</p>` : "",
-      safeLink ? `<p><a class="btn calendar-link-btn" href="${escapeHTML(safeLink)}" target="_blank" rel="noopener noreferrer">ð Apri link</a></p>` : ""
+      safeLink ? `<p><a class="btn calendar-link-btn" href="${escapeHTML(safeLink)}" target="_blank" rel="noopener noreferrer">🔗 Apri link</a></p>` : ""
     ].join("");
     return `
       <article class="calendar-event-card calendar-type-border-${escapeHTML(event.type || "altro")}">
@@ -5672,7 +5672,7 @@ function renderCalendarParticipantPicker() {
   ui.calendarParticipantsChips.innerHTML = calendarSelectedParticipants.map((participant, index) => `
     <span class="calendar-participant-chip">
       <span>${escapeHTML(participant.name)}</span>
-      <button type="button" data-calendar-participant-remove="${index}" aria-label="Rimuovi ${escapeHTML(participant.name)}">Ã</button>
+      <button type="button" data-calendar-participant-remove="${index}" aria-label="Rimuovi ${escapeHTML(participant.name)}">×</button>
     </span>
   `).join("");
   ui.calendarParticipantsChips.querySelectorAll("[data-calendar-participant-remove]").forEach((button) => {
@@ -5696,7 +5696,7 @@ function renderCalendarParticipantSuggestions() {
   ui.calendarParticipantsSuggestions.innerHTML = [
     ...matches.map((person) => `<button type="button" role="option" data-calendar-person-id="${escapeHTML(person.id)}"><strong>${escapeHTML(getPersonaleDisplayName(person))}</strong>${person.email ? `<small>${escapeHTML(person.email)}</small>` : ""}</button>`),
     freeValue && !matches.some((person) => normalizeSquadraMemberIdentity(getPersonaleDisplayName(person)) === normalizeSquadraMemberIdentity(freeValue))
-      ? `<button type="button" role="option" data-calendar-free-person="${escapeHTML(freeValue)}">ï¼ Usa nome libero: <strong>${escapeHTML(freeValue)}</strong></button>`
+      ? `<button type="button" role="option" data-calendar-free-person="${escapeHTML(freeValue)}">＋ Usa nome libero: <strong>${escapeHTML(freeValue)}</strong></button>`
       : ""
   ].join("");
   ui.calendarParticipantsSuggestions.classList.toggle("hidden", !matches.length && !freeValue);
@@ -5740,7 +5740,7 @@ function populateCalendarCommesse(selectedId = "", customName = "") {
   ui.calendarEventCommessa.innerHTML = [
     '<option value="">Nessuna commessa</option>',
     ...commesse.map((commessa) => `<option value="${escapeHTML(commessa.id)}">${escapeHTML(getCommessaDisplayName(commessa))}</option>`),
-    '<option value="__custom">ï¼ Scrivi una commessa non presente</option>'
+    '<option value="__custom">＋ Scrivi una commessa non presente</option>'
   ].join("");
   if (selectedId && commesseById.has(selectedId)) ui.calendarEventCommessa.value = selectedId;
   else if (customName) ui.calendarEventCommessa.value = "__custom";
@@ -5763,7 +5763,7 @@ function populateCalendarImpianti(commessaId = "", selectedId = "", customName =
   ui.calendarEventImpianto.innerHTML = [
     '<option value="">Nessun impianto</option>',
     ...impianti.map((impianto) => `<option value="${escapeHTML(getSquadraImpiantoId(impianto))}">${escapeHTML(getCalendarImpiantoDisplayName(impianto))}</option>`),
-    '<option value="__custom">ï¼ Scrivi un impianto non presente</option>'
+    '<option value="__custom">＋ Scrivi un impianto non presente</option>'
   ].join("");
   const hasCustomCommessa = ui.calendarEventCommessa?.value === "__custom";
   ui.calendarEventImpianto.disabled = !commessaId && !customName && !hasCustomCommessa;
@@ -5863,7 +5863,7 @@ async function saveCalendarEvent(event) {
   const startTime = allDay ? "" : String(ui.calendarEventStartTime.value || "");
   const endTime = allDay ? "" : String(ui.calendarEventEndTime.value || "");
   if (!startDate || !endDate || endDate < startDate) {
-    ui.calendarEventFormFeedback.textContent = "Controlla le date: la data finale non puÃ² precedere quella iniziale.";
+    ui.calendarEventFormFeedback.textContent = "Controlla le date: la data finale non può precedere quella iniziale.";
     return;
   }
   if (!allDay && !startTime) {
@@ -5871,7 +5871,7 @@ async function saveCalendarEvent(event) {
     return;
   }
   if (!allDay && startDate === endDate && endTime && endTime < startTime) {
-    ui.calendarEventFormFeedback.textContent = "L'ora finale non puÃ² precedere quella iniziale.";
+    ui.calendarEventFormFeedback.textContent = "L'ora finale non può precedere quella iniziale.";
     return;
   }
   const commessaSelection = String(ui.calendarEventCommessa.value || "");
@@ -5883,7 +5883,7 @@ async function saveCalendarEvent(event) {
     ? getCommessaCachedImpianti(commessa.id).find((item) => getSquadraImpiantoId(item) === impiantoSelection)
     : null;
   const eventType = String(ui.calendarEventType.value || "altro");
-  const generatedTitle = `${CALENDAR_EVENT_TYPES[eventType]?.label || "Evento"}${calendarSelectedParticipants[0]?.name ? ` â¢ ${calendarSelectedParticipants[0].name}` : ""}`;
+  const generatedTitle = `${CALENDAR_EVENT_TYPES[eventType]?.label || "Evento"}${calendarSelectedParticipants[0]?.name ? ` • ${calendarSelectedParticipants[0].name}` : ""}`;
   const payload = {
     type: eventType,
     title: String(ui.calendarEventTitle.value || "").trim() || generatedTitle,
@@ -5899,7 +5899,7 @@ async function saveCalendarEvent(event) {
     impiantoId: impianto ? getSquadraImpiantoId(impianto) : "",
     impiantoName: String(impianto ? getCalendarImpiantoDisplayName(impianto) : customImpianto).trim(),
     customImpianto,
-    worksite: [commessa?.nome || customCommessa, impianto ? getCalendarImpiantoDisplayName(impianto) : customImpianto].filter(Boolean).join(" â¢ "),
+    worksite: [commessa?.nome || customCommessa, impianto ? getCalendarImpiantoDisplayName(impianto) : customImpianto].filter(Boolean).join(" • "),
     location: String(ui.calendarEventLocation.value || "").trim(),
     participants: calendarSelectedParticipants.map((participant) => participant.name).join(", "),
     participantIds: calendarSelectedParticipants.map((participant) => participant.id).filter(Boolean),
@@ -5940,10 +5940,10 @@ async function saveCalendarEvent(event) {
 async function deleteCalendarEvent(eventId) {
   const event = calendarEvents.find((item) => item.id === eventId);
   if (!event || !canModifyCalendarEvent(event)) {
-    alert("PuÃ² eliminare questo evento solo chi lo ha inserito o un amministratore.");
+    alert("Può eliminare questo evento solo chi lo ha inserito o un amministratore.");
     return;
   }
-  if (!window.confirm(`Eliminare l'evento â${event.title || "Evento"}â?`)) return;
+  if (!window.confirm(`Eliminare l'evento “${event.title || "Evento"}”?`)) return;
   try {
     await db.collection("calendarEvents").doc(eventId).delete();
   } catch (error) {
@@ -6071,7 +6071,7 @@ function renderPosDocuments() {
   grouped.forEach((items, category) => {
     const group = document.createElement("section");
     group.className = "pos-category-group";
-    group.innerHTML = `<h3>ð ${escapeHTML(category)}</h3>`;
+    group.innerHTML = `<h3>📁 ${escapeHTML(category)}</h3>`;
     const grid = document.createElement("div");
     grid.className = "pos-document-grid";
     items.forEach((doc) => grid.appendChild(createPosDocumentCard(doc, canManage)));
@@ -6113,7 +6113,7 @@ function createPosDocumentCard(doc, canManage) {
     actions.appendChild(deleteBtn);
     const meta = document.createElement("p");
     meta.className = "muted pos-admin-meta";
-    meta.textContent = `Ordine: ${Number(doc.order || 0)} â¢ ${doc.active === false ? "Non attivo" : "Attivo"}`;
+    meta.textContent = `Ordine: ${Number(doc.order || 0)} • ${doc.active === false ? "Non attivo" : "Attivo"}`;
     card.append(title, description, meta, actions);
     return card;
   }
@@ -6124,7 +6124,7 @@ function createPosDocumentCard(doc, canManage) {
 function openPosDocumentForm(doc = null) {
   if (!canManageData()) return;
   ui.posDocumentForm?.classList.remove("hidden");
-  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = doc ? "Modifica documento" : "â Aggiungi documento";
+  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = doc ? "Modifica documento" : "➕ Aggiungi documento";
   if (ui.posDocumentId) ui.posDocumentId.value = doc?.id || "";
   if (ui.posTitle) ui.posTitle.value = doc?.title || "";
   if (ui.posDescription) ui.posDescription.value = doc?.description || "";
@@ -6139,7 +6139,7 @@ function closePosDocumentForm() {
   ui.posDocumentForm?.reset();
   if (ui.posDocumentId) ui.posDocumentId.value = "";
   if (ui.posActive) ui.posActive.checked = true;
-  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = "â Aggiungi documento";
+  if (ui.posAddToggleBtn) ui.posAddToggleBtn.textContent = "➕ Aggiungi documento";
   ui.posDocumentForm?.classList.add("hidden");
   if (ui.posFeedback) ui.posFeedback.textContent = "";
 }
@@ -6147,7 +6147,7 @@ function closePosDocumentForm() {
 async function savePosDocument(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² salvare documenti POS.");
+    alert("Solo l'admin può salvare documenti POS.");
     return;
   }
   const id = String(ui.posDocumentId?.value || "").trim();
@@ -6180,7 +6180,7 @@ async function savePosDocument(event) {
 
 async function deletePosDocument(doc) {
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² eliminare documenti POS.");
+    alert("Solo l'admin può eliminare documenti POS.");
     return;
   }
   const ok = window.confirm(`Eliminare il documento "${doc.title || "senza titolo"}"?`);
@@ -6728,20 +6728,20 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
       const dayTotal = dayItems.reduce((sum, value) => sum + getDayItemHours(value), 0);
       const hasDuplicates = dayItems.length > 1;
       const hasDataError = sources.some((source) => !source.reportDate || !source.entryCommessaId || !source.operatore || Number(source.ore || 0) <= 0);
-      let valueLabel = `â ${formatHoursValue(dayTotal)}h Â· ore inserite`;
+      let valueLabel = `✅ ${formatHoursValue(dayTotal)}h · ore inserite`;
       let statusClass = "hours-value-ok";
       if (hasDataError) {
-        valueLabel = `â ${formatHoursValue(dayTotal)}h Â· errore dati`;
+        valueLabel = `❌ ${formatHoursValue(dayTotal)}h · errore dati`;
         statusClass = "hours-value-error";
       } else if (hasDuplicates) {
-        valueLabel = `â ï¸ ${formatHoursValue(dayTotal)}h Â· duplicato da controllare`;
+        valueLabel = `⚠️ ${formatHoursValue(dayTotal)}h · duplicato da controllare`;
         statusClass = "hours-value-warning";
       } else if (hasPendingApproval) {
-        valueLabel = `â ï¸ ${formatHoursValue(dayTotal)}h Â· da confermare`;
+        valueLabel = `⚠️ ${formatHoursValue(dayTotal)}h · da confermare`;
         statusClass = "hours-value-warning hours-value-pending-approval";
       }
       const mergedDetails = hasDuplicates
-        ? `Duplicato non valido: stesso operatore/commessa/giorno inserito piÃ¹ volte. La pulizia automatica mantiene una sola registrazione valida.`
+        ? `Duplicato non valido: stesso operatore/commessa/giorno inserito più volte. La pulizia automatica mantiene una sola registrazione valida.`
         : "";
       const title = hasPendingApproval
         ? canManage
@@ -6760,7 +6760,7 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
   const emptyRowsNeeded = Math.max(0, 10 - bodyRowsReal.length);
   const emptyCells = Array.from({ length: monthMeta.daysInMonth }, () => "<td>-</td>").join("");
   const emptyRows = Array.from({ length: emptyRowsNeeded }, () => (
-    `<tr><th scope="row" class="muted">â</th>${emptyCells}<td class="muted">0h</td></tr>`
+    `<tr><th scope="row" class="muted">—</th>${emptyCells}<td class="muted">0h</td></tr>`
   ));
   const bodyRows = [...bodyRowsReal, ...emptyRows].join("");
 
@@ -6821,10 +6821,10 @@ function renderHoursMonthlyTable(reports, commessaId, monthMeta, options = {}) {
     const hasPendingApprovals = (Array.isArray(reports) ? reports : [])
       .some((report) => String(report.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName());
     ui.hoursTableFeedback.textContent = hasPendingApprovals
-      ? "Mostro anche vecchie richieste da confermare: sono evidenziate in giallo finchÃ© l'admin non le approva. Le nuove ore vengono salvate subito."
+      ? "Mostro anche vecchie richieste da confermare: sono evidenziate in giallo finché l'admin non le approva. Le nuove ore vengono salvate subito."
       : canManageData()
         ? "Clicca un valore per modificare o eliminare la registrazione ore."
-        : "Ore salvate automaticamente: solo l'amministratore puÃ² modificare o eliminare le ore.";
+        : "Ore salvate automaticamente: solo l'amministratore può modificare o eliminare le ore.";
   }
 
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn").forEach((btn) => {
@@ -6870,7 +6870,7 @@ function getHoursSourceDayLabel(source) {
 }
 
 async function approvePendingHoursSourcesFromTable(sources = []) {
-  if (!canManageData()) throw new Error("Solo admin puÃ² confermare le ore.");
+  if (!canManageData()) throw new Error("Solo admin può confermare le ore.");
   const pendingSources = (Array.isArray(sources) ? sources : [])
     .filter((source) => String(source.sourceCollection || getOreReportsCollectionName()) === getOreApprovalRequestsCollectionName() && source.reportId);
   if (!pendingSources.length) return [];
@@ -6910,7 +6910,7 @@ function markConfirmedHoursCells(keys = []) {
   ui.hoursTableContainer.querySelectorAll(".hours-value-btn[data-hours-key]").forEach((btn) => {
     const key = String(btn.dataset.hoursKey || "");
     if (!keySet.has(key)) return;
-    const valueText = String(btn.textContent || "").replace(/^â ï¸\s*/, "â ").replace(" Â· da confermare", " Â· ore inserite");
+    const valueText = String(btn.textContent || "").replace(/^⚠️\s*/, "✅ ").replace(" · da confermare", " · ore inserite");
     btn.textContent = valueText;
     btn.classList.remove("hours-value-warning", "hours-value-pending-approval");
     btn.classList.add("hours-value-ok");
@@ -7000,7 +7000,7 @@ async function handleHoursValueAction(cellKey) {
     return;
   }
   if (sources.length > 1) {
-    const details = sources.map((source, idx) => `${idx + 1}) ${source.reportDate || "-"} â¢ ${source.operatore || "-"} â¢ ${Number(source.ore || 0)}h`).join("\n");
+    const details = sources.map((source, idx) => `${idx + 1}) ${source.reportDate || "-"} • ${source.operatore || "-"} • ${Number(source.ore || 0)}h`).join("\n");
     const choice = window.prompt(
       `Ci sono ${sources.length} registrazioni in questa cella:\n${details}\n\nScrivi il numero da aggiornare/eliminare oppure A per tutte.`,
       "A"
@@ -7754,10 +7754,10 @@ function renderHoursCommessaPicker(container, select, commesseInput = null, opti
   container.innerHTML = `
     <button type="button" class="hours-commessa-picker-toggle" style="--commessa-accent:${escapeHTML(selectedColor)}" aria-expanded="${isOpen ? "true" : "false"}" ${disabled ? "disabled" : ""}>
       <span class="hours-commessa-picker-label">${escapeHTML(selectedCommessa ? getCommessaDisplayName(selectedCommessa) : "Seleziona commessa")}</span>
-      <span class="hours-commessa-picker-arrow" aria-hidden="true">â¼</span>
+      <span class="hours-commessa-picker-arrow" aria-hidden="true">▼</span>
     </button>
     <div class="hours-commessa-picker-menu ${isOpen ? "" : "hidden"}">
-      <input class="hours-commessa-picker-search" type="search" placeholder="Cerca commessaâ¦" value="${escapeHTML(query)}" aria-label="Cerca commessa">
+      <input class="hours-commessa-picker-search" type="search" placeholder="Cerca commessa…" value="${escapeHTML(query)}" aria-label="Cerca commessa">
       <div class="hours-commessa-picker-list" role="listbox" aria-label="Elenco commesse">
         ${filteredCommesse.length ? filteredCommesse.map((commessa, idx) => {
           const originalIndex = commesse.findIndex((item) => item.id === commessa.id);
@@ -8284,7 +8284,7 @@ function getTodayDateKey() {
 
 function buildSquadraDateCorrectionWhatsappUrl({ commessaName, squadraDate, todayDate, operatorName }) {
   const message = [
-    "â ï¸ RICHIESTA CORREZIONE GIORNO SQUADRA",
+    "⚠️ RICHIESTA CORREZIONE GIORNO SQUADRA",
     "",
     "Ciao, sto provando a inserire le ore, ma la squadra risulta programmata per un giorno diverso da oggi.",
     "",
@@ -8307,9 +8307,9 @@ function openSquadraDifferentDayInfoPopup({ commessa, squadraDate, todayDate, on
   overlay.className = "confirm-modal";
   overlay.innerHTML = `
     <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-labelledby="squadra-day-warning-title">
-      <h2 id="squadra-day-warning-title">â ï¸ Giorno diverso da oggi</h2>
+      <h2 id="squadra-day-warning-title">⚠️ Giorno diverso da oggi</h2>
       <p>Stai inserendo le ore per una squadra programmata in un giorno diverso da oggi.</p>
-      <p>Se il giorno Ã¨ sbagliato, avvisa lâamministratore per correggere la data della squadra.<br>Se invece vuoi continuare comunque, puoi inserire le ore per il giorno selezionato.</p>
+      <p>Se il giorno è sbagliato, avvisa l’amministratore per correggere la data della squadra.<br>Se invece vuoi continuare comunque, puoi inserire le ore per il giorno selezionato.</p>
       <div class="confirm-modal-actions">
         <button type="button" class="btn btn-primary" data-hours-day-continue>Inserisci lo stesso</button>
         <button type="button" class="btn" data-hours-day-correction>Richiedi correzione</button>
@@ -8420,12 +8420,12 @@ function updateQuickTeamHoursCard(card) {
   if (statusBox) {
     statusBox.innerHTML = `
       <section class="hours-team-status-section">
-        <strong>â GiÃ  inseriti</strong>
+        <strong>✅ Già inseriti</strong>
         ${alreadyInserted.length ? `<ul>${alreadyInserted.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
       </section>
       <section class="hours-team-status-section">
-        <strong>ð¡ Da completare</strong>
-        ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno giÃ  inserito le ore</p>`}
+        <strong>🟡 Da completare</strong>
+        ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno già inserito le ore</p>`}
       </section>`;
     statusBox.classList.remove("hidden");
   }
@@ -8458,7 +8458,7 @@ function openHoursPageForCommessa(commessaId, dateValue = "") {
   const targetDateValue = String(dateValue || "").trim() || getActiveSquadreDateKey() || new Date().toISOString().slice(0, 10);
   const { requiredParticipants, completedParticipants, missingParticipants } = getQuickTeamHoursState(id, targetDateValue);
   if (requiredParticipants.length && !missingParticipants.length) {
-    alert("â Ore giÃ  completate per tutta la squadra.");
+    alert("✅ Ore già completate per tutta la squadra.");
     renderSquadre();
     return;
   }
@@ -8542,7 +8542,7 @@ function addHoursOperatoreRow(container, rowData = { operatore: "", ore: "" }, c
   row.innerHTML = `
     <input type="text" class="hours-operatore" list="hours-operatori-options" placeholder="Operatore" value="${escapeHTML(rowData.operatore || "")}" autocomplete="off">
     <input type="number" class="hours-ore" min="0" max="24" step="0.25" placeholder="Ore" value="${escapeHTML(rowData.ore || "")}">
-    <button type="button" class="btn btn-small hours-remove-operator-btn" aria-label="Rimuovi operatore">â</button>
+    <button type="button" class="btn btn-small hours-remove-operator-btn" aria-label="Rimuovi operatore">✕</button>
   `;
   const removeBtn = row.querySelector(".hours-remove-operator-btn");
   removeBtn.addEventListener("click", () => {
@@ -8588,8 +8588,8 @@ function addHoursCommessaBlock(blockData = null) {
     <div class="hours-commessa-head">
       <h3>${escapeHTML(blockData?.title || "Commessa")}</h3>
       <div class="item-actions">
-        <button type="button" class="btn hours-compact-pill hours-export-global-btn">ð Excel</button>
-        <button type="button" class="btn hours-compact-pill hours-remove-commessa-btn">ð Rimuovi</button>
+        <button type="button" class="btn hours-compact-pill hours-export-global-btn">📊 Excel</button>
+        <button type="button" class="btn hours-compact-pill hours-remove-commessa-btn">🗑 Rimuovi</button>
       </div>
     </div>
     <select class="hours-commessa-select" required>
@@ -8677,12 +8677,12 @@ function addHoursCommessaBlock(blockData = null) {
       if (statusBox) {
         statusBox.innerHTML = `
           <section class="hours-team-status-section">
-            <strong>â GiÃ  inseriti</strong>
+            <strong>✅ Già inseriti</strong>
             ${alreadyInserted.length ? `<ul>${alreadyInserted.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Nessun operatore.</p>`}
           </section>
           <section class="hours-team-status-section">
-            <strong>ð¡ Da completare</strong>
-            ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno giÃ  inserito le ore</p>`}
+            <strong>🟡 Da completare</strong>
+            ${toComplete.length ? `<ul>${toComplete.map((name) => `<li>${escapeHTML(name)}</li>`).join("")}</ul>` : `<p class="muted">Tutti gli operatori hanno già inserito le ore</p>`}
           </section>`;
         statusBox.classList.remove("hidden");
       }
@@ -8812,7 +8812,7 @@ async function reserveHoursApprovalRequestWithLocks(payload) {
       });
     });
     if (conflicts.length) {
-      const error = new Error("Le ore per questo giorno, commessa e operatore sono giÃ  state inserite.");
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
       error.code = "hours-duplicate-lock";
       error.conflicts = conflicts;
       throw error;
@@ -9165,7 +9165,7 @@ async function createApprovedHoursReportWithLocks(request, reportPayload) {
       });
     });
     if (conflicts.length) {
-      const error = new Error("Le ore per questo giorno, commessa e operatore sono giÃ  state inserite.");
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
       error.code = "hours-duplicate-lock";
       error.conflicts = conflicts;
       throw error;
@@ -9206,7 +9206,7 @@ async function createDirectHoursReportWithLocks(reportPayload) {
       });
     });
     if (conflicts.length) {
-      const error = new Error("Le ore per questo giorno, commessa e operatore sono giÃ  state inserite.");
+      const error = new Error("Le ore per questo giorno, commessa e operatore sono già state inserite.");
       error.code = "hours-duplicate-lock";
       error.conflicts = conflicts;
       throw error;
@@ -9260,13 +9260,13 @@ function buildHoursEntriesFromApprovalSources(request, sources = []) {
 
 async function saveApprovedHoursRequest(request, options = {}) {
   if (!canManageData()) {
-    throw new Error("Solo admin puÃ² confermare il livello finale.");
+    throw new Error("Solo admin può confermare il livello finale.");
   }
   if (!request?.id) {
     throw new Error("ID richiesta ore non valido.");
   }
   if (String(request.status || "") !== "pending_admin") {
-    throw new Error("Questa richiesta non Ã¨ piÃ¹ in attesa dell'approvazione admin.");
+    throw new Error("Questa richiesta non è più in attesa dell'approvazione admin.");
   }
   const { approvedEntries, remainingEntries, isPartial } = buildHoursEntriesFromApprovalSources(request, options.sources || []);
   if (!approvedEntries.length) {
@@ -9351,7 +9351,7 @@ function formatHoursDuplicateMessage(conflicts = [], options = {}) {
   const details = unique.length ? ` (${unique.slice(0, 3).join("; ")}${unique.length > 3 ? "; ..." : ""})` : "";
   return options?.admin
     ? `Duplicato rilevato.${details}`
-    : `Ore giÃ  inserite per questo operatore.${details}`;
+    : `Ore già inserite per questo operatore.${details}`;
 }
 
 
@@ -9491,7 +9491,7 @@ function buildHoursInsertedChatText(payload) {
     })
     .filter(Boolean)
     .join("; ");
-  return `ð ${author} ha inserito le ore del ${dateLabel}: ${details || "nessun dettaglio ore"}.`;
+  return `🕒 ${author} ha inserito le ore del ${dateLabel}: ${details || "nessun dettaglio ore"}.`;
 }
 
 async function notifyHoursInsertedToChat(requestId, payload) {
@@ -9528,7 +9528,7 @@ async function notifyAdminsHoursInsertedNoApproval(reportId, payload) {
   const dateLabel = payload?.date
     ? new Date(`${payload.date}T00:00:00`).toLocaleDateString("it-IT")
     : "-";
-  const text = `â¹ï¸ Ore salvate direttamente (report ${reportId}) da ${author} per il ${dateLabel}. Nessuna approvazione richiesta.`;
+  const text = `ℹ️ Ore salvate direttamente (report ${reportId}) da ${author} per il ${dateLabel}. Nessuna approvazione richiesta.`;
   await sendHoursApprovalChatNotification({
     recipients: adminUsers,
     text,
@@ -9549,19 +9549,19 @@ function setHoursFinalizeButtonText(state = "idle") {
     hoursFinalizeStatusTimer = null;
   }
   if (state === "loading") {
-    button.textContent = "â³ Salvataggioâ¦";
+    button.textContent = "⏳ Salvataggio…";
     button.setAttribute("aria-busy", "true");
     return;
   }
   button.removeAttribute("aria-busy");
   if (state === "saved") {
-    button.textContent = "â Salvato";
+    button.textContent = "✅ Salvato";
     hoursFinalizeStatusTimer = setTimeout(() => {
       if (!hoursSubmitInFlight && !hoursFinalizeLocked) setHoursFinalizeButtonText("idle");
     }, 1800);
     return;
   }
-  button.textContent = "â Fine: salva";
+  button.textContent = "✓ Fine: salva";
 }
 
 function setHoursFinalizeLocked(locked) {
@@ -9577,7 +9577,7 @@ function unlockHoursFinalizeButton() {
   if (!hoursFinalizeLocked) return;
   setHoursFinalizeLocked(false);
   if (ui.hoursFeedback?.textContent && ui.hoursFeedback.textContent.includes("Richiesta inviata")) {
-    ui.hoursFeedback.textContent = "Modifiche rilevate. Puoi premere di nuovo âFine: salvaâ.";
+    ui.hoursFeedback.textContent = "Modifiche rilevate. Puoi premere di nuovo “Fine: salva”.";
   }
 }
 
@@ -9585,8 +9585,8 @@ async function finalizeHoursReport(event) {
   event.preventDefault();
   if (hoursFinalizeLocked || hoursSubmitInFlight) {
     ui.hoursFeedback.textContent = hoursSubmitInFlight
-      ? "Invio giÃ  in corso: attendi il completamento prima di premere di nuovo."
-      : "Richiesta giÃ  inviata. Modifica commesse/operatori/ore per riattivare âFine: salvaâ.";
+      ? "Invio già in corso: attendi il completamento prima di premere di nuovo."
+      : "Richiesta già inviata. Modifica commesse/operatori/ore per riattivare “Fine: salva”.";
     return;
   }
   if (!currentUser) {
@@ -9736,7 +9736,7 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
     : "-";
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
   const entriesCount = Array.isArray(payload?.entries) ? payload.entries.length : 0;
-  const text = `ð Richiesta ore ${requestId} da ${author} (${dateLabel}). Commesse: ${entriesCount}. Serve primo OK.`;
+  const text = `🕒 Richiesta ore ${requestId} da ${author} (${dateLabel}). Commesse: ${entriesCount}. Serve primo OK.`;
   await sendHoursApprovalChatNotification({
     recipients: Array.from(recipientsMap.values()),
     text,
@@ -9752,7 +9752,7 @@ async function notifyLevel1ForHoursApproval(requestId, payload) {
 async function notifyAdminsForFinalHoursApproval(requestId, payload, approverName) {
   const adminUsers = getKnownAdminChatRecipients();
   const author = payload?.createdByName || payload?.createdByEmail || "Operatore";
-  const text = `ð Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
+  const text = `🕒 Richiesta ore ${requestId}: primo OK da ${approverName || "utente autorizzato"}. Attesa approvazione admin finale per ${author}.`;
   await sendHoursApprovalChatNotification({
     recipients: adminUsers,
     text,
@@ -9885,11 +9885,11 @@ async function generateSegnalazionePdf(event) {
   const originalButtonText = generateButton?.textContent || "Genera PDF";
   if (generateButton) {
     generateButton.disabled = true;
-    generateButton.textContent = "Generazioneâ¦";
+    generateButton.textContent = "Generazione…";
   }
   ui.segnalazioneShareWhatsappBtn.disabled = true;
   ui.segnalazioneShareEmailBtn.disabled = true;
-  ui.segnalazioneFeedback.textContent = "Creazione del PDF in corsoâ¦";
+  ui.segnalazioneFeedback.textContent = "Creazione del PDF in corso…";
   lastSegnalazionePdfBlob = null;
   lastSegnalazionePdfName = "";
 
@@ -9966,7 +9966,7 @@ async function generateSegnalazionePdf(event) {
         doc.text(label, x + 2, y + 4.5);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        const valueLines = doc.splitTextToSize(value || "â", fieldWidth - 4);
+        const valueLines = doc.splitTextToSize(value || "—", fieldWidth - 4);
         doc.text(valueLines.slice(0, 2), x + 2, y + 9);
       });
       y += height;
@@ -10007,7 +10007,7 @@ async function generateSegnalazionePdf(event) {
       doc.rect(margin, y, contentWidth, boxHeight);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.text(lineIndex ? "DESCRIZIONE DELL'ACCADUTO (continua):" : "DESCRIZIONE DELL'ACCADUTO (cosa Ã¨ successo):", margin + 3, y + 6);
+      doc.text(lineIndex ? "DESCRIZIONE DELL'ACCADUTO (continua):" : "DESCRIZIONE DELL'ACCADUTO (cosa è successo):", margin + 3, y + 6);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
       doc.text(pageLines, margin + 4, y + 12);
@@ -10027,7 +10027,7 @@ async function generateSegnalazionePdf(event) {
       doc.setFontSize(7.5);
       doc.setTextColor(90, 90, 90);
       doc.text(`Pagina ${pageNumber} di ${totalPages}`, pageWidth - margin, pageHeight - 9, { align: "right" });
-      doc.text(`Cantiere: ${data.cantiere} Â· Data: ${data.data} Â· Ora: ${data.ora}`, margin, pageHeight - 9);
+      doc.text(`Cantiere: ${data.cantiere} · Data: ${data.data} · Ora: ${data.ora}`, margin, pageHeight - 9);
     }
 
     const safeDate = data.data.replace(/[^\d]/g, "-");
@@ -10035,7 +10035,7 @@ async function generateSegnalazionePdf(event) {
     const pdfBlob = doc.output("blob");
     const signature = new TextDecoder("ascii").decode((await pdfBlob.arrayBuffer()).slice(0, 5));
     if (pdfBlob.type !== "application/pdf" || signature !== "%PDF-") {
-      throw new Error("Il documento generato non Ã¨ un PDF valido.");
+      throw new Error("Il documento generato non è un PDF valido.");
     }
 
     lastSegnalazionePdfName = pdfName;
@@ -10223,7 +10223,7 @@ function parseGoogleSheetId(value) {
 
 function isAndroidWebViewRuntime() {
   // Flusso Android/WebView/Capacitor: qui evitiamo il redirect Firebase
-  // perchÃ© in WebView puÃ² fallire con errore "missing initial state".
+  // perché in WebView può fallire con errore "missing initial state".
   const capacitorPlatform = (window.Capacitor && typeof window.Capacitor.getPlatform === "function")
     ? window.Capacitor.getPlatform()
     : "";
@@ -10239,9 +10239,9 @@ function isAndroidWebViewRuntime() {
 }
 
 const BIOMETRIC_TITLE = "Accedi a Varga Cantieri";
-const BIOMETRIC_SUBTITLE = "Usa lâimpronta digitale o il riconoscimento facciale";
-const BIOMETRIC_UNAVAILABLE = "Lâaccesso biometrico non Ã¨ disponibile su questo dispositivo.";
-const BIOMETRIC_NOT_ENROLLED = "Configura prima lâimpronta digitale o il riconoscimento facciale nelle impostazioni del telefono.";
+const BIOMETRIC_SUBTITLE = "Usa l’impronta digitale o il riconoscimento facciale";
+const BIOMETRIC_UNAVAILABLE = "L’accesso biometrico non è disponibile su questo dispositivo.";
+const BIOMETRIC_NOT_ENROLLED = "Configura prima l’impronta digitale o il riconoscimento facciale nelle impostazioni del telefono.";
 let googleLoginMayOfferBiometrics = false;
 let biometricStartupAttempted = false;
 let biometricGateFailed = false;
@@ -10283,7 +10283,7 @@ async function enableBiometricAccess() {
   if (!plugin) return;
   const feedback = ui.biometricOfferDialog?.open ? ui.biometricOfferFeedback : ui.biometricSettingsFeedback;
   try {
-    if (feedback) feedback.textContent = "Verifica biometrica in corsoâ¦";
+    if (feedback) feedback.textContent = "Verifica biometrica in corso…";
     await plugin.enable({ title: BIOMETRIC_TITLE, subtitle: BIOMETRIC_SUBTITLE });
     if (feedback) feedback.textContent = "Accesso biometrico attivato.";
     ui.biometricOfferDialog?.close();
@@ -10517,8 +10517,8 @@ function startCommesseLoadTimeout() {
     if (commesseLoadState.status !== "loading") return;
     const cachedCommesse = loadCommesseFromLocalCache();
     commesseLoadState = cachedCommesse.length
-      ? { status: "error", message: "La connessione alle commesse Ã¨ lenta" }
-      : { status: "error", message: "La connessione alle commesse Ã¨ lenta e non ci sono dati salvati sul dispositivo. Controlla di essere loggato e premi Aggiorna." };
+      ? { status: "error", message: "La connessione alle commesse è lenta" }
+      : { status: "error", message: "La connessione alle commesse è lenta e non ci sono dati salvati sul dispositivo. Controlla di essere loggato e premi Aggiorna." };
     refreshCommesseDependentUI(false);
   }, 10000);
 }
@@ -10692,7 +10692,7 @@ function formatMqNumber(value) {
 }
 
 function formatMqProgressDetails(stats = {}) {
-  return `MQ eseguiti: ${formatMqNumber(stats.totaleMqEseguiti || 0)} â¢ MQ rimanenti: ${formatMqNumber(stats.mqRimanenti || 0)} â¢ Totale MQ: ${formatMqNumber(stats.totaleMqPrevisti || 0)}`;
+  return `MQ eseguiti: ${formatMqNumber(stats.totaleMqEseguiti || 0)} • MQ rimanenti: ${formatMqNumber(stats.mqRimanenti || 0)} • Totale MQ: ${formatMqNumber(stats.totaleMqPrevisti || 0)}`;
 }
 
 function formatHoursNumber(value) {
@@ -10703,18 +10703,18 @@ function formatWorkSummaryParts(workSummary) {
   const totalHours = Number(workSummary.totalHours || workSummary.hours || 0);
   const workedDays = Number(workSummary.workedDays ?? workSummary.workedDateKeys?.size ?? 0);
   const averageHoursPerDay = workedDays > 0 ? totalHours / workedDays : 0;
-  return `Ore ${formatHoursNumber(totalHours)} â¢ Giorni lavorati ${workedDays} â¢ Media ore/giorno ${formatHoursNumber(averageHoursPerDay)}`;
+  return `Ore ${formatHoursNumber(totalHours)} • Giorni lavorati ${workedDays} • Media ore/giorno ${formatHoursNumber(averageHoursPerDay)}`;
 }
 
 function formatParentCommessaSummary(aggregate) {
   const workedDays = aggregate.workedDateKeys?.size || 0;
-  return `${aggregate.subCount} subcommesse â¢ ${aggregate.total} impianti â¢ ${aggregate.openAlerts} segnalazioni aperte â¢ Avanzamento ${formatProgress(aggregate.done, aggregate.total)} â¢ ${formatWorkSummaryParts({ totalHours: aggregate.hours, workedDays })}`;
+  return `${aggregate.subCount} subcommesse • ${aggregate.total} impianti • ${aggregate.openAlerts} segnalazioni aperte • Avanzamento ${formatProgress(aggregate.done, aggregate.total)} • ${formatWorkSummaryParts({ totalHours: aggregate.hours, workedDays })}`;
 }
 
 function formatSingleCommessaSummary(commessaId) {
   const stats = getCommessaStats(commessaId);
   const workSummary = getCommessaWorkSummary(commessaId);
-  return `${stats.total} impianti â¢ ${stats.openAlerts} segnalazioni aperte â¢ Avanzamento ${stats.avanzamentoMq || 0}% â¢ ${formatMqProgressDetails(stats)} â¢ ${formatWorkSummaryParts(workSummary)}`;
+  return `${stats.total} impianti • ${stats.openAlerts} segnalazioni aperte • Avanzamento ${stats.avanzamentoMq || 0}% • ${formatMqProgressDetails(stats)} • ${formatWorkSummaryParts(workSummary)}`;
 }
 
 function getSelectedCommessaDashboardStats() {
@@ -10875,7 +10875,7 @@ function renderMoveSubcommesseList() {
     const parent = commessa.parentCommessaId ? commesseById.get(commessa.parentCommessaId) : null;
     row.innerHTML = `
       <input type="checkbox" value="${escapeHTML(commessa.id)}">
-      <span><strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>${commessa.codice ? ` â¢ Cod. ${escapeHTML(commessa.codice)}` : ""}${parent ? `<br><small>Ora sotto: ${escapeHTML(parent.nome || "commessa padre")}</small>` : ""}</span>
+      <span><strong>${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>${commessa.codice ? ` • Cod. ${escapeHTML(commessa.codice)}` : ""}${parent ? `<br><small>Ora sotto: ${escapeHTML(parent.nome || "commessa padre")}</small>` : ""}</span>
     `;
     ui.moveSubcommesseList.appendChild(row);
   });
@@ -10888,7 +10888,7 @@ async function createParentCommessa(event) {
     return;
   }
   if (!canManageData()) {
-    alert("Solo un admin puÃ² creare commesse padre.");
+    alert("Solo un admin può creare commesse padre.");
     return;
   }
   const nome = String(ui.parentCommessaName?.value || "").trim();
@@ -10908,7 +10908,7 @@ async function createParentCommessa(event) {
 async function moveSelectedCommesseUnderParent(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo un admin puÃ² organizzare commesse.");
+    alert("Solo un admin può organizzare commesse.");
     return;
   }
   const parentId = String(ui.moveParentCommessaSelect?.value || "").trim();
@@ -10937,7 +10937,7 @@ async function moveSelectedCommesseUnderParent(event) {
 
 async function moveSubcommessaToMain(commessaId) {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² spostare subcommesse nella vista principale.");
+    alert("Solo un admin può spostare subcommesse nella vista principale.");
     return;
   }
   await db.collection(getCommesseCollectionName()).doc(commessaId).set({
@@ -11173,7 +11173,7 @@ function getCommessaDisplayName(commessa = {}) {
 function createCommessaOption(commessa, options = {}) {
   const option = document.createElement("option");
   option.value = commessa.id;
-  const prefix = options.includeHierarchy && isSubcommessa(commessa) ? "â³ " : "";
+  const prefix = options.includeHierarchy && isSubcommessa(commessa) ? "↳ " : "";
   option.textContent = `${prefix}${getCommessaDisplayName(commessa)}`;
   return option;
 }
@@ -11246,7 +11246,7 @@ function createQuickSquadraControls(commessa) {
     const badge = document.createElement("span");
     badge.className = "quick-squadra-badge";
     badge.textContent = String(count);
-    badge.title = `${count} squadre giÃ  assegnate per domani`;
+    badge.title = `${count} squadre già assegnate per domani`;
     wrap.appendChild(badge);
   }
   return wrap;
@@ -11292,10 +11292,10 @@ function startQuickSquadraWindowTicker() {
 
 
 const WEATHER_ALERT_PRIORITY = { verde: 0, rosso: 3, arancione: 2, giallo: 1 };
-const WEATHER_ALERT_ICON = { verde: "ð¢", rosso: "ð´", arancione: "ð ", giallo: "ð¡" };
+const WEATHER_ALERT_ICON = { verde: "🟢", rosso: "🔴", arancione: "🟠", giallo: "🟡" };
 const WEATHER_ALERT_LEVEL_LABEL = { verde: "verde", rosso: "rossa", arancione: "arancione", giallo: "gialla" };
 const WORKLIMATE_COLOR_LABEL = { verde: "verde", giallo: "giallo", arancione: "arancione", rosso: "rosso" };
-const WORKLIMATE_DEFAULT_ADVICE = ["Pianificare pause e idratazione in base al rischio rilevato.", "Verificare DPI, condizioni meteo locali e idoneitÃ  dellâarea prima dellâavvio lavori.", "Rimodulare attivitÃ  e orari se il livello Ã¨ arancione o rosso."];
+const WORKLIMATE_DEFAULT_ADVICE = ["Pianificare pause e idratazione in base al rischio rilevato.", "Verificare DPI, condizioni meteo locali e idoneità dell’area prima dell’avvio lavori.", "Rimodulare attività e orari se il livello è arancione o rosso."];
 
 function normalizeWeatherAlertKey(value) {
   return String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
@@ -11351,7 +11351,7 @@ function getMostSevereWeatherAlert(alerts = []) {
 
 function getWeatherAlertButtonLabel(alert = {}) {
   const livello = normalizeWeatherAlertKey(alert.livello);
-  const icon = WEATHER_ALERT_ICON[livello] || "ð¡";
+  const icon = WEATHER_ALERT_ICON[livello] || "🟡";
   const levelLabel = WEATHER_ALERT_LEVEL_LABEL[livello] || alert.livello || "attiva";
   return `${icon} Allerta ${levelLabel} ${alert.tipoAllerta || "meteo"}`.trim();
 }
@@ -11462,11 +11462,11 @@ function getWorklimateAverageTemperature(context = {}) {
 }
 
 function formatWorklimateTemperature(value) {
-  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}Â°C` : "âÂ°C";
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–°C";
 }
 
 function formatSquadraAverageTemperature(value) {
-  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}Â°C` : "â";
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}°C` : "–";
 }
 
 function getSquadraAverageTemperatureLevel(value) {
@@ -11536,7 +11536,7 @@ function getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa) {
   const badgeMarkup = WEATHER_ALERT_PRIORITY[level] > 0
     ? `<button type="button" class="squadra-worklimate-code-badge risk-${escapeHTML(level)}" data-worklimate-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri sicurezza Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: Codice ${escapeHTML(level)}">Codice ${escapeHTML(level)}</button>`
     : "";
-  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature risk-${escapeHTML(temperatureLevel)}" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: temperatura media ${escapeHTML(temperatureLabel)}, codice temperatura ${escapeHTML(temperatureLevel)}">ð¡ï¸ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
+  return `<span class="squadra-commessa-code-line"><span class="squadra-commessa-code-text" aria-label="Codice commessa ${escapeHTML(codiceCommessa || "non disponibile")}">${escapeHTML(codiceCommessa || "-")}</span><button type="button" class="squadra-commessa-temperature risk-${escapeHTML(temperatureLevel)}" data-worklimate-temperature-commessa="${escapeHTML(commessa.id || "")}" aria-label="Apri Worklimate ore 12:00 del ${escapeHTML(scheduledDateKey)}: temperatura media ${escapeHTML(temperatureLabel)}, codice temperatura ${escapeHTML(temperatureLevel)}">🌡️ Media impianti: ${escapeHTML(temperatureLabel)}</button>${badgeMarkup}</span>`;
 }
 
 async function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreDateKey(), options = {}) {
@@ -11562,7 +11562,7 @@ async function openSquadraWorklimateSafety(commessa, dateKey = getActiveSquadreD
       selectedDate: dateKey || "",
       averageTemperature: temperature,
       alertLevel: riskLevel,
-      source: options.preferMajorityLocation ? `LocalitÃ  prevalente impianti (${majorityLocation?.count || 0})` : (context.risk?.source || context.alert?.fonte || "Worklimate/meteo")
+      source: options.preferMajorityLocation ? `Località prevalente impianti (${majorityLocation?.count || 0})` : (context.risk?.source || context.alert?.fonte || "Worklimate/meteo")
     }
   });
 }
@@ -11629,7 +11629,7 @@ function openWorklimateDetails(context) {
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay";
   overlay.innerHTML = `<div class="worklimate-modal" role="dialog" aria-modal="true" aria-label="Dettaglio Worklimate">
-    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">Ã</button>
+    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
     <h2>Worklimate</h2>
     <dl>
       <div><dt>Nome commessa</dt><dd>${escapeHTML(commessa.nome || "Commessa")}</dd></div>
@@ -11706,13 +11706,13 @@ function formatAlertTimestamp(value) {
 
 function getWeatherAlertSafetyIndications(tipo = "") {
   const key = normalizeWeatherAlertKey(tipo);
-  if (key.includes("caldo")) return ["Mantenere una corretta idratazione.", "Effettuare pause frequenti in zona ombreggiata.", "Utilizzare indumenti e DPI adeguati.", "Limitare o sospendere attivitÃ  pesanti nelle ore piÃ¹ critiche.", "Avvisare il responsabile in caso di malessere."];
-  if (key.includes("tempor")) return ["Sospendere lavori in quota se necessario.", "Non sostare sotto alberi o strutture isolate.", "Interrompere attivitÃ  pericolose se richiesto dalle condizioni.", "Attendere il miglioramento del meteo prima di riprendere."];
+  if (key.includes("caldo")) return ["Mantenere una corretta idratazione.", "Effettuare pause frequenti in zona ombreggiata.", "Utilizzare indumenti e DPI adeguati.", "Limitare o sospendere attività pesanti nelle ore più critiche.", "Avvisare il responsabile in caso di malessere."];
+  if (key.includes("tempor")) return ["Sospendere lavori in quota se necessario.", "Non sostare sotto alberi o strutture isolate.", "Interrompere attività pericolose se richiesto dalle condizioni.", "Attendere il miglioramento del meteo prima di riprendere."];
   if (key.includes("vento")) return ["Prestare attenzione a rami e alberature.", "Sospendere l'utilizzo di piattaforme e cestelli se necessario.", "Mettere in sicurezza materiali e attrezzature."];
-  if (key.includes("piogg") || key.includes("idro")) return ["Prestare attenzione a fossi e scarpate.", "Evitare aree allagate.", "Verificare la stabilitÃ  del terreno e degli accessi."];
+  if (key.includes("piogg") || key.includes("idro")) return ["Prestare attenzione a fossi e scarpate.", "Evitare aree allagate.", "Verificare la stabilità del terreno e degli accessi."];
   if (key.includes("neve") || key.includes("ghiaccio")) return ["Procedere con cautela.", "Utilizzare i DPI previsti.", "Prestare attenzione alle superfici scivolose."];
   if (key.includes("incend")) return ["Evitare fonti di innesco.", "Seguire le procedure aziendali.", "Avvisare immediatamente il responsabile in presenza di fumo o fiamme."];
-  return ["Valutare le condizioni operative prima dell'avvio attivitÃ .", "Seguire le procedure aziendali e le indicazioni del preposto.", "Sospendere le attivitÃ  non sicure e avvisare il responsabile."];
+  return ["Valutare le condizioni operative prima dell'avvio attività.", "Seguire le procedure aziendali e le indicazioni del preposto.", "Sospendere le attività non sicure e avvisare il responsabile."];
 }
 
 function renderWeatherAlertSafetyPage(alertId = "") {
@@ -11722,18 +11722,18 @@ function renderWeatherAlertSafetyPage(alertId = "") {
   const dataProgrammata = getCommessaScheduledDate(commessa?.id);
   const impianto = getScheduledImpiantiForCommessa(commessa, dataProgrammata).find((item) => normalizeWeatherAlertKey(item.comune) === normalizeWeatherAlertKey(alert.comune)) || selectedWeatherAlertContext?.impianto || {};
   selectedWeatherAlertContext = { commessa, alert, impianto, dataProgrammata };
-  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} â¢ ${alert.comune || "Comune"}`;
+  if (ui.weatherAlertSafetySubtitle) ui.weatherAlertSafetySubtitle.textContent = `${commessa?.nome || "Commessa"} • ${alert.comune || "Comune"}`;
   const indications = getWeatherAlertSafetyIndications(alert.tipoAllerta).map((text) => `<li>${escapeHTML(text)}</li>`).join("");
   const isWorklimateHeat = normalizeWeatherAlertKey(alert.fonte).includes("worklimate") && normalizeWeatherAlertKey(alert.tipoAllerta).includes("caldo");
-  const worklimateScenario = isWorklimateHeat ? `<p><b>Scenario Worklimate:</b> lavoratore esposto al sole, attivitÃ  fisica intensa, previsione ore 12:00.</p>` : "";
+  const worklimateScenario = isWorklimateHeat ? `<p><b>Scenario Worklimate:</b> lavoratore esposto al sole, attività fisica intensa, previsione ore 12:00.</p>` : "";
   if (ui.weatherAlertSafetyContent) ui.weatherAlertSafetyContent.innerHTML = `
     <article class="weather-detail-section"><h3>Riepilogo</h3>
-      <p><b>Commessa:</b> ${escapeHTML([commessa?.codice, commessa?.nome].filter(Boolean).join(" â¢ ") || "Commessa")}</p>
+      <p><b>Commessa:</b> ${escapeHTML([commessa?.codice, commessa?.nome].filter(Boolean).join(" • ") || "Commessa")}</p>
       <p><b>Nome cantiere/impianto:</b> ${escapeHTML(impianto.denominazione || impianto.nome || commessa?.nome || "Cantiere")}</p>
       <p><b>Comune:</b> ${escapeHTML(alert.comune || "-")}</p>
-      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} â¢ <b>Livello colore:</b> ${escapeHTML(alert.livello || "-")}</p>
+      <p><b>Tipo allerta:</b> ${escapeHTML(alert.tipoAllerta || "-")} • <b>Livello colore:</b> ${escapeHTML(alert.livello || "-")}</p>
       <p><b>Data programmata squadra:</b> ${escapeHTML(dataProgrammata || alert.data || "-")}</p>
-      <p><b>ValiditÃ  allerta:</b> ${escapeHTML(alert.data || "-")} â¢ ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
+      <p><b>Validità allerta:</b> ${escapeHTML(alert.data || "-")} • ${escapeHTML(formatAlertTimestamp(alert.validFrom))} - ${escapeHTML(formatAlertTimestamp(alert.validTo))}</p>
       <p><b>Fonte:</b> ${escapeHTML(alert.fonte || "Protezione Civile")}</p>
       ${worklimateScenario}
       <p><b>Descrizione allerta:</b> ${escapeHTML(alert.descrizione || "Allerta meteo attiva.")}</p>
@@ -11776,7 +11776,7 @@ function renderCommessaHomeButton(commessa, index) {
   btn.innerHTML = `
     <span class="commessa-home-main">
       <span>${escapeHTML(commessa.nome || "Commessa senza nome")}</span>
-      ${hasSubcommesse ? `<span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">ð</span>` : ""}
+      ${hasSubcommesse ? `<span class="commessa-parent-indicator" title="Contiene subcommesse" aria-label="Contiene subcommesse">📂</span>` : ""}
       ${buildCommessaWeatherAlertBadgeMarkup(commessa)}
     </span>
     ${codiceCommessa ? `<small class="muted">Cod. ${escapeHTML(codiceCommessa)}</small>` : ""}
@@ -11922,7 +11922,7 @@ async function createCommessa(event) {
     return;
   }
   if (!canManageData()) {
-    alert("Solo un admin puÃ² aggiungere commesse.");
+    alert("Solo un admin può aggiungere commesse.");
     return;
   }
 
@@ -11980,7 +11980,7 @@ function parseSnowRoadLines(value) {
 
 async function addSnowRoadsToSelectedCommessa(event) {
   event?.preventDefault?.();
-  if (!canManageData()) return alert("Solo un admin puÃ² aggiungere vie neve.");
+  if (!canManageData()) return alert("Solo un admin può aggiungere vie neve.");
   if (!isSnowServiceContext()) return alert("Apri Servizio Neve per aggiungere vie neve separate.");
   const commessaId = String(ui.commessaTargetSelect?.value || selectedCommessaId || "").trim();
   if (!commessaId) return alert("Seleziona una commessa neve.");
@@ -12152,7 +12152,7 @@ async function createGlobalCommessa(event) {
   const user = auth.currentUser;
   if (!user) return;
   if (!canManageData()) {
-    alert("Solo un admin puÃ² gestire il Global.");
+    alert("Solo un admin può gestire il Global.");
     return;
   }
   const nome = String(ui.globalCommessaName?.value || "").trim();
@@ -12217,7 +12217,7 @@ async function onGlobalCommesseListClick(event) {
   const btn = event.target.closest("[data-delete-global-commessa]");
   if (!btn) return;
   if (!canManageData()) {
-    alert("Solo un admin puÃ² eliminare commesse Global.");
+    alert("Solo un admin può eliminare commesse Global.");
     return;
   }
   const commessaId = String(btn.getAttribute("data-delete-global-commessa") || "").trim();
@@ -12352,7 +12352,7 @@ async function importGlobalFromGoogleSheetUrl() {
 
 async function importPendingGlobalRows() {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² importare nel Global.");
+    alert("Solo un admin può importare nel Global.");
     return;
   }
   if (!selectedGlobalCommessaId) {
@@ -12442,7 +12442,7 @@ async function importPendingGlobalRows() {
 
 async function updateExistingGlobalRowsOnly() {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² aggiornare impianti nel Global.");
+    alert("Solo un admin può aggiornare impianti nel Global.");
     return;
   }
   if (!selectedGlobalCommessaId) {
@@ -12617,7 +12617,7 @@ function renderGlobalImpianti(options = {}) {
       <button type="button" class="simple-list-item global-suggestion-item ${isSelected ? "is-selected" : ""}" data-global-impianto-key="${escapeHTML(key)}">
         <span>
           <b>${escapeHTML(impianto.denominazione || "Impianto")}</b> ${buildImpiantoWeatherBadgeMarkup(impianto)}<br>
-          <small>${escapeHTML(impianto.idSap || "-")} â¢ ${escapeHTML(impianto.comune || "-")} â¢ ${escapeHTML(impianto.area || impianto.competenza || "-")}</small>
+          <small>${escapeHTML(impianto.idSap || "-")} • ${escapeHTML(impianto.comune || "-")} • ${escapeHTML(impianto.area || impianto.competenza || "-")}</small>
         </span>
       </button>
     `;
@@ -12766,7 +12766,7 @@ function getGlobalSourceId(impianto = selectedGlobalImpianto) {
 }
 
 function getGlobalAddCommessaLabel(commessa) {
-  return `${commessa?.nome || "Commessa"}${commessa?.codice ? ` â ${commessa.codice}` : ""} [${commessa?.id || ""}]`;
+  return `${commessa?.nome || "Commessa"}${commessa?.codice ? ` — ${commessa.codice}` : ""} [${commessa?.id || ""}]`;
 }
 
 function isOperationalCommessa(commessa) {
@@ -12852,7 +12852,7 @@ async function onGlobalAddToCommessaSubmit(event) {
 
 function showGlobalAddDuplicate(commessa, duplicateId, addAnyway) {
   if (ui.globalAddFeedback) ui.globalAddFeedback.textContent = "";
-  ui.globalAddDuplicate.innerHTML = `<b>Questo impianto Ã¨ giÃ  presente nella commessa.</b><div class="item-actions"><button type="button" class="btn" data-open-existing>Apri impianto</button><button type="button" class="btn btn-primary" data-add-anyway>Aggiungi comunque</button></div>`;
+  ui.globalAddDuplicate.innerHTML = `<b>Questo impianto è già presente nella commessa.</b><div class="item-actions"><button type="button" class="btn" data-open-existing>Apri impianto</button><button type="button" class="btn btn-primary" data-add-anyway>Aggiungi comunque</button></div>`;
   ui.globalAddDuplicate.classList.remove("hidden");
   ui.globalAddDuplicate.querySelector("[data-open-existing]")?.addEventListener("click", () => {
     closeGlobalAddToCommessaModal();
@@ -12978,7 +12978,7 @@ function renderGlobalSegnalazioneImpiantiOptions() {
     .sort((a, b) => String(a.denominazione || "").localeCompare(String(b.denominazione || ""), "it"))
     .map((impianto) => {
       const key = buildImpiantoKey(impianto);
-      return `<option value="${escapeHTML(key)}">${escapeHTML(impianto.denominazione || "Impianto")} â¢ ${escapeHTML(impianto.idSap || "-")}</option>`;
+      return `<option value="${escapeHTML(key)}">${escapeHTML(impianto.denominazione || "Impianto")} • ${escapeHTML(impianto.idSap || "-")}</option>`;
     });
   ui.globalReportImpiantoSelect.innerHTML = `<option value="">Seleziona impianto Global</option>${options.join("")}`;
   if (current) ui.globalReportImpiantoSelect.value = current;
@@ -13057,24 +13057,24 @@ function buildGlobalWhatsappSegnalazioneMessage(impianto, testoSegnalazione) {
   const coordinateRaw = hasCoords ? `${impianto.gpsY},${impianto.gpsX}` : "Coordinate GPS non disponibili";
   const mapsUrl = hasCoords ? `https://www.google.com/maps?q=${impianto.gpsY},${impianto.gpsX}` : "";
   const coordinateLine = hasCoords
-    ? `ð Coordinate: ${coordinateRaw} â¡ï¸ ð§­ Naviga verso lâimpianto`
-    : `ð Coordinate: ${coordinateRaw}`;
+    ? `🌐 Coordinate: ${coordinateRaw} ➡️ 🧭 Naviga verso l’impianto`
+    : `🌐 Coordinate: ${coordinateRaw}`;
   const lines = [
-    "ð¢ SEGNALAZIONE MANUTENZIONE VERDE ð¿",
+    "🟢 SEGNALAZIONE MANUTENZIONE VERDE 🌿",
     "",
-    "Si segnala che allâimpianto:",
+    "Si segnala che all’impianto:",
     "",
-    `ð ID-SAP: ${impianto.idSap || impianto.codiceHera || "-"}`,
-    `ð­ Impianto: ${impianto.denominazione || "-"}`,
-    `ðï¸ Comune: ${impianto.comune || "-"}`,
-    `ð Via: ${impianto.descrizioneVia || impianto.indirizzo || "-"}`,
+    `🆔 ID-SAP: ${impianto.idSap || impianto.codiceHera || "-"}`,
+    `🏭 Impianto: ${impianto.denominazione || "-"}`,
+    `🏙️ Comune: ${impianto.comune || "-"}`,
+    `📍 Via: ${impianto.descrizioneVia || impianto.indirizzo || "-"}`,
     coordinateLine,
-    `ð¢ Ditta esecutrice: ${impianto.dittaEsecutrice || "-"}`,
+    `🏢 Ditta esecutrice: ${impianto.dittaEsecutrice || "-"}`,
     "",
-    "ð¢ Segnalazione:",
+    "📢 Segnalazione:",
     testoSegnalazione,
     "",
-    "ð Si chiede gentilmente un riscontro.",
+    "🙏 Si chiede gentilmente un riscontro.",
     "",
     "Grazie."
   ];
@@ -13236,7 +13236,7 @@ async function savePrivateDocument(event) {
     const note = String(ui.privateDocsNote.value || "").trim();
     const file = ui.privateDocsFile.files?.[0] || ui.privateDocsCamera.files?.[0] || null;
     if (!name) {
-      ui.privateDocsFeedback.textContent = "La denominazione Ã¨ obbligatoria.";
+      ui.privateDocsFeedback.textContent = "La denominazione è obbligatoria.";
       return;
     }
     let fileDataUrl = "";
@@ -13325,7 +13325,7 @@ function renderPrivateDocsList() {
 async function addResourceItem(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² inserire informazioni utili.");
+    alert("Solo l'admin può inserire informazioni utili.");
     return;
   }
   const type = String(ui.resourceType.value || "").trim();
@@ -13357,7 +13357,7 @@ async function deleteResourceItem(resourceId) {
 function renderResourcesList() {
   if (!ui.resourcesList) return;
   if (!activeResourceManageFilter) {
-    ui.resourcesList.innerHTML = "<p class='muted'>Seleziona una categoria (ð / ð / ð) per vedere l'archivio.</p>";
+    ui.resourcesList.innerHTML = "<p class='muted'>Seleziona una categoria (📞 / 📄 / 📝) per vedere l'archivio.</p>";
     return;
   }
   const visibleResources = resourceRecords.filter((item) => item.type === activeResourceManageFilter);
@@ -13374,7 +13374,7 @@ function renderResourcesList() {
       .join(", ");
     row.innerHTML = `
       <div>
-        <strong>${resourceTypeLabel(item.type)} Â· ${escapeHTML(item.title || "-")}</strong>
+        <strong>${resourceTypeLabel(item.type)} · ${escapeHTML(item.title || "-")}</strong>
         <p class="muted">${escapeHTML(item.value || "-")}</p>
         <p class="muted">Commesse: ${escapeHTML(commesseNames || "-")}</p>
       </div>
@@ -13394,9 +13394,9 @@ function renderResourceManageFilters() {
 }
 
 function resourceTypeLabel(type) {
-  if (type === "phone") return "ð";
-  if (type === "document") return "ð";
-  if (type === "note") return "ð";
+  if (type === "phone") return "📞";
+  if (type === "document") return "📄";
+  if (type === "note") return "📝";
   return "Info";
 }
 
@@ -13460,7 +13460,7 @@ function closeCommessaResourceViewer() {
 function renderCommessaResourceViewer() {
   if (!selectedCommessaId || !activeResourceTypeForViewer) return;
   const items = getResourcesByCommessa(selectedCommessaId, activeResourceTypeForViewer);
-  ui.commessaResourceViewerTitle.textContent = `${resourceTypeLongLabel(activeResourceTypeForViewer)} â¢ ${selectedCommessaName || "Commessa"}`;
+  ui.commessaResourceViewerTitle.textContent = `${resourceTypeLongLabel(activeResourceTypeForViewer)} • ${selectedCommessaName || "Commessa"}`;
   ui.commessaResourceViewerList.innerHTML = "";
   if (!items.length) {
     ui.commessaResourceViewerList.innerHTML = "<p class='muted'>Nessun contenuto disponibile.</p>";
@@ -13617,7 +13617,7 @@ function selectCommessa(id, nome, codice = "") {
   const selectedCommessa = commesseById.get(id) || {};
   const parentCommessa = selectedCommessa.parentCommessaId ? commesseById.get(selectedCommessa.parentCommessaId) : null;
   const hierarchyText = parentCommessa ? `Subcommessa di ${parentCommessa.nome || "commessa padre"}: ${nome}` : `Commessa selezionata: ${nome}`;
-  ui.commessaAttiva.textContent = codeText ? `${hierarchyText} â¢ Cod. commessa: ${codeText}` : hierarchyText;
+  ui.commessaAttiva.textContent = codeText ? `${hierarchyText} • Cod. commessa: ${codeText}` : hierarchyText;
   updateCommessaContextUI();
   updateCommessaDashboard();
   ui.importBtn.disabled = !auth.currentUser || pendingRows.length === 0 || !getTargetCommessaId() || !canManageData();
@@ -14119,7 +14119,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   if (completed) {
     ui.syncProgressOverlay.classList.remove("hidden");
     ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
-    ui.syncProgressTitle.textContent = "â Tutto sincronizzato";
+    ui.syncProgressTitle.textContent = "✅ Tutto sincronizzato";
     ui.syncProgressDetail.textContent = "Tutte le operazioni offline sono state inviate una alla volta.";
     if (ui.syncProgressList) ui.syncProgressList.innerHTML = "";
     setTimeout(() => {
@@ -14139,10 +14139,10 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
   ui.syncProgressOverlay.setAttribute("aria-hidden", "false");
   ui.syncProgressTitle.textContent = `Sincronizzazione ${safeIndex}/${total}...`;
   const action = actions[currentIndex] || actions[0];
-  ui.syncProgressDetail.textContent = `${action.commessaName || "Commessa"} â¢ ${action.impiantoName || "Impianto"}`;
+  ui.syncProgressDetail.textContent = `${action.commessaName || "Commessa"} • ${action.impiantoName || "Impianto"}`;
   if (ui.syncProgressList) {
     ui.syncProgressList.innerHTML = actions.map((item, index) => {
-      const state = index < currentIndex ? "â" : (index === currentIndex ? "ð" : "â³");
+      const state = index < currentIndex ? "✅" : (index === currentIndex ? "🔄" : "⏳");
       return `<p>${state} ${escapeHTML(item.impiantoName || "Impianto")} <span>${escapeHTML(item.commessaName || "Commessa")}</span></p>`;
     }).join("");
   }
@@ -14150,7 +14150,7 @@ function showSyncProgress(actions = [], currentIndex = 0, completed = false) {
 
 function openPendingWhatsApp(actionId) {
   if (isNetworkOffline()) {
-    alert("WhatsApp non puÃ² essere inviato automaticamente offline. Torna online e premi di nuovo Invia WhatsApp.");
+    alert("WhatsApp non può essere inviato automaticamente offline. Torna online e premi di nuovo Invia WhatsApp.");
     return;
   }
   const action = pendingImpiantoActions.find((item) => item.id === actionId);
@@ -14197,7 +14197,7 @@ function renderPendingWhatsappList() {
     row.innerHTML = `
       <div>
         <strong>${escapeHTML(action.impiantoName || "Impianto")}</strong>
-        <p class="muted">${escapeHTML(action.commessaName || "Commessa")} â¢ ${escapeHTML(doneLabel)} â¢ ${escapeHTML(whatsappLabel)}</p>
+        <p class="muted">${escapeHTML(action.commessaName || "Commessa")} • ${escapeHTML(doneLabel)} • ${escapeHTML(whatsappLabel)}</p>
         ${action.lastError ? `<p class="muted pending-error">Ultimo errore sync: ${escapeHTML(action.lastError)}</p>` : ""}
       </div>
     `;
@@ -14442,7 +14442,7 @@ function getImpiantoSearchLabel(impianto) {
     impianto?.comune,
     impianto?.idSap,
     impianto?.indirizzo || impianto?.descrizioneVia
-  ].map((value) => String(value || "").trim()).filter(Boolean).join(" â¢ ");
+  ].map((value) => String(value || "").trim()).filter(Boolean).join(" • ");
 }
 
 function getImpiantoSearchText(impianto) {
@@ -14585,9 +14585,9 @@ function parseDriveLinks(value) {
 
 function getDriveLinkLabel(url) {
   const normalized = String(url || "").toLowerCase();
-  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/.test(normalized) || normalized.includes("photo") || normalized.includes("foto")) return "ð· Apri foto";
-  if (/\.(pdf|docx?|xlsx?|pptx?)(\?|#|$)/.test(normalized) || normalized.includes("document")) return "ð Apri documento";
-  return "ð Apri allegato";
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/.test(normalized) || normalized.includes("photo") || normalized.includes("foto")) return "📷 Apri foto";
+  if (/\.(pdf|docx?|xlsx?|pptx?)(\?|#|$)/.test(normalized) || normalized.includes("document")) return "📄 Apri documento";
+  return "🔗 Apri allegato";
 }
 
 function formatCommessaNoteDate(noteDate) {
@@ -14674,8 +14674,8 @@ function openCommessaNoteDetail(note) {
       <div>
         <h3>${escapeHTML(getCommessaNoteTitle(note))}</h3>
         <p class="commessa-note-meta">
-          <span>ð ${escapeHTML(formatCommessaNoteDate(note.noteDate))}</span>
-          ${note.impiantoLabel ? `<span>ð­ ${escapeHTML(note.impiantoLabel)}</span>` : ""}
+          <span>📅 ${escapeHTML(formatCommessaNoteDate(note.noteDate))}</span>
+          ${note.impiantoLabel ? `<span>🏭 ${escapeHTML(note.impiantoLabel)}</span>` : ""}
         </p>
       </div>
       <button class="btn" type="button" data-note-close>Chiudi dettaglio</button>
@@ -14699,7 +14699,7 @@ function openCommessaNoteDetail(note) {
 function renderCommessaNotes() {
   if (!ui.commessaNotesList || !ui.commessaNotesCounter) return;
   const total = currentCommessaNotes.length;
-  ui.commessaNotesCounter.textContent = `ð Note: ${total}`;
+  ui.commessaNotesCounter.textContent = `📝 Note: ${total}`;
   if (ui.commessaNotesTitle) ui.commessaNotesTitle.textContent = selectedCommessaName ? `Commessa: ${selectedCommessaName}` : "";
 
   if (!selectedCommessaId) {
@@ -14723,8 +14723,8 @@ function renderCommessaNotes() {
     const meta = document.createElement("div");
     meta.className = "commessa-note-meta";
     meta.innerHTML = `
-      <span>ð ${escapeHTML(formatCommessaNoteDate(note.noteDate))}</span>
-      ${note.impiantoLabel ? `<span>ð­ ${escapeHTML(note.impiantoLabel)}</span>` : ""}
+      <span>📅 ${escapeHTML(formatCommessaNoteDate(note.noteDate))}</span>
+      ${note.impiantoLabel ? `<span>🏭 ${escapeHTML(note.impiantoLabel)}</span>` : ""}
     `;
     article.appendChild(titleButton);
     article.appendChild(meta);
@@ -14794,7 +14794,7 @@ async function importPendingRows() {
     return;
   }
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com puÃ² aggiungere impianti.");
+    alert("Solo ionut29019@gmail.com può aggiungere impianti.");
     return;
   }
 
@@ -14975,7 +14975,7 @@ async function addManualImpianto(event) {
     return;
   }
   if (!canManageData()) {
-    ui.manualImpiantoFeedback.textContent = "Solo l'admin puÃ² aggiungere impianti.";
+    ui.manualImpiantoFeedback.textContent = "Solo l'admin può aggiungere impianti.";
     return;
   }
 
@@ -15020,7 +15020,7 @@ async function addManualImpianto(event) {
       tipoManutenzione: classifyTipoManutenzione(mergedCodicePrezzo)
     });
     ui.manualImpiantoForm.reset();
-    ui.manualImpiantoFeedback.textContent = `Impianto giÃ  presente in "${targetCommessaName}": codice prezzo aggiornato senza modificare i precedenti.`;
+    ui.manualImpiantoFeedback.textContent = `Impianto già presente in "${targetCommessaName}": codice prezzo aggiornato senza modificare i precedenti.`;
     return;
   }
 
@@ -15515,11 +15515,11 @@ function formatDoneDateTime(doneAt) {
 
 function formatDoneButtonLabel(doneAt) {
   const millis = firestoreDateToMillis(doneAt);
-  if (!millis) return "â ï¸ FATTO";
+  if (!millis) return "⚠️ FATTO";
   const date = new Date(millis);
   const day = String(date.getDate()).padStart(2, "0");
   const month = new Intl.DateTimeFormat("it-IT", { month: "long" }).format(date).toUpperCase();
-  return `â ï¸ FATTO DAL ${day} ${month}`;
+  return `⚠️ FATTO DAL ${day} ${month}`;
 }
 
 function renderHeaderActivitySummary() {
@@ -15779,7 +15779,7 @@ function createPlantMqBox(plant) {
   const icon = document.createElement("span");
   icon.className = "area-mq-icon";
   icon.setAttribute("aria-hidden", "true");
-  icon.textContent = "ð";
+  icon.textContent = "📐";
 
   const value = document.createElement("span");
   value.className = "area-mq-value";
@@ -15818,7 +15818,7 @@ function renderBiogasSpecialCard() {
   if (!isBiogasEnabledForCurrentCommessa()) return false;
   const special = document.createElement("article");
   special.className = "impianto-item card-impianto todo biogas-special-item";
-  special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>ð¡ RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
+  special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🟡 RETE BIOGAS</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
   special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("rete_biogas"));
   ui.biogasMapRefreshBtn?.classList.remove("hidden");
   ui.biogasMapDeleteBtn?.classList.toggle("hidden", !canManageData());
@@ -15831,7 +15831,7 @@ function renderTombiniSpecialCard() {
   if (!isTombiniEnabledForCurrentCommessa()) return false;
   const special = document.createElement("article");
   special.className = "impianto-item card-impianto todo biogas-special-item tombini-special-item";
-  special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>ð´ POZZETTI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
+  special.innerHTML = `<div class="impianto-main-column"><button type="button" class="impianto-summary-btn"><span class="impianto-summary-topline"><strong>🔴 POZZETTI</strong></span><small class="impianto-summary-meta"><span class="badge badge-straordinaria">Mappa dedicata</span></small></button></div>`;
   special.querySelector("button")?.addEventListener("click", () => openBiogasMapPage("tombini"));
   ui.impiantiLista.appendChild(special);
   ui.biogasMapRefreshBtn?.classList.remove("hidden");
@@ -15934,13 +15934,13 @@ function renderImpianti() {
         <span class="impianto-summary-title-wrap">${markerChipMarkup}<strong>${escapeHTML(impianto.denominazione || "(senza nome)")}</strong></span>
       </span>
       <small class="impianto-summary-meta">
-        ${impianto.done ? `<span class="badge badge-done-list">â Nei FATTI</span>` : ""}
+        ${impianto.done ? `<span class="badge badge-done-list">✅ Nei FATTI</span>` : ""}
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
-        ${hasNoteFlag ? `<span class="badge badge-impianto-note">ð Nota</span>` : ""}
-        ${hasExtraWorkFlag ? `<span class="badge badge-extra-work">ð ï¸ Lavori straordinari</span>` : ""}
-        ${linkedNotes.length ? `<span class="badge badge-segnalazione">â ï¸ Segnalazione</span>` : ""}
+        ${hasNoteFlag ? `<span class="badge badge-impianto-note">📝 Nota</span>` : ""}
+        ${hasExtraWorkFlag ? `<span class="badge badge-extra-work">🛠️ Lavori straordinari</span>` : ""}
+        ${linkedNotes.length ? `<span class="badge badge-segnalazione">⚠️ Segnalazione</span>` : ""}
         ${pendingAction ? `<span class="badge badge-whatsapp-pending">WhatsApp in attesa</span>` : ""}
-        <span>${distance}</span><span aria-hidden="true">â¢</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">â¢</span><span>ETA ${travelMeta.etaLabel}</span>
+        <span>${distance}</span><span aria-hidden="true">•</span><span class="traffic-level traffic-${travelMeta.intensityKey}">${travelMeta.intensityLabel}</span><span aria-hidden="true">•</span><span>ETA ${travelMeta.etaLabel}</span>
       </small>
     `;
     header.setAttribute("aria-expanded", detailsVisible ? "true" : "false");
@@ -15972,7 +15972,7 @@ function renderImpianti() {
     if (linkedNotes.length) {
       const notesBox = document.createElement("div");
       notesBox.className = "impianto-linked-notes";
-      notesBox.innerHTML = "<p><b>â ï¸ Segnalazione presente:</b></p>";
+      notesBox.innerHTML = "<p><b>⚠️ Segnalazione presente:</b></p>";
       linkedNotes.forEach((note) => {
         const noteBtn = document.createElement("button");
         noteBtn.type = "button";
@@ -15990,13 +15990,13 @@ function renderImpianti() {
       const warningBox = document.createElement("div");
       warningBox.className = "impianto-whazzup-recovery";
       warningBox.innerHTML = `
-        <p><b>â ï¸ Sincronizzazione non riuscita</b> â ${escapeHTML(FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE)}</p>
-        <button type="button" class="btn btn-small">â¡ FORZA</button>
+        <p><b>⚠️ Sincronizzazione non riuscita</b> — ${escapeHTML(FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE)}</p>
+        <button type="button" class="btn btn-small">⚡ FORZA</button>
       `;
       const moveBtn = warningBox.querySelector("button");
       if (moveBtn) {
         moveBtn.disabled = !forceDoneEnabled;
-        moveBtn.title = forceDoneCoordinatesValid ? "Sposta solo questo impianto nei FATTI" : "â ï¸ Correggi la posizione nella scheda impianto per forzare la chiusura";
+        moveBtn.title = forceDoneCoordinatesValid ? "Sposta solo questo impianto nei FATTI" : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
         moveBtn.addEventListener("click", async () => {
           moveBtn.disabled = true;
           try {
@@ -16052,16 +16052,16 @@ function renderImpianti() {
       targetContainer.appendChild(btn);
     };
 
-    addAction("navigate", "ðºï¸", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
     if (!impianto.done) {
       const forceDoneBtn = document.createElement("button");
       forceDoneBtn.type = "button";
       forceDoneBtn.className = "impianto-force-done-btn";
-      forceDoneBtn.textContent = "â¡ FORZA";
+      forceDoneBtn.textContent = "⚡ FORZA";
       forceDoneBtn.setAttribute("aria-label", "Forza chiusura impianto come fatto");
       forceDoneBtn.title = forceDoneCoordinatesValid
         ? "Sposta subito questo impianto nei FATTI"
-        : "â ï¸ Correggi la posizione nella scheda impianto per forzare la chiusura";
+        : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
       forceDoneBtn.disabled = !forceDoneEnabled;
       forceDoneBtn.classList.toggle("is-enabled", forceDoneEnabled);
       forceDoneBtn.addEventListener("click", async (event) => {
@@ -16080,7 +16080,7 @@ function renderImpianti() {
     safetyQuickBtn.type = "button";
     safetyQuickBtn.className = "impianto-safety-quick-btn";
     safetyQuickBtn.setAttribute("aria-label", "Apri sicurezza impianto");
-    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>ð¦º</span>";
+    safetyQuickBtn.innerHTML = "<span aria-hidden='true'>🦺</span>";
     safetyQuickBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -16088,11 +16088,11 @@ function renderImpianti() {
     });
     secondaryActionsRow.appendChild(safetyQuickBtn);
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
-    // Questo Ã¨ il pulsante operativo visibile che conserva il flusso attuale Whazzup / Fatto.
+    // Questo è il pulsante operativo visibile che conserva il flusso attuale Whazzup / Fatto.
     if (!impianto.done) {
       addAction(
         "whatsapp",
-        "âï¸",
+        "✉️",
         "Whazzup / Fatto",
         async () => {
           await handleImpiantoWhatsAppClick(impianto);
@@ -16102,8 +16102,8 @@ function renderImpianti() {
         primaryActionsRow
       );
 
-      // Solo stato visivo: se esiste giÃ  una data FATTO salvata, mantieni
-      // l'avviso giallo anche quando l'impianto Ã¨ rimasto per errore nei Da fare.
+      // Solo stato visivo: se esiste già una data FATTO salvata, mantieni
+      // l'avviso giallo anche quando l'impianto è rimasto per errore nei Da fare.
       const completionEvidenceButton = primaryActionsRow.querySelector(
         '.action-icon-btn[data-action-key="whatsapp"]'
       );
@@ -16113,8 +16113,8 @@ function renderImpianti() {
         completionEvidenceButton.textContent = "";
         completionEvidenceButton.classList.add("is-completed-done", "has-completion-evidence");
         completionEvidenceButton.dataset.doneLabel = completionLabel;
-        completionEvidenceButton.setAttribute("aria-label", `GiÃ  premuto FATTO: ${completionLabel}`);
-        completionEvidenceButton.title = `GiÃ  premuto FATTO: ${completionLabel}`;
+        completionEvidenceButton.setAttribute("aria-label", `Già premuto FATTO: ${completionLabel}`);
+        completionEvidenceButton.title = `Già premuto FATTO: ${completionLabel}`;
       }
     } else {
       const completedDoneBtn = document.createElement("button");
@@ -16141,11 +16141,11 @@ function renderImpianti() {
       await markImpiantoDone(impianto, { source: "whatsapp" });
     });
     actions.appendChild(hiddenMoveDoneBtn);
-    addAction("problem-report", "ð¨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
-    addAction("gps-update", "ð", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
-    if (canUseImpiantoAction("reset")) addAction("reset", "â»ï¸", "Reset", () => resetImpianto(impianto), false, false, managementActions);
-    if (canUseImpiantoAction("edit")) addAction("edit", "âï¸", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
-    if (canUseImpiantoAction("delete")) addAction("delete", "ðï¸", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
+    addAction("problem-report", "🚨", "Segnala problema", () => openImpiantoReportModal(impianto), false, false, managementActions);
+    addAction("gps-update", "📍", "Aggiorna GPS", () => requestGpsUpdate(impianto), false, true, managementActions);
+    if (canUseImpiantoAction("reset")) addAction("reset", "♻️", "Reset", () => resetImpianto(impianto), false, false, managementActions);
+    if (canUseImpiantoAction("edit")) addAction("edit", "✏️", "Modifica", () => openImpiantoEditor(impianto), false, true, managementActions);
+    if (canUseImpiantoAction("delete")) addAction("delete", "🗑️", "Elimina", () => deleteImpianto(impianto), false, true, managementActions);
     if (!impianto.done) {
       const forceMoveDoneBtn = createButton("Forza in FATTI", async () => {
         forceMoveDoneBtn.disabled = true;
@@ -16159,7 +16159,7 @@ function renderImpianti() {
       forceMoveDoneBtn.disabled = !forceDoneEnabled;
       forceMoveDoneBtn.title = forceDoneCoordinatesValid
         ? "Sposta subito questo impianto nei FATTI"
-        : "â ï¸ Correggi la posizione nella scheda impianto per forzare la chiusura";
+        : "⚠️ Correggi la posizione nella scheda impianto per forzare la chiusura";
       managementActions.appendChild(forceMoveDoneBtn);
     }
     if (canManageData()) {
@@ -16168,7 +16168,7 @@ function renderImpianti() {
       managementActions.appendChild(uploadPdfBtn);
     }
     if (managementActions.childElementCount > 0) {
-      const manageBtn = createButton("âï¸", () => {
+      const manageBtn = createButton("⚙️", () => {
         if (expandedImpiantoManagementKeys.has(impiantoKey)) expandedImpiantoManagementKeys.delete(impiantoKey);
         else expandedImpiantoManagementKeys.add(impiantoKey);
         renderImpianti();
@@ -16334,19 +16334,19 @@ function getOperatorDisplayName() {
 }
 
 function formatConnectionLabel(baseState) {
-  if (baseState === "Offline") return "ð´ Offline";
+  if (baseState === "Offline") return "🔴 Offline";
   const mbps = getConnectionMbps();
   if (mbps != null) lastConnectionMbps = mbps;
   const effectiveMbps = mbps ?? lastConnectionMbps;
   const isSlow = baseState === "Connessione lenta" || (effectiveMbps != null && effectiveMbps < 2);
   if (isSlow) {
     return effectiveMbps != null
-      ? `ð¡ Connessione lenta â¢ ${Math.round(effectiveMbps)} Mbps`
-      : "ð¡ Connessione lenta";
+      ? `🟡 Connessione lenta • ${Math.round(effectiveMbps)} Mbps`
+      : "🟡 Connessione lenta";
   }
   return effectiveMbps != null
-    ? `ð¢ Online â¢ ${Math.round(effectiveMbps)} Mbps â¢ Connessione ottima`
-    : "ð¢ Online â¢ Connessione disponibile";
+    ? `🟢 Online • ${Math.round(effectiveMbps)} Mbps • Connessione ottima`
+    : "🟢 Online • Connessione disponibile";
 }
 
 function updateConnectivityStatus() {
@@ -16355,9 +16355,9 @@ function updateConnectivityStatus() {
     ? "Connessione lenta"
     : (browserOnline ? "Online" : "Offline");
   firestoreNetworkState = baseState;
-  const cacheSuffix = firestoreCacheState ? ` â¢ ${firestoreCacheState}` : "";
+  const cacheSuffix = firestoreCacheState ? ` • ${firestoreCacheState}` : "";
 
-  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `ð Ciao, ${getOperatorDisplayName()}`;
+  if (ui.operatorGreeting) ui.operatorGreeting.textContent = `👋 Ciao, ${getOperatorDisplayName()}`;
   if (ui.connectionIndicator) ui.connectionIndicator.textContent = formatConnectionLabel(baseState);
   ui.offlineModeIndicator?.classList.toggle("hidden", baseState !== "Offline");
 
@@ -16676,7 +16676,7 @@ const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [
   { id: "default-112", name: "Emergenze", role: "Numero unico emergenze", phone: "112", type: "emergenza", whatsappEnabled: true, isDefault: true },
   { id: "default-115", name: "Vigili del Fuoco", role: "Soccorso tecnico urgente", phone: "115", type: "emergenza", whatsappEnabled: true, isDefault: true },
   { id: "default-118", name: "Ambulanza", role: "Emergenza sanitaria", phone: "118", type: "emergenza", whatsappEnabled: true, isDefault: true },
-  { id: "default-hera-bo-acqua", name: "Pronto Intervento Hera Bologna", role: "Acqua, fognature e depurazione â¢ 24h", phone: "800713900", type: "pronto intervento", whatsappEnabled: true, isDefault: true },
+  { id: "default-hera-bo-acqua", name: "Pronto Intervento Hera Bologna", role: "Acqua, fognature e depurazione • 24h", phone: "800713900", type: "pronto intervento", whatsappEnabled: true, isDefault: true },
   { id: "default-varga-ionel", name: "Varga Ionel", role: "Capo squadra", phone: "3892352575", type: "capo squadra", whatsappEnabled: true, isDefault: true },
   { id: "default-alessandro-minarini", name: "Alessandro Minarini", role: "Responsabile commessa", phone: "+393356815371", type: "responsabile", whatsappEnabled: true, isDefault: true }
 ];
@@ -16684,10 +16684,10 @@ const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [
 const IMPIANTO_SAFETY_SECTIONS = [
   {
     cls: "access",
-    title: "ð§ ACCESSO SEDI TECNICHE",
-    eyebrow: "â ï¸ ACCESSO REGOLAMENTATO",
+    title: "🚧 ACCESSO SEDI TECNICHE",
+    eyebrow: "⚠️ ACCESSO REGOLAMENTATO",
     intro: "Le squadre manutenzione verde operano solo dove autorizzate dal referente Hera.",
-    icons: ["ðª Cancello", "â Divieto accesso", "ð£ï¸ Percorso autorizzato"],
+    icons: ["🚪 Cancello", "⛔ Divieto accesso", "🛣️ Percorso autorizzato"],
     groups: [
       { title: "Operare esclusivamente", items: ["nelle aree verdi autorizzate", "nei percorsi consentiti", "nelle aree assegnate dal referente Hera"] },
       { title: "NON devono", danger: true, items: ["entrare in vasche", "accedere ai locali impianto", "aprire tombini o pozzetti", "ostacolare accessi tecnici", "lasciare materiali davanti a cancelli o quadri"] }
@@ -16695,24 +16695,24 @@ const IMPIANTO_SAFETY_SECTIONS = [
   },
   {
     cls: "info",
-    title: "ð CONTINUITÃ OPERATIVA IMPIANTO",
-    intro: "Le attivitÃ  di sfalcio e manutenzione verde devono garantire continuitÃ , accessibilitÃ  e sicurezza operativa dellâimpianto.",
+    title: "🚛 CONTINUITÀ OPERATIVA IMPIANTO",
+    intro: "Le attività di sfalcio e manutenzione verde devono garantire continuità, accessibilità e sicurezza operativa dell’impianto.",
     groups: [
-      { title: "Garantire sempre", items: ["accessibilitÃ  impianto", "sicurezza operativa", "passaggio mezzi Hera", "accesso squadre emergenza", "visibilitÃ  della segnaletica"] },
+      { title: "Garantire sempre", items: ["accessibilità impianto", "sicurezza operativa", "passaggio mezzi Hera", "accesso squadre emergenza", "visibilità della segnaletica"] },
       { title: "Controllare sempre", items: ["cancelli liberi", "strade interne sgombre", "assenza rami sui passaggi", "assenza materiali vicino impianti"] }
     ]
   },
   {
     cls: "equipment",
-    title: "ð CONTROLLO ATTREZZATURE",
-    intro: "Checklist obbligatoria prima dellâavvio di decespugliatori, soffiatori, rasaerba e attrezzature a motore.",
-    checklist: ["protezione decespugliatore", "stato lama/testina", "perdite carburante", "acceleratore funzionante", "dispositivi sicurezza presenti", "rumorositÃ  anomala", "fissaggio imbragature", "livello carburante"],
-    footer: "â Se lâattrezzatura non Ã¨ sicura: NON UTILIZZARE"
+    title: "🚜 CONTROLLO ATTREZZATURE",
+    intro: "Checklist obbligatoria prima dell’avvio di decespugliatori, soffiatori, rasaerba e attrezzature a motore.",
+    checklist: ["protezione decespugliatore", "stato lama/testina", "perdite carburante", "acceleratore funzionante", "dispositivi sicurezza presenti", "rumorosità anomala", "fissaggio imbragature", "livello carburante"],
+    footer: "❌ Se l’attrezzatura non è sicura: NON UTILIZZARE"
   },
   {
     cls: "fire",
-    title: "ð¥ RISCHIO INCENDIO",
-    eyebrow: "â ï¸ ATTENZIONE RISCHIO INCENDIO",
+    title: "🔥 RISCHIO INCENDIO",
+    eyebrow: "⚠️ ATTENZIONE RISCHIO INCENDIO",
     groups: [
       { title: "In presenza di", items: ["erba secca", "caldo intenso", "vento forte"] },
       { title: "Prestare attenzione a", items: ["scarichi motori caldi", "scintille", "attriti metallici", "carburante", "mozziconi"] },
@@ -16721,8 +16721,8 @@ const IMPIANTO_SAFETY_SECTIONS = [
   },
   {
     cls: "plant",
-    title: "â¡ SICUREZZA IMPIANTI",
-    eyebrow: "â¡ ATTENZIONE IMPIANTI TECNICI",
+    title: "⚡ SICUREZZA IMPIANTI",
+    eyebrow: "⚡ ATTENZIONE IMPIANTI TECNICI",
     intro: "Mantenere distanza di sicurezza da quadri, tubazioni, sensori e apparecchiature.",
     groups: [
       { title: "Vietato", danger: true, items: ["appoggiare attrezzature agli impianti", "lavorare vicino a quadri elettrici", "dirigere getti o materiali verso apparecchiature", "urtare tubazioni o sensori"] }
@@ -16730,17 +16730,17 @@ const IMPIANTO_SAFETY_SECTIONS = [
   },
   {
     cls: "traffic",
-    title: "ð TRAFFICO INTERNO IMPIANTO",
-    eyebrow: "â ï¸ ATTENZIONE MEZZI OPERATIVI",
+    title: "🚚 TRAFFICO INTERNO IMPIANTO",
+    eyebrow: "⚠️ ATTENZIONE MEZZI OPERATIVI",
     groups: [
       { title: "Possibile presenza di", items: ["autospurghi", "camion", "pale meccaniche", "mezzi Hera", "manutentori"] },
-      { title: "Obblighi", items: ["usare gilet alta visibilitÃ ", "mantenere contatto visivo coi conducenti", "non lavorare dietro ai mezzi", "attenzione nelle curve e strade strette"] }
+      { title: "Obblighi", items: ["usare gilet alta visibilità", "mantenere contatto visivo coi conducenti", "non lavorare dietro ai mezzi", "attenzione nelle curve e strade strette"] }
     ]
   },
   {
     cls: "biological",
-    title: "â£ï¸ RISCHIO BIOLOGICO",
-    intro: "Nelle aree di depurazione e discarica puÃ² essere presente rischio biologico da reflui, fanghi, aerosol contaminati e superfici contaminate.",
+    title: "☣️ RISCHIO BIOLOGICO",
+    intro: "Nelle aree di depurazione e discarica può essere presente rischio biologico da reflui, fanghi, aerosol contaminati e superfici contaminate.",
     groups: [
       { title: "Fonti di esposizione", items: ["reflui", "fanghi", "aerosol contaminati", "superfici contaminate", "rifiuti organici o materiali sospetti"] },
       { title: "Norme operative", items: ["non mangiare durante il lavoro", "lavare mani obbligatoriamente", "disinfettare ferite", "cambiare guanti sporchi", "evitare contatto viso/bocca", "segnalare liquidi, odori forti o materiali contaminati"] }
@@ -16748,18 +16748,18 @@ const IMPIANTO_SAFETY_SECTIONS = [
   },
   {
     cls: "hygiene",
-    title: "ð§´ IGIENE OPERATIVA",
-    intro: "A fine lavoro ripristinare lâarea e ridurre il rischio di contaminazione della squadra e dei mezzi.",
-    items: ["lavare mani", "pulire attrezzi", "disinfettare parti contaminate", "cambiare DPI sporchi", "non lasciare rifiuti nellâimpianto"]
+    title: "🧴 IGIENE OPERATIVA",
+    intro: "A fine lavoro ripristinare l’area e ridurre il rischio di contaminazione della squadra e dei mezzi.",
+    items: ["lavare mani", "pulire attrezzi", "disinfettare parti contaminate", "cambiare DPI sporchi", "non lasciare rifiuti nell’impianto"]
   },
   {
     cls: "dpi",
-    title: "ð¦º DPI OBBLIGATORI",
-    items: ["Casco ove richiesto dal sito", "Scarpe antinfortunistiche S3", "Guanti da lavoro", "Occhiali o visiera", "Cuffie antirumore", "Gilet alta visibilitÃ "]
+    title: "🦺 DPI OBBLIGATORI",
+    items: ["Casco ove richiesto dal sito", "Scarpe antinfortunistiche S3", "Guanti da lavoro", "Occhiali o visiera", "Cuffie antirumore", "Gilet alta visibilità"]
   },
   {
     cls: "emergency",
-    title: "ð¨ IN CASO DI EMERGENZA",
+    title: "🚨 IN CASO DI EMERGENZA",
     items: ["Allontanarsi dalla zona", "Avvisare il capo squadra", "Avvisare il responsabile commessa", "Chiamare i soccorsi se necessario", "Non intervenire su impianti o strutture tecniche"]
   }
 ];
@@ -16767,11 +16767,11 @@ const IMPIANTO_SAFETY_SECTIONS = [
 const DISCARICHE_SPECIFIC_RISK_SECTIONS = [
   {
     cls: "discariche-risk",
-    title: "â ï¸ RISCHI SPECIFICI DISCARICHE",
-    intro: "Avvisi operativi dedicati alle commesse discariche. Non bloccano lâinserimento lavoro/squadra ma richiedono attenzione costante.",
+    title: "⚠️ RISCHI SPECIFICI DISCARICHE",
+    intro: "Avvisi operativi dedicati alle commesse discariche. Non bloccano l’inserimento lavoro/squadra ma richiedono attenzione costante.",
     groups: [
       {
-        title: "â ï¸ LAVORO IN PENDENZA",
+        title: "⚠️ LAVORO IN PENDENZA",
         danger: true,
         items: [
           "rischio ribaltamento trattore/trincia",
@@ -16782,12 +16782,12 @@ const DISCARICHE_SPECIFIC_RISK_SECTIONS = [
           "obbligo valutazione pendenza prima di iniziare",
           "vietato lavorare con mezzi su pendenze pericolose",
           "procedere lentamente",
-          "usare DPI: casco, scarpe antiscivolo, guanti, occhiali, cuffie, alta visibilitÃ ",
+          "usare DPI: casco, scarpe antiscivolo, guanti, occhiali, cuffie, alta visibilità",
           "sospendere lavoro con pioggia o terreno instabile"
         ]
       },
       {
-        title: "â½ TUBAZIONI GAS A TERRA NASCOSTE DALLâERBA",
+        title: "⛽ TUBAZIONI GAS A TERRA NASCOSTE DALL’ERBA",
         danger: true,
         items: [
           "rischio urto/taglio tubo con trattore, trincia o decespugliatore",
@@ -16803,7 +16803,7 @@ const DISCARICHE_SPECIFIC_RISK_SECTIONS = [
         ]
       },
       {
-        title: "ð³ï¸ POZZETTI, TOMBINI E CANALETTE NASCOSTE",
+        title: "🕳️ POZZETTI, TOMBINI E CANALETTE NASCOSTE",
         items: [
           "rischio caduta operatore",
           "rischio ribaltamento mezzo",
@@ -16820,18 +16820,18 @@ const DISCARICHE_SPECIFIC_RISK_SECTIONS = [
       {
         title: "Rischi collegati",
         items: [
-          "ð¥ rischio incendio con erba secca, scintille, pietre/metallo",
-          "ð§« rischio biologico da rifiuti, insetti, animali, materiali contaminati",
-          "ð«ï¸ rischio polveri e scarsa visibilitÃ ",
-          "ð rischio rumore e vibrazioni",
-          "ð rischio investimento tra mezzi e operatori"
+          "🔥 rischio incendio con erba secca, scintille, pietre/metallo",
+          "🧫 rischio biologico da rifiuti, insetti, animali, materiali contaminati",
+          "🌫️ rischio polveri e scarsa visibilità",
+          "🔊 rischio rumore e vibrazioni",
+          "🚜 rischio investimento tra mezzi e operatori"
         ]
       }
     ]
   },
   {
     cls: "gas-emergency",
-    title: "ð¨ EMERGENZA GAS",
+    title: "🚨 EMERGENZA GAS",
     eyebrow: "RIQUADRO ROSSO",
     items: [
       "NON accendere motori",
@@ -16859,7 +16859,7 @@ const IMPIANTO_SAFETY_MANDATORY_CHECKLIST = [
 const DISCARICA_CAPITOLATO_DATA = {
   BARICELLA: {
     datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Baricella (BO)", "Via Bocche 20", "Superficie: circa 14,6 ettari", "Durata indicativa intervento: 10 giorni lavorativi continuativi"],
-    aree: ["Corpo discarica interno", "Fascia esterna recinzione (1-2 metri)", "Aree verdi esterne", "Fossi perimetrali viabilitÃ  accesso", "Canalette", "Punti campionamento", "Recinzioni"],
+    aree: ["Corpo discarica interno", "Fascia esterna recinzione (1-2 metri)", "Aree verdi esterne", "Fossi perimetrali viabilità accesso", "Canalette", "Punti campionamento", "Recinzioni"],
     rischi: ["Scarpate", "Fossi", "Tombini nascosti dalla vegetazione", "Pozzetti non visibili", "Tubazioni affioranti", "Impianti biogas", "Terreno sconnesso", "Vegetazione alta"],
     modalita: ["Scarpate: decespugliatore o robot radiocomandato", "Zone biogas: sfalcio manuale", "Zone con impianti irrigazione: sfalcio manuale", "Zone con piantumazioni: sfalcio manuale"],
     sicurezza: ["Controllare sempre il terreno prima dello sfalcio", "Verificare presenza pozzetti", "Verificare presenza tubazioni biogas", "Mantenere distanza di sicurezza tra operatori"]
@@ -16896,20 +16896,20 @@ const DISCARICA_CAPITOLATO_DATA = {
     datiGenerali: ["Discarica per rifiuti non pericolosi", "Comune: Sant'Agata Bolognese (BO)", "Via Romita 1", "Superficie: circa 13 ettari", "Durata indicativa: 15 giorni lavorativi continuativi"],
     aree: ["Corpo discarica", "Aree verdi esterne", "Canalette", "Punti campionamento", "Recinzioni"],
     rischi: ["Numerose scarpate con forte pendenza", "Rete biogas fitta", "Dislivelli importanti", "Tombini nascosti", "Pozzetti", "Tubazioni", "Vegetazione alta"],
-    modalita: ["Preferire robot radiocomandato", "Preferire sfalcio manuale nelle aree sensibili", "Limitare l'uso dei mezzi nelle zone piÃ¹ critiche"],
+    modalita: ["Preferire robot radiocomandato", "Preferire sfalcio manuale nelle aree sensibili", "Limitare l'uso dei mezzi nelle zone più critiche"],
     sicurezza: ["Massima attenzione alle scarpate", "Verificare sempre presenza rete biogas", "Controllare il terreno prima di iniziare", "Prestare attenzione ai cedimenti del terreno"]
   }
 };
-const DISCARICA_COMMON_WEATHER_LINES = ["âï¸ Sole â OK", "âï¸ Nuvoloso â Favorevole", "ð§ï¸ Pioggia â Attenzione", "âï¸ Temporale â Sospendere attivitÃ ", "ð«ï¸ Nebbia â Attenzione", "âï¸ Neve â Sospendere attivitÃ ", "ð¨ Vento forte â Attenzione", "ð« Fango â Verificare accessibilitÃ ", "ð§ Acqua stagnante â Attenzione"];
+const DISCARICA_COMMON_WEATHER_LINES = ["☀️ Sole → OK", "☁️ Nuvoloso → Favorevole", "🌧️ Pioggia → Attenzione", "⛈️ Temporale → Sospendere attività", "🌫️ Nebbia → Attenzione", "❄️ Neve → Sospendere attività", "💨 Vento forte → Attenzione", "🟫 Fango → Verificare accessibilità", "💧 Acqua stagnante → Attenzione"];
 const IMPIANTO_SAFETY_ANOMALY_CATEGORIES = ["sicurezza", "impianto", "biologico", "incendio", "mezzi", "ostacoli", "altro"];
 
 const IMPIANTO_SAFETY_WEATHER_ALERTS = [
-  { key: "wet-grass", icon: "ð§", label: "Erba bagnata", risk: "medio", when: (analysis) => analysis.wetGround, explanation: "Erba, rampe e camminamenti bagnati aumentano scivolamenti e perdita di controllo delle attrezzature.", advice: "Ridurre velocitÃ , evitare pendenze critiche, aumentare distanza tra operatori e usare calzature S3 in buono stato." },
-  { key: "strong-wind", icon: "ð¨", label: "Vento forte", risk: "medio/alto", when: (analysis) => analysis.maxWind >= 25 || analysis.maxGust >= 35, explanation: "Il vento puÃ² deviare materiale proiettato dal decespugliatore e rendere instabili rami o vegetazione.", advice: "Orientare il lavoro lontano da persone, mezzi e vetrate; sospendere se le raffiche rendono insicura lâattivitÃ ." },
-  { key: "thunder", icon: "â¡", label: "Temporali", risk: "alto", when: (analysis) => analysis.thunderWithinWindow, explanation: "Temporali e fulmini espongono la squadra a rischio elettrico, scarsa visibilitÃ  e terreno rapidamente scivoloso.", advice: "Sospendere attivitÃ , allontanarsi da alberi/strutture metalliche e attendere indicazioni del responsabile." },
-  { key: "heat", icon: "ð¡", label: "Caldo intenso", risk: "medio/alto", when: (analysis) => analysis.hotModerate || analysis.intenseHeat, explanation: "Temperature elevate aumentano affaticamento, disidratazione e rischio di colpi di calore.", advice: "Aumentare pause, bere acqua, alternare gli operatori e preferire zone dâombra nelle ore piÃ¹ calde." },
-  { key: "fire", icon: "ð¥", label: "Rischio incendi alto", risk: "alto", when: (analysis) => analysis.fireRiskHigh || analysis.intenseHeat, explanation: "Erba secca, caldo e motori caldi possono innescare principi di incendio durante sfalcio o decespugliamento.", advice: "Controllare marmitte e carburante, evitare scintille, non fumare e segnalare subito fumo o odore di bruciato." },
-  { key: "mud", icon: "ð", label: "Terreno fangoso", risk: "medio", when: (analysis) => analysis.wetGround && Number(analysis.rainProbability) >= 35, explanation: "Il terreno fangoso riduce aderenza di mezzi e operatori e puÃ² bloccare passaggi tecnici.", advice: "Valutare portanza, evitare manovre vicino a fossi/pendenze e mantenere liberi accessi per mezzi Hera." }
+  { key: "wet-grass", icon: "🌧", label: "Erba bagnata", risk: "medio", when: (analysis) => analysis.wetGround, explanation: "Erba, rampe e camminamenti bagnati aumentano scivolamenti e perdita di controllo delle attrezzature.", advice: "Ridurre velocità, evitare pendenze critiche, aumentare distanza tra operatori e usare calzature S3 in buono stato." },
+  { key: "strong-wind", icon: "💨", label: "Vento forte", risk: "medio/alto", when: (analysis) => analysis.maxWind >= 25 || analysis.maxGust >= 35, explanation: "Il vento può deviare materiale proiettato dal decespugliatore e rendere instabili rami o vegetazione.", advice: "Orientare il lavoro lontano da persone, mezzi e vetrate; sospendere se le raffiche rendono insicura l’attività." },
+  { key: "thunder", icon: "⚡", label: "Temporali", risk: "alto", when: (analysis) => analysis.thunderWithinWindow, explanation: "Temporali e fulmini espongono la squadra a rischio elettrico, scarsa visibilità e terreno rapidamente scivoloso.", advice: "Sospendere attività, allontanarsi da alberi/strutture metalliche e attendere indicazioni del responsabile." },
+  { key: "heat", icon: "🌡", label: "Caldo intenso", risk: "medio/alto", when: (analysis) => analysis.hotModerate || analysis.intenseHeat, explanation: "Temperature elevate aumentano affaticamento, disidratazione e rischio di colpi di calore.", advice: "Aumentare pause, bere acqua, alternare gli operatori e preferire zone d’ombra nelle ore più calde." },
+  { key: "fire", icon: "🔥", label: "Rischio incendi alto", risk: "alto", when: (analysis) => analysis.fireRiskHigh || analysis.intenseHeat, explanation: "Erba secca, caldo e motori caldi possono innescare principi di incendio durante sfalcio o decespugliamento.", advice: "Controllare marmitte e carburante, evitare scintille, non fumare e segnalare subito fumo o odore di bruciato." },
+  { key: "mud", icon: "🚜", label: "Terreno fangoso", risk: "medio", when: (analysis) => analysis.wetGround && Number(analysis.rainProbability) >= 35, explanation: "Il terreno fangoso riduce aderenza di mezzi e operatori e può bloccare passaggi tecnici.", advice: "Valutare portanza, evitare manovre vicino a fossi/pendenze e mantenere liberi accessi per mezzi Hera." }
 ];
 
 function getCurrentCommessaSafetyKind() {
@@ -17169,11 +17169,11 @@ async function onBiogasFileSelected(event) {
   const cfg = getBiogasMapConfig();
   if (!canManageData()) {
     ui.biogasMapFileInput.value = "";
-    ui.biogasMapStatus.textContent = `Solo l'admin puÃ² aggiungere o modificare ${cfg.lowerLabel}.`;
+    ui.biogasMapStatus.textContent = `Solo l'admin può aggiungere o modificare ${cfg.lowerLabel}.`;
     return;
   }
   ui.biogasMapFileInput.value = "";
-  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}â¦`;
+  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}…`;
   const ext = (file.name.split(".").pop() || "").toLowerCase();
   try {
     let pipelines = [];
@@ -17214,7 +17214,7 @@ async function loadBiogasNetworkForCurrentCommessa(options = {}) {
   biogasMapContentType = options.type === "tombini" ? "tombini" : "rete_biogas";
   updateBiogasMapChrome();
   const cfg = getBiogasMapConfig();
-  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}â¦`;
+  ui.biogasMapStatus.textContent = `Caricamento ${cfg.lowerLabel}…`;
   const commessaRef = db.collection("commesse").doc(selectedCommessaId);
   const cacheKey = `${cfg.cachePrefix}_${selectedCommessaId}`;
   let payload = null;
@@ -17556,7 +17556,7 @@ function getImpiantoComune(impianto = {}) {
 function buildImpiantoSafetyWhatsappText(impianto = {}) {
   const operator = currentUser?.displayName || currentUser?.email || "Operatore";
   return [
-    "â ï¸ SEGNALAZIONE SICUREZZA IMPIANTO",
+    "⚠️ SEGNALAZIONE SICUREZZA IMPIANTO",
     `Commessa: ${selectedCommessaName || "Commessa"}`,
     `Impianto: ${getImpiantoDisplayName(impianto) || "non disponibile"}`,
     `Comune: ${getImpiantoComune(impianto) || "non disponibile"}`,
@@ -17586,7 +17586,7 @@ function buildImpiantoSafetySection(section) {
     ? `<div class="impianto-safety-icons">${section.icons.map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>`
     : "";
   const checklistMarkup = Array.isArray(section.checklist)
-    ? `<div class="impianto-safety-mini-checklist">${section.checklist.map((item) => `<span>â ${escapeHTML(item)}</span>`).join("")}</div>`
+    ? `<div class="impianto-safety-mini-checklist">${section.checklist.map((item) => `<span>☑ ${escapeHTML(item)}</span>`).join("")}</div>`
     : "";
   const groupsMarkup = Array.isArray(section.groups)
     ? `<div class="impianto-safety-groups">${section.groups.map((group) => `
@@ -17612,22 +17612,22 @@ function getImpiantoSafetyOperatorName() {
 function buildImpiantoSafetyChecklistSection() {
   return `
     <article class="impianto-safety-section is-checklist">
-      <h3>ð CHECKLIST OBBLIGATORIA</h3>
+      <h3>📋 CHECKLIST OBBLIGATORIA</h3>
       <p>Conferma operativa prima di iniziare. La registrazione viene salvata su Firebase con data, ora, operatore, commessa e impianto.</p>
       <form id="impianto-safety-checklist-form" class="impianto-safety-checklist-form">
         <div class="impianto-safety-checklist-grid">
           ${IMPIANTO_SAFETY_MANDATORY_CHECKLIST.map((item, index) => `
             <label class="impianto-safety-check-row">
               <input type="checkbox" name="checklist" value="${escapeHTML(item)}" data-safety-check-index="${index}" required>
-              <span>â ${escapeHTML(item)}</span>
+              <span>☑ ${escapeHTML(item)}</span>
             </label>`).join("")}
         </div>
         ${getCurrentCommessaSafetyKind() === "discariche" ? `
           <label class="impianto-safety-check-row impianto-safety-check-row-wide">
             <input type="checkbox" name="discaricheReadConfirm" value="true" required>
-            <span>âï¸ Confermo di aver letto le norme di sicurezza discariche</span>
+            <span>☑️ Confermo di aver letto le norme di sicurezza discariche</span>
           </label>` : ""}
-        <button class="btn btn-primary impianto-safety-confirm-btn" type="submit">â CONFERMA CONTROLLO SICUREZZA</button>
+        <button class="btn btn-primary impianto-safety-confirm-btn" type="submit">✅ CONFERMA CONTROLLO SICUREZZA</button>
         <p class="muted" data-safety-checklist-feedback role="status" aria-live="polite"></p>
       </form>
     </article>`;
@@ -17637,16 +17637,16 @@ function buildImpiantoSafetyAnomalySection(impianto = {}) {
   const whatsappText = buildImpiantoSafetyWhatsappText(impianto);
   return `
     <article class="impianto-safety-section is-anomaly">
-      <h3>ð¸ SEGNALAZIONE ANOMALIA</h3>
-      <p>Usa il pulsante rosso per segnalare subito criticitÃ  sicurezza, impianto, biologiche, incendio, mezzi o ostacoli.</p>
-      <button class="btn btn-danger impianto-safety-anomaly-toggle" type="button" data-safety-toggle-anomaly>â ï¸ SEGNALA ANOMALIA</button>
+      <h3>📸 SEGNALAZIONE ANOMALIA</h3>
+      <p>Usa il pulsante rosso per segnalare subito criticità sicurezza, impianto, biologiche, incendio, mezzi o ostacoli.</p>
+      <button class="btn btn-danger impianto-safety-anomaly-toggle" type="button" data-safety-toggle-anomaly>⚠️ SEGNALA ANOMALIA</button>
       <form id="impianto-safety-anomaly-form" class="impianto-safety-anomaly-form hidden">
         <label>Categoria<select name="category" required>${IMPIANTO_SAFETY_ANOMALY_CATEGORIES.map((item) => `<option value="${escapeHTML(item)}">${escapeHTML(item)}</option>`).join("")}</select></label>
         <label>Foto<input name="photo" type="file" accept="image/*" capture="environment"></label>
         <label>Nota<textarea name="note" rows="4" placeholder="Descrivi anomalia, punto impianto, rischio e azione richiesta" required></textarea></label>
         <div class="impianto-safety-form-actions">
-          <button class="btn" type="button" data-safety-get-gps>ð POSIZIONE GPS</button>
-          <a class="btn impianto-safety-whatsapp" href="https://wa.me/?text=${encodeURIComponent(whatsappText)}" target="_blank" rel="noopener" data-safety-whatsapp-anomaly>ð¬ WHAZZUP</a>
+          <button class="btn" type="button" data-safety-get-gps>📍 POSIZIONE GPS</button>
+          <a class="btn impianto-safety-whatsapp" href="https://wa.me/?text=${encodeURIComponent(whatsappText)}" target="_blank" rel="noopener" data-safety-whatsapp-anomaly>💬 WHAZZUP</a>
         </div>
         <input type="hidden" name="lat"><input type="hidden" name="lon">
         <p class="muted" data-safety-gps-feedback>GPS non acquisito.</p>
@@ -17663,7 +17663,7 @@ function buildImpiantoSafetyWeatherSection(impianto = {}) {
   const hasActive = alerts.some((alert) => alert.active);
   return `
     <article class="impianto-safety-section is-weather-ops">
-      <h3>ð§ METEO OPERATIVO</h3>
+      <h3>🌧 METEO OPERATIVO</h3>
       <p>${hasActive ? "Avvisi automatici rilevati per la squadra." : "Nessun avviso critico automatico rilevato: mantenere comunque i controlli ordinari."}</p>
       <div class="impianto-safety-weather-alerts">
         ${alerts.map((alert) => `
@@ -17679,7 +17679,7 @@ function buildImpiantoSafetyAdminSection(procedureConfig = {}) {
   if (!canManageData()) return "";
   return `
     <article class="impianto-safety-section is-admin">
-      <h3>ð ADMIN SICUREZZA</h3>
+      <h3>🔐 ADMIN SICUREZZA</h3>
       <p>Solo admin: aggiornamento procedure, norme sicurezza e numeri di emergenza della scheda.</p>
       <form id="impianto-safety-admin-form" class="impianto-safety-contact-form">
         <label>Procedure operative<textarea name="procedure" rows="4" placeholder="Modifica procedure operative per depurazione/discariche">${escapeHTML(procedureConfig.procedure || "")}</textarea></label>
@@ -17731,14 +17731,14 @@ function buildImpiantoSafetyContactCard(contact, whatsappText) {
   const whatsappUrl = whatsappPhone ? `https://wa.me/${encodeURIComponent(whatsappPhone)}?text=${encodeURIComponent(whatsappText)}` : "";
   const canEdit = canManageData() && !contact.isDefault;
   const whatsappMarkup = contact.whatsappEnabled === false || !whatsappUrl
-    ? `<button class="btn impianto-safety-whatsapp" type="button" disabled>ð¬ WHAZZUP</button>`
-    : `<a class="btn impianto-safety-whatsapp" href="${whatsappUrl}" target="_blank" rel="noopener">ð¬ WHAZZUP</a>`;
+    ? `<button class="btn impianto-safety-whatsapp" type="button" disabled>💬 WHAZZUP</button>`
+    : `<a class="btn impianto-safety-whatsapp" href="${whatsappUrl}" target="_blank" rel="noopener">💬 WHAZZUP</a>`;
   const adminActions = canEdit ? `<div class="impianto-safety-contact-admin"><button class="btn" type="button" data-safety-edit-contact="${escapeHTML(contact.id)}">Modifica</button><button class="btn btn-danger" type="button" data-safety-delete-contact="${escapeHTML(contact.id)}">Elimina</button></div>` : "";
   return `
     <article class="impianto-safety-contact" data-safety-contact-id="${escapeHTML(contact.id || "")}">
       <div><strong>${escapeHTML(contact.name || "Contatto")}</strong><small>${escapeHTML(contact.role || contact.type || "")}</small><small>${escapeHTML(contact.phone || "")}</small></div>
       <div class="impianto-safety-contact-actions">
-        <a class="btn btn-primary" href="tel:${escapeHTML(phoneHref)}">ð CHIAMA</a>
+        <a class="btn btn-primary" href="tel:${escapeHTML(phoneHref)}">📞 CHIAMA</a>
         ${whatsappMarkup}
       </div>
       ${adminActions}
@@ -17750,10 +17750,10 @@ function buildImpiantoSafetyContactsSection(contacts = [], impianto = {}) {
   return `
     <article class="impianto-safety-section is-contacts">
       <div class="impianto-safety-section-head">
-        <h3>ð NUMERI DI EMERGENZA E SUPPORTO</h3>
-        ${canManageData() ? `<button class="btn btn-primary" type="button" data-safety-add-contact>â AGGIUNGI NUMERO</button>` : ""}
+        <h3>📞 NUMERI DI EMERGENZA E SUPPORTO</h3>
+        ${canManageData() ? `<button class="btn btn-primary" type="button" data-safety-add-contact>➕ AGGIUNGI NUMERO</button>` : ""}
       </div>
-      <p class="muted">Per Hera Bologna il numero 800713900 Ã¨ indicato come pronto intervento acqua, fognature e depurazione, attivo 24 ore su 24.</p>
+      <p class="muted">Per Hera Bologna il numero 800713900 è indicato come pronto intervento acqua, fognature e depurazione, attivo 24 ore su 24.</p>
       <div class="impianto-safety-contacts-grid">${contacts.map((contact) => buildImpiantoSafetyContactCard(contact, whatsappText)).join("")}</div>
       <div id="impianto-safety-contact-form-wrap" class="impianto-safety-contact-form-wrap hidden"></div>
     </article>`;
@@ -17772,13 +17772,13 @@ function buildImpiantoSafetyContactForm(contact = {}) {
       <label>Ruolo<input name="role" type="text" value="${escapeHTML(contact.role || "")}" required></label>
       <label>Numero telefono<input name="phone" type="tel" value="${escapeHTML(contact.phone || "")}" required></label>
       <label>Tipo numero<select name="type">${["emergenza", "pronto intervento", "capo squadra", "responsabile", "cliente", "sicurezza", "altro"].map((item) => option(item, item, type)).join("")}</select></label>
-      <label>VisibilitÃ <select name="scope">
+      <label>Visibilità<select name="scope">
         ${option("commessa", "solo questa commessa", scope)}
         ${option("depurazione", "tutte le commesse depurazione", scope)}
         ${option("discariche", "tutte le commesse discariche", scope)}
         ${option("depurazione_discariche", "tutte le commesse depurazione e discariche", scope)}
       </select></label>
-      <label>Attiva WhatsApp<select name="whatsappEnabled">${option("true", "sÃ¬", String(whatsappEnabled))}${option("false", "no", String(whatsappEnabled))}</select></label>
+      <label>Attiva WhatsApp<select name="whatsappEnabled">${option("true", "sì", String(whatsappEnabled))}${option("false", "no", String(whatsappEnabled))}</select></label>
       <div class="impianto-safety-form-actions"><button class="btn btn-primary" type="submit">Salva numero</button><button class="btn" type="button" data-safety-cancel-form>Annulla</button></div>
       <p class="muted" data-safety-form-feedback role="status" aria-live="polite"></p>
     </form>`;
@@ -17801,7 +17801,7 @@ function buildDiscaricaCapitolatoPanelMarkup() {
   const capitolato = DISCARICA_CAPITOLATO_DATA[key];
   if (!capitolato) return "";
   const block = (title, items) => items?.length ? `<div class="impianto-safety-group"><h4>${escapeHTML(title)}</h4>${buildImpiantoSafetyList(items)}</div>` : "";
-  return `<article class="impianto-safety-section is-discariche-risk hidden" data-capitolato-panel><h3>ð CAPITOLATO â ${escapeHTML(key)}</h3><div class="impianto-safety-groups">${block("ð DATI GENERALI", capitolato.datiGenerali)}${block("ð± AREE DA MANUTENERE", capitolato.aree)}${block("â ï¸ RISCHI PRINCIPALI", capitolato.rischi)}${block("ð MODALITÃ OPERATIVE", capitolato.modalita)}${block("ð¦º SICUREZZA", capitolato.sicurezza)}${block("ð¦ï¸ CONDIZIONI METEO", DISCARICA_COMMON_WEATHER_LINES)}</div><p class="impianto-safety-stop">Importante: pioggia, neve, vento forte, fango o acqua possono rendere non eseguibile l'intervento.</p></article>`;
+  return `<article class="impianto-safety-section is-discariche-risk hidden" data-capitolato-panel><h3>📘 CAPITOLATO — ${escapeHTML(key)}</h3><div class="impianto-safety-groups">${block("📍 DATI GENERALI", capitolato.datiGenerali)}${block("🌱 AREE DA MANUTENERE", capitolato.aree)}${block("⚠️ RISCHI PRINCIPALI", capitolato.rischi)}${block("🚜 MODALITÀ OPERATIVE", capitolato.modalita)}${block("🦺 SICUREZZA", capitolato.sicurezza)}${block("🌦️ CONDIZIONI METEO", DISCARICA_COMMON_WEATHER_LINES)}</div><p class="impianto-safety-stop">Importante: pioggia, neve, vento forte, fango o acqua possono rendere non eseguibile l'intervento.</p></article>`;
 }
 
 function buildDiscaricaSafetyCompactFlagsMarkup() {
@@ -17811,9 +17811,9 @@ function buildDiscaricaSafetyCompactFlagsMarkup() {
   const riskText = (capitolato.rischi || []).join(" ").toUpperCase();
   const has = (token) => riskText.includes(token);
   const flags = [
-    ["â ï¸ Presenza biogas", has("BIOGAS")], ["â ï¸ Presenza fossi", has("FOSS")], ["â ï¸ Presenza canalette", has("CANALETT")], ["â ï¸ Presenza scarpate", has("SCARPAT")], ["â ï¸ Presenza punti campionamento", (capitolato.aree || []).join(" ").toUpperCase().includes("PUNTI CAMPIONAMENTO")], ["â ï¸ Presenza pozzetti", has("POZZETT")], ["â ï¸ Presenza tombini nascosti", has("TOMBIN")], ["â ï¸ Presenza tubazioni", has("TUBAZION")]
+    ["⚠️ Presenza biogas", has("BIOGAS")], ["⚠️ Presenza fossi", has("FOSS")], ["⚠️ Presenza canalette", has("CANALETT")], ["⚠️ Presenza scarpate", has("SCARPAT")], ["⚠️ Presenza punti campionamento", (capitolato.aree || []).join(" ").toUpperCase().includes("PUNTI CAMPIONAMENTO")], ["⚠️ Presenza pozzetti", has("POZZETT")], ["⚠️ Presenza tombini nascosti", has("TOMBIN")], ["⚠️ Presenza tubazioni", has("TUBAZION")]
   ];
-  return `<article class="impianto-safety-section is-risk"><h3>ð§© RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>ð´ Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>ð¡ Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>ð¢ Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
+  return `<article class="impianto-safety-section is-risk"><h3>🧩 RIEPILOGO RISCHI DISCARICA</h3><div class="impianto-safety-groups"><div class="impianto-safety-group is-danger"><h4>🔴 Rischi specifici della discarica</h4>${buildImpiantoSafetyList(capitolato.rischi || [])}</div><div class="impianto-safety-group"><h4>🟡 Attenzioni operative</h4>${buildImpiantoSafetyList(capitolato.sicurezza || [])}</div><div class="impianto-safety-group"><h4>🟢 Mezzi consigliati</h4>${buildImpiantoSafetyList(capitolato.modalita || ["Valutare decespugliatore/robot in base a pendenze e ostacoli", "Preferire sfalcio manuale nelle aree sensibili"])} </div></div><div class="impianto-safety-mini-checklist">${flags.filter(([,on])=>on).map(([label])=>`<span>${escapeHTML(label)}</span>`).join("")}</div></article>`;
 }
 
 function getCapitolatoAcceptedTypes() {
@@ -17863,17 +17863,17 @@ function renderCapitolatoOperativoPage(impiantoKey) {
   const datiGenerali = specific.datiGenerali || [];
   const superficie = datiGenerali.find((item) => /SUPERFICIE/i.test(item)) || "Superficie totale: da definire";
   const durata = datiGenerali.find((item) => /DURATA/i.test(item)) || "Durata intervento: da definire";
-  const particolarita = specific.rischi?.slice(0, 4) || ["ParticolaritÃ  operative non specificate."];
+  const particolarita = specific.rischi?.slice(0, 4) || ["Particolarità operative non specificate."];
   const mezziConsigliati = specific.modalita?.slice(0, 4) || ["Definire i mezzi in base all'area operativa."];
   const note = specific.sicurezza?.slice(0, 2) || ["Seguire le prescrizioni del referente Hera."];
 
-  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "ð CAPITOLATO OPERATIVO";
-  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} â¢ ${selectedCommessaName || "Commessa"}`;
+  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "📘 CAPITOLATO OPERATIVO";
+  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
 
   const mezzi = [
-    ["ð", "Trattore con trincia"], ["ð¦¾", "Trincia robotizzata"], ["ð¿", "Decespugliatore"], ["ð", "Rasaerba semovente"],
-    ["ð", "Autocarro ribaltabile"], ["âï¸", "Miniescavatore"], ["ð", "Bobcat"], ["ð§", "Autobotte irrigazione"],
-    ["â¬ï¸", "Piattaforma aerea 21 m"], ["ð", "Motosoffiante"], ["ð§¹", "Rastrelli e raccoglifoglie"], ["ð§ª", "Mezzi per diserbo"]
+    ["🚜", "Trattore con trincia"], ["🦾", "Trincia robotizzata"], ["🌿", "Decespugliatore"], ["🚜", "Rasaerba semovente"],
+    ["🚚", "Autocarro ribaltabile"], ["⛏️", "Miniescavatore"], ["🚜", "Bobcat"], ["💧", "Autobotte irrigazione"],
+    ["⬆️", "Piattaforma aerea 21 m"], ["🍃", "Motosoffiante"], ["🧹", "Rastrelli e raccoglifoglie"], ["🧪", "Mezzi per diserbo"]
   ];
 
   loadCommessaCapitolatoRecord().then((capitolatoRecord) => {
@@ -17886,7 +17886,7 @@ function renderCapitolatoOperativoPage(impiantoKey) {
       <article class="capitolato-hero-card">
         <div class="capitolato-hero-overlay">
           <div class="capitolato-hero-title-wrap">
-            <span class="capitolato-book">ð</span>
+            <span class="capitolato-book">📘</span>
             <div>
               <h3>Capitolato operativo</h3>
               <p>${escapeHTML(selectedCommessaName || "Commessa")}</p>
@@ -17904,10 +17904,10 @@ function renderCapitolatoOperativoPage(impiantoKey) {
         <article class="capitolato-card">
           <h4>1. Istruzioni operative</h4>
           <div class="capitolato-mini-cards">
-            <div class="capitolato-mini is-green"><h5>ð¿ Sfalcio</h5>${buildImpiantoSafetyList(["Sfalcio corpo discarica", "Aree interne recinzione", "Aree esterne di pertinenza", "Fossi e canali ove previsti"])}</div>
-            <div class="capitolato-mini is-blue"><h5>ð§¹ Pulizia</h5>${buildImpiantoSafetyList(["Pulizia recinzioni", "Pulizia canalette", "Punti di campionamento", "Residui di sfalcio"])}</div>
-            <div class="capitolato-mini is-amber"><h5>ð Gestione lavoro</h5>${buildImpiantoSafetyList(["Concordare data intervento", "Concordare fascia oraria", "Compilare consuntivo", "Indicare ore, mq e data"])}</div>
-            <div class="capitolato-mini is-red"><h5>â ï¸ Segnalazioni</h5>${buildImpiantoSafetyList(["Segnalare anomalie", "Segnalare situazioni di pericolo", "Segnalare problemi sicurezza"])}</div>
+            <div class="capitolato-mini is-green"><h5>🌿 Sfalcio</h5>${buildImpiantoSafetyList(["Sfalcio corpo discarica", "Aree interne recinzione", "Aree esterne di pertinenza", "Fossi e canali ove previsti"])}</div>
+            <div class="capitolato-mini is-blue"><h5>🧹 Pulizia</h5>${buildImpiantoSafetyList(["Pulizia recinzioni", "Pulizia canalette", "Punti di campionamento", "Residui di sfalcio"])}</div>
+            <div class="capitolato-mini is-amber"><h5>📝 Gestione lavoro</h5>${buildImpiantoSafetyList(["Concordare data intervento", "Concordare fascia oraria", "Compilare consuntivo", "Indicare ore, mq e data"])}</div>
+            <div class="capitolato-mini is-red"><h5>⚠️ Segnalazioni</h5>${buildImpiantoSafetyList(["Segnalare anomalie", "Segnalare situazioni di pericolo", "Segnalare problemi sicurezza"])}</div>
           </div>
         </article>
 
@@ -17923,8 +17923,8 @@ function renderCapitolatoOperativoPage(impiantoKey) {
         <article class="capitolato-card is-sicurezza">
           <h4>3. Sicurezza</h4>
           <p class="capitolato-sub">Verifiche prima di iniziare</p>
-          ${buildImpiantoSafetyList(["â Verificare accessi", "â Verificare terreno", "â Verificare fango/acqua", "â Verificare pendenze e scarpate", "â Verificare tubazioni biogas", "â Verificare impianti irrigazione", "â Verificare piantumazioni"]) }
-          <div class="capitolato-worker">ð·ââï¸ð¿</div>
+          ${buildImpiantoSafetyList(["✅ Verificare accessi", "✅ Verificare terreno", "✅ Verificare fango/acqua", "✅ Verificare pendenze e scarpate", "✅ Verificare tubazioni biogas", "✅ Verificare impianti irrigazione", "✅ Verificare piantumazioni"]) }
+          <div class="capitolato-worker">👷‍♂️🌿</div>
         </article>
 
         <article class="capitolato-card is-stop">
@@ -17937,13 +17937,13 @@ function renderCapitolatoOperativoPage(impiantoKey) {
 
         <article class="capitolato-card is-scheda">
           <h4>5. Scheda impianto</h4>
-          <div class="capitolato-scheda-photo">ð°ï¸ Discarica vista dall'alto</div>
+          <div class="capitolato-scheda-photo">🛰️ Discarica vista dall'alto</div>
           <ul>
             <li><strong>${escapeHTML(superficie)}</strong></li>
             <li><strong>${escapeHTML(durata)}</strong></li>
-            <li>ParticolaritÃ  operative: ${escapeHTML(particolarita.join(" â¢ "))}</li>
-            <li>Mezzi consigliati: ${escapeHTML(mezziConsigliati.join(" â¢ "))}</li>
-            <li>Note: ${escapeHTML(note.join(" â¢ "))}</li>
+            <li>Particolarità operative: ${escapeHTML(particolarita.join(" • "))}</li>
+            <li>Mezzi consigliati: ${escapeHTML(mezziConsigliati.join(" • "))}</li>
+            <li>Note: ${escapeHTML(note.join(" • "))}</li>
           </ul>
         </article>
       </div>
@@ -17951,11 +17951,11 @@ function renderCapitolatoOperativoPage(impiantoKey) {
       <article class="capitolato-card capitolato-actions">
         <h4>6. Azioni rapide</h4>
         <div class="capitolato-actions-grid">
-          <button type="button">ð· Aggiungi foto</button>
-          <button type="button">â ï¸ Invia segnalazione</button>
-          <button type="button">ð Registra consuntivo</button>
-          <button type="button">ðºï¸ Apri mappa impianto</button>
-          <button type="button">ð¤ Invia report WhatsApp</button>
+          <button type="button">📷 Aggiungi foto</button>
+          <button type="button">⚠️ Invia segnalazione</button>
+          <button type="button">📝 Registra consuntivo</button>
+          <button type="button">🗺️ Apri mappa impianto</button>
+          <button type="button">📤 Invia report WhatsApp</button>
         </div>
       </article>
       <article class="capitolato-card capitolato-file-card">
@@ -17967,8 +17967,8 @@ function renderCapitolatoOperativoPage(impiantoKey) {
         ${extractionFailed ? `<p class="capitolato-file-error">Capitolato allegato, ma dati non estratti automaticamente. Compilare manualmente.</p>` : ""}
         <p class="muted" data-capitolato-file-feedback role="status" aria-live="polite"></p>
         <div class="capitolato-actions-grid">
-          ${canManageData() ? `<button type="button" data-capitolato-upload>ð Allega capitolato</button><button type="button" data-capitolato-replace>Sostituisci capitolato</button><button type="button" data-capitolato-delete>Elimina capitolato</button><button type="button" data-capitolato-save-manual>Salva modifica manuale</button>` : ""}
-          ${capitolatoRecord?.driveWebViewLink ? `<button type="button" data-capitolato-open-originale>ð Apri capitolato originale</button>` : ""}
+          ${canManageData() ? `<button type="button" data-capitolato-upload>📎 Allega capitolato</button><button type="button" data-capitolato-replace>Sostituisci capitolato</button><button type="button" data-capitolato-delete>Elimina capitolato</button><button type="button" data-capitolato-save-manual>Salva modifica manuale</button>` : ""}
+          ${capitolatoRecord?.driveWebViewLink ? `<button type="button" data-capitolato-open-originale>📄 Apri capitolato originale</button>` : ""}
         </div>
         <input type="file" data-capitolato-file-input hidden accept="${getCapitolatoAcceptedTypes()}">
       </article>
@@ -17982,8 +17982,8 @@ async function renderImpiantoSafetyPage(impiantoKey) {
   if (!ui.impiantoSafetyContent) return;
   const impianto = getImpiantoSafetyImpiantoByKey(impiantoKey) || {};
   const impiantoName = getImpiantoDisplayName(impianto) || "Impianto";
-  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "ð¦º Sicurezza Impianto";
-  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} â¢ ${selectedCommessaName || "Commessa"}`;
+  if (ui.impiantoSafetyTitle) ui.impiantoSafetyTitle.textContent = "🦺 Sicurezza Impianto";
+  if (ui.impiantoSafetySubtitle) ui.impiantoSafetySubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   const contacts = await loadImpiantoSafetyContacts();
   const procedureConfig = await loadImpiantoSafetyProcedureConfig();
   const commessaSafetyKind = getCurrentCommessaSafetyKind();
@@ -17992,13 +17992,13 @@ async function renderImpiantoSafetyPage(impiantoKey) {
     : "";
   ui.impiantoSafetyContent.innerHTML = `
     <article class="impianto-safety-hero">
-      <div class="impianto-safety-hero-badge">Sicurezza industriale Hera â¢ manutenzione verde</div>
-      <h3>ð¦º SICUREZZA IMPIANTO<br>DEPURAZIONE / DISCARICHE</h3>
-      <p>Schermata operativa per squadre manutenzione verde: accessi regolamentati, continuitÃ  impianto, attrezzature, meteo operativo, anomalie ed emergenze.</p>
+      <div class="impianto-safety-hero-badge">Sicurezza industriale Hera • manutenzione verde</div>
+      <h3>🦺 SICUREZZA IMPIANTO<br>DEPURAZIONE / DISCARICHE</h3>
+      <p>Schermata operativa per squadre manutenzione verde: accessi regolamentati, continuità impianto, attrezzature, meteo operativo, anomalie ed emergenze.</p>
       <div class="impianto-safety-hero-meta">
-        <span>ð· ${escapeHTML(getImpiantoSafetyOperatorName())}</span>
-        <span>ð­ ${escapeHTML(impiantoName)}</span>
-        <span>ð ${escapeHTML(getImpiantoComune(impianto) || "Comune non indicato")}</span>
+        <span>👷 ${escapeHTML(getImpiantoSafetyOperatorName())}</span>
+        <span>🏭 ${escapeHTML(impiantoName)}</span>
+        <span>📍 ${escapeHTML(getImpiantoComune(impianto) || "Comune non indicato")}</span>
       </div>
     </article>
     <div class="impianto-safety-grid">${IMPIANTO_SAFETY_SECTIONS.map(buildImpiantoSafetySection).join("")}${extraDiscaricheSections}</div>
@@ -18178,7 +18178,7 @@ function acquireImpiantoSafetyGps(form) {
     if (feedback) feedback.textContent = "GPS non disponibile su questo dispositivo.";
     return;
   }
-  if (feedback) feedback.textContent = "Acquisizione GPSâ¦";
+  if (feedback) feedback.textContent = "Acquisizione GPS…";
   navigator.geolocation.getCurrentPosition((position) => {
     form.elements.lat.value = String(position.coords.latitude || "");
     form.elements.lon.value = String(position.coords.longitude || "");
@@ -18239,9 +18239,9 @@ async function saveImpiantoSafetyChecklistForm(event) {
     discaricheReadConfirm: getCurrentCommessaSafetyKind() === "discariche"
   };
   try {
-    if (feedback) feedback.textContent = "Salvataggio controllo sicurezzaâ¦";
+    if (feedback) feedback.textContent = "Salvataggio controllo sicurezza…";
     await db.collection("impiantoSafetyChecks").add(payload);
-    if (feedback) feedback.textContent = "â Controllo sicurezza salvato su Firebase.";
+    if (feedback) feedback.textContent = "✅ Controllo sicurezza salvato su Firebase.";
     form.querySelector("button[type='submit']").disabled = true;
   } catch (error) {
     console.error("Controllo sicurezza non salvato:", error);
@@ -18263,7 +18263,7 @@ async function saveImpiantoSafetyAnomalyForm(event) {
     return true;
   }
   try {
-    if (feedback) feedback.textContent = "Invio segnalazione anomaliaâ¦";
+    if (feedback) feedback.textContent = "Invio segnalazione anomalia…";
     const photoDataUrl = await readSafetyPhotoAsDataUrl(photoFile);
     const payload = {
       ...getImpiantoSafetyPayloadBase(impiantoKey, impianto),
@@ -18283,7 +18283,7 @@ async function saveImpiantoSafetyAnomalyForm(event) {
       const text = [buildImpiantoSafetyWhatsappText(impianto), `Categoria: ${payload.category}`, `Nota: ${payload.note}`, payload.lat && payload.lon ? `GPS: ${payload.lat}, ${payload.lon}` : "GPS: non acquisito"].join("\n");
       whatsapp.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
     }
-    if (feedback) feedback.textContent = "â Segnalazione inviata e pronta per condivisione WhatsApp.";
+    if (feedback) feedback.textContent = "✅ Segnalazione inviata e pronta per condivisione WhatsApp.";
     form.reset();
   } catch (error) {
     console.error("Segnalazione anomalia non salvata:", error);
@@ -18300,7 +18300,7 @@ async function saveImpiantoSafetyAdminForm(event) {
   const feedback = form.querySelector("[data-safety-admin-feedback]");
   const data = Object.fromEntries(new FormData(form).entries());
   try {
-    if (feedback) feedback.textContent = "Aggiornamento normeâ¦";
+    if (feedback) feedback.textContent = "Aggiornamento norme…";
     await db.collection("impiantoSafetyProcedures").doc(getCurrentCommessaSafetyKind() || "depurazione_discariche").set({
       procedure: String(data.procedure || "").trim(),
       norme: String(data.norme || "").trim(),
@@ -18308,7 +18308,7 @@ async function saveImpiantoSafetyAdminForm(event) {
       updatedByEmail: auth.currentUser?.email || "",
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    if (feedback) feedback.textContent = "â Procedure e norme sicurezza aggiornate.";
+    if (feedback) feedback.textContent = "✅ Procedure e norme sicurezza aggiornate.";
   } catch (error) {
     console.error("Norme sicurezza non aggiornate:", error);
     if (feedback) feedback.textContent = "Errore aggiornamento norme sicurezza.";
@@ -18342,7 +18342,7 @@ async function saveImpiantoSafetyContactForm(event) {
     return;
   }
   try {
-    if (feedback) feedback.textContent = "Salvataggio in corsoâ¦";
+    if (feedback) feedback.textContent = "Salvataggio in corso…";
     if (contactId) {
       await db.collection("safetyContacts").doc(contactId).set(payload, { merge: true });
     } else {
@@ -18368,7 +18368,7 @@ function isTruthyAtexFlag(value) {
   if (value === true) return true;
   if (value === false || value === null || value === undefined) return false;
   const normalized = normalizeAtexSearchValue(value);
-  return ["ATEX", "TRUE", "SI", "SÃ", "YES", "1", "EX"].includes(normalized) || valueContainsAtex(normalized);
+  return ["ATEX", "TRUE", "SI", "SÌ", "YES", "1", "EX"].includes(normalized) || valueContainsAtex(normalized);
 }
 
 function isInreteCommessa(commessa = {}) {
@@ -18537,7 +18537,7 @@ function sanitizeWhatsappPhone(phone = "") {
 function getAtexWhatsappText(impianto = {}) {
   const operator = currentUser?.displayName || currentUser?.email || "Operatore non indicato";
   return [
-    "â ï¸ PROBLEMA ATEX RILEVATO",
+    "⚠️ PROBLEMA ATEX RILEVATO",
     `Commessa: ${getSelectedAtexCommessaName()}`,
     `Impianto: ${impianto.denominazione || impianto.nome || "Impianto non indicato"}`,
     `Comune: ${impianto.comune || "Comune non indicato"}`,
@@ -18562,8 +18562,8 @@ function buildAtexContactCard(contact, whatsappText) {
       <strong class="atex-contact-name">${escapeHTML(contact.name)}</strong>
       <span class="atex-contact-phone">Tel: ${escapeHTML(contact.phone)}</span>
       <div class="atex-contact-actions">
-        <a class="atex-contact-action call" href="tel:${escapeHTML(phoneHref)}">ð CHIAMA</a>
-        <a class="atex-contact-action whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener noreferrer">ð¬ WHAZZUP</a>
+        <a class="atex-contact-action call" href="tel:${escapeHTML(phoneHref)}">📞 CHIAMA</a>
+        <a class="atex-contact-action whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener noreferrer">💬 WHAZZUP</a>
       </div>
     </section>
   `;
@@ -18618,7 +18618,7 @@ function handleAtexProcedureContentClick(event) {
     const isOpen = checklistToggle.getAttribute("aria-expanded") === "true";
     checklistToggle.setAttribute("aria-expanded", String(!isOpen));
     if (panel) panel.hidden = isOpen;
-    if (arrow) arrow.textContent = isOpen ? "â¼" : "â²";
+    if (arrow) arrow.textContent = isOpen ? "▼" : "▲";
     return;
   }
 
@@ -18668,7 +18668,7 @@ async function saveAtexProcedureForm(event) {
   }
   try {
     if (submitButton) submitButton.disabled = true;
-    if (feedback) feedback.textContent = "Salvataggio modulo ATEX in corsoâ¦";
+    if (feedback) feedback.textContent = "Salvataggio modulo ATEX in corso…";
     await db.collection("commesse").doc(selectedCommessaId).collection("atexModules").add(payload);
     form.reset();
     form.querySelector("[name='impianto']").value = payload.impianto;
@@ -18688,7 +18688,7 @@ function renderAtexProcedurePage(impiantoKey) {
   const impianto = getAtexProcedureImpiantoByKey(impiantoKey) || {};
   const impiantoName = impianto.denominazione || "Impianto";
   if (ui.atexProcedureSubtitle) {
-    ui.atexProcedureSubtitle.textContent = `${impiantoName} â¢ ${selectedCommessaName || "Commessa"}`;
+    ui.atexProcedureSubtitle.textContent = `${impiantoName} • ${selectedCommessaName || "Commessa"}`;
   }
   const mandatoryChecks = [
     "Verifica presenza gas",
@@ -18703,7 +18703,7 @@ function renderAtexProcedurePage(impiantoKey) {
     "Controllo assenza inneschi/scintille"
   ];
   const altairChecks = [
-    "Accendere il dispositivo prima di entrare o avvicinarsi allâarea",
+    "Accendere il dispositivo prima di entrare o avvicinarsi all’area",
     "Attendere autotest completo",
     "Verificare batteria sufficiente",
     "Verificare sensori attivi",
@@ -18716,7 +18716,7 @@ function renderAtexProcedurePage(impiantoKey) {
   ui.atexProcedureContent.innerHTML = `
     <article class="atex-procedure-alert">
       <strong>1. AVVISO IMPORTANTE</strong>
-      <p>Leggere attentamente e completare tutti i controlli prima di iniziare ogni attivitÃ .</p>
+      <p>Leggere attentamente e completare tutti i controlli prima di iniziare ogni attività.</p>
     </article>
 
     <article class="atex-procedure-section atex-hero-section">
@@ -18729,24 +18729,24 @@ function renderAtexProcedurePage(impiantoKey) {
 
     <article class="atex-procedure-section atex-access-limits">
       <h3>2. LIMITAZIONE ACCESSI</h3>
-      <p><strong>Ã vietato entrare allâinterno delle strutture.</strong></p>
-      <p>Lâaccesso Ã¨ consentito solo nel cortile e nelle aree verdi esterne autorizzate.</p>
+      <p><strong>È vietato entrare all’interno delle strutture.</strong></p>
+      <p>L’accesso è consentito solo nel cortile e nelle aree verdi esterne autorizzate.</p>
     </article>
 
     <article class="atex-procedure-section atex-team-warning">
       <strong>ATTENZIONE</strong>
       <p>Le squadre di manutenzione verde NON devono entrare nelle strutture, locali tecnici, vasche, pozzetti o ambienti confinati.</p>
-      <p>Ã consentito operare solo nel cortile e nelle aree verdi esterne autorizzate.</p>
+      <p>È consentito operare solo nel cortile e nelle aree verdi esterne autorizzate.</p>
       <p>In caso di dubbio fermarsi e contattare il responsabile.</p>
     </article>
 
     <article class="atex-procedure-section atex-collapsible-section">
       <button class="atex-section-toggle" type="button" data-atex-checklist-toggle aria-expanded="false" aria-controls="atex-mandatory-checklist">
-        <span>3. CONTROLLI OBBLIGATORI PRIMA ATTIVITÃ</span>
-        <span class="atex-section-arrow" data-atex-checklist-arrow aria-hidden="true">â¼</span>
+        <span>3. CONTROLLI OBBLIGATORI PRIMA ATTIVITÀ</span>
+        <span class="atex-section-arrow" data-atex-checklist-arrow aria-hidden="true">▼</span>
       </button>
       <div id="atex-mandatory-checklist" class="atex-collapsible-panel" hidden>
-        ${buildAtexImageCard("checklist", "Checklist sicurezza prima attivitÃ ", "atex-checklist-image")}
+        ${buildAtexImageCard("checklist", "Checklist sicurezza prima attività", "atex-checklist-image")}
         <div class="atex-checklist-grid">${buildAtexChecklist(mandatoryChecks)}</div>
       </div>
     </article>
@@ -18766,11 +18766,11 @@ function renderAtexProcedurePage(impiantoKey) {
       <div class="atex-alarm-box">
         <strong>In caso di allarme:</strong>
         <ul>
-          <li>interrompere immediatamente lâattivitÃ </li>
+          <li>interrompere immediatamente l’attività</li>
           <li>allontanarsi dalla zona in sicurezza</li>
           <li>avvisare squadra e responsabile</li>
           <li>non rientrare senza autorizzazione</li>
-          <li>vietato riavviare attivitÃ  senza verifica</li>
+          <li>vietato riavviare attività senza verifica</li>
         </ul>
       </div>
     </article>
@@ -18778,10 +18778,10 @@ function renderAtexProcedurePage(impiantoKey) {
     <article class="atex-procedure-section">
       <h3>5. NORME OPERATIVE ATEX</h3>
       <div class="atex-rules-grid">
-        <section class="atex-rule-box atex-rule-forbidden">${buildAtexImageCard("forbidden", "Divieti in zona ATEX", "atex-rule-image")}<h4>ð¥ DIVIETI</h4>${buildAtexList(["Vietato fumare", "Vietato usare fiamme libere", "Vietato produrre scintille", "Vietato utilizzare utensili non certificati", "Vietato usare telefoni non autorizzati in area ATEX"])}</section>
-        <section class="atex-rule-box">${buildAtexImageCard("dpi", "DPI obbligatori", "atex-rule-image")}<h4>ð¦º DPI OBBLIGATORI</h4>${buildAtexList(["Scarpe antistatiche", "Guanti idonei", "Visiera/protezione occhi", "Alta visibilitÃ ", "DPI previsti dalla commessa"])}</section>
-        <section class="atex-rule-box">${buildAtexImageCard("alarm", "Allarme sicurezza", "atex-rule-image")}<h4>â ï¸ COMPORTAMENTO OPERATIVO</h4>${buildAtexList(["Lavorare sempre in squadra", "Mantenere distanza sicurezza", "Controllare costantemente atmosfera", "Fermare attivitÃ  in caso di dubbio", "Segnalare immediatamente anomalie"])}</section>
-        <section class="atex-rule-box">${buildAtexImageCard("danger", "Zona pericolosa esterna", "atex-rule-image")}<h4>ð¬ GAS E VENTILAZIONE</h4>${buildAtexList(["Controllare direzione vento", "Evitare ristagni gas", "Non entrare in pozzetti senza verifica", "Aerare zona prima attivitÃ "])}</section>
+        <section class="atex-rule-box atex-rule-forbidden">${buildAtexImageCard("forbidden", "Divieti in zona ATEX", "atex-rule-image")}<h4>🔥 DIVIETI</h4>${buildAtexList(["Vietato fumare", "Vietato usare fiamme libere", "Vietato produrre scintille", "Vietato utilizzare utensili non certificati", "Vietato usare telefoni non autorizzati in area ATEX"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("dpi", "DPI obbligatori", "atex-rule-image")}<h4>🦺 DPI OBBLIGATORI</h4>${buildAtexList(["Scarpe antistatiche", "Guanti idonei", "Visiera/protezione occhi", "Alta visibilità", "DPI previsti dalla commessa"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("alarm", "Allarme sicurezza", "atex-rule-image")}<h4>⚠️ COMPORTAMENTO OPERATIVO</h4>${buildAtexList(["Lavorare sempre in squadra", "Mantenere distanza sicurezza", "Controllare costantemente atmosfera", "Fermare attività in caso di dubbio", "Segnalare immediatamente anomalie"])}</section>
+        <section class="atex-rule-box">${buildAtexImageCard("danger", "Zona pericolosa esterna", "atex-rule-image")}<h4>🌬 GAS E VENTILAZIONE</h4>${buildAtexList(["Controllare direzione vento", "Evitare ristagni gas", "Non entrare in pozzetti senza verifica", "Aerare zona prima attività"])}</section>
       </div>
     </article>
 
@@ -18790,16 +18790,16 @@ function renderAtexProcedurePage(impiantoKey) {
     <article class="atex-procedure-section atex-status-section">
       <h3>7. STATO SICUREZZA</h3>
       <div class="atex-status-grid">
-        <div class="atex-status-card is-green">ð¢ <strong>SICUREZZA OPERATIVA</strong></div>
-        <div class="atex-status-card is-yellow">ð¡ <strong>ATTENZIONE</strong></div>
-        <div class="atex-status-card is-red">ð´ <strong>RISCHIO ALTO</strong></div>
+        <div class="atex-status-card is-green">🟢 <strong>SICUREZZA OPERATIVA</strong></div>
+        <div class="atex-status-card is-yellow">🟡 <strong>ATTENZIONE</strong></div>
+        <div class="atex-status-card is-red">🔴 <strong>RISCHIO ALTO</strong></div>
       </div>
       <div class="atex-indicators">${statusIndicators.map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>
     </article>
 
     <article class="atex-procedure-section atex-form-section">
       <h3>8. MODULO ATEX</h3>
-      <button class="btn btn-primary atex-open-form-btn" type="button" data-open-atex-form>ð COMPILA MODULO ATEX</button>
+      <button class="btn btn-primary atex-open-form-btn" type="button" data-open-atex-form>📄 COMPILA MODULO ATEX</button>
       <form id="atex-module-form" class="atex-module-form hidden">
         <div class="atex-form-grid">
           <label>Operatore<input name="operatore" type="text" autocomplete="name" required></label>
@@ -18834,7 +18834,7 @@ function getImpiantoWeatherBadgeState(impianto) {
       updating: false,
       feedback: "",
       iconType: "cloud",
-      display: { description: "Coordinate mancanti", temperature: "--Â°", wind: "", rain: "" },
+      display: { description: "Coordinate mancanti", temperature: "--°", wind: "", rain: "" },
       lines: ["Coordinate mancanti"],
       compact: true,
       canRetry: false,
@@ -18846,13 +18846,13 @@ function getImpiantoWeatherBadgeState(impianto) {
   if (!entry) {
     return {
       level: "unavailable",
-      label: updating ? "Aggiornamento meteoâ¦" : "Meteo temporaneamente non disponibile",
-      text: updating ? "Aggiornamento meteoâ¦" : "Meteo temporaneamente non disponibile",
+      label: updating ? "Aggiornamento meteo…" : "Meteo temporaneamente non disponibile",
+      text: updating ? "Aggiornamento meteo…" : "Meteo temporaneamente non disponibile",
       updating,
       feedback,
       iconType: "cloud",
-      display: { description: updating ? "Aggiornamento meteoâ¦" : "Meteo non disponibile", temperature: "--Â°", wind: "", rain: "" },
-      lines: [updating ? "Aggiornamento meteoâ¦" : "Meteo temporaneamente non disponibile"],
+      display: { description: updating ? "Aggiornamento meteo…" : "Meteo non disponibile", temperature: "--°", wind: "", rain: "" },
+      lines: [updating ? "Aggiornamento meteo…" : "Meteo temporaneamente non disponibile"],
       compact: true,
       canRetry: !updating,
       retryKey: key,
@@ -18863,12 +18863,12 @@ function getImpiantoWeatherBadgeState(impianto) {
   const level = entry.riskLevel || "unavailable";
   const label = getImpiantoWeatherPrimaryLabel(entry);
   const emoji = getImpiantoWeatherLevelEmoji(level);
-  const updatedLabel = entry.updatedAt ? ` â¢ aggiornato ${new Date(entry.updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "";
+  const updatedLabel = entry.updatedAt ? ` • aggiornato ${new Date(entry.updatedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "";
   const lines = buildImpiantoWeatherCardLines(entry, label, emoji);
   const iconType = getImpiantoWeatherIconType(entry, entry.iconType || entry.syntheticState || "cloud");
   return {
     level,
-    label: `${label}${updatedLabel}${entry.weatherPartial ? " â¢ Dati meteo parziali" : ""}`,
+    label: `${label}${updatedLabel}${entry.weatherPartial ? " • Dati meteo parziali" : ""}`,
     text: `${emoji} ${label}`,
     updating,
     feedback,
@@ -18884,10 +18884,10 @@ function getImpiantoWeatherBadgeState(impianto) {
 }
 
 function getImpiantoWeatherLevelEmoji(level) {
-  if (level === "red") return "ð´";
-  if (level === "yellow") return "ð¡";
-  if (level === "green") return "ð¢";
-  return "âª";
+  if (level === "red") return "🔴";
+  if (level === "yellow") return "🟡";
+  if (level === "green") return "🟢";
+  return "⚪";
 }
 
 function getImpiantoWeatherPrimaryLabel(entry = {}) {
@@ -18901,12 +18901,12 @@ function formatImpiantoWeatherTimeRange(start, end) {
   if (!Number.isFinite(Number(start))) return "";
   const startLabel = formatWeatherSlotTime(start);
   if (!Number.isFinite(Number(end)) || Number(end) <= Number(start)) return startLabel;
-  return `${startLabel}â${formatWeatherSlotTime(end)}`;
+  return `${startLabel}–${formatWeatherSlotTime(end)}`;
 }
 
 function formatCompactImpiantoWeatherStatus(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry)) {
-  const temperature = isPresentFiniteNumber(entry.temperature) ? ` Â· ${Math.round(Number(entry.temperature))}Â°C` : "";
-  const weatherState = String(entry.weatherState || entry.description || label || "Meteo").replace(/^[^A-Za-zÃ-Ã¿]+\s*/u, "");
+  const temperature = isPresentFiniteNumber(entry.temperature) ? ` · ${Math.round(Number(entry.temperature))}°C` : "";
+  const weatherState = String(entry.weatherState || entry.description || label || "Meteo").replace(/^[^A-Za-zÀ-ÿ]+\s*/u, "");
   const intensity = entry.rainIntensity ? `${entry.rainIntensity}` : "";
   if (entry.hasCurrentRain) return `Ora ${intensity || weatherState || "Pioggia"}${temperature}`;
   return `Ora ${weatherState || label}${temperature}`;
@@ -18915,19 +18915,19 @@ function formatCompactImpiantoWeatherStatus(entry = {}, label = getImpiantoWeath
 function formatCompactImpiantoWeatherRiskLine(message = "") {
   const normalized = String(message || "").trim().toLowerCase();
   if (!normalized) return "";
-  if (normalized.includes("terreno")) return "â ï¸ Terreno";
-  if (normalized.includes("sfalcio")) return "â ï¸ Sfalcio";
-  if (normalized.includes("rinvio")) return "â ï¸ Rinvio";
-  if (normalized.includes("allerta")) return "â ï¸ Allerta";
-  if (normalized.includes("tempor")) return "â ï¸ Temporali";
-  if (normalized.includes("ok")) return "â Lavoro";
-  return `â ï¸ ${String(message).replace(/^â ï¸?\s*/u, "").split(/[.;]/)[0].trim().slice(0, 18)}`;
+  if (normalized.includes("terreno")) return "⚠️ Terreno";
+  if (normalized.includes("sfalcio")) return "⚠️ Sfalcio";
+  if (normalized.includes("rinvio")) return "⚠️ Rinvio";
+  if (normalized.includes("allerta")) return "⚠️ Allerta";
+  if (normalized.includes("tempor")) return "⚠️ Temporali";
+  if (normalized.includes("ok")) return "✓ Lavoro";
+  return `⚠️ ${String(message).replace(/^⚠️?\s*/u, "").split(/[.;]/)[0].trim().slice(0, 18)}`;
 }
 
 function truncateImpiantoWeatherLine(line = "", maxLength = 24) {
   const value = String(line || "").trim();
   if (value.length <= maxLength) return value;
-  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}â¦`;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
 }
 
 function buildImpiantoWeatherCardLines(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry), emoji = getImpiantoWeatherLevelEmoji(entry.riskLevel)) {
@@ -18977,19 +18977,19 @@ function getImpiantoCompactCondition(entry = {}) {
   const temp = Number(entry.temperature ?? entry.apparentTemperature);
   const wind = Number(entry.windSpeed ?? entry.windSpeedKmh ?? entry.importantWindKmh);
 
-  if (Number.isFinite(temp) && temp >= 35) return "ð¥ Caldo intenso";
-  if (Number.isFinite(wind) && wind >= NAVIGATION_WEATHER_STRONG_WIND_KMH) return "ð¨ Vento forte";
-  if (isThunderWeatherCode(weatherCode) || /tempor|thunder|fulmin/.test(weatherText)) return "âï¸ Temporale";
-  if ((weatherCode >= 71 && weatherCode <= 77) || weatherCode === 85 || weatherCode === 86 || /neve|snow/.test(weatherText)) return "âï¸ Neve";
-  if (weatherCode === 45 || weatherCode === 48 || /nebb|fog|foschia/.test(weatherText)) return "ð«ï¸ Nebbia";
-  if (NAVIGATION_WEATHER_RAIN_CODES.has(weatherCode) || /pioggi|rovesc|rain/.test(weatherText)) return "ð§ï¸ Pioggia";
-  if (weatherCode === 0 || /seren|sole|clear/.test(weatherText)) return "âï¸ Sole";
-  return "âï¸ Nuvoloso";
+  if (Number.isFinite(temp) && temp >= 35) return "🔥 Caldo intenso";
+  if (Number.isFinite(wind) && wind >= NAVIGATION_WEATHER_STRONG_WIND_KMH) return "💨 Vento forte";
+  if (isThunderWeatherCode(weatherCode) || /tempor|thunder|fulmin/.test(weatherText)) return "⛈️ Temporale";
+  if ((weatherCode >= 71 && weatherCode <= 77) || weatherCode === 85 || weatherCode === 86 || /neve|snow/.test(weatherText)) return "❄️ Neve";
+  if (weatherCode === 45 || weatherCode === 48 || /nebb|fog|foschia/.test(weatherText)) return "🌫️ Nebbia";
+  if (NAVIGATION_WEATHER_RAIN_CODES.has(weatherCode) || /pioggi|rovesc|rain/.test(weatherText)) return "🌧️ Pioggia";
+  if (weatherCode === 0 || /seren|sole|clear/.test(weatherText)) return "☀️ Sole";
+  return "☁️ Nuvoloso";
 }
 
 function buildImpiantoWeatherDisplay(entry = {}, label = getImpiantoWeatherPrimaryLabel(entry)) {
   const description = getImpiantoCompactCondition(entry);
-  const temperature = isPresentFiniteNumber(entry.temperature) ? `${Math.round(Number(entry.temperature))}Â°` : "--Â°";
+  const temperature = isPresentFiniteNumber(entry.temperature) ? `${Math.round(Number(entry.temperature))}°` : "--°";
   const windSpeed = Number(entry.windSpeed ?? entry.windSpeedKmh);
   const windDirection = entry.windDirection || entry.windDirectionLabel || "";
   const wind = isPresentFiniteNumber(windSpeed) && windSpeed > 0.4 ? `${Math.round(windSpeed)} km/h${windDirection ? ` ${windDirection}` : ""}` : "";
@@ -19026,22 +19026,22 @@ function buildImpiantoWeatherIconSvg(type = "cloud") {
 
 function formatImpiantoRainLine(entry = {}) {
   if (!entry.hasCurrentRain && !entry.hasNextHourRain && !entry.rainWindow) return "";
-  const intensity = entry.rainIntensity ? ` â¢ ${entry.rainIntensity}` : "";
+  const intensity = entry.rainIntensity ? ` • ${entry.rainIntensity}` : "";
   if (entry.rainWindow?.label) return `${entry.rainWindow.label}${intensity}`;
-  return entry.rainIntensity ? `Adesso â¢ ${entry.rainIntensity}` : "Adesso";
+  return entry.rainIntensity ? `Adesso • ${entry.rainIntensity}` : "Adesso";
 }
 
 function getImpiantoWeatherAlertLine(entry = {}) {
-  if (entry.civilProtectionAlert) return "â  Allerta meteo";
-  if (Array.isArray(entry.messages) && entry.messages.some((message) => /temporale/i.test(message))) return "â  Temporali";
+  if (entry.civilProtectionAlert) return "⚠ Allerta meteo";
+  if (Array.isArray(entry.messages) && entry.messages.some((message) => /temporale/i.test(message))) return "⚠ Temporali";
   return "";
 }
 
 function getImpiantoWeatherLineClass(line = "", index = 0) {
   const normalized = String(line || "").toLowerCase();
   if (normalized.includes("rischio") || normalized.includes("allerta") || normalized.includes("rinvio") || normalized.includes("attenzione") || normalized.includes("temporali")) return " is-risk";
-  if (normalized.includes("pioggia") || normalized.includes("probabilitÃ ") || normalized.includes("prob.")) return " is-rain";
-  if (normalized.includes("vento") || normalized.startsWith("ð¨") || normalized.includes("dato vento")) return " is-wind";
+  if (normalized.includes("pioggia") || normalized.includes("probabilità") || normalized.includes("prob.")) return " is-rain";
+  if (normalized.includes("vento") || normalized.startsWith("💨") || normalized.includes("dato vento")) return " is-wind";
   if (index === 0) return " is-primary";
   return "";
 }
@@ -19063,7 +19063,7 @@ function handleImpiantoWeatherRetryClick(event) {
 function buildImpiantoWeatherCardInnerMarkup(state) {
   const level = escapeHTML(state.level);
   const iconType = state.iconType || "cloud";
-  const display = state.display || { description: state.text || "Meteo", temperature: "--Â°", wind: "", rain: "" };
+  const display = state.display || { description: state.text || "Meteo", temperature: "--°", wind: "", rain: "" };
   const retryMarkup = state.canRetry && state.retryKey
     ? `<button type="button" class="impianto-weather-retry-btn" data-weather-retry="${escapeHTML(state.retryKey)}">Riprova</button>`
     : "";
@@ -19073,10 +19073,10 @@ function buildImpiantoWeatherCardInnerMarkup(state) {
   const rainMarkup = display.rain ? `<span class="impianto-weather-rain">${escapeHTML(display.rain)}</span>` : "";
   const alertMarkup = Array.isArray(display.alerts) ? display.alerts.slice(0, 2).map((line) => `<span class="impianto-weather-sfalcio-alert">${escapeHTML(line)}</span>`).join("") : "";
   const atexMarkup = state.showAtex && state.retryKey
-    ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">â ï¸</span><span>ATEX</span></button>`
+    ? `<button type="button" class="impianto-weather-atex-btn" data-atex-procedure="${escapeHTML(state.retryKey)}" aria-label="Apri procedura sicurezza ATEX"><span aria-hidden="true">⚠️</span><span>ATEX</span></button>`
     : "";
   const safetyMarkup = "";
-  const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">âº</span></span>`;
+  const detailHint = state.canRetry ? "" : `<span class="impianto-weather-detail-hint">Tocca per dettaglio <span aria-hidden="true">›</span></span>`;
   return `<span class="impianto-weather-badge impianto-weather-card weather-${level}${state.compact ? " is-compact" : ""}" title="${escapeHTML(state.label)}" role="button" tabindex="0" aria-label="Apri dettaglio meteo impianto"><span class="impianto-weather-icon-shell weather-icon-${escapeHTML(iconType)}">${buildImpiantoWeatherIconSvg(iconType)}</span><span class="impianto-weather-copy"><span class="impianto-weather-description">${escapeHTML(display.description)}</span><span class="impianto-weather-temp">${escapeHTML(display.temperature)}</span>${windMarkup}${rainMarkup}${alertMarkup}${detailHint}${atexMarkup}${safetyMarkup}${retryMarkup}</span></span>`;
 }
 
@@ -19136,7 +19136,7 @@ function getWeatherRiskMeta(level) {
     basso: {
       className: "low",
       colorClass: "green",
-      icon: "ð¢",
+      icon: "🟢",
       label: "BASSO",
       title: "RISCHIO OPERATIVO BASSO",
       finalTitle: "Lavoro regolare",
@@ -19145,7 +19145,7 @@ function getWeatherRiskMeta(level) {
     medio: {
       className: "medium",
       colorClass: "yellow",
-      icon: "ð¡",
+      icon: "🟡",
       label: "MEDIO",
       title: "RISCHIO OPERATIVO MEDIO",
       finalTitle: "Procedere con cautela",
@@ -19154,11 +19154,11 @@ function getWeatherRiskMeta(level) {
     alto: {
       className: "high",
       colorClass: "red",
-      icon: "ð´",
+      icon: "🔴",
       label: "ALTO",
       title: "RISCHIO OPERATIVO ALTO",
-      finalTitle: "Valutare sospensione attivitÃ ",
-      finalText: "Rischio alto. Valutare sospensione o rinvio finchÃ© temporali, raffiche, gelo o caldo intenso non sono terminati."
+      finalTitle: "Valutare sospensione attività",
+      finalText: "Rischio alto. Valutare sospensione o rinvio finché temporali, raffiche, gelo o caldo intenso non sono terminati."
     }
   }[normalizeWeatherRiskLevel(level)];
 }
@@ -19246,13 +19246,13 @@ function buildSfalcioOperationalIndications(status = {}, slot = null) {
   const thunder = analysis.thunderWithinWindow || slots.some((item) => isThunderWeatherCode(item.weather_code));
   const temp = Math.max(Number(scopedStatus.temperature) || -99, Number(current.temperature_2m) || -99, ...slots.map((item) => getWeatherSlotTemperature(item) || -99));
   if (thunder) {
-    add("temporali-stop", "Temporali vicini: sospendere attivitÃ  allâaperto e rientrare in zona sicura o mezzo aziendale.", 1);
+    add("temporali-stop", "Temporali vicini: sospendere attività all’aperto e rientrare in zona sicura o mezzo aziendale.", 1);
     add("temporali-metallo", "Non usare attrezzi metallici in campo aperto; allontanarsi da alberi isolati, pali e recinzioni metalliche.", 2);
   }
   if (rainProbability > 65 || wet) {
-    add("erba-bagnata", "Erba bagnata: ridurre velocitÃ  di lavoro e usare DPI antiscivolo.", 5);
-    add("pendenze", "Evitare pendenze e scarpate se il terreno Ã¨ scivoloso.", 6);
-    add("rinvio-pioggia", "Valutare rinvio dello sfalcio se la pioggia Ã¨ imminente; completare prima zone urgenti o vicine agli accessi.", 7);
+    add("erba-bagnata", "Erba bagnata: ridurre velocità di lavoro e usare DPI antiscivolo.", 5);
+    add("pendenze", "Evitare pendenze e scarpate se il terreno è scivoloso.", 6);
+    add("rinvio-pioggia", "Valutare rinvio dello sfalcio se la pioggia è imminente; completare prima zone urgenti o vicine agli accessi.", 7);
   }
   if (wet && (rainProbability >= 50 || Number(scopedStatus.rainAmount) >= 1 || slots.some((item) => getPrecipitationAmount(item) >= 1))) {
     add("terreno-umido", "Terreno molto umido: rischio impantanamento mezzi. Evitare zone morbide e controllare accessi prima di entrare.", 10);
@@ -19264,14 +19264,14 @@ function buildSfalcioOperationalIndications(status = {}, slot = null) {
     add("occhi-viso", "Proteggere occhi e viso da polvere, erba e materiale proiettato.", 17);
   }
   if (temp >= 30) {
-    add("caldo", "Caldo intenso: aumentare pause e idratazione, usare cappello, acqua e pause allâombra.", 20);
-    add("ore-calde", "Evitare lavori pesanti nelle ore piÃ¹ calde e controllare affaticamento della squadra.", 21);
+    add("caldo", "Caldo intenso: aumentare pause e idratazione, usare cappello, acqua e pause all’ombra.", 20);
+    add("ore-calde", "Evitare lavori pesanti nelle ore più calde e controllare affaticamento della squadra.", 21);
   }
   if (analysis.frostRisk || temp <= 2) {
     add("gelo", "Gelo o temperatura bassa: attenzione scivolamento su scale, tombini e rampe; usare guanti adeguati.", 25);
   }
   if (analysis.lowVisibility || slots.some(isFogOrLowVisibility)) {
-    add("visibilita", "Nebbia o scarsa visibilitÃ : aumentare distanza tra operatori, usare giubbino alta visibilitÃ  e lampeggianti mezzi.", 30);
+    add("visibilita", "Nebbia o scarsa visibilità: aumentare distanza tra operatori, usare giubbino alta visibilità e lampeggianti mezzi.", 30);
   }
   if (analysis.fireRiskHigh) {
     add("incendi", "Rischio incendi alto: evitare scintille, controllare motori caldi e marmitte, segnalare subito fumo.", 35);
@@ -19303,20 +19303,20 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const slots = Array.isArray(status.forecastSlots) ? status.forecastSlots : [];
   const analysis = buildDettaglioMeteoRiskAnalysis(status);
   const riskMeta = getWeatherRiskMeta(analysis.level);
-  ui.impiantoWeatherDetailSubtitle.textContent = `${impianto.denominazione || "Impianto"} â¢ ${impianto.comune || "Comune non indicato"}`;
+  ui.impiantoWeatherDetailSubtitle.textContent = `${impianto.denominazione || "Impianto"} • ${impianto.comune || "Comune non indicato"}`;
   const windValue = isPresentFiniteNumber(status.windSpeedKmh) ? `${Math.round(Number(status.windSpeedKmh))} km/h${status.windDirectionLabel ? ` ${status.windDirectionLabel}` : ""}` : "";
   const gustValue = isPresentFiniteNumber(status.windGustKmh ?? current.wind_gusts_10m) ? `${Math.round(Number(status.windGustKmh ?? current.wind_gusts_10m))} km/h` : "";
   const rainProbabilityValue = isPresentFiniteNumber(status.rainProbability) ? `${Math.round(Number(status.rainProbability))}%` : "";
   const rainWindowText = status.rainWindow?.label ? `Pioggia prevista ${status.rainWindow.label}` : "Pioggia non prevista a breve";
   const currentMetrics = [
-    buildWeatherDetailMetric("Meteo", status.weatherState || status.description, "ð¤ï¸"),
-    buildWeatherDetailMetric("Percepita", isPresentFiniteNumber(status.apparentTemperature) ? `${Math.round(Number(status.apparentTemperature))}Â°` : "", "ð¤"),
-    buildWeatherDetailMetric("Vento", windValue, "ð¬ï¸"),
-    buildWeatherDetailMetric("Pioggia", rainProbabilityValue, "ð§ï¸"),
-    buildWeatherDetailMetric("Temperatura", isPresentFiniteNumber(status.temperature) ? `${Math.round(Number(status.temperature))}Â°` : "", "ð¡ï¸"),
-    buildWeatherDetailMetric("UmiditÃ ", isPresentFiniteNumber(current.relative_humidity_2m) ? `${Math.round(Number(current.relative_humidity_2m))}%` : "", "ð§"),
-    buildWeatherDetailMetric("Raffiche", gustValue, "ð¨"),
-    status.rainWindow?.label ? buildWeatherDetailMetric("Prossima pioggia", status.rainWindow.label, "â±ï¸") : ""
+    buildWeatherDetailMetric("Meteo", status.weatherState || status.description, "🌤️"),
+    buildWeatherDetailMetric("Percepita", isPresentFiniteNumber(status.apparentTemperature) ? `${Math.round(Number(status.apparentTemperature))}°` : "", "🤚"),
+    buildWeatherDetailMetric("Vento", windValue, "🌬️"),
+    buildWeatherDetailMetric("Pioggia", rainProbabilityValue, "🌧️"),
+    buildWeatherDetailMetric("Temperatura", isPresentFiniteNumber(status.temperature) ? `${Math.round(Number(status.temperature))}°` : "", "🌡️"),
+    buildWeatherDetailMetric("Umidità", isPresentFiniteNumber(current.relative_humidity_2m) ? `${Math.round(Number(current.relative_humidity_2m))}%` : "", "💧"),
+    buildWeatherDetailMetric("Raffiche", gustValue, "💨"),
+    status.rainWindow?.label ? buildWeatherDetailMetric("Prossima pioggia", status.rainWindow.label, "⏱️") : ""
   ].filter(Boolean).join("");
   const forecastRows = slots.slice(0, 12).map((slot, index) => {
     const risk = getWeatherDetailRiskForSlot(slot, status);
@@ -19328,10 +19328,10 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
     const slotGust = isPresentFiniteNumber(gust) ? `${Math.round(Number(gust))} km/h` : "n/d";
     const slotIndications = buildSfalcioOperationalIndications(status, slot).slice(0, 4).map((item) => `<li>${escapeHTML(item.text)}</li>`).join("");
     return `<details class="weather-detail-hour-card hourly-card risk-${meta.className}">
-      <summary><span class="weather-detail-hour-time">${escapeHTML(formatWeatherSlotTime(slot.timestamp))}</span><span class="weather-detail-hour-icon">${escapeHTML(weatherCodeLabel(slot.weather_code).split(" ")[0] || "âï¸")}</span><span class="weather-detail-hour-rain">ð§ï¸ ${escapeHTML(probability)}</span>${isPresentFiniteNumber(wind) ? `<span class="weather-detail-hour-wind">ð¬ï¸ ${Math.round(Number(wind))}</span>` : ""}<span class="weather-detail-risk-badge risk-${meta.className}">${meta.label}</span></summary>
+      <summary><span class="weather-detail-hour-time">${escapeHTML(formatWeatherSlotTime(slot.timestamp))}</span><span class="weather-detail-hour-icon">${escapeHTML(weatherCodeLabel(slot.weather_code).split(" ")[0] || "☁️")}</span><span class="weather-detail-hour-rain">🌧️ ${escapeHTML(probability)}</span>${isPresentFiniteNumber(wind) ? `<span class="weather-detail-hour-wind">🌬️ ${Math.round(Number(wind))}</span>` : ""}<span class="weather-detail-risk-badge risk-${meta.className}">${meta.label}</span></summary>
       <div class="weather-detail-hour-panel">
-        <p><b>Meteo previsto:</b> ${escapeHTML(weatherCodeLabel(slot.weather_code))}${isPresentFiniteNumber(slot.temperature_2m) ? ` â¢ ${Math.round(Number(slot.temperature_2m))}Â°` : ""}</p>
-        <p><b>ProbabilitÃ  pioggia:</b> ${escapeHTML(probability)} â¢ <b>Vento:</b> ${escapeHTML(slotWind)} â¢ <b>Raffiche:</b> ${escapeHTML(slotGust)}</p>
+        <p><b>Meteo previsto:</b> ${escapeHTML(weatherCodeLabel(slot.weather_code))}${isPresentFiniteNumber(slot.temperature_2m) ? ` • ${Math.round(Number(slot.temperature_2m))}°` : ""}</p>
+        <p><b>Probabilità pioggia:</b> ${escapeHTML(probability)} • <b>Vento:</b> ${escapeHTML(slotWind)} • <b>Raffiche:</b> ${escapeHTML(slotGust)}</p>
         <p><b>Rischio operativo:</b> ${meta.icon} ${meta.label}</p>
         <ul>${slotIndications}</ul>
       </div>
@@ -19343,13 +19343,13 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
   const atexButtonKey = buildImpiantoKey(impianto) || impiantoKey;
   const atexActionMarkup = isCurrentCommessaInrete() && !isCurrentCommessaDepurazioneOrDiscariche() ? `
     <button type="button" class="weather-detail-atex-action" data-atex-procedure="${escapeHTML(atexButtonKey)}" aria-label="Apri istruzioni ATEX per questo impianto">
-      <span class="weather-detail-atex-icon" aria-hidden="true">â ï¸</span>
+      <span class="weather-detail-atex-icon" aria-hidden="true">⚠️</span>
       <span><strong>ATTENZIONE ATEX</strong><small>Premi per istruzioni</small></span>
     </button>
   ` : "";
   const safetyActionMarkup = isCurrentCommessaDepurazioneOrDiscariche() ? `
     <button type="button" class="weather-detail-safety-action" data-impianto-safety="${escapeHTML(atexButtonKey)}" aria-label="Apri sicurezza impianto per questo impianto">
-      <span class="weather-detail-atex-icon" aria-hidden="true">ð¦º</span>
+      <span class="weather-detail-atex-icon" aria-hidden="true">🦺</span>
       <span><strong>SICUREZZA IMPIANTO</strong><small>Premi per istruzioni</small></span>
     </button>
   ` : "";
@@ -19363,11 +19363,11 @@ function renderDettaglioMeteoImpianto(impiantoKey) {
         ${gustValue ? `<span class="risk-row">Raffiche ${escapeHTML(gustValue)}</span>` : ""}
       </div>
     </article>
-    ${atexActionMarkup}${safetyActionMarkup}${isCurrentCommessaDepurazioneOrDiscariche() ? `<button type="button" class="weather-detail-safety-action" data-capitolato-open="true" aria-label="Apri capitolato operativo"><span class="weather-detail-atex-icon" aria-hidden="true">ð</span><span><strong>CAPITOLATO</strong><small>Info operative commessa</small></span></button>` : ""}
+    ${atexActionMarkup}${safetyActionMarkup}${isCurrentCommessaDepurazioneOrDiscariche() ? `<button type="button" class="weather-detail-safety-action" data-capitolato-open="true" aria-label="Apri capitolato operativo"><span class="weather-detail-atex-icon" aria-hidden="true">📘</span><span><strong>CAPITOLATO</strong><small>Info operative commessa</small></span></button>` : ""}
     <article class="weather-detail-section"><h3>Meteo attuale</h3><div class="weather-detail-current-grid current-weather-grid">${currentMetrics || "<p class='muted'>Meteo attuale non disponibile.</p>"}</div></article>
     <article class="weather-detail-section"><h3>Previsioni prossime ore</h3><div class="weather-detail-timeline hourly-forecast-list" aria-label="Timeline previsioni prossime ore">${forecastRows}</div></article>
     <a class="weather-detail-radar-card" href="${escapeHTML(radarUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Apri radar meteo">
-      <span><b>ð¦ï¸ Radar meteo</b><small>Visualizza evoluzione precipitazioni</small></span><span aria-hidden="true">âº</span>
+      <span><b>🌦️ Radar meteo</b><small>Visualizza evoluzione precipitazioni</small></span><span aria-hidden="true">›</span>
     </a>
     <article class="weather-detail-section weather-detail-indications-card">
       <input class="weather-detail-indications-toggle" id="weather-detail-indications-toggle" type="checkbox">
@@ -19382,7 +19382,7 @@ async function refreshDettaglioMeteoImpianto() {
   const route = parseCommessaHash();
   const impianto = getDettaglioMeteoImpiantoByKey(route.meteo);
   if (!impianto) return;
-  ui.impiantoWeatherDetailFeedback.textContent = "Aggiornamento meteo in corsoâ¦";
+  ui.impiantoWeatherDetailFeedback.textContent = "Aggiornamento meteo in corso…";
   ui.impiantoWeatherDetailRefreshBtn.disabled = true;
   await refreshImpiantoWeatherStatus(impianto, { force: true });
   renderDettaglioMeteoImpianto(route.meteo);
@@ -19477,7 +19477,7 @@ function buildRainWindowLabel(rainSlots = [], allSlots = []) {
   return {
     start,
     end,
-    label: start === end ? formatWeatherSlotTime(start) : `${formatWeatherSlotTime(start)}â${formatWeatherSlotTime(end)}`
+    label: start === end ? formatWeatherSlotTime(start) : `${formatWeatherSlotTime(start)}–${formatWeatherSlotTime(end)}`
   };
 }
 
@@ -19625,7 +19625,7 @@ function buildImpiantoWeatherStatus(impianto, weatherData, civilProtectionAlert 
     currentWind: weatherDetails.windSpeedKmh ?? 0,
     currentGust: currentGustKmh ?? 0
   });
-  const description = badgeLabel === "Meteo OK" ? weatherCodeLabel(current.weather_code).replace(/^[^A-Za-zÃ-Ã¿]+\s*/, "") : shortAlertText;
+  const description = badgeLabel === "Meteo OK" ? weatherCodeLabel(current.weather_code).replace(/^[^A-Za-zÀ-ÿ]+\s*/, "") : shortAlertText;
 
   return {
     impiantoKey: getImpiantoWeatherCacheKey(impianto),
@@ -19702,12 +19702,12 @@ function getImpiantoWeatherAlertChipMeta(status) {
     || status.syntheticState === "temporale"
     || NAVIGATION_WEATHER_THUNDER_CODES.has(Number(status.currentWeather?.weather_code))
     || /protezione civile|temporale/.test(messageText);
-  if (hasCivilOrThunder) return { text: "â ï¸ Temporale", severity: "danger" };
+  if (hasCivilOrThunder) return { text: "⚠️ Temporale", severity: "danger" };
   if (status.syntheticState === "vento" || Number(status.importantWindKmh) >= NAVIGATION_WEATHER_STRONG_WIND_KMH || /vento forte/.test(messageText)) {
-    return { text: "ð¨ Vento forte", severity: "warning" };
+    return { text: "💨 Vento forte", severity: "warning" };
   }
   if (status.syntheticState === "pioggia" || status.hasCurrentRain || status.hasNextHourRain || /pioggia/.test(messageText)) {
-    return { text: "ð§ï¸ Pioggia", severity: "info" };
+    return { text: "🌧️ Pioggia", severity: "info" };
   }
   return null;
 }
@@ -19910,7 +19910,7 @@ async function refreshSelectedCommessaWeather() {
 
   commessaWeatherManualRefreshInFlight = true;
   updateCommessaWeatherRefreshButtonState();
-  setCommessaWeatherRefreshStatus("Aggiornamento meteoâ¦", "loading");
+  setCommessaWeatherRefreshStatus("Aggiornamento meteo…", "loading");
 
   try {
     clearTimeout(impiantoWeatherRefreshTimer);
@@ -20107,7 +20107,7 @@ function getRelevantNavigationWeatherRisk(current, nextHourSlots) {
   const severeSlot = nextHourSlots.find((slot) => getPrecipitationAmount(slot) >= NAVIGATION_WEATHER_RELEVANT_RAIN_MM || [65, 82, 96, 99].includes(Number(slot.weather_code)));
   if (severeSlot) return `Rischio meteo rilevante previsto ${formatNavigationWeatherSlotEta(severeSlot)}`;
   const lowVisibilitySlot = nextHourSlots.find((slot) => Number(slot.visibility) > 0 && Number(slot.visibility) < 500);
-  if (lowVisibilitySlot) return `Rischio meteo rilevante: visibilitÃ  ridotta ${formatNavigationWeatherSlotEta(lowVisibilitySlot)}`;
+  if (lowVisibilitySlot) return `Rischio meteo rilevante: visibilità ridotta ${formatNavigationWeatherSlotEta(lowVisibilitySlot)}`;
   return "";
 }
 
@@ -20137,7 +20137,7 @@ function formatCivilProtectionNavigationMessage(alert) {
 function showNavigationWeatherWarning(messages) {
   const summary = messages.join("; ");
   if (!ui.navigationWeatherWarningModal || !ui.navigationWeatherWarningList) {
-    return Promise.resolve(window.confirm(`â ï¸ Nellâarea dellâimpianto Ã¨ previsto: ${summary}.
+    return Promise.resolve(window.confirm(`⚠️ Nell’area dell’impianto è previsto: ${summary}.
 Vuoi continuare la navigazione?`));
   }
 
@@ -20229,7 +20229,7 @@ async function navigateToImpianto(impianto) {
   const url = buildImpiantoMapsUrl(impianto);
 
   if (!url) {
-    alert("Posizione dellâimpianto non disponibile");
+    alert("Posizione dell’impianto non disponibile");
     return;
   }
 
@@ -20258,7 +20258,7 @@ async function navigateToImpianto(impianto) {
     impianto.indirizzo
   ].find((value) => String(value || "").trim()) || "zona non specificata";
   const comuneLabel = String(impianto.comune || "").trim() || areaLabel;
-  const chatText = `ð§­ ${operatorName} naviga verso ${impiantoName}. La squadra Ã¨ al lavoro nella zona ${comuneLabel}.`;
+  const chatText = `🧭 ${operatorName} naviga verso ${impiantoName}. La squadra è al lavoro nella zona ${comuneLabel}.`;
 
   try {
     await sendChatMessage({
@@ -20330,7 +20330,7 @@ async function markImpiantoDone(impianto, options = {}) {
     });
     setImpiantiViewMode("done");
     alert(source === "whatsapp"
-      ? "Sei offline: FATTO salvato localmente. Whazzup Ã¨ stato preparato e Firebase si sincronizzerÃ  automaticamente quando torna Internet."
+      ? "Sei offline: FATTO salvato localmente. Whazzup è stato preparato e Firebase si sincronizzerà automaticamente quando torna Internet."
       : "Sei offline: FATTO salvato localmente. Firebase e WhatsApp saranno disponibili quando torna Internet.");
     return true;
   }
@@ -20480,7 +20480,7 @@ async function processPendingSheetExports() {
           nextRetryAt: Date.now() + Math.min(SHEET_RETRY_MS * attempts, 10 * 60 * 1000)
         });
       } else {
-        console.error("Export foglio fallito definitivamente dopo piÃ¹ tentativi:", error);
+        console.error("Export foglio fallito definitivamente dopo più tentativi:", error);
       }
     }
   }
@@ -20550,7 +20550,7 @@ async function resetImpianto(impianto) {
     resetBy: resetByLocal
   });
   if (!resetSaved) {
-    alert("Reset non salvato. Lo stato FATTO Ã¨ rimasto invariato; riprova.");
+    alert("Reset non salvato. Lo stato FATTO è rimasto invariato; riprova.");
     return false;
   }
 
@@ -20605,12 +20605,12 @@ async function deleteImpianto(impianto) {
 
 async function deleteCommessa(commessaId, nome) {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² eliminare commesse.");
+    alert("Solo un admin può eliminare commesse.");
     return;
   }
   const subcommesse = getSubcommesse(commessaId);
   if (subcommesse.length) {
-    alert(`Non puoi eliminare la commessa "${nome}" perchÃ© contiene ${subcommesse.length} subcommesse. Elimina o sposta prima le subcommesse.`);
+    alert(`Non puoi eliminare la commessa "${nome}" perché contiene ${subcommesse.length} subcommesse. Elimina o sposta prima le subcommesse.`);
     return;
   }
 
@@ -20636,7 +20636,7 @@ async function deleteCommessa(commessaId, nome) {
 async function addPersonale(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo un admin puÃ² gestire il personale.");
+    alert("Solo un admin può gestire il personale.");
     return;
   }
   const fullName = ui.personaleNome.value.trim().replace(/\s+/g, " ");
@@ -20666,7 +20666,7 @@ async function addPersonale(event) {
 async function addMezzo(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo un admin puÃ² gestire i mezzi.");
+    alert("Solo un admin può gestire i mezzi.");
     return;
   }
   const mezzo = {
@@ -20695,7 +20695,7 @@ async function addMezzo(event) {
 
 async function importPersonaleFromExcel() {
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com puÃ² importare il personale.");
+    alert("Solo ionut29019@gmail.com può importare il personale.");
     return;
   }
   await importSimpleRegistryFromExcel(ui.personaleExcelFile, "personale");
@@ -20703,7 +20703,7 @@ async function importPersonaleFromExcel() {
 
 async function importMezziFromExcel() {
   if (!canManageData()) {
-    alert("Solo ionut29019@gmail.com puÃ² importare i mezzi.");
+    alert("Solo ionut29019@gmail.com può importare i mezzi.");
     return;
   }
   const file = ui.mezziExcelFile.files && ui.mezziExcelFile.files[0];
@@ -21007,7 +21007,7 @@ const DEFAULT_COMMESSE_ABILITAZIONI = [
   "HERA Depurazione", "HERA Discariche", "INRETE Gas Bologna", "INRETE Gas Modena", "INRETE Gas Ferrara", "WTE", "Altro"
 ];
 const DEFAULT_CORSI = [
-  "Sicurezza generale", "Sicurezza specifica", "Primo soccorso", "Antincendio", "Preposto", "DPI 3Âª categoria", "Lavori in quota", "PLE", "Carrello elevatore", "Decespugliatore / attrezzature verde", "ATEX", "Rischio biologico", "Spazi confinati"
+  "Sicurezza generale", "Sicurezza specifica", "Primo soccorso", "Antincendio", "Preposto", "DPI 3ª categoria", "Lavori in quota", "PLE", "Carrello elevatore", "Decespugliatore / attrezzature verde", "ATEX", "Rischio biologico", "Spazi confinati"
 ];
 
 const PRIMARY_CORSI = ["Primo soccorso", "Antincendio", "Preposto", "ATEX"];
@@ -21036,7 +21036,7 @@ function renderPersonaleSuggestions() {
     const commesse = Array.isArray(item.commesseAbilitate) ? item.commesseAbilitate : [];
     const isAllCommesse = Boolean(item.abilitatoTutteCommesse);
     const corsiCount = toCourseList(normalizePersonCourses(item)).length;
-    return `<button type="button" class="personale-suggestion-item" data-person-id="${escapeHTML(item.id)}"><strong>${escapeHTML(getPersonaleDisplayName(item) || "Senza nome")}</strong><small>${escapeHTML(item.telefono || "-")} â¢ ${isAllCommesse ? "â Tutte le commesse" : (commesse.length ? "â Abilitato parziale" : "â Non abilitato")} â¢ Corsi ${corsiCount}/${PRIMARY_CORSI.length}</small></button>`;
+    return `<button type="button" class="personale-suggestion-item" data-person-id="${escapeHTML(item.id)}"><strong>${escapeHTML(getPersonaleDisplayName(item) || "Senza nome")}</strong><small>${escapeHTML(item.telefono || "-")} • ${isAllCommesse ? "✅ Tutte le commesse" : (commesse.length ? "✅ Abilitato parziale" : "❌ Non abilitato")} • Corsi ${corsiCount}/${PRIMARY_CORSI.length}</small></button>`;
   }).join("") || (query ? "<p class='muted'>Nessun risultato.</p>" : "<p class='muted'>Cerca personale per aprire una scheda.</p>");
   Array.from(ui.personaleSearchSuggestions.querySelectorAll("[data-person-id]")).forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -21100,12 +21100,12 @@ function renderPersonaleList(container, items, onDelete) {
     const corsi = toCourseList(normalizePersonCourses(item));
     const coursesOwned = corsi.length;
     const commesseBadge = item.abilitatoTutteCommesse
-      ? "â Abilitato a tutte le commesse"
-      : (commesseAbilitate.length ? "â Abilitato parziale" : "â Non abilitato");
+      ? "✅ Abilitato a tutte le commesse"
+      : (commesseAbilitate.length ? "✅ Abilitato parziale" : "❌ Non abilitato");
     card.innerHTML = `
       <div class="personale-card-main">
         <h4>${escapeHTML(fullName || "Senza nome")}</h4>
-        <p class="muted">${escapeHTML(item.telefono || "-")} â¢ ${escapeHTML(item.email || "-")}</p>
+        <p class="muted">${escapeHTML(item.telefono || "-")} • ${escapeHTML(item.email || "-")}</p>
         <div class="personale-badges">
           <span class="personale-badge ${item.abilitatoTutteCommesse || commesseAbilitate.length ? "ok" : "no"}">${commesseBadge}</span>
           <span class="personale-badge ok">Corsi: ${coursesOwned}/${PRIMARY_CORSI.length}</span>
@@ -21144,7 +21144,7 @@ function openPersonaleDetail(card, person, editMode = false) {
     <div class="personale-fields-grid">
       <input class="personale-edit-cognome-nome" ${editMode ? "" : "disabled"} value="${escapeHTML(getPersonaleDisplayName(person) || "")}" placeholder="Cognome e nome">
       <input class="personale-edit-tel" ${editMode ? "" : "disabled"} value="${escapeHTML(person.telefono || "")}" placeholder="Telefono">
-      <input class="personale-edit-email" type="email" autocomplete="email" ${editMode ? "" : "disabled"} value="${escapeHTML(person.email || "")}" placeholder="E-mail usata per entrare nellâapp" title="Abbina questa e-mail di accesso al nome reale">
+      <input class="personale-edit-email" type="email" autocomplete="email" ${editMode ? "" : "disabled"} value="${escapeHTML(person.email || "")}" placeholder="E-mail usata per entrare nell’app" title="Abbina questa e-mail di accesso al nome reale">
       <input class="personale-edit-ruolo" ${editMode ? "" : "disabled"} value="${escapeHTML(person.mansione || person.ruolo || "")}" placeholder="Mansione / ruolo">
       <textarea class="personale-edit-note" ${editMode ? "" : "disabled"} placeholder="Note">${escapeHTML(person.note || "")}</textarea>
     </div>
@@ -21187,7 +21187,7 @@ async function savePersonaleDetail(personId, root) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
   const duplicateEmail = email && personaleRecords.find((person) => person.id !== personId && normalizeEmail(person.email) === email);
   if (duplicateEmail) {
-    alert(`Questa e-mail Ã¨ giÃ  abbinata a ${getPersonaleDisplayName(duplicateEmail) || "un altro dipendente"}. Ogni e-mail puÃ² identificare una sola persona.`);
+    alert(`Questa e-mail è già abbinata a ${getPersonaleDisplayName(duplicateEmail) || "un altro dipendente"}. Ogni e-mail può identificare una sola persona.`);
     return;
   }
   const commesseAbilitate = Array.from(root.querySelectorAll(".personale-commesse-list input[type='checkbox']:checked")).map((el) => el.value);
@@ -21263,7 +21263,7 @@ function startSquadreLoadTimeout() {
   clearSquadreLoadTimeout();
   squadreLoadTimeout = setTimeout(() => {
     if (squadreLoadState.status !== "loading") return;
-    squadreLoadState = { status: "error", message: "La connessione alle squadre Ã¨ lenta. Controlla di essere loggato e premi Aggiorna." };
+    squadreLoadState = { status: "error", message: "La connessione alle squadre è lenta. Controlla di essere loggato e premi Aggiorna." };
     renderSquadre();
     renderCommesseHomeList();
   }, 10000);
@@ -21461,9 +21461,9 @@ function renderMezziList(container, items, onDelete) {
         portataLabel ? `Portata: ${portataLabel}` : "",
         massaLabel ? `Massa complessiva: ${massaLabel}` : "",
         item.alimentazione ? `Alimentazione: ${item.alimentazione}` : ""
-      ].filter(Boolean).join(" â¢ ");
+      ].filter(Boolean).join(" • ");
       const label = document.createElement("span");
-      label.textContent = details ? `${title} â ${details}` : title;
+      label.textContent = details ? `${title} — ${details}` : title;
       row.appendChild(label);
 
       if (isMezzoTrasportoA(item)) {
@@ -21574,7 +21574,7 @@ function formatDateKeyForDisplay(dateKey) {
 
 function updateSquadraAutofillHint(message) {
   if (!ui.squadraHint || !canManageData()) return;
-  ui.squadraHint.textContent = message || "Usa â+ Personaâ e â+ Mezzoâ: il nuovo campo resta sulla stessa riga del precedente finchÃ© c'Ã¨ spazio.";
+  ui.squadraHint.textContent = message || "Usa “+ Persona” e “+ Mezzo”: il nuovo campo resta sulla stessa riga del precedente finché c'è spazio.";
 }
 
 function setSquadraFeedback(message, type = "info") {
@@ -21585,7 +21585,7 @@ function setSquadraFeedback(message, type = "info") {
 
 function openSquadraCompositionEditor(commessaId, dateKey, focusIndex = 0) {
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² modificare la composizione squadre.");
+    alert("Solo l'admin può modificare la composizione squadre.");
     return;
   }
   if (!commessaId) return;
@@ -21594,7 +21594,7 @@ function openSquadraCompositionEditor(commessaId, dateKey, focusIndex = 0) {
   if (ui.squadraRiferimento) ui.squadraRiferimento.value = dateKey || getActiveSquadreDateKey() || getNextDayDateKey();
   const storicoDelGiorno = squadreHistoryByDate.get(ui.squadraRiferimento?.value || dateKey) || new Map();
   setSquadraRowsFromData(storicoDelGiorno.get(commessaId) || {});
-  setSquadraFeedback("Composizione aperta: modifica operatori o mezzi e premi âFineâ per salvare.", "info");
+  setSquadraFeedback("Composizione aperta: modifica operatori o mezzi e premi “Fine” per salvare.", "info");
   setTimeout(() => {
     const rows = Array.from(ui.squadraRows?.querySelectorAll(".squadra-row") || []);
     const targetRow = rows[Math.max(0, Math.min(Number(focusIndex) || 0, rows.length - 1))];
@@ -21631,7 +21631,7 @@ function calculateSquadraPausaPranzoMinutes(startMinutes, endMinutes, senzaPausa
 function getSquadraOrarioParts(row) {
   const rawStart = String(row?.orario || "").trim();
   const explicitEnd = String(row?.orarioFine || "").trim();
-  const legacyRange = rawStart.match(/^(\d{1,2}:\d{2})\s*[-ââ]\s*(\d{1,2}:\d{2})$/);
+  const legacyRange = rawStart.match(/^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})$/);
   return {
     start: legacyRange ? legacyRange[1] : rawStart,
     end: explicitEnd || (legacyRange ? legacyRange[2] : "")
@@ -21682,17 +21682,17 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
       </label>
     </div>
     <div class="squadra-multi-field">
-      <div class="squadra-multi-field-head"><strong>ð¥ Operatori</strong></div>
+      <div class="squadra-multi-field-head"><strong>👥 Operatori</strong></div>
       <div class="squadra-personale-list"></div>
       <button type="button" class="btn btn-small add-personale-input-btn">+ Operatore</button>
     </div>
     <div class="squadra-multi-field">
-      <div class="squadra-multi-field-head"><strong>ð Mezzi</strong></div>
+      <div class="squadra-multi-field-head"><strong>🚚 Mezzi</strong></div>
       <div class="squadra-mezzi-list"></div>
       <button type="button" class="btn btn-small add-mezzo-input-btn">+ Mezzo</button>
     </div>
     <div class="squadra-multi-field">
-      <div class="squadra-multi-field-head"><strong>ð Impianti</strong></div>
+      <div class="squadra-multi-field-head"><strong>📍 Impianti</strong></div>
       <div class="squadra-impianti-list"></div>
       <button type="button" class="btn btn-small add-impianto-input-btn">+ Impianto</button>
     </div>
@@ -21734,7 +21734,7 @@ function addSquadraRow(rowData = { caposquadra: "", personale: "", mezzi: "", no
     row.remove();
     renumberSquadraRows();
     updateEmptySquadraRowsHint();
-    setSquadraFeedback("Squadra rimossa dal modulo: premi âFineâ per salvare la modifica.", "info");
+    setSquadraFeedback("Squadra rimossa dal modulo: premi “Fine” per salvare la modifica.", "info");
   });
   ui.squadraRows.appendChild(row);
   updateAdminControls();
@@ -21757,7 +21757,7 @@ function addSquadraImpiantoSelection(container, impianto) {
   const wrap = document.createElement("div");
   wrap.className = "squadra-impianto-selection";
   wrap.__impianto = snapshot;
-  wrap.innerHTML = `<span><b>${escapeHTML(snapshot.denominazione || snapshot.idSap || "Impianto")}</b><small>${escapeHTML(snapshot.comune || "-")} â¢ ID SAP ${escapeHTML(snapshot.idSap || "-")}</small></span><button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi impianto">â</button>`;
+  wrap.innerHTML = `<span><b>${escapeHTML(snapshot.denominazione || snapshot.idSap || "Impianto")}</b><small>${escapeHTML(snapshot.comune || "-")} • ID SAP ${escapeHTML(snapshot.idSap || "-")}</small></span><button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi impianto">−</button>`;
   wrap.querySelector("button")?.addEventListener("click", () => wrap.remove());
   container.appendChild(wrap);
 }
@@ -21766,7 +21766,7 @@ function addSquadraImpiantoSearch(container, trigger) {
   if (!container || container.querySelector(".squadra-impianto-search-wrap")) return;
   const wrap = document.createElement("div");
   wrap.className = "squadra-impianto-search-wrap";
-  wrap.innerHTML = `<div class="search-box squadra-impianto-search-box"><span aria-hidden="true">ð</span><input type="search" class="squadra-impianto-search" placeholder="Cerca impianto, comune, indirizzo, codice prezzo..." autocomplete="off" aria-label="Cerca impianto della commessa" aria-expanded="true"></div><div class="squadra-impianto-suggestions" role="listbox"></div>`;
+  wrap.innerHTML = `<div class="search-box squadra-impianto-search-box"><span aria-hidden="true">🔎</span><input type="search" class="squadra-impianto-search" placeholder="Cerca impianto, comune, indirizzo, codice prezzo..." autocomplete="off" aria-label="Cerca impianto della commessa" aria-expanded="true"></div><div class="squadra-impianto-suggestions" role="listbox"></div>`;
   const input = wrap.querySelector("input");
   const suggestions = wrap.querySelector(".squadra-impianto-suggestions");
   const render = () => {
@@ -21779,7 +21779,7 @@ function addSquadraImpiantoSearch(container, trigger) {
     suggestions.innerHTML = matches.length ? matches.map((impianto) => {
       const address = impianto.indirizzo || impianto.descrizioneVia || "";
       const code = impianto.idSap ? `ID SAP ${impianto.idSap}` : (impianto.codiceHera ? `Codice Hera ${impianto.codiceHera}` : "");
-      const meta = [impianto.comune, address, code, impianto.codicePrezzo ? `Codice prezzo ${impianto.codicePrezzo}` : ""].filter(Boolean).join(" â¢ ");
+      const meta = [impianto.comune, address, code, impianto.codicePrezzo ? `Codice prezzo ${impianto.codicePrezzo}` : ""].filter(Boolean).join(" • ");
       return `<button type="button" role="option" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}"><b>${escapeHTML(impianto.denominazione || impianto.nome || "Impianto")}</b><small>${escapeHTML(meta || "Dati non disponibili")}</small></button>`;
     }).join("") : `<p class="muted">Nessun impianto della commessa trovato.</p>`;
     suggestions.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
@@ -21820,7 +21820,7 @@ function addMultiEntryInput({ container, listId, placeholder, value, sourceValue
   wrap.className = "squadra-multi-entry-row";
   wrap.innerHTML = `
     <input type="text" class="squadra-multi-entry-input" list="${escapeHTML(listId)}" placeholder="${escapeHTML(placeholder)}" value="${escapeHTML(value || "")}">
-    <button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi elemento">â</button>
+    <button type="button" class="btn btn-small remove-squadra-entry-btn" title="Rimuovi elemento">−</button>
   `;
   const input = wrap.querySelector(".squadra-multi-entry-input");
   const removeBtn = wrap.querySelector(".remove-squadra-entry-btn");
@@ -21858,7 +21858,7 @@ function renumberSquadraRows() {
 function updateEmptySquadraRowsHint() {
   if (!ui.squadraHint || !canManageData()) return;
   if (!ui.squadraRows.children.length) {
-    ui.squadraHint.textContent = "Nessuna squadra nel modulo: salva per eliminare la composizione della commessa in questa data, oppure premi âAggiungi squadraâ.";
+    ui.squadraHint.textContent = "Nessuna squadra nel modulo: salva per eliminare la composizione della commessa in questa data, oppure premi “Aggiungi squadra”.";
   }
 }
 
@@ -21976,7 +21976,7 @@ function calendarAbsenceMatchesOperator(event, operatorName) {
 
 function formatCalendarAbsenceWarning(event, operatorName, dateKey) {
   const type = CALENDAR_EVENT_TYPES[event.type] || CALENDAR_EVENT_TYPES.altro;
-  return `â ${operatorName} assente: ${type.label} il ${formatDateKeyForDisplay(dateKey)}`;
+  return `⛔ ${operatorName} assente: ${type.label} il ${formatDateKeyForDisplay(dateKey)}`;
 }
 
 async function validateSquadraOperatorAvailability(operatorName, dateKey) {
@@ -21985,7 +21985,7 @@ async function validateSquadraOperatorAvailability(operatorName, dateKey) {
   const assignmentKey = `${dateKey}|${normalizeSquadraMemberIdentity(operatorName)}|${absences.map((event) => event.id).sort().join(",")}`;
   if (confirmedSquadraAbsenceAssignments.has(assignmentKey)) return true;
   const warnings = absences.map((event) => formatCalendarAbsenceWarning(event, operatorName, dateKey)).join("\n");
-  const assignAnyway = window.confirm(`â ï¸ OPERATORE ASSENTE\n\n${warnings}\n\nVuoi inserirlo comunque nella squadra?\n\nOK = INSERISCI COMUNQUE\nAnnulla = NON INSERIRE`);
+  const assignAnyway = window.confirm(`⚠️ OPERATORE ASSENTE\n\n${warnings}\n\nVuoi inserirlo comunque nella squadra?\n\nOK = INSERISCI COMUNQUE\nAnnulla = NON INSERIRE`);
   if (assignAnyway) confirmedSquadraAbsenceAssignments.add(assignmentKey);
   return assignAnyway;
 }
@@ -22067,10 +22067,10 @@ function confirmSquadraConflict(type, value, conflict) {
   const isMezzo = type === "mezzi";
   const other = conflict?.others?.[0];
   const dateLabel = formatDateKeyForDisplay(conflict?.dateKey || ui.squadraRiferimento?.value || getActiveSquadreDateKey());
-  const title = isMezzo ? "â ï¸ MEZZO GIÃ ASSEGNATO" : "â ï¸ OPERATORE GIÃ ASSEGNATO";
+  const title = isMezzo ? "⚠️ MEZZO GIÀ ASSEGNATO" : "⚠️ OPERATORE GIÀ ASSEGNATO";
   const message = isMezzo
-    ? `${title}\n\nIl mezzo â${value}â Ã¨ giÃ  assegnato il ${dateLabel} alla squadra â${other?.squadraNome || "Squadra"}â della commessa â${other?.commessaNome || "Commessa"}â.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`
-    : `${title}\n\n${value} Ã¨ giÃ  presente il ${dateLabel} nella squadra â${other?.squadraNome || "Squadra"}â della commessa â${other?.commessaNome || "Commessa"}â.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`;
+    ? `${title}\n\nIl mezzo “${value}” è già assegnato il ${dateLabel} alla squadra “${other?.squadraNome || "Squadra"}” della commessa “${other?.commessaNome || "Commessa"}”.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`
+    : `${title}\n\n${value} è già presente il ${dateLabel} nella squadra “${other?.squadraNome || "Squadra"}” della commessa “${other?.commessaNome || "Commessa"}”.\n\nVuoi assegnarlo comunque anche a questa squadra?\n\nOK = ASSEGNA COMUNQUE\nAnnulla = ANNULLA E MODIFICA`;
   return window.confirm(message);
 }
 
@@ -22164,8 +22164,8 @@ async function saveSquadraComposition(event) {
   event.preventDefault();
   setSquadraFeedback("Salvataggio composizione in corso...", "info");
   if (!canManageData()) {
-    setSquadraFeedback("Solo l'admin puÃ² salvare la composizione squadre.", "error");
-    alert("Solo ionut29019@gmail.com puÃ² compilare la composizione squadre.");
+    setSquadraFeedback("Solo l'admin può salvare la composizione squadre.", "error");
+    alert("Solo ionut29019@gmail.com può compilare la composizione squadre.");
     return;
   }
   const commessaId = ui.squadraCommessa.value;
@@ -22187,19 +22187,19 @@ async function saveSquadraComposition(event) {
   }
   const absenceAssignmentsConfirmed = await applyCalendarAbsenceWarningsToSquadraRows(squadreRows, dateKey);
   if (!absenceAssignmentsConfirmed) {
-    setSquadraFeedback("Salvataggio sospeso: rimuovi l'operatore assente oppure scegli âINSERISCI COMUNQUEâ.", "error");
+    setSquadraFeedback("Salvataggio sospeso: rimuovi l'operatore assente oppure scegli “INSERISCI COMUNQUE”.", "error");
     return;
   }
   const duplicateRows = findDuplicateSquadraRows(squadreRows);
   if (duplicateRows.length) {
     const dup = duplicateRows[0];
     setSquadraFeedback("Duplicato bloccato: controlla le squadre indicate.", "error");
-    alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} Ã¨ identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
+    alert(`Duplicato bloccato: Squadra ${dup.duplicateIndex + 1} è identica alla Squadra ${dup.firstIndex + 1} per caposquadra e operatori.`);
     return;
   }
   const conflictsConfirmed = await validateDraftSquadraConflicts(squadreRows);
   if (!conflictsConfirmed) {
-    setSquadraFeedback("Salvataggio sospeso: conflitto non autorizzato. Modifica operatori o mezzi oppure conferma con âASSEGNA COMUNQUEâ.", "error");
+    setSquadraFeedback("Salvataggio sospeso: conflitto non autorizzato. Modifica operatori o mezzi oppure conferma con “ASSEGNA COMUNQUE”.", "error");
     return;
   }
   const payload = {
@@ -22236,15 +22236,15 @@ async function saveSquadraComposition(event) {
     });
   } catch (error) {
     if (error?.message === "DUPLICATE_SQUADRA") {
-      setSquadraFeedback("Duplicato bloccato: esiste giÃ  una squadra identica.", "error");
-      alert("Duplicato bloccato: esiste giÃ  una squadra con stessa commessa, stessa data, stesso caposquadra e stessi operatori.");
+      setSquadraFeedback("Duplicato bloccato: esiste già una squadra identica.", "error");
+      alert("Duplicato bloccato: esiste già una squadra con stessa commessa, stessa data, stesso caposquadra e stessi operatori.");
       return;
     }
     throw error;
   }
   renderCommesseHomeList();
   renderSquadre();
-  setSquadraFeedback(`â Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).`, "success");
+  setSquadraFeedback(`✅ Composizione salvata per ${payload.commessaNome} (${formatDateKeyForDisplay(dateKey)}).`, "success");
   await backupSquadreSnapshotToDrive(dateKey, payload);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -22280,7 +22280,7 @@ async function deleteSquadraCompositionForDate(commessaId, dateKey) {
   ui.squadraCalendarDate.value = dateKey;
   renderCommesseHomeList();
   renderSquadre();
-  setSquadraFeedback(`â Composizione eliminata per ${commessaNome} (${dateLabel}).`, "success");
+  setSquadraFeedback(`✅ Composizione eliminata per ${commessaNome} (${dateLabel}).`, "success");
 }
 
 function getDateKeyFromLocalDate(date) {
@@ -22407,7 +22407,7 @@ const INRETE_COMMESSE_REQUIRED = new Set([
 function normalizeSafetyKey(value) {
   return String(value || "")
     .normalize("NFD")
-    .replace(/[Ì-Í¯]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -22447,12 +22447,12 @@ function buildSquadraWarningDetails(commessa, squadRows) {
     parseMultiEntryValue(row?.personale || "").forEach((name) => {
       const person = getPersonByDisplayName(name);
       if (!person) {
-        issues.push(`â ï¸ ${name} non Ã¨ presente in anagrafica personale`);
+        issues.push(`⚠️ ${name} non è presente in anagrafica personale`);
         return;
       }
       const isAbilitata = isPersonAbilitataForCommessa(person, commessaName);
       if (!isAbilitata) {
-        issues.push(`â ï¸ ${getPersonaleDisplayName(person) || name} non Ã¨ abilitato per questa commessa`);
+        issues.push(`⚠️ ${getPersonaleDisplayName(person) || name} non è abilitato per questa commessa`);
         return;
       }
       abilitati.push(person);
@@ -22461,7 +22461,7 @@ function buildSquadraWarningDetails(commessa, squadRows) {
 
   const missing = requiredCourses.filter((course) => !abilitati.some((person) => hasRequiredCourse(person, course)));
   if (missing.length) {
-    issues.push(`â ï¸ ${missingLabelPrefix}:`);
+    issues.push(`⚠️ ${missingLabelPrefix}:`);
     missing.forEach((course) => issues.push(`- manca ${course.toUpperCase() === "ATEX" ? "ATEX" : course.replace(/\b\w/g, (ch) => ch.toUpperCase())}`));
   }
 
@@ -22475,7 +22475,7 @@ function renderSquadraConflictSummaryMarkup(report, dateKey) {
 
 function renderConflictValueList(rawValue, conflicts, type) {
   const byKey = new Map(conflicts[type].map((item) => [item.key, item]));
-  const title = type === "operatori" ? "â ï¸ OPERATORE PRESENTE IN PIÃ SQUADRE" : "â ï¸ MEZZO PRESENTE IN PIÃ SQUADRE";
+  const title = type === "operatori" ? "⚠️ OPERATORE PRESENTE IN PIÙ SQUADRE" : "⚠️ MEZZO PRESENTE IN PIÙ SQUADRE";
   const parts = parseMultiEntryValue(rawValue);
   if (!parts.length) return "-";
   return parts.map((value) => {
@@ -22495,7 +22495,7 @@ function openSquadreConflictsModal(report, dateKey) {
     const unique = items.filter((item, idx, arr) => arr.findIndex((other) => other.key === item.key && other.commessaId === item.commessaId && other.squadraIndex === item.squadraIndex) === idx);
     return `<section><h3>${title}</h3>${unique.length ? unique.map((item) => `<article class="squadre-conflict-detail"><strong>${escapeHTML(item.value)}</strong>${isMezzo ? `<p>Targa/codice mezzo: ${escapeHTML(item.value)}</p>` : ""}<p>Data: ${escapeHTML(formatDateKeyForDisplay(dateKey))}</p><p>Commessa: ${escapeHTML(item.commessaNome)}</p><p>Squadra: ${escapeHTML(item.squadraNome)}</p><p>Altre squadre: ${escapeHTML(item.others.map((other) => `${other.squadraNome} (${other.commessaNome})`).join(", "))}</p><button type="button" class="btn" data-jump-conflict="${escapeHTML(item.commessaId)}" data-conflict-index="${item.squadraIndex}">VAI ALLA SQUADRA</button></article>`).join("") : `<p class='muted'>Nessun duplicato.</p>`}</section>`;
   };
-  modal.innerHTML = `<div class="squadre-conflict-modal" role="dialog" aria-modal="true" aria-label="Conflitti squadre"><div class="section-head"><h2>â ï¸ Conflitti squadre</h2><button type="button" class="btn" data-close-conflicts>Chiudi</button></div>${section("OPERATORI DUPLICATI", report.operatori, false)}${section("MEZZI DUPLICATI", report.mezzi, true)}</div>`;
+  modal.innerHTML = `<div class="squadre-conflict-modal" role="dialog" aria-modal="true" aria-label="Conflitti squadre"><div class="section-head"><h2>⚠️ Conflitti squadre</h2><button type="button" class="btn" data-close-conflicts>Chiudi</button></div>${section("OPERATORI DUPLICATI", report.operatori, false)}${section("MEZZI DUPLICATI", report.mezzi, true)}</div>`;
   const close = () => modal.remove();
   modal.querySelector("[data-close-conflicts]")?.addEventListener("click", close);
   modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
@@ -22591,33 +22591,33 @@ function renderSquadre() {
     const rowsHtml = squadRows.map((row, idx) => {
       const orarioLabel = formatSquadraOrario(row);
       const details = [
-        row.caposquadra ? `<br><b>ð§ââï¸ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
-        orarioLabel ? `<br><b>ð</b> ${escapeHTML(orarioLabel)}` : "",
+        row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
+        orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
         row.impianti ? renderSquadraImpiantiButtons(row, idx, commessa.id) : "",
-        row.note ? `<br><b>ð Note:</b> ${escapeHTML(row.note)}` : "",
-        row.avvisoAutomaticoAssenze ? `<br><span class="squadra-saved-alert squadra-automatic-absence-warning"><b>â Assenza calendario:</b> ${escapeHTML(row.avvisoAutomaticoAssenze)}</span>` : ""
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : "",
+        row.avvisoAutomaticoAssenze ? `<br><span class="squadra-saved-alert squadra-automatic-absence-warning"><b>⛔ Assenza calendario:</b> ${escapeHTML(row.avvisoAutomaticoAssenze)}</span>` : ""
       ].join("");
       const rowConflictReport = {
         operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
         mezzi: conflictReport.mezzi.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx)
       };
       const rowClass = "squadra-saved-row";
-      return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">ð¥ Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>ð Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
+      return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
     const warningMarkup = warningIssues.length
-      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra">â ï¸</button><div class="squadra-warning-details hidden"><p><b>â ï¸ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^â ï¸\s*/, ""))}</li>`).join("")}</ul></div></div>`
+      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
       : "";
     const codiceCommessa = String(commessa.codice || "").trim();
     item.innerHTML = `
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
-          <strong>ð ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
+          <strong>📁 ${escapeHTML(commessa.nome || "Commessa senza nome")}</strong>
           ${getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa)}
         </div>
         ${warningMarkup}
       </div>
-      <p><b>ð Giorno:</b> ${escapeHTML(riferimento)}</p>
+      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
@@ -22691,8 +22691,8 @@ function renderSquadraImpiantiButtons(row, squadraIndex = 0, commessaId = "") {
     const live = liveById.get(getSquadraImpiantoId(impianto));
     return !Boolean(live ? live.done : impianto.done);
   });
-  if (!assigned.length) return details.length ? "" : `<br><span class="squadra-impianti-compact"><b>ð</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
-  return `<br><span class="squadra-impianti-compact"><b>ð</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
+  if (!assigned.length) return details.length ? "" : `<br><span class="squadra-impianti-compact"><b>📍</b><span>${escapeHTML(row?.impianti || "-")}</span></span>`;
+  return `<br><span class="squadra-impianti-compact"><b>📍</b>${assigned.map((impianto) => `<button type="button" class="squadra-impianto-link" data-squadra-index="${squadraIndex}" data-impianto-id="${escapeHTML(getSquadraImpiantoId(impianto))}" aria-label="Apri ${escapeHTML(impianto.denominazione || impianto.idSap || "impianto")} nella commessa">${escapeHTML(impianto.denominazione || impianto.idSap || "Impianto")}</button>`).join("")}</span>`;
 }
 
 function openCommessaImpiantoFromSquadre(commessa, impianto) {
@@ -22712,14 +22712,14 @@ function openCommessaImpiantoFromSquadre(commessa, impianto) {
     ["Ditta esecutrice", value("dittaEsecutrice")]
   ];
   ui.squadreImpiantoDetailTitle.textContent = display(value("denominazione", "nome"));
-  ui.squadreImpiantoDetailCommessa.textContent = `${commessa.nome || "Commessa"} â¢ ${formatDateKeyForDisplay(getActiveSquadreDateKey())}`;
+  ui.squadreImpiantoDetailCommessa.textContent = `${commessa.nome || "Commessa"} • ${formatDateKeyForDisplay(getActiveSquadreDateKey())}`;
   ui.squadreImpiantoDetailBody.innerHTML = fields.map(([label, entry, wide]) => `<div class="squadre-impianto-detail-field${wide ? " squadra-impianto-detail-field--wide" : ""}"><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(display(entry))}</dd></div>`).join("");
   ui.squadreImpiantoPositionFeedback.classList.add("hidden");
   ui.squadreImpiantoPositionFeedback.textContent = "";
   ui.squadreImpiantoNavigateBtn.onclick = () => {
     const url = buildImpiantoMapsUrl(impianto);
     if (!url) {
-      ui.squadreImpiantoPositionFeedback.textContent = "Posizione dellâimpianto non disponibile";
+      ui.squadreImpiantoPositionFeedback.textContent = "Posizione dell’impianto non disponibile";
       ui.squadreImpiantoPositionFeedback.classList.remove("hidden");
       return;
     }
@@ -22757,7 +22757,7 @@ function renderMezziButtonsMarkup(rawValue) {
 
 function updateSquadraHintFromSources() {
   if (!canManageData()) return;
-  ui.squadraHint.textContent = "Usa â+ Personaâ e â+ Mezzoâ: il nuovo campo resta sulla stessa riga del precedente finchÃ© c'Ã¨ spazio.";
+  ui.squadraHint.textContent = "Usa “+ Persona” e “+ Mezzo”: il nuovo campo resta sulla stessa riga del precedente finché c'è spazio.";
 }
 
 function updateSuggestionLists() {
@@ -22845,7 +22845,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   await batch.commit();
 }
 
-const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "Lâimpianto risulta ancora nellâelenco âDa fareâ. Se hai giÃ  eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
+const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "L’impianto risulta ancora nell’elenco ‘Da fare’. Se hai già eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
 
 function validateImpiantoCoordinates(impianto) {
   const rawLatitude = impianto?.gpsY;
@@ -22868,7 +22868,7 @@ function validateImpiantoCoordinates(impianto) {
 }
 
 function notifyInvalidImpiantoCoordinates() {
-  alert("La posizione nella scheda impianto Ã¨ mancante o non valida. Correggila nella scheda impianto prima di segnare FATTO.");
+  alert("La posizione nella scheda impianto è mancante o non valida. Correggila nella scheda impianto prima di segnare FATTO.");
 }
 
 function openDeferredWhatsAppTargetWindow() {
@@ -22877,7 +22877,7 @@ function openDeferredWhatsAppTargetWindow() {
     const targetWindow = window.open("about:blank", "_blank");
     if (targetWindow?.document?.body) {
       targetWindow.document.title = "Preparazione Whazzup";
-      targetWindow.document.body.textContent = "Preparazione messaggio in corsoâ¦";
+      targetWindow.document.body.textContent = "Preparazione messaggio in corso…";
     }
     return targetWindow;
   } catch (error) {
@@ -23008,7 +23008,7 @@ function setImpiantoFattoSavingState(impianto, saving) {
     button.disabled = saving;
     button.classList.toggle("is-saving-done", saving);
     if (saving) {
-      button.textContent = "Salvataggioâ¦";
+      button.textContent = "Salvataggio…";
       button.setAttribute("aria-label", "Salvataggio stato FATTO in corso");
     }
   });
@@ -23040,8 +23040,8 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    // 1) Salva prima la pressione e la data. Questa prova cloud Ã¨ separata dal
-    // trasferimento, cosÃ¬ l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
+    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
+    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
     const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
     if (!evidenceSaved && !isNetworkOffline()) {
       closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
@@ -23066,7 +23066,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
     }
 
-    // 3) Il trasferimento parte comunque, anche se WhatsApp non Ã¨ installato o
+    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
     // l'utente torna indietro senza inviare il messaggio.
     markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
     setImpiantiViewMode("done");
@@ -23136,7 +23136,7 @@ function handleCompletedImpiantoWhatsAppClick(impianto) {
     return false;
   }
 
-  // Un impianto giÃ  nei FATTI puÃ² riaprire il messaggio senza controllare la
+  // Un impianto già nei FATTI può riaprire il messaggio senza controllare la
   // posizione dell'operatore: non deve essere salvato o trasferito di nuovo.
   const opened = openWhatsApp(impianto, {
     doneAt: impianto.doneAt || new Date(),
@@ -23193,7 +23193,7 @@ async function updateAuditLogWhazzupClick(logId, patch = {}) {
 
 function notifyImpiantoBackgroundSyncPending() {
   if (!ui.gpsStatus) return;
-  ui.gpsStatus.textContent = "Attendere, salvataggio in corsoâ¦";
+  ui.gpsStatus.textContent = "Attendere, salvataggio in corso…";
 }
 
 function getWhazzupProcessingKey(impianto, commessaId = selectedCommessaId) {
@@ -23367,8 +23367,8 @@ async function notifyAdminsForImpiantoDoneSaveError(impianto, reason = "") {
   const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
   const now = new Date();
   const text = [
-    "â ï¸ ERRORE SALVATAGGIO FATTO",
-    "Lâimpianto Ã¨ stato inviato su Whazzup, ma potrebbe non essere passato nella lista FATTI.",
+    "⚠️ ERRORE SALVATAGGIO FATTO",
+    "L’impianto è stato inviato su Whazzup, ma potrebbe non essere passato nella lista FATTI.",
     "Verificare manualmente.",
     "",
     `Impianto: ${impianto?.denominazione || "Impianto"}`,
@@ -23443,31 +23443,31 @@ function buildImpiantoWhatsAppTemplate(impianto) {
   const isOnlyOrdinaria = hasOrdinario(impianto.codicePrezzo) && !hasStraordinario(impianto.codicePrezzo);
   const operatorName = getCurrentWhatsAppOperatorName();
   const date = getDeviceWhatsAppDateLabel();
-  const title = "ð¢ IMPIANTO FATTO";
+  const title = "🟢 IMPIANTO FATTO";
   const workLabel = isOnlyOrdinaria
     ? "Manutenzione ordinaria eseguita"
     : "Manutenzione ordinaria + straordinaria eseguita";
   const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || "-";
   const linkedNotes = getCommessaNoteLinkedNotes(impianto);
   const noteLines = [
-    impianto.noteImpianto ? `ð Note impianto: ${impianto.noteImpianto}` : "",
+    impianto.noteImpianto ? `📝 Note impianto: ${impianto.noteImpianto}` : "",
     ...(linkedNotes.length ? [
-      "â ï¸ A questo impianto Ã¨ stata segnalata una criticitÃ :",
+      "⚠️ A questo impianto è stata segnalata una criticità:",
       ...linkedNotes.map((note) => `${getCommessaNoteTitle(note)}\n${note.text || "-"}`)
     ] : [])
   ].filter(Boolean);
   return [
     title,
-    `â AttivitÃ : ${workLabel}`,
-    `ð ID SAP: ${impianto.idSap || "-"}`,
-    `ðï¸ Impianto: ${impianto.denominazione || "-"}`,
-    `ð Comune: ${impianto.comune || "-"}`,
-    `ð£ï¸ Via: ${impianto.indirizzo || "-"}`,
-    `ð Note: ${tipologia}`,
-    ...(isOnlyOrdinaria ? [] : [`ð ï¸ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
+    `✅ Attività: ${workLabel}`,
+    `🆔 ID SAP: ${impianto.idSap || "-"}`,
+    `🏗️ Impianto: ${impianto.denominazione || "-"}`,
+    `📍 Comune: ${impianto.comune || "-"}`,
+    `🛣️ Via: ${impianto.indirizzo || "-"}`,
+    `📝 Note: ${tipologia}`,
+    ...(isOnlyOrdinaria ? [] : [`🛠️ Lavorazione straordinaria: ${impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-"}`]),
     ...noteLines,
-    `ð· Operatore: ${operatorName}`,
-    `ð Data: ${date}`
+    `👷 Operatore: ${operatorName}`,
+    `📅 Data: ${date}`
   ].join("\n");
 }
 
@@ -23513,8 +23513,8 @@ function buildImpiantoWhatsAppPayload(impianto, options = {}) {
   const preparedTemplate = prepareImpiantoWhatsAppTemplate(impianto)?.template || buildImpiantoWhatsAppTemplate(impianto);
   const message = [
     preparedTemplate,
-    `ð Ora: ${time}`,
-    executionNote ? `ð Nota esecuzione: ${executionNote}` : ""
+    `🕒 Ora: ${time}`,
+    executionNote ? `📝 Nota esecuzione: ${executionNote}` : ""
   ].filter(Boolean).join("\n");
 
   const encodedMessage = encodeURIComponent(message);
@@ -23584,17 +23584,17 @@ async function submitImpiantoReport(event) {
   }
   const now = new Date();
   const message = [
-    "â ï¸ SEGNALAZIONE PROBLEMA IMPIANTO - Report operativo",
-    `ðï¸ Impianto: ${reportingImpianto.denominazione || "-"}`,
-    `ð Comune: ${reportingImpianto.comune || "-"}`,
-    `ð£ï¸ Via: ${reportingImpianto.indirizzo || "-"}`,
-    `ð ID SAP: ${reportingImpianto.idSap || "-"}`,
-    `ð Oggetto segnalazione: ${titolo}`,
-    `ð Dettaglio problema segnalato: ${testo}`,
-    `ð· Operatore segnalante: ${user.displayName || user.email || "-"}`,
-    `ð Data segnalazione: ${now.toLocaleDateString("it-IT")}`,
-    `ð Ora segnalazione: ${now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })}`,
-    "â Conferma: stiamo segnalando al cliente il problema riscontrato e il relativo intervento richiesto."
+    "⚠️ SEGNALAZIONE PROBLEMA IMPIANTO - Report operativo",
+    `🏗️ Impianto: ${reportingImpianto.denominazione || "-"}`,
+    `📍 Comune: ${reportingImpianto.comune || "-"}`,
+    `🛣️ Via: ${reportingImpianto.indirizzo || "-"}`,
+    `🆔 ID SAP: ${reportingImpianto.idSap || "-"}`,
+    `📝 Oggetto segnalazione: ${titolo}`,
+    `📋 Dettaglio problema segnalato: ${testo}`,
+    `👷 Operatore segnalante: ${user.displayName || user.email || "-"}`,
+    `📅 Data segnalazione: ${now.toLocaleDateString("it-IT")}`,
+    `🕒 Ora segnalazione: ${now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false })}`,
+    "✅ Conferma: stiamo segnalando al cliente il problema riscontrato e il relativo intervento richiesto."
   ].join("\n");
   const opened = safeOpenWhatsAppMessage(message);
   ui.impiantoReportFeedback.textContent = opened
@@ -23629,7 +23629,7 @@ async function requestGpsUpdate(impianto) {
     alert("Seleziona una commessa ed esegui il login.");
     return;
   }
-  const confirmed = window.confirm("Vuoi aggiornare la posizione di questo impianto? VerrÃ  inviata richiesta WhatsApp all'amministratore.");
+  const confirmed = window.confirm("Vuoi aggiornare la posizione di questo impianto? Verrà inviata richiesta WhatsApp all'amministratore.");
   if (!confirmed) return;
 
   try {
@@ -23655,7 +23655,7 @@ async function requestGpsUpdate(impianto) {
 
     const mapsUrl = `https://maps.google.com/?q=${pos.lat},${pos.lng}`;
     const waText = [
-      "ð Richiesta aggiornamento GPS impianto",
+      "📍 Richiesta aggiornamento GPS impianto",
       `ID richiesta: ${requestRef.id}`,
       `Commessa: ${selectedCommessaName || "-"}`,
       `Impianto: ${impianto.denominazione || "-"}`,
@@ -23665,7 +23665,7 @@ async function requestGpsUpdate(impianto) {
       `Mappa: ${mapsUrl}`
     ].join("\n");
     const opened = safeOpenWhatsAppMessage(waText, { phone: GPS_APPROVAL_PHONE });
-    if (!opened) alert("Richiesta creata, ma non Ã¨ stato possibile aprire WhatsApp automaticamente.");
+    if (!opened) alert("Richiesta creata, ma non è stato possibile aprire WhatsApp automaticamente.");
 
     await notifyAdminsForGpsRequest(requestRef.id, impianto, pos);
     alert("Richiesta inviata. In attesa approvazione admin.");
@@ -23678,7 +23678,7 @@ async function requestGpsUpdate(impianto) {
 async function notifyAdminsForGpsRequest(requestId, impianto, pos) {
   const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
   if (!adminUsers.length) return;
-  const text = `ð Richiesta GPS ${requestId} per ${impianto.denominazione || "impianto"} (${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}). Apri Gestione > Utenti per accettare/rifiutare.`;
+  const text = `📍 Richiesta GPS ${requestId} per ${impianto.denominazione || "impianto"} (${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}). Apri Gestione > Utenti per accettare/rifiutare.`;
   await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
     type: "text",
     text,
@@ -23698,7 +23698,7 @@ async function notifyAdminsForImpiantoDoneRecovery(impianto, reason = "") {
   if (!commessaId || !impiantoIds.length) return;
   const operatorName = currentUser?.displayName || currentUser?.email || "Operatore";
   const text = [
-    "â ï¸ Recupero stato impianto richiesto",
+    "⚠️ Recupero stato impianto richiesto",
     `Operatore: ${operatorName}`,
     `Commessa: ${selectedCommessaName || "Commessa"}`,
     `Impianto: ${impianto.denominazione || "Impianto"}`,
@@ -23729,19 +23729,19 @@ async function notifyAdminsForImpiantoDoneRecovery(impianto, reason = "") {
 function openSquadraWhatsApp(squad, commessa) {
   const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
   const rowsMessage = squadRows.map((row, idx) => ([
-    `ð¥ SQUADRA ${idx + 1}`,
-    `   â¢ Personale: ${row.personale || "-"}`,
-    `   â¢ Mezzi: ${row.mezzi || "-"}`,
-    "ââââââââââââââââââââ"
+    `👥 SQUADRA ${idx + 1}`,
+    `   • Personale: ${row.personale || "-"}`,
+    `   • Mezzi: ${row.mezzi || "-"}`,
+    "────────────────────"
   ].join("\n"))).join("\n");
   const message = [
-    "ð£ Richiesta di conferma composizione squadre",
+    "📣 Richiesta di conferma composizione squadre",
     "Gentile tecnico, di seguito la composizione registrata.",
-    "ââââââââââââââââââââ",
-    `ð Commessa: ${commessa.nome || "-"}`,
-    `ð Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    "ââââââââââââââââââââ",
-    rowsMessage || "Nessuna squadra compilata.\nââââââââââââââââââââ",
+    "────────────────────",
+    `📁 Commessa: ${commessa.nome || "-"}`,
+    `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
+    "────────────────────",
+    rowsMessage || "Nessuna squadra compilata.\n────────────────────",
     "Grazie per la verifica."
   ].join("\n");
 
@@ -23781,7 +23781,7 @@ async function buildSquadrePackagePdfBlob(entries) {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(`Squadre per commessa â¢ ${idx + 1}/${entries.length}`, margin + 6, margin + 9);
+    doc.text(`Squadre per commessa • ${idx + 1}/${entries.length}`, margin + 6, margin + 9);
     doc.setFontSize(11);
     doc.text(entry.commessa.nome || "Commessa senza nome", margin + 6, margin + 16);
     doc.setFont("helvetica", "normal");
@@ -23804,8 +23804,8 @@ async function buildSquadrePackagePdfBlob(entries) {
     doc.setFontSize(9.5);
     doc.text(`Squadra ${rowIdx + 1}`, margin + 7, y + 8.8);
 
-    const personaleLabel = "ð¥ Personale:";
-    const mezziLabel = "ð Mezzi:";
+    const personaleLabel = "👥 Personale:";
+    const mezziLabel = "🚚 Mezzi:";
     const personnelLines = doc.splitTextToSize(String(row.personale || "-"), contentWidth - 44);
     const mezziLines = doc.splitTextToSize(String(row.mezzi || "-"), contentWidth - 44);
 
@@ -23861,26 +23861,26 @@ async function shareAllSquadreToWhatsApp() {
       ? new Date(`${entry.squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
       : "-";
     const squadLines = entry.squadRows.map((row, rowIdx) => ([
-      `   ð¥ SQUADRA ${rowIdx + 1}`,
-      `      â¢ Personale: ${row.personale || "-"}`,
-      `      â¢ Mezzi: ${row.mezzi || "-"}`,
-      "   ââââââââââââââââ"
+      `   👥 SQUADRA ${rowIdx + 1}`,
+      `      • Personale: ${row.personale || "-"}`,
+      `      • Mezzi: ${row.mezzi || "-"}`,
+      "   ────────────────"
     ].join("\n"))).join("\n");
     return [
-      "ââââââââââââââââââââ",
-      `ð COMMESSA ${entryIdx + 1}: ${String(entry.commessa.nome || "Commessa").toUpperCase()}`,
-      `ð Giorno programmato: ${dateLabel}`,
+      "════════════════════",
+      `📁 COMMESSA ${entryIdx + 1}: ${String(entry.commessa.nome || "Commessa").toUpperCase()}`,
+      `📅 Giorno programmato: ${dateLabel}`,
       squadLines || "   - Nessuna squadra assegnata -"
     ].join("\n");
   });
 
   const message = [
-    "ð£ PROPOSTA SQUADRE OPERATIVE",
+    "📣 PROPOSTA SQUADRE OPERATIVE",
     "Buongiorno, condivido la proposta squadre per la pianificazione operativa.",
     "",
     groupedLines.join("\n\n"),
     "",
-    "â Per favore confermare o segnalare eventuali modifiche."
+    "✅ Per favore confermare o segnalare eventuali modifiche."
   ].join("\n");
   if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
@@ -23908,7 +23908,7 @@ function addOperatorPositionMarkerToLayer(position, layer) {
   return L.marker([position.lat, position.lng], {
     icon: L.divIcon({
       className: "",
-      html: "<div class='marker-operator' aria-hidden='true'>ð¦º</div>",
+      html: "<div class='marker-operator' aria-hidden='true'>🦺</div>",
       iconSize: [16, 16],
       iconAnchor: [8, 8]
     })
@@ -24206,10 +24206,10 @@ function renderLocationWarning() {
   ui.mapLocationWarning?.classList.toggle("hidden", !showLocationWarning);
   if (!showLocationWarning) return;
   const blocked = locationWarningMode === "blocked";
-  if (ui.mapLocationWarningTitle) ui.mapLocationWarningTitle.textContent = blocked ? "ð Posizione bloccata" : "Posizione non attiva";
+  if (ui.mapLocationWarningTitle) ui.mapLocationWarningTitle.textContent = blocked ? "📍 Posizione bloccata" : "Posizione non attiva";
   if (ui.mapLocationWarningText) {
     ui.mapLocationWarningText.textContent = blocked
-      ? "La posizione Ã¨ bloccata per questo browser. Per usare la posizione, devi abilitarla manualmente."
+      ? "La posizione è bloccata per questo browser. Per usare la posizione, devi abilitarla manualmente."
       : "Per usare questa funzione abilita la posizione dal telefono.";
   }
   ui.mapEnableLocationBtn?.classList.toggle("hidden", blocked);
@@ -24217,7 +24217,7 @@ function renderLocationWarning() {
   ui.mapLocationHelpBtn?.classList.toggle("hidden", !blocked);
   if (ui.mapLocationWarningPlatform) {
     ui.mapLocationWarningPlatform.classList.toggle("hidden", !blocked);
-    ui.mapLocationWarningPlatform.textContent = `Browser rilevato: ${locationClientInfo.browser} â¢ Sistema rilevato: ${locationClientInfo.os}`;
+    ui.mapLocationWarningPlatform.textContent = `Browser rilevato: ${locationClientInfo.browser} • Sistema rilevato: ${locationClientInfo.os}`;
   }
 }
 
@@ -24249,13 +24249,13 @@ function detectLocationClientInfo() {
 function getLocationHelpSteps() {
   const key = `${locationClientInfo.os}|${locationClientInfo.browser}`;
   const maps = {
-    "Android|Chrome": ["Tocca il lucchetto vicino allâindirizzo del sito", "Tocca Permessi", "Apri Posizione", "Seleziona Consenti", "Ricarica la pagina", "Torna nellâapp e premi âRiprova posizioneâ"],
-    "Android|Samsung Internet": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Samsung Internet", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nellâapp e premi âRiprova posizioneâ"],
-    "Android|Edge": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Microsoft Edge", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nellâapp e premi âRiprova posizioneâ"],
-    "iPhone/iOS|Safari": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Assicurati che Localizzazione sia attiva", "Cerca Safari", "Imposta la posizione su âMentre usi lâappâ", "Torna nellâapp e premi âRiprova posizioneâ"],
-    "iPhone/iOS|Chrome": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Cerca Chrome", "Imposta la posizione su âMentre usi lâappâ", "Torna nellâapp e premi âRiprova posizioneâ"]
+    "Android|Chrome": ["Tocca il lucchetto vicino all’indirizzo del sito", "Tocca Permessi", "Apri Posizione", "Seleziona Consenti", "Ricarica la pagina", "Torna nell’app e premi “Riprova posizione”"],
+    "Android|Samsung Internet": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Samsung Internet", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nell’app e premi “Riprova posizione”"],
+    "Android|Edge": ["Apri Impostazioni del telefono", "Vai su App", "Cerca Microsoft Edge", "Entra in Permessi", "Tocca Posizione", "Seleziona Consenti", "Torna nell’app e premi “Riprova posizione”"],
+    "iPhone/iOS|Safari": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Assicurati che Localizzazione sia attiva", "Cerca Safari", "Imposta la posizione su “Mentre usi l’app”", "Torna nell’app e premi “Riprova posizione”"],
+    "iPhone/iOS|Chrome": ["Apri Impostazioni iPhone", "Vai su Privacy e sicurezza", "Tocca Localizzazione", "Cerca Chrome", "Imposta la posizione su “Mentre usi l’app”", "Torna nell’app e premi “Riprova posizione”"]
   };
-  return maps[key] || ["Apri le impostazioni del telefono", "Vai su App", "Cerca il browser che stai usando", "Entra in Permessi", "Attiva Posizione", "Torna nellâapp", "Premi âRiprova posizioneâ"];
+  return maps[key] || ["Apri le impostazioni del telefono", "Vai su App", "Cerca il browser che stai usando", "Entra in Permessi", "Attiva Posizione", "Torna nell’app", "Premi “Riprova posizione”"];
 }
 
 function toggleLocationHelpPanel() {
@@ -24295,7 +24295,7 @@ async function syncLocationAvailability() {
       }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     }
   } catch (error) {
-    console.warn("Verifica disponibilitÃ  posizione non riuscita:", error);
+    console.warn("Verifica disponibilità posizione non riuscita:", error);
     clearCurrentUserPosition();
     updateLocationWarningState({ permission: "unavailable", enabled: false, mode: "blocked" });
   }
@@ -24352,7 +24352,7 @@ function getImpiantoPopupData(impianto, tipo = "") {
     tipologia,
     stato: impianto.done ? "Fatto" : "Da fare",
     dataFatto: doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`,
-    operatoreSquadra: [operatore, squadra].filter((value) => value && value !== "-").join(" â¢ ") || "-",
+    operatoreSquadra: [operatore, squadra].filter((value) => value && value !== "-").join(" • ") || "-",
     coordinates: impianto.gpsY != null && impianto.gpsX != null
       ? `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`
       : "-"
@@ -24386,7 +24386,7 @@ function buildFullscreenImpiantoWhatsAppMessage(impianto) {
   const positionUrl = buildImpiantoPositionUrl(impianto);
   const appUrl = buildImpiantoAppUrl(impianto);
   return [
-    "Ti inoltro i dettagli dellâimpianto:",
+    "Ti inoltro i dettagli dell’impianto:",
     "",
     `Nome impianto: ${impianto.denominazione || "-"}`,
     `ID SAP: ${data.idSap}`,
@@ -24400,8 +24400,8 @@ function buildFullscreenImpiantoWhatsAppMessage(impianto) {
     ...linkedNotesLines,
     "",
     `Posizione impianto: ${data.coordinates}`,
-    positionUrl ? `[ð Apri posizione impianto](${positionUrl})` : "ð Apri posizione impianto: posizione non disponibile",
-    `[ð Apri impianto nellâapp](${appUrl})`
+    positionUrl ? `[📍 Apri posizione impianto](${positionUrl})` : "📍 Apri posizione impianto: posizione non disponibile",
+    `[🔗 Apri impianto nell’app](${appUrl})`
   ].join("\n");
 }
 
@@ -24439,7 +24439,7 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
           ${buildImpiantoWeatherBadgeMarkup(impianto)}
           ${headerSubtitle}
         </div>
-        <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup dettaglio impianto" title="Chiudi">Ã</button>
+        <button type="button" class="map-popup-close-btn" data-map-popup-action="close" aria-label="Chiudi popup dettaglio impianto" title="Chiudi">×</button>
       </div>
       <div class="map-popup-scroll">
         <dl class="map-popup-details">
@@ -24724,7 +24724,7 @@ function getMezzoByLabel(label) {
 
 async function openFuelPage(mezzoLabel) {
   selectedFuelMezzo = getMezzoByLabel(mezzoLabel) || { nId: mezzoLabel, nome: mezzoLabel };
-  ui.fuelPageTitle.textContent = `Distributori Q8/ENI â¢ ${selectedFuelMezzo.nId || selectedFuelMezzo.nome || "Mezzo"}`;
+  ui.fuelPageTitle.textContent = `Distributori Q8/ENI • ${selectedFuelMezzo.nId || selectedFuelMezzo.nome || "Mezzo"}`;
   ui.fuelMezzoDetailsCard.classList.add("hidden");
   if (ui.fuelRadius) ui.fuelRadius.value = "5";
   renderFuelMezzoDetails();
@@ -24757,7 +24757,7 @@ function renderFuelMezzoDetails() {
     <p><b>Massa complessiva (kg):</b> ${escapeHTML(massaLabel)}</p>
     <p><b>Alimentazione:</b> ${escapeHTML(selectedFuelMezzo.alimentazione || "-")}</p>
     <div class="item-actions">
-      <button id="fuel-open-pin-doc-btn" class="btn" type="button">ð PIN carburante</button>
+      <button id="fuel-open-pin-doc-btn" class="btn" type="button">📌 PIN carburante</button>
     </div>
   `;
   const openPinBtn = document.getElementById("fuel-open-pin-doc-btn");
@@ -24793,8 +24793,8 @@ async function runFuelStationsLoad() {
   console.info("[Distributori] carburante e raggio", { fuel, radiusKm });
   if (ui.fuelFilterSummary) {
     ui.fuelFilterSummary.textContent = fuel
-      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km. Controllo prima lâarchivio MIMIT salvato.`
-      : `Alimentazione mezzo non riconosciuta â¢ Raggio ${radiusKm} km`;
+      ? `Cerco solo distributori Q8/ENI che vendono ${fuelLabel}, entro ${radiusKm} km. Controllo prima l’archivio MIMIT salvato.`
+      : `Alimentazione mezzo non riconosciuta • Raggio ${radiusKm} km`;
   }
   if (!fuel) {
     showFuelStationsError("Alimentazione del mezzo non riconosciuta.", true);
@@ -24824,7 +24824,7 @@ async function runFuelStationsLoad() {
       return;
     }
     if (ui.fuelFilterSummary) {
-      ui.fuelFilterSummary.textContent = `Trovati ${stations.length} distributori che vendono ${fuelLabel}, entro ${radiusKm} km â¢ Fonte: ${searchResult.source}.`;
+      ui.fuelFilterSummary.textContent = `Trovati ${stations.length} distributori che vendono ${fuelLabel}, entro ${radiusKm} km • Fonte: ${searchResult.source}.`;
     }
     renderFuelStations(stations);
   } catch (error) {
@@ -24876,7 +24876,7 @@ async function fetchCompatibleFuelStations(position, radiusKm, fuel) {
     if (nationalCache?.findNearby) {
       const cached = await nationalCache.findNearby(fuel, position, radiusKm, haversine);
       if (cached.stations.length) {
-        console.info("[Distributori] risultati dallâarchivio MIMIT nazionale", {
+        console.info("[Distributori] risultati dall’archivio MIMIT nazionale", {
           fuel,
           radiusKm,
           totalCached: cached.totalCached,
@@ -24995,11 +24995,11 @@ function renderFuelStations(stations) {
       icon: createFuelMarkerIcon(station.brandLabel)
     }).addTo(fuelStationsLayer);
     const sourceLabel = station.source ? `<br>Fonte: ${escapeHTML(station.source)}` : "";
-    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} â¢ ${formatDistance(station.distance)}${sourceLabel}`);
+    marker.bindPopup(`<b>${escapeHTML(station.name)}</b><br>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}${sourceLabel}`);
     const navBtn = createButton("NAVIGA", () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${station.lat},${station.lon}`)}`, "_blank", "noopener"));
     const row = document.createElement("div");
     row.className = "simple-list-item";
-    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} â¢ ${formatDistance(station.distance)}${sourceLabel}</small></span>`;
+    row.innerHTML = `<span><b>${escapeHTML(station.name)}</b><br><small>${escapeHTML(station.address)}<br>${escapeHTML(station.availableFuel)} • ${formatDistance(station.distance)}${sourceLabel}</small></span>`;
     row.appendChild(navBtn);
     ui.fuelStationsList.appendChild(row);
     marker.on("click", () => navBtn.focus());
@@ -25047,7 +25047,7 @@ async function loadPersonalServicesByCategory(category) {
   const cfg = PERSONAL_SERVICE_CATEGORIES[category];
   const radiusMeters = getSelectedPersonalServicesRadius();
   ui.personalServicesPageTitle.textContent = `${cfg.icon} ${cfg.title}`;
-  ui.personalServicesListTitle.textContent = `PiÃ¹ vicini a te â¢ ${cfg.title} â¢ raggio ${Math.round(radiusMeters / 1000)} km`;
+  ui.personalServicesListTitle.textContent = `Più vicini a te • ${cfg.title} • raggio ${Math.round(radiusMeters / 1000)} km`;
   if (!currentUserPos) {
     ui.personalServicesFeedback.textContent = "Posizione non disponibile. Attiva GPS per usare i servizi personali.";
     ui.personalServicesList.innerHTML = "";
@@ -25142,7 +25142,7 @@ function createPersonalServiceMarkerIcon(category) {
   const cfg = PERSONAL_SERVICE_CATEGORIES[category] || {};
   return L.divIcon({
     className: "fuel-marker-wrap",
-    html: `<span class="fuel-marker-label ${getPersonalServiceMarkerClass(category)}">${escapeHTML(cfg.icon || "ð")}</span>`,
+    html: `<span class="fuel-marker-label ${getPersonalServiceMarkerClass(category)}">${escapeHTML(cfg.icon || "📍")}</span>`,
     iconSize: [44, 24],
     iconAnchor: [22, 12],
     popupAnchor: [0, -10]
@@ -25180,7 +25180,7 @@ function renderLunchGroupedList() {
   const other = personalServicesResults.filter((place) => !isMealVoucherAccepted(place.tags));
   const acceptedCard = document.createElement("div");
   acceptedCard.className = "simple-list-item stacked";
-  acceptedCard.innerHTML = `<strong>â Accettano buoni pasto (${accepted.length})</strong>`;
+  acceptedCard.innerHTML = `<strong>✅ Accettano buoni pasto (${accepted.length})</strong>`;
   const acceptedList = document.createElement("div");
   acceptedList.className = "simple-list";
   accepted.forEach((place) => acceptedList.appendChild(buildPersonalServiceRow(place)));
@@ -25189,7 +25189,7 @@ function renderLunchGroupedList() {
 
   const otherCard = document.createElement("div");
   otherCard.className = "simple-list-item stacked";
-  otherCard.innerHTML = `<strong>â¹ï¸ Non accettano o non indicato (${other.length})</strong>`;
+  otherCard.innerHTML = `<strong>ℹ️ Non accettano o non indicato (${other.length})</strong>`;
   const otherList = document.createElement("div");
   otherList.className = "simple-list";
   other.forEach((place) => otherList.appendChild(buildPersonalServiceRow(place)));
@@ -25203,7 +25203,7 @@ function buildPersonalServiceRow(place) {
   row.dataset.placeId = String(place.id);
   const head = document.createElement("div");
   head.className = "personal-service-row-head";
-  const iconBtn = createButton(PERSONAL_SERVICE_CATEGORIES[place.category]?.icon || "ð", () => selectPersonalService(place.id));
+  const iconBtn = createButton(PERSONAL_SERVICE_CATEGORIES[place.category]?.icon || "📍", () => selectPersonalService(place.id));
   iconBtn.classList.add("action-icon-btn");
   const nameBtn = createButton(place.name, () => selectPersonalService(place.id));
   nameBtn.classList.add("personal-service-name-btn");
@@ -25300,14 +25300,14 @@ function formatDetailFieldLabel(field) {
     "payment:ticket_restaurant": "Ticket Restaurant",
     "diet:vegetarian": "Opzioni vegetariane",
     fee: "A pagamento",
-    wheelchair: "AccessibilitÃ  carrozzina",
+    wheelchair: "Accessibilità carrozzina",
     operator: "Operatore",
     cash_in: "Versamento contanti",
     contactless: "Contactless",
     "currency:EUR": "Euro",
     dispensing: "Dispensazione",
     access: "Accesso",
-    capacity: "CapacitÃ ",
+    capacity: "Capacità",
     brand: "Marchio"
   };
   return labels[field] || field;
@@ -25488,7 +25488,7 @@ function evaluateImpiantoProximityAlerts() {
       const impiantoName = nearest.denominazione || "Impianto";
       publishGlobalNotificationEvent("impianto-near", {
         title: "Operatore vicino impianto",
-        body: `${currentUser?.displayName || currentUser?.email || "Operatore"} Ã¨ vicino a ${impiantoName} (${commessaName}).`,
+        body: `${currentUser?.displayName || currentUser?.email || "Operatore"} è vicino a ${impiantoName} (${commessaName}).`,
         commessaId: selectedCommessaId,
         commessaName,
         impiantoName,
@@ -25511,7 +25511,7 @@ function evaluateImpiantoProximityAlerts() {
     const impiantoName = nearest.denominazione || "Impianto";
     publishGlobalNotificationEvent("impianto-away-without-done", {
       title: "Allontanamento senza FATTO",
-      body: `${currentUser?.displayName || currentUser?.email || "Operatore"} si Ã¨ allontanato da ${impiantoName} senza premere FATTO.`,
+      body: `${currentUser?.displayName || currentUser?.email || "Operatore"} si è allontanato da ${impiantoName} senza premere FATTO.`,
       commessaId: selectedCommessaId,
       commessaName,
       impiantoName,
@@ -25576,10 +25576,10 @@ const WEATHER_PROXY_PATH = "/api/weather";
 const WEATHER_PROXY_PUBLIC_URL = "https://creative-syrniki-dddbae.netlify.app/api/weather";
 const WEATHER_FETCH_TIMEOUT_MS = 15000;
 const ALERT_LEVEL_META = {
-  green: { rank: 0, emoji: "ð¢", className: "alert-green", label: "Nessuna allerta" },
-  yellow: { rank: 1, emoji: "ð¡", className: "alert-yellow", label: "Allerta Protezione Civile" },
-  orange: { rank: 2, emoji: "ð ", className: "alert-orange", label: "Allerta Protezione Civile" },
-  red: { rank: 3, emoji: "ð´", className: "alert-red", label: "Allerta Protezione Civile" }
+  green: { rank: 0, emoji: "🟢", className: "alert-green", label: "Nessuna allerta" },
+  yellow: { rank: 1, emoji: "🟡", className: "alert-yellow", label: "Allerta Protezione Civile" },
+  orange: { rank: 2, emoji: "🟠", className: "alert-orange", label: "Allerta Protezione Civile" },
+  red: { rank: 3, emoji: "🔴", className: "alert-red", label: "Allerta Protezione Civile" }
 };
 const ALERT_KEYWORDS = [
   { key: "temporali", label: "Temporali", patterns: ["temporali", "temporale"] },
@@ -25748,12 +25748,12 @@ async function fetchWeather() {
     if (data.proxyError) diagnostics.error = `Proxy: ${data.proxyError}`;
     const current = data.current || {};
     const weatherLabel = weatherCodeLabel(current.weather_code);
-    ui.weatherSummary.textContent = `${weatherLabel} â¢ ${Math.round(current.temperature_2m ?? 0)}Â°C â¢ vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
+    ui.weatherSummary.textContent = `${weatherLabel} • ${Math.round(current.temperature_2m ?? 0)}°C • vento ${Math.round(current.wind_speed_10m ?? 0)} km/h`;
     await renderWeatherDetails(data, target);
     renderWeatherDiagnostics(diagnostics);
   } catch (error) {
     ui.weatherSummary.textContent = "Meteo non disponibile.";
-    ui.weatherRisks.innerHTML = `<span class='weather-risk-chip'>â ï¸ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
+    ui.weatherRisks.innerHTML = `<span class='weather-risk-chip'>⚠️ Nessun dato rischio disponibile</span>${buildHomeWorklimateButton({ target })}`;
     bindHomeWorklimateButton();
     renderCivilProtectionAlert({ level: "green", label: "Protezione Civile non disponibile", url: CIVIL_PROTECTION_ALERT_PAGE });
     ui.weatherDetails.innerHTML = "<p class='muted'>Impossibile caricare previsioni dettagliate.</p>";
@@ -25800,10 +25800,10 @@ async function renderWeatherDetails(data, target) {
   const riskIce = temps.slice(0, 12).some((value, idx) => Number(value) <= 1 && Number(rains[idx] || 0) >= 40);
 
   const risks = [];
-  risks.push(maxRain >= 60 ? "ð§ï¸ Rischio pioggia alta" : "ð§ï¸ Rischio pioggia bassa");
-  if (snowSum > 0) risks.push("âï¸ Possibile neve");
-  if (hasFogCode || minVisibility < 1200) risks.push("ð«ï¸ Possibile nebbia");
-  if (riskIce) risks.push("ð§ Possibile ghiaccio");
+  risks.push(maxRain >= 60 ? "🌧️ Rischio pioggia alta" : "🌧️ Rischio pioggia bassa");
+  if (snowSum > 0) risks.push("❄️ Possibile neve");
+  if (hasFogCode || minVisibility < 1200) risks.push("🌫️ Possibile nebbia");
+  if (riskIce) risks.push("🧊 Possibile ghiaccio");
 
   const alert = await getCivilProtectionAlert(target, { temps, winds, snows, visibilities, codes });
   const riskChips = risks.map((risk) => `<span class='weather-risk-chip'>${escapeHTML(risk)}</span>`).join("");
@@ -25815,7 +25815,7 @@ async function renderWeatherDetails(data, target) {
     const hour = new Date(time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
     const visKm = ((Number(visibilities[idx]) || 0) / 1000).toFixed(1);
     const label = weatherCodeLabel(codes[idx]);
-    return `<p><b>${hour}</b> â¢ ${label} â¢ ð¡ï¸ ${Math.round(temps[idx] ?? 0)}Â°C â¢ ð§ï¸ ${Math.round(rains[idx] ?? 0)}% â¢ âï¸ ${Number(snows[idx] || 0).toFixed(1)} mm â¢ ðï¸ ${visKm} km</p>`;
+    return `<p><b>${hour}</b> • ${label} • 🌡️ ${Math.round(temps[idx] ?? 0)}°C • 🌧️ ${Math.round(rains[idx] ?? 0)}% • ❄️ ${Number(snows[idx] || 0).toFixed(1)} mm • 👁️ ${visKm} km</p>`;
   }).join("");
   const providerName = data.provider || "Open-Meteo Best Match";
   const providerUrl = data.providerUrl || "https://open-meteo.com/";
@@ -25854,7 +25854,7 @@ function normalizeItalianRegionName(region) {
   return String(region || "")
     .replace(/^regione\s+/i, "")
     .replace(/emilia-romagna/i, "Emilia Romagna")
-    .replace(/trentino-alto adige\/sÃ¼dtirol/i, "Trentino Alto Adige")
+    .replace(/trentino-alto adige\/südtirol/i, "Trentino Alto Adige")
     .trim();
 }
 
@@ -26019,7 +26019,7 @@ function formatHeatDashboardDate(date) {
 
 function getHeatRiskSuggestion(level) {
   const normalized = normalizeWorklimateLevel(level);
-  if (normalized === "rosso") return "Evitare attivitÃ  pesanti nelle ore centrali";
+  if (normalized === "rosso") return "Evitare attività pesanti nelle ore centrali";
   if (normalized === "arancione") return "Programmare pause aggiuntive";
   if (normalized === "giallo") return "Bere spesso e fare pause brevi";
   return "Condizioni ordinarie, mantenere idratazione";
@@ -26096,14 +26096,14 @@ function getHeatHourlyForecastForDay(dateKey) {
 
 function renderHeatForecastCards() {
   const days = buildHeatForecastDays();
-  if (!days.some((day) => day.available)) return `<p class="worklimate-empty-state">Dati non disponibili, riprova piÃ¹ tardi.</p>`;
+  if (!days.some((day) => day.available)) return `<p class="worklimate-empty-state">Dati non disponibili, riprova più tardi.</p>`;
   return `<div class="heat-forecast-strip" aria-label="Previsioni rischio calore prossimi 5 giorni">${days.map((day) => {
-    if (!day.available) return `<article class="heat-forecast-card heat-forecast-unavailable"><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><p>Dati non disponibili, riprova piÃ¹ tardi.</p></article>`;
-    const icon = WEATHER_ALERT_ICON[day.level] || "ð¢";
-    const weatherIcon = weatherCodeLabel(day.code).split(" ")[0] || "âï¸";
+    if (!day.available) return `<article class="heat-forecast-card heat-forecast-unavailable"><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><p>Dati non disponibili, riprova più tardi.</p></article>`;
+    const icon = WEATHER_ALERT_ICON[day.level] || "🟢";
+    const weatherIcon = weatherCodeLabel(day.code).split(" ")[0] || "☀️";
     const label = WORKLIMATE_COLOR_LABEL[day.level] || day.level;
     const dayKey = getHeatForecastDayKey(day.date);
-    return `<button type="button" class="heat-forecast-card risk-${escapeHTML(day.level)}" data-heat-day="${escapeHTML(dayKey)}" aria-label="Apri previsioni ora per ora per ${escapeHTML(formatHeatDashboardDate(day.date))}"><div><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><span>${escapeHTML(weatherIcon)}</span></div><p class="heat-risk-pill">${escapeHTML(icon)} ${escapeHTML(label)}</p><b>${escapeHTML(String(day.maxTemp))}Â°C</b><small>${escapeHTML(day.suggestion)}</small><em>Ora per ora</em></button>`;
+    return `<button type="button" class="heat-forecast-card risk-${escapeHTML(day.level)}" data-heat-day="${escapeHTML(dayKey)}" aria-label="Apri previsioni ora per ora per ${escapeHTML(formatHeatDashboardDate(day.date))}"><div><strong>${escapeHTML(formatHeatDashboardDate(day.date))}</strong><span>${escapeHTML(weatherIcon)}</span></div><p class="heat-risk-pill">${escapeHTML(icon)} ${escapeHTML(label)}</p><b>${escapeHTML(String(day.maxTemp))}°C</b><small>${escapeHTML(day.suggestion)}</small><em>Ora per ora</em></button>`;
   }).join("")}</div>`;
 }
 
@@ -26114,17 +26114,17 @@ function openHeatHourlyForecast(dayKey) {
   const rows = slots.map((slot) => {
     const hour = slot.date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false });
     const label = weatherCodeLabel(slot.code);
-    const icon = label.split(" ")[0] || "âï¸";
-    const riskIcon = WEATHER_ALERT_ICON[slot.level] || "ð¢";
+    const icon = label.split(" ")[0] || "☀️";
+    const riskIcon = WEATHER_ALERT_ICON[slot.level] || "🟢";
     const riskLabel = WORKLIMATE_COLOR_LABEL[slot.level] || slot.level;
-    const tempLabel = Number.isFinite(slot.temp) ? `${Math.round(slot.temp)}Â°C` : "n/d";
+    const tempLabel = Number.isFinite(slot.temp) ? `${Math.round(slot.temp)}°C` : "n/d";
     const rainLabel = Number.isFinite(Number(slot.rain)) ? `${Math.round(Number(slot.rain))}%` : "n/d";
     const windLabel = Number.isFinite(Number(slot.wind)) ? `${Math.round(Number(slot.wind))} km/h` : "n/d";
-    return `<article class="heat-hourly-row risk-${escapeHTML(slot.level)}"><div><strong>${escapeHTML(hour)}</strong><span aria-hidden="true">${escapeHTML(icon)}</span></div><p>${escapeHTML(label.replace(/^[^A-Za-zÃ-Ã¿]+\s*/, ""))}</p><b>${escapeHTML(tempLabel)}</b><small>ð§ï¸ ${escapeHTML(rainLabel)} Â· ð¬ï¸ ${escapeHTML(windLabel)}</small><em>${escapeHTML(riskIcon)} ${escapeHTML(riskLabel)}</em></article>`;
+    return `<article class="heat-hourly-row risk-${escapeHTML(slot.level)}"><div><strong>${escapeHTML(hour)}</strong><span aria-hidden="true">${escapeHTML(icon)}</span></div><p>${escapeHTML(label.replace(/^[^A-Za-zÀ-ÿ]+\s*/, ""))}</p><b>${escapeHTML(tempLabel)}</b><small>🌧️ ${escapeHTML(rainLabel)} · 🌬️ ${escapeHTML(windLabel)}</small><em>${escapeHTML(riskIcon)} ${escapeHTML(riskLabel)}</em></article>`;
   }).join("");
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay heat-hourly-overlay";
-  overlay.innerHTML = `<div class="worklimate-modal heat-hourly-modal" role="dialog" aria-modal="true" aria-label="Previsioni ora per ora rischio calore"><header class="worklimate-page-header"><button type="button" class="worklimate-page-back" aria-label="Torna al rischio calore">â</button><div><p>Previsioni ora per ora</p><strong>${escapeHTML(title)}</strong></div><button type="button" class="worklimate-modal-close" aria-label="Chiudi">Ã</button></header><main class="heat-hourly-list">${rows || "<p class='worklimate-empty-state'>Previsioni orarie non disponibili per questo giorno.</p>"}</main></div>`;
+  overlay.innerHTML = `<div class="worklimate-modal heat-hourly-modal" role="dialog" aria-modal="true" aria-label="Previsioni ora per ora rischio calore"><header class="worklimate-page-header"><button type="button" class="worklimate-page-back" aria-label="Torna al rischio calore">←</button><div><p>Previsioni ora per ora</p><strong>${escapeHTML(title)}</strong></div><button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button></header><main class="heat-hourly-list">${rows || "<p class='worklimate-empty-state'>Previsioni orarie non disponibili per questo giorno.</p>"}</main></div>`;
   const close = () => overlay.remove();
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
@@ -26136,39 +26136,39 @@ function openHeatHourlyForecast(dayKey) {
 function openHomeWorklimateBoard({ riskLevel = "verde", url = WORKLIMATE_FORECAST_URL, contextData = null } = {}) {
   const level = normalizeWorklimateLevel(riskLevel);
   const levelLabel = WORKLIMATE_COLOR_LABEL[level] || level;
-  const icon = WEATHER_ALERT_ICON[level] || "ð¢";
+  const icon = WEATHER_ALERT_ICON[level] || "🟢";
   const target = currentWeatherTarget || getWeatherTargetCoordinates();
   const coordinatesLabel = Number.isFinite(Number(target?.lat)) && Number.isFinite(Number(target?.lon)) ? `${Number(target.lat).toFixed(4)}, ${Number(target.lon).toFixed(4)}` : "";
-  const positionLabel = target?.source === "gps" ? `Posizione GPS attuale${coordinatesLabel ? ` â¢ ${coordinatesLabel}` : ""}` : target?.source === "manual" ? `${target.name || "LocalitÃ  scelta"}${coordinatesLabel ? ` â¢ ${coordinatesLabel}` : ""}` : target?.source === "commessa" ? `Comune/zona della commessa${coordinatesLabel ? ` â¢ ${coordinatesLabel}` : ""}` : "Postazione predefinita";
+  const positionLabel = target?.source === "gps" ? `Posizione GPS attuale${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "manual" ? `${target.name || "Località scelta"}${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : target?.source === "commessa" ? `Comune/zona della commessa${coordinatesLabel ? ` • ${coordinatesLabel}` : ""}` : "Postazione predefinita";
   const updatedLabel = currentHomeWeatherForecast?.updatedAt ? new Date(currentHomeWeatherForecast.updatedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "Dati non disponibili";
   const operationalCards = [
-    { icon: "ð", title: "Prima del turno", items: ["Controllare Worklimate", "Verificare disponibilitÃ  acqua", "Informare la squadra"] },
-    { icon: "âï¸", title: "Durante il turno", items: ["Fare pause regolari", "Lavorare preferibilmente allâombra"] },
-    { icon: "ð¥", title: "Ore centrali 12:30-16:00", items: ["Ridurre le attivitÃ  pesanti", "Aumentare la frequenza delle pause"] },
-    { icon: "ð¨", title: "In caso di livello rosso", items: ["Rimodulare le attivitÃ ", "Spostare i lavori gravosi al mattino", "Valutare la sospensione dei lavori piÃ¹ pesanti"] }
+    { icon: "📋", title: "Prima del turno", items: ["Controllare Worklimate", "Verificare disponibilità acqua", "Informare la squadra"] },
+    { icon: "☀️", title: "Durante il turno", items: ["Fare pause regolari", "Lavorare preferibilmente all’ombra"] },
+    { icon: "🔥", title: "Ore centrali 12:30-16:00", items: ["Ridurre le attività pesanti", "Aumentare la frequenza delle pause"] },
+    { icon: "🚨", title: "In caso di livello rosso", items: ["Rimodulare le attività", "Spostare i lavori gravosi al mattino", "Valutare la sospensione dei lavori più pesanti"] }
   ];
   const operationalMarkup = operationalCards.map((card) => `<article class="heat-action-card"><span aria-hidden="true">${escapeHTML(card.icon)}</span><h3>${escapeHTML(card.title)}</h3><ul>${card.items.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul></article>`).join("");
-  const contextMarkup = contextData ? `<section class="heat-context-card"><h2>Commessa selezionata</h2><p><b>${escapeHTML(contextData.commessa || "Commessa")}</b>${contextData.codiceCommessa ? ` Â· ${escapeHTML(contextData.codiceCommessa)}` : ""}</p><p>${escapeHTML(contextData.comune || "Comune non disponibile")} Â· ${escapeHTML(contextData.selectedDate || "Data non disponibile")} Â· ð¡ï¸ ${escapeHTML(formatWorklimateTemperature(contextData.averageTemperature))}</p><p>Livello allerta: <b>Codice ${escapeHTML(contextData.alertLevel || level)}</b> Â· Fonte: ${escapeHTML(contextData.source || "Worklimate/meteo")}</p></section>` : "";
+  const contextMarkup = contextData ? `<section class="heat-context-card"><h2>Commessa selezionata</h2><p><b>${escapeHTML(contextData.commessa || "Commessa")}</b>${contextData.codiceCommessa ? ` · ${escapeHTML(contextData.codiceCommessa)}` : ""}</p><p>${escapeHTML(contextData.comune || "Comune non disponibile")} · ${escapeHTML(contextData.selectedDate || "Data non disponibile")} · 🌡️ ${escapeHTML(formatWorklimateTemperature(contextData.averageTemperature))}</p><p>Livello allerta: <b>Codice ${escapeHTML(contextData.alertLevel || level)}</b> · Fonte: ${escapeHTML(contextData.source || "Worklimate/meteo")}</p></section>` : "";
   const overlay = document.createElement("div");
   overlay.className = "worklimate-modal-overlay worklimate-page-overlay";
   overlay.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-dashboard" role="dialog" aria-modal="true" aria-label="Procedura sicurezza rischio calore">
     <header class="worklimate-page-header">
-      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina rischio calore">â</button>
+      <button type="button" class="worklimate-page-back" aria-label="Chiudi pagina rischio calore">←</button>
       <div><p>Procedura sicurezza</p><strong>Rischio calore</strong></div>
-      <button type="button" class="worklimate-modal-close" aria-label="Chiudi">Ã</button>
+      <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
     </header>
     <main data-worklimate-main class="heat-dashboard-main">
       <section class="heat-status-card risk-${escapeHTML(level)}">
         <div class="heat-status-icon" aria-hidden="true">${escapeHTML(icon)}</div>
         <div><h1>Rischio calore</h1><p>${escapeHTML(positionLabel)}</p><small>Ultimo aggiornamento: ${escapeHTML(updatedLabel)}</small></div>
-        <button type="button" class="heat-location-button" data-heat-location-picker>ð Cambia localitÃ </button>
+        <button type="button" class="heat-location-button" data-heat-location-picker>📍 Cambia località</button>
         <strong>${escapeHTML(levelLabel)}</strong>
       </section>
       ${contextMarkup}
-      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">âï¸</span><h2>Previsioni prossimi 5 giorni</h2></div>${renderHeatForecastCards()}</section>
-      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">â ï¸</span><h2>Indicazioni operative</h2></div><div class="heat-actions-grid">${operationalMarkup}</div></section>
-      <section class="heat-info-card hydration"><h2>ð§ Idratazione</h2><p>Bere almeno 250 ml di acqua ogni 20 minuti.</p></section>
-      <section class="heat-law-compact"><div><h2>ð Ordinanza Regionale n.72 del 03/06/2026</h2><p>Misure di prevenzione per attivitÃ  lavorative in condizioni di esposizione al calore.</p></div><button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Apri documento</button></section>
+      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">☀️</span><h2>Previsioni prossimi 5 giorni</h2></div>${renderHeatForecastCards()}</section>
+      <section class="heat-section"><div class="heat-section-title"><span aria-hidden="true">⚠️</span><h2>Indicazioni operative</h2></div><div class="heat-actions-grid">${operationalMarkup}</div></section>
+      <section class="heat-info-card hydration"><h2>💧 Idratazione</h2><p>Bere almeno 250 ml di acqua ogni 20 minuti.</p></section>
+      <section class="heat-law-compact"><div><h2>📌 Ordinanza Regionale n.72 del 03/06/2026</h2><p>Misure di prevenzione per attività lavorative in condizioni di esposizione al calore.</p></div><button type="button" class="btn btn-primary worklimate-visit-btn" data-worklimate-visit="${escapeHTML(url)}">Apri documento</button></section>
     </main>
   </div>`;
   const close = () => {
@@ -26205,28 +26205,28 @@ function buildHeatLocationOptionMarkup() {
 function openHeatLocationPicker(boardOverlay) {
   const picker = document.createElement("div");
   picker.className = "worklimate-modal-overlay heat-location-overlay";
-  picker.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-location-view" role="dialog" aria-modal="true" aria-label="Scegli localitÃ  rischio calore">
+  picker.innerHTML = `<div class="worklimate-modal worklimate-board-modal worklimate-board-page heat-location-view" role="dialog" aria-modal="true" aria-label="Scegli località rischio calore">
     <header class="worklimate-page-header">
-      <button type="button" class="worklimate-page-back" data-location-close aria-label="Torna al rischio calore">â</button>
-      <div><p>Rischio calore</p><strong>Cambia localitÃ </strong></div>
-      <button type="button" class="worklimate-modal-close" data-location-close aria-label="Chiudi">Ã</button>
+      <button type="button" class="worklimate-page-back" data-location-close aria-label="Torna al rischio calore">←</button>
+      <div><p>Rischio calore</p><strong>Cambia località</strong></div>
+      <button type="button" class="worklimate-modal-close" data-location-close aria-label="Chiudi">×</button>
     </header>
     <main class="heat-location-main">
       <section class="heat-location-panel">
-        <h2>1. Scegli una localitÃ </h2>
-        <p>Seleziona una cittÃ  rapida oppure inserisci coordinate precise.</p>
+        <h2>1. Scegli una località</h2>
+        <p>Seleziona una città rapida oppure inserisci coordinate precise.</p>
         <div class="heat-place-grid">${buildHeatLocationOptionMarkup()}</div>
         <form class="heat-coordinate-form" data-coordinate-form>
-          <label>Nome localitÃ <input name="name" type="text" placeholder="Es. Cantiere nord"></label>
+          <label>Nome località<input name="name" type="text" placeholder="Es. Cantiere nord"></label>
           <label>Latitudine<input name="lat" type="number" step="0.0001" min="-90" max="90" required></label>
           <label>Longitudine<input name="lon" type="number" step="0.0001" min="-180" max="180" required></label>
-          <button type="submit" class="btn btn-primary">Usa questa localitÃ </button>
+          <button type="submit" class="btn btn-primary">Usa questa località</button>
         </form>
       </section>
       <section class="heat-location-panel heat-map-panel">
         <h2>2. Scegli sulla mappa</h2>
         <p>Tocca la mappa a schermo intero per posizionare il punto.</p>
-        <button type="button" class="heat-map-open" data-open-full-map><span>ðºï¸</span>Apri mappa a schermo intero</button>
+        <button type="button" class="heat-map-open" data-open-full-map><span>🗺️</span>Apri mappa a schermo intero</button>
       </section>
     </main>
   </div>`;
@@ -26245,7 +26245,7 @@ function openHeatLocationPicker(boardOverlay) {
   picker.querySelector("[data-coordinate-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    applyLocation({ name: String(form.get("name") || "LocalitÃ  scelta").trim(), lat: Number(form.get("lat")), lon: Number(form.get("lon")) });
+    applyLocation({ name: String(form.get("name") || "Località scelta").trim(), lat: Number(form.get("lat")), lon: Number(form.get("lon")) });
   });
   picker.querySelector("[data-open-full-map]")?.addEventListener("click", () => openHeatFullScreenMap(applyLocation));
   document.body.appendChild(picker);
@@ -26255,7 +26255,7 @@ function openHeatLocationPicker(boardOverlay) {
 function openHeatFullScreenMap(onSelect) {
   const overlay = document.createElement("div");
   overlay.className = "heat-full-map";
-  overlay.innerHTML = `<button type="button" class="heat-map-close" aria-label="Chiudi mappa">Ã</button><div class="heat-map-canvas" data-map-canvas></div><div class="heat-map-toolbar"><strong>Scegli posizione sulla mappa</strong><span data-map-coordinates>Tocca un punto</span><button type="button" class="btn btn-primary" data-confirm-map disabled>Conferma posizione</button></div>`;
+  overlay.innerHTML = `<button type="button" class="heat-map-close" aria-label="Chiudi mappa">×</button><div class="heat-map-canvas" data-map-canvas></div><div class="heat-map-toolbar"><strong>Scegli posizione sulla mappa</strong><span data-map-coordinates>Tocca un punto</span><button type="button" class="btn btn-primary" data-confirm-map disabled>Conferma posizione</button></div>`;
   let selected = null;
   let heatMap = null;
   let marker = null;
@@ -26304,7 +26304,7 @@ function buildCivilProtectionAlertChip(alert) {
   const level = alert?.level || "green";
   const meta = ALERT_LEVEL_META[level] || ALERT_LEVEL_META.green;
   const text = alert?.loading ? "Verifica Protezione Civile..." : `${meta.emoji} ${alert?.label || meta.label}`;
-  return `<span class='weather-risk-chip ${meta.className}' title='Avviso Protezione Civile${alert?.region ? ` â¢ ${escapeHTML(alert.region)}` : ""}'>${escapeHTML(text)}</span>`;
+  return `<span class='weather-risk-chip ${meta.className}' title='Avviso Protezione Civile${alert?.region ? ` • ${escapeHTML(alert.region)}` : ""}'>${escapeHTML(text)}</span>`;
 }
 
 function renderCivilProtectionAlert(alert) {
@@ -26625,7 +26625,7 @@ async function sendHoursDeadlineAlertIfMissing({ commessaId, commessaName, dateK
   if (existing.exists) return;
 
   const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
-  const text = `â ï¸ Avviso ore mancanti: per la commessa ${commessaName || "Commessa"} (${dateLabel}) non risultano ore inserite entro le 19:00.`;
+  const text = `⚠️ Avviso ore mancanti: per la commessa ${commessaName || "Commessa"} (${dateLabel}) non risultano ore inserite entro le 19:00.`;
   const expiresAt = new Date(Date.now() + HOURS_DEADLINE_ALERT_RETENTION_MS);
   const chatDocRef = await db.collection("chatMessages").add({
     type: "text",
@@ -26795,7 +26795,7 @@ function subscribeUsers() {
     }
     checkAndSendHoursDeadlineAlerts();
   };
-  // onSnapshot include giÃ  il caricamento iniziale: il precedente get() faceva
+  // onSnapshot include già il caricamento iniziale: il precedente get() faceva
   // pagare due volte la stessa lista a ogni accesso.
   try {
     unsubscribeUsers = source.onSnapshot(applySnapshot, (error) => {
@@ -26903,7 +26903,7 @@ function buildProgrammazioneAutocomplete(root, label, options, selectedValues = 
   const list = root.querySelector(".autocomplete-list");
   const chips = root.querySelector(".autocomplete-chips");
   function renderChips() {
-    chips.innerHTML = Array.from(selected.values()).map((item) => `<span class="autocomplete-chip">${item.avatar ? `<img src="${escapeHTML(item.avatar)}" alt="" width="18" height="18">` : ""}${escapeHTML(item.value)}<button type="button" data-remove="${escapeHTML(item.value)}">â</button></span>`).join("");
+    chips.innerHTML = Array.from(selected.values()).map((item) => `<span class="autocomplete-chip">${item.avatar ? `<img src="${escapeHTML(item.avatar)}" alt="" width="18" height="18">` : ""}${escapeHTML(item.value)}<button type="button" data-remove="${escapeHTML(item.value)}">✕</button></span>`).join("");
   }
   function renderList() {
     const q = String(input.value || "").trim().toLowerCase();
@@ -26987,11 +26987,11 @@ function isBlockingHoursApprovalWithoutVisibleRecord(request = {}) {
 
 async function unblockInvalidHoursRequest(request) {
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² sbloccare una richiesta ore incompleta.");
+    alert("Solo l'admin può sbloccare una richiesta ore incompleta.");
     return;
   }
   if (!request?.id) return;
-  const ok = window.confirm(`Sbloccare la richiesta ore ${request.id}? VerrÃ  marcata come rifiutata perchÃ© non contiene un record ore completo.`);
+  const ok = window.confirm(`Sbloccare la richiesta ore ${request.id}? Verrà marcata come rifiutata perché non contiene un record ore completo.`);
   if (!ok) return;
   await db.collection(getOreApprovalRequestsCollectionName()).doc(request.id).set({
     status: "rejected",
@@ -27029,8 +27029,8 @@ function renderHoursApprovalRequests() {
     const statusMap = {
       pending_level1: "In attesa primo OK",
       pending_admin: "In attesa OK admin finale",
-      approved: `Approvata â (report ${request.finalizedReportId || "-"})`,
-      rejected: "Rifiutata â"
+      approved: `Approvata ✅ (report ${request.finalizedReportId || "-"})`,
+      rejected: "Rifiutata ❌"
     };
     const statusText = statusMap[request.status] || request.status || "-";
     const author = request.createdByName || request.createdByEmail || "Operatore";
@@ -27041,10 +27041,10 @@ function renderHoursApprovalRequests() {
     const hasInvalidBlock = isBlockingHoursApprovalWithoutVisibleRecord(request);
     card.innerHTML = `
       <p><b>ID:</b> ${escapeHTML(request.id || "-")}</p>
-      <p><b>Data:</b> ${escapeHTML(dateLabel)} â¢ <b>Creato da:</b> ${escapeHTML(author)}</p>
+      <p><b>Data:</b> ${escapeHTML(dateLabel)} • <b>Creato da:</b> ${escapeHTML(author)}</p>
       <p><b>Stato:</b> ${escapeHTML(statusText)}</p>
       <ul>${summary || "<li>Nessuna commessa</li>"}</ul>
-      ${hasInvalidBlock ? `<p class="warning"><b>Errore:</b> risulta un blocco ore ma il record ore non Ã¨ stato trovato. Contattare amministratore.</p>` : ""}
+      ${hasInvalidBlock ? `<p class="warning"><b>Errore:</b> risulta un blocco ore ma il record ore non è stato trovato. Contattare amministratore.</p>` : ""}
       ${request.rejectionReason ? `<p><b>Motivo rifiuto:</b> ${escapeHTML(request.rejectionReason)}</p>` : ""}
     `;
     const actions = document.createElement("div");
@@ -27087,7 +27087,7 @@ async function approveHoursRequestLevel1(request) {
   if (requester?.id) {
     await sendPrivateChatNotification({
       recipientId: requester.id,
-      text: `â Richiesta ore ${request.id}: primo livello approvato. In attesa conferma admin finale.`,
+      text: `✅ Richiesta ore ${request.id}: primo livello approvato. In attesa conferma admin finale.`,
       senderName: currentUser.displayName || currentUser.email || "Sistema"
     });
   }
@@ -27100,7 +27100,7 @@ async function approveHoursRequestLevel2(request) {
     if (targetUser?.id) {
       await sendPrivateChatNotification({
         recipientId: targetUser.id,
-        text: `â Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${result.reportId}.`,
+        text: `✅ Richiesta ore ${request.id} approvata definitivamente. Report salvato: ${result.reportId}.`,
         senderName: currentUser.displayName || currentUser.email || "Admin"
       });
     }
@@ -27117,7 +27117,7 @@ async function approveHoursRequestLevel2(request) {
 
 async function approveHoursRequestFromChat(requestId) {
   if (!canManageData()) {
-    throw new Error("Solo admin puÃ² confermare le ore da chat.");
+    throw new Error("Solo admin può confermare le ore da chat.");
   }
   if (!requestId) {
     throw new Error("ID richiesta non valido.");
@@ -27134,7 +27134,7 @@ async function approveHoursRequestFromChat(requestId) {
 
 async function rejectHoursRequestFromChat(requestId) {
   if (!canManageData()) {
-    throw new Error("Solo admin puÃ² rifiutare le ore da chat.");
+    throw new Error("Solo admin può rifiutare le ore da chat.");
   }
   if (!requestId) {
     throw new Error("ID richiesta non valido.");
@@ -27162,7 +27162,7 @@ async function rejectHoursRequestFromChat(requestId) {
   if (targetUser?.id) {
     await sendPrivateChatNotification({
       recipientId: targetUser.id,
-      text: `â Richiesta ore ${request.id} rifiutata da chat admin.`,
+      text: `❌ Richiesta ore ${request.id} rifiutata da chat admin.`,
       senderName: currentUser.displayName || currentUser.email || "Admin"
     });
   }
@@ -27192,7 +27192,7 @@ async function rejectHoursRequest(request) {
   if (targetUser?.id) {
     await sendPrivateChatNotification({
       recipientId: targetUser.id,
-      text: `â Richiesta ore ${request.id} rifiutata.${reason ? ` Motivo: ${String(reason).trim()}` : ""}`,
+      text: `❌ Richiesta ore ${request.id} rifiutata.${reason ? ` Motivo: ${String(reason).trim()}` : ""}`,
       senderName: currentUser.displayName || currentUser.email || "Sistema"
     });
   }
@@ -27260,7 +27260,7 @@ function renderGpsRequests() {
       : "-";
     const status = String(request.status || "pending").toUpperCase();
     const info = document.createElement("span");
-    info.innerHTML = `${escapeHTML(request.impiantoDenominazione || "Impianto")} â¢ ${escapeHTML(request.operatorName || "Operatore")}<br><small>${escapeHTML(request.operatorLat)}, ${escapeHTML(request.operatorLng)} â¢ ${when} â¢ ${status}</small>`;
+    info.innerHTML = `${escapeHTML(request.impiantoDenominazione || "Impianto")} • ${escapeHTML(request.operatorName || "Operatore")}<br><small>${escapeHTML(request.operatorLat)}, ${escapeHTML(request.operatorLng)} • ${when} • ${status}</small>`;
     row.appendChild(info);
 
     const actions = document.createElement("div");
@@ -27304,8 +27304,8 @@ async function notifyGpsDecision(request, approved) {
   await db.collection("chatMessages").add({
     type: "text",
     text: approved
-      ? `â Richiesta GPS accettata per ${request.impiantoDenominazione || "impianto"}. Coordinate aggiornate.`
-      : `â Richiesta GPS rifiutata per ${request.impiantoDenominazione || "impianto"}.`,
+      ? `✅ Richiesta GPS accettata per ${request.impiantoDenominazione || "impianto"}. Coordinate aggiornate.`
+      : `❌ Richiesta GPS rifiutata per ${request.impiantoDenominazione || "impianto"}.`,
     recipientId: request.operatorId,
     senderId: currentUser?.uid || "",
     senderName: currentUser?.displayName || currentUser?.email || "Admin",
@@ -27355,14 +27355,14 @@ function isImpiantoActionDenied(action) {
 
 function actionLabel(action) {
   const map = {
-    done: "â Fatto",
-    navigate: "ð§­ Naviga",
-    reset: "â»ï¸ Reset",
-    whatsapp: "ð¬ WhatsApp",
-    "problem-report": "ð¨ Segnala problema",
-    "gps-update": "ð Aggiorna GPS",
-    edit: "âï¸ Modifica",
-    delete: "ðï¸ Elimina"
+    done: "✅ Fatto",
+    navigate: "🧭 Naviga",
+    reset: "♻️ Reset",
+    whatsapp: "💬 WhatsApp",
+    "problem-report": "🚨 Segnala problema",
+    "gps-update": "📍 Aggiorna GPS",
+    edit: "✏️ Modifica",
+    delete: "🗑️ Elimina"
   };
   return map[action] || action;
 }
@@ -27400,7 +27400,7 @@ function renderUserPermissionList() {
     IMPIANTO_ACTIONS.forEach((action) => {
       const adminOnly = ADMIN_ONLY_IMPIANTO_ACTIONS.includes(action);
       const enabled = adminOnly ? allowed.has(action) : !denied.has(action);
-      const btn = createButton(`${enabled ? "â" : "ð«"} ${actionLabel(action)}`, async () => {
+      const btn = createButton(`${enabled ? "✅" : "🚫"} ${actionLabel(action)}`, async () => {
         const nextDenied = new Set(denied);
         const nextAllowed = new Set(allowed);
         if (adminOnly) {
@@ -27432,7 +27432,7 @@ function renderUserPermissionList() {
 function renderUserBanList() {
   if (!ui.userBanList) return;
   if (!canManageData()) {
-    ui.userBanList.innerHTML = "<p class='muted'>Solo un admin puÃ² bloccare o sbloccare utenti.</p>";
+    ui.userBanList.innerHTML = "<p class='muted'>Solo un admin può bloccare o sbloccare utenti.</p>";
     return;
   }
   const users = platformUsers.filter((user) => String(user.id || user.uid || "") !== String(currentUser?.uid || ""));
@@ -27450,7 +27450,7 @@ function renderUserBanList() {
     row.appendChild(title);
     const status = document.createElement("span");
     status.className = banned ? "user-ban-status user-ban-status--banned" : "user-ban-status user-ban-status--active";
-    status.textContent = banned ? "ð´ Accesso negato" : "ð¢ Attivo";
+    status.textContent = banned ? "🔴 Accesso negato" : "🟢 Attivo";
     row.appendChild(status);
     const btn = createButton(banned ? "SBLOCCA UTENTE" : "BANNA UTENTE", () => setUserBanned(user, !banned));
     btn.classList.add("btn-small", banned ? "btn-primary" : "btn-danger");
@@ -27460,7 +27460,7 @@ function renderUserBanList() {
 }
 
 async function setUserBanned(user, banned) {
-  if (!canManageData()) return alert("Solo un admin puÃ² bloccare o sbloccare utenti.");
+  if (!canManageData()) return alert("Solo un admin può bloccare o sbloccare utenti.");
   const userId = String(user?.id || user?.uid || "");
   if (!userId) return;
   const payload = banned
@@ -27523,7 +27523,7 @@ function renderNotificationsList() {
     const status = item.scheduledDateKey && item.scheduledDateKey > getDateKeyFromLocalDate(new Date()) ? "Programm. futura" : "Attiva";
     const title = String(item.title || "Notifica").trim();
     const attachments = Array.isArray(item.attachments) ? item.attachments : [];
-    row.innerHTML = `<strong>${escapeHTML(title)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(userLabel)} â¢ ${escapeHTML(status)}</small>`;
+    row.innerHTML = `<strong>${escapeHTML(title)}</strong><p>${escapeHTML(item.message || "")}</p><small>${escapeHTML(userLabel)} • ${escapeHTML(status)}</small>`;
     const attachmentsBox = document.createElement("div");
     if (!attachments.length) {
       attachmentsBox.innerHTML = "<small>Nessun allegato.</small>";
@@ -27533,7 +27533,7 @@ function renderNotificationsList() {
         const li = document.createElement("li");
         const link = document.createElement("a");
         link.href = "#";
-        link.textContent = `ð ${att.name || "Documento"}`;
+        link.textContent = `📎 ${att.name || "Documento"}`;
         link.addEventListener("click", (event) => {
           event.preventDefault();
           openNotificationDocumentViewer(att.url || "", att.name || "Documento");
@@ -27592,7 +27592,7 @@ function renderActiveUserAlertAttachments() {
     const row = document.createElement("div");
     row.className = "simple-list-item";
     const label = document.createElement("span");
-    label.textContent = `ð ${attachment.name || "Documento"}`;
+    label.textContent = `📎 ${attachment.name || "Documento"}`;
     row.appendChild(label);
     const openBtn = createButton("Apri", () => openNotificationDocumentViewer(attachment.url || "", attachment.name || "Documento"));
     row.appendChild(openBtn);
@@ -27723,7 +27723,7 @@ function closeNotificationDocumentViewer() {
 async function createUserNotification(event) {
   event.preventDefault();
   if (notificationUploadInProgress) {
-    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento giÃ  in corso...";
+    if (ui.notificationFeedback) ui.notificationFeedback.textContent = "Caricamento già in corso...";
     return;
   }
   if (!currentUser || !canManageData()) {
@@ -27923,7 +27923,7 @@ async function sendNotificationAckToAdmins(alertItem, ackDate = new Date()) {
   const adminUsers = platformUsers.filter((user) => adminEmails.has(normalizeEmail(user.email)));
   if (!adminUsers.length) return;
   const whenLabel = ackDate.toLocaleString("it-IT");
-  const text = `â NOTIFICA CONFERMATA\nLâutente ${currentUser?.displayName || currentUser?.email || "Utente"} ha premuto âOK, HO CAPITOâ\nNotifica: ${alertItem?.title || "Notifica"}\nData/Ora: ${whenLabel}`;
+  const text = `✅ NOTIFICA CONFERMATA\nL’utente ${currentUser?.displayName || currentUser?.email || "Utente"} ha premuto “OK, HO CAPITO”\nNotifica: ${alertItem?.title || "Notifica"}\nData/Ora: ${whenLabel}`;
   await Promise.all(adminUsers.map((adminUser) => db.collection("chatMessages").add({
     type: "text",
     text,
@@ -28019,7 +28019,7 @@ async function openNotificationDayDetail(dateKey) {
   const dateLabel = new Date(`${selectedNotificationCalendarDateKey}T00:00:00`).toLocaleDateString("it-IT");
   const dayItems = userAlerts.filter((item) => getNotificationPrimaryDateKey(item) === selectedNotificationCalendarDateKey);
   ui.notificationDayDetail.innerHTML = `<h4>Dettaglio ${escapeHTML(dateLabel)}</h4>`;
-  const addButton = createButton("â Programma notifica per questo giorno", () => openScheduledNotificationForm(selectedNotificationCalendarDateKey));
+  const addButton = createButton("➕ Programma notifica per questo giorno", () => openScheduledNotificationForm(selectedNotificationCalendarDateKey));
   ui.notificationDayDetail.appendChild(addButton);
   if (!dayItems.length) {
     const empty = document.createElement("p");
@@ -28042,7 +28042,7 @@ async function openNotificationDayDetail(dateKey) {
     const pendingLabels = recipientsIds.filter((id) => !ackedIds.has(id)).map((id) => getPlatformUserLabel(platformUsers.find((u) => u.id === id)));
     const ackRows = itemAcks.map((ack) => {
       const when = ack.acknowledgedAt?.toDate ? ack.acknowledgedAt.toDate().toLocaleString("it-IT") : "-";
-      return `<li>${escapeHTML(ack.userName || ack.userId || "Utente")} â¢ ${escapeHTML(when)}</li>`;
+      return `<li>${escapeHTML(ack.userName || ack.userId || "Utente")} • ${escapeHTML(when)}</li>`;
     }).join("");
     card.innerHTML = `
       <strong>${escapeHTML(item.title || "Notifica")}</strong>
@@ -28082,7 +28082,7 @@ function renderExternalApps() {
     label.href = app.url;
     label.target = "_blank";
     label.rel = "noopener noreferrer";
-    label.textContent = `ð ${app.name || app.url}`;
+    label.textContent = `🔗 ${app.name || app.url}`;
     item.appendChild(label);
     const removeBtn = createButton("Rimuovi", () => removeExternalApp(index));
     item.appendChild(removeBtn);
@@ -28225,12 +28225,12 @@ function renderImpiantiManagementTable() {
   filtered.sort((a, b) => (query && a.rank !== b.rank ? a.rank - b.rank : managementSort.direction * String(managementFieldValue(a.plant, managementSort.field)).localeCompare(String(managementFieldValue(b.plant, managementSort.field)), "it", { numeric: true })));
   const done = all.filter((plant) => plant.done).length;
   document.getElementById("impianti-management-stats").innerHTML = `<span><b>${all.length}</b> impianti</span><span class="is-done"><b>${done}</b> fatti</span><span><b>${all.length - done}</b> da fare</span>`;
-  thead.innerHTML = `<tr><th class="sheet-select"><input type="checkbox" data-select-all aria-label="Seleziona tutti"></th>${MANAGEMENT_IMPIANTI_COLUMNS.map(([field, label]) => `<th data-sort="${MANAGEMENT_SORTABLE_FIELDS.has(field) ? field : ""}" class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${label}${managementSort.field === field ? (managementSort.direction > 0 ? " â" : " â") : ""}</th>`).join("")}<th>Azioni</th></tr>`;
+  thead.innerHTML = `<tr><th class="sheet-select"><input type="checkbox" data-select-all aria-label="Seleziona tutti"></th>${MANAGEMENT_IMPIANTI_COLUMNS.map(([field, label]) => `<th data-sort="${MANAGEMENT_SORTABLE_FIELDS.has(field) ? field : ""}" class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${label}${managementSort.field === field ? (managementSort.direction > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}<th>Azioni</th></tr>`;
   const pageSize = 100, pages = Math.max(1, Math.ceil(filtered.length / pageSize)); managementPage = Math.min(managementPage, pages);
   const pageRows = filtered.slice((managementPage - 1) * pageSize, managementPage * pageSize);
   if (!pageRows.length) tbody.innerHTML = `<tr><td colspan="18" class="sheet-empty">Nessun impianto trovato.</td></tr>`;
   else tbody.innerHTML = pageRows.map(({ plant }) => renderManagementPlantRow(plant)).join("");
-  document.getElementById("impianti-management-pagination").innerHTML = pages > 1 ? `<button class="btn" data-page="${managementPage - 1}" ${managementPage === 1 ? "disabled" : ""}>â</button><span>Pagina ${managementPage} di ${pages} Â· ${filtered.length} risultati</span><button class="btn" data-page="${managementPage + 1}" ${managementPage === pages ? "disabled" : ""}>â</button>` : `<span>${filtered.length} risultati</span>`;
+  document.getElementById("impianti-management-pagination").innerHTML = pages > 1 ? `<button class="btn" data-page="${managementPage - 1}" ${managementPage === 1 ? "disabled" : ""}>←</button><span>Pagina ${managementPage} di ${pages} · ${filtered.length} risultati</span><button class="btn" data-page="${managementPage + 1}" ${managementPage === pages ? "disabled" : ""}>→</button>` : `<span>${filtered.length} risultati</span>`;
   updateManagementBulkBar();
 }
 
@@ -28239,12 +28239,12 @@ function renderManagementPlantRow(plant) {
   const editableFields = new Set(MANAGEMENT_IMPIANTI_COLUMNS.slice(1).map(([field]) => field));
   const cells = MANAGEMENT_IMPIANTI_COLUMNS.map(([field]) => {
     const value = managementFieldValue(plant, field);
-    if (!editing || !editableFields.has(field)) return `<td class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${field === "stato" ? `<span class="plant-status status-${normalizeManagementSearch(value).replace(/\s+/g, "-")}">${escapeHTML(value)}</span>` : escapeHTML(value || (field === "numeroProgressivo" ? "â" : ""))}</td>`;
+    if (!editing || !editableFields.has(field)) return `<td class="${field === "numeroProgressivo" ? "sheet-number" : ""}">${field === "stato" ? `<span class="plant-status status-${normalizeManagementSearch(value).replace(/\s+/g, "-")}">${escapeHTML(value)}</span>` : escapeHTML(value || (field === "numeroProgressivo" ? "—" : ""))}</td>`;
     if (field === "stato") return `<td><select data-field="stato">${MANAGEMENT_STATUSES.map((status) => `<option ${status === value ? "selected" : ""}>${status}</option>`).join("")}</select></td>`;
     const type = field === "dataEsecuzione" ? "date" : field === "oraEsecuzione" ? "time" : "text";
     return `<td><input data-field="${field}" type="${type}" value="${escapeHTML(value)}" ${saving ? "disabled" : ""}></td>`;
   }).join("");
-  return `<tr data-plant-id="${escapeHTML(plant.id)}" class="${editing ? "is-editing" : ""}"><td class="sheet-select"><input type="checkbox" data-select-row ${managementSelectedIds.has(plant.id) ? "checked" : ""} aria-label="Seleziona impianto"></td>${cells}<td class="sheet-actions">${editing ? `<button class="btn btn-primary" data-row-action="save" ${saving ? "disabled" : ""}>${saving ? "Salvataggioâ¦" : "Salva"}</button><button class="btn" data-row-action="cancel" ${saving ? "disabled" : ""}>Annulla</button><p class="row-feedback" role="alert"></p>` : (canManageData() ? `<button class="btn" data-row-action="edit">âï¸ Modifica</button>` : "")}</td></tr>`;
+  return `<tr data-plant-id="${escapeHTML(plant.id)}" class="${editing ? "is-editing" : ""}"><td class="sheet-select"><input type="checkbox" data-select-row ${managementSelectedIds.has(plant.id) ? "checked" : ""} aria-label="Seleziona impianto"></td>${cells}<td class="sheet-actions">${editing ? `<button class="btn btn-primary" data-row-action="save" ${saving ? "disabled" : ""}>${saving ? "Salvataggio…" : "Salva"}</button><button class="btn" data-row-action="cancel" ${saving ? "disabled" : ""}>Annulla</button><p class="row-feedback" role="alert"></p>` : (canManageData() ? `<button class="btn" data-row-action="edit">✏️ Modifica</button>` : "")}</td></tr>`;
 }
 
 function openNewCommessaDialog() {
@@ -28278,7 +28278,7 @@ function openImpiantiManagement(commessa) {
   const title = document.getElementById("impianti-management-title");
   const meta = document.getElementById("impianti-management-meta");
   if (title) title.textContent = commessa.nome || "Gestione impianti";
-  if (meta) meta.textContent = `Cod. ${commessa.codice || "â"} â¢ ${total} ${total === 1 ? "impianto" : "impianti"}`;
+  if (meta) meta.textContent = `Cod. ${commessa.codice || "—"} • ${total} ${total === 1 ? "impianto" : "impianti"}`;
   renderImpiantiManagementTable();
   screen?.scrollIntoView({ block: "start" });
 }
@@ -28294,12 +28294,12 @@ function closeImpiantiManagement() {
 }
 
 function validateManagementPlant(patch, plantId, number) {
-  if (!patch.denominazione) return `Impianto n. ${number || "â"}: denominazione obbligatoria.`;
+  if (!patch.denominazione) return `Impianto n. ${number || "—"}: denominazione obbligatoria.`;
   const hasLat = String(patch.gpsY ?? "").trim() !== "", hasLng = String(patch.gpsX ?? "").trim() !== "";
-  if (hasLat !== hasLng || ((hasLat || hasLng) && !hasValidManagementCoordinates(patch))) return `Impianto n. ${number || "â"}: coordinate non valide.`;
+  if (hasLat !== hasLng || ((hasLat || hasLng) && !hasValidManagementCoordinates(patch))) return `Impianto n. ${number || "—"}: coordinate non valide.`;
   if (patch.idSap) {
     const duplicate = getCommessaCachedImpianti(managementCommessaId).find((item) => item.id !== plantId && normalizeManagementSearch(item.idSap) === normalizeManagementSearch(patch.idSap));
-    if (duplicate) return `Impianto n. ${number || "â"}: ID SAP giÃ  utilizzato dall'impianto n. ${duplicate.numeroProgressivo || "â"}.`;
+    if (duplicate) return `Impianto n. ${number || "—"}: ID SAP già utilizzato dall'impianto n. ${duplicate.numeroProgressivo || "—"}.`;
   }
   return "";
 }
@@ -28414,7 +28414,7 @@ async function downloadOfficialImpiantiTemplate() {
   instructions.columns = [{ width: 28 }, { width: 80 }];
   instructions.addRows([
     ["MODELLO UFFICIALE HERA", "Non modificare i nomi delle colonne del foglio IMPIANTI."],
-    ["Campi obbligatori", "N. e Denominazione impianto. ID SAP Ã¨ consigliato per riconoscere i duplicati."],
+    ["Campi obbligatori", "N. e Denominazione impianto. ID SAP è consigliato per riconoscere i duplicati."],
     ["N.", "Numero progressivo stabile e univoco nella commessa."],
     ["Coordinate", "Latitudine tra -90 e 90; longitudine tra -180 e 180."],
     ["Completamento", "Data esecuzione, Ora esecuzione e Operatore devono restare vuoti: saranno compilati premendo FATTO."],
@@ -28451,7 +28451,7 @@ async function exportAllImpiantiStatus(selectedIds = null) {
   });
   styleOfficialWorksheet(sheet);
   const instructions = workbook.addWorksheet("ISTRUZIONI");
-  instructions.addRow(["Esportazione stato impianti", `Commessa: ${commessa.nome || ""} â¢ Tutti gli impianti sono inclusi.`]);
+  instructions.addRow(["Esportazione stato impianti", `Commessa: ${commessa.nome || ""} • Tutti gli impianti sono inclusi.`]);
   instructions.columns = [{ width: 32 }, { width: 80 }];
   await saveOfficialWorkbook(workbook, `stato_impianti_${String(commessa.nome || "commessa").replace(/[^a-z0-9]+/gi, "_")}.xlsx`);
 }
@@ -28480,11 +28480,11 @@ function renderCommesseManagementList() {
     const codiceCommessa = String(commessa.codice || "").trim();
     const hasSubcommesse = getSubcommesse(commessa.id).length > 0;
     const total = Number(getCommessaStats(commessa.id).total || 0);
-    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse">ð</span>` : ""}`;
+    title.innerHTML = `${escapeHTML(commessa.nome || "Commessa senza nome")}${hasSubcommesse ? ` <span class="commessa-parent-indicator" title="Contiene subcommesse">📂</span>` : ""}`;
     info.appendChild(title);
     const meta = document.createElement("p");
     meta.className = "commessa-manage-meta";
-    meta.innerHTML = `<span>Cod. ${escapeHTML(codiceCommessa || "â")}</span><span>${total} ${total === 1 ? "impianto" : "impianti"}</span>`;
+    meta.innerHTML = `<span>Cod. ${escapeHTML(codiceCommessa || "—")}</span><span>${total} ${total === 1 ? "impianto" : "impianti"}</span>`;
     info.appendChild(meta);
 
     const actions = document.createElement("div");
@@ -28493,7 +28493,7 @@ function renderCommesseManagementList() {
     open.classList.add("btn-primary");
     const menu = document.createElement("details");
     menu.className = "commessa-actions-menu";
-    menu.innerHTML = `<summary aria-label="Azioni per ${escapeHTML(commessa.nome || "commessa")}">â®</summary><div></div>`;
+    menu.innerHTML = `<summary aria-label="Azioni per ${escapeHTML(commessa.nome || "commessa")}">⋮</summary><div></div>`;
     const menuBody = menu.querySelector("div");
     menuBody.appendChild(createButton("Modifica commessa", () => renameCommessa(commessa.id, commessa.nome || "Commessa", commessa.codice || "")));
     menuBody.appendChild(createButton("Gestisci impianti", () => openImpiantiManagement(commessa)));
@@ -28512,7 +28512,7 @@ function renderCommesseManagementList() {
 
 async function renameCommessa(commessaId, currentName, currentCode = "") {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² rinominare commesse.");
+    alert("Solo un admin può rinominare commesse.");
     return;
   }
   const nextName = window.prompt("Nuovo nome commessa:", currentName || "");
@@ -28525,18 +28525,18 @@ async function renameCommessa(commessaId, currentName, currentCode = "") {
   await db.collection(getCommesseCollectionName()).doc(commessaId).set({ nome: normalized, codice: normalizedCode }, { merge: true });
   if (selectedCommessaId === commessaId) {
     selectedCommessaName = normalized;
-    ui.commessaAttiva.textContent = normalizedCode ? `Commessa selezionata: ${normalized} â¢ Cod. commessa: ${normalizedCode}` : `Commessa selezionata: ${normalized}`;
+    ui.commessaAttiva.textContent = normalizedCode ? `Commessa selezionata: ${normalized} • Cod. commessa: ${normalizedCode}` : `Commessa selezionata: ${normalized}`;
     updateCommessaContextUI();
   }
 }
 
 async function clearCommessaImpianti(commessaId, nome) {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² svuotare commesse.");
+    alert("Solo un admin può svuotare commesse.");
     return;
   }
   const ok = window.confirm(
-    `Stai eliminando tutti gli impianti della commessa "${nome}".\n\nAl termine verrÃ  attivato automaticamente il nuovo modello Excel.\n\nOperazione irreversibile.\n\nPremi OK per Svuota e attiva nuovo modello.`
+    `Stai eliminando tutti gli impianti della commessa "${nome}".\n\nAl termine verrà attivato automaticamente il nuovo modello Excel.\n\nOperazione irreversibile.\n\nPremi OK per Svuota e attiva nuovo modello.`
   );
   if (!ok) return;
   const impiantiRef = db.collection("commesse").doc(commessaId).collection("impianti");
@@ -28565,7 +28565,7 @@ async function deleteCollectionDocs(collectionRef, batchSize = 200) {
 function renderAdminUsers() {
   if (!ui.adminUsersList) return;
   if (!canManageData()) {
-    ui.adminUsersList.innerHTML = "<p class='muted'>Solo un admin puÃ² gestire i permessi admin.</p>";
+    ui.adminUsersList.innerHTML = "<p class='muted'>Solo un admin può gestire i permessi admin.</p>";
     return;
   }
   const emails = Array.from(adminEmails).sort((a, b) => a.localeCompare(b, "it"));
@@ -28587,7 +28587,7 @@ function renderAdminUsers() {
 async function addAdminUserByEmail(event) {
   event.preventDefault();
   if (!canManageData()) {
-    alert("Solo un admin puÃ² aggiungere altri admin.");
+    alert("Solo un admin può aggiungere altri admin.");
     return;
   }
   const email = normalizeEmail(ui.adminUserEmail.value);
@@ -28606,7 +28606,7 @@ async function addAdminUserByEmail(event) {
 
 async function removeAdminEmail(email) {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² rimuovere admin.");
+    alert("Solo un admin può rimuovere admin.");
     return;
   }
   const normalized = normalizeEmail(email);
@@ -28680,7 +28680,7 @@ function renderChatEmptyState(message = "Nessun messaggio presente") {
   if (!ui.chatFullList) return;
   ui.chatFullList.innerHTML = `
     <div class="chat-empty-state">
-      <div class="chat-empty-icon" aria-hidden="true">ð¬</div>
+      <div class="chat-empty-icon" aria-hidden="true">💬</div>
       <p>${escapeHTML(message)}</p>
     </div>
   `;
@@ -28700,7 +28700,7 @@ function closeChatClearConfirmModal() {
 
 async function clearCurrentChatMessages() {
   if (!canManageData()) {
-    alert("Solo un admin puÃ² svuotare la chat.");
+    alert("Solo un admin può svuotare la chat.");
     return;
   }
 
@@ -28712,7 +28712,7 @@ async function clearCurrentChatMessages() {
 
   ui.chatClearBtn.disabled = true;
   ui.chatClearConfirmBtn.disabled = true;
-  ui.chatFeedback.textContent = visibleMessageIds.length ? "Svuotamento chat in corso..." : "Chat giÃ  vuota.";
+  ui.chatFeedback.textContent = visibleMessageIds.length ? "Svuotamento chat in corso..." : "Chat già vuota.";
 
   try {
     await animateChatDeletion();
@@ -28925,10 +28925,10 @@ async function buildChatMessageActions(message) {
     const statusMap = {
       pending_level1: "In attesa primo OK",
       pending_admin: "In attesa admin finale",
-      approved: "GiÃ  approvata",
-      rejected: "GiÃ  rifiutata"
+      approved: "Già approvata",
+      rejected: "Già rifiutata"
     };
-    actions.appendChild(createButton(statusMap[resolvedRequest.status] || "GiÃ  gestita", () => {}, true));
+    actions.appendChild(createButton(statusMap[resolvedRequest.status] || "Già gestita", () => {}, true));
     return actions;
   }
   if (!canAct) return null;
@@ -28947,7 +28947,7 @@ async function buildChatMessageActions(message) {
       console.error("Errore conferma ore da chat:", error);
       const latestState = await getHoursApprovalRequestById(approvalRequestId);
       if (!latestState || latestState.status !== expectedStatus) {
-        ui.chatFeedback.textContent = "Richiesta giÃ  gestita.";
+        ui.chatFeedback.textContent = "Richiesta già gestita.";
         setChatHoursActionButtonsState(acceptButton, rejectButton, true);
         return;
       }
@@ -28969,7 +28969,7 @@ async function buildChatMessageActions(message) {
       console.error("Errore rifiuto ore da chat:", error);
       const latestState = await getHoursApprovalRequestById(approvalRequestId);
       if (!latestState || latestState.status !== expectedStatus) {
-        ui.chatFeedback.textContent = "Richiesta giÃ  gestita.";
+        ui.chatFeedback.textContent = "Richiesta già gestita.";
         setChatHoursActionButtonsState(acceptButton, rejectButton, true);
         return;
       }
@@ -29002,7 +29002,7 @@ async function createChatMessageElement(message) {
   if (message.recipientId) {
     const tag = document.createElement("p");
     tag.className = "chat-type-badge";
-    tag.textContent = isOwnMessage(message) ? "ð© Messaggio privato" : "ð Privato per te";
+    tag.textContent = isOwnMessage(message) ? "📩 Messaggio privato" : "🔒 Privato per te";
     item.appendChild(tag);
   }
 
@@ -29214,13 +29214,13 @@ async function toggleVoiceRecording() {
         mediaRecorder = null;
         mediaChunks = [];
         isRecording = false;
-        ui.chatVoiceBtn.textContent = "ð¤ Invia vocale";
+        ui.chatVoiceBtn.textContent = "🎤 Invia vocale";
       }
     };
 
     mediaRecorder.start();
     isRecording = true;
-    ui.chatVoiceBtn.textContent = "â¹ï¸ Stop e invia";
+    ui.chatVoiceBtn.textContent = "⏹️ Stop e invia";
     ui.chatFeedback.textContent = "Registrazione in corso...";
   } catch (error) {
     console.error(error);
@@ -29273,7 +29273,7 @@ function updateDriveStatus(isConnected) {
   if (connected) {
     ui.driveStatus.textContent = canManageData()
       ? `Cloud centralizzato attivo${driveBridgeState.ownerEmail ? ` (${driveBridgeState.ownerEmail})` : ""}.`
-      : "Archiviazione cloud attiva â¢ Cloud centralizzato attivo";
+      : "Archiviazione cloud attiva • Cloud centralizzato attivo";
   } else {
     ui.driveStatus.textContent = getCentralDriveNotConfiguredMessage();
   }
@@ -29281,7 +29281,7 @@ function updateDriveStatus(isConnected) {
 
 async function connectGoogleDrive() {
   if (!canManageData()) {
-    alert("Solo admin puÃ² configurare Google Drive.");
+    alert("Solo admin può configurare Google Drive.");
     return;
   }
   try {
@@ -29444,7 +29444,7 @@ async function loadFaqFromFirestore() {
 
 async function saveFaqToFirestore(faqData) {
   if (!canManageData()) {
-    throw new Error("Solo un admin puÃ² aggiornare le FAQ.");
+    throw new Error("Solo un admin può aggiornare le FAQ.");
   }
   const normalized = normalizeFaqData(faqData);
   const existing = await loadFaqFromFirestore();
@@ -29487,7 +29487,7 @@ window.exportFaqSnapshotToDrive = exportFaqSnapshotToDrive;
 
 async function exportFaqSnapshotToDrive(faqData = faqDataset) {
   if (!canManageData()) {
-    throw new Error("Solo un admin puÃ² esportare snapshot FAQ.");
+    throw new Error("Solo un admin può esportare snapshot FAQ.");
   }
   if (!driveAccessToken) {
     console.warn("Cloud amministratore non configurato: salto export snapshot FAQ.");
@@ -29685,7 +29685,7 @@ async function getOrCreateCommessaSpreadsheet(commessaId, commessaName) {
         return { id: configuredSheetId };
       }
     } catch (error) {
-      console.warn("Foglio configurato non piÃ¹ disponibile, provo ricreazione automatica:", error);
+      console.warn("Foglio configurato non più disponibile, provo ricreazione automatica:", error);
       await db.collection(getCommesseCollectionName()).doc(commessaId).set({
         sheetSpreadsheetId: firebase.firestore.FieldValue.delete(),
         sheetUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -29992,15 +29992,15 @@ function programmazioneReminderBadge(dateKey, tipo = "") {
   const tipoNorm = String(tipo || "").toLowerCase();
   if (tipoNorm === "ferie") {
     if (diff < 0) return "";
-    if (diff === 0) return "ðï¸ Ferie oggi";
-    if (diff === 1) return "ðï¸ Ferie domani";
-    if (diff <= 7) return `ðï¸ Ferie tra ${diff} giorni`;
+    if (diff === 0) return "🏖️ Ferie oggi";
+    if (diff === 1) return "🏖️ Ferie domani";
+    if (diff <= 7) return `🏖️ Ferie tra ${diff} giorni`;
     return "";
   }
-  if (diff === 0) return "ð Oggi";
-  if (diff === 1) return "ð Domani";
+  if (diff === 0) return "📅 Oggi";
+  if (diff === 1) return "📌 Domani";
   const day = target.getDay();
-  if (day === 1 && diff >= 3 && diff <= 5) return "ð Programmazione lunedÃ¬";
+  if (day === 1 && diff >= 3 && diff <= 5) return "📌 Programmazione lunedì";
   return "";
 }
 
@@ -30021,7 +30021,7 @@ function renderProgrammazioni() {
     return true;
   });
   if (ui.programmazioneList) {
-    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} â¢ ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data, item.tipo)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
+    ui.programmazioneList.innerHTML = filtered.map((item) => `<article class="simple-list-item ${String(item.stato||"")==="Fatto"?"programmazione-done":""}"><strong>${escapeHTML(item.ora||"--:--")} - ${escapeHTML(item.oraFine||"--:--")} ${escapeHTML(item.tipoLabel||item.tipo||"")}</strong><p>${escapeHTML(item.commessa||"")} • ${escapeHTML(item.zona||"")}</p><p>${escapeHTML((item.note||"").slice(0,80))}</p><p>${escapeHTML(item.stato||"")} ${escapeHTML(programmazioneReminderBadge(item.data, item.tipo)||"")}</p>${canManageData()?`<div class='item-actions'><button type='button' class='btn' data-edit-programmazione='${escapeHTML(item.id||"")}'>Modifica</button><button type='button' class='btn btn-danger' data-delete-programmazione='${escapeHTML(item.id||"")}'>Elimina</button></div>`:""}</article>`).join("") || "<p class='muted'>Nessuna programmazione visibile.</p>";
     ui.programmazioneList.querySelectorAll("[data-edit-programmazione]").forEach((btn) => btn.addEventListener("click", () => openEditProgrammazione(btn.getAttribute("data-edit-programmazione"))));
     ui.programmazioneList.querySelectorAll("[data-delete-programmazione]").forEach((btn) => btn.addEventListener("click", () => deleteProgrammazioneById(btn.getAttribute("data-delete-programmazione"))));
   }
@@ -30029,7 +30029,7 @@ function renderProgrammazioni() {
     const homeItems = visible.filter((item) => Boolean(programmazioneReminderBadge(item.data, item.tipo)));
     ui.programmazioniHomeCard.classList.toggle("hidden", !homeItems.length);
     ui.programmazioniHomeCard.setAttribute("aria-hidden", homeItems.length ? "false" : "true");
-    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} â¢ ${escapeHTML(item.tipoLabel||item.tipo||"")} â¢ ${escapeHTML(item.commessa||"")}</p></article>`).join("");
+    ui.programmazioniHomeList.innerHTML = homeItems.map((item) => `<article class="simple-list-item"><strong>${escapeHTML(programmazioneReminderBadge(item.data, item.tipo))}</strong><p>${escapeHTML(item.ora||"")} • ${escapeHTML(item.tipoLabel||item.tipo||"")} • ${escapeHTML(item.commessa||"")}</p></article>`).join("");
   }
 }
 
@@ -30103,11 +30103,11 @@ function hasRequiredPersonaleCourse(person, keyword) {
 
 async function renderFerieList() {
   if (!ui.ferieList) return;
-  if (!canManageData()) { ui.ferieList.innerHTML = "<p class='muted'>Solo admin puÃ² gestire ferie.</p>"; return; }
+  if (!canManageData()) { ui.ferieList.innerHTML = "<p class='muted'>Solo admin può gestire ferie.</p>"; return; }
   const snap = await db.collection('ferieColleghi').orderBy('dataInizio','asc').get().catch(()=>null);
   if (!snap) return;
   const rows = snap.docs.map((d)=>({id:d.id,...d.data()}));
-  ui.ferieList.innerHTML = rows.map((r)=>`<article class='simple-list-item'><strong>${escapeHTML(r.operatore||'-')}</strong><p>${escapeHTML(r.dataInizio||'-')} â ${escapeHTML(r.dataFine||'-')}</p><p>${escapeHTML(r.note||'')}</p><div class='item-actions'><button type='button' class='btn' data-edit-ferie='${escapeHTML(r.id)}'>Modifica</button><button type='button' class='btn btn-danger' data-del-ferie='${escapeHTML(r.id)}'>Elimina</button></div></article>`).join('') || "<p class='muted'>Nessuna ferie inserita.</p>";
+  ui.ferieList.innerHTML = rows.map((r)=>`<article class='simple-list-item'><strong>${escapeHTML(r.operatore||'-')}</strong><p>${escapeHTML(r.dataInizio||'-')} → ${escapeHTML(r.dataFine||'-')}</p><p>${escapeHTML(r.note||'')}</p><div class='item-actions'><button type='button' class='btn' data-edit-ferie='${escapeHTML(r.id)}'>Modifica</button><button type='button' class='btn btn-danger' data-del-ferie='${escapeHTML(r.id)}'>Elimina</button></div></article>`).join('') || "<p class='muted'>Nessuna ferie inserita.</p>";
   ui.ferieList.querySelectorAll('[data-del-ferie]').forEach((btn)=>btn.addEventListener('click', async()=>{
     if (!canManageData()) return;
     if (!confirm('Eliminare ferie?')) return;
@@ -30212,7 +30212,7 @@ async function renderFerieDisponibilitaCalendar() {
       const inFerieNames = stats
         ? stats.enabledPeople.filter((p) => stats.inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p)))).map((p) => getPersonaleDisplayName(p)).filter(Boolean)
         : [];
-      const detail = stats ? `<div id="${escapeHTML(detailId)}" class="ferie-day-detail hidden"><p><b>Data:</b> ${escapeHTML(key)}</p><p>Abilitati: ${stats.enabledPeople.length} â¢ In ferie: ${stats.inFerie.size} â¢ Disponibili: ${stats.available.length}</p><p>â Squadre complete creabili: ${validTeams}</p><p>${validTeams === 0 && stats.available.length > 0 ? `â ï¸ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : 'â ï¸ Persone disponibili ma requisiti mancanti: 0'}</p><p>${validTeams === 0 ? 'â Giorno scoperto' : ''}</p><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div>` : '';
+      const detail = stats ? `<div id="${escapeHTML(detailId)}" class="ferie-day-detail hidden"><p><b>Data:</b> ${escapeHTML(key)}</p><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${validTeams}</p><p>${validTeams === 0 && stats.available.length > 0 ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${validTeams === 0 ? '❌ Giorno scoperto' : ''}</p><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div>` : '';
       cells.push(`<button type="button" class="ferie-month-cell ${statusClass}" ${inRange ? `data-ferie-toggle="${escapeHTML(detailId)}"` : 'disabled'}><span class="ferie-month-daynum">${day}</span>${inRange ? `<small>Sq: ${validTeams}</small>` : ''}</button>${detail}`);
     }
 
@@ -30333,11 +30333,11 @@ const SNOW_SERVICE_COLLECTIONS = {
 const snowServiceState = { clients: [], routes: [], vehicles: [], operators: [], reports: [] };
 const SNOW_SERVICE_COMMESSE = [
   { nome: "Comune di Ferrara", squadra: "Squadra Neve 1", operatori: "Caposquadra, autista lama, supporto sale", mezzi: "Lama 1, spargisale 1" },
-  { nome: "Comune di Vigarano Mainarda", squadra: "Squadra Neve 2", operatori: "Caposquadra, autista trattore, supporto viabilitÃ ", mezzi: "Trattore neve, spargisale 2" },
+  { nome: "Comune di Vigarano Mainarda", squadra: "Squadra Neve 2", operatori: "Caposquadra, autista trattore, supporto viabilità", mezzi: "Trattore neve, spargisale 2" },
   { nome: "Comune di Bondeno", squadra: "Squadra Neve 3", operatori: "Caposquadra, autista pala, operatore manuale", mezzi: "Pala gommata, pick-up neve" },
   { nome: "Comune di Cento", squadra: "Squadra Neve 4", operatori: "Caposquadra, autista lama, supporto emergenze", mezzi: "Lama 2, spargisale 3" },
   { nome: "Comune di Copparo", squadra: "Squadra Neve 5", operatori: "Caposquadra, autista trattore, operatore sale", mezzi: "Trattore lama, tramoggia sale" },
-  { nome: "Comune di Argenta", squadra: "Squadra Neve 6", operatori: "Caposquadra, autista mezzo 4x4, supporto reperibilitÃ ", mezzi: "4x4 neve, spargisale compatto" },
+  { nome: "Comune di Argenta", squadra: "Squadra Neve 6", operatori: "Caposquadra, autista mezzo 4x4, supporto reperibilità", mezzi: "4x4 neve, spargisale compatto" },
   { nome: "Comune di Portomaggiore", squadra: "Squadra Neve 7", operatori: "Caposquadra, autista lama, supporto strade", mezzi: "Lama 3, pick-up sale" },
   { nome: "Comune di Comacchio", squadra: "Squadra Neve 8", operatori: "Caposquadra, autista pala, supporto litorale", mezzi: "Pala compatta, spargisale 4" },
   { nome: "Comune di Occhiobello", squadra: "Squadra Neve 9", operatori: "Caposquadra, autista trattore, supporto ponti", mezzi: "Trattore neve, lama laterale" }
@@ -30360,7 +30360,7 @@ function getMezziCollectionName() { return isSnowServiceContext() ? "neve_mezzi"
 
 function openSnowServicePage() {
   if (!canManageData()) {
-    alert("Solo l'admin puÃ² accedere al Servizio Neve.");
+    alert("Solo l'admin può accedere al Servizio Neve.");
     return;
   }
   document.body.classList.add("snow-management-context");
@@ -30434,28 +30434,28 @@ function renderSnowServiceCommesse() {
     const rowsHtml = squadRows.map((row, idx) => {
       const orarioLabel = formatSquadraOrario(row);
       const details = [
-        row.caposquadra ? `<br><b>ð§ââï¸ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
-        orarioLabel ? `<br><b>ð</b> ${escapeHTML(orarioLabel)}` : "",
-        row.impianti ? `<br><b>ð Impianti:</b> ${escapeHTML(row.impianti)}` : "",
-        row.note ? `<br><b>ð Note:</b> ${escapeHTML(row.note)}` : ""
+        row.caposquadra ? `<br><b>🧑‍✈️ Caposquadra:</b> ${escapeHTML(row.caposquadra)}` : "",
+        orarioLabel ? `<br><b>🕒</b> ${escapeHTML(orarioLabel)}` : "",
+        row.impianti ? `<br><b>📍 Impianti:</b> ${escapeHTML(row.impianti)}` : "",
+        row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : ""
       ].join("");
-      return `<div class="squadra-saved-row" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra neve ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">ð¥ Squadra ${idx + 1}:</button> ${escapeHTML(row.personale || "-")}${details}<br><b>ð Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
+      return `<div class="squadra-saved-row" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra neve ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${escapeHTML(row.personale || "-")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderMezziButtonsMarkup(row.mezzi)}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
     const warningMarkup = warningIssues.length
-      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra neve">â ï¸</button><div class="squadra-warning-details hidden"><p><b>â ï¸ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^â ï¸\s*/, ""))}</li>`).join("")}</ul></div></div>`
+      ? `<div class="squadra-warning-wrap"><button type="button" class="squadra-warning-toggle" aria-expanded="false" aria-label="Mostra controllo squadra neve">⚠️</button><div class="squadra-warning-details hidden"><p><b>⚠️ Controllo squadra</b></p><ul>${warningIssues.map((issue) => `<li>${escapeHTML(issue.replace(/^⚠️\s*/, ""))}</li>`).join("")}</ul></div></div>`
       : "";
     const codiceCommessa = String(commessa.codice || "").trim();
     item.innerHTML = `
       <div class="squadra-item-head squadra-commessa-link" role="button" tabindex="0" aria-label="Apri dettaglio commessa neve ${escapeHTML(commessa.nome || "Commessa senza nome")}">
         <div class="squadra-commessa-title-wrap">
-          <strong>ð ${escapeHTML(commessa.nome || "Commessa neve")}</strong>
+          <strong>📁 ${escapeHTML(commessa.nome || "Commessa neve")}</strong>
           ${getSquadraWorklimateCodeLineMarkup(commessa, codiceCommessa)}
-          <div class="snow-squadra-meta"><span class="pill">âï¸ Servizio neve</span></div>
+          <div class="snow-squadra-meta"><span class="pill">❄️ Servizio neve</span></div>
         </div>
         ${warningMarkup}
       </div>
-      <p><b>ð Giorno:</b> ${escapeHTML(riferimento)}</p>
+      <p><b>📅 Giorno:</b> ${escapeHTML(riferimento)}</p>
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
@@ -30537,7 +30537,7 @@ function subscribeSnowServiceCollections() {
 }
 
 async function addSnowServiceItem(type) {
-  if (!canManageData()) return alert("Solo admin puÃ² modificare il Servizio Neve.");
+  if (!canManageData()) return alert("Solo admin può modificare il Servizio Neve.");
   const config = {
     clients: { collection: SNOW_SERVICE_COLLECTIONS.clients, prompt: "Nome Comune / Cliente neve", field: "nome" },
     routes: { collection: SNOW_SERVICE_COLLECTIONS.routes, prompt: "Nome percorso neve", field: "nome" },
@@ -30553,7 +30553,7 @@ async function addSnowServiceItem(type) {
 }
 
 async function deleteSnowServiceItem(type, id) {
-  if (!canManageData()) return alert("Solo admin puÃ² eliminare elementi del Servizio Neve.");
+  if (!canManageData()) return alert("Solo admin può eliminare elementi del Servizio Neve.");
   const collection = SNOW_SERVICE_COLLECTIONS[type];
   if (!collection || !id || !window.confirm("Eliminare questo elemento neve?")) return;
   await db.collection(collection).doc(id).delete();
@@ -30686,7 +30686,7 @@ function activeLogSummaryText(group) {
   const lines = [
     `Tipo: ${log.actionType || "azione"}`,
     `Stato: ${getActiveLogStatus(log.id || group.key)}`,
-    `Cosa Ã¨ successo: ${log.actionDescription || log.detail || "Evento registrato"}`,
+    `Cosa è successo: ${log.actionDescription || log.detail || "Evento registrato"}`,
     `Utente: ${log.userName || log.userEmail || "-"}`,
     `Quando: ${formatActivityDate(log.createdAt)}`,
     `View/pagina: ${log.viewName || "Da verificare"}`,
@@ -30778,7 +30778,7 @@ function buildActiveUsersRows(users = [], logs = activeUsersLogs) {
     const last = userLogs[0] || {};
     const online = Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10 * 60 * 1000;
     const problems = userLogs.filter(isErrorActivity).length;
-    return `<article class="active-users-row is-clickable" role="button" tabindex="0" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}" aria-label="Apri attivitÃ  di ${escapeHTML(getUserDisplayName(user))}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "ð¢ online" : "âª offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attivitÃ : ${formatActivityDate(user.lastSeenAt)}</span><span>Ultima azione: ${escapeHTML(last.actionDescription || last.actionType || "-")}</span><span>Commessa: ${escapeHTML(last.commessaName || last.commessaId || "-")}</span><span>Problemi: ${problems}</span></div></article>`;
+    return `<article class="active-users-row is-clickable" role="button" tabindex="0" data-active-user-id="${escapeHTML(user.id || user.uid || user.email || "")}" aria-label="Apri attività di ${escapeHTML(getUserDisplayName(user))}"><strong>${escapeHTML(getUserDisplayName(user))}</strong><div class="active-users-row-grid"><span>${escapeHTML(user.email || "-")}</span><span>${getUserRole(user)}</span><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ultima attività: ${formatActivityDate(user.lastSeenAt)}</span><span>Ultima azione: ${escapeHTML(last.actionDescription || last.actionType || "-")}</span><span>Commessa: ${escapeHTML(last.commessaName || last.commessaId || "-")}</span><span>Problemi: ${problems}</span></div></article>`;
   }).join("") || '<p class="muted">Nessun utente.</p>';
 }
 
@@ -30792,7 +30792,7 @@ function buildActiveLogList(logs = filterActiveUsersLogs()) {
     const repeated = group.logs.length > 1 ? `<strong class="active-log-repeat">Errore ripetuto ${group.logs.length} volte</strong>` : "";
     const rowKey = `log-${index}-${String(group.key || log.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
     window.activeUsersRenderedLogGroupsByKey[rowKey] = group;
-    return `<article class="active-users-log-row is-clickable" role="button" tabindex="0" data-active-log-key="${escapeHTML(rowKey)}"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "ð´" : typeClass === "important" ? "ð " : "ðµ"} ${escapeHTML(log.actionType || "azione")}</span> â¢ ${formatActivityDate(log.createdAt)} <span class="active-log-status">${escapeHTML(status)}</span></div><div>${escapeHTML(log.userName || log.userEmail || "-")} â¢ View: ${escapeHTML(log.viewName || "-")} â¢ Pulsante: ${escapeHTML(log.buttonLabel || "-")}</div><div>Commessa: ${escapeHTML(log.commessaName || log.commessaId || "-")} â¢ Impianto: ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p>${repeated}</article>`;
+    return `<article class="active-users-log-row is-clickable" role="button" tabindex="0" data-active-log-key="${escapeHTML(rowKey)}"><div><span class="active-log-type ${typeClass}">${typeClass === "error" ? "🔴" : typeClass === "important" ? "🟠" : "🔵"} ${escapeHTML(log.actionType || "azione")}</span> • ${formatActivityDate(log.createdAt)} <span class="active-log-status">${escapeHTML(status)}</span></div><div>${escapeHTML(log.userName || log.userEmail || "-")} • View: ${escapeHTML(log.viewName || "-")} • Pulsante: ${escapeHTML(log.buttonLabel || "-")}</div><div>Commessa: ${escapeHTML(log.commessaName || log.commessaId || "-")} • Impianto: ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</div><p class="muted">${escapeHTML(log.actionDescription || log.detail || "-")}</p>${repeated}</article>`;
   }).join("") || '<p class="muted">Nessuna azione nel periodo.</p>';
 }
 
@@ -30816,14 +30816,14 @@ function renderActiveUsersDetail() {
   const errorLogs = logs.filter(isErrorActivity);
   window.activeUsersRenderedLogGroupsByKey = {};
   const metrics = [
-    { key: "online", label: "ð¢ Utenti online adesso", value: onlineUsers.length },
-    { key: "today", label: "ð¥ Utenti oggi", value: usersTodayIds.size },
-    { key: "actions", label: "ð Totale azioni oggi", value: todayLogs.length },
-    { key: "done", label: "â Impianti completati", value: byType("pressione_fatto").length },
-    { key: "hours", label: "â± Ore inserite", value: byType("inserimento_ore").length },
-    { key: "nav", label: "ð§­ Navigazioni avviate", value: byType("pressione_naviga").length },
-    { key: "sync", label: "ð Ultima sincronizzazione", value: new Date().toLocaleTimeString("it-IT") },
-    { key: "errors", label: "â ï¸ Eventuali errori", value: errorLogs.length }
+    { key: "online", label: "🟢 Utenti online adesso", value: onlineUsers.length },
+    { key: "today", label: "👥 Utenti oggi", value: usersTodayIds.size },
+    { key: "actions", label: "📊 Totale azioni oggi", value: todayLogs.length },
+    { key: "done", label: "✅ Impianti completati", value: byType("pressione_fatto").length },
+    { key: "hours", label: "⏱ Ore inserite", value: byType("inserimento_ore").length },
+    { key: "nav", label: "🧭 Navigazioni avviate", value: byType("pressione_naviga").length },
+    { key: "sync", label: "🔄 Ultima sincronizzazione", value: new Date().toLocaleTimeString("it-IT") },
+    { key: "errors", label: "⚠️ Eventuali errori", value: errorLogs.length }
   ];
   if (ui.activeUsersTopSummary) ui.activeUsersTopSummary.innerHTML = metrics.slice(0,2).map(m => `<button class="card active-users-metric active-users-metric-button" type="button" data-active-card="${m.key}"><strong>${escapeHTML(m.label)}</strong><p>${escapeHTML(String(m.value))}</p></button>`).join("");
   ui.activeUsersDashboard.innerHTML = metrics.map(m => `<button class="card active-users-metric active-users-metric-button" type="button" data-active-card="${m.key}"><strong>${escapeHTML(m.label)}</strong><p>${escapeHTML(String(m.value))}</p></button>`).join("");
@@ -30863,8 +30863,8 @@ function openActiveLogProblemDetail(group) {
   const isFirestore = String(log.actionType || "").includes("firestore");
   const detailText = activeLogSummaryText(group);
   const statusOptions = ACTIVE_LOG_STATUS_OPTIONS.map(status => `<option value="${escapeHTML(status)}" ${getActiveLogStatus(log.id || group.key) === status ? "selected" : ""}>${escapeHTML(status)}</option>`).join("");
-  const repeats = group.logs.length > 1 ? `<section><h4>Errore ripetuto ${group.logs.length} volte</h4><ul>${group.logs.map(l => `<li>${escapeHTML(l.userName || l.userEmail || "-")} â¢ ${formatActivityDate(l.createdAt)} â¢ ${escapeHTML(l.viewName || "-")}</li>`).join("")}</ul></section>` : "";
-  modal.innerHTML = `<div class="active-log-detail-card" role="dialog" aria-modal="true" aria-label="Dettaglio problema / azione"><div class="section-head"><h2>Dettaglio problema / azione</h2><button type="button" class="btn" data-active-log-close>Chiudi</button></div><div class="active-log-detail-grid"><section><h4>Cosa Ã¨ successo</h4><p>${escapeHTML(log.actionDescription || log.detail || "Evento registrato")}</p></section><section><h4>Utente</h4><p>${escapeHTML(log.userName || log.userEmail || "-")}</p></section><section><h4>Quando</h4><p>${formatActivityDate(log.createdAt)}</p></section><section><h4>View / pagina</h4><p>${escapeHTML(log.viewName || "Da verificare")}</p></section><section><h4>Pulsante premuto</h4><p>${escapeHTML(log.buttonLabel || "Non indicato")}</p></section><section><h4>Commessa / impianto</h4><p>${escapeHTML(log.commessaName || log.commessaId || "-")} / ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</p></section><section class="wide"><h4>Errore tecnico completo</h4><pre>${escapeHTML(log.technicalError || log.detail || "-")}</pre></section><section><h4>Possibile causa</h4><p>${escapeHTML(log.possibleCause || (isErrorActivity(log) ? "Da analizzare in base a errore tecnico, permessi, dati e view." : "-"))}</p></section><section><h4>Suggerimento per risolvere</h4><p>${escapeHTML(log.resolutionHint || (isErrorActivity(log) ? "Riprodurre il flusso, controllare permessi/dati e console, poi correggere il codice o le regole." : "-"))}</p></section>${isFirestore ? `<section class="wide firestore-debug"><h4>Dettagli Firestore</h4><p><strong>Collection:</strong> ${escapeHTML(log.firestoreCollection || "Da verificare")}</p><p><strong>Operazione tentata:</strong> ${escapeHTML(log.firestoreOperation || "Da verificare")}</p><p><strong>Permesso negato / rete / dato mancante:</strong> ${escapeHTML(log.firestoreFailureType || "Da verificare")}</p><p><strong>Dati non salvati:</strong> ${escapeHTML(log.unsavedData || "Da verificare")}</p><p><strong>Regola Firestore che potrebbe bloccare:</strong> ${escapeHTML(log.firestoreRuleHint || "Controllare allow read/write della collection interessata.")}</p></section>` : ""}${repeats}</div><label class="active-log-status-editor">Stato problema <select data-active-log-status>${statusOptions}</select></label><div class="item-actions"><button type="button" class="btn" data-copy-details>Copia dettagli</button><button type="button" class="btn btn-primary" data-copy-codex>${isFirestore ? "Copia errore per Codex" : "Copia per Codex"}</button><button type="button" class="btn" data-mark-resolved>Segna risolto</button><button type="button" class="btn" data-open-commessa ${log.commessaId ? "" : "disabled"}>Apri commessa</button><button type="button" class="btn" data-open-impianto ${log.commessaId && (log.impiantoId || log.impiantoName) ? "" : "disabled"}>Apri impianto</button></div></div>`;
+  const repeats = group.logs.length > 1 ? `<section><h4>Errore ripetuto ${group.logs.length} volte</h4><ul>${group.logs.map(l => `<li>${escapeHTML(l.userName || l.userEmail || "-")} • ${formatActivityDate(l.createdAt)} • ${escapeHTML(l.viewName || "-")}</li>`).join("")}</ul></section>` : "";
+  modal.innerHTML = `<div class="active-log-detail-card" role="dialog" aria-modal="true" aria-label="Dettaglio problema / azione"><div class="section-head"><h2>Dettaglio problema / azione</h2><button type="button" class="btn" data-active-log-close>Chiudi</button></div><div class="active-log-detail-grid"><section><h4>Cosa è successo</h4><p>${escapeHTML(log.actionDescription || log.detail || "Evento registrato")}</p></section><section><h4>Utente</h4><p>${escapeHTML(log.userName || log.userEmail || "-")}</p></section><section><h4>Quando</h4><p>${formatActivityDate(log.createdAt)}</p></section><section><h4>View / pagina</h4><p>${escapeHTML(log.viewName || "Da verificare")}</p></section><section><h4>Pulsante premuto</h4><p>${escapeHTML(log.buttonLabel || "Non indicato")}</p></section><section><h4>Commessa / impianto</h4><p>${escapeHTML(log.commessaName || log.commessaId || "-")} / ${escapeHTML(log.impiantoName || log.impiantoId || "-")}</p></section><section class="wide"><h4>Errore tecnico completo</h4><pre>${escapeHTML(log.technicalError || log.detail || "-")}</pre></section><section><h4>Possibile causa</h4><p>${escapeHTML(log.possibleCause || (isErrorActivity(log) ? "Da analizzare in base a errore tecnico, permessi, dati e view." : "-"))}</p></section><section><h4>Suggerimento per risolvere</h4><p>${escapeHTML(log.resolutionHint || (isErrorActivity(log) ? "Riprodurre il flusso, controllare permessi/dati e console, poi correggere il codice o le regole." : "-"))}</p></section>${isFirestore ? `<section class="wide firestore-debug"><h4>Dettagli Firestore</h4><p><strong>Collection:</strong> ${escapeHTML(log.firestoreCollection || "Da verificare")}</p><p><strong>Operazione tentata:</strong> ${escapeHTML(log.firestoreOperation || "Da verificare")}</p><p><strong>Permesso negato / rete / dato mancante:</strong> ${escapeHTML(log.firestoreFailureType || "Da verificare")}</p><p><strong>Dati non salvati:</strong> ${escapeHTML(log.unsavedData || "Da verificare")}</p><p><strong>Regola Firestore che potrebbe bloccare:</strong> ${escapeHTML(log.firestoreRuleHint || "Controllare allow read/write della collection interessata.")}</p></section>` : ""}${repeats}</div><label class="active-log-status-editor">Stato problema <select data-active-log-status>${statusOptions}</select></label><div class="item-actions"><button type="button" class="btn" data-copy-details>Copia dettagli</button><button type="button" class="btn btn-primary" data-copy-codex>${isFirestore ? "Copia errore per Codex" : "Copia per Codex"}</button><button type="button" class="btn" data-mark-resolved>Segna risolto</button><button type="button" class="btn" data-open-commessa ${log.commessaId ? "" : "disabled"}>Apri commessa</button><button type="button" class="btn" data-open-impianto ${log.commessaId && (log.impiantoId || log.impiantoName) ? "" : "disabled"}>Apri impianto</button></div></div>`;
   document.body.appendChild(modal);
   const close = () => { modal.remove(); renderActiveUsersDetail(); };
   modal.querySelector("[data-active-log-close]")?.addEventListener("click", close);
@@ -30884,7 +30884,7 @@ function renderSelectedActiveUserDetail() {
   const userLogs = activeUsersLogs.filter(l => (l.userId && l.userId === user.id) || normalizeEmail(l.userEmail) === normalizeEmail(user.email));
   const count = (type) => userLogs.filter(l => l.actionType === type).length;
   ui.activeUsersUserDetail.classList.remove("hidden");
-  ui.activeUsersUserDetail.innerHTML = `<div class="section-head"><h2>Dettaglio singolo utente</h2><span class="pill">${escapeHTML(getUserRole(user))}</span></div><div class="active-users-row-grid"><span>Nome: ${escapeHTML(getUserDisplayName(user))}</span><span>Email: ${escapeHTML(user.email || "-")}</span><span>Stato: ${Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10*60*1000 ? "ð¢ online" : "âª offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ore inserite: ${count("inserimento_ore")}</span><span>Impianti FATTO: ${count("pressione_fatto")}</span><span>FORZA: ${count("pressione_forza")}</span><span>NAVIGA: ${count("pressione_naviga")}</span><span>Commesse consultate: ${new Set(userLogs.map(l => l.commessaId || l.commessaName).filter(Boolean)).size}</span><span>Errori: ${userLogs.filter(isErrorActivity).length}</span></div><h3>Cronologia attivitÃ </h3>${userLogs.slice(0,30).map(l => `<p class="muted">${formatActivityDate(l.createdAt)} â ${escapeHTML(l.actionDescription || l.actionType || "-")}</p>`).join("") || '<p class="muted">Nessuna attivitÃ .</p>'}`;
+  ui.activeUsersUserDetail.innerHTML = `<div class="section-head"><h2>Dettaglio singolo utente</h2><span class="pill">${escapeHTML(getUserRole(user))}</span></div><div class="active-users-row-grid"><span>Nome: ${escapeHTML(getUserDisplayName(user))}</span><span>Email: ${escapeHTML(user.email || "-")}</span><span>Stato: ${Date.now() - firestoreDateToMillis(user.lastSeenAt) <= 10*60*1000 ? "🟢 online" : "⚪ offline"}</span><span>Ultimo accesso: ${formatActivityDate(user.lastLoginAt || user.createdAt)}</span><span>Ore inserite: ${count("inserimento_ore")}</span><span>Impianti FATTO: ${count("pressione_fatto")}</span><span>FORZA: ${count("pressione_forza")}</span><span>NAVIGA: ${count("pressione_naviga")}</span><span>Commesse consultate: ${new Set(userLogs.map(l => l.commessaId || l.commessaName).filter(Boolean)).size}</span><span>Errori: ${userLogs.filter(isErrorActivity).length}</span></div><h3>Cronologia attività</h3>${userLogs.slice(0,30).map(l => `<p class="muted">${formatActivityDate(l.createdAt)} — ${escapeHTML(l.actionDescription || l.actionType || "-")}</p>`).join("") || '<p class="muted">Nessuna attività.</p>'}`;
 }
 
 async function loadActiveUsersLogs() {
@@ -30902,12 +30902,12 @@ async function loadActiveUsersLogs() {
 async function openActiveUsersDetailView() {
   if (!ui.activeUsersDetailPage) return;
   const allowed = canManageData();
-  ui.activeUsersAccessMessage.textContent = allowed ? "Console di controllo utilizzo app, utenti e attivitÃ ." : "Accesso consentito solo agli amministratori.";
+  ui.activeUsersAccessMessage.textContent = allowed ? "Console di controllo utilizzo app, utenti e attività." : "Accesso consentito solo agli amministratori.";
   ui.activeUsersAdminConsole?.classList.toggle("hidden", !allowed);
   if (!allowed) return;
   if (activeUsersLoaded) return;
   activeUsersLoaded = true;
-  ui.activeUsersLogList.innerHTML = '<p class="muted">Caricamento attivitÃ ...</p>';
+  ui.activeUsersLogList.innerHTML = '<p class="muted">Caricamento attività...</p>';
   try { await loadActiveUsersLogs(); }
   catch (error) { ui.activeUsersLogList.innerHTML = '<p class="muted">Errore caricamento registro azioni.</p>'; console.error("Errore activityLogs:", error); }
 }
@@ -30929,7 +30929,7 @@ function renderUserActivityView() {
   const errors = selectedUserActivityLogs.filter(isErrorActivity).length;
   const summaryFields = [
     ["Nome e cognome", getUserDisplayName(user)], ["Email", user.email], ["Ruolo", getUserRole(user)],
-    ["Stato", online ? "ð¢ online" : "âª offline"], ["Ultima attivitÃ ", user.lastSeenAt ? formatActivityDate(user.lastSeenAt) : ""],
+    ["Stato", online ? "🟢 online" : "⚪ offline"], ["Ultima attività", user.lastSeenAt ? formatActivityDate(user.lastSeenAt) : ""],
     ["Azioni nel giorno", String(selectedUserActivityLogs.length)], ["Errori", String(errors)]
   ].filter(([, value]) => value !== "" && value != null);
   ui.userActivitySummary.innerHTML = `<div class="section-head"><h2>${escapeHTML(getUserDisplayName(user))}</h2><span class="active-status-dot ${online ? "online" : "offline"}">${online ? "Online" : "Offline"}</span></div><dl>${summaryFields.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("")}</dl>`;
@@ -30944,7 +30944,7 @@ function renderUserActivityView() {
       ["Messaggio tecnico", error ? (log.technicalError || log.error || log.detail) : ""]
     ].filter(([, value]) => value !== "" && value != null);
     return `<article class="user-activity-event ${error ? "is-error" : ""}"><time datetime="${new Date(firestoreDateToMillis(log.createdAt)).toISOString()}">${escapeHTML(exactTime)}</time><dl>${fields.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(String(value))}</dd></div>`).join("")}</dl></article>`;
-  }).join("") || '<p class="muted">Nessuna attivitÃ  registrata in questa data</p>';
+  }).join("") || '<p class="muted">Nessuna attività registrata in questa data</p>';
 }
 
 async function loadSelectedUserActivity() {
@@ -30952,7 +30952,7 @@ async function loadSelectedUserActivity() {
   const dateValue = ui.userActivityDate?.value || localDateValue();
   const start = new Date(`${dateValue}T00:00:00`);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  ui.userActivityTimeline.innerHTML = '<p class="muted">Caricamento attivitÃ ...</p>';
+  ui.userActivityTimeline.innerHTML = '<p class="muted">Caricamento attività...</p>';
   const snap = await db.collection("activityLogs").where("createdAt", ">=", start).where("createdAt", "<", end).orderBy("createdAt", "desc").limit(500).get();
   selectedUserActivityLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(log => userMatchesActivityLog(log, selectedUserActivityUser));
   renderUserActivityView();
@@ -30973,7 +30973,7 @@ async function openUserActivityView(userId) {
   }
   if (ui.userActivityDate && !ui.userActivityDate.value) ui.userActivityDate.value = localDateValue();
   try { await loadSelectedUserActivity(); }
-  catch (error) { ui.userActivityTimeline.innerHTML = '<p class="muted">Errore durante il caricamento delle attivitÃ .</p>'; console.error("Errore attivitÃ  utente:", error); }
+  catch (error) { ui.userActivityTimeline.innerHTML = '<p class="muted">Errore durante il caricamento delle attività.</p>'; console.error("Errore attività utente:", error); }
 }
 
 ui.activeUsersSummary?.addEventListener("click", () => {

@@ -44,6 +44,7 @@ const PERSISTED_SESSION_VERSION = 1;
 const SHARED_OPERATOR_ACCESS_KEY = "heraSharedOperatorAccess:v1";
 const SHARED_OPERATOR_PROFILE_KEY = "heraSharedOperatorProfile:v1";
 const SHARED_OPERATOR_PASSWORD = "12345678";
+const SHARED_OPERATOR_EMAIL = "operatori.varga@vargacantieri.local";
 let adminLoginMode = false;
 
 function hasSharedOperatorAccess() {
@@ -84,7 +85,24 @@ function saveSharedOperatorProfile(firstName, lastName) {
 }
 
 function isSharedOperatorUser(user = currentUser) {
-  return Boolean(user?.isAnonymous);
+  return Boolean(user?.isAnonymous || normalizeEmail(user?.email) === SHARED_OPERATOR_EMAIL);
+}
+
+async function signInSharedOperator() {
+  try {
+    return await auth.signInWithEmailAndPassword(SHARED_OPERATOR_EMAIL, SHARED_OPERATOR_PASSWORD);
+  } catch (error) {
+    const code = String(error?.code || "").toLowerCase();
+    if (!code.includes("user-not-found") && !code.includes("invalid-credential")) throw error;
+    try {
+      return await auth.createUserWithEmailAndPassword(SHARED_OPERATOR_EMAIL, SHARED_OPERATOR_PASSWORD);
+    } catch (createError) {
+      if (String(createError?.code || "").toLowerCase().includes("email-already-in-use")) {
+        return auth.signInWithEmailAndPassword(SHARED_OPERATOR_EMAIL, SHARED_OPERATOR_PASSWORD);
+      }
+      throw createError;
+    }
+  }
 }
 
 function getCapacitorPreferencesPlugin() {
@@ -3384,7 +3402,7 @@ if (!auth || firebaseInitError) {
   if (!user) {
     if (hasSharedOperatorAccess() && readSharedOperatorProfile()) {
       try {
-        await auth.signInAnonymously();
+        await signInSharedOperator();
         return;
       } catch (error) {
         console.error("Ripristino accesso condiviso non riuscito:", error);
@@ -10477,8 +10495,8 @@ async function loginWithEmailPassword() {
     try {
       const operatorProfile = saveSharedOperatorProfile(firstName, lastName);
       saveSharedOperatorAccess();
-      if (!auth.currentUser || !auth.currentUser.isAnonymous) {
-        const credential = await auth.signInAnonymously();
+      if (!isSharedOperatorUser(auth.currentUser)) {
+        const credential = await signInSharedOperator();
         await credential.user?.updateProfile?.({ displayName: operatorProfile.displayName });
         window.location.reload();
       } else {

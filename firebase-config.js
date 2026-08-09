@@ -7,10 +7,6 @@ window.firebaseConfig = {
   appId: "1:645390631375:web:df3659a23812560e4012ba"
 };
 
-// Moduli necessari prima di app.js: protezioni letture, viste condivise e guardia
-// del primo caricamento delle commesse. Tutto il resto viene caricato dopo che
-// la pagina è pronta, così l'avvio non resta bloccato da strumenti diagnostici
-// o funzioni amministrative non necessarie alla home.
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC = "firestore-diagnostics-v4-session-cleanup.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
@@ -23,7 +19,9 @@ const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-gu
 const HERA_OPERATIONAL_OFFLINE_CACHE_SRC = "offline-operational-cache.js?v=20260808b";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
-const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260807b";
+const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260809a";
+const HERA_ACCESS_REQUEST_LOGIN_SRC = "access-request-login.js?v=20260809b";
+const HERA_ACCESS_REQUEST_ADMIN_SRC = "access-request-admin.js?v=20260809a";
 
 function loadOnce(src, dataName, ready, onLoad) {
   if (ready?.()) {
@@ -80,6 +78,11 @@ function scheduleDeferredStartupModules() {
       "hera-personnel-app-access",
       () => window.HeraPersonnelAppAccess?.installed === true
     );
+    loadOnce(
+      HERA_ACCESS_REQUEST_ADMIN_SRC,
+      "hera-access-request-admin",
+      () => window.HeraAccessRequestAdmin?.installed === true
+    );
   };
 
   const scheduleIdle = () => {
@@ -104,6 +107,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_OPERATIONAL_OFFLINE_CACHE_SRC}" data-hera-operational-offline-cache="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC}" data-firestore-startup-cost-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_PERSISTENT_OFFLINE_AUTH_SRC}" data-hera-persistent-offline-auth="1"><\/script>`);
+  document.write(`<script src="${HERA_ACCESS_REQUEST_LOGIN_SRC}" data-hera-access-request-login="1"><\/script>`);
   scheduleDeferredStartupModules();
 } else {
   const loadCriticalModules = () => {
@@ -151,6 +155,11 @@ if (document.readyState === "loading") {
       HERA_PERSISTENT_OFFLINE_AUTH_SRC,
       "hera-persistent-offline-auth",
       () => window.HeraPersistentOfflineAuth?.installed === true
+    );
+    loadOnce(
+      HERA_ACCESS_REQUEST_LOGIN_SRC,
+      "hera-access-request-login",
+      () => window.HeraAccessRequestLogin?.installed === true
     );
   };
 

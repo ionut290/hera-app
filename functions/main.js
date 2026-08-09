@@ -6,6 +6,7 @@ const centralNotificationFunctions = require("./central-notifications");
 const sharedCalendarViewFunctions = require("./shared-calendar-view");
 const sharedOperationalViewFunctions = require("./shared-operational-views");
 const operatorLoginRegisterTesterFunctions = require("./operator-login-register-tester");
+const operatorDefaultPasswordFunctions = require("./operator-default-password");
 
 Object.assign(
   exports,
@@ -14,5 +15,6 @@ Object.assign(
   centralNotificationFunctions,
   sharedCalendarViewFunctions,
   sharedOperationalViewFunctions,
-  operatorLoginRegisterTesterFunctions
+  operatorLoginRegisterTesterFunctions,
+  operatorDefaultPasswordFunctions
 );

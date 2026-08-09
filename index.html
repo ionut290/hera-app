@@ -14,14 +14,11 @@
   <link rel="stylesheet" href="menu-grouping.css?v=20260731-repair1">
   <link rel="stylesheet" href="management-v2.css?v=20260731">
   <link rel="stylesheet" href="accounting-v2.css?v=20260728">
-  <link rel="stylesheet" href="first-login-password.css?v=20260726a">
-  <link rel="stylesheet" href="login-retry-fix.css?v=20260726a">
   <link rel="stylesheet" href="identity-card-feature.css?v=20260727a">
   <link rel="stylesheet" href="private-documents-v2.css?v=20260730b">
   <link rel="stylesheet" href="squadre-restyle.css?v=20260731-mezzi1">
   <link rel="stylesheet" href="calendar-feature.css?v=20260728b">
   <link rel="stylesheet" href="notification-center.css?v=20260729a">
-  <link rel="stylesheet" href="approval-access.css?v=20260731-legacy1">
 </head>
 <body class="auth-pending">
 
@@ -49,15 +46,6 @@
       <div id="sync-progress-list" class="sync-progress-list"></div>
     </div>
   </div>
-  <section id="access-approval-screen" class="access-approval-screen hidden" aria-live="polite">
-    <div class="access-approval-card">
-      <div class="access-approval-icon">🔐</div>
-      <div id="access-approval-loading"><div class="approval-spinner"></div><h1>Verifica autorizzazione in corso…</h1></div>
-      <div id="access-approval-error" class="hidden"><h1>VERIFICA NON RIUSCITA</h1><p id="access-approval-error-message">Impossibile verificare l’autorizzazione. Controlla la connessione e riprova.</p><button id="access-approval-retry" class="btn">RIPROVA</button></div>
-      <div id="access-approval-content" class="hidden"><h1 id="access-approval-title"></h1><p id="access-approval-description"></p><dl class="access-profile"><dt>Nome e cognome</dt><dd id="access-approval-name">—</dd><dt>Email</dt><dd id="access-approval-email">—</dd><dt>Stato</dt><dd id="access-approval-status">—</dd></dl><p id="access-approval-feedback" class="access-feedback" role="status"></p><div class="access-approval-actions"><button id="access-request-whatsapp" class="btn access-whatsapp">RICHIEDI ACCESSO SU WHATSAPP</button><button id="access-check-approval" class="btn">CONTROLLA APPROVAZIONE</button><button id="access-approval-logout" class="btn">ESCI DALL’ACCOUNT</button></div></div>
-    </div>
-  </section>
-
   <aside id="side-menu" class="side-menu hidden" aria-hidden="true">
     <div class="side-menu-header">
       <h2>Menu</h2>
@@ -107,23 +95,19 @@
 
   <section id="auth-gate" class="auth-gate hidden" aria-live="polite">
     <div class="auth-gate-card">
-      <div class="auth-gate-logo">👤</div>
+      <div class="auth-gate-logo">🔐</div>
       <p class="auth-gate-kicker">Varga Cantieri</p>
-      <h1>Login richiesto</h1>
-      <p id="auth-gate-message" class="muted">Accedi con Google oppure con la tua email e password.</p>
+      <h1>Accesso amministratore</h1>
+      <p id="auth-gate-message" class="muted">Inserisci username e password amministratore.</p>
       <form id="auth-email-form" class="auth-email-form" autocomplete="on">
-        <label for="auth-email-input">Email</label>
-        <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
+        <label for="auth-email-input">Username</label>
+        <input id="auth-email-input" type="text" autocomplete="username" placeholder="Username amministratore" required>
         <label for="auth-password-input">Password</label>
         <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
-        <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
-        <button id="auth-create-account-btn" class="btn" type="button">CREA NUOVO ACCOUNT</button>
-        <button id="auth-request-password-btn" class="btn" type="button">PASSWORD DIMENTICATA?</button>
+        <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra come admin</button>
+        <button id="auth-admin-cancel-btn" class="btn" type="button">Continua con accesso libero</button>
         <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
       </form>
-      <div class="auth-gate-divider"><span>oppure</span></div>
-      <button id="auth-gate-login-btn" class="btn" type="button" data-google-mode="login">Login con Google</button>\n      <button id="auth-google-register-btn" class="btn" type="button" data-google-mode="register">REGISTRATI CON GOOGLE</button>
-      <button id="banned-request-access-btn" class="btn btn-primary banned-request-access-btn hidden" type="button">RICHIEDI ACCESSO</button>
     </div>
   </section>
 
@@ -305,7 +289,7 @@
           <p id="weather-summary" class="muted weather-summary">Caricamento meteo...</p>
           <div id="weather-expanded-content" class="home-accordion-content hidden" aria-hidden="true"><span class="pill weather-types-pill">Pioggia/Neve/Nebbia</span><pre id="weather-diagnostics" class="weather-diagnostics hidden" aria-live="polite"></pre><div id="weather-risks" class="weather-risks"></div><p id="weather-alert-banner" class="weather-alert-banner hidden">⚠️ Prestare attenzione alle condizioni operative.</p><button id="weather-external-detail-btn" class="btn weather-external-detail-btn" type="button">Apri dettagli meteo</button></div>
         </section>
-        <section class="card user-card" id="user-card"><div id="user-details-panel" class="user-details-panel hidden"><div class="actions-row weather-user-actions"><button id="login-btn" class="btn btn-primary" type="button">Login con Google</button><button id="switch-account-btn" class="btn hidden" type="button">Cambia account</button><button id="logout-btn" class="btn" type="button" disabled>Logout</button><button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button></div><div class="weather-status-grid"><p id="user" class="status status-chip">Non loggato</p><p id="user-name" class="muted status-chip">Nome utente: -</p><p id="drive-status" class="muted status-chip status-chip-drive">Cloud amministratore non configurato</p></div><section id="biometric-security-settings" class="biometric-security hidden" aria-labelledby="biometric-security-title"><h3 id="biometric-security-title">Sicurezza</h3><label class="biometric-switch-row" for="biometric-toggle"><span>Accesso biometrico</span><input id="biometric-toggle" type="checkbox" role="switch"></label><p id="biometric-settings-feedback" class="muted" role="status" aria-live="polite"></p><div class="actions-row"><button id="biometric-verify-btn" class="btn" type="button">Verifica biometria</button><button id="biometric-disable-btn" class="btn" type="button">Disattiva accesso biometrico</button></div></section><div class="weather-status-grid"><p id="pwa-notification-status" class="muted status-chip">Notifiche: verifica supporto...</p><div class="actions-row"><button id="enable-notifications-btn" class="btn" type="button">Attiva notifiche</button><button id="test-notification-btn" class="btn" type="button" disabled>Test notifica</button></div></div></div></section>
+        <section class="card user-card" id="user-card"><div id="user-details-panel" class="user-details-panel hidden"><div class="actions-row weather-user-actions"><button id="login-btn" class="btn btn-primary" type="button">Accesso amministratore</button><button id="switch-account-btn" class="btn hidden" type="button">Cambia amministratore</button><button id="logout-btn" class="btn" type="button" disabled>Esci da admin</button><button id="drive-connect-btn" class="btn hidden" type="button" disabled>Collega Google Drive</button></div><div class="weather-status-grid"><p id="user" class="status status-chip">Accesso libero</p><p id="user-name" class="muted status-chip">Ruolo: Operatore</p><p id="drive-status" class="muted status-chip status-chip-drive">Cloud amministratore non configurato</p></div><section id="biometric-security-settings" class="biometric-security hidden" aria-labelledby="biometric-security-title"><h3 id="biometric-security-title">Sicurezza</h3><label class="biometric-switch-row" for="biometric-toggle"><span>Accesso biometrico</span><input id="biometric-toggle" type="checkbox" role="switch"></label><p id="biometric-settings-feedback" class="muted" role="status" aria-live="polite"></p><div class="actions-row"><button id="biometric-verify-btn" class="btn" type="button">Verifica biometria</button><button id="biometric-disable-btn" class="btn" type="button">Disattiva accesso biometrico</button></div></section><div class="weather-status-grid"><p id="pwa-notification-status" class="muted status-chip">Notifiche: verifica supporto...</p><div class="actions-row"><button id="enable-notifications-btn" class="btn" type="button">Attiva notifiche</button><button id="test-notification-btn" class="btn" type="button" disabled>Test notifica</button></div></div></div></section>
       </section>
       <section class="home-quick-access" aria-label="Accessi personali rapidi"><button id="identity-card-btn" class="home-quick-access-btn" type="button" aria-label="Apri tesserino di riconoscimento"><span aria-hidden="true">🪪</span><span>Tesserino</span></button><button id="fuel-pin-btn" class="home-quick-access-btn fuel-pin-btn" type="button" aria-label="Apri PIN carburante"><span aria-hidden="true">⛽</span><span>PIN</span></button><button id="home-calendar-btn" class="home-quick-access-btn" type="button" aria-label="Apri scelta calendario"><span aria-hidden="true">🗓️</span><span>Calendario</span></button><button id="home-segnalazioni-btn" class="home-quick-access-btn home-quick-access-btn--warning" type="button" aria-label="Apri segnalazioni"><span aria-hidden="true">⚠️</span><span>Segnalazioni</span></button></section>
       <section id="today-summary-card" class="card today-summary-card" aria-labelledby="today-summary-title"><h2 id="today-summary-title">Oggi</h2><div class="today-summary-grid"><button id="today-commesse-btn" class="today-summary-item" type="button" aria-label="Vai alle commesse assegnate oggi"><span class="today-summary-icon" aria-hidden="true">📂</span><span class="today-summary-copy"><b id="today-commesse-action">APRI</b><small id="today-commesse-count">COMMESSA</small></span></button><button id="today-hours-btn" class="today-summary-item" type="button" aria-label="Apri le ore di oggi"><span class="today-summary-icon" aria-hidden="true">🕒</span><strong id="today-hours-count">--:--</strong><span>Inserisci ore</span></button><button id="today-mezzi-btn" class="today-summary-item today-mezzi-only" type="button" aria-label="Apri i mezzi assegnati oggi"><span id="today-mezzi-count">NESSUN MEZZO</span></button><button id="today-alerts-btn" class="today-summary-item" type="button" aria-label="Vai agli avvisi di oggi"><span class="today-summary-icon" aria-hidden="true">⚠️</span><strong id="today-alerts-count">0</strong><span>I tuoi avvisi</span></button></div></section>
@@ -400,14 +384,10 @@
   <script src="firebase-config.js"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260731-header1"></script>
-  <script src="auth-login-fix.js?v=20260809-android-google1"></script>
-  <script src="approval-access.js?v=20260731-legacy1"></script>
-  <script src="first-login-password.js?v=20260726b"></script>
-  <script src="login-retry-fix.js?v=20260726f"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260804-squadre-restore1"></script>
+  <script src="app.js?v=20260809-public-access1"></script>
   <script src="shared-static-views-client.js?v=20260804-registri3"></script>
   <script src="squadra-current-save-sync.js?v=20260804a"></script>
   <script src="activity-logs-read-disable.js?v=20260804a"></script>

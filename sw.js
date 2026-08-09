@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v113";
+const CACHE_NAME = "varga-cantieri-shell-v114";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
@@ -118,7 +118,10 @@ async function updateCache(request) {
 // Se la rete non risponde, usa la copia locale per conservare l'avvio offline.
 const networkFirstForDocument = async (event) => {
   try {
-    const preload = await event.preloadResponse;
+    const preload = await Promise.race([
+      event.preloadResponse,
+      new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS))
+    ]);
     const response = preload || await fetchWithTimeout(event.request);
     if (canCacheResponse(event.request, response)) {
       const cache = await caches.open(CACHE_NAME);
@@ -179,6 +182,10 @@ self.addEventListener("install", (event) => {
     self.skipWaiting();
     await cacheOptionalAssets(cache);
   })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

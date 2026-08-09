@@ -8,6 +8,7 @@ on:
       - "index.html"
       - "app.js"
       - "login-retry-fix.js"
+      - "pwa-login-force-update.js"
       - "firebase-config.js"
       - "sw.js"
       - "package.json"
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
   e2e-safety:
-    name: E2E login, FATTO e apertura app
+    name: E2E login, Google, FATTO e apertura app
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -65,6 +66,11 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         run: npx playwright test tests/e2e/login-session.spec.js --browser=chromium --reporter=line
+
+      - name: Esegue test login Google di riserva
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+        run: npx playwright test tests/e2e/google-login.spec.js --browser=chromium --reporter=line
 
       - name: Esegue apertura app e flusso FATTO
         env:

@@ -471,6 +471,7 @@ const ui = {
   authPasswordInput: document.getElementById("auth-password-input"),
   authEmailLoginBtn: document.getElementById("auth-email-login-btn"),
   authEmailFeedback: document.getElementById("auth-email-feedback"),
+  authAdminCancelBtn: document.getElementById("auth-admin-cancel-btn"),
   biometricOfferDialog: document.getElementById("biometric-offer-dialog"),
   biometricOfferFeedback: document.getElementById("biometric-offer-feedback"),
   biometricEnableBtn: document.getElementById("biometric-enable-btn"),
@@ -1628,15 +1629,15 @@ const MENU_HOWTO_CONTENT = {
 };
 const STATIC_HOWTO_ITEMS = [
   {
-    id: "login-google",
-    domanda: "Come faccio il login con Google?",
-    rispostaBreve: "Apri il pannello utente e premi “Login con Google”.",
+    id: "accesso-libero",
+    domanda: "Come accedo alla piattaforma?",
+    rispostaBreve: "L’accesso è libero e automatico: non servono account o password.",
     passi: [
-      "Nella home premi l'icona 👤 in alto.",
-      "Tocca “Login con Google” e scegli l'account aziendale.",
-      "Controlla che compaia “Loggato” con email e nome utente."
+      "Apri l’app o il sito.",
+      "Attendi il completamento dell’avvio automatico.",
+      "Solo gli amministratori devono usare il pulsante “Accesso amministratore”."
     ],
-    tags: ["login", "google", "accesso"],
+    tags: ["accesso", "libero", "admin"],
     updatedAt: HOWTO_UPDATED_AT
   },
   {
@@ -1860,13 +1861,13 @@ window.addEventListener("resize", () => {
   updateWorkBannerAnimationDuration();
 });
 
-ui.loginBtn?.addEventListener("click", loginWithGoogle);
-ui.authGateLoginBtn?.addEventListener("click", loginWithGoogle);
+ui.loginBtn?.addEventListener("click", openAdminLogin);
 ui.authEmailForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   void loginWithEmailPassword();
 });
-ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
+ui.authAdminCancelBtn?.addEventListener("click", closeAdminLogin);
+ui.switchAccountBtn?.addEventListener("click", switchAdminAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
 ui.updateAppBtn?.addEventListener("click", openApplicationUpdate);
 ui.menuToggleBtn?.addEventListener("click", openSideMenu);
@@ -2346,6 +2347,22 @@ function setAuthenticationGateState(state, message = "") {
     ui.authGate?.classList.add("hidden");
     document.body.classList.remove("auth-banned");
   }
+}
+
+function isPublicAccessUser(user = currentUser) {
+  return Boolean(user?.isAnonymous);
+}
+
+function openAdminLogin() {
+  setAuthenticationGateState("required", "Inserisci username e password amministratore.");
+  if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "";
+  setTimeout(() => ui.authEmailInput?.focus(), 0);
+}
+
+function closeAdminLogin() {
+  if (auth?.currentUser) setAuthenticationGateState("authenticated");
+  if (ui.authPasswordInput) ui.authPasswordInput.value = "";
+  if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "";
 }
 
 function runAfterFirstRender(callback) {
@@ -3284,33 +3301,38 @@ if (!auth || firebaseInitError) {
     .finally(() => {
     auth.onAuthStateChanged(async (user) => {
   clearTimeout(authCheckWatchdog);
+  if (!user) {
+    try {
+      await auth.signInAnonymously();
+      return;
+    } catch (error) {
+      console.error("Accesso libero non disponibile:", error);
+      authStateResolved = true;
+      currentUser = null;
+      setAuthenticationGateState("required", "Accesso libero temporaneamente non disponibile. Riprova.");
+      hideStartupLoading();
+      return;
+    }
+  }
   console.log("AUTH READY");
   authStateResolved = true;
   currentUser = user || null;
   currentUserBanProfile = null;
   const loggedIn = Boolean(user);
+  if (loggedIn && !isPublicAccessUser(user) && !canManageData()) {
+    console.info("Sessione operatore precedente sostituita con accesso libero.");
+    await clearPersistedSession();
+    await auth.signOut();
+    return;
+  }
   console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
-  if (loggedIn) {
+  if (loggedIn && !isPublicAccessUser(user)) {
     try {
       const savedSession = savedStartupSession || await readPersistedSession();
-      const hasSavedApproval = isPersistedApprovalValid(savedSession, user);
-      if (!hasSavedApproval) {
-        const authorization = await window.HeraAccessApproval.verify(user);
-        if (!authorization.allowed) {
-          stopCommesseSubscription(); stopImpiantiSubscription(); stopChatSubscription();
-          stopPersonaleSubscription(); stopMezziSubscription(); stopSquadreSubscription(); stopUsersSubscription();
-          window.location.hash = "";
-          hideStartupLoading();
-          return;
-        }
-        await savePersistedSession(user, { ...authorization.profile, accessApproved: true });
-      }
-      const databaseCheck = hasSavedApproval
-        ? { valid: true, profile: { ...savedSession, accessApproved: true }, banned: false }
-        : await verifyPersistedSessionAgainstDatabase(user, savedSession);
+      const databaseCheck = await verifyPersistedSessionAgainstDatabase(user, savedSession);
       if (databaseCheck.banned) {
         currentUserBanProfile = databaseCheck.profile || { email: user.email, displayName: user.displayName };
         await savePersistedSession(user, currentUserBanProfile);
@@ -3346,30 +3368,23 @@ if (!auth || firebaseInitError) {
         await clearPersistedSession();
       }
     }
-    if (!(await requireBiometricAtStartup())) return;
     console.log("USER UID", user.uid);
     logActivity("login_app", "Login app");
     logActivity("apertura_app", "Apertura app");
-  } else {
+  } else if (!loggedIn) {
     savedStartupSession = null;
   }
   setAuthenticationGateState(loggedIn ? "authenticated" : "required");
-  if (loggedIn) setTimeout(() => {
-    void refreshBiometricSettings();
-    void offerBiometricsAfterGoogleLogin();
-  }, 0);
-
-  ui.loginBtn.disabled = loggedIn;
-  ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
-  ui.switchAccountBtn.disabled = !loggedIn;
-  ui.logoutBtn.disabled = !loggedIn;
+  const adminLoggedIn = loggedIn && !isPublicAccessUser(user) && canManageData();
+  ui.loginBtn.disabled = adminLoggedIn;
+  ui.loginBtn.classList.toggle("hidden", adminLoggedIn);
+  ui.switchAccountBtn.classList.toggle("hidden", !adminLoggedIn);
+  ui.switchAccountBtn.disabled = !adminLoggedIn;
+  ui.logoutBtn.disabled = !adminLoggedIn;
+  ui.logoutBtn.classList.toggle("hidden", !adminLoggedIn);
   updateDriveConnectVisibility();
-  ui.user.textContent = loggedIn
-    ? `Loggato: ${user.email || "email non disponibile"}`
-    : "Non loggato";
-  ui.userName.textContent = loggedIn
-    ? `Nome utente: ${user.displayName || "Nome non disponibile"}`
-    : "Nome utente: -";
+  ui.user.textContent = adminLoggedIn ? `Amministratore: ${user.email}` : "Accesso libero attivo";
+  ui.userName.textContent = adminLoggedIn ? "Ruolo: Amministratore" : "Ruolo: Operatore";
   prefillSegnalazioneDateTime();
   syncSegnalazioneFirmaPreposto();
 
@@ -3476,7 +3491,7 @@ if (!auth || firebaseInitError) {
       });
     runDeferredStartupTasks([
       () => startPresenceHeartbeat(),
-      () => upsertCurrentPlatformUser(),
+      () => isPublicAccessUser() ? null : upsertCurrentPlatformUser(),
       () => initGeolocation(),
       () => subscribeUsers(),
       () => subscribeAdminUsers(),
@@ -4947,11 +4962,11 @@ function getWorkflowSteps() {
   return [
     {
       id: "login",
-      label: "Login con Google",
-      description: "Accedi con il tuo account per sbloccare commesse e strumenti.",
+      label: "Accesso libero",
+      description: "La piattaforma si apre automaticamente senza login.",
       available: !isLoggedIn,
       done: isLoggedIn,
-      action: () => loginWithGoogle()
+      action: () => window.location.reload()
     },
     {
       id: "select-commessa",
@@ -10347,21 +10362,34 @@ async function offerBiometricsAfterGoogleLogin() {
 }
 
 async function loginWithEmailPassword() {
-  const email = String(ui.authEmailInput?.value || "").trim();
+  const identifier = String(ui.authEmailInput?.value || "").trim();
   const password = String(ui.authPasswordInput?.value || "");
-  if (!email || !password) {
-    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Inserisci email e password.";
+  if (!identifier || !password) {
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Inserisci username e password amministratore.";
+    return;
+  }
+  const aliases = new Set(["varga.ionel", "ionel.varga", "ionut29019", "admin"]);
+  const normalizedIdentifier = identifier.toLowerCase();
+  const email = identifier.includes("@")
+    ? normalizeEmail(identifier)
+    : (aliases.has(normalizedIdentifier) ? ADMIN_EMAIL : "");
+  if (!email) {
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Username amministratore non riconosciuto.";
     return;
   }
   if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso in corso...";
   if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = true;
   try {
     await ensureAuthLocalPersistence();
-    await auth.signInWithEmailAndPassword(email, password);
+    const credential = await auth.signInWithEmailAndPassword(email, password);
+    if (!isBuiltInSuperAdminEmail(credential?.user?.email) && !adminEmails.has(normalizeEmail(credential?.user?.email))) {
+      await auth.signOut();
+      throw new Error("Questo account non dispone dei permessi amministratore.");
+    }
     if (ui.authPasswordInput) ui.authPasswordInput.value = "";
-    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Login completato.";
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso amministratore completato.";
   } catch (error) {
-    console.error("Errore login email/password:", error);
+    console.error("Errore accesso amministratore:", error);
     recoverFirestorePersistence(error);
     if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = formatLoginError(error);
   } finally {
@@ -10369,59 +10397,8 @@ async function loginWithEmailPassword() {
   }
 }
 
-function loginWithGoogle(forceAccountSelection = false) {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  provider.addScope("https://www.googleapis.com/auth/userinfo.email");
-  if (forceAccountSelection) provider.setCustomParameters({ prompt: "select_account" });
-
-  googleLoginMayOfferBiometrics = true;
-  ensureAuthLocalPersistence().then(() => {
-    // Flusso dedicato Android (APK/WebView/Capacitor): NO redirect fallback.
-    if (isAndroidWebViewRuntime()) {
-      return auth.signInWithPopup(provider).then((result) => {
-        if (biometricGateFailed && result?.user) {
-          setSessionStorageValue("heraGoogleFallbackApproved", "true");
-          window.location.reload();
-        }
-      }).catch((error) => {
-        googleLoginMayOfferBiometrics = false;
-        console.error("Login Google Android/WebView fallito:", error);
-        recoverFirestorePersistence(error);
-        alert("Errore login Android/WebView: " + formatLoginError(error));
-      });
-    }
-
-    // Flusso web desktop/browser standard: manteniamo comportamento esistente.
-    return auth.signInWithPopup(provider).then((result) => {
-      if (biometricGateFailed && result?.user) {
-        setSessionStorageValue("heraGoogleFallbackApproved", "true");
-        window.location.reload();
-      }
-    }).catch((error) => {
-      if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
-        return auth.signInWithRedirect(provider);
-      }
-      console.error("Errore login:", error);
-      googleLoginMayOfferBiometrics = false;
-      recoverFirestorePersistence(error);
-      alert("Errore login: " + formatLoginError(error));
-      return null;
-    });
-  }).catch((error) => {
-    googleLoginMayOfferBiometrics = false;
-    console.error("Errore preparazione persistenza login:", error);
-    alert("Errore preparazione login: " + formatLoginError(error));
-  });
-}
-
-async function switchGoogleAccount() {
-  try {
-    await clearPersistedSession();
-    await auth.signOut();
-  } catch (error) {
-    console.warn("Logout durante cambio account non riuscito:", error);
-  }
-  loginWithGoogle(true);
+async function switchAdminAccount() {
+  openAdminLogin();
 }
 
 function persistDriveAccessToken(accessToken) {

@@ -1,15 +1,11 @@
-const CACHE_NAME = "varga-cantieri-shell-v114";
+const CACHE_NAME = "varga-cantieri-shell-v115";
 
 const CORE_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260727-update2",
-  "./app.js?v=20260804-squadre-restore1",
+  "./app.js?v=20260809-public-access1",
   "./firebase-config.js",
-  "./auth-login-fix.js?v=20260809-android-google1",
-  "./approval-access.js?v=20260731-legacy1",
-  "./first-login-password.js?v=20260726b",
-  "./login-retry-fix.js?v=20260726f",
   "./persistent-offline-auth.js?v=20260807a",
   "./offline-first-runtime.js?v=20260807a",
   "./firestore-safe-optimizer.js?v=20260805b",
@@ -55,7 +51,6 @@ const OFFLINE_BOOTSTRAP_SCRIPTS = [
 const OPTIONAL_SHELL = [
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
-  "./approval-access.css?v=20260731-legacy1",
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260731-mezzi1",

@@ -9,7 +9,6 @@ on:
       - "functions/index.js"
       - "functions/main.js"
       - "functions/operator-login-register-tester.js"
-      - "functions/operator-default-password.js"
       - "functions/package.json"
       - ".github/workflows/deploy-register-tester.yml"
 
@@ -22,7 +21,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy Firebase functions
+    name: Deploy Firebase function
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -61,5 +60,5 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
 
-      - name: Deploy access functions
-        run: firebase deploy --only functions:registerTester,functions:setOperatorDefaultPassword --project hera-app-6cd2b --non-interactive
+      - name: Deploy registerTester
+        run: firebase deploy --only functions:registerTester --project hera-app-6cd2b --non-interactive

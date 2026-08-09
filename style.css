@@ -11321,3 +11321,18 @@ body.worklimate-page-open {
   margin: 0;
   accent-color: #008f68;
 }
+
+
+.auth-force-update-btn {
+  width: 100%;
+  margin-top: 0.35rem;
+  border: 1px solid #0b7a61;
+  background: #edf9f5;
+  color: #075b49;
+  font-weight: 900;
+}
+
+.auth-force-update-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}

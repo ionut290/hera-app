@@ -51,6 +51,17 @@ for (const obsolete of ["TESTER_TEMP_PASSWORD", "functions:registerTester"]) {
 if (!fixSource.includes('googleLoginButton.hidden = false')) {
   throw new Error("Il pulsante Google non resta visibile su web e Android.");
 }
+if (!indexSource.includes('id="auth-google-register-btn"') || !indexSource.includes('data-google-mode="register"')) {
+  throw new Error("Pulsante Registrati con Google mancante.");
+}
+for (const expected of [
+  '"auth-google-register-btn"',
+  'button.dataset.googleMode === "register"',
+  'await ensurePlatformProfileForAuthenticatedUser(result.user)',
+  'Account Google registrato. Se è nuovo, attendi l’approvazione dell’amministratore.'
+]) {
+  if (!fixSource.includes(expected)) throw new Error(`Registrazione Google incompleta: ${expected}`);
+}
 
 if (!fixSource.includes('divider.hidden = false')) {
   throw new Error("Il separatore Google non resta visibile su web e Android.");

@@ -1,7 +1,7 @@
 (function installGoogleLoginFix() {
   "use strict";
 
-  const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn"]);
+  const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn", "auth-google-register-btn"]);
   let loginInProgress = false;
 
   function normalizeEmail(value) {
@@ -185,6 +185,13 @@
       googleLoginButton.textContent = nativeAndroid ? "Accedi con Google" : "Login con Google";
     }
 
+    const googleRegisterButton = document.getElementById("auth-google-register-btn");
+    if (googleRegisterButton) {
+      googleRegisterButton.hidden = false;
+      googleRegisterButton.tabIndex = 0;
+      googleRegisterButton.removeAttribute("aria-hidden");
+    }
+
     const divider = document.querySelector(".auth-gate-divider");
     if (divider) {
       divider.hidden = false;
@@ -264,6 +271,8 @@
 
     if (loginInProgress) return;
 
+    const registrationMode = button.dataset.googleMode === "register";
+
     if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
       alert("Login Google non disponibile: configurazione Firebase non caricata.");
       return;
@@ -272,10 +281,15 @@
     loginInProgress = true;
     button.disabled = true;
     const previousText = button.textContent;
-    button.textContent = "Accesso Google...";
+    button.textContent = registrationMode ? "Registrazione Google..." : "Accesso Google...";
 
     try {
-      await (isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle());
+      const result = await (isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle());
+      if (registrationMode && result?.user) {
+        await ensurePlatformProfileForAuthenticatedUser(result.user);
+        const feedback = document.getElementById("auth-email-feedback");
+        if (feedback) feedback.textContent = "Account Google registrato. Se è nuovo, attendi l’approvazione dell’amministratore.";
+      }
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));

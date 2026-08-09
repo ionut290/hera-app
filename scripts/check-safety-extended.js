@@ -12,7 +12,8 @@ const sw = read('sw.js');
 const manifest = JSON.parse(read('manifest.webmanifest'));
 const firebaseConfig = read('firebase-config.js');
 const app = read('app.js');
-const bootstrapSources = [index, sw, firebaseConfig, app].join('\n');
+const pwaLoginForceUpdate = read('pwa-login-force-update.js');
+const bootstrapSources = [index, sw, firebaseConfig, app, pwaLoginForceUpdate].join('\n');
 
 // Gestione ore: protegge la presenza del comando e dei contenitori principali.
 assert(/id=["']open-hours-btn["']/.test(index), 'Il pulsante Gestione ore esiste');
@@ -25,7 +26,9 @@ assert(/google\.com\/maps|maps\.google|openstreetmap|tile\.openstreetmap/i.test(
 
 // PWA e Service Worker.
 assert(/rel=["']manifest["'][^>]*manifest\.webmanifest/i.test(index), 'Il manifest PWA è collegato');
-assert(/serviceWorker\.register\(["']\.\/sw\.js["']\)/.test(index), 'Il Service Worker viene registrato');
+assert(/pwa-login-force-update\.js/i.test(index), 'Il bootstrap PWA è caricato dalla pagina');
+assert(/serviceWorker\.register\(\s*(?:SERVICE_WORKER_URL|["']\.\/sw\.js["'])\s*\)/.test(pwaLoginForceUpdate), 'Il Service Worker viene registrato');
+assert(/SERVICE_WORKER_URL\s*=\s*["']\.\/sw\.js["']/.test(pwaLoginForceUpdate), 'La registrazione PWA punta a ./sw.js');
 assert(typeof manifest.name === 'string' && manifest.name.trim(), 'Il manifest contiene il nome dell’app');
 assert(typeof manifest.start_url === 'string' && manifest.start_url.trim(), 'Il manifest contiene start_url');
 assert(Array.isArray(manifest.icons) && manifest.icons.length >= 2, 'Il manifest contiene le icone principali');

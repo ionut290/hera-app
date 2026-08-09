@@ -164,14 +164,11 @@
 
   function configurePlatformLoginOptions() {
     const nativeAndroid = isNativeAndroid();
-    const webGoogleEnabled = !nativeAndroid;
-
-    document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
 
     const message = document.getElementById("auth-gate-message");
     if (message) {
       message.textContent = nativeAndroid
-        ? "Accedi con la tua email e password."
+        ? "Accedi con Google oppure con username/email e password."
         : "Accedi con Google oppure con la tua email e password.";
     }
 
@@ -182,17 +179,16 @@
 
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
     if (googleLoginButton) {
-      googleLoginButton.hidden = !webGoogleEnabled;
-      googleLoginButton.tabIndex = webGoogleEnabled ? 0 : -1;
-      if (webGoogleEnabled) googleLoginButton.removeAttribute("aria-hidden");
-      else googleLoginButton.setAttribute("aria-hidden", "true");
+      googleLoginButton.hidden = false;
+      googleLoginButton.tabIndex = 0;
+      googleLoginButton.removeAttribute("aria-hidden");
+      googleLoginButton.textContent = nativeAndroid ? "Accedi con Google" : "Login con Google";
     }
 
     const divider = document.querySelector(".auth-gate-divider");
     if (divider) {
-      divider.hidden = !webGoogleEnabled;
-      if (webGoogleEnabled) divider.removeAttribute("aria-hidden");
-      else divider.setAttribute("aria-hidden", "true");
+      divider.hidden = false;
+      divider.removeAttribute("aria-hidden");
     }
   }
 
@@ -223,15 +219,12 @@
   }
 
   async function signInWithNativeGoogle() {
-    if (isNativeAndroid()) {
-      throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
-    }
-
     const nativeAuth = getNativeFirebaseAuthentication();
     if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") {
       throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
     }
 
+    await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
     if (!idToken) {
@@ -239,19 +232,16 @@
     }
 
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
-    return firebase.auth().signInWithCredential(credential);
+    const signedIn = await firebase.auth().signInWithCredential(credential);
+    if (!signedIn?.user?.uid) throw new Error("Accesso Google completato senza un utente valido.");
+    return signedIn;
   }
 
   window.HeraNativeGoogleLogin = signInWithNativeGoogle;
 
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      if (isNativeAndroid()) {
-        return Promise.reject(
-          new Error("Nell'app Android è disponibile solo l'accesso con email e password.")
-        );
-      }
-      return signInWithWebGoogle();
+      return isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle();
     };
   });
 
@@ -272,13 +262,6 @@
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    if (isNativeAndroid()) {
-      configurePlatformLoginOptions();
-      const emailInput = document.getElementById("auth-email-input");
-      if (emailInput) emailInput.focus();
-      return;
-    }
-
     if (loginInProgress) return;
 
     if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
@@ -292,7 +275,7 @@
     button.textContent = "Accesso Google...";
 
     try {
-      await signInWithWebGoogle();
+      await (isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle());
     } catch (error) {
       console.error("Login Google fallito:", error);
       alert(formatError(error));

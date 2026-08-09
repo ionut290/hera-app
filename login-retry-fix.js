@@ -2,7 +2,48 @@
   "use strict";
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
+  const REMEMBER_LOGIN_KEY = "heraRememberLogin";
   let registrationPending = false;
+
+  function readRememberLoginPreference() {
+    try {
+      const saved = localStorage.getItem(REMEMBER_LOGIN_KEY);
+      return saved === null ? true : saved === "true";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function saveRememberLoginPreference(remember) {
+    try {
+      localStorage.setItem(REMEMBER_LOGIN_KEY, remember ? "true" : "false");
+    } catch (error) {
+      console.warn("Preferenza Ricordami non memorizzabile:", error);
+    }
+  }
+
+  function installPasswordVisibilityToggle() {
+    const passwordInput = document.getElementById("auth-password-input");
+    const toggle = document.getElementById("auth-password-toggle-btn");
+    if (!passwordInput || !toggle || toggle.dataset.installed === "1") return;
+    toggle.dataset.installed = "1";
+    toggle.addEventListener("click", () => {
+      const show = passwordInput.type === "password";
+      passwordInput.type = show ? "text" : "password";
+      toggle.textContent = show ? "🙈" : "👁️";
+      toggle.setAttribute("aria-label", show ? "Nascondi password" : "Mostra password");
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+      passwordInput.focus({ preventScroll: true });
+      passwordInput.setSelectionRange(passwordInput.value.length, passwordInput.value.length);
+    });
+  }
+
+  function initializeRememberLogin() {
+    const checkbox = document.getElementById("auth-remember-login");
+    if (!checkbox) return;
+    checkbox.checked = readRememberLoginPreference();
+    checkbox.addEventListener("change", () => saveRememberLoginPreference(checkbox.checked));
+  }
 
   function friendlyLoginError(error) {
     const code = String(error?.code || "").toLowerCase();
@@ -268,7 +309,13 @@
 
     try {
       const auth = firebase.auth();
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const rememberLogin = document.getElementById("auth-remember-login")?.checked !== false;
+      saveRememberLoginPreference(rememberLogin);
+      await auth.setPersistence(
+        rememberLogin
+          ? firebase.auth.Auth.Persistence.LOCAL
+          : firebase.auth.Auth.Persistence.SESSION
+      );
       try {
         const credential = await auth.signInWithEmailAndPassword(email, password);
         if (credential.user && credential.user.emailVerified === false) {
@@ -311,6 +358,8 @@
   }
 
   function initialize() {
+    installPasswordVisibilityToggle();
+    initializeRememberLogin();
     document.addEventListener("submit", handleLogin, true);
     document.getElementById("auth-create-account-btn")
       ?.addEventListener("click", startRegistrationFromLogin);

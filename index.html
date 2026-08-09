@@ -109,21 +109,21 @@
     <div class="auth-gate-card">
       <div class="auth-gate-logo">👤</div>
       <p class="auth-gate-kicker">Varga Cantieri</p>
-      <h1>Accesso richiesto</h1>
-      <p id="auth-gate-message" class="muted">Inserisci la password per accedere all’app.</p>
+      <h1>Login richiesto</h1>
+      <p id="auth-gate-message" class="muted">Accedi con Google oppure con la tua email e password.</p>
       <form id="auth-email-form" class="auth-email-form" autocomplete="on">
-        <label data-operator-login-field for="auth-operator-first-name">Nome</label>
-        <input data-operator-login-field id="auth-operator-first-name" type="text" autocomplete="given-name" placeholder="Nome" required>
-        <label data-operator-login-field for="auth-operator-last-name">Cognome</label>
-        <input data-operator-login-field id="auth-operator-last-name" type="text" autocomplete="family-name" placeholder="Cognome" required>
-        <label class="hidden" data-admin-login-field for="auth-email-input">Email amministratore</label>
-        <input class="hidden" data-admin-login-field id="auth-email-input" type="email" autocomplete="username" placeholder="Email amministratore">
-        <label for="auth-password-input">Password di accesso</label>
+        <label for="auth-email-input">Email</label>
+        <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
+        <label for="auth-password-input">Password</label>
         <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
         <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
-        <button id="auth-admin-mode-btn" class="btn" type="button">Accesso amministratore</button>
+        <button id="auth-create-account-btn" class="btn" type="button">CREA NUOVO ACCOUNT</button>
+        <button id="auth-request-password-btn" class="btn" type="button">PASSWORD DIMENTICATA?</button>
         <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
       </form>
+      <div class="auth-gate-divider"><span>oppure</span></div>
+      <button id="auth-gate-login-btn" class="btn" type="button">Login con Google</button>
+      <button id="banned-request-access-btn" class="btn btn-primary banned-request-access-btn hidden" type="button">RICHIEDI ACCESSO</button>
     </div>
   </section>
 
@@ -400,13 +400,14 @@
   <script src="firebase-config.js"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260731-header1"></script>
-  <script src="auth-login-fix.js?v=20260809-shared-password1"></script>
+  <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260731-legacy1"></script>
   <script src="first-login-password.js?v=20260726b"></script>
+  <script src="login-retry-fix.js?v=20260726f"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260809-shared-account2"></script>
+  <script src="app.js?v=20260804-squadre-restore1"></script>
   <script src="shared-static-views-client.js?v=20260804-registri3"></script>
   <script src="squadra-current-save-sync.js?v=20260804a"></script>
   <script src="activity-logs-read-disable.js?v=20260804a"></script>

@@ -7,6 +7,7 @@ on:
     paths:
       - "index.html"
       - "app.js"
+      - "login-retry-fix.js"
       - "firebase-config.js"
       - "sw.js"
       - "package.json"
@@ -23,8 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e-fatto:
-    name: E2E FATTO e apertura app
+  e2e-safety:
+    name: E2E login, FATTO e apertura app
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -59,6 +60,11 @@ jobs:
           done
           cat /tmp/hera-e2e-server.log
           exit 1
+
+      - name: Esegue test resilienza login
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+        run: npx playwright test tests/e2e/login-session.spec.js --browser=chromium --reporter=line
 
       - name: Esegue apertura app e flusso FATTO
         env:

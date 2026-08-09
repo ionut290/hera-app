@@ -32,6 +32,10 @@ function getPersonnelEmail(data) {
   return text(data?.linkedUserEmail || data?.LINKED_USER_EMAIL || data?.emailAccessoApp || data?.EMAIL_ACCESSO_APP || "").toLowerCase();
 }
 function getPersonnelUid(data) { return text(data?.linkedUserId || data?.LINKED_USER_ID || ""); }
+function getPlatformEmail(data) {
+  return text(data?.email || data?.linkedUserEmail || data?.emailAccessoApp || "").toLowerCase();
+}
+function getPlatformUid(doc, data) { return text(data?.uid || data?.linkedUserId || doc?.id || ""); }
 function randomPassword(length = 14) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
   let out = "";
@@ -49,6 +53,60 @@ async function requireAdmin(context) {
   throw new functions.https.HttpsError("permission-denied", "Funzione riservata all’amministratore.");
 }
 
+async function resolveUsernameIdentity(db, username) {
+  const personnelMatches = await db.collection("personale").where("loginUsername", "==", username).limit(2).get();
+  if (personnelMatches.size > 1) {
+    throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
+  }
+  if (personnelMatches.size === 1) {
+    const doc = personnelMatches.docs[0];
+    const personnel = doc.data() || {};
+    const email = getPersonnelEmail(personnel);
+    const uid = getPersonnelUid(personnel);
+    if (validEmail(email)) return { email, uid, source: "personale", personnelRef: doc.ref };
+
+    if (uid) {
+      const profile = await db.collection("platformUsers").doc(uid).get();
+      if (profile.exists) {
+        const profileData = profile.data() || {};
+        const profileUsername = normalizeUsername(profileData.loginUsername || profileData.LOGIN_USERNAME || "");
+        const profileEmail = getPlatformEmail(profileData);
+        if ((!profileUsername || profileUsername === username) && validEmail(profileEmail)) {
+          return { email: profileEmail, uid, source: "platformUsers-by-uid", personnelRef: doc.ref };
+        }
+      }
+      try {
+        const authUser = await admin.auth().getUser(uid);
+        if (validEmail(authUser.email)) return { email: authUser.email.toLowerCase(), uid, source: "auth-by-uid", personnelRef: doc.ref };
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") throw error;
+      }
+    }
+  }
+
+  const profileMatches = await db.collection("platformUsers").where("loginUsername", "==", username).limit(2).get();
+  if (profileMatches.size > 1) {
+    throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
+  }
+  if (profileMatches.size === 1) {
+    const doc = profileMatches.docs[0];
+    const profile = doc.data() || {};
+    const email = getPlatformEmail(profile);
+    const uid = getPlatformUid(doc, profile);
+    if (validEmail(email) && uid) return { email, uid, source: "platformUsers" };
+    if (uid) {
+      try {
+        const authUser = await admin.auth().getUser(uid);
+        if (validEmail(authUser.email)) return { email: authUser.email.toLowerCase(), uid, source: "auth-by-platform-uid" };
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") throw error;
+      }
+    }
+  }
+
+  throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
+}
+
 async function loginWithUsername(data) {
   const username = normalizeUsername(data?.username);
   const password = String(data?.password || "");
@@ -56,19 +114,14 @@ async function loginWithUsername(data) {
     throw new functions.https.HttpsError("invalid-argument", "Username o password non validi.");
   }
   const db = admin.firestore();
-  const matches = await db.collection("personale").where("loginUsername", "==", username).limit(2).get();
-  if (matches.size !== 1) throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
-  const personnel = matches.docs[0].data() || {};
-  const email = getPersonnelEmail(personnel);
-  const expectedUid = getPersonnelUid(personnel);
-  if (!validEmail(email)) throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
+  const identity = await resolveUsernameIdentity(db, username);
 
   let response;
   try {
     response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, returnSecureToken: true })
+      body: JSON.stringify({ email: identity.email, password, returnSecureToken: true })
     });
   } catch (error) {
     console.error("Login username: Identity Toolkit non raggiungibile.", { code: error?.code || "", message: error?.message || "" });
@@ -76,7 +129,21 @@ async function loginWithUsername(data) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.localId) throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
-  if (expectedUid && payload.localId !== expectedUid) throw new functions.https.HttpsError("failed-precondition", "Collegamento account non valido. Contatta l’amministratore.");
+  if (identity.uid && payload.localId !== identity.uid) throw new functions.https.HttpsError("failed-precondition", "Collegamento account non valido. Contatta l’amministratore.");
+
+  if (identity.personnelRef && identity.source !== "personale") {
+    identity.personnelRef.set({
+      linkedUserId: payload.localId,
+      LINKED_USER_ID: payload.localId,
+      linkedUserEmail: identity.email,
+      LINKED_USER_EMAIL: identity.email,
+      emailAccessoApp: identity.email,
+      EMAIL_ACCESSO_APP: identity.email,
+      loginUsername: username,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).catch((error) => console.warn("Allineamento collegamento personale non riuscito:", error?.message || error));
+  }
+
   return { token: await admin.auth().createCustomToken(payload.localId) };
 }
 

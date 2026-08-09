@@ -13,6 +13,33 @@ function normalizeUsername(value) {
   return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     .replace(/[^a-z0-9._-]+/g, ".").replace(/^\.+|\.+$/g, "").replace(/\.{2,}/g, ".");
 }
+function usernameCaseVariants(value) {
+  const username = normalizeUsername(value);
+  if (!username) return [];
+  const capitalize = (part) => part ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : part;
+  return [...new Set([
+    username,
+    capitalize(username),
+    username.split(".").map(capitalize).join("."),
+    username.toUpperCase()
+  ])];
+}
+async function findUsernameDocs(db, collectionName, username) {
+  const variants = usernameCaseVariants(username);
+  if (!variants.length) return [];
+  const exact = await db.collection(collectionName).where("loginUsername", "==", variants[0]).limit(2).get();
+  if (!exact.empty) return exact.docs;
+  const fallbackVariants = variants.slice(1);
+  if (!fallbackVariants.length) return [];
+  const snapshots = await Promise.all(
+    fallbackVariants.map((variant) => db.collection(collectionName).where("loginUsername", "==", variant).limit(2).get())
+  );
+  const unique = new Map();
+  for (const snapshot of snapshots) {
+    for (const doc of snapshot.docs) unique.set(doc.id, doc);
+  }
+  return [...unique.values()];
+}
 function normalizeName(value) {
   return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
@@ -54,17 +81,14 @@ async function requireAdmin(context) {
 }
 
 async function resolveUsernameIdentity(db, username) {
-  const personnelMatches = await db.collection("personale").where("loginUsername", "==", username).limit(2).get();
-  if (personnelMatches.size > 1) {
-    throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
-  }
-  if (personnelMatches.size === 1) {
-    const doc = personnelMatches.docs[0];
+  const personnelDocs = await findUsernameDocs(db, "personale", username);
+  if (personnelDocs.length > 1) throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
+  if (personnelDocs.length === 1) {
+    const doc = personnelDocs[0];
     const personnel = doc.data() || {};
     const email = getPersonnelEmail(personnel);
     const uid = getPersonnelUid(personnel);
     if (validEmail(email)) return { email, uid, source: "personale", personnelRef: doc.ref };
-
     if (uid) {
       const profile = await db.collection("platformUsers").doc(uid).get();
       if (profile.exists) {
@@ -83,13 +107,10 @@ async function resolveUsernameIdentity(db, username) {
       }
     }
   }
-
-  const profileMatches = await db.collection("platformUsers").where("loginUsername", "==", username).limit(2).get();
-  if (profileMatches.size > 1) {
-    throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
-  }
-  if (profileMatches.size === 1) {
-    const doc = profileMatches.docs[0];
+  const profileDocs = await findUsernameDocs(db, "platformUsers", username);
+  if (profileDocs.length > 1) throw new functions.https.HttpsError("failed-precondition", "Username duplicato. Contatta l’amministratore.");
+  if (profileDocs.length === 1) {
+    const doc = profileDocs[0];
     const profile = doc.data() || {};
     const email = getPlatformEmail(profile);
     const uid = getPlatformUid(doc, profile);
@@ -103,7 +124,6 @@ async function resolveUsernameIdentity(db, username) {
       }
     }
   }
-
   throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
 }
 
@@ -115,7 +135,6 @@ async function loginWithUsername(data) {
   }
   const db = admin.firestore();
   const identity = await resolveUsernameIdentity(db, username);
-
   let response;
   try {
     response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
@@ -130,8 +149,7 @@ async function loginWithUsername(data) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.localId) throw new functions.https.HttpsError("unauthenticated", "Username o password non corretti.");
   if (identity.uid && payload.localId !== identity.uid) throw new functions.https.HttpsError("failed-precondition", "Collegamento account non valido. Contatta l’amministratore.");
-
-  if (identity.personnelRef && identity.source !== "personale") {
+  if (identity.personnelRef) {
     identity.personnelRef.set({
       linkedUserId: payload.localId,
       LINKED_USER_ID: payload.localId,
@@ -143,7 +161,6 @@ async function loginWithUsername(data) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).catch((error) => console.warn("Allineamento collegamento personale non riuscito:", error?.message || error));
   }
-
   return { token: await admin.auth().createCustomToken(payload.localId) };
 }
 
@@ -228,7 +245,6 @@ async function provisionPersonnel(personnelDoc, firstName, lastName) {
   }
   if (user) user = await admin.auth().updateUser(user.uid, { password: temporaryPassword, displayName, disabled: false });
   else user = await admin.auth().createUser({ email: loginEmail, password: temporaryPassword, displayName, emailVerified: true, disabled: false });
-
   let ref = personnelDoc?.ref || null;
   if (!ref) ref = db.collection("personale").doc();
   await ref.set({

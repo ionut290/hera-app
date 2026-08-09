@@ -20,7 +20,7 @@ const HERA_OPERATIONAL_OFFLINE_CACHE_SRC = "offline-operational-cache.js?v=20260
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 const HERA_PERSISTENT_OFFLINE_AUTH_SRC = "persistent-offline-auth.js?v=20260809a";
-const HERA_ACCESS_REQUEST_LOGIN_SRC = "access-request-login.js?v=20260809a";
+const HERA_ACCESS_REQUEST_LOGIN_SRC = "access-request-login.js?v=20260809b";
 const HERA_ACCESS_REQUEST_ADMIN_SRC = "access-request-admin.js?v=20260809a";
 
 function loadOnce(src, dataName, ready, onLoad) {

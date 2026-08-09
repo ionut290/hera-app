@@ -112,6 +112,10 @@
       <h1>Accesso richiesto</h1>
       <p id="auth-gate-message" class="muted">Inserisci la password per accedere all’app.</p>
       <form id="auth-email-form" class="auth-email-form" autocomplete="on">
+        <label data-operator-login-field for="auth-operator-first-name">Nome</label>
+        <input data-operator-login-field id="auth-operator-first-name" type="text" autocomplete="given-name" placeholder="Nome" required>
+        <label data-operator-login-field for="auth-operator-last-name">Cognome</label>
+        <input data-operator-login-field id="auth-operator-last-name" type="text" autocomplete="family-name" placeholder="Cognome" required>
         <label class="hidden" data-admin-login-field for="auth-email-input">Email amministratore</label>
         <input class="hidden" data-admin-login-field id="auth-email-input" type="email" autocomplete="username" placeholder="Email amministratore">
         <label for="auth-password-input">Password di accesso</label>

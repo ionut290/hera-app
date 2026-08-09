@@ -42,6 +42,7 @@ try {
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
 const PERSISTED_SESSION_VERSION = 1;
 const SHARED_OPERATOR_ACCESS_KEY = "heraSharedOperatorAccess:v1";
+const SHARED_OPERATOR_PROFILE_KEY = "heraSharedOperatorProfile:v1";
 const SHARED_OPERATOR_PASSWORD = "12345678";
 let adminLoginMode = false;
 
@@ -59,6 +60,27 @@ function saveSharedOperatorAccess() {
   } catch (error) {
     console.warn("Memorizzazione accesso operatore non disponibile:", error);
   }
+}
+
+function readSharedOperatorProfile() {
+  try {
+    const profile = JSON.parse(localStorage.getItem(SHARED_OPERATOR_PROFILE_KEY) || "null");
+    const firstName = String(profile?.firstName || "").trim();
+    const lastName = String(profile?.lastName || "").trim();
+    return firstName && lastName ? { firstName, lastName, displayName: `${firstName} ${lastName}` } : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveSharedOperatorProfile(firstName, lastName) {
+  const profile = {
+    firstName: String(firstName || "").trim(),
+    lastName: String(lastName || "").trim()
+  };
+  profile.displayName = `${profile.firstName} ${profile.lastName}`;
+  localStorage.setItem(SHARED_OPERATOR_PROFILE_KEY, JSON.stringify(profile));
+  return profile;
 }
 
 function isSharedOperatorUser(user = currentUser) {
@@ -495,6 +517,8 @@ const ui = {
   authEmailLoginBtn: document.getElementById("auth-email-login-btn"),
   authEmailFeedback: document.getElementById("auth-email-feedback"),
   authAdminModeBtn: document.getElementById("auth-admin-mode-btn"),
+  authOperatorFirstName: document.getElementById("auth-operator-first-name"),
+  authOperatorLastName: document.getElementById("auth-operator-last-name"),
   biometricOfferDialog: document.getElementById("biometric-offer-dialog"),
   biometricOfferFeedback: document.getElementById("biometric-offer-feedback"),
   biometricEnableBtn: document.getElementById("biometric-enable-btn"),
@@ -1888,6 +1912,10 @@ ui.loginBtn?.addEventListener("click", () => {
   if (isSharedOperatorUser()) {
     adminLoginMode = true;
     document.querySelectorAll("[data-admin-login-field]").forEach((element) => element.classList.remove("hidden"));
+    document.querySelectorAll("[data-operator-login-field]").forEach((element) => {
+      element.classList.add("hidden");
+      if ("disabled" in element) element.disabled = true;
+    });
     if (ui.authAdminModeBtn) ui.authAdminModeBtn.textContent = "Torna all’accesso operatori";
     if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.textContent = "Entra come amministratore";
     setAuthenticationGateState("required", "Inserisci email e password dell’amministratore.");
@@ -1906,6 +1934,10 @@ ui.authAdminModeBtn?.addEventListener("click", () => {
   document.querySelectorAll("[data-admin-login-field]").forEach((element) => {
     element.classList.toggle("hidden", !adminLoginMode);
   });
+  document.querySelectorAll("[data-operator-login-field]").forEach((element) => {
+    element.classList.toggle("hidden", adminLoginMode);
+    if ("disabled" in element) element.disabled = adminLoginMode;
+  });
   if (ui.authAdminModeBtn) {
     ui.authAdminModeBtn.textContent = adminLoginMode ? "Torna all’accesso operatori" : "Accesso amministratore";
   }
@@ -1917,7 +1949,7 @@ ui.authAdminModeBtn?.addEventListener("click", () => {
   }
   if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "";
   if (ui.authPasswordInput) ui.authPasswordInput.value = "";
-  (adminLoginMode ? ui.authEmailInput : ui.authPasswordInput)?.focus();
+  (adminLoginMode ? ui.authEmailInput : ui.authOperatorFirstName)?.focus();
 });
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
@@ -3344,12 +3376,13 @@ if (!auth || firebaseInitError) {
   authStateResolved = true;
   currentUser = user || null;
   currentUserBanProfile = null;
-  if (user?.isAnonymous && !hasSharedOperatorAccess()) {
+  const sharedOperatorProfile = readSharedOperatorProfile();
+  if (user?.isAnonymous && (!hasSharedOperatorAccess() || !sharedOperatorProfile)) {
     await auth.signOut();
     return;
   }
   if (!user) {
-    if (hasSharedOperatorAccess()) {
+    if (hasSharedOperatorAccess() && readSharedOperatorProfile()) {
       try {
         await auth.signInAnonymously();
         return;
@@ -3446,7 +3479,7 @@ if (!auth || firebaseInitError) {
     ? `Loggato: ${user.email || "email non disponibile"}`
     : "Non loggato";
   ui.userName.textContent = isSharedOperatorUser(user)
-    ? "Ruolo: Operatore"
+    ? `Operatore: ${sharedOperatorProfile?.displayName || user.displayName || "Nome non disponibile"}`
     : loggedIn
     ? `Nome utente: ${user.displayName || "Nome non disponibile"}`
     : "Nome utente: -";
@@ -10428,7 +10461,13 @@ async function offerBiometricsAfterGoogleLogin() {
 
 async function loginWithEmailPassword() {
   if (!adminLoginMode) {
+    const firstName = String(ui.authOperatorFirstName?.value || "").trim();
+    const lastName = String(ui.authOperatorLastName?.value || "").trim();
     const sharedPassword = String(ui.authPasswordInput?.value || "");
+    if (!firstName || !lastName) {
+      if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Nome e cognome sono obbligatori.";
+      return;
+    }
     if (sharedPassword !== SHARED_OPERATOR_PASSWORD) {
       if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Password non corretta. Riprova.";
       return;
@@ -10436,10 +10475,14 @@ async function loginWithEmailPassword() {
     if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso in corso...";
     if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = true;
     try {
+      const operatorProfile = saveSharedOperatorProfile(firstName, lastName);
       saveSharedOperatorAccess();
       if (!auth.currentUser || !auth.currentUser.isAnonymous) {
-        await auth.signInAnonymously();
+        const credential = await auth.signInAnonymously();
+        await credential.user?.updateProfile?.({ displayName: operatorProfile.displayName });
+        window.location.reload();
       } else {
+        await auth.currentUser.updateProfile?.({ displayName: operatorProfile.displayName });
         setAuthenticationGateState("authenticated");
         window.location.reload();
       }

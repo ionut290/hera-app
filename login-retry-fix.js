@@ -3,6 +3,8 @@
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
   const REMEMBER_LOGIN_KEY = "heraRememberLogin";
+  const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
+  const PERSISTED_AUTH_WAIT_MS = 2500;
   let registrationPending = false;
 
   function readRememberLoginPreference() {
@@ -20,6 +22,83 @@
     } catch (error) {
       console.warn("Preferenza Ricordami non memorizzabile:", error);
     }
+  }
+
+  function readPersistedUserSession() {
+    try {
+      const raw = localStorage.getItem(PERSISTED_SESSION_KEY);
+      if (!raw) return null;
+      const session = JSON.parse(raw);
+      if (!session || session.banned === true || session.accessApproved === false) return null;
+      if (!String(session.uid || "").trim()) return null;
+      if (!String(session.email || "").includes("@")) return null;
+      return session;
+    } catch (error) {
+      console.warn("Sessione locale non leggibile:", error);
+      return null;
+    }
+  }
+
+  function normalizeEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function isMatchingRememberedUser(user, email) {
+    if (!user?.uid) return false;
+    if (normalizeEmail(user.email) !== normalizeEmail(email)) return false;
+    const session = readPersistedUserSession();
+    if (!session) return true;
+    return String(session.uid) === String(user.uid)
+      && normalizeEmail(session.email) === normalizeEmail(email);
+  }
+
+  function waitForPersistedAuthUser(auth, email, timeoutMs = PERSISTED_AUTH_WAIT_MS) {
+    if (!auth) return Promise.resolve(null);
+    if (isMatchingRememberedUser(auth.currentUser, email)) {
+      return Promise.resolve(auth.currentUser);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let unsubscribe = null;
+      const finish = (user) => {
+        if (settled) return;
+        settled = true;
+        if (typeof unsubscribe === "function") unsubscribe();
+        resolve(user || null);
+      };
+      const timer = window.setTimeout(() => finish(null), timeoutMs);
+      unsubscribe = auth.onAuthStateChanged((user) => {
+        if (!isMatchingRememberedUser(user, email)) return;
+        window.clearTimeout(timer);
+        finish(user);
+      }, () => {
+        window.clearTimeout(timer);
+        finish(null);
+      });
+    });
+  }
+
+  async function tryRememberedLogin(auth, email, feedback) {
+    if (!readRememberLoginPreference()) return null;
+    const rememberedSession = readPersistedUserSession();
+    if (rememberedSession && normalizeEmail(rememberedSession.email) !== normalizeEmail(email)) {
+      return null;
+    }
+
+    const user = await waitForPersistedAuthUser(auth, email);
+    if (!user) return null;
+    if (feedback) {
+      feedback.textContent = navigator.onLine === false
+        ? "Accesso con sessione salvata. Modalità offline attiva."
+        : "Sessione salvata ripristinata.";
+    }
+    console.log("LOGIN: sessione Firebase locale riutilizzata", {
+      uid: user.uid,
+      email: user.email,
+      online: navigator.onLine !== false
+    });
+    return user;
   }
 
   function installPasswordVisibilityToggle() {
@@ -58,7 +137,11 @@
       return "Troppi tentativi. Attendi qualche minuto e riprova.";
     }
     if (code === "auth/network-request-failed") {
-      return "Connessione non disponibile. Controlla internet e riprova.";
+      const rememberedSession = readPersistedUserSession();
+      if (rememberedSession) {
+        return "Rete troppo debole per verificare di nuovo l’account. Se questo dispositivo ha già effettuato l’accesso, riapri l’app: verrà usata automaticamente la sessione salvata.";
+      }
+      return "Connessione non disponibile. Il primo accesso su questo dispositivo richiede internet.";
     }
     if (code === "auth/email-not-verified") {
       return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
@@ -316,6 +399,21 @@
           ? firebase.auth.Auth.Persistence.LOCAL
           : firebase.auth.Auth.Persistence.SESSION
       );
+
+      if (rememberLogin) {
+        const rememberedUser = await tryRememberedLogin(auth, email, feedback);
+        if (rememberedUser) {
+          if (passwordInput) passwordInput.value = "";
+          return;
+        }
+      }
+
+      if (navigator.onLine === false) {
+        const offlineError = new Error("Connessione non disponibile.");
+        offlineError.code = "auth/network-request-failed";
+        throw offlineError;
+      }
+
       try {
         const credential = await auth.signInWithEmailAndPassword(email, password);
         if (credential.user && credential.user.emailVerified === false) {
@@ -326,6 +424,13 @@
         }
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
+        if (code === "auth/network-request-failed" && rememberLogin) {
+          const rememberedUser = await tryRememberedLogin(auth, email, feedback);
+          if (rememberedUser) {
+            if (passwordInput) passwordInput.value = "";
+            return;
+          }
+        }
         if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
         if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
         const registration = await openRegistrationDialog(email, password);

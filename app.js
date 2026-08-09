@@ -41,6 +41,29 @@ try {
 
 const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
 const PERSISTED_SESSION_VERSION = 1;
+const SHARED_OPERATOR_ACCESS_KEY = "heraSharedOperatorAccess:v1";
+const SHARED_OPERATOR_PASSWORD = "12345678";
+let adminLoginMode = false;
+
+function hasSharedOperatorAccess() {
+  try {
+    return localStorage.getItem(SHARED_OPERATOR_ACCESS_KEY) === "granted";
+  } catch (_) {
+    return false;
+  }
+}
+
+function saveSharedOperatorAccess() {
+  try {
+    localStorage.setItem(SHARED_OPERATOR_ACCESS_KEY, "granted");
+  } catch (error) {
+    console.warn("Memorizzazione accesso operatore non disponibile:", error);
+  }
+}
+
+function isSharedOperatorUser(user = currentUser) {
+  return Boolean(user?.isAnonymous);
+}
 
 function getCapacitorPreferencesPlugin() {
   return window.Capacitor
@@ -471,6 +494,7 @@ const ui = {
   authPasswordInput: document.getElementById("auth-password-input"),
   authEmailLoginBtn: document.getElementById("auth-email-login-btn"),
   authEmailFeedback: document.getElementById("auth-email-feedback"),
+  authAdminModeBtn: document.getElementById("auth-admin-mode-btn"),
   biometricOfferDialog: document.getElementById("biometric-offer-dialog"),
   biometricOfferFeedback: document.getElementById("biometric-offer-feedback"),
   biometricEnableBtn: document.getElementById("biometric-enable-btn"),
@@ -1860,11 +1884,40 @@ window.addEventListener("resize", () => {
   updateWorkBannerAnimationDuration();
 });
 
-ui.loginBtn?.addEventListener("click", loginWithGoogle);
+ui.loginBtn?.addEventListener("click", () => {
+  if (isSharedOperatorUser()) {
+    adminLoginMode = true;
+    document.querySelectorAll("[data-admin-login-field]").forEach((element) => element.classList.remove("hidden"));
+    if (ui.authAdminModeBtn) ui.authAdminModeBtn.textContent = "Torna all’accesso operatori";
+    if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.textContent = "Entra come amministratore";
+    setAuthenticationGateState("required", "Inserisci email e password dell’amministratore.");
+    setTimeout(() => ui.authEmailInput?.focus(), 0);
+    return;
+  }
+  loginWithGoogle();
+});
 ui.authGateLoginBtn?.addEventListener("click", loginWithGoogle);
 ui.authEmailForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   void loginWithEmailPassword();
+});
+ui.authAdminModeBtn?.addEventListener("click", () => {
+  adminLoginMode = !adminLoginMode;
+  document.querySelectorAll("[data-admin-login-field]").forEach((element) => {
+    element.classList.toggle("hidden", !adminLoginMode);
+  });
+  if (ui.authAdminModeBtn) {
+    ui.authAdminModeBtn.textContent = adminLoginMode ? "Torna all’accesso operatori" : "Accesso amministratore";
+  }
+  if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.textContent = adminLoginMode ? "Entra come amministratore" : "Entra";
+  if (ui.authGateMessage) {
+    ui.authGateMessage.textContent = adminLoginMode
+      ? "Inserisci email e password dell’amministratore."
+      : "Inserisci la password di accesso comunicata dall’amministratore.";
+  }
+  if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "";
+  if (ui.authPasswordInput) ui.authPasswordInput.value = "";
+  (adminLoginMode ? ui.authEmailInput : ui.authPasswordInput)?.focus();
 });
 ui.switchAccountBtn?.addEventListener("click", switchGoogleAccount);
 ui.refreshAppBtn?.addEventListener("click", refreshApplicationData);
@@ -3274,7 +3327,7 @@ if (!auth || firebaseInitError) {
     console.warn("Timeout verifica sessione Firebase: mostro la schermata di login invece del caricamento infinito.");
     authStateResolved = true;
     currentUser = null;
-    setAuthenticationGateState("required", "Verifica sessione lenta o non disponibile. Riprova il login.");
+    setAuthenticationGateState("required", "Inserisci la password per accedere all’app.");
     squadreLoadState = { status: "auth-required", message: "Fai login per caricare le squadre." };
     if (typeof renderSquadre === "function") renderSquadre();
     hideStartupLoading();
@@ -3291,12 +3344,31 @@ if (!auth || firebaseInitError) {
   authStateResolved = true;
   currentUser = user || null;
   currentUserBanProfile = null;
+  if (user?.isAnonymous && !hasSharedOperatorAccess()) {
+    await auth.signOut();
+    return;
+  }
+  if (!user) {
+    if (hasSharedOperatorAccess()) {
+      try {
+        await auth.signInAnonymously();
+        return;
+      } catch (error) {
+        console.error("Ripristino accesso condiviso non riuscito:", error);
+      }
+    }
+    setAuthenticationGateState("required", "Inserisci la password per accedere all’app.");
+    squadreLoadState = { status: "auth-required", message: "Inserisci la password per caricare le squadre." };
+    if (typeof renderSquadre === "function") renderSquadre();
+    hideStartupLoading();
+    return;
+  }
   const loggedIn = Boolean(user);
   console.log(loggedIn ? "USER LOGGED" : "USER NOT LOGGED", {
     email: user?.email || "",
     uid: user?.uid || ""
   });
-  if (loggedIn) {
+  if (loggedIn && !isSharedOperatorUser(user)) {
     try {
       const savedSession = savedStartupSession || await readPersistedSession();
       const hasSavedApproval = isPersistedApprovalValid(savedSession, user);
@@ -3362,15 +3434,20 @@ if (!auth || firebaseInitError) {
     void offerBiometricsAfterGoogleLogin();
   }, 0);
 
-  ui.loginBtn.disabled = loggedIn;
-  ui.switchAccountBtn.classList.toggle("hidden", !loggedIn);
-  ui.switchAccountBtn.disabled = !loggedIn;
-  ui.logoutBtn.disabled = !loggedIn;
+  const adminLoggedIn = loggedIn && !isSharedOperatorUser(user);
+  ui.loginBtn.disabled = adminLoggedIn;
+  ui.switchAccountBtn.classList.toggle("hidden", !adminLoggedIn);
+  ui.switchAccountBtn.disabled = !adminLoggedIn;
+  ui.logoutBtn.disabled = !adminLoggedIn;
   updateDriveConnectVisibility();
-  ui.user.textContent = loggedIn
+  ui.user.textContent = isSharedOperatorUser(user)
+    ? "Accesso operatore attivo"
+    : loggedIn
     ? `Loggato: ${user.email || "email non disponibile"}`
     : "Non loggato";
-  ui.userName.textContent = loggedIn
+  ui.userName.textContent = isSharedOperatorUser(user)
+    ? "Ruolo: Operatore"
+    : loggedIn
     ? `Nome utente: ${user.displayName || "Nome non disponibile"}`
     : "Nome utente: -";
   prefillSegnalazioneDateTime();
@@ -10350,6 +10427,31 @@ async function offerBiometricsAfterGoogleLogin() {
 }
 
 async function loginWithEmailPassword() {
+  if (!adminLoginMode) {
+    const sharedPassword = String(ui.authPasswordInput?.value || "");
+    if (sharedPassword !== SHARED_OPERATOR_PASSWORD) {
+      if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Password non corretta. Riprova.";
+      return;
+    }
+    if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso in corso...";
+    if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = true;
+    try {
+      saveSharedOperatorAccess();
+      if (!auth.currentUser || !auth.currentUser.isAnonymous) {
+        await auth.signInAnonymously();
+      } else {
+        setAuthenticationGateState("authenticated");
+        window.location.reload();
+      }
+      if (ui.authPasswordInput) ui.authPasswordInput.value = "";
+    } catch (error) {
+      console.error("Accesso operatore non riuscito:", error);
+      if (ui.authEmailFeedback) ui.authEmailFeedback.textContent = "Accesso non disponibile. Controlla la connessione e riprova.";
+    } finally {
+      if (ui.authEmailLoginBtn) ui.authEmailLoginBtn.disabled = false;
+    }
+    return;
+  }
   const email = String(ui.authEmailInput?.value || "").trim();
   const password = String(ui.authPasswordInput?.value || "");
   if (!email || !password) {

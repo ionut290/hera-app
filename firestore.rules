@@ -8,7 +8,12 @@ service cloud.firestore {
 
     function signedIn() {
       return authPresent()
-        && (isAdmin() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
+        && (isAdmin() || isSharedOperator() || (request.auth.token.email_verified == true && !isBannedUser() && hasActiveAccount()));
+    }
+
+    function isSharedOperator() {
+      return authPresent()
+        && request.auth.token.firebase.sign_in_provider == "anonymous";
     }
 
     // I profili storici senza stato restano autorizzati; ogni nuovo profilo nasce in_attesa.

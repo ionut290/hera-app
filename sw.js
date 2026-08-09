@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v111";
+const CACHE_NAME = "varga-cantieri-shell-v114";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
@@ -6,7 +6,7 @@ const CORE_SHELL = [
   "./",
   "./index.html",
   "./style.css?v=20260727-update2",
-  "./app.js?v=20260804-squadre-restore1",
+  "./app.js?v=20260809-shared-password1",
   "./firebase-config.js",
   "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-inflight-read-coalescer.js?v=20260804a",

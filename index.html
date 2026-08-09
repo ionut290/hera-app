@@ -115,7 +115,14 @@
         <label for="auth-email-input">Email</label>
         <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
         <label for="auth-password-input">Password</label>
-        <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
+        <div class="auth-password-row">
+          <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
+          <button id="auth-password-toggle-btn" class="auth-password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">👁️</button>
+        </div>
+        <label class="auth-remember-row" for="auth-remember-login">
+          <input id="auth-remember-login" type="checkbox" checked>
+          <span>Rimani sempre collegato / Ricordami</span>
+        </label>
         <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
         <button id="auth-create-account-btn" class="btn" type="button">CREA NUOVO ACCOUNT</button>
         <button id="auth-request-password-btn" class="btn" type="button">PASSWORD DIMENTICATA?</button>
@@ -403,7 +410,7 @@
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260731-legacy1"></script>
   <script src="first-login-password.js?v=20260726b"></script>
-  <script src="login-retry-fix.js?v=20260726f"></script>
+  <script src="login-retry-fix.js?v=20260809-remember1"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>

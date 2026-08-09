@@ -4,6 +4,8 @@
   if (window.HeraAccessRequestAdmin?.installed) return;
 
   const ENDPOINT = "https://europe-west1-hera-app-6cd2b.cloudfunctions.net/registerTester";
+  const DEFAULT_PASSWORD_ENDPOINT = "https://europe-west1-hera-app-6cd2b.cloudfunctions.net/setOperatorDefaultPassword";
+  const DEFAULT_OPERATOR_PASSWORD = "12345678";
   const BUTTON_ID = "access-request-admin-btn";
   const PANEL_ID = "access-request-admin-panel";
   const ADMIN_EMAIL_FALLBACK = "ionut29019@gmail.com";
@@ -34,11 +36,11 @@
     }
   }
 
-  async function callEndpoint(payload) {
+  async function callUrl(url, payload) {
     const user = auth()?.currentUser;
     if (!user) throw new Error("Sessione amministratore non disponibile.");
     const token = await user.getIdToken(true);
-    const response = await fetch(ENDPOINT, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ data: payload })
@@ -46,6 +48,14 @@
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.error) throw new Error(body?.error?.message || `Operazione non riuscita (${response.status}).`);
     return body.result || body.data || body;
+  }
+
+  function callEndpoint(payload) {
+    return callUrl(ENDPOINT, payload);
+  }
+
+  function setDefaultOperatorPassword(uid) {
+    return callUrl(DEFAULT_PASSWORD_ENDPOINT, { uid });
   }
 
   function ensurePanel() {
@@ -56,7 +66,7 @@
     panel.className = "card hidden";
     panel.innerHTML = `
       <h2>Richieste accesso</h2>
-      <p class="muted">Qui trovi gli operatori che non riescono ad accedere. Puoi accettare o rifiutare. Se accetti, l’account viene preparato e vengono generati username e password temporanea.</p>
+      <p class="muted">Qui trovi gli operatori che non riescono ad accedere. Puoi accettare o rifiutare. Se accetti, l’account viene preparato con username personale e password fissa ${DEFAULT_OPERATOR_PASSWORD}.</p>
       <div class="actions-row" style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="access-request-admin-refresh" class="btn btn-primary" type="button">AGGIORNA RICHIESTE</button>
         <button id="access-request-admin-close" class="btn" type="button">CHIUDI</button>
@@ -164,7 +174,7 @@
     const action = text(button?.dataset?.accessAction);
     if (!requestId || busy) return;
     if (action === "reject" && !window.confirm("Rifiutare questa richiesta di accesso?")) return;
-    if (action === "approve" && !window.confirm("Accettare la richiesta e preparare username e password per l’operatore?")) return;
+    if (action === "approve" && !window.confirm(`Accettare la richiesta? La password dell’operatore sarà sempre ${DEFAULT_OPERATOR_PASSWORD}.`)) return;
 
     busy = true;
     const panel = ensurePanel();
@@ -175,10 +185,12 @@
         if (feedback) feedback.textContent = "Preparazione account in corso...";
         const result = await callEndpoint({ action: "approveAccessRequest", requestId });
         const credentials = result?.credentials || {};
+        if (!credentials.uid) throw new Error("UID operatore non restituito dal server.");
+        await setDefaultOperatorPassword(credentials.uid);
         panel.querySelector("#access-request-admin-username").textContent = `Username: ${credentials.username || "—"}`;
-        panel.querySelector("#access-request-admin-password").textContent = `Password: ${credentials.temporaryPassword || "—"}`;
+        panel.querySelector("#access-request-admin-password").textContent = `Password: ${DEFAULT_OPERATOR_PASSWORD}`;
         panel.querySelector("#access-request-admin-credentials")?.classList.remove("hidden");
-        if (feedback) feedback.textContent = "✅ Richiesta accettata. Consegna username e password all’operatore.";
+        if (feedback) feedback.textContent = `✅ Richiesta accettata. Password operatore impostata a ${DEFAULT_OPERATOR_PASSWORD}.`;
       } else {
         if (feedback) feedback.textContent = "Rifiuto richiesta...";
         await callEndpoint({ action: "rejectAccessRequest", requestId });

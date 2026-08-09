@@ -13,6 +13,7 @@ service cloud.firestore {
 
     // L'accesso pubblico usa Firebase Anonymous Auth soltanto come sessione
     // tecnica. Non richiede profili, email, password o approvazione.
+    // Questa regola viene distribuita insieme agli aggiornamenti dell'accesso libero.
     function isPublicOperator() {
       return authPresent()
         && request.auth.token.firebase.sign_in_provider == "anonymous";

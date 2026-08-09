@@ -458,15 +458,15 @@
             });
           });
 
-          activateWaitingWorker();
-          await registration.update();
-
           let reloadingForUpdate = false;
           navigator.serviceWorker.addEventListener("controllerchange", () => {
             if (reloadingForUpdate) return;
             reloadingForUpdate = true;
             window.location.reload();
           }, { once: true });
+
+          activateWaitingWorker();
+          await registration.update();
 
           document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") registration.update().catch(() => {});

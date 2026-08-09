@@ -71,11 +71,24 @@
       const user = window.firebase?.auth?.()?.currentUser;
       if (user) headers.Authorization = `Bearer ${await user.getIdToken(true)}`;
     }
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ data: payload })
-    });
+
+    let response;
+    try {
+      response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ data: payload })
+      });
+    } catch (networkError) {
+      const offline = navigator.onLine === false;
+      const error = new Error(offline
+        ? "Connessione assente. Impossibile verificare il personale in questo momento."
+        : "Servizio accessi temporaneamente non disponibile. Riprova tra qualche secondo.");
+      error.code = offline ? "offline" : "network-error";
+      error.cause = networkError;
+      throw error;
+    }
+
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body.error) {
       const error = new Error(body?.error?.message || `Operazione non riuscita (${response.status}).`);

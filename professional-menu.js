@@ -128,4 +128,12 @@
     script.dataset.adminPasswordManager = "true";
     document.head.appendChild(script);
   }
+
+  if (!document.querySelector('script[data-user-management-search-fix="true"]')) {
+    const script = document.createElement("script");
+    script.src = "user-management-search-input-fix.js?v=20260810a";
+    script.defer = true;
+    script.dataset.userManagementSearchFix = "true";
+    document.head.appendChild(script);
+  }
 })();

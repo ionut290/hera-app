@@ -6,6 +6,7 @@ const centralNotificationFunctions = require("./central-notifications");
 const sharedCalendarViewFunctions = require("./shared-calendar-view");
 const sharedOperationalViewFunctions = require("./shared-operational-views");
 const adminPasswordFunctions = require("./admin-passwords");
+const adminPasswordPrivateRequestFunctions = require("./admin-password-private-requests");
 
 Object.assign(
   exports,
@@ -14,5 +15,6 @@ Object.assign(
   centralNotificationFunctions,
   sharedCalendarViewFunctions,
   sharedOperationalViewFunctions,
-  adminPasswordFunctions
+  adminPasswordFunctions,
+  adminPasswordPrivateRequestFunctions
 );

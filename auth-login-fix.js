@@ -313,3 +313,65 @@
 
   document.addEventListener("click", handleGoogleLoginClick, true);
 })();
+
+(function installLoginPasswordVisibility() {
+  "use strict";
+
+  function install() {
+    const input = document.getElementById("auth-password-input");
+    if (!input || document.getElementById("auth-password-toggle")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "auth-password-wrapper";
+    wrapper.style.position = "relative";
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.width = "100%";
+
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+    input.style.paddingRight = "48px";
+    input.style.width = "100%";
+
+    const button = document.createElement("button");
+    button.id = "auth-password-toggle";
+    button.type = "button";
+    button.textContent = "👁";
+    button.setAttribute("aria-label", "Mostra password");
+    button.setAttribute("aria-pressed", "false");
+    button.title = "Mostra password";
+    button.style.position = "absolute";
+    button.style.right = "8px";
+    button.style.top = "50%";
+    button.style.transform = "translateY(-50%)";
+    button.style.border = "0";
+    button.style.background = "transparent";
+    button.style.cursor = "pointer";
+    button.style.fontSize = "20px";
+    button.style.padding = "6px";
+    button.style.lineHeight = "1";
+    button.style.zIndex = "2";
+
+    button.addEventListener("click", () => {
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      button.textContent = visible ? "👁" : "🙈";
+      button.setAttribute("aria-label", visible ? "Mostra password" : "Nascondi password");
+      button.setAttribute("aria-pressed", visible ? "false" : "true");
+      button.title = visible ? "Mostra password" : "Nascondi password";
+      input.focus({ preventScroll: true });
+      try {
+        const end = input.value.length;
+        input.setSelectionRange(end, end);
+      } catch (_) {}
+    });
+
+    wrapper.appendChild(button);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", install, { once: true });
+  } else {
+    install();
+  }
+})();

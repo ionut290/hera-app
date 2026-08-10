@@ -146,7 +146,8 @@
     if (code === "auth/email-not-verified") {
       return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
     }
-    return "Accesso non riuscito. Controlla email e password e riprova.";
+    const safeCode = code || "errore-sconosciuto";
+    return `Accesso non riuscito (${safeCode}). Riprova oppure usa Password dimenticata.`;
   }
 
   function registrationElements() {
@@ -400,15 +401,14 @@
           : firebase.auth.Auth.Persistence.SESSION
       );
 
-      if (rememberLogin) {
-        const rememberedUser = await tryRememberedLogin(auth, email, feedback);
-        if (rememberedUser) {
-          if (passwordInput) passwordInput.value = "";
-          return;
-        }
-      }
-
       if (navigator.onLine === false) {
+        if (rememberLogin) {
+          const rememberedUser = await tryRememberedLogin(auth, email, feedback);
+          if (rememberedUser) {
+            if (passwordInput) passwordInput.value = "";
+            return;
+          }
+        }
         const offlineError = new Error("Connessione non disponibile.");
         offlineError.code = "auth/network-request-failed";
         throw offlineError;
@@ -431,14 +431,7 @@
             return;
           }
         }
-        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
-        if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
-        const registration = await openRegistrationDialog(email, password);
-        if (passwordInput) passwordInput.value = "";
-        if (registration.verificationRequired && feedback) {
-          feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
-        }
-        return;
+        throw loginError;
       }
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
@@ -463,6 +456,7 @@
   }
 
   function initialize() {
+    window.__heraEmailLoginHandlerInstalled = true;
     installPasswordVisibilityToggle();
     initializeRememberLogin();
     document.addEventListener("submit", handleLogin, true);

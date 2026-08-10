@@ -24,6 +24,43 @@
     }
   }
 
+  async function setCompatibleAuthPersistence(auth, rememberLogin) {
+    const persistence = firebase.auth.Auth.Persistence;
+    const preferred = rememberLogin ? persistence.LOCAL : persistence.SESSION;
+    try {
+      await auth.setPersistence(preferred);
+      return preferred;
+    } catch (error) {
+      const code = String(error?.code || "").toLowerCase();
+      if (!["auth/unsupported-persistence-type", "auth/invalid-persistence-type"].includes(code)) {
+        throw error;
+      }
+      console.warn("Persistenza Firebase non supportata dal browser; provo la sessione temporanea.", error);
+    }
+
+    if (preferred !== persistence.SESSION) {
+      try {
+        await auth.setPersistence(persistence.SESSION);
+        return persistence.SESSION;
+      } catch (error) {
+        const code = String(error?.code || "").toLowerCase();
+        if (!["auth/unsupported-persistence-type", "auth/invalid-persistence-type"].includes(code)) {
+          throw error;
+        }
+      }
+    }
+
+    if (persistence.NONE) {
+      try {
+        await auth.setPersistence(persistence.NONE);
+        return persistence.NONE;
+      } catch (error) {
+        console.warn("Persistenza Firebase temporanea non impostabile; continuo con quella disponibile.", error);
+      }
+    }
+    return null;
+  }
+
   function readPersistedUserSession() {
     try {
       const raw = localStorage.getItem(PERSISTED_SESSION_KEY);
@@ -395,11 +432,7 @@
       const auth = firebase.auth();
       const rememberLogin = document.getElementById("auth-remember-login")?.checked !== false;
       saveRememberLoginPreference(rememberLogin);
-      await auth.setPersistence(
-        rememberLogin
-          ? firebase.auth.Auth.Persistence.LOCAL
-          : firebase.auth.Auth.Persistence.SESSION
-      );
+      await setCompatibleAuthPersistence(auth, rememberLogin);
 
       if (navigator.onLine === false) {
         if (rememberLogin) {

@@ -2,7 +2,7 @@
   "use strict";
 
   const CACHE_PREFIX = "varga-cantieri-";
-  const APP_VERSION = "v119";
+  const APP_VERSION = "v120";
   const SERVICE_WORKER_URL = "./sw.js";
   const GOOGLE_LOGIN_BUTTON_ID = "auth-gate-login-btn";
   const GOOGLE_LOGIN_PROVIDER_KEY = "heraLastAuthProvider";
@@ -136,7 +136,13 @@
     const localPersistence = firebase.auth.Auth?.Persistence?.LOCAL
       || firebase.auth.browserLocalPersistence;
     if (!localPersistence) return;
-    await auth.setPersistence(localPersistence);
+    try {
+      await auth.setPersistence(localPersistence);
+    } catch (error) {
+      const code = String(error?.code || "").toLowerCase();
+      if (code !== "auth/unsupported-persistence-type" && code !== "auth/invalid-persistence-type") throw error;
+      console.warn("Persistenza Google permanente non supportata; continuo con la sessione disponibile.", error);
+    }
   }
 
   async function completeGoogleLoginSuccess(result) {

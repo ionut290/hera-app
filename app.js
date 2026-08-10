@@ -28,6 +28,13 @@ try {
     throw new Error("Firebase Auth o Firestore non disponibili nel SDK caricato.");
   }
 
+  const browserUserAgent = String(window.navigator?.userAgent || "");
+  const isOperaBrowser = /\bOPR\//i.test(browserUserAgent) || /\bOpera\//i.test(browserUserAgent);
+  if (isOperaBrowser && typeof db.settings === "function") {
+    db.settings({ experimentalForceLongPolling: true });
+    console.log("FIRESTORE TRANSPORT", { mode: "long-polling", browser: "Opera" });
+  }
+
   console.log("FIREBASE INIT OK", {
     appName: firebaseApp.name,
     projectId: firebaseConfig?.projectId || "non impostato",
@@ -12078,7 +12085,9 @@ function subscribeCommesse() {
 
   stopCommesseSubscription();
   const commesseCollectionName = getCommesseCollectionName();
-  const query = db.collection(commesseCollectionName).orderBy("createdAt", "desc");
+  // L'ordinamento resta lato client: orderBy esclude in Firestore i documenti
+  // storici che non hanno createdAt, facendo apparire vuota una raccolta valida.
+  const query = db.collection(commesseCollectionName);
   const applyCommesseSnapshot = (snapshot, { fromListener = false } = {}) => {
     clearCommesseLoadTimeout();
     const receivedCommesse = [];
@@ -12102,7 +12111,7 @@ function subscribeCommesse() {
     renderTodaySummary();
   };
 
-  console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "createdAt desc", mode: "getDocs initial" });
+  console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "client-side createdAt desc", mode: "getDocs initial" });
   return runFirestoreGetWithRetry(query, {
     label: "LOAD COMMESSE",
     timeoutMs: 9000,

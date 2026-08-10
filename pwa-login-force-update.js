@@ -2,7 +2,7 @@
   "use strict";
 
   const CACHE_PREFIX = "varga-cantieri-";
-  const APP_VERSION = "v122";
+  const APP_VERSION = "v123";
   const SERVICE_WORKER_URL = "./sw.js";
   const GOOGLE_LOGIN_BUTTON_ID = "auth-gate-login-btn";
   const GOOGLE_LOGIN_PROVIDER_KEY = "heraLastAuthProvider";

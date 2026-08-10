@@ -123,7 +123,7 @@
 
   if (!document.querySelector('script[data-admin-password-manager="true"]')) {
     const script = document.createElement("script");
-    script.src = "admin-password-manager.js?v=20260810a";
+    script.src = "admin-password-manager.js?v=20260810b";
     script.defer = true;
     script.dataset.adminPasswordManager = "true";
     document.head.appendChild(script);

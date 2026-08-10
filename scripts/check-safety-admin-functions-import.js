@@ -17,6 +17,8 @@ const requiredFiles = [
   'firebase.json',
   'functions/main.js',
   'functions/package.json',
+  'functions/admin-passwords.js',
+  'admin-password-manager.js',
   'admin-console.js',
   'notification-session-enhancements.js',
   'registry-google-sheet-sync.js',
@@ -33,6 +35,8 @@ const rules = read('firestore.rules');
 const firebaseJson = JSON.parse(read('firebase.json'));
 const functionsPackage = JSON.parse(read('functions/package.json'));
 const functionsMain = read('functions/main.js');
+const adminPasswordsBackend = read('functions/admin-passwords.js');
+const adminPasswordManager = read('admin-password-manager.js');
 const adminConsole = read('admin-console.js');
 const notifications = read('notification-session-enhancements.js');
 const registrySync = read('registry-google-sheet-sync.js');
@@ -62,6 +66,17 @@ const exposesCloudFunctions =
 assert(exposesCloudFunctions, 'functions/main.js espone funzioni Cloud');
 assert(!/BEGIN PRIVATE KEY|PRIVATE KEY-----/.test(functionsMain), 'Nessuna chiave privata è incorporata nelle Cloud Functions');
 
+// Cambio password amministratore: client e backend devono usare lo stesso callable e la stessa regione.
+assert(/httpsCallable\(\s*["']adminSetUserPassword["']\s*\)/.test(adminPasswordManager), 'Gestione password chiama adminSetUserPassword');
+assert(/functions\(\s*["']europe-west1["']\s*\)/.test(adminPasswordManager), 'Gestione password usa la regione europe-west1');
+assert(!/httpsCallable\(\s*["']createTesterAccounts["']\s*\)/.test(adminPasswordManager), 'Gestione password non usa il vecchio callable createTesterAccounts');
+assert(/uid:\s*activeProfile\.uid/.test(adminPasswordManager) && /email:\s*activeProfile\.email/.test(adminPasswordManager), 'Gestione password invia UID ed email dell’utente selezionato');
+assert(/exports\.adminSetUserPassword/.test(adminPasswordsBackend), 'Backend espone adminSetUserPassword');
+assert(/\.region\(\s*["']europe-west1["']\s*\)/.test(adminPasswordsBackend), 'Backend password è pubblicato in europe-west1');
+assert(/admin\.auth\(\)\.updateUser/.test(adminPasswordsBackend) && /password:\s*temporaryPassword/.test(adminPasswordsBackend), 'Backend aggiorna davvero la password Firebase Auth');
+assert(/mustChangePassword:\s*true/.test(adminPasswordsBackend), 'Backend forza il cambio password al primo accesso');
+assert(/temporaryPassword\s*\n?\s*}/.test(adminPasswordsBackend) || /temporaryPassword\s*,/.test(adminPasswordsBackend), 'Backend restituisce la password temporanea al client admin');
+
 // Permessi amministrativi lato interfaccia: la protezione può essere distribuita
 // tra console, app principale e markup di accesso, non necessariamente in un solo file.
 const adminSurface = [adminConsole, app, index].join('\n');
@@ -82,7 +97,7 @@ assert(/sheet|foglio|spreadsheet/i.test(sheetSync), 'La sincronizzazione bidirez
 assert(/fetch\s*\(|XMLHttpRequest|googleapis|script\.google/i.test(registrySync + sheetSync), 'La sincronizzazione usa un canale di comunicazione esplicito');
 
 // Nessun segreto server-side nei principali file client controllati.
-const clientBundle = [app, index, adminConsole, notifications, registrySync, sheetSync, excelImport].join('\n');
+const clientBundle = [app, index, adminConsole, adminPasswordManager, notifications, registrySync, sheetSync, excelImport].join('\n');
 assert(!/BEGIN PRIVATE KEY|PRIVATE KEY-----|service_account\s*[:=]/i.test(clientBundle), 'Nessuna chiave privata server-side è esposta nei file client controllati');
 
 console.log('\nControlli admin, Functions, import, notifiche e offline completati senza connessioni esterne.');

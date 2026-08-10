@@ -6,8 +6,8 @@
   const CACHE_PREFIX = "hera-shared-static-view:";
   const MAX_PAYLOAD_BYTES = 700000;
   const CALENDAR_SCHEMA_VERSION = 2;
-  const IS_OPERA_BROWSER = /\\bOPR\\//i.test(String(window.navigator?.userAgent || ""))
-    || /\\bOpera\\//i.test(String(window.navigator?.userAgent || ""));
+  const IS_OPERA_BROWSER = /\bOPR\//i.test(String(window.navigator?.userAgent || ""))
+    || /\bOpera\//i.test(String(window.navigator?.userAgent || ""));
   const subscriptions = new Map();
   const memory = new Map();
   const stats = {

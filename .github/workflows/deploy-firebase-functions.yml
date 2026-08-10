@@ -70,7 +70,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: >-
           firebase deploy
-          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews
+          --only functions:notifyAndroidChatMessage,functions:notifyAndroidHoursInserted,functions:notifyAndroidSquadraAssignment,functions:syncCalendarAbsenceSquadraAlerts,functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedRegistriesFromPersonale,functions:syncSharedRegistriesFromMezzi,functions:syncSharedSquadreFromHistory,functions:syncSharedSquadreFromCurrent,functions:rebuildAllSharedStaticViews,functions:adminSetUserPassword
           --project hera-app-6cd2b
           --non-interactive
           --force

@@ -9,8 +9,8 @@
   const STARTUP_LOG_TTL_MS = 5 * 60 * 1000;
   const ACTION_LOG_TTL_MS = 2500;
   const SQUADRE_FALLBACK_MS = 6500;
-  const IS_OPERA_BROWSER = /\\bOPR\\//i.test(String(window.navigator?.userAgent || ""))
-    || /\\bOpera\\//i.test(String(window.navigator?.userAgent || ""));
+  const IS_OPERA_BROWSER = /\bOPR\//i.test(String(window.navigator?.userAgent || ""))
+    || /\bOpera\//i.test(String(window.navigator?.userAgent || ""));
   const PROFILE_STORAGE_PREFIX = "hera_profile_write_guard_v1:";
   const ACTIVITY_STORAGE_PREFIX = "hera_activity_log_guard_v1:";
 

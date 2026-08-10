@@ -19,6 +19,8 @@ for (const expected of [
   "Email o password non corretta.",
   "Email non ancora verificata.",
   "event.stopImmediatePropagation()",
+  "window.__heraEmailLoginHandlerInstalled = true",
+  "if (navigator.onLine === false)",
   "loginButton.disabled = false",
   'loginButton.textContent = "Entra"',
   "window.scrollTo({ left: 0",
@@ -32,6 +34,11 @@ for (const expected of [
   "Creazione account non riuscita. Riprova tra poco."
 ]) {
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
+}
+const onlineCheck = script.indexOf("if (navigator.onLine === false)");
+const firstRememberedLogin = script.indexOf("await tryRememberedLogin(auth, email, feedback)", script.indexOf("async function handleLogin"));
+if (onlineCheck < 0 || firstRememberedLogin < onlineCheck) {
+  throw new Error("Una sessione salvata può ancora evitare la verifica password mentre il dispositivo è online.");
 }
 
 for (const expected of [

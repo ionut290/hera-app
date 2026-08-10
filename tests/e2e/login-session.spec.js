@@ -8,12 +8,12 @@ async function submitLogin(page) {
 }
 
 test.describe('Hera App - login resiliente', () => {
-  test('riusa la sessione salvata senza rifare il login di rete', async ({ page }) => {
+  test('online verifica sempre la password anche con una sessione salvata', async ({ page }) => {
     await page.goto(harnessUrl('?online=1&session=valid&currentUser=valid&remembered=1'), { waitUntil: 'domcontentloaded' });
     await submitLogin(page);
 
-    await expect.poll(() => page.evaluate(() => window.__loginTest.signInCalls)).toBe(0);
-    await expect(page.locator('#auth-email-feedback')).toContainText(/Sessione salvata ripristinata/i);
+    await expect.poll(() => page.evaluate(() => window.__loginTest.signInCalls)).toBe(1);
+    await expect(page.locator('#auth-email-feedback')).toContainText(/Login completato/i);
     await expect.poll(() => page.evaluate(() => window.__loginTest.persistenceCalls.at(-1))).toBe('LOCAL');
   });
 

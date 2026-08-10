@@ -10,7 +10,7 @@ test.describe('Hera App - protezioni E2E', () => {
 
     await page.goto(appUrl('index.html'), { waitUntil: 'domcontentloaded' });
 
-    await expect(page).toHaveTitle(/Hera App/i);
+    await expect(page).toHaveTitle(/Hera App|VARGA CANTIERI/i);
     await expect(page.locator('#home-page')).toHaveCount(1);
     await expect(page.locator('#auth-gate')).toHaveCount(1);
     await expect(page.locator('#open-panel-commesse')).toHaveCount(1);

@@ -17,9 +17,9 @@ const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
 const HERA_FIRESTORE_INFLIGHT_COALESCER_SRC = "firestore-inflight-read-coalescer.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC = "firestore-diagnostics-optimizer-extension.js?v=20260804b";
-const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
+const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260810-opera1";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
-const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
+const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260810-opera1";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 const HERA_ADMIN_PASSWORD_MANAGER_SRC = "admin-password-manager.js?v=20260810d";
 const HERA_USER_MANAGEMENT_SEARCH_FIX_SRC = "user-management-search-input-fix.js?v=20260810c";

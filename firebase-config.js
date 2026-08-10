@@ -22,6 +22,7 @@ const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-gu
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260810-opera1";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 const HERA_ADMIN_PASSWORD_MANAGER_SRC = "admin-password-manager.js?v=20260810d";
+const HERA_ADMIN_PASSWORD_PRIVATE_BRIDGE_SRC = "admin-password-private-bridge.js?v=20260810a";
 const HERA_USER_MANAGEMENT_SEARCH_FIX_SRC = "user-management-search-input-fix.js?v=20260810c";
 
 function loadOnce(src, dataName, ready, onLoad) {
@@ -73,6 +74,11 @@ function scheduleDeferredStartupModules() {
       HERA_ADMIN_PASSWORD_MANAGER_SRC,
       "hera-admin-password-manager",
       () => window.HeraAdminPasswordManager?.version === "3.3.0"
+    );
+    loadOnce(
+      HERA_ADMIN_PASSWORD_PRIVATE_BRIDGE_SRC,
+      "hera-admin-password-private-bridge",
+      () => window.HeraAdminPasswordPrivateBridge?.version === "1.0.0"
     );
     loadOnce(
       HERA_USER_MANAGEMENT_SEARCH_FIX_SRC,

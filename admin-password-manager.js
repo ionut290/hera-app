@@ -1,15 +1,10 @@
 (() => {
   "use strict";
 
-  const MIN_PASSWORD_LENGTH = 10;
-  const SCRIPT_VERSION = "2.0.0";
+  const SCRIPT_VERSION = "3.0.0";
   let busy = false;
   let observer = null;
   let activeProfile = null;
-
-  const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
-  }[char]));
 
   function isManager() {
     try {
@@ -39,37 +34,26 @@
   function ensureDialog() {
     let dialog = document.getElementById("admin-password-dialog");
     if (dialog) return dialog;
+
     dialog = document.createElement("dialog");
     dialog.id = "admin-password-dialog";
     dialog.className = "biometric-dialog admin-password-dialog";
     dialog.innerHTML = `
       <form id="admin-password-form" method="dialog">
-        <h2>Gestisci password utente</h2>
+        <h2>Password temporanea utente</h2>
         <p id="admin-password-user" class="muted"></p>
         <section class="admin-password-section">
-          <h3>Password temporanea</h3>
-          <p>Genera una password sicura. L'utente potrà entrare una sola volta con questa password e sarà obbligato a sceglierne una nuova.</p>
+          <p>L'amministratore genera una password temporanea e la comunica direttamente all'utente.</p>
+          <p><strong>Nessuna email viene inviata.</strong> L'utente accede dall'app con la password temporanea e deve scegliere subito una nuova password personale prima di poter continuare.</p>
           <button id="admin-generate-temp-password" class="btn btn-primary" type="button">GENERA PASSWORD TEMPORANEA</button>
         </section>
-        <section class="admin-password-section">
-          <h3>Imposta direttamente una password</h3>
-          <p>L'amministratore sceglie la nuova password. In questo caso non viene richiesto un ulteriore cambio automatico.</p>
-          <label for="admin-custom-password">Nuova password</label>
-          <div class="auth-password-row">
-            <input id="admin-custom-password" type="password" minlength="10" autocomplete="new-password" placeholder="Almeno 10 caratteri">
-            <button id="admin-custom-password-toggle" class="auth-password-toggle" type="button" aria-label="Mostra password">👁️</button>
-          </div>
-          <label for="admin-custom-password-confirm">Conferma password</label>
-          <input id="admin-custom-password-confirm" type="password" minlength="10" autocomplete="new-password" placeholder="Ripeti la password">
-          <button id="admin-set-custom-password" class="btn" type="button">IMPOSTA PASSWORD</button>
-        </section>
         <section id="admin-password-result" class="admin-password-result hidden" aria-live="polite">
-          <strong>Password temporanea generata</strong>
+          <strong>Password temporanea</strong>
           <div class="auth-password-row">
-            <input id="admin-password-result-value" type="text" readonly>
+            <input id="admin-password-result-value" type="text" readonly autocomplete="off">
             <button id="admin-copy-temp-password" class="btn" type="button">COPIA</button>
           </div>
-          <p class="muted">Questa password viene mostrata qui per consegnarla all'utente. Non viene salvata in Firestore.</p>
+          <p class="muted">Comunica questa password all'utente. Non viene salvata in Firestore e viene mostrata qui solo dopo la generazione.</p>
         </section>
         <p id="admin-password-feedback" class="muted" role="status" aria-live="polite"></p>
         <div class="actions-row">
@@ -84,13 +68,7 @@
     });
     dialog.querySelector("#admin-password-close")?.addEventListener("click", closeDialog);
     dialog.querySelector("#admin-generate-temp-password")?.addEventListener("click", () => void generateTemporaryPassword());
-    dialog.querySelector("#admin-set-custom-password")?.addEventListener("click", () => void setCustomPassword());
     dialog.querySelector("#admin-copy-temp-password")?.addEventListener("click", copyTemporaryPassword);
-    dialog.querySelector("#admin-custom-password-toggle")?.addEventListener("click", () => {
-      const input = dialog.querySelector("#admin-custom-password");
-      if (!input) return;
-      input.type = input.type === "password" ? "text" : "password";
-    });
     return dialog;
   }
 
@@ -112,8 +90,6 @@
     activeProfile = profile;
     const dialog = ensureDialog();
     dialog.querySelector("#admin-password-user").textContent = `${profile.displayName} • ${profile.email}`;
-    dialog.querySelector("#admin-custom-password").value = "";
-    dialog.querySelector("#admin-custom-password-confirm").value = "";
     dialog.querySelector("#admin-password-result-value").value = "";
     dialog.querySelector("#admin-password-result").classList.add("hidden");
     setFeedback("");
@@ -127,72 +103,41 @@
     busy = false;
   }
 
-  async function callAdminPasswordFunction(payload) {
-    if (!isManager() || !activeProfile || busy) return null;
+  async function generateTemporaryPassword() {
+    if (!isManager() || !activeProfile || busy) return;
+    const confirmed = window.confirm(
+      `Generare una password temporanea per ${activeProfile.displayName}?\n\n` +
+      "La password precedente smetterà di funzionare. Nessuna email verrà inviata. Al prossimo accesso l'utente dovrà scegliere una nuova password dentro l'app."
+    );
+    if (!confirmed) return;
+
     setBusy(true);
-    setFeedback("Aggiornamento password in corso...");
+    setFeedback("Generazione password temporanea...");
     try {
       const callable = getCallable();
       const response = await callable({
         uid: activeProfile.uid,
         email: activeProfile.email,
-        ...payload
+        mode: "temporary"
       });
-      return response?.data || null;
+      const result = response?.data || null;
+      if (!result?.success || !result.temporaryPassword) {
+        throw new Error("Il server non ha restituito la password temporanea.");
+      }
+      const dialog = ensureDialog();
+      dialog.querySelector("#admin-password-result-value").value = result.temporaryPassword;
+      dialog.querySelector("#admin-password-result").classList.remove("hidden");
+      setFeedback("Password temporanea creata. Comunicala all'utente: il cambio successivo avverrà direttamente nell'app.");
     } catch (error) {
       console.error("Gestione password amministratore fallita:", error);
       const code = String(error?.code || "").toLowerCase();
       if (code.includes("permission-denied")) setFeedback("Operazione non autorizzata: serve un account amministratore.");
       else if (code.includes("not-found")) setFeedback("Account Firebase dell'utente non trovato.");
       else if (code.includes("unavailable") || code.includes("network")) setFeedback("Connessione non disponibile. Riprova quando sei online.");
-      else setFeedback(error?.message || "Cambio password non riuscito.");
-      return null;
+      else setFeedback(error?.message || "Creazione password temporanea non riuscita.");
     } finally {
       setBusy(false);
     }
-  }
-
-  async function generateTemporaryPassword() {
-    if (!activeProfile) return;
-    const confirmed = window.confirm(
-      `Generare una nuova password temporanea per ${activeProfile.displayName}?\n\n` +
-      "La password attuale smetterà di funzionare. Al prossimo accesso l'utente sarà obbligato a scegliere una nuova password personale."
-    );
-    if (!confirmed) return;
-
-    const result = await callAdminPasswordFunction({ mode: "temporary" });
-    if (!result?.success || !result.temporaryPassword) return;
-    const dialog = ensureDialog();
-    dialog.querySelector("#admin-password-result-value").value = result.temporaryPassword;
-    dialog.querySelector("#admin-password-result").classList.remove("hidden");
-    setFeedback("Password temporanea creata. Consegnala all'utente: al primo accesso dovrà cambiarla.");
-  }
-
-  async function setCustomPassword() {
-    if (!activeProfile) return;
-    const dialog = ensureDialog();
-    const password = String(dialog.querySelector("#admin-custom-password")?.value || "");
-    const confirm = String(dialog.querySelector("#admin-custom-password-confirm")?.value || "");
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setFeedback(`La password deve contenere almeno ${MIN_PASSWORD_LENGTH} caratteri.`);
-      return;
-    }
-    if (password !== confirm) {
-      setFeedback("Le due password non coincidono.");
-      return;
-    }
-    const confirmed = window.confirm(
-      `Impostare direttamente questa password per ${activeProfile.displayName}?\n\n` +
-      "La password precedente smetterà di funzionare immediatamente."
-    );
-    if (!confirmed) return;
-
-    const result = await callAdminPasswordFunction({ mode: "custom", password });
-    if (!result?.success) return;
-    dialog.querySelector("#admin-custom-password").value = "";
-    dialog.querySelector("#admin-custom-password-confirm").value = "";
-    dialog.querySelector("#admin-password-result").classList.add("hidden");
-    setFeedback("Password cambiata correttamente dall'amministratore.");
   }
 
   async function copyTemporaryPassword() {
@@ -231,7 +176,7 @@
       button.type = "button";
       button.className = "btn";
       button.dataset.adminManagePassword = profile.uid;
-      button.textContent = "Gestisci password";
+      button.textContent = "Password temporanea";
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -256,7 +201,7 @@
       button.type = "button";
       button.className = "btn";
       button.dataset.adminManagePassword = profile.uid;
-      button.textContent = "GESTISCI PASSWORD";
+      button.textContent = "PASSWORD TEMPORANEA";
       button.addEventListener("click", () => openDialog(profile));
       actions.appendChild(button);
     });
@@ -287,8 +232,7 @@
     installed: true,
     version: SCRIPT_VERSION,
     open: openDialog,
-    refresh: enhance,
-    minPasswordLength: MIN_PASSWORD_LENGTH
+    refresh: enhance
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });

@@ -22,7 +22,7 @@ const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-gu
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
 const HERA_ADMIN_PASSWORD_MANAGER_SRC = "admin-password-manager.js?v=20260810c";
-const HERA_USER_MANAGEMENT_SEARCH_FIX_SRC = "user-management-search-input-fix.js?v=20260810b";
+const HERA_USER_MANAGEMENT_SEARCH_FIX_SRC = "user-management-search-input-fix.js?v=20260810c";
 
 function loadOnce(src, dataName, ready, onLoad) {
   if (ready?.()) {
@@ -77,7 +77,7 @@ function scheduleDeferredStartupModules() {
     loadOnce(
       HERA_USER_MANAGEMENT_SEARCH_FIX_SRC,
       "hera-user-management-search-fix",
-      () => window.HeraUserManagementSearchFix?.installed
+      () => window.HeraUserManagementSearchFix?.version === "2.0.0"
     );
     loadOnce("notification-session-enhancements.js?v=20260727b", "hera-notification-session", () => false);
     loadOnce("update-app-feature.js?v=20260727a", "hera-app-update", () => false);

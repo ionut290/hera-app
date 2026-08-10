@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SCRIPT_VERSION = "3.0.0";
+  const SCRIPT_VERSION = "3.1.0";
   let busy = false;
   let observer = null;
   let activeProfile = null;
@@ -28,7 +28,7 @@
     if (!window.firebase || typeof firebase.functions !== "function") {
       throw new Error("Firebase Functions non disponibile.");
     }
-    return firebase.functions("europe-west1").httpsCallable("adminSetUserPassword");
+    return firebase.functions().httpsCallable("createTesterAccounts");
   }
 
   function ensureDialog() {
@@ -115,17 +115,16 @@
     setFeedback("Generazione password temporanea...");
     try {
       const callable = getCallable();
-      const response = await callable({
-        uid: activeProfile.uid,
-        email: activeProfile.email,
-        mode: "temporary"
-      });
+      const response = await callable({ emails: [activeProfile.email] });
       const result = response?.data || null;
-      if (!result?.success || !result.temporaryPassword) {
+      const credential = Array.isArray(result?.credentials)
+        ? result.credentials.find((item) => String(item?.email || "").trim().toLowerCase() === activeProfile.email)
+        : null;
+      if (!credential?.temporaryPassword) {
         throw new Error("Il server non ha restituito la password temporanea.");
       }
       const dialog = ensureDialog();
-      dialog.querySelector("#admin-password-result-value").value = result.temporaryPassword;
+      dialog.querySelector("#admin-password-result-value").value = credential.temporaryPassword;
       dialog.querySelector("#admin-password-result").classList.remove("hidden");
       setFeedback("Password temporanea creata. Comunicala all'utente: il cambio successivo avverrà direttamente nell'app.");
     } catch (error) {

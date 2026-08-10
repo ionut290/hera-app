@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v123";
+const CACHE_NAME = "varga-cantieri-shell-v124";
 
 // Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
 // Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.

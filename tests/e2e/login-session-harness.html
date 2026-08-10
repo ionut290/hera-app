@@ -21,6 +21,7 @@
       const hasSession = params.get('session') !== 'none';
       const hasCurrentUser = params.get('currentUser') !== 'none';
       const online = params.get('online') !== '0';
+      const unsupportedLocalPersistence = params.get('persistence') === 'unsupported-local';
 
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => online });
       document.getElementById('auth-email-input').value = email;
@@ -49,7 +50,15 @@
       };
       const auth = {
         get currentUser() { return state.currentUser; },
-        setPersistence(value) { state.persistenceCalls.push(value); return Promise.resolve(); },
+        setPersistence(value) {
+          state.persistenceCalls.push(value);
+          if (unsupportedLocalPersistence && value === 'LOCAL') {
+            const error = new Error('Persistence type is not supported.');
+            error.code = 'auth/unsupported-persistence-type';
+            return Promise.reject(error);
+          }
+          return Promise.resolve();
+        },
         signInWithEmailAndPassword(loginEmail) {
           state.signInCalls += 1;
           state.currentUser = { uid, email: loginEmail, emailVerified: true };
@@ -64,7 +73,7 @@
         }
       };
       function authFactory() { return auth; }
-      authFactory.Auth = { Persistence: { LOCAL: 'LOCAL', SESSION: 'SESSION' } };
+      authFactory.Auth = { Persistence: { LOCAL: 'LOCAL', SESSION: 'SESSION', NONE: 'NONE' } };
       authFactory.Persistence = authFactory.Auth.Persistence;
 
       window.firebase = {

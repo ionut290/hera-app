@@ -51,6 +51,15 @@ test.describe('Hera App - login resiliente', () => {
     await expect(page.locator('#auth-email-feedback')).toContainText(/Login completato/i);
   });
 
+  test('Opera entra usando SESSION quando la persistenza LOCAL non è supportata', async ({ page }) => {
+    await page.goto(harnessUrl('?online=1&session=none&currentUser=none&remembered=1&persistence=unsupported-local'), { waitUntil: 'domcontentloaded' });
+    await submitLogin(page);
+
+    await expect.poll(() => page.evaluate(() => window.__loginTest.signInCalls)).toBe(1);
+    await expect.poll(() => page.evaluate(() => window.__loginTest.persistenceCalls)).toEqual(['LOCAL', 'SESSION']);
+    await expect(page.locator('#auth-email-feedback')).toContainText(/Login completato/i);
+  });
+
   test('la password non viene salvata in localStorage', async ({ page }) => {
     const password = 'PasswordTest123!';
     await page.goto(harnessUrl('?online=1&session=none&currentUser=none&remembered=1'), { waitUntil: 'domcontentloaded' });

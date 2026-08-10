@@ -1,98 +1,95 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "hera-control-center-open-section";
+  const STORAGE_KEY = "hera-control-center-open-category";
   const PAGE_ID = "control-center-page";
   const CONTENT_ID = "control-center-content";
+
+  const CATEGORIES = [
+    { key: "report", title: "📥 Report e diagnostica", description: "Scarica report, diagnostica, backup ed esportazioni.", keywords: ["report", "scarica", "download", "diagnost", "esporta", "export", "backup", "controllo app"] },
+    { key: "firestore", title: "🔥 Firestore e database", description: "Consumi, letture, scritture, eliminazioni, listener e quota.", keywords: ["firestore", "firebase", "database", "letture", "scritture", "eliminazioni", "listener", "snapshot", "quota", "consumo"] },
+    { key: "sync", title: "🔄 Sincronizzazione e rete", description: "Stato online/offline, sincronizzazione, cache e code dati.", keywords: ["sincron", "sync", "online", "offline", "rete", "connession", "cache", "coda"] },
+    { key: "access", title: "🔐 Accesso e sicurezza", description: "Login, utenti, autorizzazioni, sessioni e credenziali.", keywords: ["login", "accesso", "utente", "auth", "google", "password", "session", "permess", "autorizz"] },
+    { key: "app", title: "📱 App, PWA e aggiornamenti", description: "Versione app, PWA, Service Worker, installazione e aggiornamenti.", keywords: ["pwa", "versione", "service worker", "aggiorna app", "aggiornamento", "install", "build", "release"] },
+    { key: "device", title: "📲 Dispositivo e ambiente", description: "Browser, Android/iOS, memoria, storage e informazioni dispositivo.", keywords: ["dispositivo", "device", "browser", "android", "ios", "iphone", "capacitor", "storage", "memoria"] },
+    { key: "other", title: "🧰 Altri controlli", description: "Tutte le altre informazioni e verifiche del Centro di Controllo.", keywords: [] }
+  ];
 
   function cleanText(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
   }
 
-  function slug(value, index) {
-    const base = cleanText(value)
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    return base || `sezione-${index + 1}`;
+  function normalizedText(value) {
+    return cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
-  function getTitle(node, index) {
-    const titleNode = node.querySelector("h1, h2, h3, h4, strong, .title, [data-title]");
-    return cleanText(titleNode?.textContent) || `Sezione ${index + 1}`;
+  function classifyNode(node) {
+    const text = normalizedText(node.textContent);
+    for (const category of CATEGORIES) {
+      if (category.key === "other") continue;
+      if (category.keywords.some((keyword) => text.includes(normalizedText(keyword)))) return category;
+    }
+    return CATEGORIES[CATEGORIES.length - 1];
   }
 
-  function getDescription(node, title) {
-    const candidates = Array.from(node.querySelectorAll("p, small, .muted"));
-    const description = candidates
-      .map((item) => cleanText(item.textContent))
-      .find((text) => text && text !== title && text.length <= 180);
-    return description || "Tocca per aprire questa sezione.";
-  }
-
-  function isIgnoredNode(node) {
-    return !(node instanceof HTMLElement) ||
-      node.classList.contains("control-center-accordion-item") ||
-      node.classList.contains("control-center-empty-search") ||
-      node.id === "control-center-results";
+  function isManagedNode(node) {
+    return !(node instanceof HTMLElement) || node.classList.contains("control-center-category") || node.classList.contains("control-center-empty-search") || node.id === "control-center-results";
   }
 
   function setOpen(item, open, options = {}) {
-    const trigger = item.querySelector(":scope > .control-center-accordion-trigger");
-    const panel = item.querySelector(":scope > .control-center-accordion-panel");
+    const trigger = item.querySelector(":scope > .control-center-category-trigger");
+    const panel = item.querySelector(":scope > .control-center-category-panel");
     if (!trigger || !panel) return;
-
     item.classList.toggle("is-open", open);
     trigger.setAttribute("aria-expanded", String(open));
     panel.hidden = !open;
-
     if (open) {
-      const key = item.dataset.controlSectionKey || "";
-      try { sessionStorage.setItem(STORAGE_KEY, key); } catch (_) {}
-      if (options.scroll) {
-        requestAnimationFrame(() => item.scrollIntoView({ behavior: "smooth", block: "start" }));
-      }
+      try { sessionStorage.setItem(STORAGE_KEY, item.dataset.controlCategory || ""); } catch (_) {}
+      if (options.scroll) requestAnimationFrame(() => item.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   }
 
   function closeOthers(container, current) {
-    container.querySelectorAll(":scope > .control-center-accordion-item.is-open").forEach((item) => {
+    container.querySelectorAll(":scope > .control-center-category.is-open").forEach((item) => {
       if (item !== current) setOpen(item, false);
     });
   }
 
-  function buildItem(node, index, container) {
-    const title = getTitle(node, index);
-    const description = getDescription(node, title);
-    const key = slug(title, index);
+  function createCategory(category, container) {
     const item = document.createElement("section");
     const trigger = document.createElement("button");
+    const heading = document.createElement("span");
+    const title = document.createElement("span");
+    const count = document.createElement("span");
+    const description = document.createElement("span");
     const panel = document.createElement("div");
-    const titleSpan = document.createElement("span");
-    const descriptionSpan = document.createElement("span");
-    const panelId = `control-center-panel-${key}-${index + 1}`;
+    const content = document.createElement("div");
+    const panelId = `control-center-category-${category.key}`;
 
-    item.className = "control-center-accordion-item";
-    item.dataset.controlSectionKey = key;
-    item.dataset.controlSearchText = cleanText(node.textContent).toLowerCase();
-
+    item.className = "control-center-category";
+    item.dataset.controlCategory = category.key;
+    item.dataset.controlSearchText = normalizedText(`${category.title} ${category.description}`);
     trigger.type = "button";
-    trigger.className = "control-center-accordion-trigger";
+    trigger.className = "control-center-category-trigger";
     trigger.setAttribute("aria-expanded", "false");
     trigger.setAttribute("aria-controls", panelId);
 
-    titleSpan.className = "control-center-accordion-title";
-    titleSpan.textContent = title;
-    descriptionSpan.className = "control-center-accordion-description";
-    descriptionSpan.textContent = description;
-    trigger.append(titleSpan, descriptionSpan);
+    heading.className = "control-center-category-heading";
+    title.className = "control-center-category-title";
+    title.textContent = category.title;
+    count.className = "control-center-category-count";
+    count.textContent = "0";
+    heading.append(title, count);
 
-    panel.className = "control-center-accordion-panel";
+    description.className = "control-center-category-description";
+    description.textContent = category.description;
+    trigger.append(heading, description);
+
+    panel.className = "control-center-category-panel";
     panel.id = panelId;
     panel.hidden = true;
-    panel.appendChild(node);
+    content.className = "control-center-category-content";
+    panel.appendChild(content);
 
     trigger.addEventListener("click", () => {
       const shouldOpen = !item.classList.contains("is-open");
@@ -104,67 +101,112 @@
     return item;
   }
 
+  function ensureCategories(container) {
+    const map = new Map();
+    CATEGORIES.forEach((category) => {
+      let item = container.querySelector(`:scope > .control-center-category[data-control-category="${category.key}"]`);
+      if (!item) {
+        item = createCategory(category, container);
+        container.appendChild(item);
+      }
+      map.set(category.key, item);
+    });
+    CATEGORIES.forEach((category) => {
+      const item = map.get(category.key);
+      if (item) container.appendChild(item);
+    });
+    return map;
+  }
+
+  function updateCategoryMeta(item) {
+    const content = item.querySelector(":scope > .control-center-category-panel > .control-center-category-content");
+    const count = item.querySelector(":scope > .control-center-category-trigger .control-center-category-count");
+    if (!content || !count) return;
+    const nodes = Array.from(content.children);
+    count.textContent = String(nodes.length);
+    const base = normalizedText(item.querySelector(".control-center-category-trigger")?.textContent || "");
+    item.dataset.controlSearchText = `${base} ${nodes.map((node) => normalizedText(node.textContent)).join(" ")}`.trim();
+    item.hidden = nodes.length === 0;
+  }
+
   function ensureTools(page, container) {
     let tools = page.querySelector(":scope > .control-center-tools");
     if (tools) return tools;
-
     tools = document.createElement("section");
     tools.className = "card control-center-tools";
+    const label = document.createElement("strong");
     const input = document.createElement("input");
     const status = document.createElement("p");
-
+    label.className = "control-center-tools-title";
+    label.textContent = "Trova subito quello che ti serve";
     input.type = "search";
     input.className = "control-center-search";
-    input.placeholder = "Cerca una funzione…";
-    input.setAttribute("aria-label", "Cerca una funzione nel Centro di Controllo");
+    input.placeholder = "Cerca report, Firestore, PWA, login…";
+    input.setAttribute("aria-label", "Cerca nel Centro di Controllo");
     status.className = "control-center-search-status";
     status.setAttribute("aria-live", "polite");
 
     input.addEventListener("input", () => {
-      const query = cleanText(input.value).toLowerCase();
+      const query = normalizedText(input.value);
       let visible = 0;
-      container.querySelectorAll(":scope > .control-center-accordion-item").forEach((item) => {
-        const matches = !query || (item.dataset.controlSearchText || "").includes(query);
+      let firstMatch = null;
+      container.querySelectorAll(":scope > .control-center-category").forEach((item) => {
+        const hasContent = Number(item.querySelector(".control-center-category-count")?.textContent || "0") > 0;
+        const matches = hasContent && (!query || (item.dataset.controlSearchText || "").includes(query));
         item.hidden = !matches;
-        if (matches) visible += 1;
+        if (matches) {
+          visible += 1;
+          if (!firstMatch) firstMatch = item;
+        }
       });
-      status.textContent = query
-        ? `${visible} sezione${visible === 1 ? "" : "i"} trovata${visible === 1 ? "" : "e"}.`
-        : "Tocca una sezione per aprirla.";
+      if (query && visible === 1 && firstMatch) {
+        closeOthers(container, firstMatch);
+        setOpen(firstMatch, true);
+      }
+      status.textContent = query ? `${visible} categori${visible === 1 ? "a trovata" : "e trovate"}.` : "Tocca una categoria: vedrai solo le informazioni che ti servono.";
     });
 
-    status.textContent = "Tocca una sezione per aprirla.";
-    tools.append(input, status);
+    status.textContent = "Tocca una categoria: vedrai solo le informazioni che ti servono.";
+    tools.append(label, input, status);
     page.insertBefore(tools, container);
     return tools;
   }
 
+  let enhancing = false;
+
   function enhance() {
-    const page = document.getElementById(PAGE_ID);
-    const container = document.getElementById(CONTENT_ID);
-    if (!page || !container) return;
+    if (enhancing) return;
+    enhancing = true;
+    try {
+      const page = document.getElementById(PAGE_ID);
+      const container = document.getElementById(CONTENT_ID);
+      if (!page || !container) return;
+      ensureTools(page, container);
+      const categories = ensureCategories(container);
+      const rawNodes = Array.from(container.children).filter((node) => !isManagedNode(node));
+      rawNodes.forEach((node) => {
+        const category = classifyNode(node);
+        const item = categories.get(category.key);
+        const content = item?.querySelector(":scope > .control-center-category-panel > .control-center-category-content");
+        if (content) content.appendChild(node);
+      });
+      categories.forEach((item) => updateCategoryMeta(item));
 
-    ensureTools(page, container);
-
-    const rawNodes = Array.from(container.children).filter((node) => !isIgnoredNode(node));
-    rawNodes.forEach((node, index) => {
-      if (node.closest(".control-center-accordion-item")) return;
-      container.appendChild(buildItem(node, index, container));
-    });
-
-    let remembered = "";
-    try { remembered = sessionStorage.getItem(STORAGE_KEY) || ""; } catch (_) {}
-    if (remembered) {
-      const previous = Array.from(container.querySelectorAll(":scope > .control-center-accordion-item"))
-        .find((item) => item.dataset.controlSectionKey === remembered);
-      if (previous && !previous.hidden) {
-        closeOthers(container, previous);
-        setOpen(previous, true);
+      let remembered = "";
+      try { remembered = sessionStorage.getItem(STORAGE_KEY) || ""; } catch (_) {}
+      if (remembered) {
+        const previous = categories.get(remembered);
+        if (previous && !previous.hidden && !container.querySelector(":scope > .control-center-category.is-open")) setOpen(previous, true);
       }
+    } finally {
+      enhancing = false;
     }
   }
 
-  const observer = new MutationObserver(() => enhance());
+  const observer = new MutationObserver((mutations) => {
+    const hasExternalNodes = mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => node instanceof HTMLElement && !node.classList.contains("control-center-category")));
+    if (hasExternalNodes) enhance();
+  });
 
   function start() {
     enhance();
@@ -172,9 +214,6 @@
     if (container) observer.observe(container, { childList: true });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 })();

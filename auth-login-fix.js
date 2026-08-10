@@ -114,21 +114,19 @@
     authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile(nextOrObserver, error, completed) {
       const wrapCallback = (callback) => async (user) => {
         const emailVerificationRequired = requiresEmailVerification(user);
-        if (user) {
-          try {
-            await ensurePlatformProfileForAuthenticatedUser(user);
-          } catch (profileError) {
-            console.error("Errore preparazione profilo utente autenticato:", profileError);
-          }
-        }
-
         const effectiveUser = emailVerificationRequired ? null : user;
         if (emailVerificationRequired) window.__heraEmailVerificationRequired = true;
         else if (user) window.__heraEmailVerificationRequired = false;
 
-        const result = typeof callback === "function"
-          ? await callback(effectiveUser)
-          : undefined;
+        const result = typeof callback === "function" ? callback(effectiveUser) : undefined;
+        if (user) {
+          Promise.resolve(result)
+            .catch(() => undefined)
+            .then(() => ensurePlatformProfileForAuthenticatedUser(user))
+            .catch((profileError) => {
+              console.error("Errore preparazione profilo utente autenticato:", profileError);
+            });
+        }
         if (emailVerificationRequired) showEmailVerificationRequired();
         return result;
       };

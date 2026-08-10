@@ -61,7 +61,14 @@
     const fakeUser = { uid: 'google-user-1', email: 'google@example.test' };
     const authInstance = {
       currentUser: scenario === 'redirect-result' ? fakeUser : null,
-      setPersistence: async (value) => state.persistence.push(value),
+      setPersistence: async (value) => {
+        state.persistence.push(value);
+        if (scenario === 'persistence-unsupported') {
+          const error = new Error('Persistence type is not supported.');
+          error.code = 'auth/unsupported-persistence-type';
+          throw error;
+        }
+      },
       signInWithPopup: async () => {
         state.popupCalls += 1;
         if (scenario === 'blocked') {

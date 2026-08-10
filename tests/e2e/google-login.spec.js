@@ -32,6 +32,14 @@ test.describe('Hera App - login Google di riserva', () => {
     await expect.poll(() => page.evaluate(() => window.__googleE2E.legacyClickCalls)).toBe(0);
   });
 
+  test('Opera continua il login Google quando la persistenza non è supportata', async ({ page }) => {
+    await openHarness(page, 'persistence-unsupported');
+    await page.locator('#auth-gate-login-btn').click();
+
+    await expect.poll(() => page.evaluate(() => window.__googleE2E.popupCalls)).toBe(1);
+    await expect(page.locator('#auth-email-feedback')).toContainText('Accesso Google completato');
+  });
+
   test('Android WebView: popup bloccato non usa redirect', async ({ page }) => {
     await openHarness(page, 'blocked', 'android');
     await page.locator('#auth-gate-login-btn').click();

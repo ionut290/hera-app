@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const SCRIPT_VERSION = "3.2.0";
+  const SCRIPT_VERSION = "3.3.0";
   const SEARCH_LIST_IDS = [
     "pending-users-list",
     "admin-users-list",
@@ -51,10 +51,18 @@
   }
 
   function getCallable() {
-    if (!window.firebase || typeof firebase.functions !== "function") {
+    if (!window.firebase || typeof firebase.app !== "function") {
       throw new Error("Firebase Functions non disponibile.");
     }
-    return firebase.functions().httpsCallable("createTesterAccounts");
+    const app = firebase.app();
+    if (!app || typeof app.functions !== "function") {
+      throw new Error("Firebase Functions non disponibile.");
+    }
+    const functionsClient = app.functions("europe-west1");
+    if (!functionsClient || typeof functionsClient.httpsCallable !== "function") {
+      throw new Error("Firebase Functions non disponibile.");
+    }
+    return functionsClient.httpsCallable("adminSetUserPassword");
   }
 
   function ensureDialog() {
@@ -146,24 +154,28 @@
     setFeedback("Generazione nuova password...");
     try {
       const callable = getCallable();
-      const response = await callable({ emails: [activeProfile.email] });
+      const response = await callable({
+        uid: activeProfile.uid,
+        email: activeProfile.email
+      });
       const result = response?.data || null;
-      const credential = Array.isArray(result?.credentials)
-        ? result.credentials.find((item) => String(item?.email || "").trim().toLowerCase() === activeProfile.email)
-        : null;
-      if (!credential?.temporaryPassword) {
+      if (!result?.success || !result?.temporaryPassword) {
         throw new Error("Il server non ha restituito la nuova password temporanea.");
       }
+      if (result.uid && String(result.uid) !== String(activeProfile.uid)) {
+        throw new Error("Il server ha aggiornato un account diverso da quello selezionato.");
+      }
       const dialog = ensureDialog();
-      dialog.querySelector("#admin-password-result-value").value = credential.temporaryPassword;
+      dialog.querySelector("#admin-password-result-value").value = result.temporaryPassword;
       dialog.querySelector("#admin-password-result").classList.remove("hidden");
-      setFeedback("Password cambiata. Comunica la password temporanea all'utente: al prossimo accesso dovrà crearne una nuova personale.");
+      setFeedback("Password cambiata correttamente. Comunica la password temporanea all'utente: al prossimo accesso dovrà crearne una nuova personale.");
     } catch (error) {
       console.error("Gestione password amministratore fallita:", error);
       const code = String(error?.code || "").toLowerCase();
       if (code.includes("permission-denied")) setFeedback("Operazione non autorizzata: serve un account amministratore.");
       else if (code.includes("not-found")) setFeedback("Account Firebase dell'utente non trovato.");
       else if (code.includes("unavailable") || code.includes("network")) setFeedback("Connessione non disponibile. Riprova quando sei online.");
+      else if (code.includes("internal")) setFeedback("Il server non è riuscito a cambiare la password. Riprova tra poco.");
       else setFeedback(error?.message || "Cambio password non riuscito.");
     } finally {
       setBusy(false);

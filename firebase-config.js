@@ -21,7 +21,7 @@ const HERA_SHARED_STATIC_VIEWS_SRC = "shared-static-views.js?v=20260804a";
 const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-guard.js?v=20260806a";
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260805a";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260804b";
-const HERA_ADMIN_PASSWORD_MANAGER_SRC = "admin-password-manager.js?v=20260810c";
+const HERA_ADMIN_PASSWORD_MANAGER_SRC = "admin-password-manager.js?v=20260810d";
 const HERA_USER_MANAGEMENT_SEARCH_FIX_SRC = "user-management-search-input-fix.js?v=20260810c";
 
 function loadOnce(src, dataName, ready, onLoad) {
@@ -72,7 +72,7 @@ function scheduleDeferredStartupModules() {
     loadOnce(
       HERA_ADMIN_PASSWORD_MANAGER_SRC,
       "hera-admin-password-manager",
-      () => window.HeraAdminPasswordManager?.installed
+      () => window.HeraAdminPasswordManager?.version === "3.3.0"
     );
     loadOnce(
       HERA_USER_MANAGEMENT_SEARCH_FIX_SRC,
@@ -137,7 +137,7 @@ if (document.readyState === "loading") {
     );
     loadOnce(
       HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC,
-      "firestore-startup-cost-optimizer",
+      "hera-firestore-startup-cost-optimizer",
       () => window.HeraFirestoreStartupCostOptimizer?.installed
     );
   };

@@ -4,7 +4,7 @@
   const scripts = [
     ['./commessa-listener-cleanup.js?v=20260806a', 'commessaListenerCleanup'],
     ['./header-menu-runtime-original.js?v=20260804-diagnostics-reset1', 'headerMenuRuntimeOriginal'],
-    ['./control-center-loader.js?v=20260810-pinned2', 'controlCenterLoader']
+    ['./control-center-loader.js?v=20260810-fix2', 'controlCenterLoader']
   ];
 
   scripts.forEach(([src, datasetKey]) => {

@@ -1,5 +1,0 @@
-# Proprietario obbligatorio di tutto il codice e delle configurazioni
-* @ionut290
-
-# Protegge anche la configurazione della proprietà del codice
-.github/CODEOWNERS @ionut290

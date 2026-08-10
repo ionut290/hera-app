@@ -22,7 +22,7 @@
   };
   const lazyStartup = {
     installed: true,
-    version: "1.2.0",
+    version: "1.1.1",
     fullUsersEnabled: false,
     fullUsersStarted: false,
     usersSessionUid: "",
@@ -373,7 +373,7 @@
       "documents-new-btn"
     ].forEach((id) => bindCapture(id, enableFullUsers));
 
-    console.debug("[LIGHT STARTUP] Gestione ore usa calendario condiviso e query mensili; listener completo oreReports non associato al menu.");
+    bindCapture("open-hours-btn", enableHoursSource);
 
     bindCapture("open-panel-commesse", enableCommessaStats);
     bindCapture("toggle-commesse-home-btn", enableCommessaStats);

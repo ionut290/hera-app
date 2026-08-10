@@ -11,6 +11,20 @@
     );
   }
 
+  async function clearWebAppCaches() {
+    if (!("caches" in window)) return;
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((name) => name.startsWith("hera-app-shell-") || name.startsWith("varga-cantieri-shell-"))
+          .map((name) => caches.delete(name))
+      );
+    } catch (error) {
+      console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
+    }
+  }
+
   async function requestPwaUpdate({ reload = false } = {}) {
     if (isNativeAndroid() || !("serviceWorker" in navigator)) return false;
     try {
@@ -19,8 +33,7 @@
       const waiting = registration?.waiting;
       if (waiting) waiting.postMessage({ type: "SKIP_WAITING" });
       if (reload) {
-        // Non eliminare mai la cache funzionante prima che la nuova versione sia pronta.
-        // Il Service Worker sostituirà la vecchia cache solo durante la propria attivazione.
+        await clearWebAppCaches();
         const refreshUrl = new URL(window.location.href);
         refreshUrl.searchParams.set("appRefresh", String(Date.now()));
         window.location.replace(refreshUrl.toString());
@@ -41,11 +54,11 @@
       return;
     }
 
-    const updated = await requestPwaUpdate({ reload: true });
-    if (!updated) {
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      window.alert("Aggiornamento non riuscito. La versione attuale resta disponibile: controlla la connessione e riprova.");
+    await requestPwaUpdate({ reload: true });
+    if (document.visibilityState === "visible") {
+      const refreshUrl = new URL(window.location.href);
+      refreshUrl.searchParams.set("appRefresh", String(Date.now()));
+      window.location.replace(refreshUrl.toString());
     }
   }
 

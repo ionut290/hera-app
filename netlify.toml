@@ -18,18 +18,12 @@
   status = 200
 
 [[redirects]]
-from = "/api/google-sheet-sync"
-to = "/.netlify/functions/google-sheet-sync"
-status = 200
+  from = "/api/google-sheet-sync"
+  to = "/.netlify/functions/google-sheet-sync"
+  status = 200
 
 [[redirects]]
-from = "/vendor/firebase/*"
-to = "https://www.gstatic.com/firebasejs/8.10.1/:splat"
-status = 200
-force = true
-
-[[redirects]]
-from = "/*"
+  from = "/*"
   to = "/index.html"
   status = 200
 

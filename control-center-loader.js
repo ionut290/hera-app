@@ -10,7 +10,7 @@
     const link = document.createElement("link");
     link.id = STYLE_ID;
     link.rel = "stylesheet";
-    link.href = "./control-center-accordion.css?v=20260810-categories1";
+    link.href = "./control-center-accordion.css?v=20260804a";
     document.head.appendChild(link);
   }
 
@@ -18,7 +18,7 @@
     if (document.getElementById(SCRIPT_ID)) return;
     const script = document.createElement("script");
     script.id = SCRIPT_ID;
-    script.src = "./control-center-accordion.js?v=20260810-categories1";
+    script.src = "./control-center-accordion.js?v=20260804a";
     script.defer = true;
     document.head.appendChild(script);
   }

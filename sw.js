@@ -1,44 +1,15 @@
-const CACHE_NAME = "varga-cantieri-shell-v124";
-
-// Solo i file indispensabili per mostrare rapidamente login, Home e commesse.
-// Un errore in un modulo accessorio non deve più bloccare l'installazione del Service Worker.
-const CORE_SHELL = [
+const CACHE_NAME = "varga-cantieri-shell-v109";
+const APP_SHELL = [
   "./",
   "./index.html",
-  "./vendor/firebase/firebase-app.js",
-  "./vendor/firebase/firebase-auth.js",
-  "./vendor/firebase/firebase-firestore.js",
-  "./vendor/firebase/firebase-storage.js",
-  "./vendor/firebase/firebase-functions.js",
-  "./vendor/firebase/firebase-messaging.js",
   "./style.css?v=20260727-update2",
-  "./app.js?v=20260810-opera-data1",
-  "./firebase-config.js",
-  "./opera-auth-persistence-fix.js?v=20260810a",
-  "./auth-login-fix.js?v=20260810-session1",
-  "./login-retry-fix.js?v=20260810-opera2",
-  "./pwa-login-force-update.js?v=20260810-opera2",
-  "./firestore-safe-optimizer.js?v=20260805b",
-  "./firestore-inflight-read-coalescer.js?v=20260804a",
-  "./native-android-runtime.js?v=20260803-whatsapp-early2",
-  "./fatto-button-immediate.js?v=20260727-fatto2",
-  "./manifest.webmanifest",
-  "./icons/varga-cantieri-32.png",
-  "./icons/varga-cantieri-180.png",
-  "./icons/varga-cantieri-192.png",
-  "./icons/varga-cantieri-512.png",
-  "./icons/varga-cantieri-maskable-512.png"
-];
-
-// Questi file restano disponibili offline, ma vengono memorizzati senza rallentare
-// l'attivazione iniziale e senza far fallire tutto se un singolo asset non risponde.
-const OPTIONAL_SHELL = [
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260731-legacy1",
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260731-mezzi1",
+  "./app.js?v=20260801-cost1",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
@@ -49,6 +20,7 @@ const OPTIONAL_SHELL = [
   "./accounting-view-guard.js?v=20260728a",
   "./operational-import-repair.js?v=20260728a",
   "./google-sheet-two-way-sync.js?v=20260729b",
+  "./native-android-runtime.js?v=20260803-whatsapp-early2",
   "./notification-center.js?v=20260731-header1",
   "./today-summary-interactions.js?v=20260731-repair1",
   "./mezzi-alimentazione-fix.js?v=20260723",
@@ -56,6 +28,7 @@ const OPTIONAL_SHELL = [
   "./squad-operator-profile.js?v=20260731a",
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
+  "./fatto-button-immediate.js?v=20260727-fatto2",
   "./header-menu-runtime.js?v=20260801-cost1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
@@ -70,20 +43,22 @@ const OPTIONAL_SHELL = [
   "./fuel-stations-integration.js",
   "./registry-device-cache.js?v=20260804c",
   "./firestore-registry-read-optimizer.js?v=20260804b",
+  "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-nested-listener-optimizer.js?v=20260805a",
-  "./firestore-diagnostics-optimizer-extension.js?v=20260804a"
+  "./firestore-inflight-read-coalescer.js?v=20260804a",
+  "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
+  "./firebase-config.js",
+  "./manifest.webmanifest",
+  "./icons/varga-cantieri-32.png",
+  "./icons/varga-cantieri-180.png",
+  "./icons/varga-cantieri-192.png",
+  "./icons/varga-cantieri-512.png",
+  "./icons/varga-cantieri-maskable-512.png"
 ];
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
-const NETWORK_TIMEOUT_MS = 8000;
-const NETWORK_FIRST_ASSET_PATHS = new Set([
-  "/shared-static-views-client.js",
-  "/firebase-config.js",
-  "/auth-login-fix.js",
-  "/login-retry-fix.js",
-  "/pwa-login-force-update.js",
-  "/app.js"
-]);
+const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
+const NETWORK_FIRST_ASSET_PATHS = new Set(["/shared-static-views-client.js"]);
 
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
   .some((pattern) => pattern.test(url.pathname));
@@ -99,72 +74,33 @@ const shouldHandleRequest = (request, url) => request.method === "GET"
   && !hasNoStoreDirective(request.headers)
   && !isDynamicEndpoint(url);
 
-const canCacheResponse = (request, response) => response?.ok
+const canCacheResponse = (request, response) => response.ok
   && response.type !== "opaque"
   && !hasNoStoreDirective(response.headers)
   && CACHEABLE_DESTINATIONS.has(request.destination);
 
-const fetchWithTimeout = (request, timeoutMs = NETWORK_TIMEOUT_MS) => {
+const fetchWithTimeout = (request, timeoutMs) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
 };
 
-async function updateCache(request) {
+const networkFirstForDocument = async (request) => {
   try {
-    const response = await fetch(request);
+    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
     if (canCacheResponse(request, response)) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response.clone());
     }
     return response;
   } catch (_) {
-    return null;
-  }
-}
-
-// La PWA deve ricevere subito la pagina di login più recente quando è online.
-// Se la rete non risponde, usa la copia locale per conservare l'avvio offline.
-const networkFirstForDocument = async (event) => {
-  try {
-    const preload = await Promise.race([
-      event.preloadResponse,
-      new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS))
-    ]);
-    const response = preload || await fetchWithTimeout(event.request);
-    if (canCacheResponse(event.request, response)) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(event.request, response.clone());
-      await cache.put("./index.html", response.clone());
-    }
-    return response;
-  } catch (_) {
-    return (await caches.match(event.request))
-      || (await caches.match("./index.html"))
-      || new Response(
-        `<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>VARGA CANTIERI</title>
-  <style>
-    body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:32px 20px;background:#f6f8f7;color:#163d32}
-    main{max-width:440px;margin:15vh auto;background:#fff;padding:28px;border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.08);text-align:center}
-    h1{font-size:1.35rem;margin:0 0 12px}p{line-height:1.45;color:#4b625c}
-    button{width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;background:#176b50;color:#fff;font-weight:700;font-size:1rem}
-  </style>
-</head>
-<body><main><h1>Connessione temporaneamente non disponibile</h1><p>La versione precedente dell’app resta protetta. Controlla la rete e riprova.</p><button onclick="location.reload()">RIPROVA</button></main></body>
-</html>`,
-        { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
-      );
+    return (await caches.match(request)) || caches.match("./index.html");
   }
 };
 
 const networkFirstForCriticalAsset = async (request) => {
   try {
-    const response = await fetchWithTimeout(request);
+    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
     if (canCacheResponse(request, response)) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response.clone());
@@ -177,65 +113,45 @@ const networkFirstForCriticalAsset = async (request) => {
 
 const staleWhileRevalidateForAsset = async (event) => {
   const cached = await caches.match(event.request);
-  const networkUpdate = updateCache(event.request);
+  const networkUpdate = fetch(event.request).then(async (response) => {
+    if (canCacheResponse(event.request, response)) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(event.request, response.clone());
+    }
+    return response;
+  }).catch(() => null);
 
   if (cached) {
     event.waitUntil(networkUpdate);
     return cached;
   }
-
   return (await networkUpdate)
-    || (event.request.destination === "image"
-      ? caches.match("./icons/varga-cantieri-192.png")
-      : caches.match("./index.html"));
+    || (event.request.destination === "image" ? caches.match("./icons/varga-cantieri-192.png") : caches.match("./index.html"));
 };
 
-async function cacheOptionalAssets(cache) {
-  await Promise.allSettled(OPTIONAL_SHELL.map(async (url) => {
-    const request = new Request(url, { cache: "reload" });
-    const response = await fetch(request);
-    if (response.ok && response.type !== "opaque") await cache.put(url, response);
-  }));
-}
-
 self.addEventListener("install", (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(CORE_SHELL);
-    self.skipWaiting();
-    await cacheOptionalAssets(cache);
-  })());
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
-    if (self.registration.navigationPreload) {
-      try { await self.registration.navigationPreload.enable(); } catch (_) {}
-    }
-    await self.clients.claim();
-  })());
+  event.waitUntil(caches.keys().then((keys) => Promise.all(
+    keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+  )));
+  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (!shouldHandleRequest(event.request, url)) return;
-
   if (event.request.destination === "document") {
-    event.respondWith(networkFirstForDocument(event));
+    event.respondWith(networkFirstForDocument(event.request));
     return;
   }
-
   if (NETWORK_FIRST_ASSET_PATHS.has(url.pathname)) {
     event.respondWith(networkFirstForCriticalAsset(event.request));
     return;
   }
-
   event.respondWith(staleWhileRevalidateForAsset(event));
 });
 

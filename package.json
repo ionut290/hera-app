@@ -21,7 +21,6 @@
     "check:auth-login": "node scripts/check-auth-login.js",
     "check:first-login-password": "node scripts/check-first-login-password.js",
     "check:login-retry": "node scripts/check-login-retry.js",
-    "check:opera-data-loading": "node scripts/check-opera-data-loading.js",
     "check:done-button": "node scripts/check-done-button-logic.js",
     "check:done-button-behavior": "node scripts/check-done-button-behavior.js",
     "check:fatto-persistence-read-guard": "node scripts/check-fatto-persistence-read-guard.js",

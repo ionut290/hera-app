@@ -31,7 +31,6 @@ const requiredFiles = [
   "app.js",
   "style.css",
   "firebase-config.js",
-  "opera-auth-persistence-fix.js",
   "auth-login-fix.js",
   "approval-access.js",
   "approval-access.css",

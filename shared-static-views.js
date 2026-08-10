@@ -6,8 +6,6 @@
   const CACHE_PREFIX = "hera-shared-static-view:";
   const MAX_PAYLOAD_BYTES = 700000;
   const CALENDAR_SCHEMA_VERSION = 2;
-  const IS_OPERA_BROWSER = /\bOPR\//i.test(String(window.navigator?.userAgent || ""))
-    || /\bOpera\//i.test(String(window.navigator?.userAgent || ""));
   const subscriptions = new Map();
   const memory = new Map();
   const stats = {
@@ -261,8 +259,7 @@
     const callbacks = new Set(typeof callback === "function" ? [callback] : []);
     stats.reads += 1;
     console.debug("[SHARED VIEWS] listener", { type, key, reads: stats.reads });
-    const reference = firestore.collection(COLLECTION).doc(docId(type, key));
-    const handleSnapshot = (snapshot) => {
+    const unsubscribeFirestore = firestore.collection(COLLECTION).doc(docId(type, key)).onSnapshot((snapshot) => {
       if (!snapshot.exists) return;
       const value = { id: snapshot.id, ...(snapshot.data() || {}) };
       if (type === "calendario" && !isCompleteCalendarView(value)) {
@@ -280,26 +277,13 @@
       const metadata = { source: snapshot.metadata?.fromCache ? "firestore-cache" : "firestore" };
       callbacks.forEach((handler) => handler(value, metadata));
       window.dispatchEvent(new CustomEvent("hera-shared-static-view-updated", { detail: { type, key, value } }));
-    };
-    const handleError = (error) => {
+    }, (error) => {
       console.warn(`Vista condivisa ${type}/${key} non disponibile`, error);
-    };
-    let closed = false;
-    let unsubscribeFirestore = () => {};
-    if (IS_OPERA_BROWSER) {
-      reference.get()
-        .then((snapshot) => {
-          if (!closed) handleSnapshot(snapshot);
-        })
-        .catch(handleError);
-    } else {
-      unsubscribeFirestore = reference.onSnapshot(handleSnapshot, handleError);
-    }
+    });
 
     const unsubscribe = () => {
       callbacks.delete(callback);
       if (callbacks.size) return;
-      closed = true;
       unsubscribeFirestore?.();
       subscriptions.delete(subscriptionKey);
     };

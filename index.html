@@ -115,19 +115,11 @@
         <label for="auth-email-input">Email</label>
         <input id="auth-email-input" type="email" autocomplete="username" placeholder="email@azienda.it" required>
         <label for="auth-password-input">Password</label>
-        <div class="auth-password-row">
-          <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
-          <button id="auth-password-toggle-btn" class="auth-password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">👁️</button>
-        </div>
-        <label class="auth-remember-row" for="auth-remember-login">
-          <input id="auth-remember-login" type="checkbox" checked>
-          <span>Rimani sempre collegato / Ricordami</span>
-        </label>
+        <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" required>
         <button id="auth-email-login-btn" class="btn btn-primary" type="submit">Entra</button>
         <button id="auth-create-account-btn" class="btn" type="button">CREA NUOVO ACCOUNT</button>
         <button id="auth-request-password-btn" class="btn" type="button">PASSWORD DIMENTICATA?</button>
         <p id="auth-email-feedback" class="muted auth-email-feedback" role="status" aria-live="polite"></p>
-        <button id="auth-force-update-btn" class="btn auth-force-update-btn" type="button">🔄 AGGIORNA APP</button>
       </form>
       <div class="auth-gate-divider"><span>oppure</span></div>
       <button id="auth-gate-login-btn" class="btn" type="button">Login con Google</button>
@@ -394,30 +386,28 @@
   <section id="pos-page" class="hidden"><section class="card pos-hero-card"><div class="page-head pos-page-head"><button id="back-from-pos-btn" class="btn" type="button">← Torna</button><div><h2>📄 POS - Documenti sicurezza</h2><p class="muted">Consulta POS, PMS, schede lavorazioni, schede macchine e altri documenti.</p></div></div></section><section id="pos-admin-card" class="card pos-admin-card hidden"><div class="section-head"><h2>Gestione gruppi/categorie e documenti</h2><button id="pos-add-toggle-btn" class="btn btn-primary" type="button">➕ Aggiungi documento</button></div><form id="pos-document-form" class="resource-form pos-document-form hidden"><input id="pos-document-id" type="hidden"><input id="pos-title" type="text" placeholder="Titolo documento" maxlength="160" required><textarea id="pos-description" placeholder="Descrizione" maxlength="1000"></textarea><input id="pos-drive-url" type="url" placeholder="Link Google Drive"><input id="pos-category" type="text" list="pos-category-options" placeholder="Gruppo/Categoria" maxlength="120" required><datalist id="pos-category-options"><option value="POS"></option><option value="PMS"></option><option value="Schede lavorazioni"></option><option value="Schede macchine e attrezzature"></option><option value="Sicurezza"></option><option value="Modulistica"></option><option value="Altro"></option></datalist><input id="pos-order" type="number" inputmode="numeric" placeholder="Ordine visualizzazione" value="0"><label class="checkbox-row pos-active-row"><input id="pos-active" type="checkbox" checked><span>Attivo sì/no</span></label><div class="actions-row"><button id="pos-save-btn" class="btn btn-primary" type="submit">Salva documento</button><button id="pos-cancel-btn" class="btn" type="button">Annulla</button></div></form><p id="pos-feedback" class="muted"></p></section><section class="card pos-search-card"><label class="sr-only" for="pos-search">Cerca documenti POS</label><input id="pos-search" type="search" placeholder="Cerca per titolo, descrizione o gruppo/categoria..."></section><section class="card pos-list-card"><div id="pos-documents-list" class="pos-documents-list"><p class="muted">Caricamento documenti...</p></div></section></section>
   <section id="howto-page" class="hidden"><section class="card"><div class="page-head"><button id="back-from-howto-btn" class="btn" type="button">← Torna</button><h2>Come si fa?</h2></div></section><section class="card howto-card"><div id="howto-faq-list" class="howto-faq-list"></div></section></section>
 
-  <script src="./vendor/firebase/firebase-app.js"></script>
-  <script src="./vendor/firebase/firebase-auth.js"></script>
-  <script src="./vendor/firebase/firebase-firestore.js"></script>
-  <script src="./vendor/firebase/firebase-storage.js"></script>
-  <script src="./vendor/firebase/firebase-functions.js"></script>
-  <script src="./vendor/firebase/firebase-messaging.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="firebase-config.js"></script>
-  <script src="opera-auth-persistence-fix.js?v=20260810a"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260731-header1"></script>
-  <script src="auth-login-fix.js?v=20260810-session1"></script>
+  <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260731-legacy1"></script>
   <script src="first-login-password.js?v=20260726b"></script>
-  <script src="pwa-login-force-update.js?v=20260810-opera2"></script>
-  <script src="login-retry-fix.js?v=20260810-opera2"></script>
+  <script src="login-retry-fix.js?v=20260726f"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260810-opera-data1"></script>
+  <script src="app.js?v=20260804-squadre-restore1"></script>
   <script src="shared-static-views-client.js?v=20260804-registri3"></script>
   <script src="squadra-current-save-sync.js?v=20260804a"></script>
   <script src="activity-logs-read-disable.js?v=20260804a"></script>
@@ -441,42 +431,10 @@
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", async () => {
-        try {
-          const registration = await navigator.serviceWorker.register(
-            "./sw.js?v=20260810-opera-squadre1",
-            { updateViaCache: "none" }
-          );
-
-          const activateWaitingWorker = () => {
-            if (registration.waiting) {
-              registration.waiting.postMessage({ type: "SKIP_WAITING" });
-            }
-          };
-
-          registration.addEventListener("updatefound", () => {
-            const worker = registration.installing;
-            worker?.addEventListener("statechange", () => {
-              if (worker.state === "installed") activateWaitingWorker();
-            });
-          });
-
-          let reloadingForUpdate = false;
-          navigator.serviceWorker.addEventListener("controllerchange", () => {
-            if (reloadingForUpdate) return;
-            reloadingForUpdate = true;
-            window.location.reload();
-          }, { once: true });
-
-          activateWaitingWorker();
-          await registration.update();
-
-          document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === "visible") registration.update().catch(() => {});
-          });
-        } catch (error) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch((error) => {
           console.warn("Service Worker non registrato:", error);
-        }
+        });
       });
     }
   </script>

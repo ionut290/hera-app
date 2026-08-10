@@ -4,7 +4,6 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const fixSource = fs.readFileSync(path.join(root, "auth-login-fix.js"), "utf8");
-const operaPersistenceSource = fs.readFileSync(path.join(root, "opera-auth-persistence-fix.js"), "utf8");
 const workflowSource = fs.readFileSync(
   path.join(root, ".github", "workflows", "build-android-aab.yml"),
   "utf8"
@@ -27,36 +26,6 @@ if (!/<script\s+src=["'](?:\.\/)?auth-login-fix\.js\?v=[^"']+["']><\/script>/.te
 
 if (!fixSource.includes("configurePlatformLoginOptions")) {
   throw new Error("Le opzioni login non vengono configurate in base alla piattaforma.");
-}
-if (fixSource.includes("await ensurePlatformProfileForAuthenticatedUser(user)")) {
-  throw new Error("Il listener Auth attende ancora Firestore prima di comunicare il login ad app.js.");
-}
-if (!fixSource.includes("Promise.resolve(result)") || !fixSource.includes("ensurePlatformProfileForAuthenticatedUser(user)")) {
-  throw new Error("La preparazione profilo non bloccante dopo il login è assente.");
-}
-const authWrapperStart = fixSource.indexOf("const wrapCallback");
-const authCallbackIndex = fixSource.indexOf("callback(effectiveUser)", authWrapperStart);
-const profilePreparationIndex = fixSource.indexOf("ensurePlatformProfileForAuthenticatedUser(user)", authWrapperStart);
-if (authWrapperStart < 0 || authCallbackIndex < 0 || profilePreparationIndex < authCallbackIndex) {
-  throw new Error("La preparazione profilo parte ancora prima della comunicazione del login ad app.js.");
-}
-
-for (const expected of [
-  "firebase.initializeApp(window.firebaseConfig)",
-  "auth/unsupported-persistence-type",
-  "persistence.SESSION",
-  "persistence.NONE",
-  "__heraCompatiblePersistenceInstalled"
-]) {
-  if (!operaPersistenceSource.includes(expected)) {
-    throw new Error(`Fallback persistenza Opera incompleto: ${expected}`);
-  }
-}
-const firebaseConfigIndex = indexSource.indexOf('src="firebase-config.js"');
-const operaFixIndex = indexSource.indexOf('src="opera-auth-persistence-fix.js');
-const authLoginIndex = indexSource.indexOf('src="auth-login-fix.js');
-if (!(firebaseConfigIndex >= 0 && operaFixIndex > firebaseConfigIndex && authLoginIndex > operaFixIndex)) {
-  throw new Error("Il fallback persistenza Opera deve essere caricato dopo Firebase config e prima dei gestori login.");
 }
 
 if (!rulesSource.includes('.data.get("banned", false) == true')) {

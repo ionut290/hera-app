@@ -48,14 +48,12 @@ assert.doesNotMatch(sharedViews, /hera-hours-saved[\s\S]{0,180}publishCalendar/)
 
 if (core) {
   assert.match(core, /subscribeHoursStats = gatedHoursStats/);
-  assert.match(core, /version: "1\.2\.0"/);
-  assert.doesNotMatch(core, /bindCapture\("open-hours-btn", enableHoursSource\)/);
-  assert.match(core, /Gestione ore usa calendario condiviso e query mensili/);
+  assert.match(core, /bindCapture\("open-hours-btn", enableHoursSource\)/);
   assert.match(core, /stopStaticCalendarForFullHours\(\);[\s\S]*sourceSubscriptions\.hoursStats\(\)/);
   assert.doesNotMatch(core, /monthly-query-fallback/);
 }
 
-// Test runtime del guard: fallback programmatico bloccato, API esplicita consentita solo con azione reale.
+// Test runtime del guard: fallback programmatico bloccato, click reale consentito.
 {
   let fullHoursStarts = 0;
   const window = {
@@ -78,7 +76,7 @@ if (core) {
 
   const result = window.HeraLightStartup.enableHoursSource({ isTrusted: true });
   assert.equal(result, "started");
-  assert.equal(fullHoursStarts, 1, "Una richiesta esplicita e attendibile può ancora aprire le ore complete");
+  assert.equal(fullHoursStarts, 1, "Il click reale su Gestione ore deve restare consentito");
   const state = window.HeraHoursSourceExplicitGuard.getState();
   assert.equal(state.blockedFallbackStarts, 1);
   assert.equal(state.allowedTrustedStarts, 1);

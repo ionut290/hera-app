@@ -28,13 +28,6 @@ try {
     throw new Error("Firebase Auth o Firestore non disponibili nel SDK caricato.");
   }
 
-  const browserUserAgent = String(window.navigator?.userAgent || "");
-  const isOperaBrowser = /\bOPR\//i.test(browserUserAgent) || /\bOpera\//i.test(browserUserAgent);
-  if (isOperaBrowser && typeof db.settings === "function") {
-    db.settings({ experimentalForceLongPolling: true });
-    console.log("FIRESTORE TRANSPORT", { mode: "long-polling", browser: "Opera" });
-  }
-
   console.log("FIREBASE INIT OK", {
     appName: firebaseApp.name,
     projectId: firebaseConfig?.projectId || "non impostato",
@@ -3621,50 +3614,14 @@ async function loadStartupCoreCollections() {
 
   try {
     const personalePromise = subscribePersonale();
-    const startupTasks = [
+    await Promise.all([
       personalePromise, // anagrafiche personale
       personalePromise, // qualifiche/corsi salvati sulle anagrafiche
       personalePromise, // sicurezza salvata sulle anagrafiche
       subscribeSquadre(),
       subscribeCommesse(),
       subscribeMezzi()
-    ];
-    const startupTaskNames = [
-      "personale",
-      "qualifiche/corsi",
-      "sicurezza",
-      "squadre",
-      "commesse",
-      "mezzi"
-    ];
-    const startupTimeoutMs = 10000;
-    const startupResults = await Promise.allSettled(
-      startupTasks.map((task, index) => Promise.race([
-        Promise.resolve(task),
-        new Promise((resolve) => {
-          setTimeout(() => {
-            const sectionName = startupTaskNames[index] || `sezione-${index + 1}`;
-            console.warn(`[Startup] caricamento parziale, sezione lenta: ${sectionName}`);
-            resolve(false);
-          }, startupTimeoutMs);
-        })
-      ]))
-    );
-    startupResults.forEach((result, index) => {
-      if (result.status === "rejected") {
-        const sectionName = startupTaskNames[index] || `sezione-${index + 1}`;
-        console.warn(`[Startup] caricamento parziale, sezione non disponibile: ${sectionName}`, result.reason);
-      }
-    });
-    const availableCommesse = Array.isArray(appState?.commesse)
-      ? appState.commesse.length
-      : (commesseById instanceof Map ? commesseById.size : 0);
-    console.log(`[Startup] commesse iniziali pronte: ${availableCommesse}`);
-    if (availableCommesse > 0) {
-      console.log("[Startup] Home sbloccata con commesse disponibili");
-      renderCommesseHomeList();
-      updateHomeStatus();
-    }
+    ]);
     startupCoreCollectionsLoadState = { status: "loaded", message: "" };
   } catch (error) {
     startupCoreCollectionsLoadState = { status: "error", message: getReadableFirestoreError(error, "Errore caricamento dati iniziali") };
@@ -12085,9 +12042,7 @@ function subscribeCommesse() {
 
   stopCommesseSubscription();
   const commesseCollectionName = getCommesseCollectionName();
-  // L'ordinamento resta lato client: orderBy esclude in Firestore i documenti
-  // storici che non hanno createdAt, facendo apparire vuota una raccolta valida.
-  const query = db.collection(commesseCollectionName);
+  const query = db.collection(commesseCollectionName).orderBy("createdAt", "desc");
   const applyCommesseSnapshot = (snapshot, { fromListener = false } = {}) => {
     clearCommesseLoadTimeout();
     const receivedCommesse = [];
@@ -12111,7 +12066,7 @@ function subscribeCommesse() {
     renderTodaySummary();
   };
 
-  console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "client-side createdAt desc", mode: "getDocs initial" });
+  console.log("Query commesse avviata", { collection: commesseCollectionName, orderBy: "createdAt desc", mode: "getDocs initial" });
   return runFirestoreGetWithRetry(query, {
     label: "LOAD COMMESSE",
     timeoutMs: 9000,

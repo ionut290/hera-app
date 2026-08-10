@@ -2,164 +2,7 @@
   "use strict";
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
-  const REMEMBER_LOGIN_KEY = "heraRememberLogin";
-  const PERSISTED_SESSION_KEY = "heraPersistedUserSession";
-  const PERSISTED_AUTH_WAIT_MS = 2500;
   let registrationPending = false;
-
-  function readRememberLoginPreference() {
-    try {
-      const saved = localStorage.getItem(REMEMBER_LOGIN_KEY);
-      return saved === null ? true : saved === "true";
-    } catch (_) {
-      return true;
-    }
-  }
-
-  function saveRememberLoginPreference(remember) {
-    try {
-      localStorage.setItem(REMEMBER_LOGIN_KEY, remember ? "true" : "false");
-    } catch (error) {
-      console.warn("Preferenza Ricordami non memorizzabile:", error);
-    }
-  }
-
-  async function setCompatibleAuthPersistence(auth, rememberLogin) {
-    const persistence = firebase.auth.Auth.Persistence;
-    const preferred = rememberLogin ? persistence.LOCAL : persistence.SESSION;
-    try {
-      await auth.setPersistence(preferred);
-      return preferred;
-    } catch (error) {
-      const code = String(error?.code || "").toLowerCase();
-      if (!["auth/unsupported-persistence-type", "auth/invalid-persistence-type"].includes(code)) {
-        throw error;
-      }
-      console.warn("Persistenza Firebase non supportata dal browser; provo la sessione temporanea.", error);
-    }
-
-    if (preferred !== persistence.SESSION) {
-      try {
-        await auth.setPersistence(persistence.SESSION);
-        return persistence.SESSION;
-      } catch (error) {
-        const code = String(error?.code || "").toLowerCase();
-        if (!["auth/unsupported-persistence-type", "auth/invalid-persistence-type"].includes(code)) {
-          throw error;
-        }
-      }
-    }
-
-    if (persistence.NONE) {
-      try {
-        await auth.setPersistence(persistence.NONE);
-        return persistence.NONE;
-      } catch (error) {
-        console.warn("Persistenza Firebase temporanea non impostabile; continuo con quella disponibile.", error);
-      }
-    }
-    return null;
-  }
-
-  function readPersistedUserSession() {
-    try {
-      const raw = localStorage.getItem(PERSISTED_SESSION_KEY);
-      if (!raw) return null;
-      const session = JSON.parse(raw);
-      if (!session || session.banned === true || session.accessApproved === false) return null;
-      if (!String(session.uid || "").trim()) return null;
-      if (!String(session.email || "").includes("@")) return null;
-      return session;
-    } catch (error) {
-      console.warn("Sessione locale non leggibile:", error);
-      return null;
-    }
-  }
-
-  function normalizeEmail(value) {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function isMatchingRememberedUser(user, email) {
-    if (!user?.uid) return false;
-    if (normalizeEmail(user.email) !== normalizeEmail(email)) return false;
-    const session = readPersistedUserSession();
-    if (!session) return true;
-    return String(session.uid) === String(user.uid)
-      && normalizeEmail(session.email) === normalizeEmail(email);
-  }
-
-  function waitForPersistedAuthUser(auth, email, timeoutMs = PERSISTED_AUTH_WAIT_MS) {
-    if (!auth) return Promise.resolve(null);
-    if (isMatchingRememberedUser(auth.currentUser, email)) {
-      return Promise.resolve(auth.currentUser);
-    }
-
-    return new Promise((resolve) => {
-      let settled = false;
-      let unsubscribe = null;
-      const finish = (user) => {
-        if (settled) return;
-        settled = true;
-        if (typeof unsubscribe === "function") unsubscribe();
-        resolve(user || null);
-      };
-      const timer = window.setTimeout(() => finish(null), timeoutMs);
-      unsubscribe = auth.onAuthStateChanged((user) => {
-        if (!isMatchingRememberedUser(user, email)) return;
-        window.clearTimeout(timer);
-        finish(user);
-      }, () => {
-        window.clearTimeout(timer);
-        finish(null);
-      });
-    });
-  }
-
-  async function tryRememberedLogin(auth, email, feedback) {
-    if (!readRememberLoginPreference()) return null;
-    const rememberedSession = readPersistedUserSession();
-    if (rememberedSession && normalizeEmail(rememberedSession.email) !== normalizeEmail(email)) {
-      return null;
-    }
-
-    const user = await waitForPersistedAuthUser(auth, email);
-    if (!user) return null;
-    if (feedback) {
-      feedback.textContent = navigator.onLine === false
-        ? "Accesso con sessione salvata. Modalità offline attiva."
-        : "Sessione salvata ripristinata.";
-    }
-    console.log("LOGIN: sessione Firebase locale riutilizzata", {
-      uid: user.uid,
-      email: user.email,
-      online: navigator.onLine !== false
-    });
-    return user;
-  }
-
-  function installPasswordVisibilityToggle() {
-    const passwordInput = document.getElementById("auth-password-input");
-    const toggle = document.getElementById("auth-password-toggle-btn");
-    if (!passwordInput || !toggle || toggle.dataset.installed === "1") return;
-    toggle.dataset.installed = "1";
-    toggle.addEventListener("click", () => {
-      const show = passwordInput.type === "password";
-      passwordInput.type = show ? "text" : "password";
-      toggle.textContent = show ? "🙈" : "👁️";
-      toggle.setAttribute("aria-label", show ? "Nascondi password" : "Mostra password");
-      toggle.setAttribute("aria-pressed", show ? "true" : "false");
-      passwordInput.focus({ preventScroll: true });
-      passwordInput.setSelectionRange(passwordInput.value.length, passwordInput.value.length);
-    });
-  }
-
-  function initializeRememberLogin() {
-    const checkbox = document.getElementById("auth-remember-login");
-    if (!checkbox) return;
-    checkbox.checked = readRememberLoginPreference();
-    checkbox.addEventListener("change", () => saveRememberLoginPreference(checkbox.checked));
-  }
 
   function friendlyLoginError(error) {
     const code = String(error?.code || "").toLowerCase();
@@ -174,17 +17,12 @@
       return "Troppi tentativi. Attendi qualche minuto e riprova.";
     }
     if (code === "auth/network-request-failed") {
-      const rememberedSession = readPersistedUserSession();
-      if (rememberedSession) {
-        return "Rete troppo debole per verificare di nuovo l’account. Se questo dispositivo ha già effettuato l’accesso, riapri l’app: verrà usata automaticamente la sessione salvata.";
-      }
-      return "Connessione non disponibile. Il primo accesso su questo dispositivo richiede internet.";
+      return "Connessione non disponibile. Controlla internet e riprova.";
     }
     if (code === "auth/email-not-verified") {
       return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
     }
-    const safeCode = code || "errore-sconosciuto";
-    return `Accesso non riuscito (${safeCode}). Riprova oppure usa Password dimenticata.`;
+    return "Accesso non riuscito. Controlla email e password e riprova.";
   }
 
   function registrationElements() {
@@ -430,23 +268,7 @@
 
     try {
       const auth = firebase.auth();
-      const rememberLogin = document.getElementById("auth-remember-login")?.checked !== false;
-      saveRememberLoginPreference(rememberLogin);
-      await setCompatibleAuthPersistence(auth, rememberLogin);
-
-      if (navigator.onLine === false) {
-        if (rememberLogin) {
-          const rememberedUser = await tryRememberedLogin(auth, email, feedback);
-          if (rememberedUser) {
-            if (passwordInput) passwordInput.value = "";
-            return;
-          }
-        }
-        const offlineError = new Error("Connessione non disponibile.");
-        offlineError.code = "auth/network-request-failed";
-        throw offlineError;
-      }
-
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       try {
         const credential = await auth.signInWithEmailAndPassword(email, password);
         if (credential.user && credential.user.emailVerified === false) {
@@ -457,14 +279,14 @@
         }
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
-        if (code === "auth/network-request-failed" && rememberLogin) {
-          const rememberedUser = await tryRememberedLogin(auth, email, feedback);
-          if (rememberedUser) {
-            if (passwordInput) passwordInput.value = "";
-            return;
-          }
+        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
+        if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
+        const registration = await openRegistrationDialog(email, password);
+        if (passwordInput) passwordInput.value = "";
+        if (registration.verificationRequired && feedback) {
+          feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
         }
-        throw loginError;
+        return;
       }
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
@@ -489,9 +311,6 @@
   }
 
   function initialize() {
-    window.__heraEmailLoginHandlerInstalled = true;
-    installPasswordVisibilityToggle();
-    initializeRememberLogin();
     document.addEventListener("submit", handleLogin, true);
     document.getElementById("auth-create-account-btn")
       ?.addEventListener("click", startRegistrationFromLogin);

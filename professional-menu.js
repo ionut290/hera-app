@@ -120,20 +120,4 @@
 
   body.replaceChildren(fragment);
   body.dataset.professionalMenuReady = "true";
-
-  if (!document.querySelector('script[data-admin-password-manager="true"]')) {
-    const script = document.createElement("script");
-    script.src = "admin-password-manager.js?v=20260810b";
-    script.defer = true;
-    script.dataset.adminPasswordManager = "true";
-    document.head.appendChild(script);
-  }
-
-  if (!document.querySelector('script[data-user-management-search-fix="true"]')) {
-    const script = document.createElement("script");
-    script.src = "user-management-search-input-fix.js?v=20260810a";
-    script.defer = true;
-    script.dataset.userManagementSearchFix = "true";
-    document.head.appendChild(script);
-  }
 })();

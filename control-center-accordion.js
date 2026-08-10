@@ -5,14 +5,9 @@
   const PAGE_ID = "control-center-page";
   const CONTENT_ID = "control-center-content";
 
-  const PINNED_SECTIONS = [
-    { key: "firestore-usage", match: ["consumo firestore giornaliero"] },
-    { key: "firestore-diagnostics-v3", match: ["diagnostica operazioni firestore v3"] }
-  ];
-
   const CATEGORIES = [
     { key: "report", title: "📥 Report e diagnostica", description: "Scarica report, diagnostica, backup ed esportazioni.", keywords: ["report", "scarica", "download", "diagnost", "esporta", "export", "backup", "controllo app"] },
-    { key: "firestore", title: "🔥 Firestore e database", description: "Altri controlli Firestore, listener, snapshot e quota.", keywords: ["firestore", "firebase", "database", "listener", "snapshot", "quota"] },
+    { key: "firestore", title: "🔥 Firestore e database", description: "Consumi, letture, scritture, eliminazioni, listener e quota.", keywords: ["firestore", "firebase", "database", "letture", "scritture", "eliminazioni", "listener", "snapshot", "quota", "consumo"] },
     { key: "sync", title: "🔄 Sincronizzazione e rete", description: "Stato online/offline, sincronizzazione, cache e code dati.", keywords: ["sincron", "sync", "online", "offline", "rete", "connession", "cache", "coda"] },
     { key: "access", title: "🔐 Accesso e sicurezza", description: "Login, utenti, autorizzazioni, sessioni e credenziali.", keywords: ["login", "accesso", "utente", "auth", "google", "password", "session", "permess", "autorizz"] },
     { key: "app", title: "📱 App, PWA e aggiornamenti", description: "Versione app, PWA, Service Worker, installazione e aggiornamenti.", keywords: ["pwa", "versione", "service worker", "aggiorna app", "aggiornamento", "install", "build", "release"] },
@@ -28,12 +23,6 @@
     return cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
-  function getPinnedKey(node) {
-    const text = normalizedText(node?.textContent);
-    const pinned = PINNED_SECTIONS.find((section) => section.match.some((phrase) => text.includes(normalizedText(phrase))));
-    return pinned?.key || "";
-  }
-
   function classifyNode(node) {
     const text = normalizedText(node.textContent);
     for (const category of CATEGORIES) {
@@ -44,11 +33,7 @@
   }
 
   function isManagedNode(node) {
-    return !(node instanceof HTMLElement)
-      || node.classList.contains("control-center-category")
-      || node.classList.contains("control-center-tools")
-      || node.classList.contains("control-center-empty-search")
-      || node.id === "control-center-results";
+    return !(node instanceof HTMLElement) || node.classList.contains("control-center-category") || node.classList.contains("control-center-empty-search") || node.id === "control-center-results";
   }
 
   function setOpen(item, open, options = {}) {
@@ -126,6 +111,10 @@
       }
       map.set(category.key, item);
     });
+    CATEGORIES.forEach((category) => {
+      const item = map.get(category.key);
+      if (item) container.appendChild(item);
+    });
     return map;
   }
 
@@ -141,46 +130,45 @@
   }
 
   function ensureTools(page, container) {
-    let tools = page.querySelector(".control-center-tools");
-    if (!tools) {
-      tools = document.createElement("section");
-      tools.className = "card control-center-tools";
-      const label = document.createElement("strong");
-      const input = document.createElement("input");
-      const status = document.createElement("p");
-      label.className = "control-center-tools-title";
-      label.textContent = "Trova subito quello che ti serve";
-      input.type = "search";
-      input.className = "control-center-search";
-      input.placeholder = "Cerca report, Firestore, PWA, login…";
-      input.setAttribute("aria-label", "Cerca nel Centro di Controllo");
-      status.className = "control-center-search-status";
-      status.setAttribute("aria-live", "polite");
+    let tools = page.querySelector(":scope > .control-center-tools");
+    if (tools) return tools;
+    tools = document.createElement("section");
+    tools.className = "card control-center-tools";
+    const label = document.createElement("strong");
+    const input = document.createElement("input");
+    const status = document.createElement("p");
+    label.className = "control-center-tools-title";
+    label.textContent = "Trova subito quello che ti serve";
+    input.type = "search";
+    input.className = "control-center-search";
+    input.placeholder = "Cerca report, Firestore, PWA, login…";
+    input.setAttribute("aria-label", "Cerca nel Centro di Controllo");
+    status.className = "control-center-search-status";
+    status.setAttribute("aria-live", "polite");
 
-      input.addEventListener("input", () => {
-        const query = normalizedText(input.value);
-        let visible = 0;
-        let firstMatch = null;
-        container.querySelectorAll(":scope > .control-center-category").forEach((item) => {
-          const hasContent = Number(item.querySelector(".control-center-category-count")?.textContent || "0") > 0;
-          const matches = hasContent && (!query || (item.dataset.controlSearchText || "").includes(query));
-          item.hidden = !matches;
-          if (matches) {
-            visible += 1;
-            if (!firstMatch) firstMatch = item;
-          }
-        });
-        if (query && visible === 1 && firstMatch) {
-          closeOthers(container, firstMatch);
-          setOpen(firstMatch, true);
+    input.addEventListener("input", () => {
+      const query = normalizedText(input.value);
+      let visible = 0;
+      let firstMatch = null;
+      container.querySelectorAll(":scope > .control-center-category").forEach((item) => {
+        const hasContent = Number(item.querySelector(".control-center-category-count")?.textContent || "0") > 0;
+        const matches = hasContent && (!query || (item.dataset.controlSearchText || "").includes(query));
+        item.hidden = !matches;
+        if (matches) {
+          visible += 1;
+          if (!firstMatch) firstMatch = item;
         }
-        status.textContent = query ? `${visible} categori${visible === 1 ? "a trovata" : "e trovate"}.` : "Tocca una categoria: vedrai solo le informazioni che ti servono.";
       });
+      if (query && visible === 1 && firstMatch) {
+        closeOthers(container, firstMatch);
+        setOpen(firstMatch, true);
+      }
+      status.textContent = query ? `${visible} categori${visible === 1 ? "a trovata" : "e trovate"}.` : "Tocca una categoria: vedrai solo le informazioni che ti servono.";
+    });
 
-      status.textContent = "Tocca una categoria: vedrai solo le informazioni che ti servono.";
-      tools.append(label, input, status);
-    }
-    if (tools.parentElement !== container) container.appendChild(tools);
+    status.textContent = "Tocca una categoria: vedrai solo le informazioni che ti servono.";
+    tools.append(label, input, status);
+    page.insertBefore(tools, container);
     return tools;
   }
 
@@ -193,45 +181,16 @@
       const page = document.getElementById(PAGE_ID);
       const container = document.getElementById(CONTENT_ID);
       if (!page || !container) return;
-
+      ensureTools(page, container);
       const categories = ensureCategories(container);
-      const tools = ensureTools(page, container);
-      const candidates = [];
-
-      Array.from(container.children).filter((node) => !isManagedNode(node)).forEach((node) => candidates.push(node));
-      categories.forEach((item) => {
-        const content = item.querySelector(":scope > .control-center-category-panel > .control-center-category-content");
-        if (content) Array.from(content.children).forEach((node) => candidates.push(node));
-      });
-
-      const pinned = new Map();
-      candidates.forEach((node) => {
-        const pinnedKey = getPinnedKey(node);
-        if (pinnedKey) {
-          node.classList.add("control-center-pinned-section");
-          node.dataset.controlPinned = pinnedKey;
-          pinned.set(pinnedKey, node);
-          return;
-        }
-        node.classList.remove("control-center-pinned-section");
-        delete node.dataset.controlPinned;
+      const rawNodes = Array.from(container.children).filter((node) => !isManagedNode(node));
+      rawNodes.forEach((node) => {
         const category = classifyNode(node);
         const item = categories.get(category.key);
         const content = item?.querySelector(":scope > .control-center-category-panel > .control-center-category-content");
         if (content) content.appendChild(node);
       });
-
       categories.forEach((item) => updateCategoryMeta(item));
-
-      PINNED_SECTIONS.forEach((section) => {
-        const node = pinned.get(section.key);
-        if (node) container.appendChild(node);
-      });
-      container.appendChild(tools);
-      CATEGORIES.forEach((category) => {
-        const item = categories.get(category.key);
-        if (item) container.appendChild(item);
-      });
 
       let remembered = "";
       try { remembered = sessionStorage.getItem(STORAGE_KEY) || ""; } catch (_) {}
@@ -245,7 +204,7 @@
   }
 
   const observer = new MutationObserver((mutations) => {
-    const hasExternalNodes = mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => node instanceof HTMLElement && !node.classList.contains("control-center-category") && !node.classList.contains("control-center-tools")));
+    const hasExternalNodes = mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => node instanceof HTMLElement && !node.classList.contains("control-center-category")));
     if (hasExternalNodes) enhance();
   });
 

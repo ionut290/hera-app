@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const html = fs.readFileSync("index.html", "utf8");
 const css = fs.readFileSync("style.css", "utf8");
 const app = fs.readFileSync("app.js", "utf8");
+const serviceWorker = fs.readFileSync("sw.js", "utf8");
 const capacitor = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
 
 assert.match(html, /id="update-app-btn"[^>]*>[\s\S]*?Aggiorna app[\s\S]*?<\/button>/);
@@ -14,5 +15,12 @@ assert.match(app, new RegExp(`play\\.google\\.com/store/apps/details\\?id=${capa
 assert.match(app, /navigator\.serviceWorker\?\.getRegistration/);
 assert.match(app, /Capacitor\?\.getPlatform\?\.\(\) === "android"/);
 assert.doesNotMatch(app, /window\.location\.assign\(updateUrl/);
+assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260812-opera1"/);
+assert.match(html, /name\.startsWith\("hera-app-shell-"\)[\s\S]*name\.startsWith\("varga-cantieri-shell-"\)/);
+assert.match(html, /navigator\.serviceWorker\.register\("\.\/sw\.js", \{ updateViaCache: "none" \}\)/);
+assert.doesNotMatch(html, /localStorage\.clear\(\)/);
+assert.match(serviceWorker, /CACHE_RESET_VERSION\s*=\s*"20260812-opera1"/);
+assert.match(serviceWorker, /self\.clients\.matchAll\(\{ type: "window", includeUncontrolled: true \}\)/);
+assert.match(serviceWorker, /client\.navigate\(url\.toString\(\)\)/);
 
 console.log("App update button checks passed.");

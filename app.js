@@ -23634,33 +23634,196 @@ function updateWhazzupAttachmentButton(button, impianto) {
   button.classList.toggle("has-attachments", count > 0);
 }
 
-function chooseWhazzupPhotos(impianto, button) {
+async function saveWhazzupPhotoSelection(impianto, files) {
+  const key = getWhazzupPhotoKey(impianto);
+  const validFiles = Array.from(files || []).filter((file) => file instanceof Blob && String(file.type || "").startsWith("image/"));
+  if (!validFiles.length) {
+    await deletePersistedWhazzupPhotos(key);
+    return [];
+  }
+  const savedAt = Date.now();
+  whazzupPhotoFilesByImpianto.set(key, validFiles);
+  whazzupPhotoSavedAtByImpianto.set(key, savedAt);
+  await persistWhazzupPhotos(key, validFiles, savedAt);
+  return validFiles;
+}
+
+function openWhazzupPhotoPreview(file) {
+  const objectUrl = URL.createObjectURL(file);
+  const overlay = document.createElement("div");
+  overlay.className = "whazzup-photo-preview";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "Anteprima foto allegata");
+  overlay.innerHTML = `
+    <button type="button" class="whazzup-photo-preview-close" aria-label="Chiudi anteprima">×</button>
+    <img src="${objectUrl}" alt="Foto allegata al messaggio Whazzup">
+  `;
+  const close = () => {
+    URL.revokeObjectURL(objectUrl);
+    overlay.remove();
+    document.removeEventListener("keydown", onKeyDown, true);
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopImmediatePropagation();
+      close();
+    }
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target.closest(".whazzup-photo-preview-close")) close();
+  });
+  document.addEventListener("keydown", onKeyDown, true);
+  document.body.appendChild(overlay);
+  overlay.querySelector(".whazzup-photo-preview-close")?.focus();
+}
+
+function pickWhazzupPhotos(impianto, button, options = {}) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "image/*";
-  input.multiple = true;
+  input.multiple = options.mode !== "replace-one";
   input.hidden = true;
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []).filter((file) => file.type.startsWith("image/"));
-    const key = getWhazzupPhotoKey(impianto);
-    if (files.length) {
-      const savedAt = Date.now();
-      whazzupPhotoFilesByImpianto.set(key, files);
-      whazzupPhotoSavedAtByImpianto.set(key, savedAt);
-      try {
-        await persistWhazzupPhotos(key, files, savedAt);
-      } catch (error) {
-        console.error("Salvataggio locale foto Whazzup non riuscito:", error);
-        alert("Le foto sono allegate, ma il telefono non permette di conservarle dopo la chiusura dell’app.");
-      }
-    } else {
-      await deletePersistedWhazzupPhotos(key);
-    }
-    updateWhazzupAttachmentButton(button, impianto);
     input.remove();
+    if (!files.length) return;
+    const current = getWhazzupPhotos(impianto).slice();
+    let nextFiles = files;
+    if (options.mode === "append") nextFiles = [...current, ...files];
+    if (options.mode === "replace-one") {
+      nextFiles = current;
+      nextFiles.splice(Number(options.index || 0), 1, files[0]);
+    }
+    try {
+      await saveWhazzupPhotoSelection(impianto, nextFiles);
+      updateWhazzupAttachmentButton(button, impianto);
+      if (options.reopenManager !== false) openWhazzupPhotoManager(impianto, button);
+    } catch (error) {
+      console.error("Salvataggio locale foto Whazzup non riuscito:", error);
+      alert("Non è stato possibile conservare le foto sul dispositivo. Riprova oppure libera spazio sul telefono.");
+    }
   }, { once: true });
+  input.addEventListener("cancel", () => input.remove(), { once: true });
   document.body.appendChild(input);
   input.click();
+}
+
+function openWhazzupPhotoManager(impianto, button) {
+  const files = getWhazzupPhotos(impianto);
+  if (!files.length) {
+    pickWhazzupPhotos(impianto, button, { mode: "replace-all" });
+    return;
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "whazzup-photo-manager";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "whazzup-photo-manager-title");
+  const card = document.createElement("section");
+  card.className = "whazzup-photo-manager-card";
+  overlay.appendChild(card);
+  let objectUrls = [];
+
+  const close = () => {
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls = [];
+    overlay.remove();
+    document.removeEventListener("keydown", onKeyDown);
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") close();
+  };
+
+  const render = () => {
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls = [];
+    const currentFiles = getWhazzupPhotos(impianto);
+    if (!currentFiles.length) {
+      close();
+      updateWhazzupAttachmentButton(button, impianto);
+      return;
+    }
+    const photoCards = currentFiles.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      objectUrls.push(url);
+      return `
+        <article class="whazzup-photo-item" data-photo-index="${index}">
+          <button type="button" class="whazzup-photo-open" data-photo-action="view" aria-label="Visualizza foto ${index + 1}">
+            <img src="${url}" alt="Foto allegata ${index + 1}">
+            <span>Visualizza</span>
+          </button>
+          <div class="whazzup-photo-item-actions">
+            <button type="button" class="btn" data-photo-action="replace">Sostituisci</button>
+            <button type="button" class="btn btn-danger" data-photo-action="delete">Elimina</button>
+          </div>
+        </article>
+      `;
+    }).join("");
+    card.innerHTML = `
+      <header class="whazzup-photo-manager-head">
+        <div>
+          <p class="management-eyebrow">ALLEGATI WHAZZUP</p>
+          <h2 id="whazzup-photo-manager-title">Foto dell’impianto</h2>
+          <p>${currentFiles.length} ${currentFiles.length === 1 ? "foto allegata" : "foto allegate"} · conservate per massimo 10 ore</p>
+        </div>
+        <button type="button" class="whazzup-photo-manager-close" data-manager-action="close" aria-label="Chiudi">×</button>
+      </header>
+      <div class="whazzup-photo-grid">${photoCards}</div>
+      <footer class="whazzup-photo-manager-actions">
+        <button type="button" class="btn" data-manager-action="add">＋ Aggiungi foto</button>
+        <button type="button" class="btn" data-manager-action="replace-all">Sostituisci tutte</button>
+        <button type="button" class="btn btn-danger" data-manager-action="delete-all">Elimina tutte</button>
+      </footer>
+    `;
+  };
+
+  card.addEventListener("click", async (event) => {
+    const managerAction = event.target.closest("[data-manager-action]")?.dataset.managerAction;
+    if (managerAction === "close") return close();
+    if (managerAction === "add" || managerAction === "replace-all") {
+      close();
+      pickWhazzupPhotos(impianto, button, { mode: managerAction === "add" ? "append" : "replace-all" });
+      return;
+    }
+    if (managerAction === "delete-all") {
+      if (!confirm("Eliminare tutte le foto allegate a questo impianto?")) return;
+      await saveWhazzupPhotoSelection(impianto, []);
+      updateWhazzupAttachmentButton(button, impianto);
+      close();
+      return;
+    }
+    const item = event.target.closest("[data-photo-index]");
+    const photoAction = event.target.closest("[data-photo-action]")?.dataset.photoAction;
+    if (!item || !photoAction) return;
+    const index = Number(item.dataset.photoIndex);
+    const currentFiles = getWhazzupPhotos(impianto);
+    if (!currentFiles[index]) return;
+    if (photoAction === "view") return openWhazzupPhotoPreview(currentFiles[index]);
+    if (photoAction === "replace") {
+      close();
+      pickWhazzupPhotos(impianto, button, { mode: "replace-one", index });
+      return;
+    }
+    if (photoAction === "delete") {
+      const remaining = currentFiles.filter((_, photoIndex) => photoIndex !== index);
+      await saveWhazzupPhotoSelection(impianto, remaining);
+      updateWhazzupAttachmentButton(button, impianto);
+      render();
+    }
+  });
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+  document.addEventListener("keydown", onKeyDown);
+  document.body.appendChild(overlay);
+  render();
+  card.querySelector(".whazzup-photo-manager-close")?.focus();
+}
+
+function chooseWhazzupPhotos(impianto, button) {
+  if (getWhazzupPhotos(impianto).length) openWhazzupPhotoManager(impianto, button);
+  else pickWhazzupPhotos(impianto, button, { mode: "replace-all" });
 }
 
 async function shareWhazzupWithPhotos(impianto, options = {}) {

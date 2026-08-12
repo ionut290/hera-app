@@ -15,32 +15,35 @@
     if (!("caches" in window)) return;
     try {
       const cacheNames = await caches.keys();
-      await Promise.all(
-        cacheNames
-          .filter((name) => name.startsWith("hera-app-shell-") || name.startsWith("varga-cantieri-shell-"))
-          .map((name) => caches.delete(name))
-      );
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
     } catch (error) {
       console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
     }
   }
 
+  function reloadWithoutCache() {
+    const refreshUrl = new URL(window.location.href);
+    refreshUrl.searchParams.set("appRefresh", String(Date.now()));
+    window.location.replace(refreshUrl.toString());
+  }
+
   async function requestPwaUpdate({ reload = false } = {}) {
-    if (isNativeAndroid() || !("serviceWorker" in navigator)) return false;
     try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      await registration?.update?.();
-      const waiting = registration?.waiting;
-      if (waiting) waiting.postMessage({ type: "SKIP_WAITING" });
-      if (reload) {
-        await clearWebAppCaches();
-        const refreshUrl = new URL(window.location.href);
-        refreshUrl.searchParams.set("appRefresh", String(Date.now()));
-        window.location.replace(refreshUrl.toString());
+      await clearWebAppCaches();
+
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(async (registration) => {
+          await registration.update().catch(() => null);
+          registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+        }));
       }
+
+      if (reload) reloadWithoutCache();
       return true;
     } catch (error) {
       console.warn("Controllo aggiornamento web non riuscito.", error);
+      if (reload) reloadWithoutCache();
       return false;
     }
   }
@@ -52,17 +55,8 @@
     button.setAttribute("aria-busy", "true");
 
     try {
-      if (isNativeAndroid()) {
-        window.location.assign(PLAY_STORE_URL);
-        return;
-      }
-
       const updated = await requestPwaUpdate({ reload: true });
-      if (!updated && document.visibilityState === "visible") {
-        const refreshUrl = new URL(window.location.href);
-        refreshUrl.searchParams.set("appRefresh", String(Date.now()));
-        window.location.replace(refreshUrl.toString());
-      }
+      if (!updated && document.visibilityState === "visible") reloadWithoutCache();
     } finally {
       if (document.visibilityState === "visible") {
         button.disabled = false;
@@ -186,8 +180,8 @@
       userButton.insertAdjacentElement("afterend", button);
     }
 
-    button.title = isNativeAndroid() ? "Aggiorna app" : "Aggiorna PWA";
-    button.setAttribute("aria-label", isNativeAndroid() ? "Aggiorna app" : "Aggiorna PWA");
+    button.title = "Refresh: elimina cache e ricarica";
+    button.setAttribute("aria-label", "Refresh: elimina cache e ricarica");
     bindUpdateButton(button);
   }
 

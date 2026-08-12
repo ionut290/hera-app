@@ -146,11 +146,11 @@ async function main() {
   assert.match(whatsappHandler, /const opened = openWhatsApp\(/);
   assert.ok(
     whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)")
-      < whatsappHandler.indexOf("const opened = openWhatsApp("),
+      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
     "Lo stato FATTO deve essere salvato prima di WhatsApp"
   );
   assert.ok(
-    whatsappHandler.indexOf("const opened = openWhatsApp(")
+    whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
       < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
     "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
   );
@@ -187,6 +187,8 @@ async function main() {
     markWhazzupSafetyPressed: () => {},
     upsertWhazzupPendingDoneEntry: () => {},
     renderImpianti: () => {},
+    getWhazzupPhotos: () => [],
+    shareWhazzupWithPhotos: async () => true,
     openWhatsApp: () => { whatsappOpens += 1; return true; },
     markImpiantoDoneVisualFallback: () => {},
     setImpiantiViewMode: () => {},
@@ -214,12 +216,14 @@ async function main() {
   const completedContext = createContext({
     auth: { currentUser: { uid: "u1", displayName: "Operatore" } },
     getCurrentWhatsAppOperatorName: () => "Operatore",
+    getWhazzupPhotos: () => [],
+    shareWhazzupWithPhotos: async () => true,
     openWhatsApp: () => { completedWhatsappOpens += 1; return true; },
     alert: () => {}
   });
   loadFunctions(completedContext, ["handleCompletedImpiantoWhatsAppClick"]);
   assert.equal(
-    completedContext.handleCompletedImpiantoWhatsAppClick({ done: true, doneAt: "2026-07-29T10:00:00Z" }),
+    await completedContext.handleCompletedImpiantoWhatsAppClick({ done: true, doneAt: "2026-07-29T10:00:00Z" }),
     true,
     "FATTO DAL deve riaprire Whazzup"
   );

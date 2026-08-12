@@ -450,3 +450,41 @@ body.menu-fullscreen-open #side-menu.side-menu {
     max-width: 44px !important;
   }
 }
+
+/* Etichette operative sempre leggibili: nessuna modifica alle dimensioni dei pulsanti. */
+.impianto-primary-actions .action-icon-btn[data-action-key="navigate"]::after {
+  content: "NAVIGA" !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin-left: 5px !important;
+  color: #fff !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.035em !important;
+  white-space: nowrap !important;
+}
+
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]::after {
+  content: "FATTO" !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin-left: 5px !important;
+  color: #fff !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.035em !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 360px) {
+  .impianto-primary-actions .action-icon-btn[data-action-key="navigate"]::after,
+  .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]::after {
+    margin-left: 3px !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.01em !important;
+  }
+}

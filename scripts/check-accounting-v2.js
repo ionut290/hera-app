@@ -21,6 +21,7 @@ const checks=[
  ['sincronizzazione operativa',js.includes('synchronizeOperationalModel')&&js.includes('collection("impianti")')],
  ['verifica lista operativa dopo import',js.includes('verifyOperationalModel')&&js.includes('Impianti verificati nella lista operativa')],
  ['riparazione ricarica dati salvati',js.includes('await load({autoRepair:false});const report=await synchronizeOperationalModel')],
+ ['payload impianto fisico senza undefined',!js.includes('const physical={...plant,id:undefined')&&js.includes('delete physical.id')],
  ['autoriparazione importazioni incomplete',js.includes('needsOperationalRepair')&&js.includes('autoRepairing')&&js.includes('load({autoRepair:false})')],
  ['autoriparazione dal caricamento app',repair.includes('repairCommessa')&&repair.includes('workByPlantId')&&repair.includes('repairImportedInretePlants')],
  ['vista contabile stabile',guard.includes('ensureAccountingView')&&guard.includes('window.AccountingV2.open')&&!guard.includes('renderImpiantiManagementTable')],

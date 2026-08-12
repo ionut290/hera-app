@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v110";
+const CACHE_NAME = "varga-cantieri-shell-v111";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -16,7 +16,7 @@ const APP_SHELL = [
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
-  "./accounting-v2.js?v=20260812-modena1",
+  "./accounting-v2.js?v=20260812-modena2",
   "./accounting-view-guard.js?v=20260728a",
   "./operational-import-repair.js?v=20260728a",
   "./google-sheet-two-way-sync.js?v=20260729b",

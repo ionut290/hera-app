@@ -6,6 +6,7 @@ const vm = require("node:vm");
 const appSource = fs.readFileSync("app.js", "utf8");
 const nativeSource = fs.readFileSync("native-android-runtime.js", "utf8");
 const immediateSource = fs.readFileSync("fatto-button-immediate.js", "utf8");
+const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 function extractFunction(name) {
   const signatures = [`async function ${name}(`, `function ${name}(`];
@@ -246,11 +247,19 @@ async function main() {
   assert.match(appSource, /data-manager-action="delete-all"/);
   assert.match(appSource, /function buildOrderedWhazzupShareFiles\(files\)/);
   assert.match(appSource, /Foto-\$\{String\(index \+ 1\)\.padStart\(2, "0"\)\}/);
+  assert.ok(packageJson.dependencies["@capacitor/filesystem"], "Manca il filesystem nativo Android");
+  assert.ok(packageJson.dependencies["@capacitor/share"], "Manca la condivisione nativa Android");
+  assert.match(appSource, /function getNativeAndroidWhazzupSharePlugins\(\)/);
+  assert.match(appSource, /plugins\.filesystem\.writeFile\(\{/);
+  assert.match(appSource, /directory: "CACHE"/);
+  const nativePhotoShareHandler = extractFunction("shareWhazzupPhotosNativeAndroid");
   const photoShareHandler = extractFunction("shareWhazzupWithPhotos");
   assert.ok(
-    photoShareHandler.indexOf("files: orderedFiles") < photoShareHandler.indexOf("text: message"),
-    "Le foto ordinate devono precedere il messaggio nel payload Whazzup"
+    nativePhotoShareHandler.indexOf("files: fileUris") < nativePhotoShareHandler.indexOf("text: message"),
+    "Le foto native ordinate devono precedere il messaggio nel payload Whazzup"
   );
+  assert.match(photoShareHandler, /shareWhazzupPhotosNativeAndroid\(orderedFiles, message\)/);
+  assert.match(photoShareHandler, /files: orderedFiles[\s\S]*text: message/);
   assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);
 
   const payloadContext = createContext({

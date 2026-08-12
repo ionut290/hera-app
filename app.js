@@ -23846,26 +23846,108 @@ function buildOrderedWhazzupShareFiles(files) {
   });
 }
 
+function getNativeAndroidWhazzupSharePlugins() {
+  const capacitor = window.Capacitor;
+  const isNativeAndroid = Boolean(
+    capacitor?.isNativePlatform?.()
+    && capacitor?.getPlatform?.() === "android"
+  );
+  if (!isNativeAndroid || typeof capacitor?.registerPlugin !== "function") return null;
+  const filesystem = capacitor.Plugins?.Filesystem || capacitor.registerPlugin("Filesystem");
+  const share = capacitor.Plugins?.Share || capacitor.registerPlugin("Share");
+  return filesystem && share ? { filesystem, share } : null;
+}
+
+function readWhazzupPhotoAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const separatorIndex = result.indexOf(",");
+      if (separatorIndex < 0) return reject(new Error("Formato foto non valido"));
+      resolve(result.slice(separatorIndex + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error("Lettura foto non riuscita"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function removeNativeWhazzupShareFolder(filesystem, folderPath) {
+  try {
+    await filesystem.rmdir({
+      path: folderPath,
+      directory: "CACHE",
+      recursive: true
+    });
+  } catch (error) {
+    console.warn("Pulizia foto temporanee Whazzup non riuscita:", error);
+  }
+}
+
+function scheduleNativeWhazzupShareCleanup(filesystem, folderPath) {
+  // WhatsApp deve avere il tempo di leggere gli URI ricevuti dal pannello Android.
+  window.setTimeout(() => {
+    void removeNativeWhazzupShareFolder(filesystem, folderPath);
+  }, 5 * 60 * 1000);
+}
+
+async function shareWhazzupPhotosNativeAndroid(orderedFiles, message) {
+  const plugins = getNativeAndroidWhazzupSharePlugins();
+  if (!plugins) return null;
+  const folderPath = `hera-whazzup-share/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const fileUris = [];
+  try {
+    for (const file of orderedFiles) {
+      const fileName = String(file?.name || `Foto-${String(fileUris.length + 1).padStart(2, "0")}.jpg`);
+      const result = await plugins.filesystem.writeFile({
+        path: `${folderPath}/${fileName}`,
+        data: await readWhazzupPhotoAsBase64(file),
+        directory: "CACHE",
+        recursive: true
+      });
+      fileUris.push(result.uri);
+    }
+    const shareResult = await plugins.share.share({
+      files: fileUris,
+      text: message,
+      title: "Impianto fatto",
+      dialogTitle: "Condividi foto e messaggio Whazzup"
+    });
+    scheduleNativeWhazzupShareCleanup(plugins.filesystem, folderPath);
+    return shareResult || true;
+  } catch (error) {
+    await removeNativeWhazzupShareFolder(plugins.filesystem, folderPath);
+    throw error;
+  }
+}
+
+function isWhazzupShareCancellation(error) {
+  return error?.name === "AbortError" || /cancel|annull/i.test(String(error?.message || ""));
+}
+
 async function shareWhazzupWithPhotos(impianto, options = {}) {
   const files = getWhazzupPhotos(impianto);
   if (!files.length) return null;
   const orderedFiles = buildOrderedWhazzupShareFiles(files);
   const { message } = buildImpiantoWhatsAppPayload(impianto, options);
-  if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: orderedFiles }))) {
-    alert("Il dispositivo non permette la condivisione diretta delle foto. Apro Whazzup con il testo: allega le foto dalla graffetta di WhatsApp.");
-    return openWhatsApp(impianto, options);
-  }
   try {
-    await navigator.share({
-      files: orderedFiles,
-      text: message,
-      title: "Impianto fatto",
-    });
+    const nativeShareResult = await shareWhazzupPhotosNativeAndroid(orderedFiles, message);
+    if (!nativeShareResult) {
+      if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: orderedFiles }))) {
+        alert("Il dispositivo non permette la condivisione diretta delle foto. Apro Whazzup con il testo: allega le foto dalla graffetta di WhatsApp.");
+        return openWhatsApp(impianto, options);
+      }
+      await navigator.share({
+        files: orderedFiles,
+        text: message,
+        title: "Impianto fatto",
+      });
+    }
     await deletePersistedWhazzupPhotos(getWhazzupPhotoKey(impianto));
     if (typeof renderImpianti === "function") renderImpianti();
     return true;
   } catch (error) {
-    if (error?.name === "AbortError") return false;
+    if (isWhazzupShareCancellation(error)) return false;
     console.error("Condivisione foto Whazzup non riuscita:", error);
     alert("Non è stato possibile condividere le foto. Apro Whazzup con il solo testo.");
     return openWhatsApp(impianto, options);

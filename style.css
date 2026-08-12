@@ -11398,16 +11398,24 @@ body.worklimate-page-open {
   object-fit: cover;
 }
 
-.whazzup-photo-open span {
+.whazzup-photo-open .whazzup-photo-view-label,
+.whazzup-photo-open .whazzup-photo-order {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
   padding: 5px 9px;
   border-radius: 99px;
   background: rgba(6, 62, 50, 0.88);
   color: #fff;
   font-size: .76rem;
   font-weight: 800;
+}
+
+.whazzup-photo-open .whazzup-photo-view-label { right: 8px; bottom: 8px; }
+.whazzup-photo-open .whazzup-photo-order {
+  top: 8px;
+  left: 8px;
+  background: #fff;
+  color: #075e54;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
 }
 
 .whazzup-photo-item-actions,

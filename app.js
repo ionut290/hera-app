@@ -23751,7 +23751,8 @@ function openWhazzupPhotoManager(impianto, button) {
         <article class="whazzup-photo-item" data-photo-index="${index}">
           <button type="button" class="whazzup-photo-open" data-photo-action="view" aria-label="Visualizza foto ${index + 1}">
             <img src="${url}" alt="Foto allegata ${index + 1}">
-            <span>Visualizza</span>
+            <span class="whazzup-photo-order">Foto ${index + 1}</span>
+            <span class="whazzup-photo-view-label">Visualizza</span>
           </button>
           <div class="whazzup-photo-item-actions">
             <button type="button" class="btn" data-photo-action="replace">Sostituisci</button>
@@ -23826,19 +23827,39 @@ function chooseWhazzupPhotos(impianto, button) {
   else pickWhazzupPhotos(impianto, button, { mode: "replace-all" });
 }
 
+function buildOrderedWhazzupShareFiles(files) {
+  return Array.from(files || []).map((file, index) => {
+    const originalName = String(file?.name || "");
+    const extensionMatch = originalName.match(/\.([a-zA-Z0-9]{2,5})$/);
+    const mimeExtension = String(file?.type || "").split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+    const extension = extensionMatch?.[1]?.toLowerCase() || mimeExtension;
+    const orderedName = `Foto-${String(index + 1).padStart(2, "0")}.${extension}`;
+    try {
+      return new File([file], orderedName, {
+        type: file.type || "image/jpeg",
+        lastModified: Number(file.lastModified || Date.now())
+      });
+    } catch (error) {
+      console.warn("Nome progressivo foto non applicabile: mantengo il file originale.", error);
+      return file;
+    }
+  });
+}
+
 async function shareWhazzupWithPhotos(impianto, options = {}) {
   const files = getWhazzupPhotos(impianto);
   if (!files.length) return null;
+  const orderedFiles = buildOrderedWhazzupShareFiles(files);
   const { message } = buildImpiantoWhatsAppPayload(impianto, options);
-  if (!navigator.share || (navigator.canShare && !navigator.canShare({ files }))) {
+  if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: orderedFiles }))) {
     alert("Il dispositivo non permette la condivisione diretta delle foto. Apro Whazzup con il testo: allega le foto dalla graffetta di WhatsApp.");
     return openWhatsApp(impianto, options);
   }
   try {
     await navigator.share({
-      title: "Impianto fatto",
+      files: orderedFiles,
       text: message,
-      files
+      title: "Impianto fatto",
     });
     await deletePersistedWhazzupPhotos(getWhazzupPhotoKey(impianto));
     if (typeof renderImpianti === "function") renderImpianti();

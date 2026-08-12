@@ -244,6 +244,13 @@ async function main() {
   assert.match(appSource, /data-manager-action="add"/);
   assert.match(appSource, /data-manager-action="replace-all"/);
   assert.match(appSource, /data-manager-action="delete-all"/);
+  assert.match(appSource, /function buildOrderedWhazzupShareFiles\(files\)/);
+  assert.match(appSource, /Foto-\$\{String\(index \+ 1\)\.padStart\(2, "0"\)\}/);
+  const photoShareHandler = extractFunction("shareWhazzupWithPhotos");
+  assert.ok(
+    photoShareHandler.indexOf("files: orderedFiles") < photoShareHandler.indexOf("text: message"),
+    "Le foto ordinate devono precedere il messaggio nel payload Whazzup"
+  );
   assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);
 
   const payloadContext = createContext({

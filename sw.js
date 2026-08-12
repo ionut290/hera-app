@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v115";
+const CACHE_NAME = "varga-cantieri-shell-v116";
 const CACHE_RESET_VERSION = "20260812-opera1";
 const APP_SHELL = [
   "./",
@@ -10,7 +10,7 @@ const APP_SHELL = [
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260731-mezzi1",
-  "./app.js?v=20260812-whazzup-photo1",
+  "./app.js?v=20260812-whazzup-photo10h1",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",

@@ -233,6 +233,12 @@ async function main() {
   const completedHandler = extractFunction("handleCompletedImpiantoWhatsAppClick");
   assert.doesNotMatch(completedHandler, /validateImpiantoCoordinates|getCurrentPositionOnce|currentUserPos|distanceFromUser/);
 
+  assert.match(appSource, /WHAZZUP_PHOTO_MAX_AGE_MS\s*=\s*10\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
+  assert.match(appSource, /indexedDB\.open\(WHAZZUP_PHOTO_DB_NAME,\s*1\)/);
+  assert.match(appSource, /void restorePersistedWhazzupPhotos\(\)/);
+  assert.match(appSource, /await persistWhazzupPhotos\(key, files, savedAt\)/);
+  assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);
+
   const payloadContext = createContext({
     selectedCommessaId: "c1",
     selectedCommessaName: "Commessa prova",

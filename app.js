@@ -1270,6 +1270,10 @@ let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 const whazzupSafetyByImpianto = new Map();
 const whazzupPhotoFilesByImpianto = new Map();
+const whazzupPhotoSavedAtByImpianto = new Map();
+const WHAZZUP_PHOTO_DB_NAME = "heraWhazzupPhotoAttachments";
+const WHAZZUP_PHOTO_STORE_NAME = "attachments";
+const WHAZZUP_PHOTO_MAX_AGE_MS = 10 * 60 * 60 * 1000;
 const WHAZZUP_PENDING_DONE_KEY = "heraWhazzupPendingDone";
 let pendingSheetExports = [];
 let pendingImpiantoActions = [];
@@ -23530,8 +23534,95 @@ function getWhazzupPhotoKey(impianto) {
   return `${String(selectedCommessaId || "")}::${buildImpiantoKey(impianto)}`;
 }
 
+function openWhazzupPhotoDatabase() {
+  if (!window.indexedDB) return Promise.reject(new Error("IndexedDB non disponibile"));
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(WHAZZUP_PHOTO_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(WHAZZUP_PHOTO_STORE_NAME)) {
+        database.createObjectStore(WHAZZUP_PHOTO_STORE_NAME, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Archivio foto non accessibile"));
+  });
+}
+
+async function persistWhazzupPhotos(key, files, savedAt = Date.now()) {
+  const database = await openWhazzupPhotoDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(WHAZZUP_PHOTO_STORE_NAME, "readwrite");
+      transaction.objectStore(WHAZZUP_PHOTO_STORE_NAME).put({ key, files, savedAt });
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("Salvataggio foto non riuscito"));
+      transaction.onabort = () => reject(transaction.error || new Error("Salvataggio foto interrotto"));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function deletePersistedWhazzupPhotos(key) {
+  whazzupPhotoFilesByImpianto.delete(key);
+  whazzupPhotoSavedAtByImpianto.delete(key);
+  try {
+    const database = await openWhazzupPhotoDatabase();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(WHAZZUP_PHOTO_STORE_NAME, "readwrite");
+      transaction.objectStore(WHAZZUP_PHOTO_STORE_NAME).delete(key);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("Eliminazione foto non riuscita"));
+    });
+    database.close();
+  } catch (error) {
+    console.warn("Pulizia foto Whazzup locale non riuscita:", error);
+  }
+}
+
+async function restorePersistedWhazzupPhotos() {
+  try {
+    const database = await openWhazzupPhotoDatabase();
+    const records = await new Promise((resolve, reject) => {
+      const transaction = database.transaction(WHAZZUP_PHOTO_STORE_NAME, "readonly");
+      const request = transaction.objectStore(WHAZZUP_PHOTO_STORE_NAME).getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error || new Error("Lettura foto non riuscita"));
+    });
+    database.close();
+    const now = Date.now();
+    const expiredKeys = [];
+    records.forEach((record) => {
+      const key = String(record?.key || "");
+      const savedAt = Number(record?.savedAt || 0);
+      const files = Array.from(record?.files || []).filter((file) => file instanceof Blob);
+      if (!key || !savedAt || now - savedAt >= WHAZZUP_PHOTO_MAX_AGE_MS || !files.length) {
+        if (key) expiredKeys.push(key);
+        return;
+      }
+      whazzupPhotoFilesByImpianto.set(key, files);
+      whazzupPhotoSavedAtByImpianto.set(key, savedAt);
+    });
+    await Promise.all(expiredKeys.map((key) => deletePersistedWhazzupPhotos(key)));
+    if (selectedCommessaId && typeof renderImpianti === "function") renderImpianti();
+  } catch (error) {
+    console.warn("Ripristino foto Whazzup locale non disponibile:", error);
+  }
+}
+
+// IndexedDB non viene cancellato dal Refresh dell'app: ripristina gli allegati
+// locali ancora validi e rimuove automaticamente quelli più vecchi di 10 ore.
+void restorePersistedWhazzupPhotos();
+
 function getWhazzupPhotos(impianto) {
-  return whazzupPhotoFilesByImpianto.get(getWhazzupPhotoKey(impianto)) || [];
+  const key = getWhazzupPhotoKey(impianto);
+  const savedAt = Number(whazzupPhotoSavedAtByImpianto.get(key) || 0);
+  if (savedAt && Date.now() - savedAt >= WHAZZUP_PHOTO_MAX_AGE_MS) {
+    void deletePersistedWhazzupPhotos(key);
+    return [];
+  }
+  return whazzupPhotoFilesByImpianto.get(key) || [];
 }
 
 function updateWhazzupAttachmentButton(button, impianto) {
@@ -23549,11 +23640,22 @@ function chooseWhazzupPhotos(impianto, button) {
   input.accept = "image/*";
   input.multiple = true;
   input.hidden = true;
-  input.addEventListener("change", () => {
+  input.addEventListener("change", async () => {
     const files = Array.from(input.files || []).filter((file) => file.type.startsWith("image/"));
     const key = getWhazzupPhotoKey(impianto);
-    if (files.length) whazzupPhotoFilesByImpianto.set(key, files);
-    else whazzupPhotoFilesByImpianto.delete(key);
+    if (files.length) {
+      const savedAt = Date.now();
+      whazzupPhotoFilesByImpianto.set(key, files);
+      whazzupPhotoSavedAtByImpianto.set(key, savedAt);
+      try {
+        await persistWhazzupPhotos(key, files, savedAt);
+      } catch (error) {
+        console.error("Salvataggio locale foto Whazzup non riuscito:", error);
+        alert("Le foto sono allegate, ma il telefono non permette di conservarle dopo la chiusura dell’app.");
+      }
+    } else {
+      await deletePersistedWhazzupPhotos(key);
+    }
     updateWhazzupAttachmentButton(button, impianto);
     input.remove();
   }, { once: true });
@@ -23575,7 +23677,8 @@ async function shareWhazzupWithPhotos(impianto, options = {}) {
       text: message,
       files
     });
-    whazzupPhotoFilesByImpianto.delete(getWhazzupPhotoKey(impianto));
+    await deletePersistedWhazzupPhotos(getWhazzupPhotoKey(impianto));
+    if (typeof renderImpianti === "function") renderImpianti();
     return true;
   } catch (error) {
     if (error?.name === "AbortError") return false;

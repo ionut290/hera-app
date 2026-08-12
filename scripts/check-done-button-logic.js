@@ -105,7 +105,7 @@ else {
   const validationIndex = whatsappHandler.indexOf('validateImpiantoCoordinates(impianto)');
   const evidenceIndex = whatsappHandler.indexOf('recordFattoVisualEvidence(impianto, doneAt, doneBy)');
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
-  const openWhatsappIndex = whatsappHandler.indexOf('const opened = openWhatsApp(');
+  const openWhatsappIndex = whatsappHandler.indexOf('const opened = hasWhazzupPhotos');
   const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
   if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
     pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');

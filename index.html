@@ -8,22 +8,26 @@
   <script>
     (() => {
       const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260812-opera1";
+      const ANDROID_EMERGENCY_CACHE_RESET_VERSION = "20260812-android1";
       const PWA_EMERGENCY_CACHE_RESET_KEY = "heraPwaCacheResetVersion";
       const url = new URL(window.location.href);
       const isNativeAndroid = Boolean(
         window.Capacitor?.isNativePlatform?.()
         && window.Capacitor?.getPlatform?.() === "android"
       );
-      if (isNativeAndroid || !("caches" in window)) return;
+      const cacheResetVersion = isNativeAndroid
+        ? ANDROID_EMERGENCY_CACHE_RESET_VERSION
+        : PWA_EMERGENCY_CACHE_RESET_VERSION;
+      if (!("caches" in window)) return;
 
       let completedVersion = "";
       try {
         completedVersion = localStorage.getItem(PWA_EMERGENCY_CACHE_RESET_KEY) || "";
       } catch (_) {}
-      if (completedVersion === PWA_EMERGENCY_CACHE_RESET_VERSION) return;
-      if (url.searchParams.get("cacheReset") === PWA_EMERGENCY_CACHE_RESET_VERSION) {
+      if (completedVersion === cacheResetVersion) return;
+      if (url.searchParams.get("cacheReset") === cacheResetVersion) {
         try {
-          localStorage.setItem(PWA_EMERGENCY_CACHE_RESET_KEY, PWA_EMERGENCY_CACHE_RESET_VERSION);
+          localStorage.setItem(PWA_EMERGENCY_CACHE_RESET_KEY, cacheResetVersion);
         } catch (_) {}
         return;
       }
@@ -34,11 +38,11 @@
           .filter((name) => name.startsWith("hera-app-shell-") || name.startsWith("varga-cantieri-shell-"))
           .map((name) => caches.delete(name)));
         try {
-          localStorage.setItem(PWA_EMERGENCY_CACHE_RESET_KEY, PWA_EMERGENCY_CACHE_RESET_VERSION);
+          localStorage.setItem(PWA_EMERGENCY_CACHE_RESET_KEY, cacheResetVersion);
         } catch (_) {}
         const registration = await navigator.serviceWorker?.getRegistration?.();
         await registration?.update?.().catch(() => null);
-        url.searchParams.set("cacheReset", PWA_EMERGENCY_CACHE_RESET_VERSION);
+        url.searchParams.set("cacheReset", cacheResetVersion);
         url.searchParams.set("cacheResetTs", String(Date.now()));
         window.location.replace(url.toString());
       })().catch((error) => console.warn("Reset cache PWA non completato:", error));

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <title>Aggiornamento Varga Cantieri</title>
+  <style>
+    body{font-family:system-ui,sans-serif;display:grid;min-height:100vh;place-items:center;margin:0;background:#f3f8f6;color:#123d34}
+    main{width:min(90%,28rem);padding:2rem;border:1px solid #cfe1dc;border-radius:1.25rem;background:#fff;text-align:center;box-shadow:0 1rem 2.5rem #163d3314}
+    button{padding:.85rem 1.25rem;border:0;border-radius:.75rem;background:#078765;color:#fff;font-weight:800}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Aggiornamento app</h1>
+    <p id="status">Rimozione della vecchia cache in corso…</p>
+    <button id="retry" type="button" hidden>RIPROVA</button>
+  </main>
+  <script>
+    async function resetBrowserApp() {
+      const status = document.getElementById("status");
+      const retry = document.getElementById("retry");
+      retry.hidden = true;
+      try {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith("varga-cantieri-")).map((key) => caches.delete(key)));
+        }
+        status.textContent = "Aggiornamento completato. Apertura della versione nuova…";
+        const target = new URL("./", location.href);
+        target.searchParams.set("browser-reset", String(Date.now()));
+        location.replace(target.href);
+      } catch (error) {
+        status.textContent = "Aggiornamento non completato. Premi Riprova.";
+        retry.hidden = false;
+      }
+    }
+    document.getElementById("retry").addEventListener("click", resetBrowserApp);
+    resetBrowserApp();
+  </script>
+</body>
+</html>

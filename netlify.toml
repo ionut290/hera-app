@@ -43,6 +43,11 @@
     Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
+  for = "/browser-reset.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/app.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"

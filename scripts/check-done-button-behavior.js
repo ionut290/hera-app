@@ -236,7 +236,14 @@ async function main() {
   assert.match(appSource, /WHAZZUP_PHOTO_MAX_AGE_MS\s*=\s*10\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   assert.match(appSource, /indexedDB\.open\(WHAZZUP_PHOTO_DB_NAME,\s*1\)/);
   assert.match(appSource, /void restorePersistedWhazzupPhotos\(\)/);
-  assert.match(appSource, /await persistWhazzupPhotos\(key, files, savedAt\)/);
+  assert.match(appSource, /await persistWhazzupPhotos\(key, validFiles, savedAt\)/);
+  assert.match(appSource, /function openWhazzupPhotoManager\(impianto, button\)/);
+  assert.match(appSource, /data-photo-action="view"/);
+  assert.match(appSource, /data-photo-action="replace"/);
+  assert.match(appSource, /data-photo-action="delete"/);
+  assert.match(appSource, /data-manager-action="add"/);
+  assert.match(appSource, /data-manager-action="replace-all"/);
+  assert.match(appSource, /data-manager-action="delete-all"/);
   assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);
 
   const payloadContext = createContext({

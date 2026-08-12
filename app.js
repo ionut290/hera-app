@@ -1269,6 +1269,7 @@ const expandedImpiantoManagementKeys = new Set();
 let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 const whazzupSafetyByImpianto = new Map();
+const whazzupPhotoFilesByImpianto = new Map();
 const WHAZZUP_PENDING_DONE_KEY = "heraWhazzupPendingDone";
 let pendingSheetExports = [];
 let pendingImpiantoActions = [];
@@ -16069,6 +16070,19 @@ function renderImpianti() {
         primaryActionsRow
       );
 
+      const whazzupAttachmentBtn = document.createElement("button");
+      whazzupAttachmentBtn.type = "button";
+      whazzupAttachmentBtn.className = "btn action-icon-btn whazzup-attachment-btn";
+      whazzupAttachmentBtn.dataset.actionKey = "whatsapp-attachment";
+      whazzupAttachmentBtn.textContent = "📎";
+      updateWhazzupAttachmentButton(whazzupAttachmentBtn, impianto);
+      whazzupAttachmentBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        chooseWhazzupPhotos(impianto, whazzupAttachmentBtn);
+      });
+      primaryActionsRow.appendChild(whazzupAttachmentBtn);
+
       // Solo stato visivo: se esiste già una data FATTO salvata, mantieni
       // l'avviso giallo anche quando l'impianto è rimasto per errore nei Da fare.
       const completionEvidenceButton = primaryActionsRow.querySelector(
@@ -16095,6 +16109,18 @@ function renderImpianti() {
         handleCompletedImpiantoWhatsAppClick(impianto);
       });
       primaryActionsRow.appendChild(completedDoneBtn);
+
+      const completedAttachmentBtn = document.createElement("button");
+      completedAttachmentBtn.type = "button";
+      completedAttachmentBtn.className = "btn action-icon-btn whazzup-attachment-btn";
+      completedAttachmentBtn.dataset.actionKey = "whatsapp-attachment";
+      updateWhazzupAttachmentButton(completedAttachmentBtn, impianto);
+      completedAttachmentBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        chooseWhazzupPhotos(impianto, completedAttachmentBtn);
+      });
+      primaryActionsRow.appendChild(completedAttachmentBtn);
     }
     // LOGICA CRITICA PULSANTE FATTO - NON MODIFICARE SENZA TEST.
     // Pulsante nascosto usato dal recovery/safety check per spostare nei Fatti senza cambiare il flusso WhatsApp.
@@ -23022,11 +23048,16 @@ async function handleImpiantoWhatsAppClick(impianto) {
     renderImpianti();
 
     // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
-    const opened = openWhatsApp({ ...impianto, doneAt, doneBy }, {
+    const whazzupOptions = {
       doneAt,
       operatorName: doneBy,
       ...(deferredWhatsAppTarget ? { targetWindow: deferredWhatsAppTarget } : {})
-    });
+    };
+    const hasWhazzupPhotos = getWhazzupPhotos(impianto).length > 0;
+    if (hasWhazzupPhotos) closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+    const opened = hasWhazzupPhotos
+      ? await shareWhazzupWithPhotos({ ...impianto, doneAt, doneBy }, whazzupOptions)
+      : openWhatsApp({ ...impianto, doneAt, doneBy }, whazzupOptions);
     whatsappOpened = Boolean(opened);
     if (!whatsappOpened) {
       closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
@@ -23096,7 +23127,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
   }
 }
 
-function handleCompletedImpiantoWhatsAppClick(impianto) {
+async function handleCompletedImpiantoWhatsAppClick(impianto) {
   if (!impianto?.done) return false;
   if (!auth.currentUser) {
     alert("Sessione scaduta: esegui nuovamente il login.");
@@ -23105,10 +23136,13 @@ function handleCompletedImpiantoWhatsAppClick(impianto) {
 
   // Un impianto già nei FATTI può riaprire il messaggio senza controllare la
   // posizione dell'operatore: non deve essere salvato o trasferito di nuovo.
-  const opened = openWhatsApp(impianto, {
+  const completedOptions = {
     doneAt: impianto.doneAt || new Date(),
     operatorName: impianto.doneBy || getCurrentWhatsAppOperatorName()
-  });
+  };
+  const opened = getWhazzupPhotos(impianto).length
+    ? await shareWhazzupWithPhotos(impianto, completedOptions)
+    : openWhatsApp(impianto, completedOptions);
   if (!opened) alert("Impossibile aprire WhatsApp automaticamente su questo dispositivo.");
   return Boolean(opened);
 }
@@ -23490,6 +23524,65 @@ function buildImpiantoWhatsAppPayload(impianto, options = {}) {
     appUrl: `whatsapp://send?text=${encodedMessage}`,
     webUrl: `https://wa.me/?text=${encodedMessage}`
   };
+}
+
+function getWhazzupPhotoKey(impianto) {
+  return `${String(selectedCommessaId || "")}::${buildImpiantoKey(impianto)}`;
+}
+
+function getWhazzupPhotos(impianto) {
+  return whazzupPhotoFilesByImpianto.get(getWhazzupPhotoKey(impianto)) || [];
+}
+
+function updateWhazzupAttachmentButton(button, impianto) {
+  if (!button) return;
+  const count = getWhazzupPhotos(impianto).length;
+  button.textContent = count ? `📎 ${count}` : "📎";
+  button.title = count ? `${count} foto selezionate. Premi per modificarle` : "Allega una o più foto al messaggio Whazzup";
+  button.setAttribute("aria-label", button.title);
+  button.classList.toggle("has-attachments", count > 0);
+}
+
+function chooseWhazzupPhotos(impianto, button) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.multiple = true;
+  input.hidden = true;
+  input.addEventListener("change", () => {
+    const files = Array.from(input.files || []).filter((file) => file.type.startsWith("image/"));
+    const key = getWhazzupPhotoKey(impianto);
+    if (files.length) whazzupPhotoFilesByImpianto.set(key, files);
+    else whazzupPhotoFilesByImpianto.delete(key);
+    updateWhazzupAttachmentButton(button, impianto);
+    input.remove();
+  }, { once: true });
+  document.body.appendChild(input);
+  input.click();
+}
+
+async function shareWhazzupWithPhotos(impianto, options = {}) {
+  const files = getWhazzupPhotos(impianto);
+  if (!files.length) return null;
+  const { message } = buildImpiantoWhatsAppPayload(impianto, options);
+  if (!navigator.share || (navigator.canShare && !navigator.canShare({ files }))) {
+    alert("Il dispositivo non permette la condivisione diretta delle foto. Apro Whazzup con il testo: allega le foto dalla graffetta di WhatsApp.");
+    return openWhatsApp(impianto, options);
+  }
+  try {
+    await navigator.share({
+      title: "Impianto fatto",
+      text: message,
+      files
+    });
+    whazzupPhotoFilesByImpianto.delete(getWhazzupPhotoKey(impianto));
+    return true;
+  } catch (error) {
+    if (error?.name === "AbortError") return false;
+    console.error("Condivisione foto Whazzup non riuscita:", error);
+    alert("Non è stato possibile condividere le foto. Apro Whazzup con il solo testo.");
+    return openWhatsApp(impianto, options);
+  }
 }
 
 function openWhatsApp(impianto, options = {}) {

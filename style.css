@@ -11277,3 +11277,42 @@ body.worklimate-page-open {
 /* Gestione impianti: foglio operativo responsive */
 .impianti-head-actions,.impianti-management-stats,.impianti-management-toolbar,.impianti-bulk-actions,.impianti-management-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.impianti-management-stats{margin-top:10px}.impianti-management-stats span{padding:7px 11px;border-radius:99px;background:#edf3f2;color:#536b67}.impianti-management-stats .is-done{background:#dcfce7;color:#166534}.impianti-management-toolbar{position:sticky;z-index:12;top:0;padding:12px;border:1px solid #dbe6e3;border-radius:15px;background:rgba(255,255,255,.96);box-shadow:0 5px 18px rgba(20,62,57,.08);backdrop-filter:blur(8px)}.impianti-management-search{display:flex;align-items:center;flex:1 1 420px;gap:9px;min-width:260px;padding:0 13px;border:1px solid #cadbd7;border-radius:11px;background:#fff}.impianti-management-search input{width:100%;min-height:44px;border:0;outline:0;background:transparent}.impianti-bulk-actions{position:sticky;z-index:11;top:76px;padding:12px 14px;border-radius:12px;background:#e8f4f1;box-shadow:0 5px 15px rgba(8,118,106,.12)}.impianti-sheet-wrap{max-height:min(68vh,760px);overflow:auto;border:1px solid #ceddda;border-radius:14px;background:#fff;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.impianti-sheet{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}.impianti-sheet th,.impianti-sheet td{min-width:130px;max-width:260px;padding:10px 11px;border-right:1px solid #e3ebe9;border-bottom:1px solid #e3ebe9;vertical-align:top;white-space:normal;overflow-wrap:anywhere}.impianti-sheet th{position:sticky;z-index:5;top:0;background:#075e54;color:#fff;text-align:left;white-space:nowrap}.impianti-sheet th[data-sort]:not([data-sort=""]){cursor:pointer}.impianti-sheet .sheet-select{min-width:44px;width:44px;text-align:center}.impianti-sheet .sheet-number{position:sticky;z-index:4;left:44px;min-width:64px;width:64px;background:#f4faf8;font-weight:800}.impianti-sheet th.sheet-number{z-index:7;background:#075e54}.impianti-sheet tbody tr:hover td{background-color:#f7fbfa}.impianti-sheet tbody tr:hover .sheet-number{background:#e9f5f2}.impianti-sheet tr.is-editing td{background:#fffbea}.impianti-sheet input,.impianti-sheet select{width:100%;min-width:112px;padding:8px;border:1px solid #b9cec9;border-radius:7px;background:#fff}.impianti-sheet .sheet-actions{position:sticky;right:0;min-width:145px;background:#fff;box-shadow:-4px 0 8px rgba(15,55,50,.06)}.sheet-actions .btn{width:100%;margin-bottom:5px;padding:7px}.row-feedback{min-width:210px;margin:5px 0 0;color:#b42318;font-weight:700}.sheet-empty{padding:35px!important;text-align:center;color:#647b77}.plant-status{display:inline-block;padding:5px 8px;border-radius:99px;background:#e5e7eb;color:#374151;font-size:.72rem;font-weight:900;white-space:nowrap}.status-fatto{background:#dcfce7;color:#166534}.status-in-lavorazione{background:#fef9c3;color:#854d0e}.status-sospeso{background:#fee2e2;color:#991b1b}.status-da-verificare{background:#ffedd5;color:#9a3412}.impianti-management-pagination{justify-content:center;padding:8px}.impianti-management-pagination span{color:#536b67;font-weight:700}
 @media(max-width:700px){.impianti-head-actions>*{flex:1 1 auto}.impianti-management-toolbar{top:0}.impianti-management-toolbar select{max-width:calc(50% - 6px)}.impianti-sheet-wrap{max-height:62vh}.impianti-sheet th,.impianti-sheet td{min-width:145px}.impianti-sheet .sheet-actions{min-width:150px}.impianti-bulk-actions{top:150px;overflow-x:auto;flex-wrap:nowrap}.impianti-bulk-actions>*{flex:0 0 auto}}
+
+
+/* Graffetta Whazzup: alta visibilità in esterno e stato allegati selezionati */
+.impianto-primary-actions .whazzup-attachment-btn,
+.action-icon-btn[data-action-key="whatsapp-attachment"] {
+  width: 46px !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
+  padding: 0 8px !important;
+  border: 3px solid #f5b700 !important;
+  border-radius: 13px !important;
+  background: linear-gradient(180deg, #fff9c7 0%, #ffd84d 100%) !important;
+  color: #352900 !important;
+  box-shadow: 0 0 0 3px rgba(245, 183, 0, 0.20), 0 5px 12px rgba(120, 86, 0, 0.24) !important;
+  font-size: 1.35rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.impianto-primary-actions .whazzup-attachment-btn:hover,
+.impianto-primary-actions .whazzup-attachment-btn:focus-visible,
+.action-icon-btn[data-action-key="whatsapp-attachment"]:hover,
+.action-icon-btn[data-action-key="whatsapp-attachment"]:focus-visible {
+  border-color: #d99a00 !important;
+  background: linear-gradient(180deg, #fff4a3 0%, #ffc400 100%) !important;
+  outline: 3px solid rgba(255, 196, 0, 0.32) !important;
+  outline-offset: 2px !important;
+}
+
+.impianto-primary-actions .whazzup-attachment-btn.has-attachments,
+.action-icon-btn[data-action-key="whatsapp-attachment"].has-attachments {
+  border-color: #087f5b !important;
+  background: linear-gradient(180deg, #d8fff1 0%, #35d29a 100%) !important;
+  color: #063e2e !important;
+  box-shadow: 0 0 0 3px rgba(8, 127, 91, 0.18), 0 5px 12px rgba(6, 95, 68, 0.25) !important;
+  font-size: 1rem !important;
+}

@@ -7,10 +7,11 @@ window.firebaseConfig = {
   appId: "1:645390631375:web:df3659a23812560e4012ba"
 };
 
-// Carica diagnostica, protezioni Firestore e bridge Android prima di app.js.
+// Carica diagnostica, protezioni Firestore, quota storage e bridge Android prima di app.js.
 // La diagnostica viene installata per prima: l'ottimizzatore la richiama solo
 // quando apre un listener fisico, così il report non conta due volte gli
 // abbonati logici che condividono la stessa query.
+const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260812a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC = "firestore-diagnostics-v4-session-cleanup.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
@@ -26,6 +27,7 @@ const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a
 const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
 
 if (document.readyState === "loading") {
+  document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC}" data-firestore-diagnostics-v4-cleanup="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_SRC}" data-firestore-diagnostics-v4="1"><\/script>`);
@@ -60,6 +62,8 @@ if (document.readyState === "loading") {
     if (onLoad) script.addEventListener("load", onLoad, { once: true });
     document.head.appendChild(script);
   }
+
+  loadOnce(HERA_STORAGE_QUOTA_GUARD_SRC, "storage-quota-guard", () => window.HeraStorageQuotaGuard?.installed);
 
   const loadSafeOptimizer = () => loadOnce(
     HERA_FIRESTORE_SAFE_OPTIMIZER_SRC,

@@ -1,4 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v111";
+const CACHE_NAME = "varga-cantieri-shell-v112";
+const CACHE_RESET_VERSION = "20260812-opera1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -135,10 +136,21 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(
-    keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-  )));
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+    await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    await Promise.all(windows.map(async (client) => {
+      try {
+        const url = new URL(client.url);
+        if (url.origin !== self.location.origin || url.searchParams.get("cacheReset") === CACHE_RESET_VERSION) return;
+        url.searchParams.set("cacheReset", CACHE_RESET_VERSION);
+        url.searchParams.set("cacheResetTs", String(Date.now()));
+        await client.navigate(url.toString());
+      } catch (_) {}
+    }));
+  })());
 });
 
 self.addEventListener("fetch", (event) => {

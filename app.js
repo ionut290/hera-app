@@ -23629,6 +23629,7 @@ function updateWhazzupAttachmentButton(button, impianto) {
   if (!button) return;
   const count = getWhazzupPhotos(impianto).length;
   button.textContent = count ? `📎 ${count}` : "📎";
+  button.dataset.attachmentCount = count ? String(count) : "";
   button.title = count ? `${count} foto selezionate. Premi per modificarle` : "Allega una o più foto al messaggio Whazzup";
   button.setAttribute("aria-label", button.title);
   button.classList.toggle("has-attachments", count > 0);
@@ -23761,6 +23762,7 @@ function openWhazzupPhotoManager(impianto, button) {
         </article>
       `;
     }).join("");
+    const submitLabel = impianto.done ? "INVIA FOTO SU WHAZZUP" : "FATTO E INVIA WHAZZUP";
     card.innerHTML = `
       <header class="whazzup-photo-manager-head">
         <div>
@@ -23775,6 +23777,7 @@ function openWhazzupPhotoManager(impianto, button) {
         <button type="button" class="btn" data-manager-action="add">＋ Aggiungi foto</button>
         <button type="button" class="btn" data-manager-action="replace-all">Sostituisci tutte</button>
         <button type="button" class="btn btn-danger" data-manager-action="delete-all">Elimina tutte</button>
+        <button type="button" class="btn whazzup-photo-manager-submit" data-manager-action="done">✅ ${submitLabel}</button>
       </footer>
     `;
   };
@@ -23782,6 +23785,16 @@ function openWhazzupPhotoManager(impianto, button) {
   card.addEventListener("click", async (event) => {
     const managerAction = event.target.closest("[data-manager-action]")?.dataset.managerAction;
     if (managerAction === "close") return close();
+    if (managerAction === "done") {
+      const submitButton = event.target.closest("[data-manager-action='done']");
+      if (!submitButton || submitButton.disabled || isImpiantoWhazzupProcessing(impianto)) return;
+      submitButton.disabled = true;
+      submitButton.textContent = impianto.done ? "Apertura Whazzup…" : "Salvataggio…";
+      close();
+      if (impianto.done) await handleCompletedImpiantoWhatsAppClick(impianto);
+      else await handleImpiantoWhatsAppClick(impianto);
+      return;
+    }
     if (managerAction === "add" || managerAction === "replace-all") {
       close();
       pickWhazzupPhotos(impianto, button, { mode: managerAction === "add" ? "append" : "replace-all" });

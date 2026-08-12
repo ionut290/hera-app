@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const appSource = fs.readFileSync("app.js", "utf8");
+const styleSource = fs.readFileSync("style.css", "utf8");
 const nativeSource = fs.readFileSync("native-android-runtime.js", "utf8");
 const immediateSource = fs.readFileSync("fatto-button-immediate.js", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
@@ -245,6 +246,15 @@ async function main() {
   assert.match(appSource, /data-manager-action="add"/);
   assert.match(appSource, /data-manager-action="replace-all"/);
   assert.match(appSource, /data-manager-action="delete-all"/);
+  assert.match(appSource, /data-manager-action="done">✅ \$\{submitLabel\}/);
+  const photoManagerHandler = extractFunction("openWhazzupPhotoManager");
+  assert.match(photoManagerHandler, /await handleImpiantoWhatsAppClick\(impianto\)/);
+  assert.match(photoManagerHandler, /await handleCompletedImpiantoWhatsAppClick\(impianto\)/);
+  assert.match(photoManagerHandler, /isImpiantoWhazzupProcessing\(impianto\)/);
+  assert.doesNotMatch(photoManagerHandler, /markImpiantoDone\(|forceMoveImpiantoToFatti\(|setImpiantoDone\(/);
+  assert.match(styleSource, /\.impianto-primary-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(styleSource, /data-action-key="whatsapp-attachment"\][\s\S]*order:\s*2/);
+  assert.match(styleSource, /\.whazzup-photo-manager-actions \.whazzup-photo-manager-submit\s*\{/);
   assert.match(appSource, /function buildOrderedWhazzupShareFiles\(files\)/);
   assert.match(appSource, /Foto-\$\{String\(index \+ 1\)\.padStart\(2, "0"\)\}/);
   assert.ok(packageJson.dependencies["@capacitor/filesystem"], "Manca il filesystem nativo Android");

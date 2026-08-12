@@ -6188,7 +6188,14 @@ body.squadre-impianto-detail-open { overflow: hidden; }
   gap: 4px;
 }
 
-.impianto-primary-actions,
+.impianto-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .impianto-secondary-actions {
   display: flex;
   align-items: center;
@@ -6197,21 +6204,20 @@ body.squadre-impianto-detail-open { overflow: hidden; }
 }
 
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"],
-.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
-  flex: 1 1 50%;
-  width: 50%;
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"],
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp-attachment"] {
+  width: 100%;
   min-width: 0;
-  min-height: 38px !important;
+  min-height: 42px !important;
   border-radius: 12px;
-  padding: 0 8px 0 30px;
+  padding: 0 6px;
   background-position: 10px center;
   background-size: 16px 16px;
-  color: #fff;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"]::after {
@@ -6222,12 +6228,23 @@ body.squadre-impianto-detail-open { overflow: hidden; }
   content: "FATTO";
 }
 
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp-attachment"]::after {
+  content: "FOTO";
+  margin-left: 3px;
+}
+
 .impianto-primary-actions .action-icon-btn[data-action-key="navigate"] {
+  order: 1;
   border: 1px solid #2563eb;
   background-color: #2563eb;
 }
 
+.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp-attachment"] {
+  order: 2;
+}
+
 .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"] {
+  order: 3;
   border: 1px solid #16a34a;
   background-color: #16a34a;
   border-radius: 12px;
@@ -11282,16 +11299,16 @@ body.worklimate-page-open {
 /* Graffetta Whazzup: alta visibilità in esterno e stato allegati selezionati */
 .impianto-primary-actions .whazzup-attachment-btn,
 .action-icon-btn[data-action-key="whatsapp-attachment"] {
-  width: 46px !important;
-  min-width: 46px !important;
-  min-height: 46px !important;
-  padding: 0 8px !important;
-  border: 3px solid #f5b700 !important;
-  border-radius: 13px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  padding: 0 6px !important;
+  border: 2px solid #f5b700 !important;
+  border-radius: 12px !important;
   background: linear-gradient(180deg, #fff9c7 0%, #ffd84d 100%) !important;
   color: #352900 !important;
-  box-shadow: 0 0 0 3px rgba(245, 183, 0, 0.20), 0 5px 12px rgba(120, 86, 0, 0.24) !important;
-  font-size: 1.35rem !important;
+  box-shadow: 0 3px 9px rgba(120, 86, 0, 0.20) !important;
+  font-size: .82rem !important;
   font-weight: 900 !important;
   line-height: 1 !important;
   opacity: 1 !important;
@@ -11430,6 +11447,27 @@ body.worklimate-page-open {
 .whazzup-photo-manager-actions { margin-top: 18px; }
 .whazzup-photo-manager-actions .btn { flex: 1 1 170px; }
 
+.whazzup-photo-manager-actions .whazzup-photo-manager-submit {
+  position: sticky;
+  bottom: 0;
+  flex: 1 0 100%;
+  min-height: 52px;
+  margin-top: 4px;
+  border: 1px solid #128a42;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1fba5a 0%, #139447 100%);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(19, 148, 71, .25);
+  font-size: .94rem;
+  font-weight: 900;
+  letter-spacing: .025em;
+}
+
+.whazzup-photo-manager-actions .whazzup-photo-manager-submit:disabled {
+  opacity: .72;
+  cursor: wait;
+}
+
 .whazzup-photo-manager .btn-danger {
   border-color: #fecaca;
   background: #fff1f2;
@@ -11470,4 +11508,5 @@ body.worklimate-page-open {
   .whazzup-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .whazzup-photo-open { height: 145px; }
   .whazzup-photo-item-actions { display: grid; grid-template-columns: 1fr; }
+  .whazzup-photo-manager-actions .btn:not(.whazzup-photo-manager-submit) { flex: 1 1 calc(50% - 4px); }
 }

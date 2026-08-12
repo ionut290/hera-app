@@ -143,7 +143,9 @@ async function main() {
     "Le coordinate impianto devono essere validate prima della prova visiva"
   );
   assert.doesNotMatch(whatsappHandler, /getCachedFattoPositionDecision|refreshFattoPositionDecision|getCurrentPositionOnce|currentUserPos|distanceFromUser/);
-  assert.match(whatsappHandler, /const opened = openWhatsApp\(/);
+  assert.match(whatsappHandler, /const opened = hasWhazzupPhotos/);
+  assert.match(whatsappHandler, /shareWhazzupWithPhotos/);
+  assert.match(whatsappHandler, /openWhatsApp\(/);
   assert.ok(
     whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)")
       < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),

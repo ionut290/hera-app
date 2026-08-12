@@ -29,7 +29,9 @@
 
   async function requestPwaUpdate({ reload = false } = {}) {
     try {
-      await clearWebAppCaches();
+      // La pulizia completa deve avvenire solo dopo un clic volontario su Refresh.
+      // I controlli automatici aggiornano il Service Worker senza svuotare le cache.
+      if (reload) await clearWebAppCaches();
 
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();

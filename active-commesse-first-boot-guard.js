@@ -2,9 +2,10 @@
   "use strict";
 
   const GLOBAL = "HeraActiveCommesseFirstBootGuard";
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const INDEX_PATH = "appConfig/activeCommesse";
   const MAX_ACTIVE_IDS_PER_QUERY = 30;
+  const INDEX_READ_TIMEOUT_MS = 5000;
 
   if (window[GLOBAL]?.installed) return;
 
@@ -15,6 +16,8 @@
     deferredIndexReads: 0,
     filteredRootListeners: 0,
     emptyRootListeners: 0,
+    failOpenRootListeners: 0,
+    indexTimeouts: 0,
     blockedLegacyAlertListeners: 0,
     lastError: ""
   };
@@ -191,8 +194,15 @@
       return Promise.resolve({ explicit: false, ids: [] });
     }
 
-    fallbackStatePromise = firestore.collection("appConfig").doc("activeCommesse").get()
+    const indexRead = firestore.collection("appConfig").doc("activeCommesse").get();
+    const timeout = new Promise((resolve) => window.setTimeout(() => {
+      state.indexTimeouts += 1;
+      resolve({ __timeout: true });
+    }, INDEX_READ_TIMEOUT_MS));
+
+    fallbackStatePromise = Promise.race([indexRead, timeout])
       .then((snapshot) => {
+        if (snapshot?.__timeout) return { explicit: false, ids: [] };
         if (!snapshot?.exists) return { explicit: false, ids: [] };
         const data = snapshot.data?.() || {};
         if (!Array.isArray(data.ids)) return { explicit: false, ids: [] };
@@ -244,8 +254,12 @@
           return;
         }
         if (!ids.length) {
+          // Fail open: un indice vuoto può essere temporaneo o non ancora sincronizzato.
+          // La raccolta originale è la fonte autorevole e impedisce una Home vuota.
           state.emptyRootListeners += 1;
-          deliverEmptySnapshot(originalQuery, args, () => closed);
+          state.failOpenRootListeners += 1;
+          console.warn("[ACTIVE COMMESSE FIRST BOOT] indice vuoto; uso la raccolta commesse originale.");
+          unsubscribe = originalOnSnapshot.apply(originalQuery, args);
           return;
         }
         if (ids.length > MAX_ACTIVE_IDS_PER_QUERY) {

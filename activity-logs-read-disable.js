@@ -51,7 +51,9 @@
   }
 
   function isActive(commessaId) {
-    return !state.explicit || state.activeIds.has(String(commessaId || ""));
+    // Un indice vuoto o non sincronizzato non deve mai svuotare la Home.
+    if (!state.explicit || state.activeIds.size === 0) return true;
+    return state.activeIds.has(String(commessaId || ""));
   }
 
   function getQueryPath(query) {
@@ -93,7 +95,8 @@
   function buildActiveCommesseQuery() {
     if (!state.explicit) return null;
     const ids = [...state.activeIds];
-    if (!ids.length) return false;
+    // Fallback sicuro: se l'indice non contiene ID usa la raccolta completa.
+    if (!ids.length) return null;
     if (ids.length > MAX_ACTIVE_IDS_PER_QUERY) {
       console.warn(
         `Indice commesse attive con ${ids.length} ID: superato il limite di ${MAX_ACTIVE_IDS_PER_QUERY}. `
@@ -248,11 +251,12 @@
   }
 
   function syncOperationalCards() {
-    if (!state.explicit) return;
-    document.querySelectorAll("[data-commessa-id]").forEach((node) => {
-      const id = String(node.getAttribute("data-commessa-id") || "");
-      if (!id || node.closest("#active-commesse-manager")) return;
-      node.classList.toggle("hidden", !isActive(id));
+    // Il listener Firestore restituisce già soltanto le commesse operative.
+    // Non applicare un secondo filtro al DOM: alcune schede usano un codice
+    // legacy diverso dal document ID e verrebbero nascoste pur essendo valide.
+    document.querySelectorAll("[data-commessa-hidden-by-active-index='true']").forEach((node) => {
+      node.classList.remove("hidden");
+      delete node.dataset.commessaHiddenByActiveIndex;
     });
   }
 

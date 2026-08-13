@@ -23857,9 +23857,13 @@ function getNativeAndroidWhazzupSharePlugins() {
     capacitor?.isNativePlatform?.()
     && capacitor?.getPlatform?.() === "android"
   );
-  if (!isNativeAndroid || typeof capacitor?.registerPlugin !== "function") return null;
-  const filesystem = capacitor.Plugins?.Filesystem || capacitor.registerPlugin("Filesystem");
-  const share = capacitor.Plugins?.Share || capacitor.registerPlugin("Share");
+  if (!isNativeAndroid) return null;
+
+  const registerPlugin = typeof capacitor?.registerPlugin === "function"
+    ? capacitor.registerPlugin.bind(capacitor)
+    : null;
+  const filesystem = capacitor.Plugins?.Filesystem || registerPlugin?.("Filesystem");
+  const share = capacitor.Plugins?.Share || registerPlugin?.("Share");
   return filesystem && share ? { filesystem, share } : null;
 }
 

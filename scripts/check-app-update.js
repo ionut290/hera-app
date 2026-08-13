@@ -21,7 +21,7 @@ assert.match(html, /ANDROID_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260812-androi
 assert.match(html, /const cacheResetVersion\s*=\s*isNativeAndroid/);
 assert.doesNotMatch(html, /if\s*\(isNativeAndroid\s*\|\|/);
 assert.match(html, /name\.startsWith\("hera-app-shell-"\)[\s\S]*name\.startsWith\("varga-cantieri-shell-"\)/);
-assert.match(html, /navigator\.serviceWorker\.register\("\.\/sw\.js", \{ updateViaCache: "none" \}\)/);
+assert.match(html, /navigator\.serviceWorker\.register\("\.\/sw\.js(?:\?v=[^"]+)?", \{ updateViaCache: "none" \}\)/);
 assert.doesNotMatch(html, /localStorage\.clear\(\)/);
 assert.match(serviceWorker, /CACHE_RESET_VERSION\s*=\s*"20260812-opera1"/);
 assert.match(serviceWorker, /self\.clients\.matchAll\(\{ type: "window", includeUncontrolled: true \}\)/);

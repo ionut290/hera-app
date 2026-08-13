@@ -11779,10 +11779,6 @@ function renderCommesseHomeList() {
     ui.commesseLista.innerHTML = "<p class='muted'>Effettua login per visualizzare le commesse</p>";
     return;
   }
-  if (areStartupCoreCollectionsLoading()) {
-    ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati iniziali...")}</p>`;
-    return;
-  }
   if (commesseLoadState.status === "loading") {
     ui.commesseLista.innerHTML = `<p class='muted'>${escapeHTML(commesseLoadState.message || "Caricamento commesse...")}</p>`;
     return;
@@ -22550,10 +22546,6 @@ function updateTodaySummary() {
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
-  if (areStartupCoreCollectionsLoading()) {
-    ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(startupCoreCollectionsLoadState.message || "Caricamento dati squadra...")}</p>`;
-    return;
-  }
   if (squadreLoadState.status === "loading") {
     ui.squadreLista.innerHTML = `<p class='muted'>${escapeHTML(squadreLoadState.message || "Caricamento squadre...")}</p>`;
     return;

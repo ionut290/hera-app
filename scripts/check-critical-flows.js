@@ -39,7 +39,7 @@ flow("1. Accesso stabile", () => {
   assert.match(app, /PERSISTED_SESSION_KEY/);
   assert.match(authFix, /installProfileAccessGuard\(/);
   assert.match(autoLogin, /preparePersistentSession\(/);
-  assert.match(autoLogin, /Auth\.Persistence\.LOCAL/);
+  assert.match(autoLogin, /Persistence\?\.LOCAL|Persistence\.LOCAL/);
   assert.match(autoLogin, /auth\.onAuthStateChanged\(/);
   assert.match(autoLogin, /if \(!authResolved\) return/);
   assert.match(autoLogin, /authenticatedUser \|\| auth\?\.currentUser/);

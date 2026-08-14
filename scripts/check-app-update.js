@@ -23,7 +23,15 @@ assert.doesNotMatch(html, /if\s*\(isNativeAndroid\s*\|\|/);
 assert.match(html, /name\.startsWith\("hera-app-shell-"\)[\s\S]*name\.startsWith\("varga-cantieri-shell-"\)/);
 assert.match(html, /navigator\.serviceWorker\.register\("\.\/sw\.js(?:\?v=[^"]+)?", \{ updateViaCache: "none" \}\)/);
 assert.doesNotMatch(html, /localStorage\.clear\(\)/);
-assert.match(serviceWorker, /CACHE_RESET_VERSION\s*=\s*"20260812-opera1"/);
+const serviceWorkerResetMatch = serviceWorker.match(/CACHE_RESET_VERSION\s*=\s*"([^"]+)"/);
+assert.ok(serviceWorkerResetMatch, "Versione reset cache Service Worker non trovata");
+const serviceWorkerRegistrationMatch = html.match(/navigator\.serviceWorker\.register\("\.\/sw\.js\?v=([^"]+)"/);
+assert.ok(serviceWorkerRegistrationMatch, "Versione registrazione Service Worker non trovata");
+assert.equal(
+  serviceWorkerRegistrationMatch[1],
+  serviceWorkerResetMatch[1],
+  "La registrazione del Service Worker deve usare la stessa versione del reset cache"
+);
 assert.match(serviceWorker, /self\.clients\.matchAll\(\{ type: "window", includeUncontrolled: true \}\)/);
 assert.match(serviceWorker, /client\.navigate\(url\.toString\(\)\)/);
 const cacheVersionMatch = serviceWorker.match(/CACHE_NAME\s*=\s*"varga-cantieri-shell-v(\d+)"/);

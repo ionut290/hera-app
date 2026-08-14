@@ -11,6 +11,7 @@ import com.getcapacitor.BridgeActivity;
 
 import it.vargacantieri.hera.geofence.HeraGeofencePlugin;
 import it.vargacantieri.hera.biometric.HeraBiometricPlugin;
+import it.vargacantieri.hera.whatsapp.HeraWhazzupPhotosPlugin;
 import it.vargacantieri.hera.whatsapp.HeraWhatsAppPlugin;
 
 public class MainActivity extends BridgeActivity {
@@ -21,6 +22,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HeraGeofencePlugin.class);
         registerPlugin(HeraBiometricPlugin.class);
+        registerPlugin(HeraWhazzupPhotosPlugin.class);
         registerPlugin(HeraWhatsAppPlugin.class);
         super.onCreate(savedInstanceState);
         clearWebViewCacheAfterAppUpdate();

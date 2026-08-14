@@ -23867,6 +23867,26 @@ function getNativeAndroidWhazzupSharePlugins() {
   return filesystem && share ? { filesystem, share } : null;
 }
 
+function getDedicatedAndroidWhazzupPhotoPlugin() {
+  const capacitor = window.Capacitor;
+  const isNativeAndroid = Boolean(
+    capacitor?.isNativePlatform?.()
+    && capacitor?.getPlatform?.() === "android"
+  );
+  if (!isNativeAndroid) return null;
+
+  const registerPlugin = typeof capacitor?.registerPlugin === "function"
+    ? capacitor.registerPlugin.bind(capacitor)
+    : null;
+  const plugin = capacitor.Plugins?.HeraWhazzupPhotos || registerPlugin?.("HeraWhazzupPhotos");
+  return plugin
+    && typeof plugin.begin === "function"
+    && typeof plugin.addPhoto === "function"
+    && typeof plugin.share === "function"
+    ? plugin
+    : null;
+}
+
 function readWhazzupPhotoAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -23900,7 +23920,42 @@ function scheduleNativeWhazzupShareCleanup(filesystem, folderPath) {
   }, 5 * 60 * 1000);
 }
 
+async function shareWhazzupPhotosDedicatedAndroid(plugin, orderedFiles, message) {
+  let sessionId = "";
+  try {
+    const session = await plugin.begin();
+    sessionId = String(session?.sessionId || "");
+    if (!sessionId) throw new Error("Sessione foto Android non disponibile");
+
+    for (const file of orderedFiles) {
+      await plugin.addPhoto({
+        sessionId,
+        fileName: String(file?.name || "foto.jpg"),
+        mimeType: String(file?.type || "image/jpeg"),
+        data: await readWhazzupPhotoAsBase64(file)
+      });
+    }
+
+    return await plugin.share({
+      sessionId,
+      text: message
+    });
+  } catch (error) {
+    if (sessionId && typeof plugin.discard === "function") {
+      try {
+        await plugin.discard({ sessionId });
+      } catch (_) {}
+    }
+    throw error;
+  }
+}
+
 async function shareWhazzupPhotosNativeAndroid(orderedFiles, message) {
+  const dedicatedPlugin = getDedicatedAndroidWhazzupPhotoPlugin();
+  if (dedicatedPlugin) {
+    return shareWhazzupPhotosDedicatedAndroid(dedicatedPlugin, orderedFiles, message);
+  }
+
   const plugins = getNativeAndroidWhazzupSharePlugins();
   if (!plugins) return null;
   const folderPath = `hera-whazzup-share/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

@@ -2,9 +2,10 @@
 "use strict";
 
 const fs = require("node:fs");
-const vm = require("node:vm");
+const path = require("node:path");
+const Module = require("node:module");
 
-const sourcePath = "scripts/check-done-button-behavior.js";
+const sourcePath = path.resolve("scripts/check-done-button-behavior.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 
 const oldAssertion = 'assert.match(nativePhotoShareHandler, /await sharePhotosThroughDedicatedPlugin[\\s\\S]*safeOpenWhatsAppMessage\\(message\\)/);';
@@ -15,4 +16,7 @@ if (!source.includes(oldAssertion)) {
 }
 
 source = source.replace(oldAssertion, newAssertion);
-vm.runInThisContext(source, { filename: sourcePath });
+const testModule = new Module(sourcePath, module);
+testModule.filename = sourcePath;
+testModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
+testModule._compile(source, sourcePath);

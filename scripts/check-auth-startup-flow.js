@@ -11,10 +11,12 @@ const loginRetry = read("login-retry-fix.js");
 const sw = read("sw.js");
 const headerRuntime = read("header-menu-runtime-original.js");
 
-const authIndex = index.indexOf('auth-login-fix.js');
-const appIndex = index.indexOf('app.js');
-assert.ok(authIndex >= 0, "auth-login-fix.js deve essere caricato da index.html");
-assert.ok(appIndex >= 0, "app.js deve essere caricato da index.html");
+const authScriptMatch = index.match(/<script\s+src="auth-login-fix\.js[^\"]*"><\/script>/);
+const appScriptMatch = index.match(/<script\s+src="app\.js[^\"]*"><\/script>/);
+assert.ok(authScriptMatch, "auth-login-fix.js deve essere caricato da index.html");
+assert.ok(appScriptMatch, "app.js deve essere caricato da index.html");
+const authIndex = index.indexOf(authScriptMatch[0]);
+const appIndex = index.indexOf(appScriptMatch[0]);
 assert.ok(authIndex < appIndex, "Il controller auth deve partire prima di app.js");
 
 assert.match(authFix, /installAuthStartupController/);

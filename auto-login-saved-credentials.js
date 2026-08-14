@@ -11,6 +11,7 @@
   const STABLE_DELAY_MS = 500;
   const CHECK_INTERVAL_MS = 200;
   const AUTH_RESOLVE_TIMEOUT_MS = 6000;
+  const AUTH_GATE_ID = 'auth-gate';
 
   let attempted = false;
   let stableSince = 0;
@@ -34,48 +35,97 @@
     }
   }
 
+  function getAuthGate() {
+    return document.getElementById(AUTH_GATE_ID);
+  }
+
+  function setAuthGatePending(pending) {
+    const gate = getAuthGate();
+    if (!gate) return;
+    if (pending) {
+      gate.dataset.authStartupPending = '1';
+      gate.style.setProperty('display', 'none', 'important');
+      gate.setAttribute('aria-hidden', 'true');
+    } else {
+      delete gate.dataset.authStartupPending;
+      gate.style.removeProperty('display');
+      gate.removeAttribute('aria-hidden');
+    }
+  }
+
+  function keepGateHiddenForAuthenticatedUser() {
+    const gate = getAuthGate();
+    if (!gate) return;
+    gate.hidden = true;
+    gate.style.setProperty('display', 'none', 'important');
+    gate.setAttribute('aria-hidden', 'true');
+  }
+
+  function revealGateForSignedOutUser() {
+    const gate = getAuthGate();
+    if (!gate) return;
+    gate.hidden = false;
+    gate.style.removeProperty('display');
+    gate.removeAttribute('aria-hidden');
+  }
+
+  async function ensureLocalPersistence(auth) {
+    if (!auth || typeof auth.setPersistence !== 'function') return;
+    const localPersistence = window.firebase?.auth?.Auth?.Persistence?.LOCAL;
+    if (!localPersistence) return;
+    try {
+      await auth.setPersistence(localPersistence);
+    } catch (error) {
+      console.warn('Persistenza login locale non configurata:', error);
+    }
+  }
+
   async function preparePersistentSession() {
     const auth = getAuth();
     if (!auth) {
       authResolved = true;
+      setAuthGatePending(false);
       return null;
     }
 
-    try {
-      if (window.firebase?.auth?.Auth?.Persistence?.LOCAL && typeof auth.setPersistence === 'function') {
-        await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
-      }
-    } catch (error) {
-      console.warn('Persistenza login locale non configurata:', error);
-    }
+    setAuthGatePending(true);
 
     if (auth.currentUser) {
       authenticatedUser = auth.currentUser;
+      await ensureLocalPersistence(auth);
       authResolved = true;
+      keepGateHiddenForAuthenticatedUser();
       return authenticatedUser;
     }
 
     return new Promise((resolve) => {
       let settled = false;
       let unsubscribe = () => {};
-      const finish = (user) => {
+
+      const finish = async (user) => {
         if (settled) return;
         settled = true;
         authenticatedUser = user || null;
+        if (authenticatedUser) await ensureLocalPersistence(auth);
         authResolved = true;
         try { unsubscribe(); } catch (_) {}
+        if (authenticatedUser) keepGateHiddenForAuthenticatedUser();
+        else revealGateForSignedOutUser();
         resolve(authenticatedUser);
       };
 
-      const timeout = window.setTimeout(() => finish(auth.currentUser || null), AUTH_RESOLVE_TIMEOUT_MS);
+      const timeout = window.setTimeout(() => {
+        void finish(auth.currentUser || null);
+      }, AUTH_RESOLVE_TIMEOUT_MS);
+
       unsubscribe = auth.onAuthStateChanged(
         (user) => {
           window.clearTimeout(timeout);
-          finish(user);
+          void finish(user);
         },
         () => {
           window.clearTimeout(timeout);
-          finish(auth.currentUser || null);
+          void finish(auth.currentUser || null);
         }
       );
     });
@@ -102,6 +152,7 @@
     const auth = getAuth();
     if (authenticatedUser || auth?.currentUser) {
       attempted = true;
+      keepGateHiddenForAuthenticatedUser();
       return stop();
     }
 
@@ -132,12 +183,16 @@
     if (timer !== null || attempted) return;
     await preparePersistentSession();
 
-    if (authenticatedUser || getAuth()?.currentUser) {
+    const auth = getAuth();
+    if (authenticatedUser || auth?.currentUser) {
       attempted = true;
+      keepGateHiddenForAuthenticatedUser();
       stop();
       return;
     }
 
+    await ensureLocalPersistence(auth);
+    revealGateForSignedOutUser();
     timer = window.setInterval(tryAutoLogin, CHECK_INTERVAL_MS);
     tryAutoLogin();
   }

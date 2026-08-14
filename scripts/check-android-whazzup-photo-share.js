@@ -5,6 +5,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
 const app = fs.readFileSync("app.js", "utf8");
+const orderFix = fs.readFileSync("android-whazzup-photo-order.js", "utf8");
+const nativeRuntime = fs.readFileSync("native-android-runtime.js", "utf8");
+const capacitorPrepare = fs.readFileSync("scripts/prepare-capacitor-web.js", "utf8");
 const mainActivity = fs.readFileSync("android/app/src/main/java/it/vargacantieri/hera/MainActivity.java", "utf8");
 const plugin = fs.readFileSync(
   "android/app/src/main/java/it/vargacantieri/hera/whatsapp/HeraWhazzupPhotosPlugin.java",
@@ -19,7 +22,6 @@ const requiredNativeMarkers = [
   'Intent.ACTION_SEND_MULTIPLE',
   'Intent.ACTION_SEND',
   'intent.setPackage(packageName);',
-  'intent.putExtra(Intent.EXTRA_TEXT, message);',
   'intent.putExtra(Intent.EXTRA_STREAM, photoUris.get(0));',
   'intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, photoUris);',
   'FileProvider.getUriForFile(',
@@ -27,7 +29,10 @@ const requiredNativeMarkers = [
   'getContext().grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);',
   'private static final String WHATSAPP = "com.whatsapp";',
   'private static final String WHATSAPP_BUSINESS = "com.whatsapp.w4b";',
-  'result.put("fallback", false);'
+  'startActivityForResult(call, intent, "photosActivityResult");',
+  '@ActivityCallback',
+  'callResult.put("separateTextRequired", true);',
+  'callResult.put("fallback", false);'
 ];
 requiredNativeMarkers.forEach((marker) => assert.ok(plugin.includes(marker), `Marker nativo mancante: ${marker}`));
 
@@ -36,22 +41,33 @@ requiredNativeMarkers.forEach((marker) => assert.ok(plugin.includes(marker), `Ma
   "web.whatsapp.com",
   "https://wa.me/",
   "api.whatsapp.com",
-  "Intent.createChooser"
+  "Intent.createChooser",
+  "Intent.EXTRA_TEXT",
+  "Intent.EXTRA_SUBJECT"
 ].forEach((marker) => assert.ok(!plugin.includes(marker), `Fallback o chooser vietato nel plugin foto: ${marker}`));
 
 assert.match(app, /function getDedicatedAndroidWhazzupPhotoPlugin\(\)/);
 assert.match(app, /registerPlugin\?\.\("HeraWhazzupPhotos"\)/);
-assert.match(app, /async function shareWhazzupPhotosDedicatedAndroid\(plugin, orderedFiles, message\)/);
-assert.match(app, /await plugin\.begin\(\)/);
-assert.match(app, /await plugin\.addPhoto\(\{/);
-assert.match(app, /return await plugin\.share\(\{/);
-assert.match(app, /const dedicatedPlugin = getDedicatedAndroidWhazzupPhotoPlugin\(\);/);
-assert.match(app, /return shareWhazzupPhotosDedicatedAndroid\(dedicatedPlugin, orderedFiles, message\);/);
+assert.match(orderFix, /async function sharePhotosThroughDedicatedPlugin\(plugin, orderedFiles\)/);
+assert.match(orderFix, /await plugin\.begin\(\)/);
+assert.match(orderFix, /await plugin\.addPhoto\(\{/);
+assert.match(orderFix, /return await plugin\.share\(\{ sessionId \}\);/);
+assert.match(orderFix, /async function shareWhazzupPhotosNativeAndroidInOrder\(orderedFiles, message\)/);
+assert.match(orderFix, /window\.shareWhazzupPhotosNativeAndroid = shareWhazzupPhotosNativeAndroidInOrder;/);
+assert.match(orderFix, /files: fileUris,[\s\S]*safeOpenWhatsAppMessage\(message\)/);
+assert.doesNotMatch(orderFix, /text:\s*message/);
+assert.doesNotMatch(orderFix, /title:\s*"Impianto fatto"/);
 
-const dedicatedStart = app.indexOf("async function shareWhazzupPhotosDedicatedAndroid");
-const nativeStart = app.indexOf("async function shareWhazzupPhotosNativeAndroid", dedicatedStart);
-const dedicatedSource = app.slice(dedicatedStart, nativeStart);
-assert.ok(dedicatedSource.indexOf("await plugin.addPhoto") < dedicatedSource.indexOf("return await plugin.share"));
-assert.ok(dedicatedSource.indexOf("fileName:") < dedicatedSource.indexOf("text: message"));
+const dedicatedShareIndex = orderFix.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
+const dedicatedMessageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)", dedicatedShareIndex);
+assert.ok(dedicatedShareIndex >= 0 && dedicatedShareIndex < dedicatedMessageIndex);
+const genericShareIndex = orderFix.indexOf("await plugins.share.share");
+const genericMessageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)", genericShareIndex);
+assert.ok(genericShareIndex >= 0 && genericShareIndex < genericMessageIndex);
+
+assert.match(nativeRuntime, /function loadAndroidWhazzupPhotoOrderFix\(\)/);
+assert.match(nativeRuntime, /script\.src = "android-whazzup-photo-order\.js\?v=20260814a"/);
+assert.match(nativeRuntime, /const start = \(\) => \{\s*loadAndroidWhazzupPhotoOrderFix\(\);/);
+assert.match(capacitorPrepare, /"android-whazzup-photo-order\.js"/);
 
 console.log("Android Whazzup photo-share checks passed.");

@@ -2,6 +2,7 @@
   "use strict";
 
   const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
+  const APP_CACHE_PREFIXES = ["varga-cantieri-shell-", "hera-app-shell-"];
   let controllerReloaded = false;
 
   function isNativeAndroid() {
@@ -11,11 +12,16 @@
     );
   }
 
+  function isAppShellCache(name) {
+    return APP_CACHE_PREFIXES.some((prefix) => String(name || "").startsWith(prefix));
+  }
+
   async function clearWebAppCaches() {
     if (!("caches" in window)) return;
     try {
       const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      const appShellCaches = cacheNames.filter(isAppShellCache);
+      await Promise.all(appShellCaches.map((name) => caches.delete(name)));
     } catch (error) {
       console.warn("Pulizia cache web non riuscita; proseguo con l'aggiornamento.", error);
     }
@@ -29,8 +35,9 @@
 
   async function requestPwaUpdate({ reload = false } = {}) {
     try {
-      // La pulizia completa deve avvenire solo dopo un clic volontario su Refresh.
-      // I controlli automatici aggiornano il Service Worker senza svuotare le cache.
+      // IMPORTANTE: Refresh elimina solo la cache dell'app shell.
+      // Non deve mai eseguire signOut, localStorage.clear(), sessionStorage.clear()
+      // o cancellare IndexedDB: Firebase Auth, dati offline e preferenze restano intatti.
       if (reload) await clearWebAppCaches();
 
       if ("serviceWorker" in navigator) {
@@ -182,8 +189,8 @@
       userButton.insertAdjacentElement("afterend", button);
     }
 
-    button.title = "Refresh: elimina cache e ricarica";
-    button.setAttribute("aria-label", "Refresh: elimina cache e ricarica");
+    button.title = "Refresh: aggiorna l’app mantenendo accesso e dati";
+    button.setAttribute("aria-label", "Refresh: aggiorna l’app mantenendo accesso e dati");
     bindUpdateButton(button);
   }
 
@@ -198,8 +205,8 @@
     const button = document.createElement("button");
     button.id = "auth-update-pwa-btn";
     button.type = "button";
-    button.title = "Aggiorna la versione PWA";
-    button.setAttribute("aria-label", "Aggiorna la versione PWA");
+    button.title = "Aggiorna la versione PWA mantenendo accesso e dati";
+    button.setAttribute("aria-label", "Aggiorna la versione PWA mantenendo accesso e dati");
     button.innerHTML = '<span class="pwa-update-icon" aria-hidden="true">↻</span><span>Aggiorna PWA</span>';
 
     wrap.appendChild(button);

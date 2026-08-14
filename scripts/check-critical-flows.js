@@ -36,8 +36,10 @@ flow("1. Accesso stabile", () => {
 });
 
 flow("2. Lavori di oggi / commesse e squadre", () => {
-  assert.match(activeCommesseGuard, /installed:\s*true/);
-  assert.match(activeCommesseGuard, /commess/i);
+  assert.match(activeCommesseGuard, /HeraActiveCommesseFirstBootGuard/);
+  assert.match(activeCommesseGuard, /installIndexReadGuard\(/);
+  assert.match(activeCommesseGuard, /installListenerGuard\(/);
+  assert.match(activeCommesseGuard, /failOpenRootListeners/);
   assert.match(squadraSync, /squadr/i);
   assert.match(app, /renderTodaySummary\(/);
 });

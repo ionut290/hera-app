@@ -1,9 +1,9 @@
-const CACHE_NAME = "varga-cantieri-shell-v127";
-const CACHE_RESET_VERSION = "20260812-opera1";
+const CACHE_NAME = "varga-cantieri-shell-v128";
+const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20260812-mobile-photo-done1",
+  "./style.css?v=20260814-loading-humor1",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260731-legacy1",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "./calendar-feature.css?v=20260728b",
   "./squadre-restyle.css?v=20260731-mezzi1",
   "./app.js?v=20260813-render-gate1",
+  "./loading-humor.js?v=20260814a",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",

@@ -1,11 +1,11 @@
 (function installAndroidWhazzupPhotoOrderFix() {
   "use strict";
 
-  const FINAL_MESSAGE_SETTLE_MS = 8000;
+  const PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS = 8000;
 
-  function waitBeforeFinalWhazzupMessage() {
+  function waitBeforeWhazzupPhotos() {
     return new Promise((resolve) => {
-      window.setTimeout(resolve, FINAL_MESSAGE_SETTLE_MS);
+      window.setTimeout(resolve, PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS);
     });
   }
 
@@ -37,13 +37,15 @@
   }
 
   async function shareWhazzupPhotosNativeAndroidInOrder(orderedFiles, message) {
+    if (!safeOpenWhatsAppMessage(message)) {
+      throw new Error("Impossibile aprire il messaggio Whazzup iniziale");
+    }
+
+    await waitBeforeWhazzupPhotos();
+
     const dedicatedPlugin = getDedicatedAndroidWhazzupPhotoPlugin();
     if (dedicatedPlugin) {
       await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles);
-      await waitBeforeFinalWhazzupMessage();
-      if (!safeOpenWhatsAppMessage(message)) {
-        throw new Error("Impossibile aprire il messaggio Whazzup finale");
-      }
       return true;
     }
 
@@ -64,13 +66,9 @@
       }
       await plugins.share.share({
         files: fileUris,
-        dialogTitle: "Condividi prima tutte le foto su Whazzup"
+        dialogTitle: "Condividi le foto su Whazzup"
       });
       scheduleNativeWhazzupShareCleanup(plugins.filesystem, folderPath);
-      await waitBeforeFinalWhazzupMessage();
-      if (!safeOpenWhatsAppMessage(message)) {
-        throw new Error("Impossibile aprire il messaggio Whazzup finale");
-      }
       return true;
     } catch (error) {
       await removeNativeWhazzupShareFolder(plugins.filesystem, folderPath);

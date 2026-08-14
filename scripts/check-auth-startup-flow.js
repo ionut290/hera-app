@@ -36,7 +36,7 @@ assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signIn
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
 assert.match(sw, /varga-cantieri-shell-v129/);
-assert.match(sw, /CACHE_RESET_VERSION = "20260814-authflow1"/);
+assert.match(sw, /CACHE_RESET_VERSION = "20260814-loading-humor1"/);
 for (const path of [
   "/firebase-config.js",
   "/auth-login-fix.js",

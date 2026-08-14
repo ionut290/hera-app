@@ -9771,6 +9771,64 @@ body.auth-required .menu-overlay {
   }
 }
 
+.loading-humor-emoji {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.55em;
+  font-size: 1.45em;
+  line-height: 1;
+  transform-origin: 50% 80%;
+  animation: loading-humor-bounce 1.15s ease-in-out infinite;
+}
+
+.loading-humor-inline {
+  margin: 10px 0 0;
+  color: var(--muted, #64748b);
+  font-weight: 700;
+}
+
+.loading-humor-slow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.loading-humor-slow.hidden {
+  display: none !important;
+}
+
+.loading-humor-retry {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+.startup-loading .loading-humor-slow {
+  color: rgb(255 255 255 / 82%);
+}
+
+.startup-loading .loading-humor-retry {
+  border-color: #fbbf24;
+  background: #fbbf24;
+  color: #111214;
+}
+
+@keyframes loading-humor-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  45% { transform: translateY(-4px) rotate(-5deg); }
+  70% { transform: translateY(0) rotate(4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-humor-emoji {
+    animation: none;
+  }
+}
 
 .whazzup-preparing-feedback {
   position: fixed;

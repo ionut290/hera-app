@@ -1,3 +1,172 @@
+(function installAuthStartupController() {
+  "use strict";
+
+  if (window.__heraAuthStartupControllerInstalled) return;
+  window.__heraAuthStartupControllerInstalled = true;
+
+  // L'auto-login legacy viene caricato tardi dal runtime menu. Il controllo
+  // sessione ora vive qui, prima di app.js, quindi impediamo un secondo
+  // controller concorrente di modificare l'auth gate dopo l'avvio.
+  window.__heraSavedCredentialsAutoLoginInstalled = true;
+
+  const AUTH_GATE_ID = "auth-gate";
+  const RESOLVE_TIMEOUT_MS = 10000;
+  let authResolved = false;
+  let authenticatedUser = null;
+  let tokenUnsubscribe = null;
+  let gateObserver = null;
+  let applyingGateState = false;
+
+  function getAuth() {
+    try {
+      return window.firebase && typeof firebase.auth === "function" ? firebase.auth() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function isUsableAuthenticatedUser(user) {
+    if (!user) return false;
+    if (user.email && user.emailVerified === false) return false;
+    return true;
+  }
+
+  function getGate() {
+    return document.getElementById(AUTH_GATE_ID);
+  }
+
+  function applyGateHidden(hidden) {
+    const gate = getGate();
+    if (!gate || applyingGateState) return;
+    const currentlyHidden = gate.hidden === true
+      || gate.classList.contains("hidden")
+      || gate.style.getPropertyValue("display") === "none";
+    if (currentlyHidden === hidden) return;
+
+    applyingGateState = true;
+    try {
+      if (hidden) {
+        gate.hidden = true;
+        gate.classList.add("hidden");
+        gate.style.setProperty("display", "none", "important");
+        gate.setAttribute("aria-hidden", "true");
+      } else {
+        gate.hidden = false;
+        gate.classList.remove("hidden");
+        gate.style.removeProperty("display");
+        gate.removeAttribute("aria-hidden");
+      }
+    } finally {
+      applyingGateState = false;
+    }
+  }
+
+  function reconcileAuthGate() {
+    const auth = getAuth();
+    const rawUser = authenticatedUser || (auth && auth.currentUser) || null;
+    const usableUser = isUsableAuthenticatedUser(rawUser) ? rawUser : null;
+
+    if (usableUser) {
+      authenticatedUser = usableUser;
+      applyGateHidden(true);
+      return true;
+    }
+
+    // Durante il ripristino Firebase nessun altro modulo deve poter mostrare
+    // prematuramente "Login richiesto".
+    if (!authResolved) {
+      applyGateHidden(true);
+      return false;
+    }
+
+    applyGateHidden(false);
+    return false;
+  }
+
+  function installGateMutationGuard() {
+    const gate = getGate();
+    if (!gate || gateObserver || typeof MutationObserver !== "function") return;
+    gateObserver = new MutationObserver(() => {
+      if (applyingGateState) return;
+      queueMicrotask(reconcileAuthGate);
+    });
+    gateObserver.observe(gate, {
+      attributes: true,
+      attributeFilter: ["class", "style", "hidden", "aria-hidden"]
+    });
+  }
+
+  async function ensureLocalPersistence(auth) {
+    if (!auth || typeof auth.setPersistence !== "function") return;
+    const persistence = window.firebase?.auth?.Auth?.Persistence?.LOCAL;
+    if (!persistence) return;
+    try {
+      await auth.setPersistence(persistence);
+    } catch (error) {
+      console.warn("Persistenza Firebase LOCAL non disponibile:", error);
+    }
+  }
+
+  async function startAuthStartupController() {
+    installGateMutationGuard();
+    applyGateHidden(true);
+
+    const auth = getAuth();
+    if (!auth) {
+      authResolved = true;
+      reconcileAuthGate();
+      return;
+    }
+
+    await ensureLocalPersistence(auth);
+
+    if (isUsableAuthenticatedUser(auth.currentUser)) {
+      authenticatedUser = auth.currentUser;
+      authResolved = true;
+      reconcileAuthGate();
+    }
+
+    if (typeof auth.onIdTokenChanged === "function" && !tokenUnsubscribe) {
+      tokenUnsubscribe = auth.onIdTokenChanged((user) => {
+        authenticatedUser = isUsableAuthenticatedUser(user) ? user : null;
+        authResolved = true;
+        reconcileAuthGate();
+      }, (error) => {
+        console.warn("Ripristino sessione Firebase non riuscito:", error);
+        authenticatedUser = isUsableAuthenticatedUser(auth.currentUser) ? auth.currentUser : null;
+        authResolved = true;
+        reconcileAuthGate();
+      });
+    }
+
+    window.setTimeout(() => {
+      if (authResolved) return;
+      authenticatedUser = isUsableAuthenticatedUser(auth.currentUser) ? auth.currentUser : null;
+      authResolved = true;
+      reconcileAuthGate();
+    }, RESOLVE_TIMEOUT_MS);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) reconcileAuthGate();
+  });
+  window.addEventListener("pageshow", () => queueMicrotask(reconcileAuthGate));
+
+  window.HeraAuthStartupController = {
+    getState: () => ({
+      resolved: authResolved,
+      authenticated: reconcileAuthGate()
+    }),
+    reconcile: reconcileAuthGate
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startAuthStartupController, { once: true });
+  } else {
+    void startAuthStartupController();
+  }
+})();
+
 (function installGoogleLoginFix() {
   "use strict";
 

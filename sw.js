@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v128";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v129";
+const CACHE_RESET_VERSION = "20260814-authflow1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -15,6 +15,9 @@ const APP_SHELL = [
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
+  "./auth-login-fix.js?v=20260731-legacy1",
+  "./login-retry-fix.js?v=20260726f",
+  "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
@@ -31,12 +34,13 @@ const APP_SHELL = [
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
   "./fatto-button-immediate.js?v=20260727-fatto2",
-  "./header-menu-runtime.js?v=20260801-cost1",
+  "./header-menu-runtime.js?v=20260804-diagnostics-reset1",
+  "./header-menu-runtime-original.js?v=20260804-diagnostics-reset1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
   "./global-archive-sync.js?v=20260802-cost2",
   "./global-archive-new-commesse-fix.js?v=20260801-lazy1",
-  "./auto-login-saved-credentials.js?v=20260801a",
+  "./auto-login-saved-credentials.js?v=20260814-authflow1",
   "./varga-branding.js?v=20260731a",
   "./whazzup-preload-cache.js?v=20260803-installed-only2",
   "./fuel-stations-core.js",
@@ -60,7 +64,17 @@ const APP_SHELL = [
 
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
-const NETWORK_FIRST_ASSET_PATHS = new Set(["/shared-static-views-client.js"]);
+const NETWORK_FIRST_ASSET_PATHS = new Set([
+  "/shared-static-views-client.js",
+  "/firebase-config.js",
+  "/auth-login-fix.js",
+  "/login-retry-fix.js",
+  "/first-login-password.js",
+  "/approval-access.js",
+  "/auto-login-saved-credentials.js",
+  "/header-menu-runtime.js",
+  "/header-menu-runtime-original.js"
+]);
 
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
   .some((pattern) => pattern.test(url.pathname));

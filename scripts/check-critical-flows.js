@@ -17,6 +17,7 @@ const updateFeature = read("update-app-feature.js");
 const updateFeatureExecutable = updateFeature
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/^\s*\/\/.*$/gm, "");
+const netlifyHeaders = read("_headers");
 const approval = read("approval-access.js");
 const activeCommesseGuard = read("active-commesse-first-boot-guard.js");
 const squadraSync = read("squadra-current-save-sync.js");
@@ -48,6 +49,9 @@ flow("1. Accesso stabile", () => {
   assert.doesNotMatch(updateFeatureExecutable, /localStorage\.clear\(/);
   assert.doesNotMatch(updateFeatureExecutable, /sessionStorage\.clear\(/);
   assert.doesNotMatch(updateFeatureExecutable, /indexedDB\.deleteDatabase\(/);
+  for (const path of ["/", "/index.html", "/sw.js", "/auth-login-fix.js", "/auto-login-saved-credentials.js"]) {
+    assert.match(netlifyHeaders, new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n\\s+Cache-Control: no-cache, must-revalidate`));
+  }
   assert.match(approval, /window\.HeraAccessApproval\s*=\s*\{/);
 });
 

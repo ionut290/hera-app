@@ -21,7 +21,15 @@ jobs:
         run: npm ci
       - name: Check syntax
         run: npm run check:syntax
-      - name: Check FATTO critical flow
-        run: npm run check:fatto-critical
+      - name: Check FATTO core
+        run: npm run check:done-button
+      - name: Check Android photo share
+        run: npm run check:android-photo-share
+      - name: Check Android camera capture
+        run: npm run check:android-camera-capture
+      - name: Check photo notes
+        run: npm run check:photo-notes
+      - name: Check WhatsApp protection
+        run: npm run check:whatsapp-protection
       - name: Check nine fundamental flows
         run: node scripts/check-critical-flows.js

@@ -1,6 +1,14 @@
 (function installAndroidWhazzupPhotoOrderFix() {
   "use strict";
 
+  const FINAL_MESSAGE_SETTLE_MS = 8000;
+
+  function waitBeforeFinalWhazzupMessage() {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, FINAL_MESSAGE_SETTLE_MS);
+    });
+  }
+
   async function sharePhotosThroughDedicatedPlugin(plugin, orderedFiles) {
     let sessionId = "";
     try {
@@ -32,6 +40,7 @@
     const dedicatedPlugin = getDedicatedAndroidWhazzupPhotoPlugin();
     if (dedicatedPlugin) {
       await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles);
+      await waitBeforeFinalWhazzupMessage();
       if (!safeOpenWhatsAppMessage(message)) {
         throw new Error("Impossibile aprire il messaggio Whazzup finale");
       }
@@ -58,6 +67,7 @@
         dialogTitle: "Condividi prima tutte le foto su Whazzup"
       });
       scheduleNativeWhazzupShareCleanup(plugins.filesystem, folderPath);
+      await waitBeforeFinalWhazzupMessage();
       if (!safeOpenWhatsAppMessage(message)) {
         throw new Error("Impossibile aprire il messaggio Whazzup finale");
       }

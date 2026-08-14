@@ -1270,6 +1270,7 @@ let impiantiSearchTerm = "";
 let impiantiViewMode = "todo";
 const whazzupSafetyByImpianto = new Map();
 const whazzupPhotoFilesByImpianto = new Map();
+const whazzupPhotoNotesByImpianto = new Map();
 const whazzupPhotoSavedAtByImpianto = new Map();
 const WHAZZUP_PHOTO_DB_NAME = "heraWhazzupPhotoAttachments";
 const WHAZZUP_PHOTO_STORE_NAME = "attachments";
@@ -23541,12 +23542,24 @@ function openWhazzupPhotoDatabase() {
   });
 }
 
-async function persistWhazzupPhotos(key, files, savedAt = Date.now()) {
+function normalizeWhazzupPhotoNotes(notes, photoCount) {
+  const noteList = Array.from(notes || []);
+  return Array.from({ length: Math.max(0, Number(photoCount || 0)) }, (_, index) => (
+    String(noteList[index] || "").trim().slice(0, 180)
+  ));
+}
+
+async function persistWhazzupPhotos(key, files, savedAt = Date.now(), notes = []) {
   const database = await openWhazzupPhotoDatabase();
   try {
     await new Promise((resolve, reject) => {
       const transaction = database.transaction(WHAZZUP_PHOTO_STORE_NAME, "readwrite");
-      transaction.objectStore(WHAZZUP_PHOTO_STORE_NAME).put({ key, files, savedAt });
+      transaction.objectStore(WHAZZUP_PHOTO_STORE_NAME).put({
+        key,
+        files,
+        savedAt,
+        notes: normalizeWhazzupPhotoNotes(notes, files.length)
+      });
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error || new Error("Salvataggio foto non riuscito"));
       transaction.onabort = () => reject(transaction.error || new Error("Salvataggio foto interrotto"));
@@ -23558,6 +23571,7 @@ async function persistWhazzupPhotos(key, files, savedAt = Date.now()) {
 
 async function deletePersistedWhazzupPhotos(key) {
   whazzupPhotoFilesByImpianto.delete(key);
+  whazzupPhotoNotesByImpianto.delete(key);
   whazzupPhotoSavedAtByImpianto.delete(key);
   try {
     const database = await openWhazzupPhotoDatabase();
@@ -23594,6 +23608,7 @@ async function restorePersistedWhazzupPhotos() {
         return;
       }
       whazzupPhotoFilesByImpianto.set(key, files);
+      whazzupPhotoNotesByImpianto.set(key, normalizeWhazzupPhotoNotes(record?.notes, files.length));
       whazzupPhotoSavedAtByImpianto.set(key, savedAt);
     });
     await Promise.all(expiredKeys.map((key) => deletePersistedWhazzupPhotos(key)));
@@ -23617,6 +23632,11 @@ function getWhazzupPhotos(impianto) {
   return whazzupPhotoFilesByImpianto.get(key) || [];
 }
 
+function getWhazzupPhotoNotes(impianto) {
+  const files = getWhazzupPhotos(impianto);
+  return normalizeWhazzupPhotoNotes(whazzupPhotoNotesByImpianto.get(getWhazzupPhotoKey(impianto)), files.length);
+}
+
 function updateWhazzupAttachmentButton(button, impianto) {
   if (!button) return;
   const count = getWhazzupPhotos(impianto).length;
@@ -23627,7 +23647,7 @@ function updateWhazzupAttachmentButton(button, impianto) {
   button.classList.toggle("has-attachments", count > 0);
 }
 
-async function saveWhazzupPhotoSelection(impianto, files) {
+async function saveWhazzupPhotoSelection(impianto, files, notes = []) {
   const key = getWhazzupPhotoKey(impianto);
   const validFiles = Array.from(files || []).filter((file) => file instanceof Blob && String(file.type || "").startsWith("image/"));
   if (!validFiles.length) {
@@ -23635,10 +23655,23 @@ async function saveWhazzupPhotoSelection(impianto, files) {
     return [];
   }
   const savedAt = Date.now();
+  const normalizedNotes = normalizeWhazzupPhotoNotes(notes, validFiles.length);
   whazzupPhotoFilesByImpianto.set(key, validFiles);
+  whazzupPhotoNotesByImpianto.set(key, normalizedNotes);
   whazzupPhotoSavedAtByImpianto.set(key, savedAt);
-  await persistWhazzupPhotos(key, validFiles, savedAt);
+  await persistWhazzupPhotos(key, validFiles, savedAt, normalizedNotes);
   return validFiles;
+}
+
+async function saveWhazzupPhotoNotes(impianto, notes) {
+  const key = getWhazzupPhotoKey(impianto);
+  const files = getWhazzupPhotos(impianto);
+  if (!files.length) return [];
+  const normalizedNotes = normalizeWhazzupPhotoNotes(notes, files.length);
+  const savedAt = Number(whazzupPhotoSavedAtByImpianto.get(key) || Date.now());
+  whazzupPhotoNotesByImpianto.set(key, normalizedNotes);
+  await persistWhazzupPhotos(key, files, savedAt, normalizedNotes);
+  return normalizedNotes;
 }
 
 function openWhazzupPhotoPreview(file) {
@@ -23682,14 +23715,18 @@ function pickWhazzupPhotos(impianto, button, options = {}) {
     input.remove();
     if (!files.length) return;
     const current = getWhazzupPhotos(impianto).slice();
+    const currentNotes = getWhazzupPhotoNotes(impianto);
     let nextFiles = files;
+    let nextNotes = files.map(() => "");
     if (options.mode === "append") nextFiles = [...current, ...files];
+    if (options.mode === "append") nextNotes = [...currentNotes, ...files.map(() => "")];
     if (options.mode === "replace-one") {
       nextFiles = current;
       nextFiles.splice(Number(options.index || 0), 1, files[0]);
+      nextNotes = currentNotes;
     }
     try {
-      await saveWhazzupPhotoSelection(impianto, nextFiles);
+      await saveWhazzupPhotoSelection(impianto, nextFiles, nextNotes);
       updateWhazzupAttachmentButton(button, impianto);
       if (options.reopenManager !== false) openWhazzupPhotoManager(impianto, button);
     } catch (error) {
@@ -23717,8 +23754,31 @@ function openWhazzupPhotoManager(impianto, button) {
   card.className = "whazzup-photo-manager-card";
   overlay.appendChild(card);
   let objectUrls = [];
+  let noteSaveTimer = null;
+
+  const readVisibleNotes = () => {
+    const currentNotes = getWhazzupPhotoNotes(impianto);
+    card.querySelectorAll("[data-photo-note-index]").forEach((input) => {
+      const index = Number(input.dataset.photoNoteIndex);
+      if (Number.isInteger(index) && index >= 0 && index < currentNotes.length) {
+        currentNotes[index] = String(input.value || "").trim().slice(0, 180);
+      }
+    });
+    return currentNotes;
+  };
+
+  const flushVisibleNotes = async () => {
+    if (noteSaveTimer) window.clearTimeout(noteSaveTimer);
+    noteSaveTimer = null;
+    return saveWhazzupPhotoNotes(impianto, readVisibleNotes());
+  };
 
   const close = () => {
+    if (noteSaveTimer) {
+      window.clearTimeout(noteSaveTimer);
+      noteSaveTimer = null;
+      void saveWhazzupPhotoNotes(impianto, readVisibleNotes());
+    }
     objectUrls.forEach((url) => URL.revokeObjectURL(url));
     objectUrls = [];
     overlay.remove();
@@ -23732,6 +23792,7 @@ function openWhazzupPhotoManager(impianto, button) {
     objectUrls.forEach((url) => URL.revokeObjectURL(url));
     objectUrls = [];
     const currentFiles = getWhazzupPhotos(impianto);
+    const currentNotes = getWhazzupPhotoNotes(impianto);
     if (!currentFiles.length) {
       close();
       updateWhazzupAttachmentButton(button, impianto);
@@ -23747,6 +23808,10 @@ function openWhazzupPhotoManager(impianto, button) {
             <span class="whazzup-photo-order">Foto ${index + 1}</span>
             <span class="whazzup-photo-view-label">Visualizza</span>
           </button>
+          <label class="whazzup-photo-note">
+            <span>Nota della foto <small>(opzionale)</small></span>
+            <textarea data-photo-note-index="${index}" maxlength="180" rows="2" placeholder="Es. Albero caduto a Marzabotto">${escapeHTML(currentNotes[index])}</textarea>
+          </label>
           <div class="whazzup-photo-item-actions">
             <button type="button" class="btn" data-photo-action="replace">Sostituisci</button>
             <button type="button" class="btn btn-danger" data-photo-action="delete">Elimina</button>
@@ -23782,6 +23847,11 @@ function openWhazzupPhotoManager(impianto, button) {
       if (!submitButton || submitButton.disabled || isImpiantoWhazzupProcessing(impianto)) return;
       submitButton.disabled = true;
       submitButton.textContent = impianto.done ? "Apertura Whazzup…" : "Salvataggio…";
+      try {
+        await flushVisibleNotes();
+      } catch (error) {
+        console.warn("Conservazione locale note foto Whazzup non riuscita:", error);
+      }
       close();
       if (impianto.done) await handleCompletedImpiantoWhatsAppClick(impianto);
       else await handleImpiantoWhatsAppClick(impianto);
@@ -23813,10 +23883,22 @@ function openWhazzupPhotoManager(impianto, button) {
     }
     if (photoAction === "delete") {
       const remaining = currentFiles.filter((_, photoIndex) => photoIndex !== index);
-      await saveWhazzupPhotoSelection(impianto, remaining);
+      const remainingNotes = getWhazzupPhotoNotes(impianto).filter((_, photoIndex) => photoIndex !== index);
+      await saveWhazzupPhotoSelection(impianto, remaining, remainingNotes);
       updateWhazzupAttachmentButton(button, impianto);
       render();
     }
+  });
+  card.addEventListener("input", (event) => {
+    const noteInput = event.target.closest("[data-photo-note-index]");
+    if (!noteInput) return;
+    const key = getWhazzupPhotoKey(impianto);
+    whazzupPhotoNotesByImpianto.set(key, readVisibleNotes());
+    if (noteSaveTimer) window.clearTimeout(noteSaveTimer);
+    noteSaveTimer = window.setTimeout(() => {
+      noteSaveTimer = null;
+      void saveWhazzupPhotoNotes(impianto, readVisibleNotes());
+    }, 450);
   });
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) close();
@@ -23849,6 +23931,120 @@ function buildOrderedWhazzupShareFiles(files) {
       return file;
     }
   });
+}
+
+function loadWhazzupPhotoForAnnotation(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => resolve({ image, objectUrl });
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("La foto non può essere preparata con la nota"));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function wrapWhazzupPhotoNote(context, text, maxWidth, maxLines) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean).flatMap((word) => {
+    if (context.measureText(word).width <= maxWidth) return [word];
+    const chunks = [];
+    let chunk = "";
+    Array.from(word).forEach((character) => {
+      if (chunk && context.measureText(`${chunk}${character}`).width > maxWidth) {
+        chunks.push(chunk);
+        chunk = character;
+      } else {
+        chunk += character;
+      }
+    });
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  });
+  const lines = [];
+  let currentLine = "";
+  words.forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (!currentLine || context.measureText(candidate).width <= maxWidth) {
+      currentLine = candidate;
+      return;
+    }
+    lines.push(currentLine);
+    currentLine = word;
+  });
+  if (currentLine) lines.push(currentLine);
+  if (lines.length <= maxLines) return lines;
+  const visibleLines = lines.slice(0, maxLines);
+  let lastLine = visibleLines[maxLines - 1];
+  while (lastLine && context.measureText(`${lastLine}…`).width > maxWidth) {
+    lastLine = lastLine.slice(0, -1).trimEnd();
+  }
+  visibleLines[maxLines - 1] = `${lastLine}…`;
+  return visibleLines;
+}
+
+async function addWhazzupNoteToPhoto(file, note) {
+  const normalizedNote = String(note || "").trim().slice(0, 180);
+  if (!normalizedNote) return file;
+
+  const { image, objectUrl } = await loadWhazzupPhotoForAnnotation(file);
+  try {
+    const maxDimension = 4096;
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Elaborazione foto non disponibile");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const padding = Math.max(22, Math.round(canvas.width * 0.035));
+    const accentWidth = Math.max(8, Math.round(canvas.width * 0.009));
+    const titleSize = Math.max(12, Math.min(42, Math.round(canvas.width * 0.032), Math.round(canvas.height * 0.052)));
+    const textSize = Math.max(16, Math.min(58, Math.round(canvas.width * 0.048), Math.round(canvas.height * 0.07)));
+    const lineHeight = Math.round(textSize * 1.24);
+    context.font = `700 ${textSize}px sans-serif`;
+    const lines = wrapWhazzupPhotoNote(context, normalizedNote, canvas.width - (padding * 2) - accentWidth, 12);
+    const panelHeight = padding + titleSize + Math.round(titleSize * 0.55) + (lines.length * lineHeight) + padding;
+    const panelTop = Math.max(0, canvas.height - panelHeight);
+
+    context.fillStyle = "rgba(4, 35, 31, 0.88)";
+    context.fillRect(0, panelTop, canvas.width, canvas.height - panelTop);
+    context.fillStyle = "#f5c542";
+    context.fillRect(0, panelTop, accentWidth, canvas.height - panelTop);
+    context.fillStyle = "#7ff0c5";
+    context.font = `800 ${titleSize}px sans-serif`;
+    context.fillText("NOTA FOTO", padding + accentWidth, panelTop + padding + titleSize);
+    context.fillStyle = "#ffffff";
+    context.font = `700 ${textSize}px sans-serif`;
+    const firstTextBaseline = panelTop + padding + titleSize + Math.round(titleSize * 0.55) + textSize;
+    lines.forEach((line, index) => {
+      context.fillText(line, padding + accentWidth, firstTextBaseline + (index * lineHeight));
+    });
+
+    const outputType = String(file.type || "").toLowerCase() === "image/png" ? "image/png" : "image/jpeg";
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Creazione foto con nota non riuscita")), outputType, 0.92);
+    });
+    const outputExtension = outputType === "image/png" ? "png" : "jpg";
+    const originalBaseName = String(file.name || "foto-nota").replace(/\.[^.]+$/, "") || "foto-nota";
+    return new File([blob], `${originalBaseName}.${outputExtension}`, {
+      type: outputType,
+      lastModified: Number(file.lastModified || Date.now())
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function buildWhazzupShareFilesWithNotes(impianto, files) {
+  const notes = getWhazzupPhotoNotes(impianto);
+  const annotatedFiles = [];
+  for (let index = 0; index < files.length; index += 1) {
+    annotatedFiles.push(await addWhazzupNoteToPhoto(files[index], notes[index]));
+  }
+  return buildOrderedWhazzupShareFiles(annotatedFiles);
 }
 
 function getNativeAndroidWhazzupSharePlugins() {
@@ -23992,9 +24188,9 @@ function isWhazzupShareCancellation(error) {
 async function shareWhazzupWithPhotos(impianto, options = {}) {
   const files = getWhazzupPhotos(impianto);
   if (!files.length) return null;
-  const orderedFiles = buildOrderedWhazzupShareFiles(files);
   const { message } = buildImpiantoWhatsAppPayload(impianto, options);
   try {
+    const orderedFiles = await buildWhazzupShareFilesWithNotes(impianto, files);
     const nativeShareResult = await shareWhazzupPhotosNativeAndroid(orderedFiles, message);
     if (!nativeShareResult) {
       if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: orderedFiles }))) {

@@ -238,7 +238,8 @@ async function main() {
   assert.match(appSource, /WHAZZUP_PHOTO_MAX_AGE_MS\s*=\s*10\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   assert.match(appSource, /indexedDB\.open\(WHAZZUP_PHOTO_DB_NAME,\s*1\)/);
   assert.match(appSource, /void restorePersistedWhazzupPhotos\(\)/);
-  assert.match(appSource, /await persistWhazzupPhotos\(key, validFiles, savedAt\)/);
+  assert.match(appSource, /await persistWhazzupPhotos\(key, validFiles, savedAt, normalizedNotes\)/);
+  assert.match(appSource, /notes:\s*normalizeWhazzupPhotoNotes\(notes, files\.length\)/);
   assert.match(appSource, /function openWhazzupPhotoManager\(impianto, button\)/);
   assert.match(appSource, /data-photo-action="view"/);
   assert.match(appSource, /data-photo-action="replace"/);

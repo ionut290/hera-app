@@ -14,6 +14,9 @@ const index = read("index.html");
 const authFix = read("auth-login-fix.js");
 const autoLogin = read("auto-login-saved-credentials.js");
 const updateFeature = read("update-app-feature.js");
+const updateFeatureExecutable = updateFeature
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
 const approval = read("approval-access.js");
 const activeCommesseGuard = read("active-commesse-first-boot-guard.js");
 const squadraSync = read("squadra-current-save-sync.js");
@@ -41,10 +44,10 @@ flow("1. Accesso stabile", () => {
   assert.match(autoLogin, /authenticatedUser \|\| auth\?\.currentUser/);
   assert.match(updateFeature, /APP_CACHE_PREFIXES/);
   assert.match(updateFeature, /cacheNames\.filter\(isAppShellCache\)/);
-  assert.doesNotMatch(updateFeature, /firebase\.auth\(\)\.signOut\(/);
-  assert.doesNotMatch(updateFeature, /localStorage\.clear\(/);
-  assert.doesNotMatch(updateFeature, /sessionStorage\.clear\(/);
-  assert.doesNotMatch(updateFeature, /indexedDB\.deleteDatabase\(/);
+  assert.doesNotMatch(updateFeatureExecutable, /firebase\.auth\(\)\.signOut\(/);
+  assert.doesNotMatch(updateFeatureExecutable, /localStorage\.clear\(/);
+  assert.doesNotMatch(updateFeatureExecutable, /sessionStorage\.clear\(/);
+  assert.doesNotMatch(updateFeatureExecutable, /indexedDB\.deleteDatabase\(/);
   assert.match(approval, /window\.HeraAccessApproval\s*=\s*\{/);
 });
 

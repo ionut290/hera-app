@@ -202,9 +202,46 @@
       .map(text).join(" ").toLocaleUpperCase("it-IT").includes("INRETE");
   }
 
-  function chooseWorkItem(items, impianto) {
+  function getOpenWorkKinds(items) {
+    return [...new Set((items || [])
+      .filter((item) => !isWorkItemDone(item))
+      .map(getWorkItemKind)
+      .filter(Boolean))];
+  }
+
+  function buildSelectionWarning(selectedKinds, availableKinds) {
+    const selected = new Set(selectedKinds || []);
+    const available = new Set(availableKinds || []);
+    if (selected.size === 1 && selected.has("ORDINARIO") && available.has("STRAORDINARIO")) {
+      return "Hai scelto solo la manutenzione ordinaria. La manutenzione straordinaria resterà da fare e il puntino dell’impianto rimarrà visibile.";
+    }
+    if (selected.size === 1 && selected.has("STRAORDINARIO") && available.has("ORDINARIO")) {
+      return "Hai scelto solo la manutenzione straordinaria. La manutenzione ordinaria resterà da fare e il puntino dell’impianto rimarrà visibile.";
+    }
+    return "";
+  }
+
+  function buildWorkMessage(selectedKinds) {
+    const selected = new Set(selectedKinds || []);
+    if (selected.size === 1 && selected.has("ORDINARIO")) {
+      return "🟢 INTERVENTO ESEGUITO\nIntervento eseguito: manutenzione ordinaria";
+    }
+    if (selected.size === 1 && selected.has("STRAORDINARIO")) {
+      return "🟠 INTERVENTO STRAORDINARIO ESEGUITO\nIntervento eseguito: manutenzione straordinaria";
+    }
+    if (selected.has("ORDINARIO") && selected.has("STRAORDINARIO")) {
+      return "🟢 INTERVENTI ESEGUITI\nInterventi eseguiti: manutenzione ordinaria e straordinaria";
+    }
+    return "🟢 INTERVENTO ESEGUITO";
+  }
+
+  function chooseWorkKinds(items, impianto) {
+    const availableKinds = getOpenWorkKinds(items);
+    if (!availableKinds.length) return Promise.resolve([]);
+    if (availableKinds.length === 1) return Promise.resolve(availableKinds);
     if (partialDialogOpen) return Promise.resolve(null);
     partialDialogOpen = true;
+
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.dataset.inretePartialFatto = "true";
@@ -218,7 +255,7 @@
         borderRadius: "18px", padding: "18px", boxShadow: "0 20px 60px rgba(0,0,0,.35)"
       });
       const title = document.createElement("h2");
-      title.textContent = "Quale lavorazione hai completato?";
+      title.textContent = "Cosa hai eseguito?";
       title.style.margin = "0 0 6px";
       const subtitle = document.createElement("p");
       subtitle.textContent = text(impianto?.denominazione || impianto?.nome || impianto?.idSap || "Impianto");
@@ -226,64 +263,91 @@
       subtitle.style.opacity = ".72";
       card.append(title, subtitle);
 
+      const selectedByKind = new Map();
+      const createChoice = (kind, labelText) => {
+        if (!availableKinds.includes(kind)) return;
+        const label = document.createElement("label");
+        Object.assign(label.style, {
+          display: "flex", alignItems: "center", gap: "10px", width: "100%", border: "1px solid #d7d7d7",
+          borderRadius: "12px", background: "#f7f7f7", padding: "13px", margin: "0 0 9px", cursor: "pointer"
+        });
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = kind;
+        input.style.width = "22px";
+        input.style.height = "22px";
+        const span = document.createElement("span");
+        span.textContent = labelText;
+        span.style.fontWeight = "700";
+        label.append(input, span);
+        card.appendChild(label);
+        selectedByKind.set(kind, input);
+      };
+
+      createChoice("ORDINARIO", "Manutenzione ordinaria");
+      createChoice("STRAORDINARIO", "Manutenzione straordinaria");
+
+      const feedback = document.createElement("p");
+      feedback.style.minHeight = "1.25em";
+      feedback.style.margin = "7px 0 10px";
+      feedback.style.fontSize = ".9rem";
+      feedback.setAttribute("role", "status");
+      feedback.setAttribute("aria-live", "polite");
+      card.appendChild(feedback);
+
+      const actions = document.createElement("div");
+      Object.assign(actions.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
+      const back = document.createElement("button");
+      back.type = "button";
+      back.textContent = "TORNA INDIETRO";
+      Object.assign(back.style, {
+        border: "1px solid #d7d7d7", borderRadius: "12px", background: "#fff", color: "#333",
+        fontWeight: "800", padding: "12px", cursor: "pointer"
+      });
+      const confirmButton = document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.textContent = "CONFERMA E INVIA";
+      Object.assign(confirmButton.style, {
+        border: "0", borderRadius: "12px", background: "#f4c542", color: "#111",
+        fontWeight: "800", padding: "12px", cursor: "pointer"
+      });
+      actions.append(back, confirmButton);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+
       const finish = (value) => {
         partialDialogOpen = false;
         overlay.remove();
         resolve(value);
       };
 
-      items.forEach((item) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.workItemId = item.id;
-        Object.assign(button.style, {
-          display: "block", width: "100%", textAlign: "left", border: "1px solid #d7d7d7", borderRadius: "12px",
-          background: "#f7f7f7", color: "#111", padding: "13px", margin: "0 0 9px", font: "inherit", cursor: "pointer"
-        });
-        const kind = document.createElement("strong");
-        kind.textContent = getWorkItemKind(item);
-        kind.style.display = "block";
-        kind.style.fontSize = ".78rem";
-        kind.style.marginBottom = "3px";
-        const label = document.createElement("span");
-        label.textContent = getWorkItemTitle(item);
-        button.append(kind, label);
-        button.addEventListener("click", () => finish(item.id));
-        card.appendChild(button);
+      back.addEventListener("click", () => finish(null));
+      confirmButton.addEventListener("click", () => {
+        const selectedKinds = [...selectedByKind.entries()]
+          .filter(([, input]) => input.checked)
+          .map(([kind]) => kind);
+        if (!selectedKinds.length) {
+          feedback.textContent = "Seleziona almeno un intervento.";
+          return;
+        }
+        const warning = buildSelectionWarning(selectedKinds, availableKinds);
+        if (warning && !window.confirm(`${warning}\n\nConfermi e vuoi continuare con l’invio?`)) return;
+        finish(selectedKinds);
       });
-
-      const allButton = document.createElement("button");
-      allButton.type = "button";
-      allButton.textContent = "TUTTE LE LAVORAZIONI SONO FATTE";
-      Object.assign(allButton.style, {
-        width: "100%", border: "0", borderRadius: "12px", background: "#f4c542", color: "#111",
-        fontWeight: "800", padding: "13px", marginTop: "4px", cursor: "pointer"
-      });
-      allButton.addEventListener("click", () => finish("__ALL__"));
-      card.appendChild(allButton);
-
-      const cancel = document.createElement("button");
-      cancel.type = "button";
-      cancel.textContent = "ANNULLA";
-      Object.assign(cancel.style, {
-        width: "100%", border: "0", background: "transparent", color: "#555", padding: "12px", marginTop: "3px", cursor: "pointer"
-      });
-      cancel.addEventListener("click", () => finish(null));
-      card.appendChild(cancel);
-      overlay.appendChild(card);
       overlay.addEventListener("click", (event) => { if (event.target === overlay) finish(null); });
       document.body.appendChild(overlay);
     });
   }
 
-  function openPartialWhatsApp(impianto, item, doneAt, doneBy, remaining) {
+  function openPartialWhatsApp(impianto, selectedKinds, selectedItems, doneAt, doneBy, remaining) {
     const when = formatDoneLabel(doneAt);
+    const messageLines = buildWorkMessage(selectedKinds).split("\n");
+    const selectedDescriptions = (selectedItems || []).map(getWorkItemTitle).filter(Boolean);
     const lines = [
-      "🟡 LAVORAZIONE FATTA",
+      ...messageLines,
       `Impianto: ${text(impianto?.denominazione || impianto?.nome || impianto?.idSap || "—")}`,
       text(impianto?.comune) ? `Comune: ${text(impianto.comune)}` : "",
-      `Tipo: ${getWorkItemKind(item)}`,
-      `Lavorazione: ${getWorkItemTitle(item)}`,
+      selectedDescriptions.length ? `Lavorazioni: ${selectedDescriptions.join(" | ")}` : "",
       when ? `Data/Ora: ${when}` : "",
       doneBy ? `Operatore: ${doneBy}` : "",
       `Lavorazioni ancora da fare: ${remaining}`
@@ -321,9 +385,10 @@
     }
   }
 
-  async function savePartialWorkItem(context, workItemId, impianto) {
-    const item = context.items.find((entry) => entry.id === workItemId);
-    if (!item) throw new Error("Lavorazione non trovata");
+  async function saveSelectedWorkItems(context, selectedKinds, impianto) {
+    const selectedItems = context.items.filter((entry) => !isWorkItemDone(entry) && selectedKinds.includes(getWorkItemKind(entry)));
+    if (!selectedItems.length) throw new Error("Nessuna lavorazione selezionata trovata");
+
     const now = new Date();
     const doneAt = now.toISOString();
     const user = window.auth?.currentUser;
@@ -331,13 +396,24 @@
     const pad = (value) => String(value).padStart(2, "0");
     const dataEsecuzione = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const oraEsecuzione = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const nextItems = context.items.map((entry) => entry.id === workItemId
-      ? { ...entry, stato: "FATTO", done: true, doneAt, dataEsecuzione, oraEsecuzione, operatoreNome: doneBy, operatoreUid: text(user?.uid) }
-      : entry);
+
+    const nextItems = context.items.map((entry) => {
+      if (isWorkItemDone(entry) || !selectedKinds.includes(getWorkItemKind(entry))) return entry;
+      return {
+        ...entry,
+        stato: "FATTO",
+        done: true,
+        doneAt,
+        dataEsecuzione,
+        oraEsecuzione,
+        operatoreNome: doneBy,
+        operatoreUid: text(user?.uid),
+        operatoreEmail: text(user?.email)
+      };
+    });
     const doneCount = nextItems.filter(isWorkItemDone).length;
     const allDone = doneCount === nextItems.length;
     const stato = allDone ? "FATTO" : (doneCount ? "PARZIALMENTE FATTO" : "DA FARE");
-    const workRef = context.commessaRef.collection("lavorazioni").doc(workItemId);
     const physicalRef = context.commessaRef.collection("impiantiFisici").doc(context.plantId);
     const operationalRef = context.commessaRef.collection("impianti").doc(context.plantId);
     const payload = {
@@ -349,21 +425,26 @@
       numeroLavorazioniDaFare: nextItems.length - doneCount,
       updatedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || now
     };
+
     const batch = window.db.batch();
-    batch.set(workRef, {
-      stato: "FATTO",
-      done: true,
-      doneAt: window.firebase?.firestore?.Timestamp?.fromDate?.(now) || now,
-      dataEsecuzione,
-      oraEsecuzione,
-      operatoreNome: doneBy,
-      operatoreUid: text(user?.uid),
-      operatoreEmail: text(user?.email)
-    }, { merge: true });
+    for (const item of selectedItems) {
+      const workRef = context.commessaRef.collection("lavorazioni").doc(item.id);
+      batch.set(workRef, {
+        stato: "FATTO",
+        done: true,
+        doneAt: window.firebase?.firestore?.Timestamp?.fromDate?.(now) || now,
+        dataEsecuzione,
+        oraEsecuzione,
+        operatoreNome: doneBy,
+        operatoreUid: text(user?.uid),
+        operatoreEmail: text(user?.email)
+      }, { merge: true });
+    }
     batch.set(physicalRef, payload, { merge: true });
     batch.set(operationalRef, payload, { merge: true });
     await batch.commit();
 
+    context.items = nextItems;
     try {
       impianto.stato = stato;
       impianto.statoGenerale = stato;
@@ -373,8 +454,18 @@
       impianto.numeroLavorazioniDaFare = nextItems.length - doneCount;
     } catch (_) {}
     try { if (typeof window.renderImpianti === "function") window.renderImpianti(); } catch (_) {}
-    try { window.dispatchEvent(new CustomEvent("hera:inrete-work-item-done", { detail: { commessaId: text(window.selectedCommessaId), impiantoId: context.plantId, workItemId, stato } })); } catch (_) {}
-    return { item, allDone, remaining: nextItems.length - doneCount, doneAt, doneBy };
+    try {
+      window.dispatchEvent(new CustomEvent("hera:inrete-work-item-done", {
+        detail: {
+          commessaId: text(window.selectedCommessaId),
+          impiantoId: context.plantId,
+          workItemIds: selectedItems.map((item) => item.id),
+          selectedKinds: [...selectedKinds],
+          stato
+        }
+      }));
+    } catch (_) {}
+    return { selectedItems, allDone, remaining: nextItems.length - doneCount, doneAt, doneBy };
   }
 
   async function maybeHandlePartialInreteDone(impianto) {
@@ -382,13 +473,14 @@
     if (!context) return { handled: false };
     const unfinished = context.items.filter((item) => !isWorkItemDone(item));
     if (!unfinished.length) return { handled: false };
-    const selected = await chooseWorkItem(unfinished, impianto);
-    if (!selected) return { handled: true, result: false };
-    if (selected === "__ALL__") return { handled: false };
+    const availableKinds = getOpenWorkKinds(unfinished);
+    const selectedKinds = await chooseWorkKinds(unfinished, impianto);
+    if (!selectedKinds) return { handled: true, result: false };
+    if (!selectedKinds.length) return { handled: false };
 
-    const saved = await savePartialWorkItem(context, selected, impianto);
-    if (saved.allDone) return { handled: false };
-    openPartialWhatsApp(impianto, saved.item, saved.doneAt, saved.doneBy, saved.remaining);
+    const saved = await saveSelectedWorkItems(context, selectedKinds, impianto);
+    if (saved.allDone) return { handled: false, selectedKinds, availableKinds };
+    openPartialWhatsApp(impianto, selectedKinds, saved.selectedItems, saved.doneAt, saved.doneBy, saved.remaining);
     return { handled: true, result: true };
   }
 

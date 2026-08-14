@@ -57,8 +57,8 @@ flow("4. NAVIGA - graffetta - FATTO", () => {
 
 flow("5. Whazzup Android: messaggio prima delle foto", () => {
   const messageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)");
-  const dedicatedPhotoIndex = androidOrder.indexOf("sharePhotosThroughDedicatedPlugin");
-  const fallbackPhotoIndex = androidOrder.indexOf("plugins.share.share");
+  const dedicatedPhotoIndex = androidOrder.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
+  const fallbackPhotoIndex = androidOrder.indexOf("await plugins.share.share");
   assert.ok(messageIndex >= 0, "Apertura messaggio Whazzup mancante");
   assert.ok(dedicatedPhotoIndex >= 0 && messageIndex < dedicatedPhotoIndex, "Il messaggio deve precedere le foto nel plugin dedicato");
   assert.ok(fallbackPhotoIndex >= 0 && messageIndex < fallbackPhotoIndex, "Il messaggio deve precedere le foto nel fallback Android");

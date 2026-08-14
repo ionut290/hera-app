@@ -1,0 +1,23 @@
+/
+  Cache-Control: no-cache, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, must-revalidate
+
+/auth-login-fix.js
+  Cache-Control: no-cache, must-revalidate
+
+/auto-login-saved-credentials.js
+  Cache-Control: no-cache, must-revalidate
+
+/update-app-feature.js
+  Cache-Control: no-cache, must-revalidate
+
+/header-menu-runtime.js
+  Cache-Control: no-cache, must-revalidate
+
+/header-menu-runtime-original.js
+  Cache-Control: no-cache, must-revalidate

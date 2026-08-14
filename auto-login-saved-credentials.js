@@ -10,7 +10,7 @@
   const MAX_WAIT_MS = 10000;
   const STABLE_DELAY_MS = 500;
   const CHECK_INTERVAL_MS = 200;
-  const AUTH_RESOLVE_TIMEOUT_MS = 6000;
+  const AUTH_RESOLVE_TIMEOUT_MS = 8000;
   const AUTH_GATE_ID = 'auth-gate';
 
   let attempted = false;
@@ -18,6 +18,7 @@
   let timer = null;
   let authResolved = false;
   let authenticatedUser = null;
+  let tokenUnsubscribe = null;
   const startedAt = Date.now();
 
   const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -80,6 +81,36 @@
     }
   }
 
+  function reconcileGateWithAuth() {
+    const auth = getAuth();
+    const user = authenticatedUser || auth?.currentUser || null;
+    if (user) {
+      authenticatedUser = user;
+      keepGateHiddenForAuthenticatedUser();
+      return true;
+    }
+    if (authResolved) revealGateForSignedOutUser();
+    return false;
+  }
+
+  function installDirectTokenObserver(auth) {
+    if (!auth || typeof auth.onIdTokenChanged !== 'function' || tokenUnsubscribe) return;
+    tokenUnsubscribe = auth.onIdTokenChanged((user) => {
+      authenticatedUser = user || null;
+      authResolved = true;
+      if (authenticatedUser) {
+        keepGateHiddenForAuthenticatedUser();
+        stop();
+        attempted = true;
+      } else {
+        revealGateForSignedOutUser();
+      }
+    }, () => {
+      authResolved = true;
+      reconcileGateWithAuth();
+    });
+  }
+
   async function preparePersistentSession() {
     const auth = getAuth();
     if (!auth) {
@@ -89,6 +120,7 @@
     }
 
     setAuthGatePending(true);
+    installDirectTokenObserver(auth);
 
     if (auth.currentUser) {
       authenticatedUser = auth.currentUser;
@@ -100,15 +132,12 @@
 
     return new Promise((resolve) => {
       let settled = false;
-      let unsubscribe = () => {};
-
       const finish = async (user) => {
         if (settled) return;
         settled = true;
-        authenticatedUser = user || null;
+        authenticatedUser = user || auth.currentUser || null;
         if (authenticatedUser) await ensureLocalPersistence(auth);
         authResolved = true;
-        try { unsubscribe(); } catch (_) {}
         if (authenticatedUser) keepGateHiddenForAuthenticatedUser();
         else revealGateForSignedOutUser();
         resolve(authenticatedUser);
@@ -118,16 +147,17 @@
         void finish(auth.currentUser || null);
       }, AUTH_RESOLVE_TIMEOUT_MS);
 
-      unsubscribe = auth.onAuthStateChanged(
-        (user) => {
-          window.clearTimeout(timeout);
-          void finish(user);
-        },
-        () => {
-          window.clearTimeout(timeout);
-          void finish(auth.currentUser || null);
-        }
-      );
+      const unsubscribeOnce = typeof auth.onIdTokenChanged === 'function'
+        ? auth.onIdTokenChanged((user) => {
+            window.clearTimeout(timeout);
+            try { unsubscribeOnce(); } catch (_) {}
+            void finish(user);
+          }, () => {
+            window.clearTimeout(timeout);
+            try { unsubscribeOnce(); } catch (_) {}
+            void finish(auth.currentUser || null);
+          })
+        : () => {};
     });
   }
 
@@ -149,10 +179,8 @@
     if (Date.now() - startedAt > MAX_WAIT_MS) return stop();
     if (document.visibilityState === 'hidden') return;
 
-    const auth = getAuth();
-    if (authenticatedUser || auth?.currentUser) {
+    if (reconcileGateWithAuth()) {
       attempted = true;
-      keepGateHiddenForAuthenticatedUser();
       return stop();
     }
 
@@ -180,13 +208,17 @@
   }
 
   async function start() {
-    if (timer !== null || attempted) return;
+    if (timer !== null || attempted) {
+      reconcileGateWithAuth();
+      return;
+    }
+
     await preparePersistentSession();
 
     const auth = getAuth();
-    if (authenticatedUser || auth?.currentUser) {
+    installDirectTokenObserver(auth);
+    if (reconcileGateWithAuth()) {
       attempted = true;
-      keepGateHiddenForAuthenticatedUser();
       stop();
       return;
     }
@@ -205,7 +237,15 @@
   }, true);
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !attempted) start();
+    if (!document.hidden) {
+      if (!reconcileGateWithAuth() && !attempted) void start();
+    }
+  });
+
+  window.addEventListener('pageshow', () => {
+    window.setTimeout(() => {
+      if (!reconcileGateWithAuth() && !attempted) void start();
+    }, 0);
   });
 
   window.HeraAutoLoginSession = {
@@ -220,6 +260,6 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start, { once: true });
   } else {
-    start();
+    void start();
   }
 })();

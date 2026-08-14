@@ -10,10 +10,13 @@
   const MAX_WAIT_MS = 10000;
   const STABLE_DELAY_MS = 500;
   const CHECK_INTERVAL_MS = 200;
+  const AUTH_RESOLVE_TIMEOUT_MS = 6000;
 
   let attempted = false;
   let stableSince = 0;
   let timer = null;
+  let authResolved = false;
+  let authenticatedUser = null;
   const startedAt = Date.now();
 
   const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -21,6 +24,61 @@
   function stop() {
     if (timer !== null) window.clearInterval(timer);
     timer = null;
+  }
+
+  function getAuth() {
+    try {
+      return window.firebase?.auth?.() || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function preparePersistentSession() {
+    const auth = getAuth();
+    if (!auth) {
+      authResolved = true;
+      return null;
+    }
+
+    try {
+      if (window.firebase?.auth?.Auth?.Persistence?.LOCAL && typeof auth.setPersistence === 'function') {
+        await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+      }
+    } catch (error) {
+      console.warn('Persistenza login locale non configurata:', error);
+    }
+
+    if (auth.currentUser) {
+      authenticatedUser = auth.currentUser;
+      authResolved = true;
+      return authenticatedUser;
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let unsubscribe = () => {};
+      const finish = (user) => {
+        if (settled) return;
+        settled = true;
+        authenticatedUser = user || null;
+        authResolved = true;
+        try { unsubscribe(); } catch (_) {}
+        resolve(authenticatedUser);
+      };
+
+      const timeout = window.setTimeout(() => finish(auth.currentUser || null), AUTH_RESOLVE_TIMEOUT_MS);
+      unsubscribe = auth.onAuthStateChanged(
+        (user) => {
+          window.clearTimeout(timeout);
+          finish(user);
+        },
+        () => {
+          window.clearTimeout(timeout);
+          finish(auth.currentUser || null);
+        }
+      );
+    });
   }
 
   function credentialsReady() {
@@ -37,9 +95,15 @@
 
   function tryAutoLogin() {
     if (attempted) return stop();
+    if (!authResolved) return;
     if (Date.now() - startedAt > MAX_WAIT_MS) return stop();
     if (document.visibilityState === 'hidden') return;
-    if (window.firebase?.auth?.()?.currentUser) return stop();
+
+    const auth = getAuth();
+    if (authenticatedUser || auth?.currentUser) {
+      attempted = true;
+      return stop();
+    }
 
     const ready = credentialsReady();
     if (!ready) {
@@ -64,8 +128,16 @@
     }, 1500);
   }
 
-  function start() {
+  async function start() {
     if (timer !== null || attempted) return;
+    await preparePersistentSession();
+
+    if (authenticatedUser || getAuth()?.currentUser) {
+      attempted = true;
+      stop();
+      return;
+    }
+
     timer = window.setInterval(tryAutoLogin, CHECK_INTERVAL_MS);
     tryAutoLogin();
   }
@@ -78,8 +150,17 @@
   }, true);
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) start();
+    if (!document.hidden && !attempted) start();
   });
+
+  window.HeraAutoLoginSession = {
+    installed: true,
+    getState: () => ({
+      authResolved,
+      authenticated: Boolean(authenticatedUser || getAuth()?.currentUser),
+      fallbackAttempted: attempted
+    })
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start, { once: true });

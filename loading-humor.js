@@ -14,9 +14,7 @@
   const controllers = new Map();
 
   function isVisible(surface) {
-    return !surface.hidden
-      && !surface.classList.contains("hidden")
-      && surface.getAttribute("aria-hidden") !== "true";
+    return surface.closest(".hidden, [hidden], [aria-hidden='true']") === null;
   }
 
   function setMessage(surface, index) {
@@ -71,10 +69,15 @@
       window.location.reload();
     });
 
-    new MutationObserver(() => sync(surface)).observe(surface, {
-      attributes: true,
-      attributeFilter: ["class", "hidden", "aria-hidden"]
-    });
+    const visibilityObserver = new MutationObserver(() => sync(surface));
+    let observedNode = surface;
+    while (observedNode && observedNode !== document.body) {
+      visibilityObserver.observe(observedNode, {
+        attributes: true,
+        attributeFilter: ["class", "hidden", "aria-hidden"]
+      });
+      observedNode = observedNode.parentElement;
+    }
 
     sync(surface);
   });

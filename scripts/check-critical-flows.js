@@ -12,6 +12,7 @@ function read(path) {
 const app = read("app.js");
 const index = read("index.html");
 const authFix = read("auth-login-fix.js");
+const autoLogin = read("auto-login-saved-credentials.js");
 const approval = read("approval-access.js");
 const activeCommesseGuard = read("active-commesse-first-boot-guard.js");
 const squadraSync = read("squadra-current-save-sync.js");
@@ -32,6 +33,11 @@ flow("1. Accesso stabile", () => {
   assert.match(app, /ensureAuthLocalPersistence\(/);
   assert.match(app, /PERSISTED_SESSION_KEY/);
   assert.match(authFix, /installProfileAccessGuard\(/);
+  assert.match(autoLogin, /preparePersistentSession\(/);
+  assert.match(autoLogin, /Auth\.Persistence\.LOCAL/);
+  assert.match(autoLogin, /auth\.onAuthStateChanged\(/);
+  assert.match(autoLogin, /if \(!authResolved\) return/);
+  assert.match(autoLogin, /authenticatedUser \|\| auth\?\.currentUser/);
   assert.match(approval, /window\.HeraAccessApproval\s*=\s*\{/);
 });
 

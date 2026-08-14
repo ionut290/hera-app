@@ -4,28 +4,33 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const appSource = fs.readFileSync("app.js", "utf8");
+const photoOrderSource = fs.readFileSync("android-whazzup-photo-order.js", "utf8");
 const styleSource = fs.readFileSync("style.css", "utf8");
 const nativeSource = fs.readFileSync("native-android-runtime.js", "utf8");
 const immediateSource = fs.readFileSync("fatto-button-immediate.js", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-function extractFunction(name) {
+function extractFunctionFrom(source, name) {
   const signatures = [`async function ${name}(`, `function ${name}(`];
   let start = -1;
   for (const signature of signatures) {
-    start = appSource.indexOf(signature);
+    start = source.indexOf(signature);
     if (start >= 0) break;
   }
   assert.notEqual(start, -1, `Funzione ${name} non trovata`);
-  const signatureEnd = appSource.indexOf(") {", start);
-  const bodyStart = appSource.indexOf("{", signatureEnd);
+  const signatureEnd = source.indexOf(") {", start);
+  const bodyStart = source.indexOf("{", signatureEnd);
   let depth = 0;
-  for (let index = bodyStart; index < appSource.length; index += 1) {
-    if (appSource[index] === "{") depth += 1;
-    if (appSource[index] === "}") depth -= 1;
-    if (depth === 0) return appSource.slice(start, index + 1);
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
   }
   throw new Error(`Funzione ${name} non chiusa`);
+}
+
+function extractFunction(name) {
+  return extractFunctionFrom(appSource, name);
 }
 
 function createContext(values = {}) {
@@ -263,12 +268,11 @@ async function main() {
   assert.match(appSource, /function getNativeAndroidWhazzupSharePlugins\(\)/);
   assert.match(appSource, /plugins\.filesystem\.writeFile\(\{/);
   assert.match(appSource, /directory: "CACHE"/);
-  const nativePhotoShareHandler = extractFunction("shareWhazzupPhotosNativeAndroid");
+  const nativePhotoShareHandler = extractFunctionFrom(photoOrderSource, "shareWhazzupPhotosNativeAndroidInOrder");
   const photoShareHandler = extractFunction("shareWhazzupWithPhotos");
-  assert.ok(
-    nativePhotoShareHandler.indexOf("files: fileUris") < nativePhotoShareHandler.indexOf("text: message"),
-    "Le foto native ordinate devono precedere il messaggio nel payload Whazzup"
-  );
+  assert.match(nativePhotoShareHandler, /files: fileUris/);
+  assert.doesNotMatch(nativePhotoShareHandler, /text:\s*message/);
+  assert.match(nativePhotoShareHandler, /await sharePhotosThroughDedicatedPlugin[\s\S]*safeOpenWhatsAppMessage\(message\)/);
   assert.match(photoShareHandler, /shareWhazzupPhotosNativeAndroid\(orderedFiles, message\)/);
   assert.match(photoShareHandler, /files: orderedFiles[\s\S]*text: message/);
   assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);

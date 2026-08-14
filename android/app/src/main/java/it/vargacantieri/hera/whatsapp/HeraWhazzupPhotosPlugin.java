@@ -9,12 +9,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 
+import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
@@ -91,9 +93,8 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
     @PluginMethod
     public void share(PluginCall call) {
         String sessionId = validatedSessionId(call.getString("sessionId", ""));
-        String message = call.getString("text", "");
-        if (sessionId == null || message.trim().isEmpty()) {
-            call.reject("Foto o messaggio Whazzup non disponibile.");
+        if (sessionId == null) {
+            call.reject("Sessione foto Whazzup non disponibile.");
             return;
         }
 
@@ -125,8 +126,6 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
             intent.setType("image/*");
             intent.setPackage(packageName);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intent.putExtra(Intent.EXTRA_TEXT, message);
-            intent.putExtra(Intent.EXTRA_SUBJECT, "Impianto fatto");
 
             ClipData clipData = ClipData.newRawUri("Foto impianto", photoUris.get(0));
             for (int index = 1; index < photoUris.size(); index++) {
@@ -144,20 +143,24 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
                 getContext().grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             }
 
-            getActivity().startActivity(intent);
+            startActivityForResult(call, intent, "photosActivityResult");
             scheduleCleanup(folder);
-
-            JSObject result = new JSObject();
-            result.put("opened", true);
-            result.put("packageName", packageName);
-            result.put("photoCount", photoUris.size());
-            result.put("fallback", false);
-            call.resolve(result);
         } catch (ActivityNotFoundException error) {
             call.reject("Impossibile aprire WhatsApp installato con le foto.", error);
         } catch (Exception error) {
             call.reject("Errore durante la condivisione nativa delle foto.", error);
         }
+    }
+
+    @ActivityCallback
+    private void photosActivityResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSObject callResult = new JSObject();
+        callResult.put("opened", true);
+        callResult.put("returned", true);
+        callResult.put("separateTextRequired", true);
+        callResult.put("fallback", false);
+        call.resolve(callResult);
     }
 
     @PluginMethod

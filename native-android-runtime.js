@@ -324,9 +324,19 @@
     isNative: true
   };
 
+  function loadAndroidWhazzupPhotoOrderFix() {
+    if (document.querySelector('script[data-hera-android-whazzup-photo-order="1"]')) return;
+    const script = document.createElement("script");
+    script.src = "android-whazzup-photo-order.js?v=20260814a";
+    script.dataset.heraAndroidWhazzupPhotoOrder = "1";
+    script.async = false;
+    document.head.appendChild(script);
+  }
+
   installNativeGeolocationBridge();
 
   const start = () => {
+    loadAndroidWhazzupPhotoOrderFix();
     persistPushTokenAfterLogin();
     refreshNativeLocation();
     configureBackgroundLocation();

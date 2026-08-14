@@ -39,10 +39,14 @@ flow("1. Accesso stabile", () => {
   assert.match(app, /PERSISTED_SESSION_KEY/);
   assert.match(authFix, /installProfileAccessGuard\(/);
   assert.match(autoLogin, /preparePersistentSession\(/);
-  assert.match(autoLogin, /Auth\.Persistence\.LOCAL/);
+  assert.match(autoLogin, /Persistence\?\.LOCAL|Persistence\.LOCAL/);
   assert.match(autoLogin, /auth\.onAuthStateChanged\(/);
   assert.match(autoLogin, /if \(!authResolved\) return/);
   assert.match(autoLogin, /authenticatedUser \|\| auth\?\.currentUser/);
+  assert.match(autoLogin, /setAuthGatePending\(true\)/);
+  assert.match(autoLogin, /keepGateHiddenForAuthenticatedUser\(/);
+  assert.match(autoLogin, /revealGateForSignedOutUser\(/);
+  assert.match(autoLogin, /if \(authenticatedUser\) await ensureLocalPersistence\(auth\)/);
   assert.match(updateFeature, /APP_CACHE_PREFIXES/);
   assert.match(updateFeature, /cacheNames\.filter\(isAppShellCache\)/);
   assert.doesNotMatch(updateFeatureExecutable, /firebase\.auth\(\)\.signOut\(/);

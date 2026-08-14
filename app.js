@@ -23708,7 +23708,9 @@ function pickWhazzupPhotos(impianto, button, options = {}) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "image/*";
-  input.multiple = options.mode !== "replace-one";
+  const useCamera = options.source === "camera";
+  input.multiple = !useCamera && options.mode !== "replace-one";
+  if (useCamera) input.setAttribute("capture", "environment");
   input.hidden = true;
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []).filter((file) => file.type.startsWith("image/"));
@@ -23739,10 +23741,63 @@ function pickWhazzupPhotos(impianto, button, options = {}) {
   input.click();
 }
 
+function openWhazzupPhotoSourceChooser(impianto, button, options = {}) {
+  const overlay = document.createElement("div");
+  overlay.className = "whazzup-photo-manager whazzup-photo-source-chooser";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "whazzup-photo-source-title");
+  overlay.innerHTML = `
+    <section class="whazzup-photo-source-card">
+      <header>
+        <p class="management-eyebrow">AGGIUNGI FOTO</p>
+        <h2 id="whazzup-photo-source-title">Da dove vuoi prendere la foto?</h2>
+        <p>Puoi scattarla adesso oppure selezionarla dalla galleria.</p>
+      </header>
+      <div class="whazzup-photo-source-actions">
+        <button type="button" class="btn whazzup-photo-camera-btn" data-photo-source="camera">
+          <span aria-hidden="true">📷</span>
+          <strong>Scatta foto</strong>
+          <small>Usa la fotocamera posteriore</small>
+        </button>
+        <button type="button" class="btn whazzup-photo-gallery-btn" data-photo-source="gallery">
+          <span aria-hidden="true">🖼️</span>
+          <strong>Scegli dalla galleria</strong>
+          <small>Seleziona una o più foto salvate</small>
+        </button>
+      </div>
+      <button type="button" class="btn whazzup-photo-source-cancel" data-photo-source="cancel">Annulla</button>
+    </section>
+  `;
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKeyDown, true);
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopImmediatePropagation();
+      close();
+    }
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) return close();
+    const source = event.target.closest("[data-photo-source]")?.dataset.photoSource;
+    if (!source) return;
+    close();
+    if (source === "camera" || source === "gallery") {
+      pickWhazzupPhotos(impianto, button, { ...options, source });
+    }
+  });
+  document.addEventListener("keydown", onKeyDown, true);
+  document.body.appendChild(overlay);
+  overlay.querySelector("[data-photo-source='camera']")?.focus();
+}
+
 function openWhazzupPhotoManager(impianto, button) {
   const files = getWhazzupPhotos(impianto);
   if (!files.length) {
-    pickWhazzupPhotos(impianto, button, { mode: "replace-all" });
+    openWhazzupPhotoSourceChooser(impianto, button, { mode: "replace-all" });
     return;
   }
   const overlay = document.createElement("div");
@@ -23859,7 +23914,9 @@ function openWhazzupPhotoManager(impianto, button) {
     }
     if (managerAction === "add" || managerAction === "replace-all") {
       close();
-      pickWhazzupPhotos(impianto, button, { mode: managerAction === "add" ? "append" : "replace-all" });
+      openWhazzupPhotoSourceChooser(impianto, button, {
+        mode: managerAction === "add" ? "append" : "replace-all"
+      });
       return;
     }
     if (managerAction === "delete-all") {
@@ -23878,7 +23935,7 @@ function openWhazzupPhotoManager(impianto, button) {
     if (photoAction === "view") return openWhazzupPhotoPreview(currentFiles[index]);
     if (photoAction === "replace") {
       close();
-      pickWhazzupPhotos(impianto, button, { mode: "replace-one", index });
+      openWhazzupPhotoSourceChooser(impianto, button, { mode: "replace-one", index });
       return;
     }
     if (photoAction === "delete") {
@@ -23911,7 +23968,7 @@ function openWhazzupPhotoManager(impianto, button) {
 
 function chooseWhazzupPhotos(impianto, button) {
   if (getWhazzupPhotos(impianto).length) openWhazzupPhotoManager(impianto, button);
-  else pickWhazzupPhotos(impianto, button, { mode: "replace-all" });
+  else openWhazzupPhotoSourceChooser(impianto, button, { mode: "replace-all" });
 }
 
 function buildOrderedWhazzupShareFiles(files) {

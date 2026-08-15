@@ -139,8 +139,6 @@
     ['#map-fullscreen-draw-btn','#map-draw-btn','#draw-map-btn','#map-fullscreen-undo-btn','#map-fullscreen-redo-btn','#map-fullscreen-clear-btn','.map-draw-toolbar','.map-drawing-toolbar','.leaflet-draw','.leaflet-draw-toolbar','[data-map-draw]','[data-draw-map]']
       .forEach((selector) => page.querySelectorAll(selector).forEach((node) => node.remove()));
 
-    // IMPORTANTE: non includere DIV generici. Il vecchio runtime poteva rimuovere
-    // il contenitore della mappa perché il suo textContent conteneva il messaggio Disegna.
     page.querySelectorAll('button, [role="button"], .map-fullscreen-hint, .map-hint, p').forEach((node) => {
       if (!node.isConnected) return;
       const view = document.getElementById(VIEW_ID);
@@ -156,8 +154,17 @@
     const style = document.createElement('style');
     style.id = 'hera-map-search-focus-style-v2';
     style.textContent = `
-      @keyframes heraSearchPulseV2 { 0%,100%{transform:scale(1);filter:brightness(1)} 50%{transform:scale(1.28);filter:brightness(1.22) drop-shadow(0 0 9px rgba(37,99,235,.75))} }
-      #${PAGE_ID} .${FLASH_CLASS}{animation:heraSearchPulseV2 .72s ease-in-out infinite !important;transform-origin:center center !important;z-index:9999 !important}
+      @keyframes heraSearchPulseV2 {
+        0%,100% {
+          transform:scale(1);
+          filter:brightness(1.08) drop-shadow(0 0 5px rgba(239,68,68,.95)) drop-shadow(0 0 11px rgba(239,68,68,.82));
+        }
+        50% {
+          transform:scale(1.30);
+          filter:brightness(1.22) drop-shadow(0 0 5px rgba(37,99,235,1)) drop-shadow(0 0 13px rgba(37,99,235,.95));
+        }
+      }
+      #${PAGE_ID} .${FLASH_CLASS}{animation:heraSearchPulseV2 .78s ease-in-out infinite !important;transform-origin:center center !important;z-index:9999 !important}
       #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map]{display:none !important}
     `;
     document.head.appendChild(style);

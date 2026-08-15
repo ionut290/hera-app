@@ -1,0 +1,30 @@
+name: Check commessa stats cache
+
+on:
+  pull_request:
+    paths:
+      - 'commessa-stats-cache-optimizer.js'
+      - 'index.html'
+      - 'scripts/check-commessa-stats-cache.js'
+      - '.github/workflows/check-commessa-stats-cache.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'commessa-stats-cache-optimizer.js'
+      - 'index.html'
+      - 'scripts/check-commessa-stats-cache.js'
+      - '.github/workflows/check-commessa-stats-cache.yml'
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check optimizer syntax
+        run: node --check commessa-stats-cache-optimizer.js
+      - name: Check cache and Firestore safety rules
+        run: node scripts/check-commessa-stats-cache.js

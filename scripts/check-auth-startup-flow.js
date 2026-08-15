@@ -36,7 +36,7 @@ const signInIndex = loginRetry.indexOf("signInWithEmailAndPassword");
 assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signInIndex,
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
-assert.match(sw, /varga-cantieri-shell-v131/);
+assert.match(sw, /varga-cantieri-shell-v132/);
 assert.match(sw, /CACHE_RESET_VERSION = "20260814-loading-humor1"/);
 for (const path of [
   "/firebase-config.js",

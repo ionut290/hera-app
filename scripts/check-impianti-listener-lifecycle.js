@@ -22,6 +22,15 @@ assert.match(section, /pendingStop\.commessaId === commessaId/);
 assert.match(section, /activeCommessaId === commessaId/);
 assert.match(section, /cancelledSameCommessaRestarts \+= 1/);
 assert.match(section, /runPendingStop\(\)/);
+
+// La variabile applicativa reale deve avere priorità rispetto alla copia su window.
+// Questo impedisce che un window.selectedCommessaId rimasto sulla commessa precedente
+// faccia riusare il listener sbagliato (es. impianti Depurazione in altre commesse).
+assert.match(section, /String\(selectedCommessaId \|\| window\.selectedCommessaId \|\| ""\)/,
+  "selectedId must prefer the real selectedCommessaId over window.selectedCommessaId");
+assert.doesNotMatch(section, /String\(window\.selectedCommessaId \|\| selectedCommessaId \|\| ""\)/,
+  "Stale window.selectedCommessaId must never take priority");
+
 assert.doesNotMatch(executable, /\.collection\(|\.doc\(|\.get\(|\.set\(|\.update\(|\.delete\(|\.onSnapshot\(/, "Lifecycle guard must not call Firestore directly");
 assert.doesNotMatch(executable, /fattoVisualEvidence|subscribeFattoVisualEvidence|stopFattoVisualEvidence/i, "FATTO visual evidence must stay untouched");
 assert.doesNotMatch(executable, /WhatsApp|WHAZZUP|whazzup/i, "WhatsApp/WHAZZUP must stay untouched");

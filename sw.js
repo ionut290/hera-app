@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v131";
+const CACHE_NAME = "varga-cantieri-shell-v132";
 const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
@@ -48,7 +48,6 @@ const APP_SHELL = [
   "./registry-device-cache.js?v=20260804c",
   "./firestore-registry-read-optimizer.js?v=20260804b",
   "./firestore-safe-optimizer.js?v=20260805b",
-  "./firestore-nested-listener-optimizer.js?v=20260805a",
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
   "./firebase-config.js",

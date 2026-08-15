@@ -109,7 +109,59 @@
     const style = document.createElement('style');
     style.id = 'hera-safe-map-search-v5-style';
     style.textContent = `
+      #${PAGE_ID}{overflow-x:hidden!important}
       #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map],#${PAGE_ID} #map-fullscreen-draw-btn,#${PAGE_ID} #map-draw-btn,#${PAGE_ID} #draw-map-btn,#${PAGE_ID} .map-fullscreen-hint,#${PAGE_ID} .map-hint{display:none!important}
+      #${PAGE_ID} .map-fullscreen-toolbar{
+        position:fixed!important;
+        top:calc(env(safe-area-inset-top, 0px) + 8px)!important;
+        left:0!important;
+        right:0!important;
+        z-index:2147482000!important;
+        display:flex!important;
+        flex-wrap:wrap!important;
+        align-items:center!important;
+        gap:8px!important;
+        width:100%!important;
+        max-width:100vw!important;
+        box-sizing:border-box!important;
+        padding:0 12px!important;
+        overflow:visible!important;
+      }
+      #${PAGE_ID} #${FORM_ID}{
+        box-sizing:border-box!important;
+        min-width:0!important;
+        max-width:calc(100vw - 24px)!important;
+      }
+      #${PAGE_ID} #${FORM_ID} .hera-map-search-shell{
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        box-sizing:border-box!important;
+      }
+      #${PAGE_ID} #${INPUT_ID}{
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        box-sizing:border-box!important;
+      }
+      @media (max-width:720px){
+        #${PAGE_ID} .map-fullscreen-toolbar{
+          align-content:flex-start!important;
+          padding-left:12px!important;
+          padding-right:12px!important;
+        }
+        #${PAGE_ID} #${FORM_ID}{
+          order:999!important;
+          flex:0 0 100%!important;
+          width:100%!important;
+          min-width:0!important;
+          max-width:100%!important;
+          margin:0!important;
+          padding:0!important;
+        }
+        #${PAGE_ID} #${FORM_ID} .hera-map-search-shell,
+        #${PAGE_ID} #${INPUT_ID}{width:100%!important;max-width:100%!important}
+      }
       #${BOX_ID}{position:fixed;z-index:2147483000;max-height:min(52vh,420px);overflow:auto;padding:7px;border:1px solid rgba(15,23,42,.12);border-radius:16px;background:rgba(255,255,255,.995);box-shadow:0 16px 38px rgba(15,23,42,.24);-webkit-overflow-scrolling:touch}
       #${BOX_ID}[hidden]{display:none!important}
       #${BOX_ID} button{display:flex;flex-direction:column;gap:3px;width:100%;padding:11px 12px;border:0;border-radius:12px;background:transparent;text-align:left;color:#111827}
@@ -195,8 +247,6 @@
       return;
     }
 
-    // Riutilizza la ricerca numerica fullscreen già presente nell'app: è lei che
-    // conosce il marker reale, centra la mappa e apre la scheda corretta.
     input.value = String(number);
     try {
       const event = new Event('submit', { bubbles:true, cancelable:true });
@@ -205,7 +255,6 @@
       try { form.requestSubmit?.(); } catch (_) {}
     }
 
-    // Il nome resta leggibile nella barra dopo che la ricerca nativa ha lavorato.
     window.setTimeout(() => { input.value = displayName; }, 350);
   }
 

@@ -265,13 +265,6 @@
     getState: () => ({ ...state })
   };
 
-  if (!install()) {
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      attempts += 1;
-      if (install() || attempts >= 100) window.clearInterval(timer);
-      window[GLOBAL].installed = state.installed;
-    }, 25);
-  }
+  install();
   window[GLOBAL].installed = state.installed;
 })();

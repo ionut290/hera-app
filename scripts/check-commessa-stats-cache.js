@@ -19,7 +19,11 @@ assert.match(code, /readImpiantiCache/);
 assert.match(code, /calculateImpiantiStats/);
 assert.match(code, /recalculateCommessaWorkSummaries/);
 
-assert.doesNotMatch(code, /\.set\(|\.update\(|\.delete\(|\.add\(/, "Optimizer must not write to Firestore");
+// Sono ammessi Map.set/localStorage.setItem. Vietiamo invece mutazioni Firestore
+// nel nuovo ottimizzatore: deve essere strettamente read-only lato server.
+assert.doesNotMatch(code, /\.collection\([^\n]+\)\.add\(/, "Optimizer must not add Firestore documents");
+assert.doesNotMatch(code, /\.doc\([^\n]+\)\.(?:set|update|delete)\(/, "Optimizer must not mutate Firestore documents");
+assert.doesNotMatch(code, /writeBatch|runTransaction|FieldValue\./, "Optimizer must not use Firestore write APIs");
 assert.doesNotMatch(code, /FATTO|fattoVisualEvidence|WhatsApp|WHAZZUP|whazzup/i, "Protected FATTO/WhatsApp flows must stay outside this optimizer");
 
 console.log("Commessa stats cache safety checks passed");

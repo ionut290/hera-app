@@ -1,0 +1,23 @@
+name: Audit incremental impianti client temp
+on:
+  push:
+    branches: [feat/impianti-incremental-client-20260815]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect client integration points
+        run: |
+          echo '=== globals around impianti ==='
+          grep -n -C 12 -E 'let currentImpianti|const currentImpianti|impiantiByCommessaId|unsubscribeImpianti' app.js | head -n 260 || true
+          echo '=== persistence startup ==='
+          sed -n '300,370p' app.js
+          echo '=== subscribe/stop ==='
+          sed -n '12720,12855p' app.js
+          echo '=== script order around app ==='
+          grep -n -C 8 -E 'app\.js|firebase-config\.js' index.html | tail -n 100 || true
+          echo '=== sw assets ==='
+          grep -n -E 'app\.js|firebase-config\.js' sw.js || true

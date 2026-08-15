@@ -1,0 +1,54 @@
+name: Remove startup polling once
+
+on:
+  push:
+    branches:
+      - opt/remove-startup-polling-20260815
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: opt/remove-startup-polling-20260815
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply cleanup
+        run: node scripts/remove-startup-polling-once.js
+      - name: Verify Firebase SDK order
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const sdk = html.indexOf('firebase-firestore.js');
+          const cfg = html.indexOf('firebase-config.js');
+          if (sdk < 0 || cfg < 0 || sdk >= cfg) throw new Error('firebase-firestore.js deve precedere firebase-config.js');
+          console.log('Ordine Firebase confermato.');
+          NODE
+      - name: Verify focused checks
+        run: |
+          node --check active-commesse-first-boot-guard.js
+          node --check firestore-startup-cost-optimizer.js
+          ! grep -n "setInterval" active-commesse-first-boot-guard.js
+          ! grep -n "setInterval" firestore-startup-cost-optimizer.js
+          npm run check:done-button
+          node scripts/check-critical-flows.js
+          npm run check:auth-login
+      - name: Commit runtime changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add active-commesse-first-boot-guard.js firestore-startup-cost-optimizer.js
+          git commit -m "Remove redundant startup polling"
+          git push origin HEAD:opt/remove-startup-polling-20260815

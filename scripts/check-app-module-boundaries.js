@@ -40,6 +40,17 @@ const modules = [
       "savePrivateDocument",
       "openNotificationDocumentViewer"
     ]
+  },
+  {
+    file: "app-calendar.js",
+    global: "VargaCalendarModule",
+    functions: [
+      "renderCalendar",
+      "saveCalendarEvent",
+      "subscribeCalendarEvents",
+      "renderNotificationCalendar",
+      "applyCalendarAbsenceWarningsToSquadraRows"
+    ]
   }
 ];
 
@@ -81,10 +92,12 @@ for (const coreName of [
   "normalizeCommessaDocument",
   "normalizeMezzoDocument",
   "normalizePersonaleDocument",
-  "normalizeSquadraStoricoDocument"
+  "normalizeSquadraStoricoDocument",
+  "renderPersonalHoursCalendar",
+  "renderFerieDisponibilitaCalendar"
 ]) {
   if (!app.includes(`function ${coreName}`)) fail(`${coreName} deve restare nel core app.js`);
 }
 
 if (process.exitCode) process.exit(process.exitCode);
-console.log("✅ Confini modulari Worklimate + ATEX + Documenti verificati.");
+console.log("✅ Confini modulari Worklimate + ATEX + Documenti + Calendario verificati.");

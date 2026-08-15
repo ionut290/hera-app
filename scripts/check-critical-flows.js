@@ -12,7 +12,6 @@ function read(path) {
 const app = read("app.js");
 const index = read("index.html");
 const authFix = read("auth-login-fix.js");
-const autoLogin = read("auto-login-saved-credentials.js");
 const updateFeature = read("update-app-feature.js");
 const updateFeatureExecutable = updateFeature
   .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -27,6 +26,7 @@ const hoursGuard = read("hours-source-explicit-guard.js");
 const sharedViews = read("shared-static-views-client.js");
 const androidOrder = read("android-whazzup-photo-order.js");
 const serviceWorker = read("sw.js");
+const headerRuntime = read("header-menu-runtime-original.js");
 
 const flows = [];
 function flow(name, checks) {
@@ -38,24 +38,21 @@ flow("1. Accesso stabile", () => {
   assert.match(app, /ensureAuthLocalPersistence\(/);
   assert.match(app, /PERSISTED_SESSION_KEY/);
   assert.match(authFix, /installProfileAccessGuard\(/);
-  assert.match(autoLogin, /preparePersistentSession\(/);
-  assert.match(autoLogin, /Persistence\?\.LOCAL|Persistence\.LOCAL/);
-  assert.match(autoLogin, /auth\.onIdTokenChanged\(/);
-  assert.match(autoLogin, /installDirectTokenObserver\(/);
-  assert.match(autoLogin, /reconcileGateWithAuth\(/);
-  assert.match(autoLogin, /authResolved/);
-  assert.match(autoLogin, /authenticatedUser \|\| auth\?\.currentUser/);
-  assert.match(autoLogin, /setAuthGatePending\(true\)/);
-  assert.match(autoLogin, /keepGateHiddenForAuthenticatedUser\(/);
-  assert.match(autoLogin, /revealGateForSignedOutUser\(/);
-  assert.match(autoLogin, /if \(authenticatedUser\) await ensureLocalPersistence\(auth\)/);
+  assert.match(authFix, /installAuthStartupController/);
+  assert.match(authFix, /Auth\?\.Persistence\?\.LOCAL|Auth\.Persistence\.LOCAL/);
+  assert.match(authFix, /onIdTokenChanged/);
+  assert.match(authFix, /MutationObserver/);
+  assert.match(authFix, /HeraAuthStartupController/);
+  assert.doesNotMatch(headerRuntime, /loadAutoLoginFeature/);
+  assert.doesNotMatch(headerRuntime, /auto-login-saved-credentials\.js/);
+  assert.doesNotMatch(serviceWorker, /auto-login-saved-credentials\.js/);
   assert.match(updateFeature, /APP_CACHE_PREFIXES/);
   assert.match(updateFeature, /cacheNames\.filter\(isAppShellCache\)/);
   assert.doesNotMatch(updateFeatureExecutable, /firebase\.auth\(\)\.signOut\(/);
   assert.doesNotMatch(updateFeatureExecutable, /localStorage\.clear\(/);
   assert.doesNotMatch(updateFeatureExecutable, /sessionStorage\.clear\(/);
   assert.doesNotMatch(updateFeatureExecutable, /indexedDB\.deleteDatabase\(/);
-  for (const path of ["/", "/index.html", "/sw.js", "/auth-login-fix.js", "/auto-login-saved-credentials.js"]) {
+  for (const path of ["/", "/index.html", "/sw.js", "/auth-login-fix.js"]) {
     assert.match(netlifyHeaders, new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n\\s+Cache-Control: no-cache, must-revalidate`));
   }
   assert.match(approval, /window\.HeraAccessApproval\s*=\s*\{/);

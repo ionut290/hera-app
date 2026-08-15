@@ -8562,9 +8562,6 @@ function getHoursOperatorUniquePart(row = {}) {
   return String(row?.operatoreId || row?.participantId || row?.personaleId || row?.userId || row?.uid || resolveHoursOperatorId(operatore) || normalizedOperator).trim();
 }
 
-function encodeHoursLockPart(value) {
-  return encodeURIComponent(String(value || "").trim());
-}
 
 function getHoursLockDocId(dateValue, commessaId, operatore) {
   const normalizedOperator = normalizeHoursOperatorName(operatore);
@@ -9963,9 +9960,6 @@ function isCentralDriveConfigured() {
   return Boolean(driveBridgeState.configured || driveAccessToken);
 }
 
-function getCentralDriveNotConfiguredMessage() {
-  return "Cloud amministratore non configurato";
-}
 
 function normalizeDriveFolderName(value, fallback = "Generale") {
   return String(value || fallback).trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 120) || fallback;
@@ -16125,10 +16119,6 @@ function createActionIconButton(icon, title, onClick) {
   return btn;
 }
 
-function setUsedActionButtonState(btn, used) {
-  btn.disabled = used;
-  btn.classList.toggle("is-used", used);
-}
 
 function isActionUsed(actionId) {
   if (!actionId) return false;
@@ -16397,9 +16387,6 @@ function setImpiantoWeatherFeedback(impianto, message = "") {
 }
 
 
-function normalizeAtexSearchValue(value) {
-  return String(value || "").trim().toLocaleUpperCase("it-IT");
-}
 
 
 const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [

@@ -97,8 +97,11 @@ async function heraExportHoursRangeWorkbook(options = {}) {
   }
   const monthMeta = monthRange[0];
   const periodDaysInMonth = monthRange.reduce((max, item) => Math.max(max, item.daysInMonth), 0);
+  if (!window.ExcelJS?.Workbook && window.HeraHeavyLibs?.ensure) {
+    try { await window.HeraHeavyLibs.ensure("exceljs"); } catch (_) {}
+  }
   if (!window.ExcelJS?.Workbook) {
-    alert("Libreria Excel non disponibile. Ricarica la pagina e riprova.");
+    alert("Libreria Excel non disponibile. Controlla la connessione e riprova.");
     return;
   }
 

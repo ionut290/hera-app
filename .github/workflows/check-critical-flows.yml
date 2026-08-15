@@ -35,6 +35,8 @@ jobs:
         run: node scripts/check-firestore-diagnostics-cleanup-inline.js
       - name: Check removed dead nested-listener optimizer
         run: node scripts/check-no-dead-nested-listener-optimizer.js
+      - name: Check lazy admin user profiles
+        run: node scripts/check-admin-user-profiles-lazy.js
       - name: Check FATTO core
         run: npm run check:done-button
       - name: Check Android photo share

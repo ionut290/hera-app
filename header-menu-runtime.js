@@ -88,6 +88,8 @@
   function normalizeActionButton(button, labelText, iconText) {
     if (!button) return;
     button.classList.add('header-action-button');
+    button.setAttribute('aria-label', labelText);
+    button.setAttribute('title', labelText);
     button.textContent = '';
     const icon = document.createElement('span');
     icon.className = 'header-action-icon';
@@ -100,6 +102,8 @@
     const button = qs('#user-toggle-btn');
     if (!button) return;
     button.classList.add('header-action-button');
+    button.setAttribute('aria-label', 'Profilo utente');
+    button.setAttribute('title', 'Profilo utente');
     button.textContent = '';
     const image = document.createElement('img');
     image.className = 'header-login-photo';

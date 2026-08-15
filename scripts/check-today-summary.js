@@ -25,19 +25,15 @@ const subscribePersonaleSource = sourceBetween("function subscribePersonale()", 
 const subscribeMezziSource = sourceBetween("function subscribeMezzi()", "function clearSquadreLoadTimeout()");
 const subscribeSquadreSource = sourceBetween("function subscribeSquadre()", "function stopSquadreSubscription()");
 
-// Each collection must refresh the summary both when data arrives and when loading fails.
 assert.match(subscribeCommesseSource, /const applyCommesseSnapshot[\s\S]*?renderNextActionCard\(\);\s*renderTodaySummary\(\);/);
 assert.match(subscribeCommesseSource, /query\.onSnapshot[\s\S]*?\(error\) => \{[\s\S]*?commesseLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 assert.match(subscribeCommesseSource, /\.catch\(\(error\) => \{[\s\S]*?commesseLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
-
 assert.match(subscribePersonaleSource, /const applySnapshot[\s\S]*?refreshResolvedUserIdentity\(\);\s*renderTodaySummary\(\);/);
 assert.match(subscribePersonaleSource, /query\.onSnapshot\(applySnapshot, \(error\) => \{[\s\S]*?personaleLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 assert.match(subscribePersonaleSource, /\.catch\(\(error\) => \{[\s\S]*?personaleLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
-
 assert.match(subscribeMezziSource, /const applySnapshot[\s\S]*?mezziLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
 assert.match(subscribeMezziSource, /query\.onSnapshot\(applySnapshot, \(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 assert.match(subscribeMezziSource, /\.catch\(\(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
-
 assert.match(subscribeSquadreSource, /const applySquadreSnapshot[\s\S]*?squadreHistoryByDate\.set[\s\S]*?squadreLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
 assert.match(subscribeSquadreSource, /squadreQuery\.onSnapshot[\s\S]*?\(error\) => \{[\s\S]*?squadreLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 
@@ -71,7 +67,8 @@ assert.match(interactions, /return \{ loaded: true, found, minutes: Math\.max\(0
 assert.match(interactions, /const hoursText = !savedHours\.loaded[\s\S]*?savedHours\.found/);
 assert.match(interactions, /\? "Dati ore in caricamento"/);
 assert.match(interactions, /timeZone: ROME_TIME_ZONE/);
-assert.match(interactions, /elapsed > 8 \* 60 \? elapsed - 60 : elapsed/);
+assert.doesNotMatch(interactions, /function getLiveWorkedMinutes\(/);
+assert.match(interactions, /assignedStart === null \? "--:--" : formatHoursMinutes\(assignedStart\)/);
 assert.match(interactions, /window\.setInterval\(\(\) => renderTodaySummary\(\), 60 \* 1000\)/);
 assert.match(interactions, /stopTodayHoursCounter/);
 assert.match(interactions, /replaceSummaryButton\("todayMezziBtn", openAssignedVehicles\)/);
@@ -79,7 +76,6 @@ assert.match(interactions, /getUnreadPersonalAlerts/);
 assert.match(interactions, /doSquadraMemberAndUserMatch\(row\?\.operatore/);
 assert.match(interactions, /openHoursPageForCommessa\(assignments\[0\]\.commessaId/);
 assert.match(interactions, /isNotificationForCurrentUser\(alertItem\)/);
-
 assert.match(notifications, /title: "👷 Aggiunto a una squadra"/);
 assert.match(notifications, /avvisoAutomaticoAssenze/);
 
@@ -121,17 +117,8 @@ assert.match(interactions, /function getUnreadPersonalAlerts\(dateKey = getSumma
 assert.match(interactions, /function renderInteractiveTodaySummary\(\) \{[\s\S]*?const dateKey = getSummaryDateKey\(\);[\s\S]*?findCurrentUserSquadreForDate\(dateKey\)/);
 const summaryDateExpression = interactions.match(/const getSummaryDateKey = \(\) => ([^;]+);/)?.[1];
 assert.ok(summaryDateExpression, "getSummaryDateKey must be defined");
-const evaluateSummaryDate = Function(
-  "getTodayDateKey",
-  "getActiveSquadreDateKey",
-  `return (${summaryDateExpression});`
-);
-assert.equal(
-  evaluateSummaryDate(() => "2026-07-28", () => "2026-07-27"),
-  "2026-07-28",
-  "the today card must ignore a different active squadre date"
-);
-assert.match(interactions, /assignedStart === null \? "--:--" : formatHoursMinutes\(assignedStart\)/);
+const evaluateSummaryDate = Function("getTodayDateKey", "getActiveSquadreDateKey", `return (${summaryDateExpression});`);
+assert.equal(evaluateSummaryDate(() => "2026-07-28", () => "2026-07-27"), "2026-07-28", "the today card must ignore a different active squadre date");
 assert.match(app, /function getSquadraRowMembers/);
 assert.match(app, /row\.personale, row\.operatori, row\.caposquadra/);
 assert.match(app, /Il riepilogo usa gli stessi dati e la stessa data appena renderizzati qui/);

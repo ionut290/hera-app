@@ -217,6 +217,47 @@
   let configDocumentCache = null;
   const clean = (value) => String(value == null ? "" : value).trim();
   const configDocRef = () => db.collection("appConfig").doc("driveBridge");
+
+  function getSharedDriveBridgeConfigState() {
+    const root = typeof window !== "undefined" ? window : globalThis;
+    const existing = root.HeraDriveBridgeConfigShared;
+    if (existing && existing.firstSnapshot && typeof existing.publish === "function") return existing;
+
+    let resolveFirstSnapshot = null;
+    const firstSnapshot = new Promise((resolve) => {
+      resolveFirstSnapshot = resolve;
+    });
+    const state = {
+      hasSnapshot: false,
+      data: null,
+      firstSnapshot,
+      publish(data) {
+        state.data = data && typeof data === "object" ? data : {};
+        if (state.hasSnapshot) return;
+        state.hasSnapshot = true;
+        resolveFirstSnapshot(state.data);
+      }
+    };
+    root.HeraDriveBridgeConfigShared = state;
+    return state;
+  }
+
+  const sharedDriveBridgeConfig = getSharedDriveBridgeConfigState();
+
+  async function waitForSharedDriveBridgeConfig(timeoutMs = 900) {
+    if (sharedDriveBridgeConfig.hasSnapshot) return sharedDriveBridgeConfig.data || {};
+    let timer = null;
+    try {
+      return await Promise.race([
+        sharedDriveBridgeConfig.firstSnapshot,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
   const timestamp = (value) => value?.toDate instanceof Function ? value.toDate().toISOString() : clean(value) || new Date(0).toISOString();
   const autoSyncKey = (type) => `hera_registry_sheet_auto_sync_${type}`;
 
@@ -233,8 +274,31 @@
   }
 
   async function readConfigDocument(force = false) {
+    if (!force && sharedDriveBridgeConfig.hasSnapshot) {
+      configDocumentCache = sharedDriveBridgeConfig.data || {};
+      return configDocumentCache;
+    }
     if (!force && configDocumentCache) return configDocumentCache;
     if (!force && configDocumentPromise) return configDocumentPromise;
+
+    if (!force) {
+      configDocumentPromise = waitForSharedDriveBridgeConfig()
+        .then((sharedData) => {
+          if (sharedData !== null) {
+            configDocumentCache = sharedData || {};
+            return configDocumentCache;
+          }
+          return configDocRef().get().then((snap) => {
+            configDocumentCache = snap.exists ? snap.data() || {} : {};
+            return configDocumentCache;
+          });
+        })
+        .finally(() => {
+          configDocumentPromise = null;
+        });
+      return configDocumentPromise;
+    }
+
     configDocumentPromise = configDocRef().get()
       .then((snap) => {
         configDocumentCache = snap.exists ? snap.data() || {} : {};

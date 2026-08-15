@@ -10696,6 +10696,9 @@ async function createCommessa(event) {
 function subscribeDriveBridge() {
   unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot(async (doc) => {
     const data = doc.exists ? doc.data() : null;
+    if (window.HeraDriveBridgeConfigShared?.publish) {
+      window.HeraDriveBridgeConfigShared.publish(data || {});
+    }
     const owner = data?.ownerEmail || ADMIN_EMAIL;
     driveBridgeState = {
       configured: Boolean(data?.configured || data?.rootFolderId),

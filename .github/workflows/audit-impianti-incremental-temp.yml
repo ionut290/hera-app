@@ -1,0 +1,24 @@
+name: Audit impianti incremental temp
+on:
+  push:
+    branches:
+      - audit/impianti-incremental-20260815
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect impianti sync flow
+        run: |
+          echo '=== Persistence / IndexedDB ==='
+          grep -RInE 'enablePersistence|persistentLocalCache|indexedDB|IndexedDB|impianti.*cache|cache.*impianti' --exclude-dir=node_modules --exclude-dir=.git . | head -n 240 || true
+          echo '=== subscribeImpianti and stats ==='
+          grep -n -C 40 -E 'function subscribeImpianti|subscribeImpianti\(|function subscribeStatsForCommesse|subscribeStatsForCommesse\(' app.js | head -n 420 || true
+          echo '=== Impianto document writes ==='
+          grep -RInE 'collection\([^)]*impianti|\.doc\([^)]*\)\.(set|update|delete)\(' --include='*.js' --exclude-dir=node_modules --exclude-dir=.git . | grep -E 'impiant|commess' | head -n 420 || true
+          echo '=== updatedAt / done fields ==='
+          grep -RInE 'updatedAt|doneAt|fattoAt|completedAt|isDone|stato.*FATTO' --include='*.js' --exclude-dir=node_modules --exclude-dir=.git . | head -n 420 || true
+          echo '=== Cloud Functions impianti triggers ==='
+          grep -RInE 'onDocument(Written|Updated|Created)|onWrite|onUpdate|impianti/\{' functions --include='*.js' | head -n 300 || true
+          echo '=== Static/shared operational views ==='
+          grep -RInE 'sharedOperational|sharedStatic|impianti' functions/shared-operational-views.js functions/main.js functions/shared-calendar-view.js 2>/dev/null | head -n 360 || true

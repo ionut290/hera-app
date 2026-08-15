@@ -111,10 +111,16 @@
     );
   }
 
-  state.ready = db.collection("appConfig").doc("activeCommesse").get()
-    .then((snapshot) => {
-      if (!snapshot.exists) return;
-      const data = snapshot.data() || {};
+  const sharedIndexPromise = window.HeraActiveCommesseFirstBootGuard?.getActiveIndexState?.();
+  state.ready = (sharedIndexPromise || db.collection("appConfig").doc("activeCommesse").get())
+    .then((result) => {
+      if (result && Object.prototype.hasOwnProperty.call(result, "explicit")) {
+        state.explicit = result.explicit === true;
+        state.activeIds = new Set(normalizeIds(result.ids));
+        return;
+      }
+      if (!result?.exists) return;
+      const data = result.data() || {};
       if (!Array.isArray(data.ids)) return;
       state.explicit = true;
       state.activeIds = new Set(normalizeIds(data.ids));

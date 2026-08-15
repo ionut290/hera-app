@@ -48,12 +48,28 @@ if (document.readyState === "loading") {
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
   document.write(`<script src="${HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC}" data-fatto-ordinary-extraordinary="1"><\/script>`);
 } else {
+  function normalizeAssetPath(value) {
+    try {
+      return new URL(String(value || ""), document.baseURI).pathname;
+    } catch (_) {
+      return String(value || "").split("?")[0].split("#")[0];
+    }
+  }
+
+  function findExistingScript(src, dataName) {
+    const byData = document.querySelector(`script[data-${dataName}="true"], script[data-${dataName}="1"]`);
+    if (byData) return byData;
+    const wantedPath = normalizeAssetPath(src);
+    if (!wantedPath) return null;
+    return Array.from(document.scripts || []).find((script) => normalizeAssetPath(script.src) === wantedPath) || null;
+  }
+
   function loadOnce(src, dataName, ready, onLoad) {
     if (ready?.()) {
       onLoad?.();
       return;
     }
-    const existing = document.querySelector(`script[data-${dataName}="true"], script[data-${dataName}="1"]`);
+    const existing = findExistingScript(src, dataName);
     if (existing) {
       if (onLoad) existing.addEventListener("load", onLoad, { once: true });
       return;

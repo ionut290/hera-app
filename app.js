@@ -6357,36 +6357,6 @@ function setHoursExportButtonsLoading(isLoading) {
   if (ui.hoursTableExportGlobalBtn) ui.hoursTableExportGlobalBtn.disabled = isLoading;
 }
 
-function buildHoursMonthlyExportData(reports, commessaId, monthMeta) {
-  const operatorDayMap = new Map();
-  const operatorTotals = new Map();
-  const operatorCommessaTotals = new Map();
-  (Array.isArray(reports) ? reports : []).forEach((report) => {
-    const day = Number(String(report.date || "").split("-")[2] || 0);
-    const entries = Array.isArray(report.entries) ? report.entries : [];
-    entries.forEach((entry) => {
-      const entryCommessaInfo = resolveHoursEntryCommessa(entry);
-      const entryCommessaId = String(entryCommessaInfo.id || entryCommessaInfo.key || "").trim();
-      const entryCommessaName = String(entryCommessaInfo.nome || commesseById.get(entryCommessaId)?.nome || "Commessa").trim();
-      (Array.isArray(entry.rows) ? entry.rows : []).forEach((row) => {
-        const operatore = String(row.operatore || "").trim();
-        const ore = Number(row.ore || 0);
-        if (!operatore || ore <= 0) return;
-        const operatorNorm = operatore.toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
-        if (!operatorTotals.has(operatorNorm)) operatorTotals.set(operatorNorm, { name: operatore, total: 0 });
-        operatorTotals.get(operatorNorm).total += ore;
-        const byCommessaKey = `${operatorNorm}__${entryCommessaId || entryCommessaName}`;
-        if (!operatorCommessaTotals.has(byCommessaKey)) operatorCommessaTotals.set(byCommessaKey, { operatore, commessaName: entryCommessaName, total: 0 });
-        operatorCommessaTotals.get(byCommessaKey).total += ore;
-        if (!doesHoursEntryMatchCommessa(entry, commessaId) || !day || day < 1 || day > monthMeta.daysInMonth) return;
-        if (!operatorDayMap.has(operatore)) operatorDayMap.set(operatore, Array(monthMeta.daysInMonth).fill(0));
-        operatorDayMap.get(operatore)[day - 1] += ore;
-      });
-    });
-  });
-  return { operatorDayMap, operatorTotals, operatorCommessaTotals };
-}
-
 async function loadHoursMonthlyTable() {
   if (!ui.hoursTableFeedback || !ui.hoursTableContainer) return null;
   const requestId = hoursTableLoadRequestId + 1;
@@ -7973,29 +7943,6 @@ function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
   return Boolean(currentUser && String(commessaId || "").trim());
 }
 
-function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
-  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
-  if (assignment) {
-    return parseMultiEntryValue(assignment.row?.personale || "").map((name) => ({
-      operatore: name,
-      ore: "",
-      squadraIndex: assignment.squadraIndex,
-      squadraLabel: assignment.squadraLabel
-    }));
-  }
-  if (canManageData()) {
-    const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
-    const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
-    return squadRows.flatMap((row, index) => parseMultiEntryValue(row?.personale || "").map((name) => ({
-      operatore: name,
-      ore: "",
-      squadraIndex: index + 1,
-      squadraLabel: `Squadra ${index + 1}`
-    })));
-  }
-  return [];
-}
-
 function getHoursEntrySquadraIndexes(entry) {
   const indexes = new Set();
   const entryIndex = String(entry?.squadraIndex || "").trim();
@@ -8005,13 +7952,6 @@ function getHoursEntrySquadraIndexes(entry) {
     if (rowIndex) indexes.add(rowIndex);
   });
   return indexes;
-}
-
-function doesHoursEntryMatchSquadra(entry, squadraIndex = "") {
-  const targetIndex = String(squadraIndex || "").trim();
-  if (!targetIndex) return true;
-  const entryIndexes = getHoursEntrySquadraIndexes(entry);
-  return !entryIndexes.size || entryIndexes.has(targetIndex);
 }
 
 function getHoursParticipantId(row = {}, entry = {}, options = {}) {
@@ -8132,29 +8072,11 @@ function getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue) {
   return completed;
 }
 
-function getMissingHoursParticipantsForCommessaDate(commessaId, dateValue) {
-  const required = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
-  const completed = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
-  return Array.from(required.values()).filter((participant) => !completed.has(participant.key));
-}
-
 function areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateValue) {
   const required = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
   if (!required.size) return false;
   const completed = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
   return Array.from(required.keys()).every((key) => completed.has(key));
-}
-
-function hasHoursRecordForCommessaDateSquadra(commessaId, dateValue, squadraIndex = "") {
-  const id = String(commessaId || "").trim();
-  const dateKey = String(dateValue || "").trim();
-  const targetIndex = String(squadraIndex || "").trim();
-  if (!id || !dateKey) return false;
-  const completed = getCompletedHoursParticipantsForCommessaDate(id, dateKey);
-  return Array.from(completed.values()).some((participant) => {
-    if (!targetIndex) return true;
-    return String(participant.squadraIndex || "").trim() === targetIndex;
-  });
 }
 
 function getQuickHoursContextForCommessa(commessaId, dateValue = "") {

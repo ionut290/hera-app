@@ -1,0 +1,43 @@
+name: Apply phase 20 unused function cleanup
+
+on:
+  push:
+    branches:
+      - agent/consolidation-phase-20-dead-functions-batch2
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.head_commit.message != 'Remove phase 20 unused functions'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/consolidation-phase-20-dead-functions-batch2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install parser
+        run: npm install --no-save --no-audit --no-fund acorn@8
+      - name: Remove confirmed unused functions
+        run: node scripts/remove-confirmed-unused-functions-phase20.js
+      - name: Verify syntax and sensitive flows
+        run: |
+          node --check app.js
+          node --check today-summary-interactions.js
+          node --check active-commesse-first-boot-guard.js
+          npm run check:done-button
+          npm run check:android-photo-share
+          npm run check:photo-notes
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js today-summary-interactions.js active-commesse-first-boot-guard.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove phase 20 unused functions"
+          git push origin HEAD:agent/consolidation-phase-20-dead-functions-batch2

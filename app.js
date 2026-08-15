@@ -3513,11 +3513,6 @@ if (!auth || firebaseInitError) {
 }
 
 
-
-
-
-
-
 function reloadNormalModeData() {
   if (!currentUser) return Promise.resolve(false);
   commesseById = new Map();
@@ -3826,7 +3821,6 @@ function closeMapFullscreenPage() {
   setFullscreenFeedback("Usa “Disegna” per definire il perimetro di lavoro.");
   setTimeout(() => map.invalidateSize(), 60);
 }
-
 
 
 const WEATHER_RADAR_MAX_ZOOM = 20;
@@ -5107,8 +5101,6 @@ function buildHowtoFaqItems() {
 }
 
 
-
-
 const CALENDAR_EVENT_TYPES = {
   ferie: { label: "Ferie", icon: "🏖️" },
   permesso: { label: "Permesso", icon: "🕒" },
@@ -5119,12 +5111,6 @@ const CALENDAR_EVENT_TYPES = {
   scadenza: { label: "Scadenza", icon: "⏰" },
   altro: { label: "Altro", icon: "📌" }
 };
-
-
-
-
-
-
 
 
 function getPersonalHoursRowsForDate(dateKey) {
@@ -5154,10 +5140,6 @@ function formatPersonalHours(hours) {
   const minutes = Math.round(Number(hours || 0) * 60);
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
-
-
-
-
 
 
 function renderPersonalHoursCalendar() {
@@ -5229,29 +5211,6 @@ function renderPersonalHoursSelectedDay() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function initHoursPage() {
   if (ui.hoursDate) ui.hoursDate.value = new Date().toISOString().slice(0, 10);
   if (ui.hoursTableMonth) ui.hoursTableMonth.value = new Date().toISOString().slice(0, 7);
@@ -5307,14 +5266,6 @@ function closePosPage() {
   }
   applyRoute();
 }
-
-
-
-
-
-
-
-
 
 
 function renderSavedHoursReports(records = []) {
@@ -10339,7 +10290,6 @@ function getWeatherAlertButtonLabel(alert = {}) {
 }
 
 
-
 function getRiskTimestampMs(value) {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
@@ -10364,8 +10314,6 @@ function getRomeDateHourFromTimestamp(value) {
 }
 
 
-
-
 function getFirstFiniteNumber(...values) {
   for (const value of values) {
     if (value === null || value === undefined || String(value).trim() === "") continue;
@@ -10374,7 +10322,6 @@ function getFirstFiniteNumber(...values) {
   }
   return null;
 }
-
 
 
 function formatSquadraAverageTemperature(value) {
@@ -10436,9 +10383,6 @@ function getCommessaMajorityImpiantiLocation(commessa, dateKey = getCommessaSche
   }
   return majority;
 }
-
-
-
 
 
 function appendSquadreHeaderRiskActions(container, commessa, dateKey = getActiveSquadreDateKey()) {
@@ -10747,7 +10691,6 @@ async function createCommessa(event) {
   closeNewCommessaDialog();
   updateCommessaParentField();
 }
-
 
 
 function subscribeDriveBridge() {
@@ -11835,7 +11778,6 @@ function stopResourcesSubscription() {
 }
 
 
-
 function applyPrivateDocPreset(type) {
   if (!ui.privateDocsName || !ui.privateDocsNote) return;
   if (type === "pin") {
@@ -11872,10 +11814,6 @@ async function driveApiFetchWithToken(token, url, options = {}) {
   }
   return response.status === 204 ? null : response.json();
 }
-
-
-
-
 
 
 async function addResourceItem(event) {
@@ -15214,8 +15152,6 @@ function setImpiantoWeatherFeedback(impianto, message = "") {
 }
 
 
-
-
 const DEFAULT_IMPIANTO_SAFETY_CONTACTS = [
   { id: "default-112", name: "Emergenze", role: "Numero unico emergenze", phone: "112", type: "emergenza", whatsappEnabled: true, isDefault: true },
   { id: "default-115", name: "Vigili del Fuoco", role: "Soccorso tecnico urgente", phone: "115", type: "emergenza", whatsappEnabled: true, isDefault: true },
@@ -16902,7 +16838,6 @@ async function saveImpiantoSafetyContactForm(event) {
 }
 
 
-
 function isInreteCommessa(commessa = {}) {
   return [
     commessa.nome,
@@ -16928,19 +16863,6 @@ function isCurrentCommessaInrete() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 function sanitizePhoneHref(phone = "") {
   const value = String(phone || "").trim();
   return value.startsWith("+") ? `+${value.replace(/\D/g, "")}` : value.replace(/\D/g, "");
@@ -16949,14 +16871,6 @@ function sanitizePhoneHref(phone = "") {
 function sanitizeWhatsappPhone(phone = "") {
   return String(phone || "").replace(/\D/g, "");
 }
-
-
-
-
-
-
-
-
 
 
 function getImpiantoWeatherBadgeState(impianto) {
@@ -19981,7 +19895,6 @@ function setSquadraRowsFromData(data) {
 }
 
 
-
 function normalizeSquadraConflictKey(value) {
   return String(value || "")
     .normalize("NFD")
@@ -20001,9 +19914,6 @@ function getSquadraName(index) {
 }
 
 const CALENDAR_ABSENCE_TYPES = new Set(["ferie", "permesso", "malattia"]);
-
-
-
 
 
 async function validateSquadraOperatorAvailability(operatorName, dateKey) {
@@ -22617,7 +22527,6 @@ function renderOperatorPositionMarkers(bounds) {
 }
 
 
-
 function buildMapMarkerSequence(impianti = []) {
   return impianti
     .map((impianto) => ({ impianto, key: buildImpiantoKey(impianto), lat: Number(impianto.gpsY), lng: Number(impianto.gpsX) }))
@@ -22748,10 +22657,6 @@ function keepSelectedFullscreenPopupOpen(markerForSelectedImpianto) {
   requestAnimationFrame(reopenPopup);
   setTimeout(reopenPopup, 80);
 }
-
-
-
-
 
 
 function addImpiantoMarkerToMapLayer(impianto, targetLayer, targetMap = map) {
@@ -24608,9 +24513,6 @@ function buildAlertLabel(level, phenomenon) {
 }
 
 
-
-
-
 function formatHeatDashboardDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
   const day = date.toLocaleDateString("it-IT", { weekday: "short" });
@@ -24733,7 +24635,6 @@ function openHeatHourlyForecast(dayKey) {
   document.body.appendChild(overlay);
   overlay.querySelector(".worklimate-page-back")?.focus();
 }
-
 
 
 function buildHeatLocationOptionMarkup() {
@@ -25605,7 +25506,6 @@ function renderHoursApprovalRequests() {
 }
 
 
-
 async function approveHoursRequestLevel1(request) {
   if (!canApproveHoursLevel1(request)) {
     alert("Non autorizzato al primo livello di approvazione.");
@@ -26235,8 +26135,6 @@ async function uploadNotificationAttachments(files = [], options = {}) {
 }
 
 
-
-
 async function createUserNotification(event) {
   event.preventDefault();
   if (notificationUploadInProgress) {
@@ -26465,9 +26363,6 @@ function postponeActiveUserAlert() {
   activeUserAlert = null;
   closeUserAlertModal();
 }
-
-
-
 
 
 async function openNotificationDayDetail(dateKey) {
@@ -28496,62 +28391,6 @@ function renderProgrammazioni() {
 }
 
 
-function getFerieEligibleOperators() {
-  const commesseNames = Array.from(commesseById.values()).map((c) => String(c?.nome || "").trim()).filter(Boolean);
-  return personaleRecords.filter((person) => {
-    const allEnabled = Boolean(person?.abilitatoTutteCommesse || person?.allCommesseEnabled);
-    if (allEnabled) return true;
-    const enabled = Array.isArray(person?.commesseAbilitate)
-      ? person.commesseAbilitate.map((v) => String(v || "").trim()).filter(Boolean)
-      : [];
-    if (!enabled.length) return false;
-    if (!commesseNames.length) return true;
-    return commesseNames.some((commessaName) => isPersonAbilitataForCommessa(person, commessaName));
-  });
-}
-
-function refreshFerieProgrammazioneUi() {
-  refreshFerieOperatorOptions();
-}
-
-function refreshFerieOperatorOptions() {
-  if (!ui.ferieOperatore) return;
-  const people = getFerieEligibleOperators();
-  const prev = ui.ferieOperatore.value;
-  ui.ferieOperatore.innerHTML = '<option value="">Operatore</option>' + people
-    .map((p) => getPersonaleDisplayName(p)).filter(Boolean).sort((a,b)=>a.localeCompare(b,'it'))
-    .map((name)=>`<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join("");
-  if (prev) ui.ferieOperatore.value = prev;
-}
-
-async function saveFerieCollega(event) {
-  event.preventDefault();
-  if (!canManageData()) return;
-  const operatore = String(ui.ferieOperatore?.value || "").trim();
-  const dataInizio = String(ui.ferieInizio?.value || "").trim();
-  const dataFine = String(ui.ferieFine?.value || "").trim();
-  const note = String(ui.ferieNote?.value || "").trim();
-  if (!operatore || !dataInizio || !dataFine) return alert('Compila tutti i campi obbligatori ferie.');
-  if (dataFine < dataInizio) return alert('La data fine ferie deve essere successiva o uguale alla data inizio.');
-  await db.collection('ferieColleghi').add({ operatore, dataInizio, dataFine, note, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: currentUser?.email || '' });
-  ui.ferieForm?.reset();
-  renderFerieList();
-}
-
-function computeDayStats(dateKey, ferieItems) {
-  const enabledPeople = getFerieEligibleOperators();
-  const inFerie = new Set(ferieItems.filter((f) => f.dataInizio <= dateKey && f.dataFine >= dateKey).map((f) => normalizeSafetyKey(f.operatore)));
-  const available = enabledPeople.filter((p) => !inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p))));
-  const reqCounts = {
-    primo: available.filter((p) => hasRequiredPersonaleCourse(p, 'primo soccorso')).length,
-    antincendio: available.filter((p) => hasRequiredPersonaleCourse(p, 'antincendio')).length,
-    preposto: available.filter((p) => hasRequiredPersonaleCourse(p, 'preposto')).length
-  };
-  const byPeople = Math.floor(available.length / 2);
-  const validTeams = Math.max(0, Math.min(byPeople, reqCounts.primo, reqCounts.antincendio, reqCounts.preposto));
-  return { enabledPeople, inFerie, available, validTeams };
-}
-
 function hasRequiredPersonaleCourse(person, keyword) {
   const target = normalizeSafetyKey(keyword);
   if (target.includes('primo soccorso')) return hasRequiredCourse(person, 'primo soccorso');
@@ -28560,32 +28399,6 @@ function hasRequiredPersonaleCourse(person, keyword) {
   if (target.includes('atex')) return hasRequiredCourse(person, 'atex');
   const corsi = normalizePersonCourses(person);
   return Object.values(corsi || {}).some((corso) => Boolean(corso?.possiede) && normalizeSafetyKey(corso?.nome || '').includes(target));
-}
-
-
-async function renderFerieList() {
-  if (!ui.ferieList) return;
-  if (!canManageData()) { ui.ferieList.innerHTML = "<p class='muted'>Solo admin può gestire ferie.</p>"; return; }
-  const snap = await db.collection('ferieColleghi').orderBy('dataInizio','asc').get().catch(()=>null);
-  if (!snap) return;
-  const rows = snap.docs.map((d)=>({id:d.id,...d.data()}));
-  ui.ferieList.innerHTML = rows.map((r)=>`<article class='simple-list-item'><strong>${escapeHTML(r.operatore||'-')}</strong><p>${escapeHTML(r.dataInizio||'-')} → ${escapeHTML(r.dataFine||'-')}</p><p>${escapeHTML(r.note||'')}</p><div class='item-actions'><button type='button' class='btn' data-edit-ferie='${escapeHTML(r.id)}'>Modifica</button><button type='button' class='btn btn-danger' data-del-ferie='${escapeHTML(r.id)}'>Elimina</button></div></article>`).join('') || "<p class='muted'>Nessuna ferie inserita.</p>";
-  ui.ferieList.querySelectorAll('[data-del-ferie]').forEach((btn)=>btn.addEventListener('click', async()=>{
-    if (!canManageData()) return;
-    if (!confirm('Eliminare ferie?')) return;
-    await db.collection('ferieColleghi').doc(btn.getAttribute('data-del-ferie')||'').delete();
-    renderFerieList();
-  }));
-  ui.ferieList.querySelectorAll('[data-edit-ferie]').forEach((btn)=>btn.addEventListener('click', async()=>{
-    if (!canManageData()) return;
-    const id = btn.getAttribute('data-edit-ferie') || '';
-    const row = rows.find((x)=>x.id===id);
-    if (!row) return;
-    const note = prompt('Modifica note ferie', row.note || '');
-    if (note === null) return;
-    await db.collection('ferieColleghi').doc(id).set({ note, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    renderFerieList();
-  }));
 }
 
 
@@ -28622,74 +28435,6 @@ function formatPersonReqBadges(person) {
   if (hasRequiredPersonaleCourse(person, "antincendio")) parts.push("AI");
   if (hasRequiredPersonaleCourse(person, "preposto")) parts.push("PR");
   return parts.length ? ` [${parts.join("/")}]` : "";
-}
-
-async function renderFerieDisponibilitaCalendar() {
-  if (!ui.ferieCalendarResult) return;
-  if (!canManageData()) return;
-  const start = String(ui.ferieCheckStart?.value || '').trim();
-  const end = String(ui.ferieCheckEnd?.value || '').trim();
-  if (!start || !end) return alert('Seleziona periodo.');
-  if (end < start) return alert('Intervallo date non valido.');
-
-  const ferieSnap = await db.collection('ferieColleghi').get();
-  const ferieItems = ferieSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  const startDate = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  const dayStats = new Map();
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
-    const stats = computeDayStats(key, ferieItems);
-    const combos = buildTeamCombinations(stats.available, stats.validTeams);
-    dayStats.set(key, { stats, combos });
-  }
-
-  const monthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const monthEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-  const monthBlocks = [];
-
-  for (let m = new Date(monthStart); m <= monthEnd; m.setMonth(m.getMonth() + 1)) {
-    const year = m.getFullYear();
-    const month = m.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const startOffset = (firstDay.getDay() + 6) % 7;
-    const monthLabel = firstDay.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-    const cells = [];
-
-    for (let i = 0; i < startOffset; i += 1) cells.push('<div class="ferie-month-cell ferie-month-cell--empty"></div>');
-
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const dayDate = new Date(year, month, day);
-      const key = dayDate.toISOString().slice(0, 10);
-      const inRange = dayDate >= startDate && dayDate <= endDate;
-      const payload = inRange ? dayStats.get(key) : null;
-      const validTeams = payload?.stats?.validTeams || 0;
-      const statusClass = !inRange ? 'ferie-month-cell--out' : (validTeams > 0 ? 'ferie-month-cell--ok' : 'ferie-month-cell--ko');
-      const detailId = `ferie-day-detail-${key}`;
-      const stats = payload?.stats;
-      const combos = payload?.combos || [];
-      const comboRows = combos.map((team, idx) => `<li><b>Squadra ${idx + 1}</b>: ${team.map((p) => `${escapeHTML(getPersonaleDisplayName(p) || '-')}${escapeHTML(formatPersonReqBadges(p))}`).join(' + ')}</li>`).join('');
-      const inFerieNames = stats
-        ? stats.enabledPeople.filter((p) => stats.inFerie.has(normalizeSafetyKey(getPersonaleDisplayName(p)))).map((p) => getPersonaleDisplayName(p)).filter(Boolean)
-        : [];
-      const detail = stats ? `<div id="${escapeHTML(detailId)}" class="ferie-day-detail hidden"><p><b>Data:</b> ${escapeHTML(key)}</p><p>Abilitati: ${stats.enabledPeople.length} • In ferie: ${stats.inFerie.size} • Disponibili: ${stats.available.length}</p><p>✅ Squadre complete creabili: ${validTeams}</p><p>${validTeams === 0 && stats.available.length > 0 ? `⚠️ Persone disponibili ma requisiti mancanti: ${stats.available.length}` : '⚠️ Persone disponibili ma requisiti mancanti: 0'}</p><p>${validTeams === 0 ? '❌ Giorno scoperto' : ''}</p><p><b>Colleghi in ferie:</b> ${escapeHTML(inFerieNames.join(', ') || '-')}</p>${comboRows ? `<ul>${comboRows}</ul>` : '<p class="muted">Nessuna combinazione valida.</p>'}</div>` : '';
-      cells.push(`<button type="button" class="ferie-month-cell ${statusClass}" ${inRange ? `data-ferie-toggle="${escapeHTML(detailId)}"` : 'disabled'}><span class="ferie-month-daynum">${day}</span>${inRange ? `<small>Sq: ${validTeams}</small>` : ''}</button>${detail}`);
-    }
-
-    monthBlocks.push(`<section class="ferie-month"><h5>${escapeHTML(monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1))}</h5><div class="ferie-month-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div><div class="ferie-month-grid">${cells.join('')}</div></section>`);
-  }
-
-  ui.ferieCalendarResult.innerHTML = `<div class="ferie-month-wrap">${monthBlocks.join('')}</div>`;
-  ui.ferieCalendarResult.querySelectorAll('[data-ferie-toggle]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.getAttribute('data-ferie-toggle') || '';
-      const detail = ui.ferieCalendarResult.querySelector(`#${cssEscapeValue(id)}`);
-      if (!detail) return;
-      detail.classList.toggle('hidden');
-    });
-  });
 }
 
 
@@ -28816,15 +28561,6 @@ function getOreReportsCollectionName() { return isSnowServiceContext() ? "neve_o
 function getOreApprovalRequestsCollectionName() { return isSnowServiceContext() ? "neve_ore_richieste" : "oreApprovalRequests"; }
 function getPersonaleCollectionName() { return isSnowServiceContext() ? "neve_personale" : "personale"; }
 function getMezziCollectionName() { return isSnowServiceContext() ? "neve_mezzi" : "mezzi"; }
-
-
-
-
-
-
-
-
-
 
 
 document.getElementById("snow-service-btn")?.addEventListener("click", openSnowServicePage);

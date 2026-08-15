@@ -62,6 +62,17 @@ const modules = [
       "saveDrawnSnowRoadPath",
       "openSnowServicePage"
     ]
+  },
+  {
+    file: "app-availability.js",
+    global: "VargaAvailabilityModule",
+    functions: [
+      "getFerieEligibleOperators",
+      "saveFerieCollega",
+      "computeDayStats",
+      "renderFerieList",
+      "renderFerieDisponibilitaCalendar"
+    ]
   }
 ];
 
@@ -105,11 +116,22 @@ for (const coreName of [
   "normalizePersonaleDocument",
   "normalizeSquadraStoricoDocument",
   "renderPersonalHoursCalendar",
-  "renderFerieDisponibilitaCalendar",
   "publishGlobalNotificationEvent"
 ]) {
   if (!app.includes(`function ${coreName}`)) fail(`${coreName} deve restare nel core app.js`);
 }
 
+for (const protectedCoreName of [
+  "resetImpianto",
+  "deleteImpianto",
+  "getReadableFirestoreError",
+  "logFirestoreError",
+  "enablePushNotifications",
+  "programmazioneReminderBadge",
+  "renderProgrammazioni"
+]) {
+  if (!app.includes(`function ${protectedCoreName}`)) fail(`${protectedCoreName} deve restare nel core app.js`);
+}
+
 if (process.exitCode) process.exit(process.exitCode);
-console.log("✅ Confini modulari Worklimate + ATEX + Documenti + Calendario + Neve verificati.");
+console.log("✅ Confini modulari Worklimate + ATEX + Documenti + Calendario + Neve + Disponibilità verificati.");

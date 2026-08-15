@@ -23,7 +23,34 @@ replaceOnce(
 );
 
 const checkPath = "scripts/check-platform-profile-bootstrap-reuse.js";
-fs.writeFileSync(checkPath, `"use strict";\n\nconst fs = require("node:fs");\nconst auth = fs.readFileSync("auth-login-fix.js", "utf8");\nconst approval = fs.readFileSync("approval-access.js", "utf8");\n\nconst checks = [\n  [auth.includes("window.HeraPlatformProfileBootstrap = {"), "auth deve pubblicare il profilo appena letto"],\n  [auth.includes("exists: currentDoc.exists === true"), "la cache deve distinguere documenti esistenti"],\n  [approval.includes("bootstrap?.uid === firebaseUser.uid"), "approval deve riusare solo il profilo dello stesso UID"],\n  [approval.includes("bootstrap.exists === true"), "approval non deve riusare cache di profili mancanti"],\n  [approval.includes("bootstrapAgeMs <= 2000"), "la cache bootstrap deve scadere rapidamente"],\n  [approval.includes("window.HeraPlatformProfileBootstrap = null"), "la cache bootstrap deve essere one-shot"],\n  [approval.includes("return db.runTransaction(async (transaction) =>"), "il fallback transaction Firestore deve restare intatto"],\n  [approval.includes("const snapshot = await transaction.get(ref)"), "la lettura transaction originale deve restare disponibile"],\n  [!auth.includes("setInterval("), "l'ottimizzazione login non deve introdurre polling"],\n];\n\nconst failed = checks.filter(([ok]) => !ok).map(([, message]) => message);\nif (failed.length) {\n  console.error("Controllo riuso profilo bootstrap NON superato:");\n  failed.forEach((message) => console.error(`- ${message}`));\n  process.exit(1);\n}\nconsole.log("Controllo riuso profilo bootstrap superato.");\n`);
+const checkSource = [
+  '"use strict";',
+  '',
+  'const fs = require("node:fs");',
+  'const auth = fs.readFileSync("auth-login-fix.js", "utf8");',
+  'const approval = fs.readFileSync("approval-access.js", "utf8");',
+  '',
+  'const checks = [',
+  '  [auth.includes("window.HeraPlatformProfileBootstrap = {"), "auth deve pubblicare il profilo appena letto"],',
+  '  [auth.includes("exists: currentDoc.exists === true"), "la cache deve distinguere documenti esistenti"],',
+  '  [approval.includes("bootstrap?.uid === firebaseUser.uid"), "approval deve riusare solo il profilo dello stesso UID"],',
+  '  [approval.includes("bootstrap.exists === true"), "approval non deve riusare cache di profili mancanti"],',
+  '  [approval.includes("bootstrapAgeMs <= 2000"), "la cache bootstrap deve scadere rapidamente"],',
+  '  [approval.includes("window.HeraPlatformProfileBootstrap = null"), "la cache bootstrap deve essere one-shot"],',
+  '  [approval.includes("return db.runTransaction(async (transaction) =>"), "il fallback transaction Firestore deve restare intatto"],',
+  '  [approval.includes("const snapshot = await transaction.get(ref)"), "la lettura transaction originale deve restare disponibile"],',
+  '];',
+  '',
+  'const failed = checks.filter(([ok]) => !ok).map(([, message]) => message);',
+  'if (failed.length) {',
+  '  console.error("Controllo riuso profilo bootstrap NON superato:");',
+  '  failed.forEach((message) => console.error("- " + message));',
+  '  process.exit(1);',
+  '}',
+  'console.log("Controllo riuso profilo bootstrap superato.");',
+  ''
+].join("\n");
+fs.writeFileSync(checkPath, checkSource);
 
 const packagePath = "package.json";
 const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));

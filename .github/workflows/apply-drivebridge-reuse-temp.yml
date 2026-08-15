@@ -7,7 +7,6 @@ on:
       - audit/drivebridge-20260815
 jobs:
   apply:
-    if: ${{ !contains(github.event.head_commit.message, 'Reuse driveBridge listener snapshot') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,10 +150,8 @@ jobs:
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-
 const app = fs.readFileSync("app.js", "utf8");
 const registry = fs.readFileSync("registry-google-sheet-sync.js", "utf8");
-
 assert.match(app, /function subscribeDriveBridge\(\)[\s\S]*?HeraDriveBridgeConfigShared\?\.publish[\s\S]*?\.publish\(data \|\| \{\}\)/, "Il listener Drive deve pubblicare il proprio snapshot nel ponte condiviso");
 assert.match(registry, /function getSharedDriveBridgeConfigState\(\)/, "Deve esistere il ponte condiviso della configurazione Drive");
 assert.match(registry, /async function waitForSharedDriveBridgeConfig\(timeoutMs = 900\)/, "Il riuso deve avere un timeout breve e finito");

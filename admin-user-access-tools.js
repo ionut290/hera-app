@@ -12,6 +12,7 @@
   let busy = false;
   let activeProfile = null;
   let observer = null;
+  let panelActivated = false;
   let profilesCache = [];
   let profilesPromise = null;
 
@@ -439,13 +440,16 @@
   }
 
   async function enhance() {
+    if (!panelActivated || !isManager()) return;
     ensureSearch();
     await enhanceUserCards();
     applySearch();
   }
 
   function installObserver() {
-    if (observer || !document.body) return;
+    if (observer || !panelActivated) return;
+    const panel = document.getElementById("panel-utenti");
+    if (!panel) return;
     let scheduled = false;
     observer = new MutationObserver(() => {
       if (scheduled) return;
@@ -455,24 +459,31 @@
         void enhance();
       }, 80);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(panel, { childList: true, subtree: true });
+  }
+
+  function activateUserPanel() {
+    panelActivated = true;
+    installObserver();
+    void enhance();
   }
 
   function initialize() {
     document.addEventListener("click", interceptLegacyPasswordButton, true);
     document.addEventListener("click", (event) => {
       if (event.target?.closest?.("#open-panel-utenti")) {
-        window.setTimeout(() => void enhance(), 120);
+        window.setTimeout(activateUserPanel, 120);
       }
     }, true);
-    void enhance();
-    installObserver();
+    const panel = document.getElementById("panel-utenti");
+    if (panel && !panel.classList.contains("hidden")) activateUserPanel();
   }
 
   window.HeraAdminUserAccessTools = {
     installed: true,
     version: VERSION,
     refresh: enhance,
+    activate: activateUserPanel,
     search: applySearch,
     openPassword: openDialog
   };

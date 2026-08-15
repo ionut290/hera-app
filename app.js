@@ -13240,9 +13240,6 @@ function updateResourceFormByType() {
   });
 }
 
-function sanitizePhone(value) {
-  return String(value || "").replace(/[^0-9+]/g, "");
-}
 
 function openExternalUrl(url, options = {}) {
   if (!url) return false;
@@ -17299,9 +17296,6 @@ function buildImpiantoSafetyWhatsappText(impianto = {}) {
   ].join("\n");
 }
 
-function formatPhoneHref(phone = "") {
-  return String(phone || "").replace(/[^+\d]/g, "");
-}
 
 function formatWhatsappPhone(phone = "") {
   const cleaned = formatPhoneHref(phone);
@@ -20457,9 +20451,6 @@ async function parseMezziExcelRows(file) {
   }).filter((row) => row.nId);
 }
 
-function normalizeMezzoNId(value) {
-  return String(value || "").trim().toLowerCase();
-}
 
 function isMezzoTrasportoA(mezzoOrId) {
   const nId = typeof mezzoOrId === "object" && mezzoOrId !== null
@@ -25856,9 +25847,6 @@ function getLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function getMinutesSinceMidnight(date) {
-  return date.getHours() * 60 + date.getMinutes();
-}
 
 function evaluateTimbraturaReminders(now = new Date()) {
   if (!currentUserPos) return;

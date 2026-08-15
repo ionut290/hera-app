@@ -7,117 +7,29 @@ body{background:linear-gradient(180deg,#f7faff 0%,#eef4fa 55%,#f8fafc 100%);}
 .container{width:min(1120px,100%);padding:clamp(10px,2vw,18px);gap:14px;}
 .card{border:1px solid var(--ui-line);border-radius:var(--ui-radius);background:var(--ui-surface);box-shadow:var(--ui-shadow);}
 .btn{border-radius:12px;min-height:42px;font-weight:700;transition:transform .14s ease,box-shadow .14s ease,background .14s ease;}
-.btn:active{transform:scale(.98);}
-.btn-primary{box-shadow:0 5px 14px rgba(37,99,235,.18);}
-input,select,textarea{border-radius:12px;border-color:#cbd7e5;background:#fff;}
-input:focus,select:focus,textarea:focus{outline:3px solid rgba(37,99,235,.12);border-color:#7aa7f7;}
-.section-head,.page-head{gap:12px;}
-.pill,.badge{border-radius:999px;font-weight:750;}
-.logo-card{overflow:hidden;}
-.user-connection-bar{border-radius:15px;background:linear-gradient(135deg,#f8fbff,#eef6ff);border:1px solid #d8e5f5;}
-.home-top-grid{gap:12px;}
-.weather-card{background:linear-gradient(135deg,#f5fbff 0%,#fffaf0 100%);}
-.home-quick-access{border:1px solid var(--ui-line);border-radius:var(--ui-radius);background:#fff;box-shadow:var(--ui-shadow-soft);overflow:hidden;}
-.home-quick-access-btn{border-radius:0;transition:background .14s ease,transform .14s ease;}
-.home-quick-access-btn:active{transform:scale(.97);}
-.today-summary-card{overflow:hidden;}
-.today-summary-grid{gap:0;}
-.today-summary-item{border-radius:13px;}
-.squadre-card{box-shadow:var(--ui-shadow);}
-.search-box{border-radius:15px;background:#fff;box-shadow:var(--ui-shadow-soft);}
-.search-box input{min-height:46px;}
-.impianti-toolbar{gap:10px;}
-.view-tabs{gap:8px;}
-.commessa-dashboard-card{overflow:hidden;}
-.commessa-stat-strip{gap:8px;}
-.commessa-stat-item{border-radius:15px;background:#f8fbff;border:1px solid #e3eaf3;}
-.commessa-map-card{overflow:hidden;}
-#map{border-radius:15px;}
-.simple-list>*{border-radius:14px;}
-.side-menu-header{background:rgba(255,255,255,.96);backdrop-filter:blur(18px);}
-.menu-section .menu-title-btn{border-color:#e0e8f1;box-shadow:var(--ui-shadow-soft);}
-.chat-modal-content,.confirm-modal-card,.management-dialog-card{border-radius:22px;box-shadow:0 22px 60px rgba(15,23,42,.18);}
-
+.btn:active{transform:scale(.98);}.btn-primary{box-shadow:0 5px 14px rgba(37,99,235,.18);}
+input,select,textarea{border-radius:12px;border-color:#cbd7e5;background:#fff;}input:focus,select:focus,textarea:focus{outline:3px solid rgba(37,99,235,.12);border-color:#7aa7f7;}
+.section-head,.page-head{gap:12px}.pill,.badge{border-radius:999px;font-weight:750}.logo-card{overflow:hidden}.user-connection-bar{border-radius:15px;background:linear-gradient(135deg,#f8fbff,#eef6ff);border:1px solid #d8e5f5}.home-top-grid{gap:12px}.weather-card{background:linear-gradient(135deg,#f5fbff 0%,#fffaf0 100%)}.home-quick-access{border:1px solid var(--ui-line);border-radius:var(--ui-radius);background:#fff;box-shadow:var(--ui-shadow-soft);overflow:hidden}.home-quick-access-btn{border-radius:0;transition:background .14s ease,transform .14s ease}.home-quick-access-btn:active{transform:scale(.97)}.today-summary-card{overflow:hidden}.today-summary-grid{gap:0}.today-summary-item{border-radius:13px}.squadre-card{box-shadow:var(--ui-shadow)}.search-box{border-radius:15px;background:#fff;box-shadow:var(--ui-shadow-soft)}.search-box input{min-height:46px}.impianti-toolbar{gap:10px}.view-tabs{gap:8px}.commessa-dashboard-card{overflow:hidden}.commessa-stat-strip{gap:8px}.commessa-stat-item{border-radius:15px;background:#f8fbff;border:1px solid #e3eaf3}.commessa-map-card{overflow:hidden}#map{border-radius:15px}.simple-list>*{border-radius:14px}.side-menu-header{background:rgba(255,255,255,.96);backdrop-filter:blur(18px)}.menu-section .menu-title-btn{border-color:#e0e8f1;box-shadow:var(--ui-shadow-soft)}.chat-modal-content,.confirm-modal-card,.management-dialog-card{border-radius:22px;box-shadow:0 22px 60px rgba(15,23,42,.18)}
 @media (min-width:760px){.container{padding-top:20px;padding-bottom:24px}.card{padding:18px}.home-top-grid{grid-template-columns:minmax(0,1fr)}.commessa-stat-strip{grid-template-columns:repeat(3,minmax(0,1fr))}.today-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
-/* Home mobile compatta: recupera spazio verticale senza ridurre le aree touch essenziali. */
+/* Mobile: Login -> Oggi come un unico pannello visivo, compatto come il mockup approvato. */
 @media (max-width:700px){
-  .container{padding:8px;gap:9px;}
-  #home-page{gap:9px;}
-  #home-page>.card{border-radius:16px;}
-  .logo-card{padding:9px!important;}
-  .home-header-modern .logo-head{min-height:50px!important;gap:4px!important;}
-  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:50px!important;min-height:50px!important;padding:3px 1px 4px!important;border-radius:10px!important;font-size:.56rem!important;gap:2px!important;}
-  .home-header-modern .header-action-button .header-action-icon,.home-header-modern #user-toggle-btn .header-action-icon{font-size:1.05rem!important;}
-  .home-header-modern .header-login-photo{width:23px!important;height:23px!important;}
-  .home-header-modern #user-connection-bar{margin-top:6px!important;}
-  .user-connection-bar{padding:9px 12px!important;min-height:0!important;}
-  .user-connection-greeting,.user-connection-indicator,.user-connection-offline{margin:1px 0!important;line-height:1.2!important;}
-  .user-connection-greeting{font-size:.92rem!important;}
-  .user-connection-indicator,.user-connection-offline{font-size:.79rem!important;}
-  .home-top-grid{gap:8px;}
-  .weather-card{padding:10px 12px!important;min-height:0!important;}
-  .weather-card .section-head{margin-bottom:2px!important;}
-  .weather-card .section-head h2{font-size:1rem!important;margin:0!important;}
-  .weather-summary{margin:2px 0 0!important;font-size:.9rem!important;line-height:1.25!important;}
-  .home-quick-access{min-height:0!important;}
-  .home-quick-access-btn{min-height:68px!important;padding:7px 3px!important;gap:3px!important;font-size:.75rem!important;}
-  .home-quick-access-btn>span:first-child{font-size:1.25rem!important;line-height:1!important;}
-  .today-summary-card{padding:8px!important;}
-  .today-summary-card>h2{font-size:.8rem!important;margin:0 0 4px!important;}
-  .today-summary-item{min-height:72px!important;padding:7px 3px!important;gap:2px!important;font-size:.73rem!important;line-height:1.08!important;}
-  .today-summary-icon{font-size:1.25rem!important;}
-  .today-summary-item strong,.today-summary-item b{font-size:.9rem!important;}
-  .today-summary-item small,.today-summary-item span{line-height:1.08!important;}
-  .squadre-card{padding:11px!important;}
-  .section-head{gap:7px;}
+  .container{padding:5px 6px 8px!important;gap:7px!important}
+  #home-page{gap:0!important}
+  #home-page>.logo-card,.home-top-grid,.home-quick-access,#today-summary-card{margin:0!important;background:#fff!important;box-shadow:none!important;border-color:#dbe4ef!important;border-radius:0!important}
+  #home-page>.logo-card{border-radius:18px 18px 0 0!important;border-bottom:0!important;padding:7px 8px 5px!important}
+  #home-page>.home-top-grid{border-left:1px solid #dbe4ef!important;border-right:1px solid #dbe4ef!important;padding:0 8px!important}
+  #home-page>.home-top-grid .weather-card{margin:0!important;border:0!important;border-top:1px solid #e4e9f0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important;padding:8px 5px!important}
+  #home-page>.home-quick-access{border-top:1px solid #e4e9f0!important;border-bottom:0!important;border-left:1px solid #dbe4ef!important;border-right:1px solid #dbe4ef!important;padding:3px 8px!important}
+  #home-page>#today-summary-card{border-top:1px solid #e4e9f0!important;border-radius:0 0 18px 18px!important;padding:5px 8px 8px!important;box-shadow:0 8px 20px rgba(15,23,42,.06)!important;margin-bottom:7px!important}
+  .home-header-modern .logo-head{min-height:43px!important;gap:3px!important}
+  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:43px!important;min-height:43px!important;padding:2px 1px 3px!important;border-radius:9px!important;font-size:.51rem!important;gap:1px!important;box-shadow:none!important}
+  .home-header-modern .header-action-button .header-action-icon,.home-header-modern #user-toggle-btn .header-action-icon{font-size:.98rem!important}.home-header-modern .header-login-photo{width:22px!important;height:22px!important}
+  .home-header-modern #user-connection-bar{margin-top:5px!important}.user-connection-bar{padding:7px 9px!important;min-height:0!important;border:0!important;border-top:1px solid #e4e9f0!important;border-radius:0!important;background:#fff!important}
+  .user-connection-greeting,.user-connection-indicator,.user-connection-offline{margin:1px 0!important;line-height:1.15!important}.user-connection-greeting{font-size:.86rem!important}.user-connection-indicator,.user-connection-offline{font-size:.73rem!important}.home-accordion-chevron{transform:scale(.82)}
+  .weather-card .section-head{margin:0!important}.weather-card .section-head h2{font-size:.9rem!important;margin:0!important}.weather-summary{margin:2px 0 0!important;font-size:.8rem!important;line-height:1.12!important}
+  .home-quick-access-btn{min-height:49px!important;padding:3px 2px!important;gap:1px!important;font-size:.65rem!important}.home-quick-access-btn>span:first-child{font-size:1.02rem!important;line-height:1!important}
+  .today-summary-card>h2{font-size:.7rem!important;margin:0 0 2px!important;line-height:1!important}.today-summary-item{min-height:50px!important;padding:3px 2px!important;gap:1px!important;font-size:.62rem!important;line-height:1.05!important}.today-summary-icon{font-size:1.02rem!important}.today-summary-item strong,.today-summary-item b{font-size:.78rem!important}.today-summary-item small,.today-summary-item span{line-height:1.05!important}
+  #today-squads-section{margin-top:0!important;padding:8px!important}.squadre-section-head{margin:0 0 4px!important;min-height:0!important;align-items:center!important}.squadre-section-head h2{margin:0!important;font-size:1.05rem!important;line-height:1.1!important}.squadre-status-pill{display:none!important}.squadre-commesse-toggle{min-height:38px!important;padding:6px 10px!important}.squadre-filter-controls{margin:3px 0 0!important;gap:4px!important}.squadre-filter-controls input,.squadre-filter-controls .btn{min-height:40px!important;height:40px!important}.squadre-lista{margin-top:4px!important}
 }
-
-@media (max-width:420px){
-  .container{padding:6px;gap:7px;}
-  #home-page{gap:7px;}
-  .logo-card{padding:7px!important;}
-  .home-header-modern .logo-head{min-height:46px!important;}
-  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:46px!important;min-height:46px!important;font-size:.52rem!important;}
-  .user-connection-bar{padding:8px 10px!important;}
-  .weather-card{padding:9px 10px!important;}
-  .home-quick-access-btn{min-height:62px!important;font-size:.7rem!important;}
-  .today-summary-item{min-height:66px!important;font-size:.68rem!important;}
-}
-
-/* Home ultra-compatta: riduce gli spazi vuoti tra i moduli visibili prima delle squadre. */
-@media (max-width:700px){
-  .container{padding:4px 6px 8px!important;gap:5px!important;}
-  #home-page{gap:5px!important;}
-  #home-page>.card,.home-top-grid,.home-quick-access,#today-summary-card{margin:0!important;}
-  .logo-card{padding:6px!important;}
-  .home-header-modern .logo-head{min-height:42px!important;gap:3px!important;}
-  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:42px!important;min-height:42px!important;padding:2px 1px 3px!important;font-size:.5rem!important;border-radius:9px!important;}
-  .home-header-modern .header-action-button .header-action-icon,.home-header-modern #user-toggle-btn .header-action-icon{font-size:.95rem!important;}
-  .home-header-modern .header-login-photo{width:21px!important;height:21px!important;}
-  .home-header-modern #user-connection-bar{margin-top:4px!important;}
-  .user-connection-bar{padding:6px 9px!important;border-radius:12px!important;}
-  .user-connection-greeting{font-size:.84rem!important;}
-  .user-connection-indicator,.user-connection-offline{font-size:.72rem!important;}
-  .home-accordion-chevron{transform:scale(.85);}
-  .weather-card{padding:7px 9px!important;border-radius:14px!important;}
-  .weather-card .section-head h2{font-size:.92rem!important;}
-  .weather-summary{font-size:.82rem!important;line-height:1.15!important;}
-  .home-quick-access{border-radius:14px!important;}
-  .home-quick-access-btn{min-height:52px!important;padding:4px 2px!important;font-size:.66rem!important;gap:1px!important;}
-  .home-quick-access-btn>span:first-child{font-size:1.05rem!important;}
-  .today-summary-card{padding:5px!important;border-radius:14px!important;}
-  .today-summary-card>h2{font-size:.72rem!important;margin:0 0 1px!important;line-height:1!important;}
-  .today-summary-item{min-height:54px!important;padding:4px 2px!important;font-size:.64rem!important;gap:1px!important;}
-  .today-summary-icon{font-size:1.05rem!important;}
-  .today-summary-item strong,.today-summary-item b{font-size:.8rem!important;}
-  .squadre-card{margin-top:0!important;padding:9px!important;}
-}
-
-@media (max-width:420px){
-  .container{padding-left:4px!important;padding-right:4px!important;}
-  .home-header-modern .logo-head{min-height:40px!important;}
-  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:40px!important;min-height:40px!important;}
-  .home-quick-access-btn{min-height:48px!important;}
-  .today-summary-item{min-height:50px!important;}
-}
+@media (max-width:420px){.container{padding-left:4px!important;padding-right:4px!important}.home-header-modern .logo-head{min-height:40px!important}.home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:40px!important;min-height:40px!important}.home-quick-access-btn{min-height:46px!important}.today-summary-item{min-height:47px!important}.squadre-section-head h2{font-size:.98rem!important}}

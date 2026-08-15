@@ -141,30 +141,7 @@
     return true;
   }
 
-  function parseSnapshotObserver(argsLike) {
-    const args = Array.from(argsLike || []);
-    let index = 0;
-    const first = args[0];
-    if (first && typeof first === "object" && Object.prototype.hasOwnProperty.call(first, "includeMetadataChanges")) {
-      index = 1;
-    }
-    const candidate = args[index];
-    if (typeof candidate === "function") {
-      return {
-        next: candidate,
-        context: null
-      };
-    }
-    if (candidate && typeof candidate === "object" && typeof candidate.next === "function") {
-      return {
-        next: candidate.next,
-        context: candidate
-      };
-    }
-    return null;
-  }
-
-    function currentGuardHasRootFiltering() {
+      function currentGuardHasRootFiltering() {
     const api = window.HeraActiveCommesse;
     return Boolean(api?.installed && typeof api.loadAllForManager === "function");
   }

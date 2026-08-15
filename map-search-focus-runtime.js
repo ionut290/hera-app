@@ -111,6 +111,7 @@
     style.textContent = `
       #${PAGE_ID}{overflow-x:hidden!important}
       #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map],#${PAGE_ID} #map-fullscreen-draw-btn,#${PAGE_ID} #map-draw-btn,#${PAGE_ID} #draw-map-btn,#${PAGE_ID} .map-fullscreen-hint,#${PAGE_ID} .map-hint{display:none!important}
+      #${PAGE_ID} #${FORM_ID} .hera-map-search-results{display:none!important}
       #${PAGE_ID} .map-fullscreen-toolbar{
         position:fixed!important;
         top:calc(env(safe-area-inset-top, 0px) + 8px)!important;

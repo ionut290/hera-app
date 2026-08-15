@@ -343,3 +343,111 @@
     getState: () => ({ ...state, errors: state.errors.slice() })
   };
 })();
+
+// Evita il ciclo stop -> subscribe immediato sulla stessa commessa, che causa
+// una seconda consegna completa degli stessi impianti. La chiusura viene
+// differita solo se esiste già un listener impianti attivo; se cambia commessa
+// o non arriva una riapertura immediata, la chiusura originale viene eseguita.
+// Non modifica FATTO, fattoVisualEvidence, note commessa o WhatsApp/WHAZZUP.
+(() => {
+  "use strict";
+
+  if (window.HeraImpiantiListenerLifecycleGuard?.installed) return;
+  if (
+    typeof window.stopImpiantiSubscription !== "function"
+    || typeof window.subscribeImpianti !== "function"
+  ) return;
+
+  const originalStopImpiantiSubscription = window.stopImpiantiSubscription;
+  const originalSubscribeImpianti = window.subscribeImpianti;
+  const DEFER_MS = 80;
+  let pendingStop = null;
+  let activeCommessaId = "";
+
+  const state = {
+    deferredStops: 0,
+    cancelledSameCommessaRestarts: 0,
+    flushedForCommessaChange: 0,
+    completedStops: 0,
+    subscribes: 0
+  };
+
+  function selectedId() {
+    try {
+      return String(window.selectedCommessaId || selectedCommessaId || "").trim();
+    } catch (_) {
+      return String(window.selectedCommessaId || "").trim();
+    }
+  }
+
+  function clearPendingTimer() {
+    if (pendingStop?.timer) clearTimeout(pendingStop.timer);
+  }
+
+  function runPendingStop() {
+    if (!pendingStop) return;
+    const stop = pendingStop;
+    pendingStop = null;
+    clearTimeout(stop.timer);
+    originalStopImpiantiSubscription.call(window);
+    if (activeCommessaId === stop.commessaId) activeCommessaId = "";
+    state.completedStops += 1;
+  }
+
+  window.stopImpiantiSubscription = function stopImpiantiSubscriptionWithLifecycleGuard() {
+    if (!activeCommessaId) {
+      return originalStopImpiantiSubscription.apply(this, arguments);
+    }
+
+    if (pendingStop) {
+      if (pendingStop.commessaId === activeCommessaId) return;
+      runPendingStop();
+    }
+
+    const commessaId = activeCommessaId;
+    const timer = setTimeout(() => {
+      if (pendingStop?.commessaId !== commessaId) return;
+      runPendingStop();
+    }, DEFER_MS);
+    pendingStop = { commessaId, timer, createdAt: Date.now() };
+    state.deferredStops += 1;
+    return undefined;
+  };
+
+  window.subscribeImpianti = function subscribeImpiantiWithLifecycleGuard() {
+    const commessaId = selectedId();
+    if (pendingStop) {
+      const sameCommessa = Boolean(
+        commessaId
+        && activeCommessaId
+        && pendingStop.commessaId === commessaId
+        && activeCommessaId === commessaId
+      );
+      if (sameCommessa) {
+        clearPendingTimer();
+        pendingStop = null;
+        state.cancelledSameCommessaRestarts += 1;
+        return undefined;
+      }
+      state.flushedForCommessaChange += 1;
+      runPendingStop();
+    }
+
+    const result = originalSubscribeImpianti.apply(this, arguments);
+    activeCommessaId = commessaId;
+    state.subscribes += 1;
+    return result;
+  };
+
+  window.HeraImpiantiListenerLifecycleGuard = {
+    installed: true,
+    version: "1.0.0",
+    deferMs: DEFER_MS,
+    getState: () => ({
+      ...state,
+      activeCommessaId,
+      pendingStopCommessaId: pendingStop?.commessaId || ""
+    }),
+    flush: runPendingStop
+  };
+})();

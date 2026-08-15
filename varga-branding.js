@@ -63,9 +63,19 @@
     window.__vargaBrandingObserver = observer;
   }
 
+  function normalizedScriptPath(value) {
+    try {
+      return new URL(value, document.baseURI).pathname;
+    } catch (_) {
+      return String(value || '').split('?')[0].split('#')[0];
+    }
+  }
+
   function loadScriptOnce(selector, src, datasetKey, onLoad, errorMessage) {
     try {
-      const existing = document.querySelector(selector);
+      const expectedPath = normalizedScriptPath(src);
+      const existing = document.querySelector(selector)
+        || Array.from(document.scripts).find((script) => normalizedScriptPath(script.src) === expectedPath);
       if (existing) { if (onLoad) onLoad(); return existing; }
       const script = document.createElement('script');
       script.src = src;

@@ -1,0 +1,156 @@
+from pathlib import Path
+
+registry = Path('registry-google-sheet-sync.js')
+text = registry.read_text()
+anchor = '  const configDocRef = () => db.collection("appConfig").doc("driveBridge");\n'
+insert = '''  const configDocRef = () => db.collection("appConfig").doc("driveBridge");
+
+  function getSharedDriveBridgeConfigState() {
+    const root = typeof window !== "undefined" ? window : globalThis;
+    const existing = root.HeraDriveBridgeConfigShared;
+    if (existing && existing.firstSnapshot && typeof existing.publish === "function") return existing;
+
+    let resolveFirstSnapshot = null;
+    const firstSnapshot = new Promise((resolve) => {
+      resolveFirstSnapshot = resolve;
+    });
+    const state = {
+      hasSnapshot: false,
+      data: null,
+      firstSnapshot,
+      publish(data) {
+        state.data = data && typeof data === "object" ? data : {};
+        if (state.hasSnapshot) return;
+        state.hasSnapshot = true;
+        resolveFirstSnapshot(state.data);
+      }
+    };
+    root.HeraDriveBridgeConfigShared = state;
+    return state;
+  }
+
+  const sharedDriveBridgeConfig = getSharedDriveBridgeConfigState();
+
+  async function waitForSharedDriveBridgeConfig(timeoutMs = 900) {
+    if (sharedDriveBridgeConfig.hasSnapshot) return sharedDriveBridgeConfig.data || {};
+    let timer = null;
+    try {
+      return await Promise.race([
+        sharedDriveBridgeConfig.firstSnapshot,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+'''
+if 'function getSharedDriveBridgeConfigState()' not in text:
+    if anchor not in text:
+        raise SystemExit('registry anchor not found')
+    text = text.replace(anchor, insert, 1)
+
+old = '''  async function readConfigDocument(force = false) {
+    if (!force && configDocumentCache) return configDocumentCache;
+    if (!force && configDocumentPromise) return configDocumentPromise;
+    configDocumentPromise = configDocRef().get()
+      .then((snap) => {
+        configDocumentCache = snap.exists ? snap.data() || {} : {};
+        return configDocumentCache;
+      })
+      .finally(() => {
+        configDocumentPromise = null;
+      });
+    return configDocumentPromise;
+  }
+'''
+new = '''  async function readConfigDocument(force = false) {
+    if (!force && sharedDriveBridgeConfig.hasSnapshot) {
+      configDocumentCache = sharedDriveBridgeConfig.data || {};
+      return configDocumentCache;
+    }
+    if (!force && configDocumentCache) return configDocumentCache;
+    if (!force && configDocumentPromise) return configDocumentPromise;
+
+    if (!force) {
+      configDocumentPromise = waitForSharedDriveBridgeConfig()
+        .then((sharedData) => {
+          if (sharedData !== null) {
+            configDocumentCache = sharedData || {};
+            return configDocumentCache;
+          }
+          return configDocRef().get().then((snap) => {
+            configDocumentCache = snap.exists ? snap.data() || {} : {};
+            return configDocumentCache;
+          });
+        })
+        .finally(() => {
+          configDocumentPromise = null;
+        });
+      return configDocumentPromise;
+    }
+
+    configDocumentPromise = configDocRef().get()
+      .then((snap) => {
+        configDocumentCache = snap.exists ? snap.data() || {} : {};
+        return configDocumentCache;
+      })
+      .finally(() => {
+        configDocumentPromise = null;
+      });
+    return configDocumentPromise;
+  }
+'''
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit('readConfigDocument block not found')
+registry.write_text(text)
+
+app = Path('app.js')
+text = app.read_text()
+old = '''  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot(async (doc) => {
+    const data = doc.exists ? doc.data() : null;
+    const owner = data?.ownerEmail || ADMIN_EMAIL;
+'''
+new = '''  unsubscribeDriveBridge = db.collection("appConfig").doc("driveBridge").onSnapshot(async (doc) => {
+    const data = doc.exists ? doc.data() : null;
+    if (window.HeraDriveBridgeConfigShared?.publish) {
+      window.HeraDriveBridgeConfigShared.publish(data || {});
+    }
+    const owner = data?.ownerEmail || ADMIN_EMAIL;
+'''
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit('subscribeDriveBridge block not found')
+app.write_text(text)
+
+test = Path('scripts/check-drivebridge-config-reuse.js')
+test.write_text(r'''#!/usr/bin/env node
+"use strict";
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const app = fs.readFileSync("app.js", "utf8");
+const registry = fs.readFileSync("registry-google-sheet-sync.js", "utf8");
+assert.match(app, /function subscribeDriveBridge\(\)[\s\S]*?HeraDriveBridgeConfigShared\?\.publish[\s\S]*?\.publish\(data \|\| \{\}\)/, "Il listener Drive deve pubblicare il proprio snapshot nel ponte condiviso");
+assert.match(registry, /function getSharedDriveBridgeConfigState\(\)/, "Deve esistere il ponte condiviso della configurazione Drive");
+assert.match(registry, /async function waitForSharedDriveBridgeConfig\(timeoutMs = 900\)/, "Il riuso deve avere un timeout breve e finito");
+assert.match(registry, /if \(!force && sharedDriveBridgeConfig\.hasSnapshot\)/, "La cache del listener deve avere precedenza sui get non forzati");
+assert.match(registry, /waitForSharedDriveBridgeConfig\(\)[\s\S]*?sharedData !== null[\s\S]*?configDocRef\(\)\.get\(\)/, "Se il listener non consegna dati deve restare il get Firestore di fallback");
+assert.match(registry, /if \(!force\)[\s\S]*?return configDocumentPromise;[\s\S]*?configDocumentPromise = configDocRef\(\)\.get\(\)/, "I caricamenti force devono continuare a leggere Firestore direttamente");
+assert.doesNotMatch(app, /HeraDriveBridgeConfigShared[\s\S]{0,300}\.onSnapshot\(/, "Il ponte non deve creare un nuovo listener Firestore");
+console.log("✅ appConfig/driveBridge riusa il listener esistente prima del get di fallback.");
+console.log("✅ Nessun nuovo listener viene creato e force=true conserva la lettura server.");
+''')
+
+package = Path('package.json')
+p = package.read_text()
+if '"check:drivebridge-config-reuse"' not in p:
+    needle = '    "check:google-sheet-sync": "node scripts/check-google-sheet-two-way-sync.js",\n'
+    replacement = needle + '    "check:drivebridge-config-reuse": "node scripts/check-drivebridge-config-reuse.js",\n'
+    if needle not in p:
+        raise SystemExit('package script anchor not found')
+    p = p.replace(needle, replacement, 1)
+package.write_text(p)

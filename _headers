@@ -10,9 +10,6 @@
 /auth-login-fix.js
   Cache-Control: no-cache, must-revalidate
 
-/auto-login-saved-credentials.js
-  Cache-Control: no-cache, must-revalidate
-
 /update-app-feature.js
   Cache-Control: no-cache, must-revalidate
 

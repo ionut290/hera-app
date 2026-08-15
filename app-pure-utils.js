@@ -43,3 +43,27 @@
   Object.assign(global, api);
   global.VargaPureUtils = Object.freeze({ ...(global.VargaPureUtils || {}), ...api });
 })(window);
+
+// Phase 28: pure utilities extracted from app.js
+(function exposePhase28PureUtils(global) {
+  const api = {};
+  function encodeHoursLockPart(value) {
+    return encodeURIComponent(String(value || "").trim());
+  }
+  api.encodeHoursLockPart = encodeHoursLockPart;
+  function getCentralDriveNotConfiguredMessage() {
+    return "Cloud amministratore non configurato";
+  }
+  api.getCentralDriveNotConfiguredMessage = getCentralDriveNotConfiguredMessage;
+  function normalizeAtexSearchValue(value) {
+    return String(value || "").trim().toLocaleUpperCase("it-IT");
+  }
+  api.normalizeAtexSearchValue = normalizeAtexSearchValue;
+  function setUsedActionButtonState(btn, used) {
+    btn.disabled = used;
+    btn.classList.toggle("is-used", used);
+  }
+  api.setUsedActionButtonState = setUsedActionButtonState;
+  Object.assign(global, api);
+  global.VargaPureUtils = Object.freeze({ ...(global.VargaPureUtils || {}), ...api });
+})(window);

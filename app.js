@@ -7943,17 +7943,6 @@ function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
   return Boolean(currentUser && String(commessaId || "").trim());
 }
 
-function getHoursEntrySquadraIndexes(entry) {
-  const indexes = new Set();
-  const entryIndex = String(entry?.squadraIndex || "").trim();
-  if (entryIndex) indexes.add(entryIndex);
-  (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
-    const rowIndex = String(row?.squadraIndex || "").trim();
-    if (rowIndex) indexes.add(rowIndex);
-  });
-  return indexes;
-}
-
 function getHoursParticipantId(row = {}, entry = {}, options = {}) {
   const allowSquadraFallback = options.allowSquadraFallback !== false;
   const savedParticipantId = String(row.participantId || "").trim();
@@ -11416,36 +11405,6 @@ function appendSquadreHeaderRiskActions(container, commessa, dateKey = getActive
   const alertButton = createSquadraWeatherAlertButton(commessa, dateKey);
   if (alertButton) container?.appendChild(alertButton);
   // Worklimate is shown inline on the compact codice commessa row.
-}
-
-function openWorklimateDetails(context) {
-  const { commessa, risk, alert, riskLevel } = context;
-  const comune = risk?.comune || alert?.comune || getCommessaAlertComuni(commessa)[0] || "Non disponibile";
-  const tipo = risk?.tipoRischio || alert?.tipoAllerta || "caldo, pioggia, temporali, vento, neve/nebbia";
-  const advice = risk?.operationalAdvice || WORKLIMATE_DEFAULT_ADVICE;
-  const updated = formatAlertTimestamp(risk?.updatedAt || risk?.forecastAt || alert?.updatedAt || alert?.validFrom);
-  const overlay = document.createElement("div");
-  overlay.className = "worklimate-modal-overlay";
-  overlay.innerHTML = `<div class="worklimate-modal" role="dialog" aria-modal="true" aria-label="Dettaglio Worklimate">
-    <button type="button" class="worklimate-modal-close" aria-label="Chiudi">×</button>
-    <h2>Worklimate</h2>
-    <dl>
-      <div><dt>Nome commessa</dt><dd>${escapeHTML(commessa.nome || "Commessa")}</dd></div>
-      <div><dt>Comune/zona collegata</dt><dd>${escapeHTML(comune)}</dd></div>
-      <div><dt>Livello allerta Worklimate</dt><dd>${escapeHTML(WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel)}</dd></div>
-      <div><dt>Colore allerta</dt><dd><span class="worklimate-color-dot risk-${riskLevel}"></span>${escapeHTML(WORKLIMATE_COLOR_LABEL[riskLevel] || riskLevel)}</dd></div>
-      <div><dt>Tipo rischio</dt><dd>${escapeHTML(tipo)}</dd></div>
-      <div><dt>Ultimo aggiornamento</dt><dd>${escapeHTML(updated)}</dd></div>
-    </dl>
-    <h3>Indicazioni operative</h3>
-    <ul>${advice.map((item) => `<li>${escapeHTML(item)}</li>`).join("")}</ul>
-    <p class="worklimate-compliance">Conforme alle indicazioni di sicurezza e al Testo Unico Sicurezza D.Lgs. 81/08</p>
-  </div>`;
-  const close = () => overlay.remove();
-  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
-  overlay.querySelector(".worklimate-modal-close")?.addEventListener("click", close);
-  document.body.appendChild(overlay);
-  overlay.querySelector(".worklimate-modal-close")?.focus();
 }
 
 function createSquadraWeatherAlertButton(commessa, dateKey = getActiveSquadreDateKey()) {

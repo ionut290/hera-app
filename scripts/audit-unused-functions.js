@@ -25,6 +25,7 @@ function walk(dir, out = []) {
 }
 
 const files = walk(ROOT);
+const fileByPath = new Map(files.map((file) => [file.rel, file]));
 const corpus = files.map((file) => file.text).join("\n");
 const declarations = [];
 const declarationPattern = /(?:^|[\n;{}]\s*)function\s+([A-Za-z_$][\w$]*)\s*\(/g;
@@ -53,4 +54,12 @@ if (!candidates.length) {
   process.exit(0);
 }
 console.log(`Candidati a funzione mai usata: ${candidates.length}`);
-for (const item of candidates) console.log(`UNUSED_CANDIDATE ${item.file}:${item.line} ${item.name}`);
+for (const item of candidates) {
+  console.log(`UNUSED_CANDIDATE ${item.file}:${item.line} ${item.name}`);
+  const lines = fileByPath.get(item.file)?.text.split("\n") || [];
+  const start = Math.max(0, item.line - 3);
+  const end = Math.min(lines.length, item.line + 8);
+  for (let index = start; index < end; index += 1) {
+    console.log(`  ${String(index + 1).padStart(5, " ")} | ${lines[index]}`);
+  }
+}

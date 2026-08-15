@@ -183,6 +183,12 @@
     const database = firebase.firestore();
     const currentRef = database.collection("platformUsers").doc(user.uid);
     const currentDoc = await currentRef.get();
+    window.HeraPlatformProfileBootstrap = {
+      uid: user.uid,
+      exists: currentDoc.exists === true,
+      data: currentDoc.exists ? (currentDoc.data() || {}) : null,
+      loadedAt: Date.now()
+    };
     if (currentDoc.exists) return;
 
     const email = normalizeEmail(user.email);

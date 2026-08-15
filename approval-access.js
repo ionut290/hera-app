@@ -81,6 +81,17 @@
 
   async function ensureProfile(firebaseUser) {
     const ref = db.collection("platformUsers").doc(firebaseUser.uid);
+    const bootstrap = window.HeraPlatformProfileBootstrap;
+    const bootstrapAgeMs = Date.now() - Number(bootstrap?.loadedAt || 0);
+    if (
+      bootstrap?.uid === firebaseUser.uid
+      && bootstrap.exists === true
+      && bootstrapAgeMs >= 0
+      && bootstrapAgeMs <= 2000
+    ) {
+      window.HeraPlatformProfileBootstrap = null;
+      return bootstrap.data && typeof bootstrap.data === "object" ? bootstrap.data : {};
+    }
     return db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (snapshot.exists) {

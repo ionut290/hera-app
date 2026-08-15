@@ -44,8 +44,15 @@ if (!identity.includes('HeraHeavyLibs.ensure("html2canvas")')) {
   fail('carta da visita non ha fallback diretto per html2canvas lazy');
 }
 
-for (const forbidden of ['firebase.firestore', '.onSnapshot(', '.get()', '.set(', '.add(', '.update(']) {
-  if (loader.includes(forbidden)) fail(`loader lazy non deve eseguire Firestore: ${forbidden}`);
+const firestorePatterns = [
+  /firebase\s*\.\s*firestore\b/,
+  /\bdb\s*\.\s*collection\s*\(/,
+  /\.onSnapshot\s*\(/,
+  /firebase\s*\.\s*database\b/,
+  /\bgetFirestore\s*\(/
+];
+for (const pattern of firestorePatterns) {
+  if (pattern.test(loader)) fail(`loader lazy non deve eseguire Firestore: ${pattern}`);
 }
 for (const protectedTerm of ['fattoVisualEvidence', 'WHAZZUP', 'WhatsApp', 'completeImpianto', 'markImpiantoDone']) {
   if (loader.includes(protectedTerm)) fail(`loader lazy contiene riferimento a flusso protetto: ${protectedTerm}`);

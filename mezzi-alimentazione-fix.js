@@ -202,9 +202,7 @@
     document.head.appendChild(script);
   }
 
+  // Questi due moduli dipendono dal contesto Mezzi e restano caricati qui.
   loadOptionalScript('script[data-squadre-mezzi-pictograms]', "./squadre-mezzi-pictograms.js?v=20260727a", "squadreMezziPictograms");
-  loadOptionalScript('script[data-today-live-hours-vehicles]', "./today-live-hours-vehicles.js?v=20260730b", "todayLiveHoursVehicles");
-  loadOptionalScript('script[data-squad-operator-profile]', "./squad-operator-profile.js?v=20260731a", "squadOperatorProfile");
   loadOptionalScript('script[data-calendar-personal-hours-loader]', "./calendar-personal-hours-loader.js?v=20260802b", "calendarPersonalHoursLoader");
-  loadOptionalScript('script[data-rubrica-personale-restore]', "./rubrica-personale-restore.js?v=20260802-clear2", "rubricaPersonaleRestore");
 })();

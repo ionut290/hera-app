@@ -15,6 +15,8 @@ const checks = [
   [!guard.includes('property === "set"'), "la guardia non deve bloccare set/scritture"],
   [!guard.includes('property === "update"'), "la guardia non deve bloccare update/scritture"],
   [!guard.includes('property === "delete"'), "la guardia non deve bloccare delete/scritture"],
+  [!guard.includes("setInterval("), "la guardia non deve introdurre polling"],
+  [guard.includes('addEventListener("load", installOnLoad, { once: true })'), "il fallback di installazione deve essere one-shot"],
   [config.includes("HERA_APP_NOTIFICATIONS_READ_GUARD_SRC"), "firebase-config deve caricare la guardia"],
   [config.includes('data-app-notifications-read-guard="1"'), "la guardia deve essere caricata prima di app.js"],
   [sw.includes("app-notifications-read-guard.js?v=20260815a"), "la shell PWA deve includere la guardia"]

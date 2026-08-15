@@ -146,9 +146,8 @@
     return Boolean(api?.installed && typeof api.loadAllForManager === "function");
   }
 
-  function loadFallbackState(query) {
+  function loadSharedIndexState(firestore) {
     if (fallbackStatePromise) return fallbackStatePromise;
-    const firestore = query?.firestore;
     if (!firestore?.collection) {
       return Promise.resolve({ explicit: false, ids: [] });
     }
@@ -173,6 +172,10 @@
         return { explicit: false, ids: [] };
       });
     return fallbackStatePromise;
+  }
+
+  function loadFallbackState(query) {
+    return loadSharedIndexState(query?.firestore);
   }
 
   function shouldBlockLegacyUserAlerts(path) {
@@ -262,6 +265,7 @@
     installed: false,
     version: VERSION,
     install,
+    getActiveIndexState: () => loadSharedIndexState(window.firebase?.firestore?.()),
     getState: () => ({ ...state })
   };
 

@@ -142,6 +142,19 @@
     normalizeActionButton(qs('#snow-service-menu-btn'), 'Menu', '☰');
   }
 
+  function removeDeprecatedCommessaActions() {
+    [
+      '#map-fullscreen-btn',
+      '#commessa-notes-toggle-btn',
+      '#commessa-documents-btn',
+      '#commessa-weather-refresh-btn',
+      '#commessa-call-btn'
+    ].forEach((selector) => qs(selector)?.remove());
+
+    const weatherStatus = qs('#commessa-weather-refresh-status');
+    if (weatherStatus && !weatherStatus.textContent.trim()) weatherStatus.remove();
+  }
+
   function loadFirestorePresenceCostGuard() {
     loadScriptOnce({
       selector: 'script[data-firestore-presence-cost-guard]',
@@ -252,6 +265,7 @@
     loadBrandingFeature();
     setupHomeHeader();
     setupSnowHeader();
+    removeDeprecatedCommessaActions();
     setLoginPhoto();
     loadOperatorProfileFeature();
     loadGlobalArchiveFeature();

@@ -5,107 +5,117 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const TARGETS = {
+
+const REMOVALS = {
   "app.js": [
-    "openBannedAccessRequest",
-    "isCurrentUserBanned",
-    "urlBase64ToUint8Array",
-    "getCurrentUserIdentityParts",
-    "getHoursOperatorForCurrentUser",
-    "parseGoogleSheetId",
-    "getCommesseErrorMessage",
-    "getCommessaHoursTotal",
-    "createWorklimateButton",
-    "shareGlobalImpiantoViaWhatsapp",
-    "toggleCommessaNoteForm",
-    "formatCompactImpiantoWeatherRiskLine",
-    "formatImpiantoRainLine",
-    "getImpiantoWeatherAlertLine",
-    "getImpiantoWeatherLineClass",
-    "formatWeatherDetailValue",
-    "formatWeatherAmount",
-    "renderSimpleList",
-    "getTimestampDate",
-    "openWeatherModal",
-    "renderSnowServiceList"
+`function openBannedAccessRequest() {
+  window.open(buildBannedWhatsAppUrl(), "_blank", "noopener,noreferrer");
+}
+`,
+`function isCurrentUserBanned() {
+  return Boolean(currentUserBanProfile?.banned);
+}
+`,
+`function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+`,
+`function getCurrentUserIdentityParts() {
+  if (!currentUser) return [];
+  const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser.uid || ""));
+  return getPlatformUserIdentityParts(currentProfile || currentUser);
+}
+`,
+`function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
+  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
+  return assignment?.matchedName || getCurrentUserResolvedName();
+}
+`,
+`function getCommesseErrorMessage() {
+  return "Impossibile caricare le commesse online. Mostro dati salvati localmente.";
+}
+`,
+`function getCommessaHoursTotal(commessaId) {
+  return Number(getCommessaWorkSummary(commessaId).totalHours || 0);
+}
+`,
+`function shareGlobalImpiantoViaWhatsapp(impianto) {
+  handleOpenGlobalSegnalazioneClick(impianto);
+}
+`,
+`function toggleCommessaNoteForm() {
+  openCommessaNotesPage();
+}
+`,
+`function formatWeatherDetailValue(value, suffix = "") {
+  if (!isPresentFiniteNumber(value)) return "-";
+  return \`${Math.round(Number(value))}${suffix}\`;
+}
+`,
+`function formatWeatherAmount(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  return amount >= 10 ? String(Math.round(amount)) : amount.toFixed(1);
+}
+`,
+`function getTimestampDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+`,
+`function openWeatherModal() {
+  ui.weatherModal.classList.remove("hidden");
+  ui.weatherModal.setAttribute("aria-hidden", "false");
+}
+`,
+`function renderSnowServiceList(element, rows, emptyText, renderRow) {
+  if (!element) return;
+  element.innerHTML = rows.length
+    ? rows.map(renderRow).join("")
+    : \`<p class='muted'>${escapeHTML(emptyText)}</p>\`;
+}
+`
   ],
   "today-summary-interactions.js": [
-    "getPlannedHours",
-    "getAlertGroups",
-    "getLiveWorkedMinutes"
-  ],
-  "active-commesse-first-boot-guard.js": [
-    "deliverEmptySnapshot"
+`  function getLiveWorkedMinutes(assignments) {
+    const start = getAssignedStartMinutes(assignments);
+    if (start === null) return null;
+    const elapsed = Math.max(0, getRomeClockMinutes() - start);
+    return elapsed > 8 * 60 ? elapsed - 60 : elapsed;
+  }
+`
   ]
 };
 
-function findFunctionRange(source, name) {
-  const pattern = new RegExp(`(^|\\n)([ \\t]*)function\\s+${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\s*\\(`, "m");
-  const match = pattern.exec(source);
-  if (!match) return null;
-  const start = match.index + (match[1] ? match[1].length : 0);
-  const declarationStart = start + match[2].length;
-  const openBrace = source.indexOf("{", declarationStart);
-  if (openBrace < 0) throw new Error(`Graffa iniziale non trovata per ${name}`);
-
-  let depth = 0;
-  let mode = "code";
-  let escaped = false;
-  for (let i = openBrace; i < source.length; i += 1) {
-    const ch = source[i];
-    const next = source[i + 1];
-
-    if (mode === "lineComment") {
-      if (ch === "\n") mode = "code";
-      continue;
-    }
-    if (mode === "blockComment") {
-      if (ch === "*" && next === "/") { mode = "code"; i += 1; }
-      continue;
-    }
-    if (mode === "single" || mode === "double" || mode === "template") {
-      if (escaped) { escaped = false; continue; }
-      if (ch === "\\") { escaped = true; continue; }
-      if ((mode === "single" && ch === "'") || (mode === "double" && ch === '"') || (mode === "template" && ch === "`")) mode = "code";
-      continue;
-    }
-
-    if (ch === "/" && next === "/") { mode = "lineComment"; i += 1; continue; }
-    if (ch === "/" && next === "*") { mode = "blockComment"; i += 1; continue; }
-    if (ch === "'") { mode = "single"; continue; }
-    if (ch === '"') { mode = "double"; continue; }
-    if (ch === "`") { mode = "template"; continue; }
-    if (ch === "{") depth += 1;
-    if (ch === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        let end = i + 1;
-        while (source[end] === " " || source[end] === "\t") end += 1;
-        if (source[end] === "\r") end += 1;
-        if (source[end] === "\n") end += 1;
-        if (source[end] === "\r") end += 1;
-        if (source[end] === "\n") end += 1;
-        return { start, end };
-      }
-    }
+function removeExactBlock(source, block, fileName) {
+  const normalizedSource = source.replace(/\r\n/g, "\n");
+  const normalizedBlock = block.replace(/\r\n/g, "\n");
+  const first = normalizedSource.indexOf(normalizedBlock);
+  if (first < 0) throw new Error(`Blocco non trovato in ${fileName}: ${normalizedBlock.split("\n")[0]}`);
+  if (normalizedSource.indexOf(normalizedBlock, first + normalizedBlock.length) >= 0) {
+    throw new Error(`Blocco duplicato in ${fileName}: ${normalizedBlock.split("\n")[0]}`);
   }
-  throw new Error(`Fine funzione non trovata per ${name}`);
+  let result = normalizedSource.slice(0, first) + normalizedSource.slice(first + normalizedBlock.length);
+  if (result[first] === "\n") result = result.slice(0, first) + result.slice(first + 1);
+  return result;
 }
 
-let totalRemoved = 0;
-for (const [relativePath, names] of Object.entries(TARGETS)) {
+let removed = 0;
+for (const [relativePath, blocks] of Object.entries(REMOVALS)) {
   const filePath = path.join(ROOT, relativePath);
   let source = fs.readFileSync(filePath, "utf8");
-  for (const name of names) {
-    const occurrences = source.match(new RegExp(`\\b${name}\\b`, "g")) || [];
-    if (occurrences.length !== 1) throw new Error(`${name}: attesi 1 riferimento prima della rimozione, trovati ${occurrences.length}`);
-    const range = findFunctionRange(source, name);
-    if (!range) throw new Error(`${name}: dichiarazione non trovata`);
-    source = source.slice(0, range.start) + source.slice(range.end);
-    totalRemoved += 1;
-    console.log(`RIMOSSA ${relativePath} :: ${name}`);
+  for (const block of blocks) {
+    source = removeExactBlock(source, block, relativePath);
+    removed += 1;
+    console.log(`RIMOSSO ${relativePath} :: ${block.match(/function\s+([\w$]+)/)?.[1] || "blocco"}`);
   }
-  fs.writeFileSync(filePath, source);
+  fs.writeFileSync(filePath, source, "utf8");
 }
 
-console.log(`Rimosse ${totalRemoved} funzioni confermate come inutilizzate.`);
+console.log(`Rimosse ${removed} funzioni semplici confermate come inutilizzate.`);

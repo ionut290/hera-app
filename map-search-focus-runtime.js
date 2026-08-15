@@ -244,6 +244,58 @@
     } catch (_) {}
   }
 
+  function openPlantCard(match) {
+    const map = getFullscreenMap();
+    const coords = plantCoordinates(match?.item);
+    if (!map || !coords) return;
+
+    const targetLat = Number(coords[0]);
+    const targetLng = Number(coords[1]);
+    let bestPopupLayer = null;
+    let bestPopupDistance = Infinity;
+    let bestClickableLayer = null;
+    let bestClickableDistance = Infinity;
+
+    try {
+      map.eachLayer((layer) => {
+        if (!layer || typeof layer.getLatLng !== 'function') return;
+        let latLng;
+        try { latLng = layer.getLatLng(); } catch (_) { return; }
+        const lat = Number(latLng?.lat);
+        const lng = Number(latLng?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+        const distance = ((lat - targetLat) ** 2) + ((lng - targetLng) ** 2);
+        const interactive = layer.options?.interactive !== false;
+        if (!interactive) return;
+
+        const popup = typeof layer.getPopup === 'function' ? layer.getPopup() : null;
+        if (popup && typeof layer.openPopup === 'function' && distance < bestPopupDistance) {
+          bestPopupLayer = layer;
+          bestPopupDistance = distance;
+        }
+
+        if (typeof layer.fire === 'function' && distance < bestClickableDistance) {
+          bestClickableLayer = layer;
+          bestClickableDistance = distance;
+        }
+      });
+    } catch (_) {}
+
+    const zoom = Math.max(Number(map.getZoom?.() || 0), 17);
+    try { map.setView(coords, zoom, { animate:true }); } catch (_) {}
+
+    window.setTimeout(() => {
+      try {
+        if (bestPopupLayer) {
+          bestPopupLayer.openPopup();
+          return;
+        }
+        bestClickableLayer?.fire?.('click', { latlng: bestClickableLayer.getLatLng?.() });
+      } catch (_) {}
+    }, 260);
+  }
+
   function renderSuggestions(matches, input) {
     const box = ensureBox(input);
     box.textContent = '';
@@ -269,7 +321,7 @@
         input.value = plantName(match.item,match.index);
         hideBox();
         clearSearchOverlay();
-        centerMatches([match]);
+        openPlantCard(match);
       });
       box.appendChild(button);
     });

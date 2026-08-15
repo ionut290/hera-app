@@ -178,14 +178,4 @@
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) window.setTimeout(refreshCalendar, 0);
   });
-
-  // Il file di ripristino esisteva nel repository ma non veniva mai caricato.
-  // Lo avvia una sola volta con una versione nuova per evitare la cache PWA precedente.
-  if (!document.querySelector('script[data-ripristino-id-personale]')) {
-    const restoreScript = document.createElement('script');
-    restoreScript.src = './rubrica-personale-restore.js?v=20260802c';
-    restoreScript.defer = true;
-    restoreScript.dataset.ripristinoIdPersonale = '1';
-    document.head.appendChild(restoreScript);
-  }
 })();

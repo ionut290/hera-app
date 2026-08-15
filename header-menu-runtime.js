@@ -119,6 +119,59 @@
     }
   }
 
+  function communicationMenuSection() {
+    return qs('#menu-comunicazione-title')?.closest('.menu-section') || null;
+  }
+
+  function closeMenuBeforeAction(button) {
+    if (!button || button.dataset.secondaryMenuCloseBound === '1') return;
+    button.dataset.secondaryMenuCloseBound = '1';
+    button.addEventListener('click', () => qs('#menu-close-btn')?.click(), { capture: true });
+  }
+
+  function styleSecondaryMenuButton(button, labelText, iconText) {
+    if (!button) return;
+    button.classList.remove('header-action-button', 'header-notification-button', 'snow-service-btn');
+    button.classList.add('btn', 'menu-title-btn', 'home-secondary-menu-action');
+    button.innerHTML = '';
+    const icon = document.createElement('span');
+    icon.className = 'menu-item-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = iconText;
+    const label = document.createElement('span');
+    label.className = 'home-secondary-menu-label';
+    label.textContent = labelText;
+    button.append(icon, label);
+    closeMenuBeforeAction(button);
+  }
+
+  function moveSecondaryActionsToMenu() {
+    const section = communicationMenuSection();
+    if (!section) return;
+
+    const snowButton = qs('#snow-service-btn');
+    if (snowButton && snowButton.parentElement !== section) {
+      styleSecondaryMenuButton(snowButton, 'Servizio neve', '❄️');
+      section.insertBefore(snowButton, section.children[1] || null);
+    }
+
+    const notificationButton = qs('#notification-inbox-btn, #notification-bell-btn, #notification-center-btn, .notification-bell-btn, [data-notification-bell]');
+    if (notificationButton && notificationButton.parentElement !== section) {
+      const badge = notificationButton.querySelector('.notification-bell-badge');
+      styleSecondaryMenuButton(notificationButton, 'Notifiche', '🔔');
+      if (badge) notificationButton.querySelector('.menu-item-icon')?.appendChild(badge);
+      section.insertBefore(notificationButton, section.children[1] || null);
+    }
+  }
+
+  function watchDynamicNotificationButton() {
+    const headerActions = qs('#home-page .logo-head-action-icons');
+    if (!headerActions || headerActions.dataset.secondaryActionsObserver === '1') return;
+    headerActions.dataset.secondaryActionsObserver = '1';
+    const observer = new MutationObserver(() => moveSecondaryActionsToMenu());
+    observer.observe(headerActions, { childList: true });
+  }
+
   function setupHomeHeader() {
     const card = qs('#home-page .logo-card');
     if (!card) return;
@@ -128,13 +181,8 @@
     normalizeActionButton(qs('#refresh-app-btn'), 'Refresh', '↻');
     normalizeActionButton(qs('#update-app-btn'), 'Aggiorna', '↻');
     normalizeActionButton(qs('#menu-toggle-btn'), 'Menu', '☰');
-    normalizeActionButton(qs('#snow-service-btn'), 'Neve', '❄️');
-    const notificationButton = qs('#notification-inbox-btn, #notification-bell-btn, #notification-center-btn, .notification-bell-btn, [data-notification-bell]');
-    if (notificationButton) {
-      notificationButton.classList.add('header-action-button', 'header-notification-button');
-      notificationButton.querySelector('[aria-hidden="true"]')?.classList.add('header-action-icon');
-      if (!notificationButton.querySelector('.header-action-label')) notificationButton.append(createLabel('Notifiche'));
-    }
+    moveSecondaryActionsToMenu();
+    watchDynamicNotificationButton();
   }
 
   function setupSnowHeader() {

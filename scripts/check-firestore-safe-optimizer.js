@@ -21,8 +21,8 @@ function snapshotObserverFromArgs(args) {
 }
 
 class FakeQuery {
-  constructor(collection, canonical) {
-    this.path = collection;
+  constructor(collection, canonical, { exposePath = true } = {}) {
+    if (exposePath) this.path = collection;
     this._query = {
       path: { canonicalString: () => collection },
       canonicalId: () => canonical
@@ -113,16 +113,43 @@ async function run() {
   const unsubscribeAlertB = userAlertB.onSnapshot(() => {});
   assert.equal(physicalStarts, 3, "I due listener identici userAlerts devono condividere una sola apertura fisica");
 
+  const nestedA = new FakeQuery("commesse/alpha/impianti", "");
+  const nestedB = new FakeQuery("commesse/alpha/impianti", "");
+  const nestedReceivedA = [];
+  const nestedReceivedB = [];
+  const unsubscribeNestedA = nestedA.onSnapshot((snapshot) => nestedReceivedA.push(snapshot));
+  const unsubscribeNestedB = nestedB.onSnapshot((snapshot) => nestedReceivedB.push(snapshot));
+  assert.equal(physicalStarts, 4, "Due CollectionReference annidate identiche devono usare un solo listener fisico");
+  const nestedSnapshot = { marker: "impianti-alpha" };
+  emit(3, nestedSnapshot);
+  assert.deepEqual(nestedReceivedA, [nestedSnapshot]);
+  assert.deepEqual(nestedReceivedB, [nestedSnapshot]);
+
+  const nestedOther = new FakeQuery("commesse/beta/impianti", "");
+  const unsubscribeNestedOther = nestedOther.onSnapshot(() => {});
+  assert.equal(physicalStarts, 5, "Sottocollezioni di commesse diverse devono restare indipendenti");
+
+  const unresolvedA = new FakeQuery("commesse/alpha/impianti", "", { exposePath: false });
+  const unresolvedB = new FakeQuery("commesse/alpha/impianti", "", { exposePath: false });
+  const unsubscribeUnresolvedA = unresolvedA.onSnapshot(() => {});
+  const unsubscribeUnresolvedB = unresolvedB.onSnapshot(() => {});
+  assert.equal(physicalStarts, 7, "Query senza path pubblico né canonical id non devono essere unite");
+
   const chatA = new FakeQuery("chatMessages", "chatMessages|limit:500");
   const chatB = new FakeQuery("chatMessages", "chatMessages|limit:500");
   const unsubscribeChatA = chatA.onSnapshot(() => {});
   const unsubscribeChatB = chatB.onSnapshot(() => {});
-  assert.equal(physicalStarts, 5, "Le raccolte non autorizzate devono mantenere il comportamento Firestore originale");
+  assert.equal(physicalStarts, 9, "Le raccolte non autorizzate devono mantenere il comportamento Firestore originale");
 
   unsubscribeC();
   unsubscribeFiltered();
   unsubscribeAlertA();
   unsubscribeAlertB();
+  unsubscribeNestedA();
+  unsubscribeNestedB();
+  unsubscribeNestedOther();
+  unsubscribeUnresolvedA();
+  unsubscribeUnresolvedB();
   unsubscribeChatA();
   unsubscribeChatB();
   optimizer.clear();
@@ -131,14 +158,15 @@ async function run() {
   assert.equal(state.activeGroups, 0);
   assert.equal(
     state.stats.preventedListenerStarts,
-    3,
-    "Devono essere evitati il secondo commesse, la riapertura commesse e il secondo userAlerts"
+    4,
+    "Devono essere evitati il secondo commesse, la riapertura commesse, il secondo userAlerts e il secondo listener impianti annidato"
   );
   assert.equal(state.stats.gracePeriodReuses, 1);
-  assert.equal(state.stats.physicalListenersStarted, 3);
-  assert.equal(physicalCloses, 5, "Tutti i listener fisici devono poter essere chiusi normalmente");
+  assert.equal(state.stats.physicalListenersStarted, 5);
+  assert.equal(physicalCloses, 9, "Tutti i listener fisici devono poter essere chiusi normalmente");
 
   console.log("✅ Commesse, squadreStorico e userAlerts condividono solo query identiche.");
+  console.log("✅ Le CollectionReference annidate identiche condividono un solo listener fisico.");
   console.log("✅ Filtri diversi e raccolte non autorizzate restano completamente indipendenti.");
   console.log("✅ La riapertura immediata riusa lo snapshot senza una seconda lettura iniziale.");
 }

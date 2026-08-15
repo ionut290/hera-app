@@ -8,189 +8,53 @@ Obiettivo: ridurre letture Firestore senza compromettere caricamento commesse/sq
 
 Audit statico dell'intero repository orientato alle chiamate Firestore (`onSnapshot`, `.get()`, accessi `firebase.firestore`, query e moduli che intercettano le letture) e verifica dei meccanismi di ottimizzazione già presenti.
 
-Questo documento distingue:
-- letture realtime permanenti;
-- letture one-shot;
-- fallback che possono riaprire query native;
-- letture amministrative/on-demand;
-- moduli già protetti da cache, viste aggregate o guardie;
-- punti da misurare con la diagnostica runtime prima di qualsiasi rimozione.
-
-## Stato generale
-
-L'app contiene già un sistema avanzato di riduzione letture. Non conviene applicare una nuova ottimizzazione globale indiscriminata: il rischio sarebbe duplicare wrapper Firestore già presenti e rompere la sincronizzazione. La strategia corretta è intervenire solo sui punti che la diagnostica runtime dimostra essere ancora costosi.
+L'audit automatico ha censito 504 siti di lettura in 53 file, con 50 listener e 70 candidati ad alto rischio. La classificazione è volutamente conservativa: un sito segnalato non è automaticamente un problema, perché alcune letture sono dentro funzioni realmente on-demand.
 
 ## Protezioni già presenti
 
-### `firestore-operation-diagnostics.js`
-- conta documenti letti e operazioni;
-- distingue letture one-shot e consegne dei listener;
-- registra collection, area, funzione chiamante, schermata, query e durata;
-- registra listener aperti/chiusi e picco dei listener simultanei.
+- `firestore-operation-diagnostics.js`: conta documenti, operazioni, listener, query, funzioni chiamanti e schermate.
+- `firestore-safe-optimizer.js`: condivide listener fisici identici di `commesse`, `squadreStorico` e `userAlerts`.
+- `firestore-startup-cost-optimizer.js`: blocca listener non necessari all'avvio e usa viste condivise per le squadre quando possibile.
+- `activity-logs-read-disable.js`: evita letture dell'archivio attività operativo e limita le commesse caricate all'avvio.
+- `shared-static-views*`: sostituisce dataset ripetitivi con viste aggregate.
+- `firestore-registry-read-optimizer.js` + cache dispositivo: riduce letture anagrafiche.
 
-### `firestore-safe-optimizer.js`
-- condivide listener fisici identici;
-- evita aperture duplicate per query realmente equivalenti;
-- protegge `commesse`, `squadreStorico`, `userAlerts`;
-- usa una grace period prima di chiudere il listener fisico.
+## Prima riduzione reale applicata — `appNotifications`
 
-### `firestore-startup-cost-optimizer.js`
-- impedisce l'avvio automatico di `chatMessages` quando non necessario;
-- impedisce l'avvio automatico di `commessaResources` quando non necessario;
-- blocca listener legacy `userAlerts` fuori dal centro notifiche;
-- sostituisce, quando possibile, `squadreStorico` con viste statiche condivise;
-- mantiene un fallback Firestore nativo se la vista condivisa non è disponibile.
+L'audit ha confermato che il vecchio `subscribeGlobalNotifications` in `app.js` può aprire all'avvio un listener su `appNotifications` con `limit(40)`. Il Centro notifiche corrente usa già i flussi moderni `notifications` e `userAlerts`, perciò quella lettura legacy non è necessaria per la UI corrente.
 
-### `activity-logs-read-disable.js`
-- disattiva la lettura dell'archivio `activityLogs` nella schermata operativa;
-- usa `appConfig/activeCommesse` per limitare le commesse caricate all'avvio;
-- evita listener impianti per commesse disattivate;
-- carica tutte le commesse solo quando viene aperta esplicitamente la gestione amministrativa.
+È stato aggiunto `app-notifications-read-guard.js` con queste regole:
+- blocca soltanto `get()` e `onSnapshot()` sulla raccolta `appNotifications`;
+- restituisce snapshot vuoti compatibili al codice legacy;
+- non blocca `add`, `set`, `update`, `delete` o altre scritture;
+- viene caricato da `firebase-config.js` prima di `app.js` e prima della diagnostica;
+- viene incluso nella cache PWA e nel bundle Android, che copia automaticamente i file JS root;
+- un controllo statico impedisce di reintrodurre letture o di bloccare accidentalmente le scritture.
 
-### `shared-static-views.js` / `shared-static-views-client-core.js`
-- spostano dati operativi ripetitivi verso documenti aggregati condivisi;
-- possono sostituire molte letture con una singola lettura/listener.
+**Risultato atteso:** da fino a 40 documenti iniziali del listener legacy a **0 letture Firestore di rete su `appNotifications`** per sessione normale.
 
-### `firestore-registry-read-optimizer.js` / `registry-device-cache.js`
-- riducono letture delle anagrafiche/registri con cache per dispositivo.
+## Candidati successivi
 
-## Aree da controllare ancora
+Priorità runtime:
+- `app.js`: listener di avvio e listener che devono esistere solo quando una schermata è aperta;
+- `squadreStorico`: verificare che `staticSquadreFallbacks` resti 0;
+- login/accesso: eliminare eventuali `get()` duplicati in pochi secondi;
+- `documents.js`, Preventivi e Contabilità: confermare che non leggano prima dell'apertura della funzione;
+- backend: verificare scansioni complete e rebuild ripetuti separatamente dal client.
 
-La ricerca statica mostra accessi Firestore o chiamate `.get()` anche nei seguenti moduli. La presenza di una chiamata non significa automaticamente che sia un problema: va distinta una lettura occasionale da una lettura ripetuta ad ogni apertura/render.
+## Soglie per una sessione standard
 
-### Priorità A — avvio e uso quotidiano
-- `app.js`
-- `active-commesse-first-boot-guard.js`
-- `squadra-current-save-sync.js`
-- `shared-static-views.js`
-- `shared-static-views-client-core.js`
-- `firestore-startup-cost-optimizer.js`
-- `firestore-safe-optimizer.js`
-- `firestore-registry-read-optimizer.js`
-- `approval-access.js`
-- `auth-login-fix.js`
-- `login-retry-fix.js`
-
-Da verificare:
-- nessuna doppia sottoscrizione alla stessa query;
-- listener chiusi quando si cambia pagina/commessa;
-- nessun `get()` ripetuto durante render multipli;
-- nessuna lettura completa di collection quando basta un documento o una query filtrata;
-- nessun fallback nativo `squadreStorico` attivato inutilmente dopo timeout;
-- nessuna lettura profilo/accesso duplicata durante login + retry + approvazione.
-
-### Priorità B — moduli operativi aperti su richiesta
-- `global-archive-sync.js`
-- `operational-import-repair.js`
-- `inrete-work-items-v2.js`
-- `hours-export-range.js`
-- `app-worklimate.js`
-- `app-atex.js`
-- `private-documents-v2.js`
-- `operator-profile-feature.js`
-- `identity-card-feature.js`
-- `google-sheet-two-way-sync.js`
-- `registry-google-sheet-sync.js`
-
-Regola: questi moduli non devono generare letture Firestore finché la rispettiva funzione/pagina non viene realmente aperta, salvo dati indispensabili alla Home.
-
-### Priorità C — Preventivi / contabilità
-- `preventivi-core.js`
-- `preventivi-firestore-chunks.js`
-- `preventivi-persistenza-selezioni-fix.js`
-- `preventivi-commessa-search-bridge.js`
-- `preventivi-storage-config.js`
-- `accounting-v2.js`
-
-Questi moduli possono avere dataset più grandi. Devono restare lazy/on-demand e preferire cache/chunk/indici mirati invece di letture complete ripetute.
-
-### Backend / funzioni
-- `functions/index.js`
-- `functions/shared-operational-views.js`
-- `functions/user-notifications.js`
-- `functions/run-calendar-admin-reminders.js`
-- script di rebuild/backfill
-
-Le letture server non pesano sul caricamento del client ma contribuiscono ai costi Firestore. Vanno auditati separatamente per trigger duplicati, scansioni complete e rebuild troppo frequenti.
-
-## Rischi individuati
-
-### 1. Troppi wrapper sullo stesso `Query.prototype.onSnapshot`
-Il progetto utilizza più moduli che intercettano `onSnapshot`. È utile ma delicato. Ogni nuovo wrapper deve preservare correttamente il precedente e l'ordine di caricamento.
-
-Azione: non aggiungere nuovi wrapper generici se la stessa ottimizzazione può essere fatta nel modulo specifico.
-
-### 2. Fallback delle viste condivise
-`squadreStorico` può ricadere sul listener Firestore nativo dopo timeout. Se la vista condivisa è lenta/non inizializzata, si rischia di pagare sia la preparazione della vista sia il listener originale.
-
-Azione: misurare `staticSquadreFallbacks`. Se > 0 nell'uso normale, priorità alta.
-
-### 3. Listener duplicati ma non identici
-Il multiplexer unisce solo query equivalenti. Due query quasi uguali con filtri/ordinamenti differenti continueranno a creare due listener fisici.
-
-Azione: usare la diagnostica `queries` per individuare query diverse sulla stessa collection che possono essere consolidate.
-
-### 4. Letture amministrative accidentali all'avvio
-La gestione completa delle commesse è già on-demand. Lo stesso principio va verificato per utenti, documenti, Preventivi, contabilità, registri e moduli speciali.
-
-### 5. `get()` ripetuti da retry/render
-I moduli login/accesso e alcuni bridge possono effettuare letture one-shot. Una singola lettura è corretta; la stessa lettura ripetuta più volte in pochi secondi no.
-
-Azione: cercare nella diagnostica funzioni con molte `readOperations` e pochi documenti per operazione.
-
-## Soglie proposte per sessione standard
-Sessione: apertura app -> Home -> apertura di una commessa -> un impianto, senza pannelli amministrativi.
-
+Apertura app → Home → una commessa → un impianto, senza pannelli amministrativi:
 - listener duplicati identici: 0;
-- `activityLogs` letti: 0;
-- `chatMessages` letti senza aprire chat: 0;
-- `commessaResources` letti senza aprire risorse: 0;
-- raccolte Preventivi/contabilità lette senza aprire i moduli: 0;
-- documenti privati letti senza aprire Documenti: 0;
+- `activityLogs`: 0 letture;
+- `appNotifications`: 0 letture;
+- `chatMessages` senza aprire chat: 0 letture;
+- `commessaResources` senza aprire risorse: 0 letture;
+- Preventivi/Contabilità senza aprirli: 0 letture;
+- documenti privati senza aprire Documenti: 0 letture;
 - fallback `squadreStorico`: 0 in condizioni normali;
-- letture di commesse disattivate: 0 all'avvio;
-- letture impianti di commesse non operative: da minimizzare.
+- commesse disattivate: 0 letture all'avvio.
 
-## Ordine di intervento
-1. Eseguire una diagnostica pulita della build corrente per 60-120 secondi.
-2. Ordinare per `collections`, `queries`, `functions` e `listenerInstances`.
-3. Correggere prima i listener permanenti con più documenti consegnati.
-4. Correggere poi i `get()` ripetuti.
-5. Spostare su viste aggregate solo dataset realmente ripetitivi e condivisi.
-6. Verificare dopo ogni modifica che FATTO, commesse, squadre, ore e WhatsApp restino invariati.
-7. Applicare una sola ottimizzazione per volta e confrontare due diagnostiche prima/dopo.
+## Regola di sicurezza
 
-## Funzioni critiche da preservare
-- caricamento affidabile di commesse e squadre;
-- aggiornamenti multi-dispositivo necessari;
-- persistenza e visualizzazione FATTO;
-- ordinario/straordinario;
-- foto e WHAZZUP/WhatsApp;
-- gestione ore;
-- navigazione e dati impianto;
-- autenticazione e autorizzazioni;
-- Android e PWA.
-
-## Esito audit statico
-
-Il codice contiene già molte ottimizzazioni valide e non richiede una riscrittura generale. Il margine ulteriore più probabile è in:
-1. listener residui aperti all'avvio da moduli non visibili;
-2. fallback di `squadreStorico`;
-3. letture one-shot duplicate nei flussi login/accesso;
-4. moduli Preventivi/contabilità/documenti caricati prima dell'apertura della pagina;
-5. query simili ma non identiche che il multiplexer non può condividere;
-6. funzioni backend con possibili scansioni complete.
-
-La prossima ottimizzazione deve essere decisa dai numeri della diagnostica runtime della versione corrente.
-
-## Checklist runtime
-- avvio da app completamente chiusa;
-- attendere caricamento Home;
-- non aprire menu per 30 secondi;
-- aprire una sola commessa;
-- aprire un solo impianto;
-- non premere FATTO durante il baseline;
-- esportare la diagnostica;
-- ripetere su Android e web/PWA.
-
-Con questi due report sarà possibile quantificare esattamente le prossime riduzioni e fissare un obiettivo numerico per le letture iniziali.
+Ogni riduzione va applicata una alla volta e verificata prima/dopo con la diagnostica. Non devono cambiare: FATTO, ordinario/straordinario, foto e WHAZZUP/WhatsApp, commesse, squadre, ore, mappe, autenticazione, Android e PWA.

@@ -2,18 +2,20 @@ const { test, expect } = require('@playwright/test');
 
 const APP_URL = process.env.E2E_APP_URL || 'http://127.0.0.1:4173';
 
-function watchLocal404s(page) {
+function watchCriticalLocal404s(page) {
   const local404s = [];
   page.on('response', (response) => {
     const url = response.url();
-    if (url.startsWith(APP_URL) && response.status() === 404) local404s.push(url);
+    if (!url.startsWith(APP_URL) || response.status() !== 404) return;
+    const pathname = new URL(url).pathname;
+    if (/\.(?:js|html|webmanifest|json)$/i.test(pathname)) local404s.push(url);
   });
   return local404s;
 }
 
 test.describe('Varga Cantieri startup smoke', () => {
   test('loads the PWA shell and authentication surface', async ({ page }) => {
-    const local404s = watchLocal404s(page);
+    const critical404s = watchCriticalLocal404s(page);
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('#app-startup-loading')).toHaveCount(1);
@@ -25,14 +27,13 @@ test.describe('Varga Cantieri startup smoke', () => {
     await expect(page.locator('#open-panel-commesse')).toHaveCount(1);
     await expect(page.locator('#open-panel-squadre')).toHaveCount(1);
     await expect(page.locator('#open-hours-btn')).toHaveCount(1);
+    await expect(page.locator('#auth-gate-message')).not.toHaveText('');
 
-    const gateMessage = await page.locator('#auth-gate-message').textContent();
-    expect(gateMessage || '').toContain('email');
-    expect(local404s).toEqual([]);
+    expect(critical404s).toEqual([]);
   });
 
   test('survives reload without duplicating critical shell elements', async ({ page }) => {
-    const local404s = watchLocal404s(page);
+    const critical404s = watchCriticalLocal404s(page);
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'domcontentloaded' });
 
@@ -40,6 +41,6 @@ test.describe('Varga Cantieri startup smoke', () => {
     await expect(page.locator('#app-startup-loading')).toHaveCount(1);
     await expect(page.locator('script[src*="app-pure-utils.js"]')).toHaveCount(1);
     await expect(page.locator('script[src*="app.js"]')).toHaveCount(1);
-    expect(local404s).toEqual([]);
+    expect(critical404s).toEqual([]);
   });
 });

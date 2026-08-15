@@ -84,3 +84,40 @@ input:focus,select:focus,textarea:focus{outline:3px solid rgba(37,99,235,.12);bo
   .home-quick-access-btn{min-height:62px!important;font-size:.7rem!important;}
   .today-summary-item{min-height:66px!important;font-size:.68rem!important;}
 }
+
+/* Home ultra-compatta: riduce gli spazi vuoti tra i moduli visibili prima delle squadre. */
+@media (max-width:700px){
+  .container{padding:4px 6px 8px!important;gap:5px!important;}
+  #home-page{gap:5px!important;}
+  #home-page>.card,.home-top-grid,.home-quick-access,#today-summary-card{margin:0!important;}
+  .logo-card{padding:6px!important;}
+  .home-header-modern .logo-head{min-height:42px!important;gap:3px!important;}
+  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:42px!important;min-height:42px!important;padding:2px 1px 3px!important;font-size:.5rem!important;border-radius:9px!important;}
+  .home-header-modern .header-action-button .header-action-icon,.home-header-modern #user-toggle-btn .header-action-icon{font-size:.95rem!important;}
+  .home-header-modern .header-login-photo{width:21px!important;height:21px!important;}
+  .home-header-modern #user-connection-bar{margin-top:4px!important;}
+  .user-connection-bar{padding:6px 9px!important;border-radius:12px!important;}
+  .user-connection-greeting{font-size:.84rem!important;}
+  .user-connection-indicator,.user-connection-offline{font-size:.72rem!important;}
+  .home-accordion-chevron{transform:scale(.85);}
+  .weather-card{padding:7px 9px!important;border-radius:14px!important;}
+  .weather-card .section-head h2{font-size:.92rem!important;}
+  .weather-summary{font-size:.82rem!important;line-height:1.15!important;}
+  .home-quick-access{border-radius:14px!important;}
+  .home-quick-access-btn{min-height:52px!important;padding:4px 2px!important;font-size:.66rem!important;gap:1px!important;}
+  .home-quick-access-btn>span:first-child{font-size:1.05rem!important;}
+  .today-summary-card{padding:5px!important;border-radius:14px!important;}
+  .today-summary-card>h2{font-size:.72rem!important;margin:0 0 1px!important;line-height:1!important;}
+  .today-summary-item{min-height:54px!important;padding:4px 2px!important;font-size:.64rem!important;gap:1px!important;}
+  .today-summary-icon{font-size:1.05rem!important;}
+  .today-summary-item strong,.today-summary-item b{font-size:.8rem!important;}
+  .squadre-card{margin-top:0!important;padding:9px!important;}
+}
+
+@media (max-width:420px){
+  .container{padding-left:4px!important;padding-right:4px!important;}
+  .home-header-modern .logo-head{min-height:40px!important;}
+  .home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:40px!important;min-height:40px!important;}
+  .home-quick-access-btn{min-height:48px!important;}
+  .today-summary-item{min-height:50px!important;}
+}

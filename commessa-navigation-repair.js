@@ -285,3 +285,61 @@
     }
   };
 })();
+
+// Le statistiche degli impianti di tutte le commesse non devono aprire un
+// listener completo all'avvio/Home. La diagnostica ha mostrato che questo
+// percorso rilegge intere sottocollezioni anche quando l'utente non sta
+// consultando un riepilogo. Il listener originale resta disponibile e viene
+// attivato solo quando si apre una commessa padre, dove i rollup delle
+// subcommesse sono effettivamente necessari.
+(() => {
+  "use strict";
+
+  if (window.HeraLazyCommessaStats?.installed) return;
+  if (
+    typeof refreshCommesseDependentUI !== "function"
+    || typeof subscribeStatsForCommesse !== "function"
+    || typeof selectCommessa !== "function"
+  ) return;
+
+  const originalRefreshCommesseDependentUI = refreshCommesseDependentUI;
+  const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
+  const originalSelectCommessaForStats = selectCommessa;
+  const state = {
+    suppressedStartupLoads: 0,
+    explicitParentLoads: 0,
+    lastParentId: "",
+    errors: []
+  };
+
+  refreshCommesseDependentUI = function refreshCommesseDependentUILazyStats(includeRemoteStats = true) {
+    if (includeRemoteStats) state.suppressedStartupLoads += 1;
+    // Mantiene rendering e cache commesse invariati, ma non apre automaticamente
+    // i listener impianti di tutte le commesse né il listener ore completo.
+    return originalRefreshCommesseDependentUI.call(this, false);
+  };
+
+  selectCommessa = function selectCommessaWithLazyStats(id, nome, codice = "") {
+    const result = originalSelectCommessaForStats.call(this, id, nome, codice);
+    try {
+      const hasSubcommesse = typeof getSubcommesse === "function" && getSubcommesse(id).length > 0;
+      if (hasSubcommesse) {
+        state.explicitParentLoads += 1;
+        state.lastParentId = String(id || "");
+        originalSubscribeStatsForCommesse();
+      }
+    } catch (error) {
+      state.errors.push(String(error?.message || error));
+      console.warn("Statistiche commessa padre non caricate:", error);
+    }
+    return result;
+  };
+
+  window.HeraLazyCommessaStats = {
+    installed: true,
+    version: "1.0.0",
+    mode: "home-suppressed-parent-explicit",
+    loadAll: () => originalSubscribeStatsForCommesse(),
+    getState: () => ({ ...state, errors: state.errors.slice() })
+  };
+})();

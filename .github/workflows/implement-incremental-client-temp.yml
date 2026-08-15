@@ -7,25 +7,29 @@ permissions:
   contents: write
 jobs:
   implement:
-    if: github.event.head_commit.message == 'Fix temporary incremental client implementation workflow'
+    if: github.event.head_commit.message == 'Regenerate safe incremental impianti client'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/impianti-incremental-client-20260815
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Implement safe incremental sync
         run: |
+          git fetch origin main
+          git checkout origin/main -- app.js
           python3 scripts/implement-incremental-client-temp.py
           node --check app.js
           npm ci
           npm run check:done-button
           npm run check:whatsapp-protection
           node scripts/check-critical-flows.js
+          git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app.js
-          git commit -m 'Add incremental impianti client sync'
+          git commit -m 'Harden incremental impianti client sync'
           git push origin HEAD:feat/impianti-incremental-client-20260815

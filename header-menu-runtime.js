@@ -260,6 +260,15 @@
     });
   }
 
+  function loadModernImpiantiMap() {
+    loadScriptOnce({
+      selector: 'script[data-modern-impianti-map]',
+      src: './map-modern-runtime.js?v=20260815a',
+      datasetKey: 'modernImpiantiMap',
+      errorMessage: 'Mappa moderna impianti non caricata.'
+    });
+  }
+
   function init() {
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
@@ -273,6 +282,7 @@
     loadFirestoreUsageControl();
     loadControlCenterBackup();
     loadPerformanceDiagnostic();
+    loadModernImpiantiMap();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

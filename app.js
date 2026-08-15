@@ -218,14 +218,6 @@ Grazie.`;
   return `https://wa.me/393892352575?text=${encodeURIComponent(text)}`;
 }
 
-function openBannedAccessRequest() {
-  window.open(buildBannedWhatsAppUrl(), "_blank", "noopener,noreferrer");
-}
-
-function isCurrentUserBanned() {
-  return Boolean(currentUserBanProfile?.banned);
-}
-
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
@@ -2804,13 +2796,6 @@ async function attivaNotifiche() {
     console.error("Errore notifiche:", error);
     updateNotificationUi("Notifiche locali attive (push cloud non disponibile).", true);
   }
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
 async function ensurePushSubscription() {
@@ -7814,12 +7799,6 @@ function normalizeSquadraMemberIdentity(value) {
     .trim();
 }
 
-function getCurrentUserIdentityParts() {
-  if (!currentUser) return [];
-  const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser.uid || ""));
-  return getPlatformUserIdentityParts(currentProfile || currentUser);
-}
-
 function getSquadraNameVariants(value) {
   const normalized = normalizeSquadraMemberIdentity(value);
   if (!normalized) return [];
@@ -8028,11 +8007,6 @@ function tryAutoOpenAssignedCommessaAtStartup() {
 
 function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
   return Boolean(currentUser && String(commessaId || "").trim());
-}
-
-function getHoursOperatorForCurrentUser(commessaId, dateValue = "") {
-  const assignment = getCurrentUserSquadraAssignment(commessaId, dateValue);
-  return assignment?.matchedName || getCurrentUserResolvedName();
 }
 
 function getHoursRowsForCommessaSquadra(commessaId, dateValue = "") {
@@ -10474,10 +10448,6 @@ function validateFirebaseConfigForCommesse() {
   return true;
 }
 
-function getCommesseErrorMessage() {
-  return "Impossibile caricare le commesse online. Mostro dati salvati localmente.";
-}
-
 function clearCommesseLoadTimeout() {
   if (!commesseLoadTimeout) return;
   clearTimeout(commesseLoadTimeout);
@@ -10629,10 +10599,6 @@ function getEmptyCommessaWorkSummary() {
 
 function getCommessaWorkSummary(commessaId) {
   return commessaWorkSummariesById.get(commessaId) || getEmptyCommessaWorkSummary();
-}
-
-function getCommessaHoursTotal(commessaId) {
-  return Number(getCommessaWorkSummary(commessaId).totalHours || 0);
 }
 
 function getParentCommessaAggregate(parentCommessaId) {
@@ -12910,10 +12876,6 @@ function formatExtraFieldLabel(key) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function shareGlobalImpiantoViaWhatsapp(impianto) {
-  handleOpenGlobalSegnalazioneClick(impianto);
-}
-
 function handleOpenGlobalSegnalazioneClick(impiantoFromAction = null) {
   const impianto = impiantoFromAction || selectedGlobalImpianto || null;
   console.log("Invio segnalazione manutenzione verde via WhatsApp", impianto);
@@ -14387,10 +14349,6 @@ function getTodayDateKey() {
   }).formatToParts(new Date());
   const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
   return `${value.year}-${value.month}-${value.day}`;
-}
-
-function toggleCommessaNoteForm() {
-  openCommessaNotesPage();
 }
 
 function getCommessaNoteTitle(note) {
@@ -19100,11 +19058,6 @@ function getDettaglioMeteoImpiantoByKey(key) {
     || null;
 }
 
-function formatWeatherDetailValue(value, suffix = "") {
-  if (!isPresentFiniteNumber(value)) return "-";
-  return `${Math.round(Number(value))}${suffix}`;
-}
-
 function formatWeatherDetailDirection(slot = {}) {
   return slot.windDirectionLabel || slot.windDirection || getWindDirectionLabel(slot.wind_direction_10m ?? slot.windDirectionDegrees);
 }
@@ -19407,12 +19360,6 @@ function scheduleImpiantoWeatherBadgeRender() {
   impiantoWeatherRenderTimer = setTimeout(() => {
     updateImpiantoWeatherBadgesInPlace();
   }, 120);
-}
-
-function formatWeatherAmount(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "";
-  return amount >= 10 ? String(Math.round(amount)) : amount.toFixed(1);
 }
 
 function isPresentFiniteNumber(value) {
@@ -24642,14 +24589,6 @@ function getCommessaAccentColor(commessaId, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function getTimestampDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function addOperatorPositionMarkerToLayer(position, layer) {
   return L.marker([position.lat, position.lng], {
     icon: L.divIcon({
@@ -27067,11 +27006,6 @@ function openWeatherExternalDetail() {
     ? (currentCivilProtectionAlert.url || CIVIL_PROTECTION_ALERT_PAGE)
     : `${METEO_3B_BASE_URL}?lat=${encodeURIComponent(target.lat)}&lon=${encodeURIComponent(target.lon)}`;
   window.open(url, "_blank", "noopener,noreferrer");
-}
-
-function openWeatherModal() {
-  ui.weatherModal.classList.remove("hidden");
-  ui.weatherModal.setAttribute("aria-hidden", "false");
 }
 
 function closeWeatherModal() {
@@ -31127,13 +31061,6 @@ function closeSnowServicePage() {
 
 function isSnowServiceRoute() {
   return window.location.hash === "#servizio-neve";
-}
-
-function renderSnowServiceList(element, rows, emptyText, renderRow) {
-  if (!element) return;
-  element.innerHTML = rows.length
-    ? rows.map(renderRow).join("")
-    : `<p class='muted'>${escapeHTML(emptyText)}</p>`;
 }
 
 function renderSnowServiceCommesse() {

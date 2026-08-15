@@ -236,13 +236,6 @@
     return starts.length ? Math.min(...starts) : null;
   }
 
-  function getLiveWorkedMinutes(assignments) {
-    const start = getAssignedStartMinutes(assignments);
-    if (start === null) return null;
-    const elapsed = Math.max(0, getRomeClockMinutes() - start);
-    return elapsed > 8 * 60 ? elapsed - 60 : elapsed;
-  }
-
   function stopTodayHoursCounter() {
     if (todayHoursInterval !== null) window.clearInterval(todayHoursInterval);
     todayHoursInterval = null;

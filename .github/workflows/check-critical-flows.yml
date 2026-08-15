@@ -23,6 +23,8 @@ jobs:
         run: npm run check:syntax
       - name: Check app module boundaries
         run: node scripts/check-app-module-boundaries.js
+      - name: Check automatic PWA build versioning
+        run: node scripts/check-pwa-build-versioning.js
       - name: Audit unused functions
         run: node scripts/audit-unused-functions.js
       - name: Check header loader dedupe

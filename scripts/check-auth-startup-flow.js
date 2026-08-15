@@ -35,7 +35,7 @@ const signInIndex = loginRetry.indexOf("signInWithEmailAndPassword");
 assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signInIndex,
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
-assert.match(sw, /varga-cantieri-shell-v129/);
+assert.match(sw, /varga-cantieri-shell-v130/);
 assert.match(sw, /CACHE_RESET_VERSION = "20260814-loading-humor1"/);
 for (const path of [
   "/firebase-config.js",
@@ -43,16 +43,17 @@ for (const path of [
   "/login-retry-fix.js",
   "/first-login-password.js",
   "/approval-access.js",
-  "/auto-login-saved-credentials.js",
   "/header-menu-runtime.js",
   "/header-menu-runtime-original.js"
 ]) {
   assert.ok(sw.includes(`"${path}"`), `${path} deve essere network-first`);
 }
+assert.doesNotMatch(sw, /auto-login-saved-credentials\.js/);
 assert.match(sw, /NETWORK_FIRST_ASSET_PATHS\.has\(url\.pathname\)/);
 assert.match(sw, /networkFirstForCriticalAsset/);
 
-assert.match(headerRuntime, /loadAutoLoginFeature/);
+assert.doesNotMatch(headerRuntime, /loadAutoLoginFeature/);
+assert.doesNotMatch(headerRuntime, /auto-login-saved-credentials\.js/);
 assert.match(authFix, /__heraSavedCredentialsAutoLoginInstalled/);
 
-console.log("Auth startup flow checks passed: persistence, early gate guard, PWA cache refresh and network-first auth assets.");
+console.log("Auth startup flow checks passed: controller unico, persistence LOCAL, gate anticipato e asset auth network-first.");

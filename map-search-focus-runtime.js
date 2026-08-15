@@ -10,6 +10,7 @@
   const MAX_AUTO_CENTER_MATCHES = 6;
   const MAX_FLASH_MATCHES = 8;
   const FLASH_CLASS = 'hera-search-match-flash';
+  const SELECTED_CLASS = 'hera-search-selected-marker';
 
   const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const firstValue = (item, keys) => {
@@ -93,6 +94,8 @@
   }
 
   function clearFlashes() { document.querySelectorAll(`.${FLASH_CLASS}`).forEach((n) => n.classList.remove(FLASH_CLASS)); }
+  function clearSelected() { document.querySelectorAll(`.${SELECTED_CLASS}`).forEach((n) => n.classList.remove(SELECTED_CLASS)); }
+
   function markerCandidatesForNumber(number) {
     const view = document.getElementById(VIEW_ID);
     if (!view) return [];
@@ -102,10 +105,22 @@
       return vals.includes(wanted) || vals.includes(String(Number(wanted)-1)) || String(node.textContent || '').trim() === wanted;
     });
   }
+
   function flashMatches(matches) {
     clearFlashes();
+    clearSelected();
     matches.slice(0,MAX_FLASH_MATCHES).forEach(({item,index}) => markerCandidatesForNumber(plantNumber(item,index)).forEach((n) => n.classList.add(FLASH_CLASS)));
   }
+
+  function selectMarkerByPlantIndex(index) {
+    const items = getCurrentImpianti();
+    const item = items[index];
+    if (!item) return;
+    clearFlashes();
+    clearSelected();
+    markerCandidatesForNumber(plantNumber(item,index)).forEach((n) => n.classList.add(SELECTED_CLASS));
+  }
+
   function centerMatches(matches) {
     if (!matches.length || matches.length > MAX_AUTO_CENTER_MATCHES) return;
     const coords = matches.map(({item}) => plantCoordinates(item)).filter(Boolean);
@@ -123,9 +138,9 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       const query = normalize(input.value);
-      if (!query) { clearFlashes(); return; }
+      if (!query) { clearFlashes(); clearSelected(); return; }
       const matches = findMatches(query);
-      if (!matches.length) { clearFlashes(); return; }
+      if (!matches.length) { clearFlashes(); clearSelected(); return; }
       const bestScore = matches[0].score;
       const best = matches.filter((e) => e.score === bestScore).slice(0,MAX_FLASH_MATCHES);
       flashMatches(best);
@@ -165,6 +180,7 @@
         }
       }
       #${PAGE_ID} .${FLASH_CLASS}{animation:heraSearchPulseV2 .78s ease-in-out infinite !important;transform-origin:center center !important;z-index:9999 !important}
+      #${PAGE_ID} .${SELECTED_CLASS}{filter:brightness(1.10) drop-shadow(0 0 5px rgba(37,99,235,.95)) drop-shadow(0 0 13px rgba(37,99,235,.75)) !important;transform:scale(1.12) !important;transform-origin:center center !important;z-index:9998 !important}
       #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map]{display:none !important}
     `;
     document.head.appendChild(style);
@@ -181,6 +197,36 @@
     input.addEventListener('search', () => handleSearchInput(input));
   }
 
+  function setupSelectionStop() {
+    const page = document.getElementById(PAGE_ID);
+    if (!page || page.dataset.searchSelectionStop === '1') return;
+    page.dataset.searchSelectionStop = '1';
+
+    page.addEventListener('click', (event) => {
+      const clearButton = event.target.closest?.('.hera-map-search-clear');
+      if (clearButton) {
+        clearFlashes();
+        clearSelected();
+        return;
+      }
+
+      const result = event.target.closest?.('.hera-map-search-result');
+      if (result && !result.hasAttribute('aria-disabled')) {
+        const index = Number.parseInt(result.dataset.plantIndex || '', 10);
+        if (Number.isFinite(index)) selectMarkerByPlantIndex(index);
+        else clearFlashes();
+        return;
+      }
+
+      const marker = event.target.closest?.(`#${VIEW_ID} .leaflet-marker-icon, #${VIEW_ID} .leaflet-tooltip-pane > *, #${VIEW_ID} [data-plant-index], #${VIEW_ID} [data-impianto-index], #${VIEW_ID} [data-marker-number]`);
+      if (marker) {
+        clearFlashes();
+        clearSelected();
+        marker.classList.add(SELECTED_CLASS);
+      }
+    }, true);
+  }
+
   function ensureMapVisible() {
     const view = document.getElementById(VIEW_ID);
     if (!view) return;
@@ -190,7 +236,7 @@
     try { getFullscreenMap()?.invalidateSize?.({animate:false}); } catch (_) {}
   }
 
-  function apply() { installStyles(); hideDrawUiSafely(); setupInput(); ensureMapVisible(); }
+  function apply() { installStyles(); hideDrawUiSafely(); setupInput(); setupSelectionStop(); ensureMapVisible(); }
   const observer = new MutationObserver(() => requestAnimationFrame(apply));
   observer.observe(document.documentElement,{childList:true,subtree:true});
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',apply,{once:true}); else apply();

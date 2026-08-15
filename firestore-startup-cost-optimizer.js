@@ -476,12 +476,6 @@
   window[GLOBAL] = api;
 
   installLazyTriggers();
-  let attempts = 0;
-  const timer = setInterval(() => {
-    attempts += 1;
-    if (install() || attempts >= 200) clearInterval(timer);
-    api.installed = state.installed;
-  }, 25);
   install();
   api.installed = state.installed;
 })();

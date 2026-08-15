@@ -10,6 +10,7 @@ const authFix = read("auth-login-fix.js");
 const loginRetry = read("login-retry-fix.js");
 const sw = read("sw.js");
 const headerRuntime = read("header-menu-runtime-original.js");
+const netlifyHeaders = read("_headers");
 
 const authScriptMatch = index.match(/<script\s+src="auth-login-fix\.js[^\"]*"><\/script>/);
 const appScriptMatch = index.match(/<script\s+src="app\.js[^\"]*"><\/script>/);
@@ -49,11 +50,13 @@ for (const path of [
   assert.ok(sw.includes(`"${path}"`), `${path} deve essere network-first`);
 }
 assert.doesNotMatch(sw, /auto-login-saved-credentials\.js/);
-assert.match(sw, /NETWORK_FIRST_ASSET_PATHS\.has\(url\.pathname\)/);
-assert.match(sw, /networkFirstForCriticalAsset/);
-
 assert.doesNotMatch(headerRuntime, /loadAutoLoginFeature/);
 assert.doesNotMatch(headerRuntime, /auto-login-saved-credentials\.js/);
+assert.doesNotMatch(netlifyHeaders, /auto-login-saved-credentials\.js/);
+assert.equal(fs.existsSync("auto-login-saved-credentials.js"), false,
+  "Il vecchio controller auto-login deve essere eliminato dal repository");
+assert.match(sw, /NETWORK_FIRST_ASSET_PATHS\.has\(url\.pathname\)/);
+assert.match(sw, /networkFirstForCriticalAsset/);
 assert.match(authFix, /__heraSavedCredentialsAutoLoginInstalled/);
 
-console.log("Auth startup flow checks passed: controller unico, persistence LOCAL, gate anticipato e asset auth network-first.");
+console.log("Auth startup flow checks passed: controller unico, legacy auto-login rimosso, persistence LOCAL e asset auth network-first.");

@@ -52,7 +52,7 @@ const REMOVALS = {
 `,
 `function formatWeatherDetailValue(value, suffix = "") {
   if (!isPresentFiniteNumber(value)) return "-";
-  return \`${Math.round(Number(value))}${suffix}\`;
+  return \`\${Math.round(Number(value))}\${suffix}\`;
 }
 `,
 `function formatWeatherAmount(value) {
@@ -78,7 +78,7 @@ const REMOVALS = {
   if (!element) return;
   element.innerHTML = rows.length
     ? rows.map(renderRow).join("")
-    : \`<p class='muted'>${escapeHTML(emptyText)}</p>\`;
+    : \`<p class='muted'>\${escapeHTML(emptyText)}</p>\`;
 }
 `
   ],

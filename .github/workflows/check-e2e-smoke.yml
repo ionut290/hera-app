@@ -1,0 +1,37 @@
+name: Check browser E2E smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright test runner
+        run: npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start local PWA server
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/varga-e2e-server.log 2>&1 &
+          echo $! > /tmp/varga-e2e-server.pid
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/varga-e2e-server.log
+          exit 1
+      - name: Run startup and reload smoke tests
+        env:
+          E2E_APP_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/e2e/startup-smoke.spec.js --browser=chromium --workers=1 --reporter=line

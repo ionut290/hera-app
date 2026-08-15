@@ -1,4 +1,5 @@
 [build]
+  command = "node scripts/stamp-pwa-build-version.js"
   publish = "."
   functions = "netlify/functions"
 

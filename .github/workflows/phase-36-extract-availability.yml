@@ -26,7 +26,9 @@ jobs:
         with:
           node-version: 24
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund acorn@8
       - name: Extract Availability module
         run: node scripts/phase36-extract-availability-module.js
       - name: Verify Availability modularization

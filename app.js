@@ -204,20 +204,6 @@ async function verifyPersistedSessionAgainstDatabase(user, savedSession) {
   return { valid: true, profile, banned: Boolean(profile.banned) };
 }
 
-function buildBannedWhatsAppUrl(profile = currentUserBanProfile) {
-  const now = new Date().toLocaleString("it-IT");
-  const name = profile?.displayName || currentUser?.displayName || currentUser?.email || "Utente";
-  const email = profile?.email || currentUser?.email || "";
-  const text = `Ciao Admin, ti chiedo di riattivare il mio accesso alla Hera App.
-
-Nome utente: ${name}
-Email: ${email}
-Data richiesta: ${now}
-
-Grazie.`;
-  return `https://wa.me/393892352575?text=${encodeURIComponent(text)}`;
-}
-
 const DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoAA";
 const FIRESTORE_PERSISTENCE_RECOVERY_KEY = "heraFirestorePersistenceRecoveryAttempted";
 let firebaseMessaging = null;
@@ -7887,28 +7873,6 @@ function getSquadraRowMembers(row = {}) {
   return [row.personale, row.operatori, row.caposquadra].flatMap(getSquadraMemberIdentityValues);
 }
 
-function getPlatformUserIdentityParts(user) {
-  if (!user) return [];
-  const userEmail = String(user.email || "").trim();
-  const linkedPerson = userEmail
-    ? personaleRecords.find((person) => normalizeEmail(person?.email) === normalizeEmail(userEmail))
-    : null;
-  const parts = [
-    user.id,
-    user.uid,
-    userEmail,
-    linkedPerson?.email,
-    linkedPerson ? getPersonaleDisplayName(linkedPerson) : "",
-    user.displayName,
-    user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "",
-    user.userName,
-    user.nome
-  ];
-  const emailLocal = userEmail.split("@")[0] || "";
-  if (emailLocal) parts.push(emailLocal, emailLocal.replace(/[._-]+/g, " "));
-  return [...new Set(parts.map(normalizeSquadraMemberIdentity).filter(Boolean))];
-}
-
 function doSquadraMemberAndUserMatch(memberName, identityParts = null) {
   if (!identityParts) return doesSquadraMemberMatchCurrentUser(memberName);
   const members = getSquadraMemberIdentityValues(memberName).map(normalizeSquadraMemberIdentity).filter(Boolean);
@@ -10157,17 +10121,6 @@ async function queueSheetExportForAdmin(payload) {
   });
 }
 
-function parseGoogleSheetId(value) {
-  const input = String(value || "").trim();
-  if (!input) return "";
-
-  const urlMatch = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (urlMatch && urlMatch[1]) return urlMatch[1];
-
-  const idOnly = input.match(/^[a-zA-Z0-9-_]{20,}$/);
-  return idOnly ? input : "";
-}
-
 function isAndroidWebViewRuntime() {
   // Flusso Android/WebView/Capacitor: qui evitiamo il redirect Firebase
   // perché in WebView può fallire con errore "missing initial state".
@@ -11537,22 +11490,6 @@ function getWorklimateContextForCommessa(commessa) {
   return { commessa, risk, alert, riskLevel };
 }
 
-function createWorklimateButton(commessa) {
-  const context = getWorklimateContextForCommessa(commessa);
-  if (!context) return null;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `btn worklimate-squadra-btn risk-${context.riskLevel}`;
-  button.textContent = "Worklimate";
-  button.setAttribute("aria-label", `Apri dettaglio Worklimate per ${commessa.nome || "commessa"}`);
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openWorklimateDetails(context);
-  });
-  return button;
-}
-
 function appendSquadreHeaderRiskActions(container, commessa, dateKey = getActiveSquadreDateKey()) {
   const alertButton = createSquadraWeatherAlertButton(commessa, dateKey);
   if (alertButton) container?.appendChild(alertButton);
@@ -12913,26 +12850,6 @@ function renderGlobalSegnalazioneImpiantiOptions() {
     });
   ui.globalReportImpiantoSelect.innerHTML = `<option value="">Seleziona impianto Global</option>${options.join("")}`;
   if (current) ui.globalReportImpiantoSelect.value = current;
-}
-
-function openGlobalSegnalazioneModal(impianto = null) {
-  renderGlobalSegnalazioneImpiantiOptions();
-  if (ui.globalReportText) ui.globalReportText.value = "";
-  if (ui.globalReportFeedback && !ui.globalReportFeedback.textContent) {
-    ui.globalReportFeedback.textContent = globalImpianti.length ? "" : "Nessun impianto disponibile nella commessa Global selezionata.";
-  }
-  ui.globalReportModal?.classList.remove("hidden");
-  if (ui.globalReportModal) ui.globalReportModal.style.display = "flex";
-  ui.globalReportModal?.setAttribute("aria-hidden", "false");
-
-  const preferred = impianto || selectedGlobalImpianto || null;
-  if (preferred) {
-    const key = buildImpiantoKey(preferred);
-    if (ui.globalReportImpiantoSelect) ui.globalReportImpiantoSelect.value = key;
-    applyGlobalSegnalazioneImpianto(preferred);
-  } else {
-    applyGlobalSegnalazioneImpianto(null);
-  }
 }
 
 function closeGlobalSegnalazioneModal() {
@@ -18864,18 +18781,6 @@ function formatCompactImpiantoWeatherStatus(entry = {}, label = getImpiantoWeath
   return `Ora ${weatherState || label}${temperature}`;
 }
 
-function formatCompactImpiantoWeatherRiskLine(message = "") {
-  const normalized = String(message || "").trim().toLowerCase();
-  if (!normalized) return "";
-  if (normalized.includes("terreno")) return "⚠️ Terreno";
-  if (normalized.includes("sfalcio")) return "⚠️ Sfalcio";
-  if (normalized.includes("rinvio")) return "⚠️ Rinvio";
-  if (normalized.includes("allerta")) return "⚠️ Allerta";
-  if (normalized.includes("tempor")) return "⚠️ Temporali";
-  if (normalized.includes("ok")) return "✓ Lavoro";
-  return `⚠️ ${String(message).replace(/^⚠️?\s*/u, "").split(/[.;]/)[0].trim().slice(0, 18)}`;
-}
-
 function truncateImpiantoWeatherLine(line = "", maxLength = 24) {
   const value = String(line || "").trim();
   if (value.length <= maxLength) return value;
@@ -18974,28 +18879,6 @@ function buildImpiantoWeatherIconSvg(type = "cloud") {
   else if (normalized === "fog") body = `<g stroke="#94a3b8" stroke-width="9" stroke-linecap="round" filter="url(#softShadow)"><path d="M20 43h88"/><path d="M35 61h73"/><path d="M20 79h70"/><path d="M39 97h69"/></g>`;
   else if (normalized === "wind" || normalized === "vento") body = `<g fill="none" stroke="#2563eb" stroke-width="9" stroke-linecap="round" filter="url(#softShadow)"><path d="M18 43h62c13 0 13-20 0-20-7 0-11 4-13 9"/><path d="M18 65h84c14 0 14 22 0 22-8 0-13-5-15-11"/><path d="M18 87h49"/></g>`;
   return `<svg class="impianto-weather-svg" viewBox="0 0 128 128" aria-hidden="true">${defs}${body}</svg>`;
-}
-
-function formatImpiantoRainLine(entry = {}) {
-  if (!entry.hasCurrentRain && !entry.hasNextHourRain && !entry.rainWindow) return "";
-  const intensity = entry.rainIntensity ? ` • ${entry.rainIntensity}` : "";
-  if (entry.rainWindow?.label) return `${entry.rainWindow.label}${intensity}`;
-  return entry.rainIntensity ? `Adesso • ${entry.rainIntensity}` : "Adesso";
-}
-
-function getImpiantoWeatherAlertLine(entry = {}) {
-  if (entry.civilProtectionAlert) return "⚠ Allerta meteo";
-  if (Array.isArray(entry.messages) && entry.messages.some((message) => /temporale/i.test(message))) return "⚠ Temporali";
-  return "";
-}
-
-function getImpiantoWeatherLineClass(line = "", index = 0) {
-  const normalized = String(line || "").toLowerCase();
-  if (normalized.includes("rischio") || normalized.includes("allerta") || normalized.includes("rinvio") || normalized.includes("attenzione") || normalized.includes("temporali")) return " is-risk";
-  if (normalized.includes("pioggia") || normalized.includes("probabilità") || normalized.includes("prob.")) return " is-rain";
-  if (normalized.includes("vento") || normalized.startsWith("💨") || normalized.includes("dato vento")) return " is-wind";
-  if (index === 0) return " is-primary";
-  return "";
 }
 
 function handleImpiantoWeatherRetryClick(event) {
@@ -21349,26 +21232,6 @@ function stopSquadreSubscription() {
     unsubscribeSquadreViewConfig();
     unsubscribeSquadreViewConfig = null;
   }
-}
-
-function renderSimpleList(container, items, onDelete) {
-  container.innerHTML = "";
-  if (!items.length) {
-    container.innerHTML = "<p class='muted'>Nessun elemento.</p>";
-    return;
-  }
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "simple-list-item";
-    const displayLabel = getPersonaleDisplayName(item);
-    const label = document.createElement("span");
-    label.textContent = displayLabel;
-    row.appendChild(label);
-    const deleteBtn = createButton("Elimina", () => onDelete(item.id, displayLabel || "elemento"));
-    deleteBtn.disabled = !canManageData();
-    row.appendChild(deleteBtn);
-    container.appendChild(row);
-  });
 }
 
 function renderMezziList(container, items, onDelete) {

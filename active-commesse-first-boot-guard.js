@@ -164,25 +164,7 @@
     return null;
   }
 
-  function deliverEmptySnapshot(query, args, cancelled) {
-    const observer = parseSnapshotObserver(args);
-    if (!observer?.next || cancelled()) return;
-    const snapshot = Object.freeze({
-      docs: Object.freeze([]),
-      empty: true,
-      size: 0,
-      query,
-      metadata: Object.freeze({ fromCache: true, hasPendingWrites: false }),
-      forEach() {},
-      docChanges() { return []; },
-      isEqual(other) { return other === snapshot; }
-    });
-    queueMicrotask(() => {
-      if (!cancelled()) observer.next.call(observer.context || undefined, snapshot);
-    });
-  }
-
-  function currentGuardHasRootFiltering() {
+    function currentGuardHasRootFiltering() {
     const api = window.HeraActiveCommesse;
     return Boolean(api?.installed && typeof api.loadAllForManager === "function");
   }

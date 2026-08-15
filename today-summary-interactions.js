@@ -7,32 +7,7 @@
   const getSummaryDateKey = () => getTodayDateKey();
   const getAssignments = () => findCurrentUserSquadreForDate(getSummaryDateKey());
 
-  function getPlannedHours(assignments = getAssignments()) {
-    const uniqueRows = new Set();
-    let total = 0;
-    assignments.forEach((assignment) => {
-      (assignment.matchedRows || []).forEach(({ squadraIndex, row }) => {
-        const rowKey = `${assignment.commessaId}:${squadraIndex}`;
-        if (uniqueRows.has(rowKey)) return;
-        uniqueRows.add(rowKey);
-        total += getSquadraWorkedHours(row);
-      });
-    });
-    return total;
-  }
-
-  function getAlertGroups(assignments = getAssignments()) {
-    return assignments.map((assignment) => {
-      const matchedRows = assignment.matchedRows || [];
-      const issues = buildSquadraWarningDetails(
-        assignment.commessa,
-        matchedRows.map((item) => item.row)
-      );
-      return { assignment, issues };
-    }).filter((group) => group.issues.length);
-  }
-
-  function openChoice({ title, description, assignments, actionLabel, onSelect }) {
+      function openChoice({ title, description, assignments, actionLabel, onSelect }) {
     if (!assignments.length) {
       alert("Oggi non risulti assegnato a nessuna commessa.");
       return;

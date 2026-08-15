@@ -29,6 +29,17 @@ const modules = [
       "shouldShowAtexButtonForImpianto",
       "getAtexIllustrationSvg"
     ]
+  },
+  {
+    file: "app-documents.js",
+    global: "VargaDocumentsModule",
+    functions: [
+      "renderPosDocuments",
+      "savePosDocument",
+      "renderPrivateDocsList",
+      "savePrivateDocument",
+      "openNotificationDocumentViewer"
+    ]
   }
 ];
 
@@ -66,5 +77,14 @@ for (const module of modules) {
   if (!sw.includes(`./${module.file}`)) fail(`${module.file} manca dalla shell PWA`);
 }
 
+for (const coreName of [
+  "normalizeCommessaDocument",
+  "normalizeMezzoDocument",
+  "normalizePersonaleDocument",
+  "normalizeSquadraStoricoDocument"
+]) {
+  if (!app.includes(`function ${coreName}`)) fail(`${coreName} deve restare nel core app.js`);
+}
+
 if (process.exitCode) process.exit(process.exitCode);
-console.log("✅ Confini modulari Worklimate + ATEX verificati.");
+console.log("✅ Confini modulari Worklimate + ATEX + Documenti verificati.");

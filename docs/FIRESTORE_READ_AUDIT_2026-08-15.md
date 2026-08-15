@@ -58,3 +58,7 @@ Apertura app → Home → una commessa → un impianto, senza pannelli amministr
 ## Regola di sicurezza
 
 Ogni riduzione va applicata una alla volta e verificata prima/dopo con la diagnostica. Non devono cambiare: FATTO, ordinario/straordinario, foto e WHAZZUP/WhatsApp, commesse, squadre, ore, mappe, autenticazione, Android e PWA.
+
+## Stato della fase 2
+
+La prima riduzione è stata implementata nel branch di audit insieme al relativo controllo di regressione. Prima del merge va verificata la CI completa e poi confrontata una diagnostica runtime nuova con quella precedente per confermare che `appNotifications` resti a zero senza regressioni funzionali.

@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Check syntax
         run: npm run check:syntax
+      - name: Audit unused functions
+        run: node scripts/audit-unused-functions.js
       - name: Check header loader dedupe
         run: node scripts/check-header-loader-dedupe.js
       - name: Check Firebase loader dedupe

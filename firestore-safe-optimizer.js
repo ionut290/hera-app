@@ -157,15 +157,11 @@
     if (!TARGET_COLLECTIONS.has(collection)) return null;
 
     const canonical = canonicalQuery(query);
-    // Una CollectionReference semplice espone il proprio `path` pubblico.
-    // È sicuro usare il percorso completo anche per sottocollezioni come
-    // commesse/{id}/impianti: due reference con lo stesso path rappresentano
-    // esattamente la stessa raccolta. Le Query filtrate/ordinate/limitate, che
-    // non espongono una CollectionReference semplice, continuano invece a
-    // richiedere un identificatore canonico e non vengono mai unite a intuito.
-    const publicPath = canonicalPath(query?.path).replace(/^\/+|\/+$/g, "");
-    const isPlainCollectionReference = Boolean(publicPath && publicPath === path);
-    if (!canonical && !isPlainCollectionReference) return null;
+    // Una CollectionReference semplice ha `path`. Per una Query filtrata,
+    // invece, pretendiamo sempre un identificatore canonico: così query con
+    // filtri o limiti diversi non possono mai essere unite per errore.
+    const isPlainCollection = Boolean(query?.path && path === collection);
+    if (!canonical && !isPlainCollection) return null;
 
     return {
       collection,

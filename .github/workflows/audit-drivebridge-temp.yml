@@ -1,0 +1,16 @@
+name: Audit driveBridge temp
+on:
+  push:
+    branches:
+      - audit/drivebridge-20260815
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect driveBridge call sites
+        run: |
+          echo '=== app.js subscribeDriveBridge ==='
+          grep -n -C 30 -E 'subscribeDriveBridge|driveBridge' app.js || true
+          echo '=== registry-google-sheet-sync ==='
+          grep -n -C 20 -E 'readConfigDocument|driveBridge' registry-google-sheet-sync.js || true

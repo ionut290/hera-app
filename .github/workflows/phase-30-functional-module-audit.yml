@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   audit:
-    if: github.event.head_commit.message != 'Record phase 30 functional module audit'
+    if: github.event.head_commit.message != 'Record phase 30 module selection'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -25,11 +25,13 @@ jobs:
         run: npm install --no-save --no-audit --no-fund acorn@8
       - name: Audit ATEX and Worklimate clusters
         run: node scripts/phase30-audit-functional-module.js
+      - name: Select named feature clusters
+        run: node scripts/phase30-select-functional-module.js
       - name: Commit audit report
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/phase30-module-audit.json
+          git add docs/phase30-module-audit.json docs/phase30-module-selection.json
           git diff --cached --quiet && exit 0
-          git commit -m "Record phase 30 functional module audit"
+          git commit -m "Record phase 30 module selection"
           git push origin HEAD:agent/consolidation-phase-30-functional-module

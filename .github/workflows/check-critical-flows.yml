@@ -23,6 +23,8 @@ jobs:
         run: npm run check:syntax
       - name: Check header loader dedupe
         run: node scripts/check-header-loader-dedupe.js
+      - name: Check Firebase loader dedupe
+        run: node scripts/check-firebase-loader-dedupe.js
       - name: Check FATTO core
         run: npm run check:done-button
       - name: Check Android photo share

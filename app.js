@@ -20736,9 +20736,6 @@ function renderPersonaleSuggestions() {
   });
 }
 
-function createEmptyCorsoState() {
-  return { possiede: false };
-}
 
 function normalizePersonCourses(person = {}) {
   const base = Object.fromEntries(PRIMARY_CORSI.map((nome) => [nome.toLowerCase(), createEmptyCorsoState()]));
@@ -24286,9 +24283,6 @@ function renderOperatorPositionMarkers(bounds) {
   });
 }
 
-function toggleOperatorPositionsVisibility() {
-  return;
-}
 
 
 function buildMapMarkerSequence(impianti = []) {
@@ -25026,9 +25020,6 @@ function canManageData() {
   return isBuiltInSuperAdminEmail(email) || adminEmails.has(email);
 }
 
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
 
 function clearMap() {
   impiantoMarkerByKey.clear();
@@ -26322,9 +26313,6 @@ function getHomeWorklimateRiskLevel(temps = []) {
   return "verde";
 }
 
-function getHomeWorklimateButtonLabel() {
-  return "worklimate";
-}
 
 function buildHomeWorklimateButton({ temps = [], target = null } = {}) {
   const riskLevel = getHomeWorklimateRiskLevel(temps);

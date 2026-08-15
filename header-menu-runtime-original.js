@@ -65,20 +65,6 @@
     normalizeActionButton(qs('#snow-service-menu-btn'), 'Menu', '☰');
   }
 
-  function loadAutoLoginFeature() {
-    try {
-      if (document.querySelector('script[data-auto-login-saved-credentials]')) return;
-      const script = document.createElement('script');
-      script.src = './auto-login-saved-credentials.js?v=20260801a';
-      script.defer = true;
-      script.dataset.autoLoginSavedCredentials = '1';
-      script.addEventListener('error', () => console.warn('Accesso automatico non caricato.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Accesso automatico non caricato:', error);
-    }
-  }
-
   function loadFirestorePresenceCostGuard() {
     try {
       if (document.querySelector('script[data-firestore-presence-cost-guard]')) return;
@@ -89,7 +75,7 @@
       script.addEventListener('error', () => console.warn('Riduzione scritture presenza Firestore non caricata.'), { once: true });
       document.head.appendChild(script);
     } catch (error) {
-      console.warn('Riduzione scritture presenza Firestore non caricata:', error);
+      console.warn('Riduzione scritture presenza Firestore non caricato:', error);
     }
   }
 
@@ -191,7 +177,7 @@
       script.addEventListener('error', () => console.warn('Monitoraggio consumo Firestore non caricato.'), { once: true });
       document.head.appendChild(script);
     } catch (error) {
-      console.warn('Monitoraggio consumo Firestore non caricato:', error);
+      console.warn('Monitoraggio consumo Firestore non disponibile:', error);
     }
   }
 
@@ -224,7 +210,6 @@
   }
 
   function init() {
-    loadAutoLoginFeature();
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
     setupHomeHeader();

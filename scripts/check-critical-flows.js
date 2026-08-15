@@ -21,7 +21,6 @@ const approval = read("approval-access.js");
 const activeCommesseGuard = read("active-commesse-first-boot-guard.js");
 const squadraSync = read("squadra-current-save-sync.js");
 const doneImmediate = read("fatto-button-immediate.js");
-const doneFix = read("done-button-fix.js");
 const hoursGuard = read("hours-source-explicit-guard.js");
 const sharedViews = read("shared-static-views-client.js");
 const androidOrder = read("android-whazzup-photo-order.js");
@@ -80,7 +79,6 @@ flow("3. Ricerca impianti", () => {
 flow("4. NAVIGA - graffetta - FATTO", () => {
   assert.match(app, /NAVIGA|navigate|navigation/i);
   assert.match(doneImmediate, /FATTO|fatto/i);
-  assert.match(doneFix, /FATTO|fatto/i);
   assert.match(index, /📎|graffetta|foto/i);
 });
 

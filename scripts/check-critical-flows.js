@@ -94,7 +94,18 @@ flow("3. Ricerca e visibilità impianti", () => {
   assert.match(navigationRepair, /if \(commessaId && context\?\.canPersist\) \{\s*persistCurrentCache\(commessaId\);\s*\}/);
   assert.match(navigationRepair, /CACHE_MAX_AGE_MS = 30 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(navigationRepair, /encodeURIComponent\(scope\.uid\)/);
-  assert.doesNotMatch(navigationRepair, /\bdb\.collection\(|\.onSnapshot\(|\.where\(|\.orderBy\(/);
+
+  // Le statistiche complete degli impianti non devono più partire dalla Home.
+  // Rimangono disponibili esplicitamente per le commesse padre.
+  assert.match(navigationRepair, /HeraLazyCommessaStats/);
+  assert.match(navigationRepair, /mode: "home-suppressed-parent-explicit"/);
+  assert.match(navigationRepair, /originalRefreshCommesseDependentUI\.call\(this, false\)/);
+  assert.match(navigationRepair, /const hasSubcommesse = typeof getSubcommesse === "function" && getSubcommesse\(id\)\.length > 0;/);
+  assert.match(navigationRepair, /if \(hasSubcommesse\) \{[\s\S]*?originalSubscribeStatsForCommesse\(\);/);
+
+  // La cache persistente e il gate lazy non devono aggiungere chiamate Firestore proprie.
+  const cacheSection = navigationRepair.split("// Cache persistente degli impianti")[1]?.split("// Le statistiche degli impianti")[0] || "";
+  assert.doesNotMatch(cacheSection, /\bdb\.collection\(|\.onSnapshot\(|\.where\(|\.orderBy\(/);
 });
 
 flow("4. NAVIGA - graffetta - FATTO", () => {

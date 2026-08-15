@@ -7,10 +7,16 @@ const fs = require("node:fs");
 const code = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 
+const appScriptIndex = index.indexOf("app.js?v=");
 const statsScriptIndex = index.indexOf("commessa-stats-cache-optimizer.js");
+const sharedClientIndex = index.indexOf("shared-static-views-client.js");
 const navigationScriptIndex = index.indexOf("commessa-navigation-repair.js");
+assert.ok(appScriptIndex >= 0, "app.js script tag missing");
 assert.ok(statsScriptIndex >= 0, "Stats optimizer script tag missing");
+assert.ok(sharedClientIndex >= 0, "Shared static views client script tag missing");
 assert.ok(navigationScriptIndex >= 0, "Navigation repair script tag missing");
+assert.ok(appScriptIndex < statsScriptIndex, "Optimizer must load after app.js definitions");
+assert.ok(statsScriptIndex < sharedClientIndex, "Optimizer must load before Light Startup captures subscribeStatsForCommesse");
 assert.ok(statsScriptIndex < navigationScriptIndex, "Optimizer must load before navigation repair");
 assert.match(code, /heraCommessaStatsCacheV1:/);
 assert.match(code, /impiantoChangeIndex/);

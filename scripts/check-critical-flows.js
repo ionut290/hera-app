@@ -70,10 +70,18 @@ flow("2. Lavori di oggi / commesse e squadre", () => {
   assert.match(app, /renderTodaySummary\(/);
 });
 
-flow("3. Ricerca impianti", () => {
+flow("3. Ricerca e visibilità impianti", () => {
   assert.match(index, /type="search"/i);
   assert.match(app, /impiant/i);
   assert.match(app, /search|cerca/i);
+  assert.match(app, /function subscribeImpianti\(\)/);
+  assert.match(app, /const startFullListener = \(\) => \{/);
+  assert.match(app, /if \(!incrementalState \|\| !cachedImpianti\.length\)\s*\{\s*unsubscribeImpianti = startFullListener\(\);\s*return;\s*\}/);
+  assert.match(app, /const rawImpianti = snapshot\.docs\.map\(\(doc\) => \(\{ id: doc\.id, \.\.\.doc\.data\(\) \}\)\);\s*applyRaw\(rawImpianti\);/);
+  assert.match(app, /function renderImpiantiAfterRemoteSync\([\s\S]*?renderImpianti\(\);/);
+  assert.match(app, /changeIndexRef\.orderBy\("changedAt", "desc"\)\.limit\(1\)\.get\(\)/);
+  assert.match(app, /saveImpiantiIncrementalState\(requestedCommessaId, latestMarkerMs\)/);
+  assert.doesNotMatch(app, /saveImpiantiIncrementalState\(requestedCommessaId, Date\.now\(\)\)/);
 });
 
 flow("4. NAVIGA - graffetta - FATTO", () => {

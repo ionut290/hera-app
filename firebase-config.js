@@ -7,13 +7,57 @@ window.firebaseConfig = {
   appId: "1:645390631375:web:df3659a23812560e4012ba"
 };
 
+// Recupera i listener diagnostici lasciati attivi da una sessione pagina precedente.
+// È solo telemetria locale: eventuali errori non devono mai bloccare l'avvio dell'app.
+function recoverAbandonedFirestoreDiagnosticListeners() {
+  const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Rome" });
+  const key = `varga_fs_diag_v4_${today()}`;
+  const now = Date.now();
+  const closedAt = new Date(now).toISOString();
+
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    if (!value || value.date !== today() || !value.listeners) return;
+
+    let recovered = 0;
+    Object.values(value.listeners).forEach((listener) => {
+      if (!listener?.active) return;
+      listener.active = false;
+      listener.abandoned = true;
+      listener.closeReason = "page-session-ended-without-unsubscribe";
+      listener.closedAt = closedAt;
+      listener.durationMs = listener.openedAt
+        ? Math.max(0, now - new Date(listener.openedAt).getTime())
+        : null;
+      recovered += 1;
+    });
+
+    if (!recovered) return;
+    value.totals = value.totals || {};
+    value.totals.abandonedListenersRecovered =
+      Math.max(0, Number(value.totals.abandonedListenersRecovered) || 0) + recovered;
+    value.lifecycle = Array.isArray(value.lifecycle) ? value.lifecycle : [];
+    value.lifecycle.unshift({
+      at: closedAt,
+      type: "previous-page-listeners-recovered",
+      recoveredListeners: recovered,
+      note: "Listener rimasti attivi nel salvataggio locale dopo ricaricamento, crash o chiusura della pagina."
+    });
+    value.updatedAt = closedAt;
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {
+    // Pulizia diagnostica best-effort.
+  }
+}
+
+recoverAbandonedFirestoreDiagnosticListeners();
+
 // Carica diagnostica, protezioni Firestore, quota storage e bridge Android prima di app.js.
 // La diagnostica viene installata per prima: l'ottimizzatore la richiama solo
 // quando apre un listener fisico, così il report non conta due volte gli
 // abbonati logici che condividono la stessa query.
 const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260812a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
-const HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC = "firestore-diagnostics-v4-session-cleanup.js?v=20260805a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
 const HERA_NATIVE_RUNTIME_SRC = "native-android-runtime.js?v=20260803-whatsapp-early2";
@@ -30,7 +74,6 @@ const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
-  document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC}" data-firestore-diagnostics-v4-cleanup="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_SRC}" data-firestore-diagnostics-v4="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_INFLIGHT_COALESCER_SRC}"><\/script>`);
@@ -96,20 +139,12 @@ if (document.readyState === "loading") {
     loadSafeOptimizer
   );
 
-  const loadDiagnosticsV4Cleanup = () => loadOnce(
-    HERA_FIRESTORE_DIAGNOSTICS_V4_CLEANUP_SRC,
-    "firestore-diagnostics-v4-cleanup",
-    () => false,
-    loadDiagnosticsV4
-  );
-
   loadOnce(
     HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC,
     "firestore-operation-diagnostics",
     () => window.__vargaFsDiagV3,
-    loadDiagnosticsV4Cleanup
+    loadDiagnosticsV4
   );
-  window.setTimeout(loadDiagnosticsV4Cleanup, 75);
   window.setTimeout(loadDiagnosticsV4, 150);
   window.setTimeout(loadSafeOptimizer, 300);
 

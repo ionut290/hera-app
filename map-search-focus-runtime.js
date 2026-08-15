@@ -1,17 +1,20 @@
 (() => {
   'use strict';
 
-  if (window.__heraMapSearchFocusV3Installed) return;
-  window.__heraMapSearchFocusV3Installed = true;
+  if (window.__heraSafeFullscreenSearchV4Installed) return;
+  window.__heraSafeFullscreenSearchV4Installed = true;
 
   const INPUT_ID = 'map-fullscreen-number-search-input';
   const PAGE_ID = 'map-fullscreen-page';
   const VIEW_ID = 'map-fullscreen-view';
-  const SUGGESTIONS_ID = 'hera-map-live-suggestions';
-  const FLASH_CLASS = 'hera-search-match-flash';
-  const SELECTED_CLASS = 'hera-search-selected-marker';
+  const BOX_ID = 'hera-safe-map-suggestions';
   const MAX_RESULTS = 8;
   const MAX_AUTO_CENTER = 6;
+
+  let overlayGroup = null;
+  let blinkTimer = null;
+  let blinkBlue = false;
+  let boundInput = null;
 
   const normalize = (value) => String(value ?? '')
     .normalize('NFD')
@@ -43,9 +46,19 @@
   function plantName(item, index) {
     return firstValue(item, ['denominazioneImpianto','denominazione_impianto','Denominazione Impianto','denominazione','nomeImpianto','nome','impianto','name','title']) || `Impianto ${index + 1}`;
   }
-  function plantComune(item) { return firstValue(item, ['comune','Comune','ubicazione','localita','località','city']); }
-  function plantAddress(item) { return firstValue(item, ['descrizioneVia','descrizione_via','Descrizione via','indirizzo','Indirizzo','via','address']); }
-  function plantCode(item) { return firstValue(item, ['idSap','idSAP','ID SAP','idsap','sap','codiceSap','codiceSAP','codice','code','id']); }
+
+  function plantComune(item) {
+    return firstValue(item, ['comune','Comune','ubicazione','localita','località','city']);
+  }
+
+  function plantAddress(item) {
+    return firstValue(item, ['descrizioneVia','descrizione_via','Descrizione via','indirizzo','Indirizzo','via','address']);
+  }
+
+  function plantCode(item) {
+    return firstValue(item, ['idSap','idSAP','ID SAP','idsap','sap','codiceSap','codiceSAP','codice','code','id']);
+  }
+
   function plantNumber(item, index) {
     const raw = firstValue(item, ['numero','Numero','numeroImpianto','numero_impianto','progressivo','n','markerNumber','marker_number']);
     const parsed = Number.parseInt(raw, 10);
@@ -58,6 +71,7 @@
     const lat = Number(String(latRaw).replace(',', '.'));
     const lng = Number(String(lngRaw).replace(',', '.'));
     if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return [lat, lng];
+
     const combined = firstValue(item, ['coordinate','Coordinate','coordinateGPS','Coordinate GPS','gps','GPS']);
     const nums = combined ? (String(combined).match(/-?\d+(?:[.,]\d+)?/g)?.map((v) => Number(v.replace(',', '.'))) || []) : [];
     if (nums.length >= 2) {
@@ -69,17 +83,19 @@
   }
 
   function matchScore(item, index, query) {
-    const name = normalize(plantName(item,index));
-    const comune = normalize(plantComune(item));
-    const address = normalize(plantAddress(item));
-    const code = normalize(plantCode(item));
-    const number = normalize(String(plantNumber(item,index)));
-    const values = [name, comune, address, code, number].filter(Boolean);
+    const values = [
+      normalize(plantName(item,index)),
+      normalize(plantComune(item)),
+      normalize(plantAddress(item)),
+      normalize(plantCode(item)),
+      normalize(String(plantNumber(item,index)))
+    ].filter(Boolean);
+
     if (!values.length) return Infinity;
-    if (number === query || code === query || name === query) return 0;
-    if (values.some((v) => v.startsWith(query))) return 1;
-    if (values.some((v) => v.split(/\s+/).some((word) => word.startsWith(query)))) return 2;
-    if (values.some((v) => v.includes(query))) return 3;
+    if (values.some((value) => value === query)) return 0;
+    if (values.some((value) => value.startsWith(query))) return 1;
+    if (values.some((value) => value.split(/\s+/).some((word) => word.startsWith(query)))) return 2;
+    if (values.some((value) => value.includes(query))) return 3;
     return Infinity;
   }
 
@@ -102,215 +118,230 @@
     return null;
   }
 
-  function clearFlashes() {
-    document.querySelectorAll(`.${FLASH_CLASS}`).forEach((node) => node.classList.remove(FLASH_CLASS));
-  }
-  function clearSelected() {
-    document.querySelectorAll(`.${SELECTED_CLASS}`).forEach((node) => node.classList.remove(SELECTED_CLASS));
+  function ensureStyles() {
+    if (document.getElementById('hera-safe-map-search-v4-style')) return;
+    const style = document.createElement('style');
+    style.id = 'hera-safe-map-search-v4-style';
+    style.textContent = `
+      #${PAGE_ID} .leaflet-draw,
+      #${PAGE_ID} .leaflet-draw-toolbar,
+      #${PAGE_ID} [data-map-draw],
+      #${PAGE_ID} [data-draw-map],
+      #${PAGE_ID} #map-fullscreen-draw-btn,
+      #${PAGE_ID} #map-draw-btn,
+      #${PAGE_ID} #draw-map-btn,
+      #${PAGE_ID} .map-fullscreen-hint,
+      #${PAGE_ID} .map-hint { display:none !important; }
+      #${BOX_ID} {
+        position:fixed;
+        z-index:2147483000;
+        max-height:min(52vh,420px);
+        overflow:auto;
+        padding:7px;
+        border:1px solid rgba(15,23,42,.12);
+        border-radius:16px;
+        background:rgba(255,255,255,.995);
+        box-shadow:0 16px 38px rgba(15,23,42,.24);
+        -webkit-overflow-scrolling:touch;
+      }
+      #${BOX_ID}[hidden] { display:none !important; }
+      #${BOX_ID} button {
+        display:flex;
+        flex-direction:column;
+        gap:3px;
+        width:100%;
+        padding:11px 12px;
+        border:0;
+        border-radius:12px;
+        background:transparent;
+        text-align:left;
+        color:#111827;
+      }
+      #${BOX_ID} button:active { background:#eef4ff; }
+      #${BOX_ID} strong { font-size:14px; font-weight:800; }
+      #${BOX_ID} span { font-size:12px; font-weight:600; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #${BOX_ID} .hera-empty { padding:14px; color:#64748b; font-size:14px; font-weight:700; }
+    `;
+    document.head.appendChild(style);
   }
 
-  function markerCandidatesForNumber(number) {
-    const view = document.getElementById(VIEW_ID);
-    if (!view) return [];
-    const wanted = String(number);
-    return Array.from(view.querySelectorAll('.leaflet-marker-pane > *, .leaflet-tooltip-pane > *, .leaflet-marker-icon, [data-plant-index], [data-impianto-index], [data-marker-number]')).filter((node) => {
-      const vals = [node.dataset?.plantIndex,node.dataset?.impiantoIndex,node.dataset?.markerNumber].filter((v) => v != null).map(String);
-      return vals.includes(wanted)
-        || vals.includes(String(Number(wanted) - 1))
-        || String(node.textContent || '').trim() === wanted;
-    });
+  function ensureBox(input) {
+    let box = document.getElementById(BOX_ID);
+    if (!box) {
+      box = document.createElement('div');
+      box.id = BOX_ID;
+      box.hidden = true;
+      document.body.appendChild(box);
+    }
+    positionBox(input, box);
+    return box;
   }
 
-  function flashMatches(matches) {
-    clearFlashes();
-    clearSelected();
-    matches.slice(0, MAX_RESULTS).forEach(({item,index}) => {
-      markerCandidatesForNumber(plantNumber(item,index)).forEach((node) => node.classList.add(FLASH_CLASS));
-    });
+  function positionBox(input, box) {
+    if (!input || !box) return;
+    const rect = input.getBoundingClientRect();
+    box.style.left = `${Math.max(8, rect.left)}px`;
+    box.style.top = `${Math.min(window.innerHeight - 80, rect.bottom + 8)}px`;
+    box.style.width = `${Math.max(220, Math.min(rect.width, window.innerWidth - 16))}px`;
+  }
+
+  function hideBox() {
+    const box = document.getElementById(BOX_ID);
+    if (box) {
+      box.hidden = true;
+      box.textContent = '';
+    }
+  }
+
+  function clearSearchOverlay() {
+    if (blinkTimer) {
+      clearInterval(blinkTimer);
+      blinkTimer = null;
+    }
+    const map = getFullscreenMap();
+    try {
+      if (overlayGroup && map?.hasLayer?.(overlayGroup)) map.removeLayer(overlayGroup);
+    } catch (_) {}
+    overlayGroup = null;
+    blinkBlue = false;
+  }
+
+  function drawSearchOverlay(matches) {
+    clearSearchOverlay();
+    const map = getFullscreenMap();
+    if (!map || !window.L?.layerGroup || !window.L?.circleMarker) return;
+
+    const coords = matches.map((match) => ({ match, coords: plantCoordinates(match.item) })).filter((entry) => entry.coords);
+    if (!coords.length) return;
+
+    overlayGroup = window.L.layerGroup().addTo(map);
+    const circles = coords.map(({coords}) => window.L.circleMarker(coords, {
+      radius: 13,
+      weight: 4,
+      color: '#ef4444',
+      fillColor: '#ef4444',
+      fillOpacity: 0.22,
+      opacity: 0.95,
+      interactive: false,
+      pane: 'markerPane'
+    }).addTo(overlayGroup));
+
+    blinkTimer = setInterval(() => {
+      blinkBlue = !blinkBlue;
+      const color = blinkBlue ? '#2563eb' : '#ef4444';
+      circles.forEach((circle) => circle.setStyle({ color, fillColor: color, radius: blinkBlue ? 16 : 13 }));
+    }, 430);
   }
 
   function centerMatches(matches) {
     if (!matches.length || matches.length > MAX_AUTO_CENTER) return;
-    const coords = matches.map(({item}) => plantCoordinates(item)).filter(Boolean);
-    const mapInstance = getFullscreenMap();
-    if (!coords.length || !mapInstance) return;
+    const coords = matches.map((match) => plantCoordinates(match.item)).filter(Boolean);
+    const map = getFullscreenMap();
+    if (!map || !coords.length) return;
     try {
-      if (coords.length === 1) {
-        mapInstance.setView(coords[0], Math.max(Number(mapInstance.getZoom?.() || 0), 16), { animate: true });
-      } else if (window.L?.latLngBounds) {
-        mapInstance.fitBounds(window.L.latLngBounds(coords), { padding: [60,60], maxZoom: 16, animate: true });
-      } else {
-        mapInstance.fitBounds(coords, { padding: [60,60], maxZoom: 16, animate: true });
-      }
-    } catch (error) {
-      console.warn('Centratura risultati ricerca non completata:', error);
-    }
-  }
-
-  function ensureSuggestions(input) {
-    let box = document.getElementById(SUGGESTIONS_ID);
-    if (box) return box;
-    const parent = input.closest('.hera-map-search-shell') || input.parentElement;
-    if (!parent) return null;
-    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
-    box = document.createElement('div');
-    box.id = SUGGESTIONS_ID;
-    box.className = 'hera-map-live-suggestions';
-    box.hidden = true;
-    box.setAttribute('role','listbox');
-    parent.appendChild(box);
-    return box;
-  }
-
-  function hideSuggestions() {
-    const box = document.getElementById(SUGGESTIONS_ID);
-    if (box) { box.hidden = true; box.textContent = ''; }
-  }
-
-  function selectMatch(match, input) {
-    clearFlashes();
-    clearSelected();
-    hideSuggestions();
-    input.value = plantName(match.item, match.index);
-    const nodes = markerCandidatesForNumber(plantNumber(match.item, match.index));
-    nodes.forEach((node) => node.classList.add(SELECTED_CLASS));
-    centerMatches([match]);
-    const clickable = nodes.find((node) => typeof node.click === 'function');
-    try { clickable?.click(); } catch (_) {}
+      if (coords.length === 1) map.setView(coords[0], Math.max(Number(map.getZoom?.() || 0), 16), { animate:true });
+      else if (window.L?.latLngBounds) map.fitBounds(window.L.latLngBounds(coords), { padding:[60,60], maxZoom:16, animate:true });
+    } catch (_) {}
   }
 
   function renderSuggestions(matches, input) {
-    const box = ensureSuggestions(input);
-    if (!box) return;
+    const box = ensureBox(input);
     box.textContent = '';
     const visible = matches.slice(0, MAX_RESULTS);
     if (!visible.length) {
       const empty = document.createElement('div');
-      empty.className = 'hera-map-live-empty';
+      empty.className = 'hera-empty';
       empty.textContent = 'Nessun impianto trovato';
       box.appendChild(empty);
       box.hidden = false;
       return;
     }
+
     visible.forEach((match) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'hera-map-live-suggestion';
-      button.dataset.plantIndex = String(match.index);
       const title = document.createElement('strong');
-      title.textContent = `${plantNumber(match.item, match.index)} · ${plantName(match.item, match.index)}`;
+      title.textContent = `${plantNumber(match.item,match.index)} · ${plantName(match.item,match.index)}`;
       const meta = document.createElement('span');
       meta.textContent = [plantComune(match.item), plantAddress(match.item), plantCode(match.item) ? `ID SAP ${plantCode(match.item)}` : ''].filter(Boolean).join(' • ');
       button.append(title, meta);
-      button.addEventListener('click', () => selectMatch(match, input));
+      button.addEventListener('click', () => {
+        input.value = plantName(match.item,match.index);
+        hideBox();
+        clearSearchOverlay();
+        centerMatches([match]);
+      });
       box.appendChild(button);
     });
+
     box.hidden = false;
   }
 
-  let searchTimer = null;
-  function handleSearchInput(input) {
-    window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(() => {
+  let searchDebounce = null;
+  function onSearch(input) {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
       const query = normalize(input.value);
       if (!query) {
-        clearFlashes();
-        clearSelected();
-        hideSuggestions();
+        hideBox();
+        clearSearchOverlay();
         return;
       }
       const matches = findMatches(query);
       renderSuggestions(matches, input);
       if (!matches.length) {
-        clearFlashes();
-        clearSelected();
+        clearSearchOverlay();
         return;
       }
       const bestScore = matches[0].score;
       const best = matches.filter((entry) => entry.score === bestScore).slice(0, MAX_RESULTS);
-      flashMatches(best);
+      drawSearchOverlay(best);
       centerMatches(best);
-    }, 100);
+    }, 110);
   }
 
-  function hideDrawUiSafely() {
-    const page = document.getElementById(PAGE_ID);
-    if (!page) return;
-    ['#map-fullscreen-draw-btn','#map-draw-btn','#draw-map-btn','#map-fullscreen-undo-btn','#map-fullscreen-redo-btn','#map-fullscreen-clear-btn','.map-draw-toolbar','.map-drawing-toolbar','.leaflet-draw','.leaflet-draw-toolbar','[data-map-draw]','[data-draw-map]']
-      .forEach((selector) => page.querySelectorAll(selector).forEach((node) => node.remove()));
-  }
-
-  function installStyles() {
-    if (document.getElementById('hera-map-search-focus-style-v3')) return;
-    const style = document.createElement('style');
-    style.id = 'hera-map-search-focus-style-v3';
-    style.textContent = `
-      @keyframes heraSearchPulseV3 {
-        0%,100% { transform:scale(1); filter:brightness(1.08) drop-shadow(0 0 5px rgba(239,68,68,.98)) drop-shadow(0 0 12px rgba(239,68,68,.90)); }
-        50% { transform:scale(1.32); filter:brightness(1.24) drop-shadow(0 0 6px rgba(37,99,235,1)) drop-shadow(0 0 14px rgba(37,99,235,.98)); }
-      }
-      #${PAGE_ID} .${FLASH_CLASS} { animation:heraSearchPulseV3 .72s ease-in-out infinite !important; transform-origin:center center !important; z-index:9999 !important; }
-      #${PAGE_ID} .${SELECTED_CLASS} { filter:brightness(1.12) drop-shadow(0 0 6px rgba(37,99,235,1)) drop-shadow(0 0 14px rgba(37,99,235,.8)) !important; transform:scale(1.14) !important; transform-origin:center center !important; z-index:9998 !important; }
-      #${PAGE_ID} .hera-map-live-suggestions { position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5000; max-height:min(52vh,420px); overflow:auto; padding:7px; border:1px solid rgba(15,23,42,.12); border-radius:18px; background:rgba(255,255,255,.995); box-shadow:0 18px 40px rgba(15,23,42,.24); -webkit-overflow-scrolling:touch; }
-      #${PAGE_ID} .hera-map-live-suggestions[hidden] { display:none !important; }
-      #${PAGE_ID} .hera-map-live-suggestion { display:flex; flex-direction:column; gap:3px; width:100%; padding:11px 12px; border:0; border-radius:13px; background:transparent; text-align:left; color:#111827; }
-      #${PAGE_ID} .hera-map-live-suggestion:active { background:#eef4ff; }
-      #${PAGE_ID} .hera-map-live-suggestion strong { font-size:14px; font-weight:800; line-height:1.25; }
-      #${PAGE_ID} .hera-map-live-suggestion span { font-size:12px; font-weight:600; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-      #${PAGE_ID} .hera-map-live-empty { padding:14px; font-size:14px; font-weight:700; color:#64748b; }
-      #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map] { display:none !important; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function setupInput() {
-    const input = document.getElementById(INPUT_ID);
-    if (!input) return;
+  function bindInput(input) {
+    if (!input || input === boundInput) return;
+    boundInput = input;
+    input.type = 'search';
+    input.inputMode = 'search';
     input.placeholder = 'Cerca impianto, numero, comune, indirizzo o ID SAP';
-    input.setAttribute('aria-label','Cerca impianto per nome, numero, comune, indirizzo o ID SAP');
-    ensureSuggestions(input);
-    if (input.dataset.searchFocusEnhancementV3 === '1') return;
-    input.dataset.searchFocusEnhancementV3 = '1';
-    input.addEventListener('input', () => handleSearchInput(input));
-    input.addEventListener('search', () => handleSearchInput(input));
-    input.addEventListener('focus', () => { if (normalize(input.value)) handleSearchInput(input); });
+    input.setAttribute('autocomplete','off');
+    input.addEventListener('input', () => onSearch(input));
+    input.addEventListener('search', () => onSearch(input));
+    input.addEventListener('focus', () => { if (normalize(input.value)) onSearch(input); });
+    input.addEventListener('blur', () => setTimeout(() => {
+      const box = document.getElementById(BOX_ID);
+      if (box && !box.matches(':hover')) hideBox();
+    }, 180));
   }
 
-  function setupSelectionStop() {
-    const page = document.getElementById(PAGE_ID);
-    if (!page || page.dataset.searchSelectionStopV3 === '1') return;
-    page.dataset.searchSelectionStopV3 = '1';
-    page.addEventListener('click', (event) => {
-      if (event.target.closest?.(`#${SUGGESTIONS_ID}`)) return;
-      if (event.target.closest?.('.hera-map-search-clear')) {
-        clearFlashes(); clearSelected(); hideSuggestions(); return;
-      }
-      const marker = event.target.closest?.(`#${VIEW_ID} .leaflet-marker-icon, #${VIEW_ID} .leaflet-tooltip-pane > *, #${VIEW_ID} [data-plant-index], #${VIEW_ID} [data-impianto-index], #${VIEW_ID} [data-marker-number]`);
-      if (marker) {
-        clearFlashes(); clearSelected(); hideSuggestions(); marker.classList.add(SELECTED_CLASS);
-      }
-    }, true);
+  function initWhenAvailable() {
+    ensureStyles();
+    const input = document.getElementById(INPUT_ID);
+    if (input) bindInput(input);
   }
 
-  function ensureMapVisible() {
-    const view = document.getElementById(VIEW_ID);
-    if (!view) return;
-    view.style.removeProperty('display');
-    view.style.removeProperty('visibility');
-    view.style.removeProperty('opacity');
-    try { getFullscreenMap()?.invalidateSize?.({ animate:false }); } catch (_) {}
+  window.addEventListener('resize', () => {
+    const box = document.getElementById(BOX_ID);
+    if (boundInput && box && !box.hidden) positionBox(boundInput, box);
+  }, { passive:true });
+
+  window.addEventListener('scroll', () => {
+    const box = document.getElementById(BOX_ID);
+    if (boundInput && box && !box.hidden) positionBox(boundInput, box);
+  }, { passive:true });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWhenAvailable, { once:true });
+  } else {
+    initWhenAvailable();
   }
 
-  function apply() {
-    installStyles();
-    hideDrawUiSafely();
-    setupInput();
-    setupSelectionStop();
-    ensureMapVisible();
-  }
-
-  const observer = new MutationObserver(() => window.requestAnimationFrame(apply));
-  observer.observe(document.documentElement, { childList:true, subtree:true });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply, { once:true });
-  else apply();
+  let tries = 0;
+  const initTimer = setInterval(() => {
+    tries += 1;
+    initWhenAvailable();
+    if (boundInput || tries >= 40) clearInterval(initTimer);
+  }, 500);
 })();

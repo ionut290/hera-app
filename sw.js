@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",
   "./app-documents.js?v=20260815-mod1",
+  "./app-calendar.js?v=20260815-mod1",
   "./app.js?v=20260813-render-gate1",
   "./loading-humor.js?v=20260814a",
   "./management-core.js?v=20260731",

@@ -3,7 +3,12 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const app = read("app.js");
+const appCore = read("app.js");
+const calendarModule = fs.existsSync(path.join(root, "app-calendar.js")) ? read("app-calendar.js") : "";
+// I controlli funzionali devono osservare l'intero runtime classico, non soltanto
+// app.js: le funzioni calendario estratte mantengono gli stessi nomi globali e
+// vengono caricate prima del core.
+const app = `${appCore}\n${calendarModule}`;
 const html = read("index.html");
 const rules = read("firestore.rules");
 const css = read("calendar-feature.css");

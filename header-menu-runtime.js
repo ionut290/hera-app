@@ -172,6 +172,33 @@
     observer.observe(headerActions, { childList: true });
   }
 
+  function installFourActionHeaderStyle() {
+    if (document.getElementById('home-four-action-header-style')) return;
+    const style = document.createElement('style');
+    style.id = 'home-four-action-header-style';
+    style.textContent = `
+      @media (max-width: 700px) {
+        .home-header-modern .logo-head {
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        }
+        .home-header-modern #user-toggle-btn,
+        .home-header-modern #update-app-btn,
+        .home-header-modern #refresh-app-btn,
+        .home-header-modern #menu-toggle-btn {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          font-size: .62rem !important;
+        }
+        .home-header-modern .header-action-button .header-action-icon,
+        .home-header-modern #user-toggle-btn .header-action-icon {
+          font-size: 1.08rem !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function setupHomeHeader() {
     const card = qs('#home-page .logo-card');
     if (!card) return;
@@ -183,6 +210,7 @@
     normalizeActionButton(qs('#menu-toggle-btn'), 'Menu', '☰');
     moveSecondaryActionsToMenu();
     watchDynamicNotificationButton();
+    installFourActionHeaderStyle();
   }
 
   function setupSnowHeader() {

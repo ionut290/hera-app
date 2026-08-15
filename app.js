@@ -22615,40 +22615,6 @@ function setWhazzupPreparingFeedback(visible, message = "") {
   ui.whazzupPreparingFeedback.classList.toggle("hidden", !visible);
 }
 
-function createDelayedWhazzupPreparingFeedback(message = "Attendere, sto creando il messaggio.", delayMs = 250) {
-  let shown = false;
-  const timerId = setTimeout(() => {
-    shown = true;
-    setWhazzupPreparingFeedback(true, message);
-  }, delayMs);
-  return {
-    showNow() {
-      clearTimeout(timerId);
-      shown = true;
-      setWhazzupPreparingFeedback(true, message);
-    },
-    hide(minVisibleMs = 0) {
-      clearTimeout(timerId);
-      if (!shown) return;
-      setTimeout(() => setWhazzupPreparingFeedback(false), minVisibleMs);
-    },
-    hideNow() {
-      clearTimeout(timerId);
-      if (!shown) return;
-      setWhazzupPreparingFeedback(false);
-      shown = false;
-    }
-  };
-}
-
-
-function triggerHiddenMoveDoneButton(impianto) {
-  const impiantoKey = buildImpiantoKey(impianto);
-  if (!impiantoKey || !ui.impiantiLista) return;
-  const selector = `[data-hidden-move-done-btn="1"][data-impianto-key="${cssEscapeValue(impiantoKey)}"]`;
-  const hiddenBtn = ui.impiantiLista.querySelector(selector);
-  if (hiddenBtn instanceof HTMLButtonElement) hiddenBtn.click();
-}
 
 function cacheFattoVisualEvidence(impianto, clickedAt) {
   const millis = (clickedAt instanceof Date ? clickedAt : new Date(clickedAt)).getTime();
@@ -22856,11 +22822,6 @@ async function updateAuditLogWhazzupClick(logId, patch = {}) {
   } catch (error) {
     console.error("Errore aggiornamento audit log Whazzup:", error);
   }
-}
-
-function notifyImpiantoBackgroundSyncPending() {
-  if (!ui.gpsStatus) return;
-  ui.gpsStatus.textContent = "Attendere, salvataggio in corso…";
 }
 
 function getWhazzupProcessingKey(impianto, commessaId = selectedCommessaId) {
@@ -24139,28 +24100,6 @@ async function notifyAdminsForImpiantoDoneRecovery(impianto, reason = "") {
     },
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   })));
-}
-
-function openSquadraWhatsApp(squad, commessa) {
-  const squadRows = Array.isArray(squad.squadre) ? squad.squadre : getLegacySquadreRows(squad);
-  const rowsMessage = squadRows.map((row, idx) => ([
-    `👥 SQUADRA ${idx + 1}`,
-    `   • Personale: ${row.personale || "-"}`,
-    `   • Mezzi: ${row.mezzi || "-"}`,
-    "────────────────────"
-  ].join("\n"))).join("\n");
-  const message = [
-    "📣 Richiesta di conferma composizione squadre",
-    "Gentile tecnico, di seguito la composizione registrata.",
-    "────────────────────",
-    `📁 Commessa: ${commessa.nome || "-"}`,
-    `📅 Giorno riferimento: ${squad.riferimentoData || "-"}`,
-    "────────────────────",
-    rowsMessage || "Nessuna squadra compilata.\n────────────────────",
-    "Grazie per la verifica."
-  ].join("\n");
-
-  if (!safeOpenWhatsAppMessage(message)) alert("Impossibile aprire WhatsApp su questo dispositivo.");
 }
 
 function getSquadrePackageEntries() {

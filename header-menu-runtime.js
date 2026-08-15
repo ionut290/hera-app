@@ -269,6 +269,15 @@
     });
   }
 
+  function loadMapSearchFocus() {
+    loadScriptOnce({
+      selector: 'script[data-map-search-focus]',
+      src: './map-search-focus-runtime.js?v=20260815b',
+      datasetKey: 'mapSearchFocus',
+      errorMessage: 'Ricerca intelligente mappa non caricata.'
+    });
+  }
+
   function init() {
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
@@ -283,6 +292,7 @@
     loadControlCenterBackup();
     loadPerformanceDiagnostic();
     loadModernImpiantiMap();
+    loadMapSearchFocus();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

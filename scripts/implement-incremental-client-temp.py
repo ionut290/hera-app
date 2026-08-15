@@ -5,6 +5,9 @@ path = Path("app.js")
 source = path.read_text(encoding="utf-8")
 start = source.index("function subscribeImpianti() {")
 end = source.index("\nfunction stopImpiantiSubscription()", start)
+helper_start = source.rfind("function getImpiantiIncrementalStateKey(commessaId) {", 0, start)
+if helper_start != -1:
+    start = helper_start
 
 replacement = dedent(r'''
 function getImpiantiIncrementalStateKey(commessaId) {
@@ -77,10 +80,28 @@ function subscribeImpianti() {
     ? impiantiByCommessaId.get(requestedCommessaId)
     : [];
   const incrementalState = readImpiantiIncrementalState(requestedCommessaId);
+  let markerSeedCaptured = false;
 
   const applyRaw = (rawImpianti) => {
     if (requestedCommessaId !== selectedCommessaId) return;
     renderImpiantiAfterRemoteSync(rawImpianti, previousDoneSignatureRef);
+  };
+
+  const captureLatestServerMarker = async () => {
+    if (markerSeedCaptured) return;
+    markerSeedCaptured = true;
+    try {
+      const markerSnapshot = await changeIndexRef.orderBy("changedAt", "desc").limit(1).get();
+      const latestMarker = markerSnapshot.docs?.[0]?.data?.() || null;
+      const latestMarkerMs = latestMarker ? firestoreDateToMillis(latestMarker.changedAt) : 0;
+      if (latestMarkerMs > 0) saveImpiantiIncrementalState(requestedCommessaId, latestMarkerMs);
+    } catch (error) {
+      markerSeedCaptured = false;
+      console.debug("Indice incrementale impianti non ancora disponibile; mantengo il listener completo.", {
+        commessaId: requestedCommessaId,
+        error: String(error?.message || error || "")
+      });
+    }
   };
 
   const startFullListener = () => {
@@ -88,8 +109,7 @@ function subscribeImpianti() {
     return impiantiRef.onSnapshot((snapshot) => {
       const rawImpianti = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       applyRaw(rawImpianti);
-      const newestMarkerMs = Date.now();
-      saveImpiantiIncrementalState(requestedCommessaId, newestMarkerMs);
+      captureLatestServerMarker();
     }, (error) => {
       console.error("Errore Firestore caricamento impianti:", error);
       if (!cachedImpianti.length && ui.impiantiLista) {
@@ -108,31 +128,38 @@ function subscribeImpianti() {
   renderMap();
 
   const since = firebase.firestore.Timestamp.fromMillis(Number(incrementalState.lastChangedAtMs));
-  let working = new Map(cachedImpianti.map((item) => [String(item.id || ""), item]).filter(([id]) => id));
+  const working = new Map(cachedImpianti.map((item) => [String(item.id || ""), item]).filter(([id]) => id));
+  let incrementalSyncChain = Promise.resolve();
   console.log("Sync impianti incrementale avviata", { commessaId: requestedCommessaId, cached: working.size });
   unsubscribeImpianti = changeIndexRef
     .where("changedAt", ">", since)
     .orderBy("changedAt", "asc")
-    .onSnapshot(async (snapshot) => {
-      if (requestedCommessaId !== selectedCommessaId) return;
-      let maxChangedAtMs = Number(incrementalState.lastChangedAtMs);
-      for (const change of snapshot.docChanges()) {
-        if (change.type === "removed") continue;
-        const marker = change.doc.data() || {};
-        const impiantoId = String(marker.impiantoId || change.doc.id || "").trim();
-        const changedAtMs = firestoreDateToMillis(marker.changedAt);
-        if (changedAtMs > maxChangedAtMs) maxChangedAtMs = changedAtMs;
-        if (!impiantoId) continue;
-        if (marker.deleted === true) {
-          working.delete(impiantoId);
-          continue;
+    .onSnapshot((snapshot) => {
+      incrementalSyncChain = incrementalSyncChain.then(async () => {
+        if (requestedCommessaId !== selectedCommessaId) return;
+        let maxChangedAtMs = Number(readImpiantiIncrementalState(requestedCommessaId)?.lastChangedAtMs || incrementalState.lastChangedAtMs);
+        for (const change of snapshot.docChanges()) {
+          if (change.type === "removed") continue;
+          const marker = change.doc.data() || {};
+          const impiantoId = String(marker.impiantoId || change.doc.id || "").trim();
+          const changedAtMs = firestoreDateToMillis(marker.changedAt);
+          if (changedAtMs > maxChangedAtMs) maxChangedAtMs = changedAtMs;
+          if (!impiantoId) continue;
+          if (marker.deleted === true) {
+            working.delete(impiantoId);
+            continue;
+          }
+          const doc = await impiantiRef.doc(impiantoId).get();
+          if (doc.exists) working.set(doc.id, { id: doc.id, ...doc.data() });
+          else working.delete(impiantoId);
         }
-        const doc = await impiantiRef.doc(impiantoId).get();
-        if (doc.exists) working.set(doc.id, { id: doc.id, ...doc.data() });
-        else working.delete(impiantoId);
-      }
-      saveImpiantiIncrementalState(requestedCommessaId, maxChangedAtMs);
-      applyRaw(Array.from(working.values()));
+        saveImpiantiIncrementalState(requestedCommessaId, maxChangedAtMs);
+        applyRaw(Array.from(working.values()));
+      }).catch((error) => {
+        console.warn("Aggiornamento incrementale impianti fallito, ripristino listener completo:", error);
+        try { unsubscribeImpianti?.(); } catch (_) {}
+        unsubscribeImpianti = startFullListener();
+      });
     }, (error) => {
       console.warn("Sync incrementale impianti non disponibile, ripristino listener completo:", error);
       try { unsubscribeImpianti?.(); } catch (_) {}

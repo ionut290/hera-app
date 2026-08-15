@@ -22602,19 +22602,6 @@ async function forceMarkDone(impianto) {
   return true;
 }
 
-function canTriggerImpiantoWhatsApp(impianto, notify = true) {
-  const valid = validateImpiantoCoordinates(impianto).valid;
-  if (!valid && notify) notifyInvalidImpiantoCoordinates();
-  return valid;
-}
-
-function setWhazzupPreparingFeedback(visible, message = "") {
-  if (!ui.whazzupPreparingFeedback) return;
-  const cardMessage = ui.whazzupPreparingFeedback.querySelector(".whazzup-preparing-card span:not(.whazzup-preparing-spinner)");
-  if (cardMessage && message) cardMessage.textContent = message;
-  ui.whazzupPreparingFeedback.classList.toggle("hidden", !visible);
-}
-
 
 function cacheFattoVisualEvidence(impianto, clickedAt) {
   const millis = (clickedAt instanceof Date ? clickedAt : new Date(clickedAt)).getTime();

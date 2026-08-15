@@ -13,6 +13,18 @@ function watchCriticalLocal404s(page) {
   return local404s;
 }
 
+async function countExactScript(page, pathname) {
+  return page.locator('script[src]').evaluateAll((scripts, expectedPathname) => (
+    scripts.filter((script) => {
+      try {
+        return new URL(script.src, window.location.href).pathname === expectedPathname;
+      } catch (_) {
+        return false;
+      }
+    }).length
+  ), pathname);
+}
+
 test.describe('Varga Cantieri startup smoke', () => {
   test('loads the PWA shell and authentication surface', async ({ page }) => {
     const critical404s = watchCriticalLocal404s(page);
@@ -39,8 +51,8 @@ test.describe('Varga Cantieri startup smoke', () => {
 
     await expect(page.locator('#auth-gate')).toHaveCount(1);
     await expect(page.locator('#app-startup-loading')).toHaveCount(1);
-    await expect(page.locator('script[src*="app-pure-utils.js"]')).toHaveCount(1);
-    await expect(page.locator('script[src*="app.js"]')).toHaveCount(1);
+    expect(await countExactScript(page, '/app-pure-utils.js')).toBe(1);
+    expect(await countExactScript(page, '/app.js')).toBe(1);
     expect(critical404s).toEqual([]);
   });
 });

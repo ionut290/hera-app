@@ -31,8 +31,6 @@ input,select,textarea{border-radius:12px;border-color:#cbd7e5;background:#fff;}i
   .home-quick-access-btn{min-height:49px!important;padding:3px 2px!important;gap:1px!important;font-size:.65rem!important}.home-quick-access-btn>span:first-child{font-size:1.02rem!important;line-height:1!important}
   .today-summary-card>h2{font-size:.7rem!important;margin:0 0 2px!important;line-height:1!important}.today-summary-item{min-height:50px!important;padding:3px 2px!important;gap:1px!important;font-size:.62rem!important;line-height:1.05!important}.today-summary-icon{font-size:1.02rem!important}.today-summary-item strong,.today-summary-item b{font-size:.78rem!important}.today-summary-item small,.today-summary-item span{line-height:1.05!important}
   #today-squads-section{margin-top:0!important;padding:8px!important}.squadre-section-head{margin:0 0 4px!important;min-height:0!important;align-items:center!important}.squadre-section-head h2{margin:0!important;font-size:1.05rem!important;line-height:1.1!important}.squadre-status-pill{display:none!important}.squadre-commesse-toggle{min-height:38px!important;padding:6px 10px!important}.squadre-filter-controls{margin:3px 0 0!important;gap:4px!important}.squadre-filter-controls input,.squadre-filter-controls .btn{min-height:40px!important;height:40px!important}.squadre-lista{margin-top:4px!important}
-
-  /* Tutti i comandi della testata hanno la stessa cella, larghezza e altezza. */
   .home-header-modern .logo-head{grid-template-columns:repeat(6,minmax(0,1fr))!important;align-items:stretch!important}
   .home-header-modern .logo-head-left,.home-header-modern .logo-head-actions,.home-header-modern .logo-head-action-icons{display:contents!important}
   .home-header-modern #user-toggle-btn,.home-header-modern #update-app-btn,.home-header-modern #refresh-app-btn,.home-header-modern #menu-toggle-btn,.home-header-modern #snow-service-btn{width:100%!important;min-width:0!important;max-width:none!important;height:43px!important;min-height:43px!important;max-height:43px!important;margin:0!important;padding:2px 1px 3px!important;align-self:stretch!important;border-radius:9px!important;box-sizing:border-box!important}
@@ -40,3 +38,35 @@ input,select,textarea{border-radius:12px;border-color:#cbd7e5;background:#fff;}i
   .home-header-modern #update-app-btn span:last-child{display:block!important;width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;text-align:center!important}
 }
 @media (max-width:420px){.container{padding-left:4px!important;padding-right:4px!important}.home-header-modern .logo-head{min-height:40px!important}.home-header-modern .header-action-button,.home-header-modern #user-toggle-btn,.home-header-modern .snow-service-btn{height:40px!important;min-height:40px!important}.home-quick-access-btn{min-height:46px!important}.today-summary-item{min-height:47px!important}.squadre-section-head h2{font-size:.98rem!important}.home-header-modern #user-toggle-btn,.home-header-modern #update-app-btn,.home-header-modern #refresh-app-btn,.home-header-modern #menu-toggle-btn,.home-header-modern #snow-service-btn{height:40px!important;min-height:40px!important;max-height:40px!important}}
+
+/* Palette Home 2026: superfici morbide, meno bianco puro e accenti funzionali. */
+body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!important}
+#home-page>.logo-card{background:linear-gradient(145deg,#eef5ff 0%,#e8f2f7 52%,#eef8f3 100%)!important}
+#home-page>.home-top-grid{background:linear-gradient(180deg,#eef6fb 0%,#edf7f2 100%)!important}
+#home-page>.home-top-grid .weather-card{background:linear-gradient(135deg,#e6f3ff 0%,#edf8f3 58%,#fff2d9 100%)!important}
+#home-page>.home-quick-access{background:linear-gradient(90deg,#edf4ff 0%,#f1efff 50%,#fff2df 100%)!important}
+#home-page>#today-summary-card{background:linear-gradient(135deg,#edf4ff 0%,#eaf7f1 100%)!important}
+#today-squads-section{background:linear-gradient(145deg,#f0f5fb 0%,#edf4f8 100%)!important}
+.user-connection-bar{background:linear-gradient(90deg,#e9f4ff 0%,#eaf8f1 100%)!important}
+#connection-indicator{color:#18794e!important}
+.weather-card .section-head h2{color:#1e5f8f!important}
+.home-quick-access-btn{border:0!important}
+#identity-card-btn{background:linear-gradient(180deg,rgba(77,137,255,.13),rgba(77,137,255,.06))!important;color:#2457a6!important}
+#fuel-pin-btn{background:linear-gradient(180deg,rgba(245,158,11,.16),rgba(245,158,11,.07))!important;color:#9a5b00!important}
+#home-calendar-btn{background:linear-gradient(180deg,rgba(139,92,246,.14),rgba(139,92,246,.06))!important;color:#6542b8!important}
+#home-segnalazioni-btn{background:linear-gradient(180deg,rgba(249,115,22,.16),rgba(249,115,22,.07))!important;color:#b45309!important}
+#today-commesse-btn{background:rgba(59,130,246,.08)!important}
+#today-hours-btn{background:rgba(14,165,233,.08)!important}
+#today-mezzi-btn{background:rgba(16,185,129,.08)!important}
+#today-alerts-btn{background:rgba(249,115,22,.09)!important}
+.home-header-modern #user-toggle-btn{background:#e8f1ff!important;border-color:#cdddf6!important}
+.home-header-modern #update-app-btn{background:#eaf6f0!important;border-color:#cfe8da!important}
+.home-header-modern #refresh-app-btn{background:#e7f5fb!important;border-color:#cbe5ef!important}
+.home-header-modern #menu-toggle-btn{background:#f1effb!important;border-color:#ddd6f4!important}
+.home-header-modern #snow-service-btn{background:#e8f5ff!important;border-color:#cce7f8!important;color:#246c96!important}
+@media (max-width:700px){
+  #home-page>.logo-card{border-color:#cad8e8!important}
+  #home-page>.home-top-grid,#home-page>.home-quick-access,#home-page>#today-summary-card{border-color:#cad8e8!important}
+  #home-page>.home-top-grid .weather-card,#home-page>.home-quick-access,#home-page>#today-summary-card,.user-connection-bar{border-top-color:#d3deea!important}
+  .home-quick-access-btn>span:first-child,.today-summary-icon{filter:saturate(1.2)}
+}

@@ -1,0 +1,37 @@
+name: Extend safe listener nested once
+
+on:
+  push:
+    branches: [opt/share-nested-commessa-listeners-20260815]
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: opt/share-nested-commessa-listeners-20260815
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node scripts/extend-safe-listener-nested-once.js
+      - name: Verify focused behavior
+        run: |
+          node --check firestore-safe-optimizer.js
+          node scripts/check-firestore-safe-optimizer.js
+          npm run check:done-button
+          npm run check:whatsapp-protection
+          node scripts/check-critical-flows.js
+      - name: Commit runtime and test changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore-safe-optimizer.js scripts/check-firestore-safe-optimizer.js
+          git commit -m "Share identical nested Firestore listeners"
+          git push origin HEAD:opt/share-nested-commessa-listeners-20260815

@@ -374,7 +374,7 @@
 
   function selectedId() {
     try {
-      return String(window.selectedCommessaId || selectedCommessaId || "").trim();
+      return String(selectedCommessaId || window.selectedCommessaId || "").trim();
     } catch (_) {
       return String(window.selectedCommessaId || "").trim();
     }
@@ -441,7 +441,7 @@
 
   window.HeraImpiantiListenerLifecycleGuard = {
     installed: true,
-    version: "1.0.0",
+    version: "1.0.1",
     deferMs: DEFER_MS,
     getState: () => ({
       ...state,

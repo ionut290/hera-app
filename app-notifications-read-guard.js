@@ -161,10 +161,12 @@
 
   if (install()) return;
 
-  const timer = setInterval(() => {
-    if (install() || state.attempts >= 200) {
-      clearInterval(timer);
-      if (!state.installed) console.warn("Guardia letture appNotifications non installata.");
+  const installOnLoad = () => {
+    if (!install()) {
+      console.warn("Guardia letture appNotifications non installata.");
     }
-  }, 25);
+  };
+
+  if (document.readyState === "complete") installOnLoad();
+  else window.addEventListener("load", installOnLoad, { once: true });
 })();

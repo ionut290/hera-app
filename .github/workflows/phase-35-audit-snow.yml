@@ -1,0 +1,21 @@
+name: Phase 35 Snow audit
+
+on:
+  push:
+    branches:
+      - agent/consolidation-phase-35-snow-module
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install parser
+        run: npm install --no-save --no-audit --no-fund acorn@8
+      - name: Audit Snow functions
+        run: node scripts/phase35-audit-snow-module.js

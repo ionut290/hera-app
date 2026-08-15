@@ -1,18 +1,24 @@
 (() => {
   'use strict';
 
-  if (window.__heraMapSearchFocusV2Installed) return;
-  window.__heraMapSearchFocusV2Installed = true;
+  if (window.__heraMapSearchFocusV3Installed) return;
+  window.__heraMapSearchFocusV3Installed = true;
 
   const INPUT_ID = 'map-fullscreen-number-search-input';
   const PAGE_ID = 'map-fullscreen-page';
   const VIEW_ID = 'map-fullscreen-view';
-  const MAX_AUTO_CENTER_MATCHES = 6;
-  const MAX_FLASH_MATCHES = 8;
+  const SUGGESTIONS_ID = 'hera-map-live-suggestions';
   const FLASH_CLASS = 'hera-search-match-flash';
   const SELECTED_CLASS = 'hera-search-selected-marker';
+  const MAX_RESULTS = 8;
+  const MAX_AUTO_CENTER = 6;
 
-  const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const normalize = (value) => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
   const firstValue = (item, keys) => {
     for (const key of keys) {
       const value = item?.[key];
@@ -63,21 +69,24 @@
   }
 
   function matchScore(item, index, query) {
-    const values = [
-      normalize(plantName(item,index)), normalize(plantComune(item)), normalize(plantAddress(item)),
-      normalize(plantCode(item)), normalize(String(plantNumber(item,index)))
-    ].filter(Boolean);
+    const name = normalize(plantName(item,index));
+    const comune = normalize(plantComune(item));
+    const address = normalize(plantAddress(item));
+    const code = normalize(plantCode(item));
+    const number = normalize(String(plantNumber(item,index)));
+    const values = [name, comune, address, code, number].filter(Boolean);
     if (!values.length) return Infinity;
-    if (values.some((v) => v === query)) return 0;
+    if (number === query || code === query || name === query) return 0;
     if (values.some((v) => v.startsWith(query))) return 1;
-    if (values.some((v) => v.split(/\s+/).some((w) => w.startsWith(query)))) return 2;
+    if (values.some((v) => v.split(/\s+/).some((word) => word.startsWith(query)))) return 2;
     if (values.some((v) => v.includes(query))) return 3;
     return Infinity;
   }
 
   function findMatches(query) {
-    return getCurrentImpianti().map((item,index) => ({item,index,score:matchScore(item,index,query)}))
-      .filter((e) => Number.isFinite(e.score))
+    return getCurrentImpianti()
+      .map((item,index) => ({ item, index, score: matchScore(item,index,query) }))
+      .filter((entry) => Number.isFinite(entry.score))
       .sort((a,b) => a.score - b.score || plantNumber(a.item,a.index) - plantNumber(b.item,b.index));
   }
 
@@ -93,8 +102,12 @@
     return null;
   }
 
-  function clearFlashes() { document.querySelectorAll(`.${FLASH_CLASS}`).forEach((n) => n.classList.remove(FLASH_CLASS)); }
-  function clearSelected() { document.querySelectorAll(`.${SELECTED_CLASS}`).forEach((n) => n.classList.remove(SELECTED_CLASS)); }
+  function clearFlashes() {
+    document.querySelectorAll(`.${FLASH_CLASS}`).forEach((node) => node.classList.remove(FLASH_CLASS));
+  }
+  function clearSelected() {
+    document.querySelectorAll(`.${SELECTED_CLASS}`).forEach((node) => node.classList.remove(SELECTED_CLASS));
+  }
 
   function markerCandidatesForNumber(number) {
     const view = document.getElementById(VIEW_ID);
@@ -102,50 +115,122 @@
     const wanted = String(number);
     return Array.from(view.querySelectorAll('.leaflet-marker-pane > *, .leaflet-tooltip-pane > *, .leaflet-marker-icon, [data-plant-index], [data-impianto-index], [data-marker-number]')).filter((node) => {
       const vals = [node.dataset?.plantIndex,node.dataset?.impiantoIndex,node.dataset?.markerNumber].filter((v) => v != null).map(String);
-      return vals.includes(wanted) || vals.includes(String(Number(wanted)-1)) || String(node.textContent || '').trim() === wanted;
+      return vals.includes(wanted)
+        || vals.includes(String(Number(wanted) - 1))
+        || String(node.textContent || '').trim() === wanted;
     });
   }
 
   function flashMatches(matches) {
     clearFlashes();
     clearSelected();
-    matches.slice(0,MAX_FLASH_MATCHES).forEach(({item,index}) => markerCandidatesForNumber(plantNumber(item,index)).forEach((n) => n.classList.add(FLASH_CLASS)));
-  }
-
-  function selectMarkerByPlantIndex(index) {
-    const items = getCurrentImpianti();
-    const item = items[index];
-    if (!item) return;
-    clearFlashes();
-    clearSelected();
-    markerCandidatesForNumber(plantNumber(item,index)).forEach((n) => n.classList.add(SELECTED_CLASS));
+    matches.slice(0, MAX_RESULTS).forEach(({item,index}) => {
+      markerCandidatesForNumber(plantNumber(item,index)).forEach((node) => node.classList.add(FLASH_CLASS));
+    });
   }
 
   function centerMatches(matches) {
-    if (!matches.length || matches.length > MAX_AUTO_CENTER_MATCHES) return;
+    if (!matches.length || matches.length > MAX_AUTO_CENTER) return;
     const coords = matches.map(({item}) => plantCoordinates(item)).filter(Boolean);
     const mapInstance = getFullscreenMap();
     if (!coords.length || !mapInstance) return;
     try {
-      if (coords.length === 1) mapInstance.setView(coords[0], Math.max(Number(mapInstance.getZoom?.() || 0),16), {animate:true});
-      else if (window.L?.latLngBounds) mapInstance.fitBounds(window.L.latLngBounds(coords), {padding:[54,54],maxZoom:16,animate:true});
-      else mapInstance.fitBounds(coords, {padding:[54,54],maxZoom:16,animate:true});
-    } catch (error) { console.warn('Centratura risultati ricerca non completata:', error); }
+      if (coords.length === 1) {
+        mapInstance.setView(coords[0], Math.max(Number(mapInstance.getZoom?.() || 0), 16), { animate: true });
+      } else if (window.L?.latLngBounds) {
+        mapInstance.fitBounds(window.L.latLngBounds(coords), { padding: [60,60], maxZoom: 16, animate: true });
+      } else {
+        mapInstance.fitBounds(coords, { padding: [60,60], maxZoom: 16, animate: true });
+      }
+    } catch (error) {
+      console.warn('Centratura risultati ricerca non completata:', error);
+    }
+  }
+
+  function ensureSuggestions(input) {
+    let box = document.getElementById(SUGGESTIONS_ID);
+    if (box) return box;
+    const parent = input.closest('.hera-map-search-shell') || input.parentElement;
+    if (!parent) return null;
+    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    box = document.createElement('div');
+    box.id = SUGGESTIONS_ID;
+    box.className = 'hera-map-live-suggestions';
+    box.hidden = true;
+    box.setAttribute('role','listbox');
+    parent.appendChild(box);
+    return box;
+  }
+
+  function hideSuggestions() {
+    const box = document.getElementById(SUGGESTIONS_ID);
+    if (box) { box.hidden = true; box.textContent = ''; }
+  }
+
+  function selectMatch(match, input) {
+    clearFlashes();
+    clearSelected();
+    hideSuggestions();
+    input.value = plantName(match.item, match.index);
+    const nodes = markerCandidatesForNumber(plantNumber(match.item, match.index));
+    nodes.forEach((node) => node.classList.add(SELECTED_CLASS));
+    centerMatches([match]);
+    const clickable = nodes.find((node) => typeof node.click === 'function');
+    try { clickable?.click(); } catch (_) {}
+  }
+
+  function renderSuggestions(matches, input) {
+    const box = ensureSuggestions(input);
+    if (!box) return;
+    box.textContent = '';
+    const visible = matches.slice(0, MAX_RESULTS);
+    if (!visible.length) {
+      const empty = document.createElement('div');
+      empty.className = 'hera-map-live-empty';
+      empty.textContent = 'Nessun impianto trovato';
+      box.appendChild(empty);
+      box.hidden = false;
+      return;
+    }
+    visible.forEach((match) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'hera-map-live-suggestion';
+      button.dataset.plantIndex = String(match.index);
+      const title = document.createElement('strong');
+      title.textContent = `${plantNumber(match.item, match.index)} · ${plantName(match.item, match.index)}`;
+      const meta = document.createElement('span');
+      meta.textContent = [plantComune(match.item), plantAddress(match.item), plantCode(match.item) ? `ID SAP ${plantCode(match.item)}` : ''].filter(Boolean).join(' • ');
+      button.append(title, meta);
+      button.addEventListener('click', () => selectMatch(match, input));
+      box.appendChild(button);
+    });
+    box.hidden = false;
   }
 
   let searchTimer = null;
   function handleSearchInput(input) {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
       const query = normalize(input.value);
-      if (!query) { clearFlashes(); clearSelected(); return; }
+      if (!query) {
+        clearFlashes();
+        clearSelected();
+        hideSuggestions();
+        return;
+      }
       const matches = findMatches(query);
-      if (!matches.length) { clearFlashes(); clearSelected(); return; }
+      renderSuggestions(matches, input);
+      if (!matches.length) {
+        clearFlashes();
+        clearSelected();
+        return;
+      }
       const bestScore = matches[0].score;
-      const best = matches.filter((e) => e.score === bestScore).slice(0,MAX_FLASH_MATCHES);
+      const best = matches.filter((entry) => entry.score === bestScore).slice(0, MAX_RESULTS);
       flashMatches(best);
       centerMatches(best);
-    },160);
+    }, 100);
   }
 
   function hideDrawUiSafely() {
@@ -153,35 +238,27 @@
     if (!page) return;
     ['#map-fullscreen-draw-btn','#map-draw-btn','#draw-map-btn','#map-fullscreen-undo-btn','#map-fullscreen-redo-btn','#map-fullscreen-clear-btn','.map-draw-toolbar','.map-drawing-toolbar','.leaflet-draw','.leaflet-draw-toolbar','[data-map-draw]','[data-draw-map]']
       .forEach((selector) => page.querySelectorAll(selector).forEach((node) => node.remove()));
-
-    page.querySelectorAll('button, [role="button"], .map-fullscreen-hint, .map-hint, p').forEach((node) => {
-      if (!node.isConnected) return;
-      const view = document.getElementById(VIEW_ID);
-      const input = document.getElementById(INPUT_ID);
-      if (node === view || (view && node.contains(view)) || (input && node.contains(input))) return;
-      const signature = normalize([node.textContent,node.getAttribute?.('title'),node.getAttribute?.('aria-label'),node.id,node.className].filter(Boolean).join(' '));
-      if (/(^|\s)(disegna|disegno|drawing|draw)(\s|$)/.test(signature) || /usa.*disegna.*per.*perimetro/.test(signature) || /annulla.*disegno|ripristina.*disegno|cancella.*disegno|condividi.*disegno/.test(signature)) node.remove();
-    });
   }
 
   function installStyles() {
-    if (document.getElementById('hera-map-search-focus-style-v2')) return;
+    if (document.getElementById('hera-map-search-focus-style-v3')) return;
     const style = document.createElement('style');
-    style.id = 'hera-map-search-focus-style-v2';
+    style.id = 'hera-map-search-focus-style-v3';
     style.textContent = `
-      @keyframes heraSearchPulseV2 {
-        0%,100% {
-          transform:scale(1);
-          filter:brightness(1.08) drop-shadow(0 0 5px rgba(239,68,68,.95)) drop-shadow(0 0 11px rgba(239,68,68,.82));
-        }
-        50% {
-          transform:scale(1.30);
-          filter:brightness(1.22) drop-shadow(0 0 5px rgba(37,99,235,1)) drop-shadow(0 0 13px rgba(37,99,235,.95));
-        }
+      @keyframes heraSearchPulseV3 {
+        0%,100% { transform:scale(1); filter:brightness(1.08) drop-shadow(0 0 5px rgba(239,68,68,.98)) drop-shadow(0 0 12px rgba(239,68,68,.90)); }
+        50% { transform:scale(1.32); filter:brightness(1.24) drop-shadow(0 0 6px rgba(37,99,235,1)) drop-shadow(0 0 14px rgba(37,99,235,.98)); }
       }
-      #${PAGE_ID} .${FLASH_CLASS}{animation:heraSearchPulseV2 .78s ease-in-out infinite !important;transform-origin:center center !important;z-index:9999 !important}
-      #${PAGE_ID} .${SELECTED_CLASS}{filter:brightness(1.10) drop-shadow(0 0 5px rgba(37,99,235,.95)) drop-shadow(0 0 13px rgba(37,99,235,.75)) !important;transform:scale(1.12) !important;transform-origin:center center !important;z-index:9998 !important}
-      #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map]{display:none !important}
+      #${PAGE_ID} .${FLASH_CLASS} { animation:heraSearchPulseV3 .72s ease-in-out infinite !important; transform-origin:center center !important; z-index:9999 !important; }
+      #${PAGE_ID} .${SELECTED_CLASS} { filter:brightness(1.12) drop-shadow(0 0 6px rgba(37,99,235,1)) drop-shadow(0 0 14px rgba(37,99,235,.8)) !important; transform:scale(1.14) !important; transform-origin:center center !important; z-index:9998 !important; }
+      #${PAGE_ID} .hera-map-live-suggestions { position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5000; max-height:min(52vh,420px); overflow:auto; padding:7px; border:1px solid rgba(15,23,42,.12); border-radius:18px; background:rgba(255,255,255,.995); box-shadow:0 18px 40px rgba(15,23,42,.24); -webkit-overflow-scrolling:touch; }
+      #${PAGE_ID} .hera-map-live-suggestions[hidden] { display:none !important; }
+      #${PAGE_ID} .hera-map-live-suggestion { display:flex; flex-direction:column; gap:3px; width:100%; padding:11px 12px; border:0; border-radius:13px; background:transparent; text-align:left; color:#111827; }
+      #${PAGE_ID} .hera-map-live-suggestion:active { background:#eef4ff; }
+      #${PAGE_ID} .hera-map-live-suggestion strong { font-size:14px; font-weight:800; line-height:1.25; }
+      #${PAGE_ID} .hera-map-live-suggestion span { font-size:12px; font-weight:600; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #${PAGE_ID} .hera-map-live-empty { padding:14px; font-size:14px; font-weight:700; color:#64748b; }
+      #${PAGE_ID} .leaflet-draw,#${PAGE_ID} .leaflet-draw-toolbar,#${PAGE_ID} [data-map-draw],#${PAGE_ID} [data-draw-map] { display:none !important; }
     `;
     document.head.appendChild(style);
   }
@@ -191,38 +268,26 @@
     if (!input) return;
     input.placeholder = 'Cerca impianto, numero, comune, indirizzo o ID SAP';
     input.setAttribute('aria-label','Cerca impianto per nome, numero, comune, indirizzo o ID SAP');
-    if (input.dataset.searchFocusEnhancementV2 === '1') return;
-    input.dataset.searchFocusEnhancementV2 = '1';
+    ensureSuggestions(input);
+    if (input.dataset.searchFocusEnhancementV3 === '1') return;
+    input.dataset.searchFocusEnhancementV3 = '1';
     input.addEventListener('input', () => handleSearchInput(input));
     input.addEventListener('search', () => handleSearchInput(input));
+    input.addEventListener('focus', () => { if (normalize(input.value)) handleSearchInput(input); });
   }
 
   function setupSelectionStop() {
     const page = document.getElementById(PAGE_ID);
-    if (!page || page.dataset.searchSelectionStop === '1') return;
-    page.dataset.searchSelectionStop = '1';
-
+    if (!page || page.dataset.searchSelectionStopV3 === '1') return;
+    page.dataset.searchSelectionStopV3 = '1';
     page.addEventListener('click', (event) => {
-      const clearButton = event.target.closest?.('.hera-map-search-clear');
-      if (clearButton) {
-        clearFlashes();
-        clearSelected();
-        return;
+      if (event.target.closest?.(`#${SUGGESTIONS_ID}`)) return;
+      if (event.target.closest?.('.hera-map-search-clear')) {
+        clearFlashes(); clearSelected(); hideSuggestions(); return;
       }
-
-      const result = event.target.closest?.('.hera-map-search-result');
-      if (result && !result.hasAttribute('aria-disabled')) {
-        const index = Number.parseInt(result.dataset.plantIndex || '', 10);
-        if (Number.isFinite(index)) selectMarkerByPlantIndex(index);
-        else clearFlashes();
-        return;
-      }
-
       const marker = event.target.closest?.(`#${VIEW_ID} .leaflet-marker-icon, #${VIEW_ID} .leaflet-tooltip-pane > *, #${VIEW_ID} [data-plant-index], #${VIEW_ID} [data-impianto-index], #${VIEW_ID} [data-marker-number]`);
       if (marker) {
-        clearFlashes();
-        clearSelected();
-        marker.classList.add(SELECTED_CLASS);
+        clearFlashes(); clearSelected(); hideSuggestions(); marker.classList.add(SELECTED_CLASS);
       }
     }, true);
   }
@@ -233,11 +298,19 @@
     view.style.removeProperty('display');
     view.style.removeProperty('visibility');
     view.style.removeProperty('opacity');
-    try { getFullscreenMap()?.invalidateSize?.({animate:false}); } catch (_) {}
+    try { getFullscreenMap()?.invalidateSize?.({ animate:false }); } catch (_) {}
   }
 
-  function apply() { installStyles(); hideDrawUiSafely(); setupInput(); setupSelectionStop(); ensureMapVisible(); }
-  const observer = new MutationObserver(() => requestAnimationFrame(apply));
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',apply,{once:true}); else apply();
+  function apply() {
+    installStyles();
+    hideDrawUiSafely();
+    setupInput();
+    setupSelectionStop();
+    ensureMapVisible();
+  }
+
+  const observer = new MutationObserver(() => window.requestAnimationFrame(apply));
+  observer.observe(document.documentElement, { childList:true, subtree:true });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply, { once:true });
+  else apply();
 })();

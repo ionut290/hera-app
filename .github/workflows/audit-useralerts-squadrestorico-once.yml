@@ -1,0 +1,25 @@
+name: Audit userAlerts and squadreStorico once
+
+on:
+  push:
+    branches: [audit/useralerts-squadrestorico-20260815]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show userAlerts contexts
+        run: |
+          echo '=== userAlerts references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git "userAlerts" . | head -n 120 || true
+          echo '=== subscribeUserAlerts context ==='
+          grep -n -B 25 -A 80 "subscribeUserAlerts" app.js || true
+          echo '=== notification center listen/subscribe context ==='
+          grep -n -B 15 -A 45 "function subscribe" notification-center.js || true
+      - name: Show squadreStorico contexts
+        run: |
+          echo '=== squadreStorico references ==='
+          grep -RIn --exclude-dir=node_modules --exclude-dir=.git "squadreStorico" . | head -n 160 || true
+          echo '=== app listener contexts ==='
+          grep -n -B 35 -A 90 "collection(\"squadreStorico\")" app.js || true

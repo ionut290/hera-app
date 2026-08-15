@@ -1,0 +1,43 @@
+name: Phase 38 platform profile bootstrap read
+
+on:
+  push:
+    branches:
+      - opt/platform-profile-bootstrap-read
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: opt/platform-profile-bootstrap-read
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply one-shot refactor
+        run: node scripts/phase38-coalesce-platform-profile-bootstrap.js
+      - name: Verify focused checks
+        run: |
+          node --check auth-login-fix.js
+          node --check approval-access.js
+          node scripts/check-platform-profile-bootstrap-reuse.js
+          npm run check:auth-login
+          npm run check:done-button
+          node scripts/check-critical-flows.js
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add auth-login-fix.js approval-access.js package.json scripts/check-platform-profile-bootstrap-reuse.js
+          git commit -m "Coalesce platform profile bootstrap read"
+          git push origin HEAD:opt/platform-profile-bootstrap-read

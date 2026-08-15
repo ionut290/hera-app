@@ -7,7 +7,11 @@ const fs = require("node:fs");
 const code = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 
-assert.match(index, /commessa-stats-cache-optimizer\.js[^\n]*commessa-navigation-repair\.js/s, "Optimizer must load before navigation repair");
+const statsScriptIndex = index.indexOf("commessa-stats-cache-optimizer.js");
+const navigationScriptIndex = index.indexOf("commessa-navigation-repair.js");
+assert.ok(statsScriptIndex >= 0, "Stats optimizer script tag missing");
+assert.ok(navigationScriptIndex >= 0, "Navigation repair script tag missing");
+assert.ok(statsScriptIndex < navigationScriptIndex, "Optimizer must load before navigation repair");
 assert.match(code, /heraCommessaStatsCacheV1:/);
 assert.match(code, /impiantoChangeIndex/);
 assert.match(code, /where\("changedAt", ">", markerDate\)/);

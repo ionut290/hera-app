@@ -101,10 +101,6 @@
     );
   }
 
-  function loadFirestoreSafeOptimizer() {
-    loadScriptOnce('script[data-firestore-safe-optimizer]', './firestore-safe-optimizer.js?v=20260802d', 'firestoreSafeOptimizer', null, 'Modulo compatibilità Firestore non caricato; avvio app non interrotto.');
-  }
-
   function loadFirestoreDiagnostics() {
     loadScriptOnce('script[data-firestore-operation-diagnostics]', './firestore-operation-diagnostics.js?v=20260804-v3', 'firestoreOperationDiagnostics', null, 'Diagnostica Firestore non caricata; avvio app non interrotto.');
   }
@@ -163,7 +159,6 @@
   disableAutomaticHoursRepair();
   loadSquadValidationPersonnelCompat();
   loadWhatsAppInstalledOnlyGuard();
-  loadFirestoreSafeOptimizer();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once:true });
   else init();
 })();

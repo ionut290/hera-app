@@ -1,1 +1,0 @@
-Deploy notifiche Android: chat, ore inserite e assegnazione squadra.

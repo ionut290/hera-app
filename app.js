@@ -13272,12 +13272,6 @@ function openExternalUrl(url, options = {}) {
   }
 }
 
-function buildWhatsAppWebUrl(encodedMessage, phone = "") {
-  const normalizedPhone = sanitizePhone(phone).replace(/\+/g, "");
-  if (normalizedPhone) return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
-  return `https://wa.me/?text=${encodedMessage}`;
-}
-
 function safeOpenWhatsAppMessage(message, options = {}) {
   const encodedMessage = encodeURIComponent(String(message || ""));
   const appUrl = options?.appUrl || `whatsapp://send?text=${encodedMessage}`;
@@ -13452,17 +13446,6 @@ function updateCurrentUserPosition(coords, timestamp = Date.now(), options = {})
 
 function clearCurrentUserPosition() {
   currentUserPos = null;
-}
-
-function isCurrentUserPositionFresh(maxAgeMs = FATTO_POSITION_MAX_AGE_MS) {
-  const timestamp = Number(currentUserPos?.timestamp || 0);
-  return Boolean(
-    currentUserPos
-    && Number.isFinite(currentUserPos.lat)
-    && Number.isFinite(currentUserPos.lng)
-    && timestamp > 0
-    && Date.now() - timestamp <= maxAgeMs
-  );
 }
 
 function loadPendingImpiantoActions() {
@@ -22623,11 +22606,6 @@ function canTriggerImpiantoWhatsApp(impianto, notify = true) {
   const valid = validateImpiantoCoordinates(impianto).valid;
   if (!valid && notify) notifyInvalidImpiantoCoordinates();
   return valid;
-}
-
-function triggerImpiantoWhatsAppAction(impianto, options = {}) {
-  if (!options.force && !canTriggerImpiantoWhatsApp(impianto, true)) return false;
-  return openWhatsApp(impianto);
 }
 
 function setWhazzupPreparingFeedback(visible, message = "") {

@@ -45,15 +45,15 @@ let index = fs.readFileSync(indexPath, "utf8");
 if (!index.includes('src="app-availability.js')) {
   const appScriptRe = /(<script[^>]+src=["'][^"']*app\.js(?:\?[^"']*)?["'][^>]*><\/script>)/i;
   if (!appScriptRe.test(index)) throw new Error("Script app.js non trovato in index.html");
-  index = index.replace(appScriptRe, `<script src="app-availability.js"></script>\n  $1`);
+  index = index.replace(appScriptRe, `<script src="app-availability.js?v=20260815-mod1"></script>\n  $1`);
   fs.writeFileSync(indexPath, index);
 }
 
 let sw = fs.readFileSync(swPath, "utf8");
 if (!sw.includes("./app-availability.js")) {
-  const appAssetRe = /(\s*["']\.\/app\.js["'],?)/;
-  if (!appAssetRe.test(sw)) throw new Error("Asset ./app.js non trovato in sw.js");
-  sw = sw.replace(appAssetRe, `\n  "./app-availability.js",$1`);
+  const appAssetRe = /(\s*["']\.\/app\.js(?:\?[^"']*)?["'],?)/;
+  if (!appAssetRe.test(sw)) throw new Error("Asset app.js versionato non trovato in sw.js");
+  sw = sw.replace(appAssetRe, `\n  "./app-availability.js?v=20260815-mod1",$1`);
   fs.writeFileSync(swPath, sw);
 }
 

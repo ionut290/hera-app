@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v129";
+const CACHE_NAME = "varga-cantieri-shell-v130";
 const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
@@ -40,7 +40,6 @@ const APP_SHELL = [
   "./preventivi-lazy-loader.js?v=20260801a",
   "./global-archive-sync.js?v=20260802-cost2",
   "./global-archive-new-commesse-fix.js?v=20260801-lazy1",
-  "./auto-login-saved-credentials.js?v=20260814-authflow1",
   "./varga-branding.js?v=20260731a",
   "./whazzup-preload-cache.js?v=20260803-installed-only2",
   "./fuel-stations-core.js",
@@ -71,7 +70,6 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/login-retry-fix.js",
   "/first-login-password.js",
   "/approval-access.js",
-  "/auto-login-saved-credentials.js",
   "/header-menu-runtime.js",
   "/header-menu-runtime-original.js"
 ]);

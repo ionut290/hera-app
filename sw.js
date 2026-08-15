@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v132";
+const CACHE_NAME = "varga-cantieri-shell-v133";
 const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260813-render-gate1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
+  "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",

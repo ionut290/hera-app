@@ -57,6 +57,7 @@ recoverAbandonedFirestoreDiagnosticListeners();
 // quando apre un listener fisico, così il report non conta due volte gli
 // abbonati logici che condividono la stessa query.
 const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260812a";
+const HERA_APP_NOTIFICATIONS_READ_GUARD_SRC = "app-notifications-read-guard.js?v=20260815a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";
 const HERA_FIRESTORE_SAFE_OPTIMIZER_SRC = "firestore-safe-optimizer.js?v=20260805b";
@@ -73,6 +74,7 @@ const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
+  document.write(`<script src="${HERA_APP_NOTIFICATIONS_READ_GUARD_SRC}" data-app-notifications-read-guard="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC}" data-firestore-operation-diagnostics="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_DIAGNOSTICS_V4_SRC}" data-firestore-diagnostics-v4="1"><\/script>`);
   document.write(`<script src="${HERA_FIRESTORE_SAFE_OPTIMIZER_SRC}" data-firestore-safe-optimizer="1"><\/script>`);
@@ -125,6 +127,7 @@ if (document.readyState === "loading") {
   }
 
   loadOnce(HERA_STORAGE_QUOTA_GUARD_SRC, "storage-quota-guard", () => window.HeraStorageQuotaGuard?.installed);
+  loadOnce(HERA_APP_NOTIFICATIONS_READ_GUARD_SRC, "app-notifications-read-guard", () => window.VargaAppNotificationsReadGuard?.installed);
 
   const loadSafeOptimizer = () => loadOnce(
     HERA_FIRESTORE_SAFE_OPTIMIZER_SRC,

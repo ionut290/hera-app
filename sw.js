@@ -57,6 +57,7 @@ const APP_SHELL = [
   "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
+  "./app-notifications-read-guard.js?v=20260815a",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",

@@ -7,7 +7,7 @@
   let loadPromise = null;
 
   const ensureStyle = () => {
-    const existing = document.querySelector('link[data-hera-identity-style="true"]');
+    const existing = document.querySelector('link[data-hera-identity-style="true"], link[href*="identity-card-feature.css"]');
     if (existing) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const link = document.createElement("link");
@@ -48,6 +48,10 @@
     });
     return loadPromise;
   };
+
+  // Lo stylesheet contiene anche regole usate dalla Home: caricalo subito.
+  // Il JavaScript della funzione e il listener Firestore restano invece lazy.
+  ensureStyle().catch((error) => console.warn("Stile Tesserino/PIN non caricato all'avvio:", error));
 
   document.addEventListener("click", async (event) => {
     const trigger = event.target.closest?.(TRIGGER_SELECTOR);

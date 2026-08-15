@@ -267,6 +267,12 @@
       datasetKey: 'modernImpiantiMap',
       errorMessage: 'Mappa moderna impianti non caricata.'
     });
+    loadScriptOnce({
+      selector: 'script[data-map-detail-close-fix]',
+      src: './map-detail-close-fix.js?v=20260815a',
+      datasetKey: 'mapDetailCloseFix',
+      errorMessage: 'Correzione chiusura dettaglio impianto non caricata.'
+    });
   }
 
   function loadMapSearchFocus() {

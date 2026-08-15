@@ -23,6 +23,7 @@ const squadraSync = read("squadra-current-save-sync.js");
 const doneImmediate = read("fatto-button-immediate.js");
 const hoursGuard = read("hours-source-explicit-guard.js");
 const sharedViews = read("shared-static-views-client.js");
+const navigationRepair = read("commessa-navigation-repair.js");
 const androidOrder = read("android-whazzup-photo-order.js");
 const serviceWorker = read("sw.js");
 const headerRuntime = read("header-menu-runtime.js");
@@ -82,6 +83,18 @@ flow("3. Ricerca e visibilità impianti", () => {
   assert.match(app, /changeIndexRef\.orderBy\("changedAt", "desc"\)\.limit\(1\)\.get\(\)/);
   assert.match(app, /saveImpiantiIncrementalState\(requestedCommessaId, latestMarkerMs\)/);
   assert.doesNotMatch(app, /saveImpiantiIncrementalState\(requestedCommessaId, Date\.now\(\)\)/);
+
+  // La cache persistente non può diventare fonte primaria senza un checkpoint
+  // incrementale già valido. Il primo caricamento completo resta quindi protetto.
+  assert.match(navigationRepair, /HeraImpiantiPersistentCache/);
+  assert.match(navigationRepair, /mode: "verified-incremental-only"/);
+  assert.match(navigationRepair, /const hadMemoryCache = Array\.isArray\(existing\) && existing\.length > 0;/);
+  assert.match(navigationRepair, /const hydrated = hadMemoryCache \? false : hydratePersistentCache\(commessaId\);/);
+  assert.match(navigationRepair, /canPersist: Boolean\(\(hadMemoryCache \|\| hydrated\) && Number\(checkpoint\?\.lastChangedAtMs\) > 0\)/);
+  assert.match(navigationRepair, /if \(commessaId && context\?\.canPersist\) \{\s*persistCurrentCache\(commessaId\);\s*\}/);
+  assert.match(navigationRepair, /CACHE_MAX_AGE_MS = 30 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(navigationRepair, /encodeURIComponent\(scope\.uid\)/);
+  assert.doesNotMatch(navigationRepair, /\bdb\.collection\(|\.onSnapshot\(|\.where\(|\.orderBy\(/);
 });
 
 flow("4. NAVIGA - graffetta - FATTO", () => {

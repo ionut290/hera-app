@@ -69,3 +69,219 @@
   selectCommessaWithNavigationRepair.__navigationRepair = true;
   window.selectCommessa = selectCommessaWithNavigationRepair;
 })();
+
+// Cache persistente degli impianti: viene usata solo quando esiste già un
+// checkpoint incrementale sicuro. Non sostituisce mai il fallback completo
+// Firestore e non aggiunge letture, scritture o listener remoti.
+(() => {
+  "use strict";
+
+  if (window.HeraImpiantiPersistentCache?.installed) return;
+  if (
+    typeof subscribeImpianti !== "function"
+    || typeof renderImpiantiAfterRemoteSync !== "function"
+    || typeof readImpiantiIncrementalState !== "function"
+    || typeof saveImpiantiIncrementalState !== "function"
+    || typeof impiantiByCommessaId === "undefined"
+  ) return;
+
+  const CACHE_SCHEMA_VERSION = 1;
+  const CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
+  const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const CACHE_MAX_ENTRY_BYTES = 2 * 1024 * 1024;
+  const CACHE_MAX_ENTRIES_PER_USER = 8;
+  const contexts = new Map();
+  const state = {
+    hydrated: 0,
+    persisted: 0,
+    rejected: 0,
+    removedExpired: 0,
+    storageErrors: 0,
+    lastCommessaId: ""
+  };
+
+  const originalSubscribeImpianti = subscribeImpianti;
+  const originalRenderImpiantiAfterRemoteSync = renderImpiantiAfterRemoteSync;
+
+  function getUserScope() {
+    const uid = String(currentUser?.uid || "").trim();
+    if (!uid) return null;
+    let collectionName = "commesse";
+    try {
+      if (typeof getCommesseCollectionName === "function") {
+        collectionName = String(getCommesseCollectionName() || "commesse").trim() || "commesse";
+      }
+    } catch (_) {}
+    return { uid, collectionName };
+  }
+
+  function getCacheKey(commessaId, scope = getUserScope()) {
+    if (!scope || !commessaId) return "";
+    return `${CACHE_PREFIX}${encodeURIComponent(scope.uid)}:${encodeURIComponent(scope.collectionName)}:${encodeURIComponent(commessaId)}`;
+  }
+
+  function cloneItems(items) {
+    return Array.isArray(items) ? items.map((item) => ({ ...(item || {}) })) : [];
+  }
+
+  function removeCacheKey(key, expired = false) {
+    if (!key) return;
+    try {
+      localStorage.removeItem(key);
+      if (expired) state.removedExpired += 1;
+    } catch (_) {
+      state.storageErrors += 1;
+    }
+  }
+
+  function readPersistentCache(commessaId) {
+    const scope = getUserScope();
+    const key = getCacheKey(commessaId, scope);
+    if (!scope || !key) return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "null");
+      const ageMs = Date.now() - Number(parsed?.savedAt || 0);
+      const valid = Boolean(
+        parsed
+        && parsed.schemaVersion === CACHE_SCHEMA_VERSION
+        && parsed.uid === scope.uid
+        && parsed.collectionName === scope.collectionName
+        && parsed.commessaId === commessaId
+        && Number(parsed.markerMs) > 0
+        && Array.isArray(parsed.items)
+        && parsed.items.length > 0
+        && Number.isFinite(ageMs)
+        && ageMs >= 0
+        && ageMs <= CACHE_MAX_AGE_MS
+      );
+      if (!valid) {
+        if (parsed) removeCacheKey(key, ageMs > CACHE_MAX_AGE_MS);
+        state.rejected += 1;
+        return null;
+      }
+      return { ...parsed, key };
+    } catch (_) {
+      state.storageErrors += 1;
+      removeCacheKey(key);
+      return null;
+    }
+  }
+
+  function prunePersistentCaches(scope, keepKey) {
+    if (!scope) return;
+    try {
+      const scopedPrefix = `${CACHE_PREFIX}${encodeURIComponent(scope.uid)}:${encodeURIComponent(scope.collectionName)}:`;
+      const entries = [];
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key || !key.startsWith(scopedPrefix)) continue;
+        let savedAt = 0;
+        try {
+          savedAt = Number(JSON.parse(localStorage.getItem(key) || "null")?.savedAt || 0);
+        } catch (_) {}
+        entries.push({ key, savedAt });
+      }
+      entries.sort((a, b) => b.savedAt - a.savedAt);
+      entries.slice(CACHE_MAX_ENTRIES_PER_USER).forEach(({ key }) => {
+        if (key !== keepKey) removeCacheKey(key);
+      });
+    } catch (_) {
+      state.storageErrors += 1;
+    }
+  }
+
+  function persistCurrentCache(commessaId) {
+    const scope = getUserScope();
+    const markerMs = Number(readImpiantiIncrementalState(commessaId)?.lastChangedAtMs || 0);
+    const items = cloneItems(currentImpianti);
+    const key = getCacheKey(commessaId, scope);
+    if (!scope || !key || markerMs <= 0 || !items.length) return false;
+
+    const payload = {
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      uid: scope.uid,
+      collectionName: scope.collectionName,
+      commessaId,
+      markerMs,
+      savedAt: Date.now(),
+      items
+    };
+
+    try {
+      const serialized = JSON.stringify(payload);
+      if (serialized.length > CACHE_MAX_ENTRY_BYTES) {
+        state.rejected += 1;
+        removeCacheKey(key);
+        return false;
+      }
+      localStorage.setItem(key, serialized);
+      state.persisted += 1;
+      state.lastCommessaId = commessaId;
+      prunePersistentCaches(scope, key);
+      return true;
+    } catch (_) {
+      state.storageErrors += 1;
+      return false;
+    }
+  }
+
+  function hydratePersistentCache(commessaId) {
+    const cached = readPersistentCache(commessaId);
+    if (!cached) return false;
+    try {
+      impiantiByCommessaId.set(commessaId, cloneItems(cached.items));
+      saveImpiantiIncrementalState(commessaId, Number(cached.markerMs));
+      state.hydrated += 1;
+      state.lastCommessaId = commessaId;
+      return true;
+    } catch (_) {
+      state.rejected += 1;
+      removeCacheKey(cached.key);
+      return false;
+    }
+  }
+
+  subscribeImpianti = function subscribeImpiantiWithPersistentCache() {
+    const commessaId = String(selectedCommessaId || "").trim();
+    if (!commessaId) return originalSubscribeImpianti.apply(this, arguments);
+
+    const existing = impiantiByCommessaId.get(commessaId);
+    const hadMemoryCache = Array.isArray(existing) && existing.length > 0;
+    const hydrated = hadMemoryCache ? false : hydratePersistentCache(commessaId);
+    const checkpoint = readImpiantiIncrementalState(commessaId);
+
+    contexts.set(commessaId, {
+      canPersist: Boolean((hadMemoryCache || hydrated) && Number(checkpoint?.lastChangedAtMs) > 0),
+      hydrated,
+      startedAt: Date.now()
+    });
+
+    return originalSubscribeImpianti.apply(this, arguments);
+  };
+
+  renderImpiantiAfterRemoteSync = function renderImpiantiAfterRemoteSyncWithPersistentCache(rawImpianti, previousDoneSignatureRef) {
+    const commessaId = String(selectedCommessaId || "").trim();
+    const result = originalRenderImpiantiAfterRemoteSync.apply(this, arguments);
+    const context = contexts.get(commessaId);
+
+    // Si salva solo dopo un ciclo partito da cache + checkpoint. Il primo
+    // caricamento completo non viene mai promosso direttamente a cache persistente:
+    // evita finestre di gara tra snapshot completo e marker del server.
+    if (commessaId && context?.canPersist) {
+      persistCurrentCache(commessaId);
+    }
+    return result;
+  };
+
+  window.HeraImpiantiPersistentCache = {
+    installed: true,
+    version: "1.0.0",
+    mode: "verified-incremental-only",
+    maxAgeMs: CACHE_MAX_AGE_MS,
+    getState: () => ({ ...state, activeContexts: contexts.size }),
+    clearCurrent: () => {
+      const commessaId = String(selectedCommessaId || "").trim();
+      removeCacheKey(getCacheKey(commessaId));
+    }
+  };
+})();

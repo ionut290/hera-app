@@ -354,6 +354,9 @@
     businessShareButton && (businessShareButton.disabled = true);
     try {
       let file = null;
+      if (!window.html2canvas && window.HeraHeavyLibs?.ensure) {
+        try { await window.HeraHeavyLibs.ensure("html2canvas"); } catch (_) {}
+      }
       if (window.html2canvas && businessPreview) {
         const canvas = await window.html2canvas(businessPreview, {
           scale: Math.min(3, window.devicePixelRatio || 2),

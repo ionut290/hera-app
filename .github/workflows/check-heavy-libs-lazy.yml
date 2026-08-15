@@ -1,0 +1,20 @@
+name: Check heavy libs lazy loading
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  heavy-libs-lazy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check syntax
+        run: |
+          node --check heavy-libs-lazy-loader.js
+          node --check hours-export-range.js
+          node --check identity-card-feature.js
+      - name: Check lazy loading boundaries
+        run: node scripts/check-heavy-libs-lazy.js

@@ -1,0 +1,45 @@
+name: Apply phase 24 final unused cleanup
+
+on:
+  push:
+    branches:
+      - agent/consolidation-phase-24-final-unused-whazzup-functions
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.head_commit.message != 'Remove phase 24 final unused functions'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/consolidation-phase-24-final-unused-whazzup-functions
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install parser
+        run: npm install --no-save --no-audit --no-fund acorn@8
+      - name: Remove final unused functions
+        run: node scripts/remove-phase24-final-unused-functions.js
+      - name: Verify sensitive runtime
+        run: |
+          node --check app.js
+          npm run check:fatto-critical
+          npm run check:android-photo-share
+          npm run check:android-camera-capture
+          npm run check:photo-notes
+          npm run check:whatsapp-protection
+          node scripts/check-critical-flows.js
+          node scripts/audit-unused-functions.js
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove phase 24 final unused functions"
+          git push origin HEAD:agent/consolidation-phase-24-final-unused-whazzup-functions

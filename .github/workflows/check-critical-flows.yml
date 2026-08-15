@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Check syntax
         run: npm run check:syntax
+      - name: Check impianto change index
+        run: node scripts/check-impianto-change-index.js
       - name: Check app module boundaries
         run: node scripts/check-app-module-boundaries.js
       - name: Check automatic PWA build versioning

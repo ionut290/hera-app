@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v132";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v133";
+const CACHE_RESET_VERSION = "20260815-firestore-read-guard1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -54,6 +54,7 @@ const APP_SHELL = [
   "./firestore-safe-optimizer.js?v=20260805b",
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
+  "./app-notifications-read-guard.js?v=20260815a",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
@@ -78,179 +79,69 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]
   .some((pattern) => pattern.test(url.pathname));
 
-const hasNoStoreDirective = (headers) => {
-  const value = headers.get("cache-control");
-  return typeof value === "string" && value.toLowerCase().includes("no-store");
-};
-
-const shouldHandleRequest = (request, url) => request.method === "GET"
-  && url.origin === self.location.origin
-  && CACHEABLE_DESTINATIONS.has(request.destination)
-  && !hasNoStoreDirective(request.headers)
-  && !isDynamicEndpoint(url);
-
-const canCacheResponse = (request, response) => response.ok
-  && response.type !== "opaque"
-  && !hasNoStoreDirective(response.headers)
-  && CACHEABLE_DESTINATIONS.has(request.destination);
-
-const fetchWithTimeout = (request, timeoutMs) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
-};
-
-const networkFirstForDocument = async (request) => {
-  try {
-    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
-    if (canCacheResponse(request, response)) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, response.clone());
-    }
-    return response;
-  } catch (_) {
-    return (await caches.match(request)) || caches.match("./index.html");
-  }
-};
-
-const networkFirstForCriticalAsset = async (request) => {
-  try {
-    const response = await fetchWithTimeout(request, NETWORK_DOCUMENT_TIMEOUT_MS);
-    if (canCacheResponse(request, response)) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, response.clone());
-    }
-    return response;
-  } catch (_) {
-    return caches.match(request);
-  }
-};
-
-const staleWhileRevalidateForAsset = async (event) => {
-  const cached = await caches.match(event.request);
-  const networkUpdate = fetch(event.request).then(async (response) => {
-    if (canCacheResponse(event.request, response)) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(event.request, response.clone());
-    }
-    return response;
-  }).catch(() => null);
-
-  if (cached) {
-    event.waitUntil(networkUpdate);
-    return cached;
-  }
-  return (await networkUpdate)
-    || (event.request.destination === "image" ? caches.match("./icons/varga-cantieri-192.png") : caches.match("./index.html"));
-};
-
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => Promise.allSettled(APP_SHELL.map((asset) => cache.add(asset))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
-    await self.clients.claim();
-    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    await Promise.all(windows.map(async (client) => {
-      try {
-        const url = new URL(client.url);
-        if (url.origin !== self.location.origin || url.searchParams.get("cacheReset") === CACHE_RESET_VERSION) return;
-        url.searchParams.set("cacheReset", CACHE_RESET_VERSION);
-        url.searchParams.set("cacheResetTs", String(Date.now()));
-        await client.navigate(url.toString());
-      } catch (_) {}
-    }));
-  })());
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  if (!shouldHandleRequest(event.request, url)) return;
-  if (event.request.destination === "document") {
-    event.respondWith(networkFirstForDocument(event.request));
-    return;
-  }
-  if (NETWORK_FIRST_ASSET_PATHS.has(url.pathname)) {
-    event.respondWith(networkFirstForCriticalAsset(event.request));
-    return;
-  }
-  event.respondWith(staleWhileRevalidateForAsset(event));
-});
+  if (url.origin !== self.location.origin || isDynamicEndpoint(url)) return;
 
-function normalizePushPayload(event) {
-  let payload = {};
-  try {
-    payload = event.data ? event.data.json() : {};
-  } catch (_) {
-    payload = { body: event.data ? event.data.text() : "" };
-  }
-  const notification = payload.notification || {};
-  const data = payload.data || {};
-  return {
-    title: payload.title || notification.title || data.title || "VARGA CANTIERI",
-    body: payload.body || notification.body || data.body || "Nuovo aggiornamento disponibile.",
-    destination: data.destination || data.page || data.route || "home",
-    url: payload.url || data.url || "./index.html",
-    id: data.notificationId || data.id || String(Date.now()),
-    rawData: data
-  };
-}
-
-self.addEventListener("push", (event) => {
-  const message = normalizePushPayload(event);
-  const options = {
-    body: message.body,
-    icon: "./icons/varga-cantieri-192.png",
-    badge: "./icons/varga-cantieri-192.png",
-    tag: message.id || "hera-push-default",
-    renotify: true,
-    actions: [
-      { action: "read", title: "LEGGI" },
-      { action: "open_app", title: "APRI NELL’APP" }
-    ],
-    data: message
-  };
-  event.waitUntil(self.registration.showNotification(message.title, options));
-});
-
-self.addEventListener("notificationclick", (event) => {
-  const message = event.notification.data || {};
-  event.notification.close();
-
-  if (event.action === "read" || event.action === "") {
-    event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
-      for (const client of windows) client.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
-    }));
+  if (event.request.mode === "navigate" || event.request.destination === "document") {
+    event.respondWith((async () => {
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_DOCUMENT_TIMEOUT_MS));
+      try {
+        const response = await Promise.race([fetch(event.request), timeout]);
+        if (response) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(event.request, response.clone()).catch(() => {});
+          return response;
+        }
+      } catch (_) {}
+      return (await caches.match(event.request)) || (await caches.match("./index.html"));
+    })());
     return;
   }
 
-  if (event.action === "open_app") {
-    const targetUrl = new URL(message.url || "./index.html", self.location.origin);
-    targetUrl.searchParams.set("notification", "open");
-    event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
-      const existing = windows[0];
-      if (existing) {
-        existing.postMessage({ type: "HERA_NOTIFICATION_READ", notification: message });
-        await existing.focus();
-        return;
+  const networkFirst = NETWORK_FIRST_ASSET_PATHS.has(url.pathname);
+  if (networkFirst) {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(event.request, response.clone()).catch(() => {});
+        return response;
+      } catch (_) {
+        return (await caches.match(event.request)) || Response.error();
       }
-      return clients.openWindow(targetUrl.href);
-    }));
+    })());
+    return;
   }
-});
 
-self.addEventListener("sync", (event) => {
-  if (event.tag !== "hera-app-background-check") return;
-  event.waitUntil(self.registration.showNotification("VARGA CANTIERI", {
-    body: "Controllo in background completato.",
-    icon: "./icons/varga-cantieri-192.png",
-    badge: "./icons/varga-cantieri-192.png",
-    tag: "hera-background-sync",
-    actions: [{ action: "open_app", title: "APRI NELL’APP" }],
-    data: { url: "./index.html", destination: "home" }
-  }));
+  if (!CACHEABLE_DESTINATIONS.has(event.request.destination)) return;
+  event.respondWith((async () => {
+    const cached = await caches.match(event.request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(event.request);
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(event.request, response.clone()).catch(() => {});
+      return response;
+    } catch (_) {
+      return Response.error();
+    }
+  })());
 });

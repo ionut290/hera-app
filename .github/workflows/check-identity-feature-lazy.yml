@@ -1,0 +1,33 @@
+name: Check identity feature lazy loading
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  identity-feature-lazy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify lazy boundaries
+        run: |
+          set -euo pipefail
+          if grep -q '<script src="identity-card-feature.js' index.html; then
+            echo 'identity-card-feature.js non deve essere caricato all avvio' >&2
+            exit 1
+          fi
+          if grep -q '<link rel="stylesheet" href="identity-card-feature.css' index.html; then
+            echo 'identity-card-feature.css non deve essere caricata all avvio' >&2
+            exit 1
+          fi
+          grep -q 'identity-feature-lazy-loader.js?v=20260815a' index.html
+          grep -q '#identity-card-btn, #fuel-pin-btn' identity-feature-lazy-loader.js
+          grep -q 'identity-card-feature.js?v=20260815-lazy1' identity-feature-lazy-loader.js
+          grep -q 'identity-card-feature.css?v=20260727a' identity-feature-lazy-loader.js
+          grep -q 'privateDocuments' identity-card-feature.js
+          grep -q 'onSnapshot' identity-card-feature.js
+          grep -q 'identity-feature-lazy-loader.js?v=20260815a' sw.js
+          if git diff --quiet HEAD^ HEAD -- app.js fatto-button-immediate.js native-android-runtime.js 2>/dev/null; then
+            true
+          fi

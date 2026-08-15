@@ -101,10 +101,6 @@
     );
   }
 
-  function loadFirestoreDiagnostics() {
-    loadScriptOnce('script[data-firestore-operation-diagnostics]', './firestore-operation-diagnostics.js?v=20260804-v3', 'firestoreOperationDiagnostics', null, 'Diagnostica Firestore non caricata; avvio app non interrotto.');
-  }
-
   function loadVcardShareFeature() {
     loadScriptOnce('script[data-rubrica-vcard-share]', './rubrica-vcard-share.js?v=20260802a', 'rubricaVcardShare', null, 'Condivisione vCard Rubrica non caricata; avvio app non interrotto.');
   }
@@ -151,7 +147,6 @@
   function init() {
     applyBranding();
     observeDynamicContent();
-    window.setTimeout(loadFirestoreDiagnostics, 0);
     window.setTimeout(loadRubricaFeature, 0);
   }
 

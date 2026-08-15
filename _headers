@@ -15,6 +15,3 @@
 
 /header-menu-runtime.js
   Cache-Control: no-cache, must-revalidate
-
-/header-menu-runtime-original.js
-  Cache-Control: no-cache, must-revalidate

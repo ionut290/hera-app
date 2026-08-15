@@ -26,7 +26,7 @@ const hoursGuard = read("hours-source-explicit-guard.js");
 const sharedViews = read("shared-static-views-client.js");
 const androidOrder = read("android-whazzup-photo-order.js");
 const serviceWorker = read("sw.js");
-const headerRuntime = read("header-menu-runtime-original.js");
+const headerRuntime = read("header-menu-runtime.js");
 
 const flows = [];
 function flow(name, checks) {
@@ -45,7 +45,11 @@ flow("1. Accesso stabile", () => {
   assert.match(authFix, /HeraAuthStartupController/);
   assert.doesNotMatch(headerRuntime, /loadAutoLoginFeature/);
   assert.doesNotMatch(headerRuntime, /auto-login-saved-credentials\.js/);
+  assert.doesNotMatch(headerRuntime, /header-menu-runtime-original\.js/);
+  assert.doesNotMatch(headerRuntime, /commessa-listener-cleanup\.js/);
+  assert.match(headerRuntime, /__heraCommessaListenerCleanupInstalled/);
   assert.doesNotMatch(serviceWorker, /auto-login-saved-credentials\.js/);
+  assert.doesNotMatch(serviceWorker, /header-menu-runtime-original\.js/);
   assert.match(updateFeature, /APP_CACHE_PREFIXES/);
   assert.match(updateFeature, /cacheNames\.filter\(isAppShellCache\)/);
   assert.doesNotMatch(updateFeatureExecutable, /firebase\.auth\(\)\.signOut\(/);

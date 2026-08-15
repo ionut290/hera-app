@@ -11,7 +11,7 @@ const deploy = fs.readFileSync(".github/workflows/deploy-firebase-functions.yml"
 assert.match(source, /onDocumentWritten/);
 assert.match(source, /document:\s*"commesse\/\{commessaId\}\/impianti\/\{impiantoId\}"/);
 assert.match(source, /collection\("impiantoChangeIndex"\)/);
-assert.match(source, /changedAt:\s*admin\.firestore\(\)\.FieldValue\.serverTimestamp\(\)/);
+assert.match(source, /changedAt:\s*admin\.firestore\.FieldValue\.serverTimestamp\(\)/);
 assert.match(source, /deleted:\s*!afterExists/);
 assert.doesNotMatch(source, /collection\("impianti"\).*?\.set\(/s, "Il trigger non deve riscrivere gli impianti e non deve creare ricorsione");
 assert.match(main, /require\("\.\/impianto-change-index"\)/);

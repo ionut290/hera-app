@@ -19,7 +19,6 @@
       if (impiantiSubscriptionStarted && typeof originalStopImpiantiSubscription === 'function') {
         originalStopImpiantiSubscription();
       }
-
       const result = originalSubscribeImpianti.apply(this, args);
       impiantiSubscriptionStarted = true;
       return result;
@@ -29,7 +28,6 @@
       if (notesSubscriptionStarted && typeof originalStopCommessaNotesSubscription === 'function') {
         originalStopCommessaNotesSubscription();
       }
-
       const result = originalSubscribeCommessaNotes.apply(this, args);
       notesSubscriptionStarted = true;
       return result;
@@ -41,7 +39,44 @@
 })();
 
 (() => {
+  'use strict';
+
   const qs = (selector) => document.querySelector(selector);
+
+  function normalizeAssetPath(value) {
+    try {
+      return new URL(String(value || ''), document.baseURI).pathname;
+    } catch (_) {
+      return String(value || '').split('?')[0].split('#')[0];
+    }
+  }
+
+  function findExistingScript(selector, src) {
+    const selected = selector ? document.querySelector(selector) : null;
+    if (selected) return selected;
+    const wantedPath = normalizeAssetPath(src);
+    if (!wantedPath) return null;
+    return Array.from(document.scripts || []).find((script) => normalizeAssetPath(script.src) === wantedPath) || null;
+  }
+
+  function loadScriptOnce({ selector, src, datasetKey, errorMessage, defer = true }) {
+    try {
+      const existing = findExistingScript(selector, src);
+      if (existing) return existing;
+      const script = document.createElement('script');
+      script.src = src;
+      script.defer = defer;
+      if (datasetKey) script.dataset[datasetKey] = '1';
+      if (errorMessage) {
+        script.addEventListener('error', () => console.warn(errorMessage), { once: true });
+      }
+      document.head.appendChild(script);
+      return script;
+    } catch (error) {
+      console.warn(errorMessage || `Modulo non caricato: ${src}`, error);
+      return null;
+    }
+  }
 
   function createLabel(text) {
     const label = document.createElement('span');
@@ -108,30 +143,21 @@
   }
 
   function loadFirestorePresenceCostGuard() {
-    try {
-      if (document.querySelector('script[data-firestore-presence-cost-guard]')) return;
-      const script = document.createElement('script');
-      script.src = './firestore-presence-cost-guard.js?v=20260802a';
-      script.defer = true;
-      script.dataset.firestorePresenceCostGuard = '1';
-      script.addEventListener('error', () => console.warn('Riduzione scritture presenza Firestore non caricata.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Riduzione scritture presenza Firestore non caricato:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-firestore-presence-cost-guard]',
+      src: './firestore-presence-cost-guard.js?v=20260802a',
+      datasetKey: 'firestorePresenceCostGuard',
+      errorMessage: 'Riduzione scritture presenza Firestore non caricata.'
+    });
   }
 
   function loadBrandingFeature() {
-    try {
-      if (document.querySelector('script[data-varga-branding]')) return;
-      const script = document.createElement('script');
-      script.src = './varga-branding.js?v=20260804-diagnostics-reset1';
-      script.dataset.vargaBranding = '1';
-      script.addEventListener('error', () => console.warn('Branding VARGA CANTIERI non caricato.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Branding VARGA CANTIERI non caricato:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-varga-branding]',
+      src: './varga-branding.js?v=20260804-diagnostics-reset1',
+      datasetKey: 'vargaBranding',
+      errorMessage: 'Branding VARGA CANTIERI non caricato.'
+    });
   }
 
   function setLoginPhoto() {
@@ -159,96 +185,66 @@
         css.dataset.operatorProfileCss = '1';
         document.head.appendChild(css);
       }
-      if (!document.querySelector('script[data-operator-profile-js]')) {
-        const script = document.createElement('script');
-        script.src = './operator-profile-feature.js?v=20260731-safe2';
-        script.defer = true;
-        script.dataset.operatorProfileJs = '1';
-        script.addEventListener('error', () => console.warn('Scheda operatore non caricata: file JavaScript non disponibile.'), { once: true });
-        document.head.appendChild(script);
-      }
+      loadScriptOnce({
+        selector: 'script[data-operator-profile-js]',
+        src: './operator-profile-feature.js?v=20260731-safe2',
+        datasetKey: 'operatorProfileJs',
+        errorMessage: 'Scheda operatore non caricata: file JavaScript non disponibile.'
+      });
     } catch (error) {
-      console.warn('Scheda operatore non caricato:', error);
+      console.warn('Scheda operatore non caricata:', error);
     }
   }
 
   function loadGlobalArchiveFeature() {
-    try {
-      if (!document.querySelector('script[data-global-archive-sync]')) {
-        const script = document.createElement('script');
-        script.src = './global-archive-sync.js?v=20260801-cost1';
-        script.defer = true;
-        script.dataset.globalArchiveSync = '1';
-        script.addEventListener('error', () => console.warn('Archivio Global permanente non caricato.'), { once: true });
-        document.head.appendChild(script);
-      }
-      if (!document.querySelector('script[data-global-archive-new-commesse-fix]')) {
-        const fix = document.createElement('script');
-        fix.src = './global-archive-new-commesse-fix.js?v=20260801-lazy1';
-        fix.defer = true;
-        fix.dataset.globalArchiveNewCommesseFix = '1';
-        fix.addEventListener('error', () => console.warn('Controllo nuove commesse Global non caricato.'), { once: true });
-        document.head.appendChild(fix);
-      }
-    } catch (error) {
-      console.warn('Archivio Global permanente non caricato:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-global-archive-sync]',
+      src: './global-archive-sync.js?v=20260801-cost1',
+      datasetKey: 'globalArchiveSync',
+      errorMessage: 'Archivio Global permanente non caricato.'
+    });
+    loadScriptOnce({
+      selector: 'script[data-global-archive-new-commesse-fix]',
+      src: './global-archive-new-commesse-fix.js?v=20260801-lazy1',
+      datasetKey: 'globalArchiveNewCommesseFix',
+      errorMessage: 'Controllo nuove commesse Global non caricato.'
+    });
   }
 
   function loadPreventiviLazyFeature() {
-    try {
-      if (document.querySelector('script[data-preventivi-lazy-loader]')) return;
-      const script = document.createElement('script');
-      script.src = './preventivi-lazy-loader.js?v=20260801a';
-      script.defer = true;
-      script.dataset.preventiviLazyLoader = '1';
-      script.addEventListener('error', () => console.warn('Caricatore Preventivi non disponibile.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Caricatore Preventivi non disponibile:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-preventivi-lazy-loader]',
+      src: './preventivi-lazy-loader.js?v=20260801a',
+      datasetKey: 'preventiviLazyLoader',
+      errorMessage: 'Caricatore Preventivi non disponibile.'
+    });
   }
 
   function loadFirestoreUsageControl() {
-    try {
-      if (document.querySelector('script[data-firestore-usage-control]')) return;
-      const script = document.createElement('script');
-      script.src = './control-center-firestore-usage.js?v=20260802a';
-      script.defer = true;
-      script.dataset.firestoreUsageControl = '1';
-      script.addEventListener('error', () => console.warn('Monitoraggio consumo Firestore non caricato.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Monitoraggio consumo Firestore non disponibile:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-firestore-usage-control]',
+      src: './control-center-firestore-usage.js?v=20260802a',
+      datasetKey: 'firestoreUsageControl',
+      errorMessage: 'Monitoraggio consumo Firestore non caricato.'
+    });
   }
 
   function loadControlCenterBackup() {
-    try {
-      if (document.querySelector('script[data-control-center-backup]')) return;
-      const script = document.createElement('script');
-      script.src = './control-center-backup.js?v=20260802a';
-      script.defer = true;
-      script.dataset.controlCenterBackup = '1';
-      script.addEventListener('error', () => console.warn('Backup dati del Centro di controllo non caricato.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Backup dati del Centro di controllo non caricato:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-control-center-backup]',
+      src: './control-center-backup.js?v=20260802a',
+      datasetKey: 'controlCenterBackup',
+      errorMessage: 'Backup dati del Centro di controllo non caricato.'
+    });
   }
 
   function loadPerformanceDiagnostic() {
-    try {
-      if (document.querySelector('script[data-performance-diagnostic]')) return;
-      const script = document.createElement('script');
-      script.src = './admin-console.js?v=20260803-performance1';
-      script.defer = true;
-      script.dataset.performanceDiagnostic = '1';
-      script.addEventListener('error', () => console.warn('Diagnostica prestazioni e fluidità non caricata.'), { once: true });
-      document.head.appendChild(script);
-    } catch (error) {
-      console.warn('Diagnostica prestazioni e fluidità non caricata:', error);
-    }
+    loadScriptOnce({
+      selector: 'script[data-performance-diagnostic]',
+      src: './admin-console.js?v=20260803-performance1',
+      datasetKey: 'performanceDiagnostic',
+      errorMessage: 'Diagnostica prestazioni e fluidità non caricata.'
+    });
   }
 
   function init() {

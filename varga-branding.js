@@ -153,16 +153,13 @@
   }
 
   function init() {
-    disableAutomaticHoursRepair();
-    loadSquadValidationPersonnelCompat();
-    loadWhatsAppInstalledOnlyGuard();
-    loadFirestoreSafeOptimizer();
     applyBranding();
     observeDynamicContent();
     window.setTimeout(loadFirestoreDiagnostics, 0);
     window.setTimeout(loadRubricaFeature, 0);
   }
 
+  // I guard che devono essere disponibili il prima possibile vengono avviati una sola volta qui.
   disableAutomaticHoursRepair();
   loadSquadValidationPersonnelCompat();
   loadWhatsAppInstalledOnlyGuard();

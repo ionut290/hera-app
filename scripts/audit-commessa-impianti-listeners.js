@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const source = fs.readFileSync("app.js", "utf8");
 const lines = source.split(/\r?\n/);
 
-function showMatches(label, pattern, context = 8) {
+function showMatches(label, pattern, context = 12) {
   const indexes = [];
   lines.forEach((line, index) => { if (pattern.test(line)) indexes.push(index); });
   console.log(`\n${label}=${indexes.length}`);
@@ -17,11 +17,10 @@ function showMatches(label, pattern, context = 8) {
   });
 }
 
-showMatches("SUBSCRIBE_STATS_CALLS", /subscribeStatsForCommesse\s*\(/, 14);
-showMatches("COMMESSA_STATS_MAP_USES", /commessaStatsById/, 8);
-showMatches("IMPIANTI_BY_COMMESSA_USES", /impiantiByCommessaId/, 8);
-showMatches("WORK_SUMMARY_USES", /commessaWorkSummariesById/, 8);
-showMatches("HOURS_BY_COMMESSA_USES", /commessaHoursById/, 8);
-showMatches("CALCULATE_STATS", /calculateImpiantiStats\s*\(/, 12);
-showMatches("PARENT_OVERVIEW_CALLS", /renderParentCommessaOverview\s*\(/, 10);
-showMatches("MANAGEMENT_LIST_CALLS", /renderCommesseManagementList\s*\(/, 10);
+showMatches("GET_COMMESSA_STATS_CALLS", /getCommessaStats\s*\(/, 14);
+showMatches("GET_WORK_SUMMARY_CALLS", /getCommessaWorkSummary\s*\(/, 14);
+showMatches("HOME_BUTTON", /function renderCommessaHomeButton\s*\(/, 45);
+showMatches("PARENT_OVERVIEW", /function renderParentCommessaOverview\s*\(/, 55);
+showMatches("MANAGEMENT_LIST", /function renderCommesseManagementList\s*\(/, 45);
+showMatches("DASHBOARD", /function updateCommessaDashboard\s*\(/, 45);
+showMatches("REFRESH_DEPENDENT_UI", /function refreshCommesseDependentUI\s*\(/, 25);

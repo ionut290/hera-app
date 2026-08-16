@@ -103,3 +103,27 @@ body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!impo
   #impianti-page>#impianti-card{margin:0!important;border-radius:0 0 16px 16px!important;border-top:0!important;padding-top:6px!important}
   #impianti-page>#impianti-card>h2{margin:0 0 6px!important;font-size:1rem!important;line-height:1.1!important}
 }
+
+/* Allineamento alla vista approvata: meno interruzioni, più mappa e posizione stile Google Maps. */
+#impianti-page{gap:0!important}
+#impianti-page>#commessa-operational-card #gps-status{display:none!important}
+#impianti-page .commessa-map-shell{margin:0!important}
+#impianti-page .user-location-marker-dot{width:20px!important;height:20px!important;background:#1a73e8!important;border:4px solid #fff!important;box-shadow:0 0 0 10px rgba(26,115,232,.18),0 2px 8px rgba(15,23,42,.28)!important;position:relative!important}
+#impianti-page .user-location-marker-dot::after{content:"";position:absolute;inset:-12px;border-radius:999px;border:1px solid rgba(26,115,232,.22);pointer-events:none}
+#impianti-page .map-geolocate-btn{width:44px!important;height:44px!important;border-radius:999px!important;background:#fff!important;border:0!important;box-shadow:0 3px 12px rgba(15,23,42,.22)!important;color:#174ea6!important}
+@media (max-width:700px){
+  #impianti-page>.commessa-dashboard-card{padding-bottom:5px!important}
+  #impianti-page .commessa-stat-strip{margin-bottom:0!important}
+  #impianti-page>#commessa-operational-card{margin-top:0!important;background:transparent!important}
+  #impianti-page>#commessa-operational-card .commessa-map-shell{margin-top:0!important}
+  #impianti-page #map{height:clamp(470px,66vh,700px)!important;min-height:470px!important}
+  #impianti-page>#impianti-card{padding:8px 8px 10px!important;background:linear-gradient(180deg,#f5f9fd 0%,#edf4f9 100%)!important}
+  #impianti-page>#impianti-card>h2{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;margin:0!important;padding:0!important}
+  #impianti-page .impianti-toolbar{padding:0!important;margin:0!important;gap:7px!important;background:transparent!important}
+  #impianti-page .search-box{min-height:48px!important;padding:4px 10px!important;border:1px solid #d4dfeb!important;border-radius:16px!important;background:rgba(255,255,255,.9)!important;box-shadow:0 3px 10px rgba(30,64,100,.05)!important}
+  #impianti-page .search-box input{min-height:38px!important;font-size:.9rem!important;background:transparent!important;border:0!important;box-shadow:none!important}
+  #impianti-page .view-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important;margin:0!important}
+  #impianti-page .view-tabs .btn{min-height:42px!important;padding:6px 5px!important;font-size:.72rem!important;border-radius:13px!important}
+  #impianti-page #export-current-commessa-btn{display:inline-flex!important}
+  #impianti-page .impianti-lista{margin-top:8px!important;gap:8px!important}
+}

@@ -11,7 +11,6 @@
   const QUEUE_MAX = 10;
   const QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   let flushing = false;
-  let toastAt = 0;
   let authFlushBound = false;
 
   function truncate(value, max = 1000) {
@@ -170,24 +169,7 @@
     try { return window.firebase?.auth?.()?.currentUser || null; } catch (_) { return null; }
   }
 
-  function showSentToast() {
-    const now = Date.now();
-    if (now - toastAt < 30000 || !document.body) return;
-    toastAt = now;
-    const toast = document.createElement("div");
-    toast.setAttribute("role", "status");
-    toast.setAttribute("aria-live", "polite");
-    toast.textContent = "⚠️ Problema rilevato. Diagnosi inviata automaticamente all’amministratore.";
-    Object.assign(toast.style, {
-      position: "fixed", left: "50%", bottom: "18px", transform: "translateX(-50%)", zIndex: "200000",
-      maxWidth: "min(92vw,560px)", padding: "10px 14px", borderRadius: "12px", background: "#172033",
-      color: "#fff", font: "600 13px/1.35 system-ui,sans-serif", boxShadow: "0 8px 24px rgba(0,0,0,.22)"
-    });
-    document.body.appendChild(toast);
-    window.setTimeout(() => toast.remove(), 4500);
-  }
-
-  async function send(report, { silent = false } = {}) {
+  async function send(report) {
     if (!report || isDuplicate(report.fingerprint)) return true;
     if (navigator.onLine === false || !currentUser()) {
       enqueue(report);
@@ -200,9 +182,8 @@
     }
     try {
       const result = await invoke(report);
-      if (result?.data?.sent || result?.data?.rateLimited) {
+      if (result?.data?.sent || result?.data?.rateLimited || result?.data?.monthlyLimited) {
         markSent(report.fingerprint);
-        if (!silent && result?.data?.sent) showSentToast();
         return true;
       }
     } catch (_) {
@@ -219,7 +200,7 @@
       const remaining = [];
       for (const report of queue) {
         if (isDuplicate(report.fingerprint)) continue;
-        const sent = await send(report, { silent: true });
+        const sent = await send(report);
         if (!sent) remaining.push(report);
       }
       writeQueue(remaining);
@@ -284,6 +265,6 @@
   }, { once: true });
 
   bindAuthFlush();
-  window.HeraClientErrorReporter = Object.freeze({ installed: true, version: "1.0.1", report, flushQueue });
+  window.HeraClientErrorReporter = Object.freeze({ installed: true, version: "1.1.0", report, flushQueue });
   window.setTimeout(() => { void flushQueue(); }, 0);
 })();

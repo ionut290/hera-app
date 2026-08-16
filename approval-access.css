@@ -89,3 +89,17 @@ body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!impo
   #impianti-page .commessa-map-card{width:calc(100% + 12px)!important;margin:4px -6px 0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}
   #impianti-page #map{width:100%!important;height:clamp(430px,62vh,650px)!important;min-height:430px!important;border:0!important;border-radius:0!important;margin:0!important;box-shadow:none!important}
 }
+
+/* Commessa come scheda unica: titolo, mappa ed elenco senza stacchi visivi. */
+#impianti-page>.commessa-dashboard-card{margin-bottom:0!important;border-radius:18px 18px 0 0!important;border-bottom:0!important;box-shadow:none!important}
+#impianti-page>#commessa-operational-card{margin-top:0!important;margin-bottom:0!important;border-left:1px solid #cad9e7!important;border-right:1px solid #cad9e7!important;background:linear-gradient(180deg,#edf5fa,#eaf2f7)!important}
+#impianti-page>#impianti-card{margin-top:0!important;border-radius:0 0 18px 18px!important;border-top:0!important;background:linear-gradient(180deg,#edf5fa 0%,#eef3f8 100%)!important;box-shadow:0 10px 24px rgba(30,64,100,.08)!important}
+#impianti-page .commessa-squadre-footer{display:none!important}
+#impianti-page #view-alerts-btn{display:none!important}
+#impianti-page>#impianti-card>h2{margin-top:0!important;padding-top:4px!important}
+@media (max-width:700px){
+  #impianti-page>.commessa-dashboard-card{margin:0!important;border-radius:16px 16px 0 0!important}
+  #impianti-page>#commessa-operational-card{width:calc(100% + 12px)!important;margin:0 -6px!important;border-left:0!important;border-right:0!important}
+  #impianti-page>#impianti-card{margin:0!important;border-radius:0 0 16px 16px!important;border-top:0!important;padding-top:6px!important}
+  #impianti-page>#impianti-card>h2{margin:0 0 6px!important;font-size:1rem!important;line-height:1.1!important}
+}

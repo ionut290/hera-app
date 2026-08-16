@@ -75,17 +75,17 @@ body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!impo
 #impianti-page>.commessa-dashboard-card{background:linear-gradient(145deg,#edf5fb 0%,#edf7f3 60%,#f2effb 100%)!important;border-color:#cad9e7!important;box-shadow:0 8px 22px rgba(30,64,100,.08)!important}
 #impianti-page .commessa-stat-strip{background:linear-gradient(135deg,rgba(207,235,224,.72),rgba(218,229,251,.72),rgba(232,221,251,.72))!important;border:1px solid #d2deeb!important;border-radius:15px!important;padding:5px!important;gap:5px!important}
 #impianti-page .commessa-stat-item{background:rgba(247,250,253,.75)!important;border-color:rgba(198,215,230,.78)!important;box-shadow:none!important}
-#impianti-page .commessa-map-card{background:linear-gradient(180deg,#eaf2f8,#edf4f8)!important;border-color:#cad9e6!important;box-shadow:0 8px 22px rgba(30,64,100,.08)!important}
+#impianti-page .commessa-map-card{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important;overflow:visible!important}
 #impianti-page .search-box,#impianti-page .impianti-toolbar{background:linear-gradient(180deg,#eef5fa,#edf3f8)!important}
 @media (max-width:700px){
-  #impianti-page>.commessa-dashboard-card{padding:8px!important;margin-bottom:6px!important}
-  #impianti-page>.commessa-dashboard-card .page-head,#impianti-page>.commessa-dashboard-card .commessa-head{min-height:0!important;margin:0 0 5px!important;gap:6px!important;padding:0!important}
+  #impianti-page>.commessa-dashboard-card{padding:8px!important;margin-bottom:4px!important}
+  #impianti-page>.commessa-dashboard-card .page-head,#impianti-page>.commessa-dashboard-card .commessa-head{min-height:0!important;margin:0 0 4px!important;gap:5px!important;padding:0!important}
   #impianti-page>.commessa-dashboard-card h1,#impianti-page>.commessa-dashboard-card h2{font-size:1rem!important;line-height:1.05!important;margin:0!important}
   #impianti-page>.commessa-dashboard-card .commessa-focus-label,#impianti-page>.commessa-dashboard-card .muted{font-size:.7rem!important;line-height:1!important;margin:0!important}
-  #impianti-page .commessa-stat-strip{min-height:0!important;margin:4px 0 0!important;padding:4px!important;gap:4px!important;border-radius:13px!important}
-  #impianti-page .commessa-stat-item{min-height:50px!important;padding:4px 3px!important;border-radius:11px!important;gap:1px!important}
-  #impianti-page .commessa-stat-item strong,#impianti-page .commessa-stat-item b{font-size:1rem!important;line-height:1!important}
-  #impianti-page .commessa-stat-item span,#impianti-page .commessa-stat-item small{font-size:.62rem!important;line-height:1.05!important}
-  #impianti-page .commessa-map-card{margin-top:6px!important;padding:4px!important}
-  #impianti-page #map{height:clamp(390px,56vh,570px)!important;min-height:390px!important;border-radius:14px!important}
+  #impianti-page .commessa-stat-strip{min-height:0!important;margin:3px 0 0!important;padding:3px!important;gap:3px!important;border-radius:12px!important}
+  #impianti-page .commessa-stat-item{min-height:46px!important;padding:3px 2px!important;border-radius:10px!important;gap:0!important}
+  #impianti-page .commessa-stat-item strong,#impianti-page .commessa-stat-item b{font-size:.96rem!important;line-height:1!important}
+  #impianti-page .commessa-stat-item span,#impianti-page .commessa-stat-item small{font-size:.59rem!important;line-height:1!important}
+  #impianti-page .commessa-map-card{width:calc(100% + 12px)!important;margin:4px -6px 0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+  #impianti-page #map{width:100%!important;height:clamp(430px,62vh,650px)!important;min-height:430px!important;border:0!important;border-radius:0!important;margin:0!important;box-shadow:none!important}
 }

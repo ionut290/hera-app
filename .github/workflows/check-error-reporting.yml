@@ -1,0 +1,33 @@
+name: Check error reporting
+
+on:
+  pull_request:
+    paths:
+      - "client-error-reporter.js"
+      - "loading-humor.js"
+      - "functions/error-reporting.js"
+      - "functions/main.js"
+      - "scripts/check-error-reporting.js"
+      - ".github/workflows/check-error-reporting.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check syntax
+        run: |
+          node --check client-error-reporter.js
+          node --check loading-humor.js
+          node --check functions/error-reporting.js
+          node --check functions/main.js
+      - name: Check safety guards
+        run: node scripts/check-error-reporting.js

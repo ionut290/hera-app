@@ -12,6 +12,7 @@
   const QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   let flushing = false;
   let toastAt = 0;
+  let authFlushBound = false;
 
   function truncate(value, max = 1000) {
     return String(value || "")
@@ -237,6 +238,18 @@
     }
   }
 
+  function bindAuthFlush() {
+    if (authFlushBound) return;
+    try {
+      const auth = window.firebase?.auth?.();
+      if (!auth) return;
+      authFlushBound = true;
+      auth.onAuthStateChanged((user) => {
+        if (user) void flushQueue();
+      });
+    } catch (_) {}
+  }
+
   window.addEventListener("error", (event) => {
     try {
       const target = event.target;
@@ -265,13 +278,12 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void flushQueue();
   }, { passive: true });
+  window.addEventListener("load", () => {
+    bindAuthFlush();
+    void flushQueue();
+  }, { once: true });
 
-  try {
-    window.firebase?.auth?.().onAuthStateChanged((user) => {
-      if (user) void flushQueue();
-    });
-  } catch (_) {}
-
-  window.HeraClientErrorReporter = Object.freeze({ installed: true, version: "1.0.0", report, flushQueue });
+  bindAuthFlush();
+  window.HeraClientErrorReporter = Object.freeze({ installed: true, version: "1.0.1", report, flushQueue });
   window.setTimeout(() => { void flushQueue(); }, 0);
 })();

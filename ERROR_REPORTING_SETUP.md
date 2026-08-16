@@ -5,7 +5,8 @@ Il sistema è composto da:
 - `client-error-reporter.js`: intercetta errori JavaScript, Promise non gestite e mancato caricamento di script/CSS locali;
 - `functions/error-reporting.js`: Cloud Function autenticata che classifica il problema e invia la diagnosi all'amministratore;
 - coda locale offline e deduplicazione locale per evitare invii ripetuti;
-- nessuna lettura, scrittura o listener Firestore.
+- funzionamento completamente silenzioso per l'utente: nessun toast, popup, conferma o messaggio viene mostrato quando una diagnosi viene inviata;
+- limite globale di 2.500 email diagnostiche al mese.
 
 ## Sicurezza
 
@@ -25,6 +26,22 @@ firebase functions:secrets:set ERROR_REPORT_FROM --project hera-app-6cd2b
 - `ERROR_REPORT_FROM`: mittente autorizzato da Resend, per esempio `Varga Cantieri <errori@dominio-verificato.it>`.
 
 Il destinatario amministratore configurato nel backend è `ionut29019@gmail.com`.
+
+## Limite mensile e Firestore
+
+Per garantire un tetto rigido anche quando Firebase esegue più istanze Cloud Function contemporaneamente, il backend usa un solo documento mensile:
+
+`systemCounters/errorEmails_YYYY-MM`
+
+La transazione prenota un posto prima dell'invio e blocca ogni invio oltre 2.500 email diagnostiche nel mese. Se Resend rifiuta l'invio o la rete fallisce, il posto viene rilasciato.
+
+Impatto Firestore della diagnostica:
+
+- nessun listener;
+- nessuna lettura all'apertura dell'app;
+- nessuna lettura durante il normale utilizzo se non avvengono errori;
+- per ogni email diagnostica realmente tentata: una transazione sul singolo contatore mensile, quindi normalmente circa 1 lettura + 1 scrittura;
+- in caso di invio fallito, viene eseguita una seconda transazione per rilasciare il posto prenotato.
 
 ## Deploy iniziale
 
@@ -50,10 +67,12 @@ HeraClientErrorReporter.report(new Error("TEST DIAGNOSTICA VARGA CANTIERI"), {
 Verificare:
 
 1. arrivo di una sola email all'amministratore;
-2. presenza di utente, data/ora, schermata, dispositivo, messaggio, stack e diagnosi automatica;
-3. nuovo invio dello stesso errore entro 30 minuti non produce una seconda email dal medesimo dispositivo;
-4. offline: il report resta nella coda locale e viene ritentato quando l'utente torna online/autenticato;
-5. nessun dato GPS, password, token o chiave API compare nell'email.
+2. nessun messaggio, toast o popup mostrato all'utente;
+3. presenza di utente, data/ora, schermata, dispositivo, messaggio, stack e diagnosi automatica;
+4. nuovo invio dello stesso errore entro 30 minuti non produce una seconda email dal medesimo dispositivo;
+5. offline: il report resta nella coda locale e viene ritentato quando l'utente torna online/autenticato;
+6. nessun dato GPS, password, token o chiave API compare nell'email;
+7. raggiunto il contatore 2.500 del mese, ulteriori report non generano email e non disturbano l'utente.
 
 ## Limiti intenzionali
 
@@ -61,4 +80,5 @@ Verificare:
 - il backend accetta al massimo 8 report per utente in 10 minuti per istanza attiva;
 - la deduplicazione locale dello stesso errore dura 30 minuti;
 - la Cloud Function accetta solo utenti Firebase autenticati;
-- non viene usato Firestore per la diagnostica, così non vengono introdotti costi di lettura/scrittura o listener.
+- massimo 2.500 email diagnostiche al mese;
+- il contatore mensile viene usato solo quando si verifica un errore e non aggiunge listener o letture al caricamento dell'app.

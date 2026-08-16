@@ -67,8 +67,20 @@
     if (fit) fitTodoBounds();
   }
 
+  function observeMarkers() {
+    const pane = document.querySelector('#map .leaflet-marker-pane');
+    if (!pane || pane === observedPane) return;
+    markerObserver?.disconnect();
+    observedPane = pane;
+    markerObserver = new MutationObserver(() => {
+      if (todoFilterActive) requestAnimationFrame(() => applyFilter({ fit: false }));
+    });
+    markerObserver.observe(pane, { childList: true, subtree: true });
+  }
+
   function activateTodoFilter() {
     todoFilterActive = true;
+    observeMarkers();
     requestAnimationFrame(() => applyFilter({ fit: true }));
     window.setTimeout(() => applyFilter({ fit: false }), 80);
   }
@@ -93,27 +105,9 @@
     }
   }
 
-  function observeMarkers() {
-    const pane = document.querySelector('#map .leaflet-marker-pane');
-    if (!pane || pane === observedPane) return;
-    markerObserver?.disconnect();
-    observedPane = pane;
-    markerObserver = new MutationObserver(() => {
-      if (todoFilterActive) requestAnimationFrame(() => applyFilter({ fit: false }));
-    });
-    markerObserver.observe(pane, { childList: true, subtree: true });
-  }
-
   function init() {
     bindButtons();
     observeMarkers();
-
-    const rootObserver = new MutationObserver(() => {
-      bindButtons();
-      observeMarkers();
-      if (todoFilterActive) applyFilter({ fit: false });
-    });
-    rootObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

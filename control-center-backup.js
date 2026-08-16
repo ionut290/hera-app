@@ -191,3 +191,14 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();
+
+(() => {
+  'use strict';
+  if (document.querySelector('script[data-control-center-organizer]')) return;
+  const script = document.createElement('script');
+  script.src = './control-center-organizer.js?v=20260816c';
+  script.defer = true;
+  script.dataset.controlCenterOrganizer = '1';
+  script.addEventListener('error', () => console.warn('Organizzazione Centro di controllo non caricata.'), { once: true });
+  document.head.appendChild(script);
+})();

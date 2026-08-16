@@ -202,3 +202,14 @@
   script.addEventListener('error', () => console.warn('Organizzazione Centro di controllo non caricata.'), { once: true });
   document.head.appendChild(script);
 })();
+
+(() => {
+  'use strict';
+  if (document.querySelector('script[data-control-center-email-counter]')) return;
+  const script = document.createElement('script');
+  script.src = './control-center-email-counter.js?v=20260816a';
+  script.defer = true;
+  script.dataset.controlCenterEmailCounter = '1';
+  script.addEventListener('error', () => console.warn('Contatore e-mail Centro di controllo non caricato.'), { once: true });
+  document.head.appendChild(script);
+})();

@@ -8,6 +8,7 @@ const sharedOperationalViewFunctions = require("./shared-operational-views");
 const adminPasswordPrivateRequestFunctions = require("./admin-password-private-requests");
 const impiantoChangeIndexFunctions = require("./impianto-change-index");
 const errorReportingFunctions = require("./error-reporting");
+const errorEmailUsageFunctions = require("./error-email-usage");
 
 Object.assign(
   exports,
@@ -18,5 +19,6 @@ Object.assign(
   sharedOperationalViewFunctions,
   adminPasswordPrivateRequestFunctions,
   impiantoChangeIndexFunctions,
-  errorReportingFunctions
+  errorReportingFunctions,
+  errorEmailUsageFunctions
 );

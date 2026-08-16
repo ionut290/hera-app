@@ -1,0 +1,45 @@
+name: Check email counter
+
+on:
+  pull_request:
+    paths:
+      - "control-center-email-counter.js"
+      - "control-center-backup.js"
+      - "functions/error-email-usage.js"
+      - "functions/main.js"
+      - ".github/workflows/deploy-firebase-functions.yml"
+      - ".github/workflows/check-email-counter.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: |
+          node --check control-center-email-counter.js
+          node --check control-center-backup.js
+          node --check functions/error-email-usage.js
+          node --check functions/main.js
+      - name: Check Firestore cost guards
+        run: |
+          grep -q "getErrorEmailUsage" control-center-email-counter.js
+          grep -q "CACHE_MS" control-center-email-counter.js
+          ! grep -q "onSnapshot" control-center-email-counter.js
+          ! grep -q "setInterval" control-center-email-counter.js
+          grep -q "ref.get()" functions/error-email-usage.js
+          ! grep -q "runTransaction" functions/error-email-usage.js
+          ! grep -q "onSnapshot" functions/error-email-usage.js
+      - name: Load Cloud Functions entrypoint
+        working-directory: functions
+        run: |
+          npm install --no-audit --no-fund
+          node -e "require('./main.js'); console.log('Functions loaded successfully')"

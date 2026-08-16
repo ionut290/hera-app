@@ -2,7 +2,7 @@
   "use strict";
 
   const GLOBAL = "HeraFirestoreStartupCostOptimizer";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   if (window[GLOBAL]?.installed) return;
 
   const PROFILE_WRITE_TTL_MS = 5 * 60 * 1000;
@@ -217,17 +217,22 @@
     } catch (_) {}
 
     const dates = activeSquadreDateKeys();
+    const primaryDate = dates[0] || todayKey();
     const views = new Map();
     const unsubs = [];
     let nativeUnsubscribe = null;
     let closed = false;
     let fallbackStarted = false;
     let fallbackTimer = null;
+    let lastDeliveredSignature = "";
     state.staticSquadreStarts += 1;
 
     const deliver = () => {
-      if (closed || fallbackStarted || !dates.every((date) => views.has(date))) return;
+      if (closed || fallbackStarted || !views.has(primaryDate)) return;
       const snapshot = buildStaticSquadreSnapshot(query, views);
+      const signature = `${[...views.keys()].sort().join("|")}:${snapshot.size}`;
+      if (signature === lastDeliveredSignature) return;
+      lastDeliveredSignature = signature;
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
         fallbackTimer = null;
@@ -260,8 +265,8 @@
       }
     });
 
-    if (!dates.every((date) => views.has(date))) {
-      fallbackTimer = setTimeout(() => startFallback("timeout"), SQUADRE_FALLBACK_MS);
+    if (!views.has(primaryDate)) {
+      fallbackTimer = setTimeout(() => startFallback("timeout-vista-principale"), SQUADRE_FALLBACK_MS);
     }
     return () => {
       if (closed) return;

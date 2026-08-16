@@ -1,3 +1,18 @@
+(function loadEarlyErrorReporter() {
+  "use strict";
+  if (window.HeraClientErrorReporter?.installed || document.querySelector('script[data-client-error-reporter]')) return;
+  const src = "./client-error-reporter.js?v=20260816a";
+  if (document.readyState === "loading") {
+    document.write(`<script src="${src}" data-client-error-reporter="1"><\/script>`);
+    return;
+  }
+  const script = document.createElement("script");
+  script.src = src;
+  script.dataset.clientErrorReporter = "1";
+  script.async = false;
+  document.head.appendChild(script);
+})();
+
 (function installLoadingHumor() {
   "use strict";
 

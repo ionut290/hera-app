@@ -127,3 +127,16 @@ body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!impo
   #impianti-page #export-current-commessa-btn{display:inline-flex!important}
   #impianti-page .impianti-lista{margin-top:8px!important;gap:8px!important}
 }
+
+/* Elenco impianti continuo: schede ravvicinate, come un'unica lista operativa. */
+#impianti-page #impianti-lista{gap:2px!important;margin-top:6px!important;background:rgba(255,255,255,.48)!important;border:1px solid #d7e2ed!important;border-radius:16px!important;padding:2px!important;overflow:hidden!important}
+#impianti-page #impianti-lista>.impianto-item,#impianti-page #impianti-lista>.card-impianto{margin:0!important;border-radius:0!important;border-left:0!important;border-right:0!important;border-top:1px solid #e3eaf2!important;border-bottom:0!important;box-shadow:none!important;background:rgba(255,255,255,.82)!important}
+#impianti-page #impianti-lista>.impianto-item:first-child,#impianti-page #impianti-lista>.card-impianto:first-child{border-top:0!important;border-radius:14px 14px 0 0!important}
+#impianti-page #impianti-lista>.impianto-item:last-child,#impianti-page #impianti-lista>.card-impianto:last-child{border-radius:0 0 14px 14px!important}
+#impianti-page #impianti-lista>.impianto-item+.impianto-item,#impianti-page #impianti-lista>.card-impianto+.card-impianto{margin-top:0!important}
+@media (max-width:700px){
+  #impianti-page #impianti-lista{gap:0!important;margin-top:5px!important;padding:1px!important;border-radius:14px!important}
+  #impianti-page #impianti-lista>.impianto-item,#impianti-page #impianti-lista>.card-impianto{padding-top:5px!important;padding-bottom:5px!important;border-radius:0!important}
+  #impianti-page #impianti-lista>.impianto-item:first-child,#impianti-page #impianti-lista>.card-impianto:first-child{border-radius:13px 13px 0 0!important}
+  #impianti-page #impianti-lista>.impianto-item:last-child,#impianti-page #impianti-lista>.card-impianto:last-child{border-radius:0 0 13px 13px!important}
+}

@@ -2,10 +2,13 @@
 
 const crypto = require("node:crypto");
 const functions = require("firebase-functions/v1");
+const { defineSecret } = require("firebase-functions/params");
 
 const REGION = "europe-west1";
 const ADMIN_EMAIL = "ionut29019@gmail.com";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+const ERROR_REPORT_FROM = defineSecret("ERROR_REPORT_FROM");
 const MAX_MESSAGE = 1200;
 const MAX_STACK = 7000;
 const MAX_TEXT = 900;
@@ -130,7 +133,7 @@ function buildEmail(report, user, diagnosis) {
 
 exports.reportClientError = functions
   .region(REGION)
-  .runWith({ secrets: ["RESEND_API_KEY", "ERROR_REPORT_FROM"] })
+  .runWith({ secrets: [RESEND_API_KEY, ERROR_REPORT_FROM] })
   .https.onCall(async (data, context) => {
     if (!context.auth?.uid) {
       throw new functions.https.HttpsError("unauthenticated", "Accesso necessario per inviare la diagnostica.");
@@ -139,8 +142,8 @@ exports.reportClientError = functions
       return { sent: false, rateLimited: true };
     }
 
-    const apiKey = String(process.env.RESEND_API_KEY || "").trim();
-    const from = String(process.env.ERROR_REPORT_FROM || "").trim();
+    const apiKey = String(RESEND_API_KEY.value() || "").trim();
+    const from = String(ERROR_REPORT_FROM.value() || "").trim();
     if (!apiKey || !from) {
       throw new functions.https.HttpsError("failed-precondition", "Sistema email diagnostica non configurato.");
     }

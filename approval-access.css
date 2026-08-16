@@ -70,3 +70,73 @@ body{background:linear-gradient(180deg,#eaf1f8 0%,#edf3f8 38%,#e7eef5 100%)!impo
   #home-page>.home-top-grid .weather-card,#home-page>.home-quick-access,#home-page>#today-summary-card,.user-connection-bar{border-top-color:#d3deea!important}
   .home-quick-access-btn>span:first-child,.today-summary-icon{filter:saturate(1.2)}
 }
+
+/* Pagina commessa: restyling + più spazio alla mappa. Solo CSS. */
+#impianti-page>.commessa-dashboard-card{background:linear-gradient(145deg,#edf5fb 0%,#edf7f3 60%,#f2effb 100%)!important;border-color:#cad9e7!important;box-shadow:0 8px 22px rgba(30,64,100,.08)!important}
+#impianti-page .commessa-stat-strip{background:linear-gradient(135deg,rgba(207,235,224,.72),rgba(218,229,251,.72),rgba(232,221,251,.72))!important;border:1px solid #d2deeb!important;border-radius:15px!important;padding:5px!important;gap:5px!important}
+#impianti-page .commessa-stat-item{background:rgba(247,250,253,.75)!important;border-color:rgba(198,215,230,.78)!important;box-shadow:none!important}
+#impianti-page .commessa-map-card{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important;overflow:visible!important}
+#impianti-page .search-box,#impianti-page .impianti-toolbar{background:linear-gradient(180deg,#eef5fa,#edf3f8)!important}
+@media (max-width:700px){
+  #impianti-page>.commessa-dashboard-card{padding:8px!important;margin-bottom:4px!important}
+  #impianti-page>.commessa-dashboard-card .page-head,#impianti-page>.commessa-dashboard-card .commessa-head{min-height:0!important;margin:0 0 4px!important;gap:5px!important;padding:0!important}
+  #impianti-page>.commessa-dashboard-card h1,#impianti-page>.commessa-dashboard-card h2{font-size:1rem!important;line-height:1.05!important;margin:0!important}
+  #impianti-page>.commessa-dashboard-card .commessa-focus-label,#impianti-page>.commessa-dashboard-card .muted{font-size:.7rem!important;line-height:1!important;margin:0!important}
+  #impianti-page .commessa-stat-strip{min-height:0!important;margin:3px 0 0!important;padding:3px!important;gap:3px!important;border-radius:12px!important}
+  #impianti-page .commessa-stat-item{min-height:46px!important;padding:3px 2px!important;border-radius:10px!important;gap:0!important}
+  #impianti-page .commessa-stat-item strong,#impianti-page .commessa-stat-item b{font-size:.96rem!important;line-height:1!important}
+  #impianti-page .commessa-stat-item span,#impianti-page .commessa-stat-item small{font-size:.59rem!important;line-height:1!important}
+  #impianti-page .commessa-map-card{width:calc(100% + 12px)!important;margin:4px -6px 0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+  #impianti-page #map{width:100%!important;height:clamp(430px,62vh,650px)!important;min-height:430px!important;border:0!important;border-radius:0!important;margin:0!important;box-shadow:none!important}
+}
+
+/* Commessa come scheda unica: titolo, mappa ed elenco senza stacchi visivi. */
+#impianti-page>.commessa-dashboard-card{margin-bottom:0!important;border-radius:18px 18px 0 0!important;border-bottom:0!important;box-shadow:none!important}
+#impianti-page>#commessa-operational-card{margin-top:0!important;margin-bottom:0!important;border-left:1px solid #cad9e7!important;border-right:1px solid #cad9e7!important;background:linear-gradient(180deg,#edf5fa,#eaf2f7)!important}
+#impianti-page>#impianti-card{margin-top:0!important;border-radius:0 0 18px 18px!important;border-top:0!important;background:linear-gradient(180deg,#edf5fa 0%,#eef3f8 100%)!important;box-shadow:0 10px 24px rgba(30,64,100,.08)!important}
+#impianti-page .commessa-squadre-footer{display:none!important}
+#impianti-page #view-alerts-btn{display:none!important}
+#impianti-page>#impianti-card>h2{margin-top:0!important;padding-top:4px!important}
+@media (max-width:700px){
+  #impianti-page>.commessa-dashboard-card{margin:0!important;border-radius:16px 16px 0 0!important}
+  #impianti-page>#commessa-operational-card{width:calc(100% + 12px)!important;margin:0 -6px!important;border-left:0!important;border-right:0!important}
+  #impianti-page>#impianti-card{margin:0!important;border-radius:0 0 16px 16px!important;border-top:0!important;padding-top:6px!important}
+  #impianti-page>#impianti-card>h2{margin:0 0 6px!important;font-size:1rem!important;line-height:1.1!important}
+}
+
+/* Allineamento alla vista approvata: meno interruzioni, più mappa e posizione stile Google Maps. */
+#impianti-page{gap:0!important}
+#impianti-page>#commessa-operational-card #gps-status{display:none!important}
+#impianti-page .commessa-map-shell{margin:0!important}
+#impianti-page .user-location-marker-dot{width:20px!important;height:20px!important;background:#1a73e8!important;border:4px solid #fff!important;box-shadow:0 0 0 10px rgba(26,115,232,.18),0 2px 8px rgba(15,23,42,.28)!important;position:relative!important}
+#impianti-page .user-location-marker-dot::after{content:"";position:absolute;inset:-12px;border-radius:999px;border:1px solid rgba(26,115,232,.22);pointer-events:none}
+#impianti-page .map-geolocate-btn{width:44px!important;height:44px!important;border-radius:999px!important;background:#fff!important;border:0!important;box-shadow:0 3px 12px rgba(15,23,42,.22)!important;color:#174ea6!important}
+@media (max-width:700px){
+  #impianti-page>.commessa-dashboard-card{padding-bottom:5px!important}
+  #impianti-page .commessa-stat-strip{margin-bottom:0!important}
+  #impianti-page>#commessa-operational-card{margin-top:0!important;background:transparent!important}
+  #impianti-page>#commessa-operational-card .commessa-map-shell{margin-top:0!important}
+  #impianti-page #map{height:clamp(470px,66vh,700px)!important;min-height:470px!important}
+  #impianti-page>#impianti-card{padding:8px 8px 10px!important;background:linear-gradient(180deg,#f5f9fd 0%,#edf4f9 100%)!important}
+  #impianti-page>#impianti-card>h2{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;margin:0!important;padding:0!important}
+  #impianti-page .impianti-toolbar{padding:0!important;margin:0!important;gap:7px!important;background:transparent!important}
+  #impianti-page .search-box{min-height:48px!important;padding:4px 10px!important;border:1px solid #d4dfeb!important;border-radius:16px!important;background:rgba(255,255,255,.9)!important;box-shadow:0 3px 10px rgba(30,64,100,.05)!important}
+  #impianti-page .search-box input{min-height:38px!important;font-size:.9rem!important;background:transparent!important;border:0!important;box-shadow:none!important}
+  #impianti-page .view-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important;margin:0!important}
+  #impianti-page .view-tabs .btn{min-height:42px!important;padding:6px 5px!important;font-size:.72rem!important;border-radius:13px!important}
+  #impianti-page #export-current-commessa-btn{display:inline-flex!important}
+  #impianti-page .impianti-lista{margin-top:8px!important;gap:8px!important}
+}
+
+/* Elenco impianti continuo: schede ravvicinate, come un'unica lista operativa. */
+#impianti-page #impianti-lista{gap:2px!important;margin-top:6px!important;background:rgba(255,255,255,.48)!important;border:1px solid #d7e2ed!important;border-radius:16px!important;padding:2px!important;overflow:hidden!important}
+#impianti-page #impianti-lista>.impianto-item,#impianti-page #impianti-lista>.card-impianto{margin:0!important;border-radius:0!important;border-left:0!important;border-right:0!important;border-top:1px solid #e3eaf2!important;border-bottom:0!important;box-shadow:none!important;background:rgba(255,255,255,.82)!important}
+#impianti-page #impianti-lista>.impianto-item:first-child,#impianti-page #impianti-lista>.card-impianto:first-child{border-top:0!important;border-radius:14px 14px 0 0!important}
+#impianti-page #impianti-lista>.impianto-item:last-child,#impianti-page #impianti-lista>.card-impianto:last-child{border-radius:0 0 14px 14px!important}
+#impianti-page #impianti-lista>.impianto-item+.impianto-item,#impianti-page #impianti-lista>.card-impianto+.card-impianto{margin-top:0!important}
+@media (max-width:700px){
+  #impianti-page #impianti-lista{gap:0!important;margin-top:5px!important;padding:1px!important;border-radius:14px!important}
+  #impianti-page #impianti-lista>.impianto-item,#impianti-page #impianti-lista>.card-impianto{padding-top:5px!important;padding-bottom:5px!important;border-radius:0!important}
+  #impianti-page #impianti-lista>.impianto-item:first-child,#impianti-page #impianti-lista>.card-impianto:first-child{border-radius:13px 13px 0 0!important}
+  #impianti-page #impianti-lista>.impianto-item:last-child,#impianti-page #impianti-lista>.card-impianto:last-child{border-radius:0 0 13px 13px!important}
+}

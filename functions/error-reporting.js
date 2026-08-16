@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
 
@@ -14,6 +15,9 @@ const MAX_STACK = 7000;
 const MAX_TEXT = 900;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_PER_USER = 8;
+const MONTHLY_EMAIL_LIMIT = 2500;
+const COUNTER_COLLECTION = "systemCounters";
+const COUNTER_PREFIX = "errorEmails_";
 const recentByUser = new Map();
 
 function cleanText(value, max = MAX_TEXT) {
@@ -95,6 +99,59 @@ function enforceRateLimit(uid) {
   return true;
 }
 
+function monthKeyRome(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value || String(date.getUTCFullYear());
+  const month = parts.find((part) => part.type === "month")?.value || String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function monthlyCounterRef() {
+  const month = monthKeyRome();
+  return { month, ref: admin.firestore().collection(COUNTER_COLLECTION).doc(`${COUNTER_PREFIX}${month}`) };
+}
+
+async function reserveMonthlyEmailSlot() {
+  const { month, ref } = monthlyCounterRef();
+  return admin.firestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const used = Math.max(0, Number(snapshot.data()?.sentCount) || 0);
+    if (used >= MONTHLY_EMAIL_LIMIT) {
+      return { allowed: false, month, used, limit: MONTHLY_EMAIL_LIMIT };
+    }
+    const next = used + 1;
+    transaction.set(ref, {
+      month,
+      sentCount: next,
+      limit: MONTHLY_EMAIL_LIMIT,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { allowed: true, month, used: next, limit: MONTHLY_EMAIL_LIMIT };
+  });
+}
+
+async function releaseMonthlyEmailSlot(month) {
+  if (!month) return;
+  const ref = admin.firestore().collection(COUNTER_COLLECTION).doc(`${COUNTER_PREFIX}${month}`);
+  try {
+    await admin.firestore().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return;
+      const used = Math.max(0, Number(snapshot.data()?.sentCount) || 0);
+      transaction.set(ref, {
+        sentCount: Math.max(0, used - 1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  } catch (error) {
+    console.error("Rilascio contatore email diagnostica fallito.", { month, message: cleanText(error?.message, 240) });
+  }
+}
+
 function buildEmail(report, user, diagnosis) {
   const location = [report.page, report.activeView].filter(Boolean).join(" · ") || "Non disponibile";
   const technicalLocation = [report.source, report.line ? `riga ${report.line}` : "", report.column ? `colonna ${report.column}` : ""].filter(Boolean).join(" · ") || "Non disponibile";
@@ -158,6 +215,12 @@ exports.reportClientError = functions
     const email = buildEmail(report, user, diagnosis);
     const idempotencyKey = `varga-error-${crypto.createHash("sha256").update(`${context.auth.uid}:${report.reportId}`).digest("hex").slice(0, 40)}`;
 
+    const monthlySlot = await reserveMonthlyEmailSlot();
+    if (!monthlySlot.allowed) {
+      console.warn("Limite mensile email diagnostiche raggiunto.", { month: monthlySlot.month, used: monthlySlot.used, limit: monthlySlot.limit });
+      return { sent: false, monthlyLimited: true, monthly: { month: monthlySlot.month, used: monthlySlot.used, limit: monthlySlot.limit } };
+    }
+
     let response;
     try {
       response = await fetch(RESEND_ENDPOINT, {
@@ -165,7 +228,7 @@ exports.reportClientError = functions
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "User-Agent": "varga-cantieri-error-reporter/1.0",
+          "User-Agent": "varga-cantieri-error-reporter/1.1",
           "Idempotency-Key": idempotencyKey
         },
         body: JSON.stringify({
@@ -177,15 +240,22 @@ exports.reportClientError = functions
         })
       });
     } catch (error) {
+      await releaseMonthlyEmailSlot(monthlySlot.month);
       console.error("Invio diagnostica email non raggiungibile.", { message: cleanText(error?.message, 300), reportId: report.reportId });
       throw new functions.https.HttpsError("unavailable", "Invio della diagnostica temporaneamente non disponibile.");
     }
 
     if (!response.ok) {
+      await releaseMonthlyEmailSlot(monthlySlot.month);
       const responseText = cleanText(await response.text().catch(() => ""), 700);
       console.error("Invio diagnostica email rifiutato.", { status: response.status, response: responseText, reportId: report.reportId });
       throw new functions.https.HttpsError("unavailable", "Il servizio email ha rifiutato la diagnostica.");
     }
 
-    return { sent: true, reportId: report.reportId, diagnosis: { category: diagnosis.category, severity: diagnosis.severity } };
+    return {
+      sent: true,
+      reportId: report.reportId,
+      diagnosis: { category: diagnosis.category, severity: diagnosis.severity },
+      monthly: { month: monthlySlot.month, used: monthlySlot.used, limit: monthlySlot.limit }
+    };
   });

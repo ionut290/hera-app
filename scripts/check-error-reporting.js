@@ -14,6 +14,9 @@ assert.match(client, /hera_client_error_queue_v1/);
 assert.match(client, /hera_client_error_dedupe_v1/);
 assert.match(client, /httpsCallable\(FUNCTION_NAME\)/);
 assert.match(client, /europe-west1/);
+assert.match(client, /monthlyLimited/);
+assert.doesNotMatch(client, /showSentToast/);
+assert.doesNotMatch(client, /Diagnosi inviata automaticamente/);
 assert.doesNotMatch(client, /\.firestore\s*\(/);
 assert.doesNotMatch(client, /onSnapshot\s*\(/);
 assert.doesNotMatch(client, /setInterval\s*\(/);
@@ -24,8 +27,10 @@ assert.match(backend, /runWith\(\{ secrets: \[RESEND_API_KEY, ERROR_REPORT_FROM\
 assert.match(backend, /context\.auth/);
 assert.match(backend, /Idempotency-Key/);
 assert.match(backend, /api\.resend\.com\/emails/);
-assert.doesNotMatch(backend, /\.firestore\s*\(/);
-assert.doesNotMatch(backend, /collection\s*\(/);
+assert.match(backend, /MONTHLY_EMAIL_LIMIT = 2500/);
+assert.match(backend, /systemCounters/);
+assert.match(backend, /runTransaction/);
+assert.match(backend, /monthlyLimited/);
 assert.doesNotMatch(backend, /onSnapshot\s*\(/);
 assert.doesNotMatch(backend, /setInterval\s*\(/);
 

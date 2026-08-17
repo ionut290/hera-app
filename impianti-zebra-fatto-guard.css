@@ -1,0 +1,39 @@
+/* Separazione visiva elenco impianti. Solo presentazione. */
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) {
+  background: #ffffff !important;
+  border-color: #d9dee5 !important;
+}
+
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(even),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) {
+  background: #e1e5ea !important;
+  border-color: #c8cfd8 !important;
+}
+
+/* Alcune righe hanno una card interna con il proprio sfondo: eredita il colore della riga. */
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) > :is(article, div, section),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) > :is(article, div, section) {
+  background: #ffffff !important;
+}
+
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) > :is(article, div, section),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) > :is(article, div, section) {
+  background: #e1e5ea !important;
+}
+
+#impianti-lista > :is(article, div, li),
+.impianti-lista > :is(article, div, li) {
+  transition: background-color .12s ease;
+}
+
+/* Feedback minimo quando un click FATTO viene scartato perché generato durante lo scroll. */
+.fatto-scroll-guard-blocked {
+  animation: fatto-scroll-guard-pulse .22s ease-out;
+}
+
+@keyframes fatto-scroll-guard-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(.97); }
+  100% { transform: scale(1); }
+}

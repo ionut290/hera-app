@@ -68,7 +68,7 @@
   if (!document.querySelector('link[data-squadre-commessa-themes-visible-fix]')) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "./squadre-commessa-themes-visible-fix.css?v=20260817b";
+    link.href = "./squadre-commessa-themes-visible-fix.css?v=20260817c";
     link.dataset.squadreCommessaThemesVisibleFix = "1";
     document.head.appendChild(link);
   }

@@ -6,12 +6,9 @@
   overflow: visible !important;
 }
 
+/* Il titolo "Oggi" non serve: la scheda resta riconoscibile dal contenuto. */
 #today-summary-card > #today-summary-title {
-  position: relative;
-  z-index: 1;
-  overflow: visible !important;
-  white-space: normal !important;
-  text-overflow: clip !important;
+  display: none !important;
 }
 
 #today-summary-card .today-summary-grid {
@@ -43,6 +40,23 @@
   text-overflow: clip !important;
 }
 
+#today-commesse-btn .today-summary-copy {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100%;
+}
+
+#today-commesse-action {
+  white-space: normal !important;
+  line-height: 1.15 !important;
+  text-align: center;
+}
+
+#today-commesse-count:empty {
+  display: none !important;
+}
+
 #today-mezzi-btn {
   padding-top: 7px !important;
   padding-bottom: 7px !important;
@@ -59,13 +73,7 @@
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
-    padding-top: 7px !important;
-  }
-
-  #today-summary-card > h2 {
-    min-height: 1em !important;
-    margin: 0 0 5px !important;
-    line-height: 1.15 !important;
+    padding-top: 5px !important;
   }
 
   #today-summary-card .today-summary-item {

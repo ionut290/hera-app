@@ -56,6 +56,24 @@
   document.head.appendChild(script);
 })();
 
+(function loadSquadreCommessaThemes() {
+  "use strict";
+  if (!document.querySelector('link[data-squadre-commessa-themes]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "./squadre-commessa-themes.css?v=20260817a";
+    link.dataset.squadreCommessaThemes = "1";
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector('script[data-squadre-commessa-themes]')) {
+    const script = document.createElement("script");
+    script.src = "./squadre-commessa-themes.js?v=20260817a";
+    script.defer = true;
+    script.dataset.squadreCommessaThemes = "1";
+    document.head.appendChild(script);
+  }
+})();
+
 (function installLoadingHumor() {
   "use strict";
 

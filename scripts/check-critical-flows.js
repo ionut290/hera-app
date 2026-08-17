@@ -114,13 +114,13 @@ flow("4. NAVIGA - graffetta - FATTO", () => {
   assert.match(index, /📎|graffetta|foto/i);
 });
 
-flow("5. Whazzup Android: messaggio prima delle foto", () => {
-  const messageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)");
+flow("5. Whazzup Android: foto prima del messaggio", () => {
   const dedicatedPhotoIndex = androidOrder.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
+  const dedicatedMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", dedicatedPhotoIndex);
   const fallbackPhotoIndex = androidOrder.indexOf("await plugins.share.share");
-  assert.ok(messageIndex >= 0, "Apertura messaggio Whazzup mancante");
-  assert.ok(dedicatedPhotoIndex >= 0 && messageIndex < dedicatedPhotoIndex, "Il messaggio deve precedere le foto nel plugin dedicato");
-  assert.ok(fallbackPhotoIndex >= 0 && messageIndex < fallbackPhotoIndex, "Il messaggio deve precedere le foto nel fallback Android");
+  const fallbackMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", fallbackPhotoIndex);
+  assert.ok(dedicatedPhotoIndex >= 0 && dedicatedMessageIndex > dedicatedPhotoIndex, "Le foto devono precedere il messaggio nel plugin dedicato");
+  assert.ok(fallbackPhotoIndex >= 0 && fallbackMessageIndex > fallbackPhotoIndex, "Le foto devono precedere il messaggio nel fallback Android");
 });
 
 flow("6. Gestione ore", () => {

@@ -1,0 +1,46 @@
+/* Desktop full-screen layout: solo presentazione, nessuna logica applicativa. */
+@media (min-width: 901px) {
+  html,
+  body {
+    width: 100%;
+    min-width: 100%;
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  .container {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: clamp(12px, 1.2vw, 24px) !important;
+    padding-right: clamp(12px, 1.2vw, 24px) !important;
+    box-sizing: border-box;
+  }
+
+  #home-page,
+  #impianti-page,
+  #control-center-page,
+  #control-center-content,
+  main,
+  .page,
+  .page-content {
+    width: 100%;
+    max-width: none !important;
+    box-sizing: border-box;
+  }
+
+  #impianti-page .commessa-map-card,
+  #impianti-page #map,
+  .commessa-dashboard-card,
+  .home-top-grid,
+  .home-quick-access,
+  .today-summary-card,
+  #today-squads-section {
+    max-width: none !important;
+  }
+}

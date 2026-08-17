@@ -9,6 +9,7 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
+import it.vargacantieri.hera.camera.HeraContinuousCameraPlugin;
 import it.vargacantieri.hera.geofence.HeraGeofencePlugin;
 import it.vargacantieri.hera.biometric.HeraBiometricPlugin;
 import it.vargacantieri.hera.whatsapp.HeraWhazzupPhotosPlugin;
@@ -24,6 +25,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraBiometricPlugin.class);
         registerPlugin(HeraWhazzupPhotosPlugin.class);
         registerPlugin(HeraWhatsAppPlugin.class);
+        registerPlugin(HeraContinuousCameraPlugin.class);
         super.onCreate(savedInstanceState);
         clearWebViewCacheAfterAppUpdate();
     }

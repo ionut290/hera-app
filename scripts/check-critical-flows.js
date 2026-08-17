@@ -83,9 +83,6 @@ flow("3. Ricerca e visibilità impianti", () => {
   assert.match(app, /changeIndexRef\.orderBy\("changedAt", "desc"\)\.limit\(1\)\.get\(\)/);
   assert.match(app, /saveImpiantiIncrementalState\(requestedCommessaId, latestMarkerMs\)/);
   assert.doesNotMatch(app, /saveImpiantiIncrementalState\(requestedCommessaId, Date\.now\(\)\)/);
-
-  // La cache persistente non può diventare fonte primaria senza un checkpoint
-  // incrementale già valido. Il primo caricamento completo resta quindi protetto.
   assert.match(navigationRepair, /HeraImpiantiPersistentCache/);
   assert.match(navigationRepair, /mode: "verified-incremental-only"/);
   assert.match(navigationRepair, /const hadMemoryCache = Array\.isArray\(existing\) && existing\.length > 0;/);
@@ -94,16 +91,11 @@ flow("3. Ricerca e visibilità impianti", () => {
   assert.match(navigationRepair, /if \(commessaId && context\?\.canPersist\) \{\s*persistCurrentCache\(commessaId\);\s*\}/);
   assert.match(navigationRepair, /CACHE_MAX_AGE_MS = 30 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(navigationRepair, /encodeURIComponent\(scope\.uid\)/);
-
-  // Le statistiche complete degli impianti non devono più partire dalla Home.
-  // Rimangono disponibili esplicitamente per le commesse padre.
   assert.match(navigationRepair, /HeraLazyCommessaStats/);
   assert.match(navigationRepair, /mode: "home-suppressed-parent-explicit"/);
   assert.match(navigationRepair, /originalRefreshCommesseDependentUI\.call\(this, false\)/);
   assert.match(navigationRepair, /const hasSubcommesse = typeof getSubcommesse === "function" && getSubcommesse\(id\)\.length > 0;/);
   assert.match(navigationRepair, /if \(hasSubcommesse\) \{[\s\S]*?originalSubscribeStatsForCommesse\(\);/);
-
-  // La cache persistente e il gate lazy non devono aggiungere chiamate Firestore proprie.
   const cacheSection = navigationRepair.split("// Cache persistente degli impianti")[1]?.split("// Le statistiche degli impianti")[0] || "";
   assert.doesNotMatch(cacheSection, /\bdb\.collection\(|\.onSnapshot\(|\.where\(|\.orderBy\(/);
 });
@@ -114,13 +106,13 @@ flow("4. NAVIGA - graffetta - FATTO", () => {
   assert.match(index, /📎|graffetta|foto/i);
 });
 
-flow("5. Whazzup Android: foto prima del messaggio", () => {
+flow("5. Whazzup Android: messaggio prima delle foto", () => {
+  const messageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)");
   const dedicatedPhotoIndex = androidOrder.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
-  const dedicatedMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", dedicatedPhotoIndex);
   const fallbackPhotoIndex = androidOrder.indexOf("await plugins.share.share");
-  const fallbackMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", fallbackPhotoIndex);
-  assert.ok(dedicatedPhotoIndex >= 0 && dedicatedMessageIndex > dedicatedPhotoIndex, "Le foto devono precedere il messaggio nel plugin dedicato");
-  assert.ok(fallbackPhotoIndex >= 0 && fallbackMessageIndex > fallbackPhotoIndex, "Le foto devono precedere il messaggio nel fallback Android");
+  assert.ok(messageIndex >= 0 && dedicatedPhotoIndex > messageIndex, "Il messaggio deve precedere le foto nel plugin dedicato");
+  assert.ok(messageIndex >= 0 && fallbackPhotoIndex > messageIndex, "Il messaggio deve precedere le foto nel fallback Android");
+  assert.match(androidOrder, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS\s*=\s*8000/);
 });
 
 flow("6. Gestione ore", () => {

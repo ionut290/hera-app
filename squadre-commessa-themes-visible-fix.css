@@ -1,34 +1,40 @@
-/* Override ad alta specificita per il restyle esistente di Squadre per commessa. */
+/* Squadre per commessa: sfondo chiaro + disegno tecnico non invasivo. */
 #today-squads-section .squadre-lista > .commessa-theme-card {
   position: relative !important;
   overflow: hidden !important;
   isolation: isolate;
-  background-color: #1b252b !important;
+  background: #fff !important;
+  color: #17324d !important;
+  border-color: rgba(35, 96, 145, .22) !important;
 }
 
-/* Il vecchio restyle usa ::before per la striscia colorata. Qui diventa l'overlay leggibile. */
+/* Mantiene la zona testo pulita e leggibile. */
 #today-squads-section .squadre-lista > .commessa-theme-card::before {
   content: "" !important;
   position: absolute !important;
   inset: 0 !important;
   width: auto !important;
-  border-radius: 0 !important;
+  border-radius: inherit !important;
   z-index: 1 !important;
-  background: linear-gradient(90deg, rgba(8,16,20,.90) 0%, rgba(8,16,20,.68) 52%, rgba(8,16,20,.38) 100%) !important;
+  background: linear-gradient(90deg, #fff 0%, rgba(255,255,255,.99) 42%, rgba(255,255,255,.88) 61%, rgba(255,255,255,.25) 100%) !important;
   pointer-events: none !important;
 }
 
-/* L'immagine deve stare sopra il fondo della card, non dietro. */
+/* Disegno tecnico: solo a destra, tenue, come filigrana. */
 #today-squads-section .squadre-lista > .commessa-theme-card::after {
   content: "" !important;
   position: absolute !important;
-  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 46% !important;
   z-index: 0 !important;
-  opacity: .96 !important;
+  opacity: .18 !important;
   background-repeat: no-repeat !important;
-  background-position: center !important;
-  background-size: cover !important;
+  background-position: right center !important;
+  background-size: contain !important;
   pointer-events: none !important;
+  filter: saturate(.7);
 }
 
 #today-squads-section .squadre-lista > .commessa-theme-card > * {
@@ -43,35 +49,58 @@
 #today-squads-section .squadre-lista > .commessa-theme-card > strong,
 #today-squads-section .squadre-lista > .commessa-theme-card .commessa-name,
 #today-squads-section .squadre-lista > .commessa-theme-card .title {
-  color: #fff !important;
-  text-shadow: 0 1px 3px rgba(0,0,0,.55);
+  color: #0f3558 !important;
+  text-shadow: none !important;
 }
 
-/* Ripete le immagini sulle regole ad alta specificita per vincere sul restyle attuale. */
+/* Testi secondari sempre leggibili sul bianco. */
+#today-squads-section .squadre-lista > .commessa-theme-card p,
+#today-squads-section .squadre-lista > .commessa-theme-card span:not(.badge):not(.chip),
+#today-squads-section .squadre-lista > .commessa-theme-card .muted {
+  text-shadow: none !important;
+}
+
+/* DEPURAZIONE: vasca circolare, pompe, tubazioni e passerella in stile blueprint. */
 #today-squads-section .squadre-lista > .commessa-theme-depurazione::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%23324f5c'/%3E%3Ccircle cx='500' cy='205' r='92' fill='%236d9fae'/%3E%3Ccircle cx='500' cy='205' r='66' fill='%23557f8c'/%3E%3Ccircle cx='500' cy='205' r='16' fill='%23d7eef3'/%3E%3Cpath d='M500 205L610 150M500 205L390 150M500 205L500 285' stroke='%23d7eef3' stroke-width='9'/%3E%3Crect x='90' y='130' width='190' height='95' rx='10' fill='%237f9eaa'/%3E%3Crect x='120' y='95' width='45' height='35' fill='%23a8c2ca'/%3E%3Cpath d='M70 225h570' stroke='%23d5e6ea' stroke-width='8' opacity='.65'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%235b8fb8' stroke-width='3'%3E%3Ccircle cx='560' cy='205' r='92'/%3E%3Ccircle cx='560' cy='205' r='60'/%3E%3Ccircle cx='560' cy='205' r='10'/%3E%3Cpath d='M560 205l105-54M560 205l-95-51M560 205v84'/%3E%3Crect x='160' y='120' width='180' height='96' rx='8'/%3E%3Cpath d='M185 120V88h45v32M340 168h70v-45h48M94 232h585M405 232V99h62v133M436 99V70'/%3E%3Cpath d='M100 245h590M135 230v-40h38v40M380 245v-30h32v30' stroke-dasharray='8 6'/%3E%3C/svg%3E") !important;
 }
+
+/* INRETE: rete tubazioni, valvole e pozzetti tecnici. */
 #today-squads-section .squadre-lista > .commessa-theme-inrete::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%233b4650'/%3E%3Cpath d='M40 205h610' stroke='%23d6d9dc' stroke-width='18'/%3E%3Cpath d='M120 205v-92h115v92M470 205v-92h105v92' fill='none' stroke='%23f0b94d' stroke-width='15'/%3E%3Ccircle cx='177' cy='112' r='22' fill='%23f4d37d'/%3E%3Ccircle cx='522' cy='112' r='22' fill='%23f4d37d'/%3E%3Crect x='300' y='122' width='108' height='85' rx='12' fill='%237f8f9b'/%3E%3Cpath d='M354 122V78' stroke='%23d6d9dc' stroke-width='12'/%3E%3Ccircle cx='354' cy='72' r='17' fill='%23f0b94d'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%236f8ea5' stroke-width='3'%3E%3Cpath d='M80 205h600M170 205v-82h110v82M470 205v-82h105v82'/%3E%3Ccircle cx='225' cy='123' r='18'/%3E%3Ccircle cx='523' cy='123' r='18'/%3E%3Crect x='320' y='145' width='100' height='60' rx='7'/%3E%3Cpath d='M370 145V90M352 90h36M115 205v45M640 205v45M80 250h600' stroke-dasharray='9 6'/%3E%3C/svg%3E") !important;
 }
+
+/* WTE/impianti: capannoni, camino, linee processo. */
 #today-squads-section .squadre-lista > .commessa-theme-wte::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%23413f45'/%3E%3Crect x='115' y='145' width='360' height='95' fill='%23787a80'/%3E%3Cpath d='M160 145l72-58 72 58M315 145l64-48 64 48' fill='%2394969b'/%3E%3Crect x='505' y='70' width='55' height='170' fill='%2371747b'/%3E%3Cpath d='M530 68c-24-38 18-47 3-78 35 27 10 49 29 76' fill='none' stroke='%23d7d9dc' stroke-width='22' opacity='.45'/%3E%3Cpath d='M95 240h500' stroke='%23b7b9bd' stroke-width='8'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%237c8a96' stroke-width='3'%3E%3Crect x='115' y='145' width='360' height='95'/%3E%3Cpath d='M115 145l92-62 92 62 82-52 94 52M520 240V72h52v168M546 72V38M92 240h525M170 240v-48h48v48M295 240v-60h60v60'/%3E%3Cpath d='M525 48c20-25 0-37 16-58M548 48c22-25 2-37 17-58' stroke-dasharray='8 6'/%3E%3C/svg%3E") !important;
 }
+
+/* DISCARICA: profilo terreno, drenaggi, pozzi biogas. */
 #today-squads-section .squadre-lista > .commessa-theme-discarica::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%235d644f'/%3E%3Cpath d='M30 245C140 175 190 215 285 150c90 83 175 8 300 95z' fill='%237d845d'/%3E%3Cpath d='M155 210l48-24 52 20-44 25zM335 195l44-20 56 20-48 26zM465 230l35-20 52 12-38 30z' fill='%23b5a36f'/%3E%3Crect x='92' y='115' width='12' height='105' fill='%23d7d0b6'/%3E%3Cpath d='M98 120h95l-25 28H98z' fill='%23d08a3b'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%237f8f73' stroke-width='3'%3E%3Cpath d='M70 240c95-65 170-30 255-92 92 78 180 15 320 92M125 235v-95M125 140h92l-24 26h-68M268 228l55-28 64 27M420 222l54-29 63 26M555 235l40-25 52 20'/%3E%3Cpath d='M88 255h575M330 153v-70M322 83h16M470 175v-82M462 93h16' stroke-dasharray='8 6'/%3E%3C/svg%3E") !important;
 }
+
+/* COMPOSTAGGIO: capannone, cumuli e ventilazione. */
 #today-squads-section .squadre-lista > .commessa-theme-compostaggio::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%2347583e'/%3E%3Crect x='100' y='135' width='260' height='105' rx='8' fill='%23718a62'/%3E%3Cpath d='M100 135l130-65 130 65' fill='%238ea67f'/%3E%3Cpath d='M430 230c0-92 70-135 120-120 12 80-36 126-120 120z' fill='%2399b57d'/%3E%3Cpath d='M432 229c45-42 72-72 111-108' stroke='%23dce9cf' stroke-width='8' fill='none'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%237b9b75' stroke-width='3'%3E%3Crect x='110' y='140' width='250' height='100'/%3E%3Cpath d='M110 140l125-68 125 68M430 230c0-88 70-128 118-112 8 77-37 119-118 112M432 230c43-39 74-76 111-108M390 240h215M150 240v-55h55v55'/%3E%3Cpath d='M470 88v-38M510 95V52M550 103V60' stroke-dasharray='8 6'/%3E%3C/svg%3E") !important;
 }
+
+/* VERDE: alberature, aiuole e linee di taglio. */
 #today-squads-section .squadre-lista > .commessa-theme-verde::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%233e5a45'/%3E%3Ccircle cx='500' cy='125' r='78' fill='%236f936c'/%3E%3Ccircle cx='575' cy='150' r='58' fill='%237da276'/%3E%3Crect x='510' y='160' width='22' height='90' fill='%2383694f'/%3E%3Cpath d='M80 245c95-65 200-70 300 0' fill='%236b8d58'/%3E%3Cpath d='M165 195l100 38M250 175l74 50' stroke='%23b9cda3' stroke-width='9'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%237a9f80' stroke-width='3'%3E%3Ccircle cx='520' cy='112' r='62'/%3E%3Ccircle cx='600' cy='145' r='48'/%3E%3Cpath d='M520 174v78M600 193v59M490 252h145M110 245c90-60 200-68 310 0M170 208l105 38M260 187l88 54M145 230h215'/%3E%3Cpath d='M95 260h570' stroke-dasharray='9 6'/%3E%3C/svg%3E") !important;
 }
+
+/* ACQUA: serbatoi e condotte. */
 #today-squads-section .squadre-lista > .commessa-theme-acqua::after {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 300'%3E%3Crect width='700' height='300' fill='%23394f63'/%3E%3Crect x='145' y='105' width='210' height='135' rx='18' fill='%23769bb8'/%3E%3Cpath d='M145 150h210M250 105v135' stroke='%23bfd6e5' stroke-width='8'/%3E%3Cpath d='M430 220c80-60 95-120 120-165 42 62 82 126 32 170-42 36-103 22-152-5z' fill='%237fb6d6'/%3E%3C/svg%3E") !important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300' fill='none' stroke='%236b9fc2' stroke-width='3'%3E%3Crect x='130' y='108' width='220' height='132' rx='18'/%3E%3Cpath d='M130 155h220M240 108v132M405 225c78-56 94-115 118-160 43 64 78 122 31 163-40 34-101 23-149-3M90 250h570M350 190h70v-38h56'/%3E%3C/svg%3E") !important;
 }
 
 @media (max-width:700px){
   #today-squads-section .squadre-lista > .commessa-theme-card::before {
-    background: linear-gradient(90deg, rgba(8,16,20,.90) 0%, rgba(8,16,20,.64) 58%, rgba(8,16,20,.34) 100%) !important;
+    background: linear-gradient(90deg, #fff 0%, rgba(255,255,255,.99) 58%, rgba(255,255,255,.76) 78%, rgba(255,255,255,.28) 100%) !important;
+  }
+  #today-squads-section .squadre-lista > .commessa-theme-card::after {
+    left: 58% !important;
+    opacity: .13 !important;
   }
 }

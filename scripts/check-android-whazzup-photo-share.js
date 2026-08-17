@@ -54,22 +54,21 @@ assert.match(orderFix, /await plugin\.addPhoto\(\{/);
 assert.match(orderFix, /return await plugin\.share\(\{ sessionId \}\);/);
 assert.match(orderFix, /async function shareWhazzupPhotosNativeAndroidInOrder\(orderedFiles, message\)/);
 assert.match(orderFix, /window\.shareWhazzupPhotosNativeAndroid = shareWhazzupPhotosNativeAndroidInOrder;/);
-assert.match(orderFix, /files: fileUris,[\s\S]*safeOpenWhatsAppMessage\(message\)/);
+assert.match(orderFix, /safeOpenWhatsAppMessage\(message\)[\s\S]*await waitBeforeWhazzupPhotos\(\)[\s\S]*sharePhotosThroughDedicatedPlugin/);
+assert.match(orderFix, /safeOpenWhatsAppMessage\(message\)[\s\S]*await waitBeforeWhazzupPhotos\(\)[\s\S]*await plugins\.share\.share/);
 assert.doesNotMatch(orderFix, /text:\s*message/);
 assert.doesNotMatch(orderFix, /title:\s*"Impianto fatto"/);
-assert.doesNotMatch(orderFix, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS/);
-assert.doesNotMatch(orderFix, /waitBeforeWhazzupPhotos/);
 
+const messageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)");
 const dedicatedShareIndex = orderFix.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
-const dedicatedMessageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)", dedicatedShareIndex);
-assert.ok(dedicatedShareIndex >= 0 && dedicatedShareIndex < dedicatedMessageIndex, "Le foto devono essere condivise prima del messaggio nel plugin dedicato");
 const genericShareIndex = orderFix.indexOf("await plugins.share.share");
-const genericMessageIndex = orderFix.indexOf("safeOpenWhatsAppMessage(message)", genericShareIndex);
-assert.ok(genericShareIndex >= 0 && genericShareIndex < genericMessageIndex, "Le foto devono essere condivise prima del messaggio nel fallback nativo");
+assert.ok(messageIndex >= 0 && messageIndex < dedicatedShareIndex, "Il messaggio deve aprirsi prima del plugin foto dedicato");
+assert.ok(messageIndex >= 0 && messageIndex < genericShareIndex, "Il messaggio deve aprirsi prima del fallback foto");
+assert.match(orderFix, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS\s*=\s*8000/);
 
 assert.match(nativeRuntime, /function loadAndroidWhazzupPhotoOrderFix\(\)/);
 assert.match(nativeRuntime, /script\.src = "android-whazzup-photo-order\.js\?v=20260814a"/);
 assert.match(nativeRuntime, /const start = \(\) => \{\s*loadAndroidWhazzupPhotoOrderFix\(\);/);
 assert.match(capacitorPrepare, /"android-whazzup-photo-order\.js"/);
 
-console.log("Android Whazzup photo-first share checks passed.");
+console.log("Android Whazzup message-first photo-share checks passed.");

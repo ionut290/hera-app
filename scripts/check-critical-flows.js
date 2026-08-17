@@ -114,13 +114,13 @@ flow("4. NAVIGA - graffetta - FATTO", () => {
   assert.match(index, /📎|graffetta|foto/i);
 });
 
-flow("5. Whazzup Android: foto prima del messaggio", () => {
+flow("5. Whazzup Android: messaggio prima delle foto", () => {
+  const messageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)");
   const dedicatedPhotoIndex = androidOrder.indexOf("await sharePhotosThroughDedicatedPlugin(dedicatedPlugin, orderedFiles)");
-  const dedicatedMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", dedicatedPhotoIndex);
   const fallbackPhotoIndex = androidOrder.indexOf("await plugins.share.share");
-  const fallbackMessageIndex = androidOrder.indexOf("safeOpenWhatsAppMessage(message)", fallbackPhotoIndex);
-  assert.ok(dedicatedPhotoIndex >= 0 && dedicatedMessageIndex > dedicatedPhotoIndex, "Le foto devono precedere il messaggio nel plugin dedicato");
-  assert.ok(fallbackPhotoIndex >= 0 && fallbackMessageIndex > fallbackPhotoIndex, "Le foto devono precedere il messaggio nel fallback Android");
+  assert.ok(messageIndex >= 0 && dedicatedPhotoIndex > messageIndex, "Il messaggio deve precedere le foto nel plugin dedicato");
+  assert.ok(messageIndex >= 0 && fallbackPhotoIndex > messageIndex, "Il messaggio deve precedere le foto nel fallback Android");
+  assert.match(androidOrder, /PHOTO_SHARE_AFTER_MESSAGE_DELAY_MS\s*=\s*8000/);
 });
 
 flow("6. Gestione ore", () => {

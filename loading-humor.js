@@ -3,7 +3,7 @@
   if (!document.querySelector('link[data-impianti-zebra-style]')) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "./impianti-zebra-fatto-guard.css?v=20260817a";
+    link.href = "./impianti-zebra-fatto-guard.css?v=20260817b";
     link.dataset.impiantiZebraStyle = "1";
     document.head.appendChild(link);
   }

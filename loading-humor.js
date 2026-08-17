@@ -13,13 +13,13 @@
   if (!document.querySelector('link[data-today-summary-adaptive-style]')) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "./today-summary-adaptive.css?v=20260817a";
+    link.href = "./today-summary-adaptive.css?v=20260817b";
     link.dataset.todaySummaryAdaptiveStyle = "1";
     document.head.appendChild(link);
   }
   if (document.querySelector('script[data-today-summary-adaptive]')) return;
   const script = document.createElement("script");
-  script.src = "./today-summary-adaptive.js?v=20260817a";
+  script.src = "./today-summary-adaptive.js?v=20260817b";
   script.defer = true;
   script.dataset.todaySummaryAdaptive = "1";
   document.head.appendChild(script);

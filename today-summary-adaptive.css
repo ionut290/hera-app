@@ -1,0 +1,80 @@
+/* Scheda Oggi adattiva: solo presentazione, nessuna logica dati. */
+#today-summary-card {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+#today-summary-card > #today-summary-title {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+}
+
+#today-summary-card .today-summary-grid {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-items: stretch !important;
+}
+
+#today-summary-card .today-summary-item {
+  height: auto !important;
+  min-height: 54px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  align-self: stretch !important;
+}
+
+#today-summary-card .today-summary-copy,
+#today-summary-card .today-summary-item > span,
+#today-summary-card .today-summary-item > strong,
+#today-summary-card .today-summary-item > b,
+#today-mezzi-count {
+  overflow: visible !important;
+  max-height: none !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
+}
+
+#today-mezzi-btn {
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+}
+
+#today-mezzi-count {
+  display: block;
+  width: 100%;
+  line-height: 1.18 !important;
+}
+
+@media (max-width: 700px) {
+  #home-page > #today-summary-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-top: 7px !important;
+  }
+
+  #today-summary-card > h2 {
+    min-height: 1em !important;
+    margin: 0 0 5px !important;
+    line-height: 1.15 !important;
+  }
+
+  #today-summary-card .today-summary-item {
+    min-height: 50px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  #today-mezzi-btn {
+    min-height: 50px !important;
+  }
+}

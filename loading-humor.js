@@ -1,3 +1,13 @@
+(function loadDesktopFullscreenStyle() {
+  "use strict";
+  if (document.querySelector('link[data-desktop-fullscreen-style]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "./desktop-fullscreen.css?v=20260817a";
+  link.dataset.desktopFullscreenStyle = "1";
+  document.head.appendChild(link);
+})();
+
 (function loadEarlyErrorReporter() {
   "use strict";
   if (window.HeraClientErrorReporter?.installed || document.querySelector('script[data-client-error-reporter]')) return;

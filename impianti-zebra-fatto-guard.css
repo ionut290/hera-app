@@ -1,0 +1,26 @@
+/* Separazione visiva elenco impianti. Solo presentazione. */
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) {
+  background-color: #ffffff !important;
+}
+
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(even),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) {
+  background-color: #f1f3f5 !important;
+}
+
+#impianti-lista > :is(article, div, li),
+.impianti-lista > :is(article, div, li) {
+  transition: background-color .12s ease;
+}
+
+/* Feedback minimo quando un click FATTO viene scartato perché generato durante lo scroll. */
+.fatto-scroll-guard-blocked {
+  animation: fatto-scroll-guard-pulse .22s ease-out;
+}
+
+@keyframes fatto-scroll-guard-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(.97); }
+  100% { transform: scale(1); }
+}

@@ -1,3 +1,21 @@
+(function loadImpiantiVisualAndFattoGuard() {
+  "use strict";
+  if (!document.querySelector('link[data-impianti-zebra-style]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "./impianti-zebra-fatto-guard.css?v=20260817a";
+    link.dataset.impiantiZebraStyle = "1";
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector('script[data-fatto-scroll-guard]')) {
+    const script = document.createElement("script");
+    script.src = "./fatto-scroll-guard.js?v=20260817a";
+    script.defer = true;
+    script.dataset.fattoScrollGuard = "1";
+    document.head.appendChild(script);
+  }
+})();
+
 (function loadDesktopFullscreenStyle() {
   "use strict";
   if (document.querySelector('link[data-desktop-fullscreen-style]')) return;

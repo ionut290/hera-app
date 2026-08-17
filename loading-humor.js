@@ -41,6 +41,21 @@
   document.head.appendChild(script);
 })();
 
+(function loadPwaWhazzupContinuousCamera() {
+  "use strict";
+  const isNative = Boolean(
+    window.Capacitor &&
+    typeof window.Capacitor.isNativePlatform === "function" &&
+    window.Capacitor.isNativePlatform()
+  );
+  if (isNative || document.querySelector('script[data-pwa-whazzup-camera]')) return;
+  const script = document.createElement("script");
+  script.src = "./pwa-whazzup-continuous-camera.js?v=20260817a";
+  script.defer = true;
+  script.dataset.pwaWhazzupCamera = "1";
+  document.head.appendChild(script);
+})();
+
 (function installLoadingHumor() {
   "use strict";
 

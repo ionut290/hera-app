@@ -1,12 +1,25 @@
 /* Separazione visiva elenco impianti. Solo presentazione. */
 #impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd),
 .impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) {
-  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border-color: #d9dee5 !important;
 }
 
 #impianti-lista > :is(article, div, li):not(.hidden):nth-child(even),
 .impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) {
-  background-color: #f1f3f5 !important;
+  background: #e1e5ea !important;
+  border-color: #c8cfd8 !important;
+}
+
+/* Alcune righe hanno una card interna con il proprio sfondo: eredita il colore della riga. */
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) > :is(article, div, section),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(odd) > :is(article, div, section) {
+  background: #ffffff !important;
+}
+
+#impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) > :is(article, div, section),
+.impianti-lista > :is(article, div, li):not(.hidden):nth-child(even) > :is(article, div, section) {
+  background: #e1e5ea !important;
 }
 
 #impianti-lista > :is(article, div, li),

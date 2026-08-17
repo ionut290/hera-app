@@ -34,15 +34,16 @@
     const marker = normalize(`${element.id || ""} ${element.className || ""} ${element.getAttribute?.("data-view") || ""} ${element.getAttribute?.("aria-label") || ""}`);
     if (/squadr/.test(marker)) return true;
     let node = element.parentElement;
-    for (let i = 0; node && i < 6; i += 1, node = node.parentElement) {
+    for (let i = 0; node && i < 8; i += 1, node = node.parentElement) {
       const ancestorMarker = normalize(`${node.id || ""} ${node.className || ""} ${node.getAttribute?.("data-view") || ""}`);
-      if (/squadr/.test(ancestorMarker)) return true;
+      if (/squadr/.test(ancestorMarker) || node.id === "today-squads-section") return true;
     }
     return false;
   }
 
   function candidateCards(root){
     const selectors = [
+      "#today-squads-section .squadre-lista > *",
       ".squadre-commessa-card",
       ".squadra-commessa-card",
       "[data-squadre-commessa-card]",

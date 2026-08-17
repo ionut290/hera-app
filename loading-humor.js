@@ -61,13 +61,20 @@
   if (!document.querySelector('link[data-squadre-commessa-themes]')) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "./squadre-commessa-themes.css?v=20260817a";
+    link.href = "./squadre-commessa-themes.css?v=20260817b";
     link.dataset.squadreCommessaThemes = "1";
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector('link[data-squadre-commessa-themes-visible-fix]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "./squadre-commessa-themes-visible-fix.css?v=20260817b";
+    link.dataset.squadreCommessaThemesVisibleFix = "1";
     document.head.appendChild(link);
   }
   if (!document.querySelector('script[data-squadre-commessa-themes]')) {
     const script = document.createElement("script");
-    script.src = "./squadre-commessa-themes.js?v=20260817a";
+    script.src = "./squadre-commessa-themes.js?v=20260817b";
     script.defer = true;
     script.dataset.squadreCommessaThemes = "1";
     document.head.appendChild(script);

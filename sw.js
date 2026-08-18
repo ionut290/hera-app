@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v133";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v134";
+const CACHE_RESET_VERSION = "20260818-data-durability1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,6 +18,7 @@ const APP_SHELL = [
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260813-render-gate1",
+  "./data-durability-runtime.js?v=20260818a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
@@ -73,6 +74,7 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/shared-static-views-client.js",
+  "/data-durability-runtime.js",
   "/firebase-config.js",
   "/auth-login-fix.js",
   "/login-retry-fix.js",
@@ -152,7 +154,13 @@ const staleWhileRevalidateForAsset = async (event) => {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  // Non usare skipWaiting qui: un aggiornamento automatico non deve interrompere
+  // una schermata con dati ancora in compilazione. Il refresh manuale può
+  // autorizzare l'attivazione dopo avere creato un backup locale.
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -161,15 +169,15 @@ self.addEventListener("activate", (event) => {
     await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
     await self.clients.claim();
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    await Promise.all(windows.map(async (client) => {
+    windows.forEach((client) => {
       try {
-        const url = new URL(client.url);
-        if (url.origin !== self.location.origin || url.searchParams.get("cacheReset") === CACHE_RESET_VERSION) return;
-        url.searchParams.set("cacheReset", CACHE_RESET_VERSION);
-        url.searchParams.set("cacheResetTs", String(Date.now()));
-        await client.navigate(url.toString());
+        client.postMessage({
+          type: "HERA_SW_UPDATE_READY",
+          version: CACHE_RESET_VERSION,
+          activatedAt: Date.now()
+        });
       } catch (_) {}
-    }));
+    });
   })());
 });
 

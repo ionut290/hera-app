@@ -3,7 +3,26 @@
 
   const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
   const APP_CACHE_PREFIXES = ["varga-cantieri-shell-", "hera-app-shell-"];
-  let controllerReloaded = false;
+  const DATA_DURABILITY_SRC = "data-durability-runtime.js?v=20260818a";
+
+  function ensureDataDurabilityRuntime() {
+    if (window.HeraDataDurability) return;
+    const existing = Array.from(document.scripts || []).find((script) => {
+      try { return new URL(script.src, document.baseURI).pathname.endsWith("/data-durability-runtime.js"); }
+      catch (_) { return false; }
+    });
+    if (existing) return;
+    if (document.readyState === "loading") {
+      document.write(`<script src="${DATA_DURABILITY_SRC}" data-hera-data-durability="1"><\/script>`);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = DATA_DURABILITY_SRC;
+    script.setAttribute("data-hera-data-durability", "1");
+    document.head.appendChild(script);
+  }
+
+  ensureDataDurabilityRuntime();
 
   function isNativeAndroid() {
     return Boolean(
@@ -14,6 +33,16 @@
 
   function isAppShellCache(name) {
     return APP_CACHE_PREFIXES.some((prefix) => String(name || "").startsWith(prefix));
+  }
+
+  async function protectDataBeforeReload(reason) {
+    try {
+      if (window.HeraDataDurability?.prepareForUpdate) {
+        await window.HeraDataDurability.prepareForUpdate(reason || "pwa-refresh");
+      }
+    } catch (error) {
+      console.warn("Backup dati pre-aggiornamento non completato; evito cancellazioni dei dati locali.", error);
+    }
   }
 
   async function clearWebAppCaches() {
@@ -38,13 +67,16 @@
       // IMPORTANTE: Refresh elimina solo la cache dell'app shell.
       // Non deve mai eseguire signOut, localStorage.clear(), sessionStorage.clear()
       // o cancellare IndexedDB: Firebase Auth, dati offline e preferenze restano intatti.
-      if (reload) await clearWebAppCaches();
+      if (reload) {
+        await protectDataBeforeReload("manual-pwa-update");
+        await clearWebAppCaches();
+      }
 
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map(async (registration) => {
           await registration.update().catch(() => null);
-          registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+          if (reload) registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         }));
       }
 
@@ -52,7 +84,10 @@
       return true;
     } catch (error) {
       console.warn("Controllo aggiornamento web non riuscito.", error);
-      if (reload) reloadWithoutCache();
+      if (reload) {
+        await protectDataBeforeReload("manual-pwa-update-fallback");
+        reloadWithoutCache();
+      }
       return false;
     }
   }
@@ -78,10 +113,10 @@
   function installAutomaticPwaUpdate() {
     if (isNativeAndroid() || !("serviceWorker" in navigator)) return;
 
+    // Gli aggiornamenti automatici vengono solo scaricati. Non ricarichiamo più
+    // la pagina da soli: evitiamo di interrompere moduli o dati in compilazione.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (controllerReloaded) return;
-      controllerReloaded = true;
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent("hera:update-controller-changed"));
     });
 
     const check = () => void requestPwaUpdate();

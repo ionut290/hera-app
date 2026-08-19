@@ -111,9 +111,12 @@ service cloud.firestore {
 
     match /commesse/{commessaId} {
       allow read: if signedIn();
-      allow write: if signedIn();
+      allow write: if isAdmin();
 
-      match /{document=**} {
+      // In rules v2 il wildcard ricorsivo può includere anche il documento padre.
+      // Richiedendo prima il nome della sotto-collezione preserviamo le scritture
+      // operative (impianti, lavorazioni, ecc.) senza riaprire la commessa padre.
+      match /{subcollection}/{document=**} {
         allow read, write: if signedIn();
       }
     }
@@ -422,11 +425,21 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /globalCommesse/{commessaId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+
+      // Gli utenti operativi possono continuare a lavorare sui dati figli senza
+      // poter rinominare, sostituire o cancellare la commessa Global padre.
+      match /{subcollection}/{document=**} {
+        allow read, write: if signedIn();
+      }
+    }
+
     match /{collection}/{docId} {
       allow read, write: if signedIn() && collection in [
         "appNotifications",
         "commessaResources",
-        "globalCommesse",
         "gpsUpdateRequests",
         "hoursDeadlineAlerts",
         "items",
@@ -442,12 +455,6 @@ service cloud.firestore {
         "userAlerts",
         "utenti"
       ];
-
-      match /{document=**} {
-        allow read, write: if signedIn() && collection in [
-          "globalCommesse"
-        ];
-      }
     }
   }
 }

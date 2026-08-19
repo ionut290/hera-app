@@ -349,15 +349,25 @@
     return summaryPromise;
   }
 
-  function applyManagementStats(canonical = findCanonicalModenaCommessa(), summary = lastSummary) {
-    if (!canonical?.id || !summary) return false;
-    let isCurrent = false;
-    try {
-      if (typeof managementCommessaId !== "undefined" && managementCommessaId === canonical.id) isCurrent = true;
-    } catch (_) {}
+  function getManagementMetaCode() {
     const meta = document.querySelector?.("#impianti-management-meta");
-    if (!isCurrent && meta && normalizeCode(meta.textContent).includes(CANONICAL_COMMESSA_CODE)) isCurrent = true;
-    if (!isCurrent) return false;
+    const value = text(meta?.textContent);
+    const match = value.match(/(?:Cod\.?|Codice)\s*[:.]?\s*([A-Za-z0-9_-]+)/i);
+    return normalizeCode(match?.[1] || "");
+  }
+
+  function isManagementForCommessa(commessa = {}) {
+    if (!commessa?.id) return false;
+    try {
+      const activeId = typeof managementCommessaId !== "undefined" ? text(managementCommessaId) : "";
+      if (activeId) return activeId === text(commessa.id);
+    } catch (_) {}
+    const targetCode = normalizeCode(commessa.codice || commessa.code);
+    return Boolean(targetCode && getManagementMetaCode() === targetCode);
+  }
+
+  function applyManagementStats(canonical = findCanonicalModenaCommessa(), summary = lastSummary) {
+    if (!canonical?.id || !summary || !isManagementForCommessa(canonical)) return false;
 
     const target = document.querySelector?.("#impianti-management-stats");
     if (!target) return false;
@@ -437,7 +447,10 @@
       physicalIdentity,
       summarizeData,
       removeSyntheticCommessaFromLocalState,
-      applyMetadataFallback
+      applyMetadataFallback,
+      getManagementMetaCode,
+      isManagementForCommessa,
+      applyManagementStats
     }
   };
 

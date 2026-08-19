@@ -277,6 +277,7 @@
       tipo: "ORDINARIO",
       tipologiaIntervento: "ORDINARIO",
       attivitaLabel: "ORDINARIO",
+      localFallback: true,
       sourceDataset: SOURCE_DATASET,
       sourceDatasetVersion: DATASET_VERSION
     }, { lat, lng });
@@ -514,16 +515,17 @@
           groups.push(group);
         }
 
-        mergeObjectByPriority(group.item, item, priority);
+        const effectivePriority = item.localFallback === true ? 0 : priority;
+        mergeObjectByPriority(group.item, item, effectivePriority);
         if (priority === 0 && !group.fallback) group.fallback = { ...item };
         registerAliases(group, item);
 
         const detected = detectKinds(item);
         if (detected.size > 0) {
-          if (priority > group.kindPriority) {
+          if (effectivePriority > group.kindPriority) {
             group.kinds = new Set(detected);
-            group.kindPriority = priority;
-          } else if (priority === group.kindPriority) {
+            group.kindPriority = effectivePriority;
+          } else if (effectivePriority === group.kindPriority) {
             detected.forEach((kind) => group.kinds.add(kind));
           }
         }
@@ -814,6 +816,7 @@
       ].forEach(([field, value]) => setIfDifferent(field, value));
     }
 
+    setIfDifferent("localFallback", false);
     setIfDifferent("sourceDataset", SOURCE_DATASET);
     setIfDifferent("sourceDatasetVersion", DATASET_VERSION);
 
@@ -838,7 +841,7 @@
   }
 
   function buildNewPlantData(fallback, aggregate = null) {
-    const data = { ...fallback };
+    const data = { ...fallback, localFallback: false };
     applyCoordinatePair(data, coordinatePairFrom(fallback));
     applyAggregateToPlant(data, aggregate);
     return data;

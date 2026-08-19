@@ -11,12 +11,14 @@ function read(path) {
 }
 
 const safety = read("data-safety-layer.js");
+const criticalBridge = read("critical-write-safety-bridge.js");
 const durability = read("data-durability-runtime.js");
 const updater = read("update-app-feature.js");
 const sw = read("sw.js");
 const pkg = JSON.parse(read("package.json"));
 
 execFileSync(process.execPath, ["--check", "data-safety-layer.js"], { stdio: "inherit" });
+execFileSync(process.execPath, ["--check", "critical-write-safety-bridge.js"], { stdio: "inherit" });
 
 assert.match(safety, /window\.HeraDataSafety\s*=\s*\{/);
 assert.match(safety, /createOperationId/);
@@ -37,14 +39,30 @@ assert.doesNotMatch(safety, /\.collection\s*\(/, "Il safety layer non deve scriv
 assert.doesNotMatch(safety, /localStorage\.clear\s*\(/, "Il safety layer non deve cancellare tutto il localStorage");
 assert.doesNotMatch(safety, /indexedDB\.deleteDatabase\s*\(/, "Il safety layer non deve cancellare IndexedDB");
 
+assert.match(criticalBridge, /window\.HeraCriticalWriteSafetyBridge\s*=\s*\{/);
+assert.match(criticalBridge, /forceMoveImpiantoToFatti/);
+assert.match(criticalBridge, /markImpiantoDone/);
+assert.match(criticalBridge, /resetImpianto/);
+assert.match(criticalBridge, /deleteImpianto/);
+assert.match(criticalBridge, /saveCommessaNote/);
+assert.match(criticalBridge, /saveHoursReport/);
+assert.match(criticalBridge, /saveSquadra/);
+assert.match(criticalBridge, /safety\.run\(/);
+assert.match(criticalBridge, /safety\.snapshot/);
+assert.match(criticalBridge, /__heraCriticalWriteSafetyWrapped/);
+assert.doesNotMatch(criticalBridge, /\.collection\s*\(/, "Il bridge non deve creare proprie scritture Firestore");
+assert.doesNotMatch(criticalBridge, /localStorage\.clear\s*\(/, "Il bridge non deve cancellare dati locali");
+
 assert.match(durability, /window\.HeraDataDurability/);
 assert.match(durability, /async function snapshot\(/);
 assert.match(updater, /data-safety-layer\.js\?v=20260819a/);
 assert.match(updater, /ensureDataSafetyLayer/);
+assert.match(updater, /critical-write-safety-bridge\.js\?v=20260819a/);
+assert.match(updater, /ensureCriticalWriteSafetyBridge/);
 assert.match(sw, /\.\/data-safety-layer\.js\?v=20260819a/);
 assert.match(sw, /"\/data-safety-layer\.js"/);
 assert.doesNotMatch(sw, /client\.navigate\s*\(/, "L'attivazione del Service Worker non deve ricaricare forzatamente le finestre");
 
 assert.equal(pkg.scripts["check:data-safety"], "node scripts/check-data-safety-layer.js");
 
-console.log("✅ Data Safety Layer: controlli statici superati.");
+console.log("✅ Data Safety Layer e bridge scritture critiche: controlli statici superati.");

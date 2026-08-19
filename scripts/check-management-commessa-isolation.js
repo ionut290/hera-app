@@ -15,6 +15,7 @@ const commesseById = new Map([
 
 const meta = { textContent: "INRETE FERRARA • Cod. 28015001" };
 const stats = { innerHTML: "FERRARA ORIGINALE" };
+const managementScreen = { classList: { contains(name) { return name === "hidden" ? false : false; } } };
 
 const sandbox = {
   console: { info() {}, warn() {}, error() {} },
@@ -25,6 +26,7 @@ const sandbox = {
     querySelector(selector) {
       if (selector === "#impianti-management-meta") return meta;
       if (selector === "#impianti-management-stats") return stats;
+      if (selector === "#impianti-management-screen") return managementScreen;
       return null;
     }
   },
@@ -112,6 +114,44 @@ assert.equal(testing.isManagementForCommessa(modena), false, "28015002 non deve 
 meta.textContent = "INRETE MODENA • Cod. 28015";
 assert.equal(testing.isManagementForCommessa(modena), true, "Il codice esatto 28015 deve corrispondere a Modena");
 
+const ferraraOperational = Array.from({ length: 94 }, (_, index) => ({
+  id: `op-${index + 1}`,
+  idSap: `F${String(index + 1).padStart(3, "0")}`,
+  denominazione: `FERRARA ${index + 1}`,
+  comune: "FERRARA",
+  stato: "FATTO",
+  statoGenerale: "FATTO",
+  done: true
+}));
+const ferraraPhysical = ferraraOperational.slice(0, 30).map((plant, index) => ({
+  id: `physical-${index + 1}`,
+  idSap: plant.idSap,
+  denominazione: plant.denominazione,
+  comune: plant.comune
+}));
+const ferraraWork = Array.from({ length: 42 }, (_, index) => ({
+  id: `work-${index + 1}`,
+  impiantoId: `physical-${(index % 30) + 1}`,
+  stato: index < 4 ? "FATTO" : "DA FARE",
+  totale: index < 4 ? 79.2 : null
+}));
+
+const ferraraSummary = testing.summarizeManagementData(ferraraOperational, ferraraPhysical, ferraraWork);
+assert.equal(ferraraSummary.uniquePlants, 94, "La Gestione Ferrara deve usare i 94 impianti reali della raccolta operativa");
+assert.equal(ferraraSummary.workRows, 42, "Le lavorazioni restano un conteggio separato dagli impianti");
+assert.equal(ferraraSummary.doneWork, 4);
+assert.equal(ferraraSummary.pendingWork, 38);
+assert.equal(ferraraSummary.donePlants, 94, "Lo stato impianti operativo non deve essere degradato dai dati contabili parziali");
+
+sandbox.managementCommessaId = "ferrara";
+meta.textContent = "INRETE FERRARA • Cod. 28015001";
+stats.innerHTML = "";
+assert.equal(testing.renderManagementStatsForCommessa(ferrara, ferraraSummary), true);
+assert.match(stats.innerHTML, />94<\/b> impianti/);
+assert.match(stats.innerHTML, />42<\/b> lavorazioni/);
+assert.match(stats.innerHTML, />4<\/b> lavorazioni fatte/);
+assert.match(stats.innerHTML, />38<\/b> lavorazioni da fare/);
+
 assert.doesNotMatch(source, /normalizeCode\(meta\.textContent\)\.includes\(CANONICAL_COMMESSA_CODE\)/);
 
-console.log("✅ Isolamento commesse: Modena, Ferrara e Bologna mantengono statistiche indipendenti.");
+console.log("✅ Gestione commesse: isolamento esatto e numero reale impianti verificati (Ferrara 94).");

@@ -49,6 +49,7 @@ assert.match(criticalBridge, /saveHoursReport/);
 assert.match(criticalBridge, /saveSquadra/);
 assert.match(criticalBridge, /safety\.run\(/);
 assert.match(criticalBridge, /safety\.snapshot/);
+assert.match(criticalBridge, /const dedupeIdentity = meta\.entityId \|\| operationId;/);
 assert.match(criticalBridge, /__heraCriticalWriteSafetyWrapped/);
 assert.doesNotMatch(criticalBridge, /\.collection\s*\(/, "Il bridge non deve creare proprie scritture Firestore");
 assert.doesNotMatch(criticalBridge, /localStorage\.clear\s*\(/, "Il bridge non deve cancellare dati locali");

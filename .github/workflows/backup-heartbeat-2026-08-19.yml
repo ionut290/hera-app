@@ -1,0 +1,27 @@
+name: Backup heartbeat 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/backup-heartbeat-2026-08-19.yml'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report Actions heartbeat
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: `🔄 GitHub Actions operativo sul branch backup — run ${context.runId}. Il backup completo può proseguire.`
+            });

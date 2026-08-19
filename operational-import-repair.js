@@ -1,15 +1,15 @@
-/* INRETE operational repair + forced one-time Modena August 2026 replacement. */
+/* Crea una nuova commessa INRETE Modena agosto 2026 con 30 impianti e coordinate. */
 (() => {
   "use strict";
 
-  const MODENA_VERSION = "2026-08-19-ago30-v2";
-  const MODENA_FIELD = "inreteModenaDatasetVersion";
+  const COMMESSA_ID = "inrete_modena_agosto_2026";
+  const DATASET_VERSION = "2026-08-19-ago30-new-commessa-v1";
   const RETRY_MS = 2000;
   const MAX_ATTEMPTS = 90;
   let attempts = 0;
   let running = false;
 
-  const MODENA_PLANTS = Object.freeze([
+  const PLANTS = Object.freeze([
     { idSap:"3430707", denominazione:"REMI CASTELFRANCO", comune:"CASTELFRANCO EMILIA", indirizzo:"Via Loda, 28", lat:44.58931, lng:11.04352 },
     { idSap:"3430051", denominazione:"REMI S.CESARIO", comune:"S.CESARIO SUL PANARO", indirizzo:"Via della Cartiera, 33 (dietro al Cimitero)", lat:44.56565, lng:11.03273 },
     { idSap:"3472968", denominazione:"REMI SAVIGNANO", comune:"SAVIGNANO SUL PANARO", indirizzo:"Via S. Anna, 10", lat:44.48468, lng:11.03210 },
@@ -42,112 +42,103 @@
     { idSap:"3426335", denominazione:"GRMI UMF08 _ EXPORT CERAM", comune:"MONTEFIORINO", indirizzo:"VIA LA PIANA, 6", lat:44.37797, lng:10.62001 }
   ]);
 
-  const normalize = (v) => String(v ?? "").trim().toLocaleUpperCase("it-IT");
   const collectionName = () => typeof getCommesseCollectionName === "function" ? getCommesseCollectionName() : "commesse";
-  const isModena = (c) => [c?.nome,c?.name,c?.codice,c?.code,c?.cliente,c?.category,c?.categoria,c?.descrizione]
-    .map(normalize).join(" ").includes("INRETE") && [c?.nome,c?.name,c?.codice,c?.code,c?.cliente,c?.category,c?.categoria,c?.descrizione]
-    .map(normalize).join(" ").includes("MODENA");
 
   function plantId(plant, index) {
-    if (/^\d+$/.test(String(plant.idSap))) return `sap_${plant.idSap}`;
-    return `modena_${String(plant.denominazione).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"") || index + 1}`;
+    const sap = String(plant.idSap || "").trim();
+    if (/^\d+$/.test(sap)) return `sap_${sap}`;
+    const slug = String(plant.denominazione || `impianto_${index + 1}`).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    return `modena_${slug || index + 1}`;
   }
 
-  async function deleteCollectionDocs(ref) {
-    const snap = await ref.get();
-    for (let i = 0; i < snap.docs.length; i += 400) {
-      const batch = db.batch();
-      snap.docs.slice(i, i + 400).forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
-  }
-
-  async function replaceOne(commessa, force = false) {
-    const id = String(commessa?.id || "").trim();
-    if (!id || !isModena(commessa)) return false;
-    if (!force && String(commessa?.[MODENA_FIELD] || "") === MODENA_VERSION) return true;
-
-    const ref = db.collection(collectionName()).doc(id);
-    await Promise.all([
-      deleteCollectionDocs(ref.collection("impianti")),
-      deleteCollectionDocs(ref.collection("impiantiFisici"))
-    ]);
-
-    for (let i = 0; i < MODENA_PLANTS.length; i += 200) {
-      const batch = db.batch();
-      MODENA_PLANTS.slice(i, i + 200).forEach((plant, j) => {
-        const n = i + j;
-        const docId = plantId(plant, n);
-        const data = {
-          commessaId:id,
-          physicalPlantId:docId,
-          migrationSourceId:docId,
-          numeroProgressivo:n+1,
-          numeroProgressivoImpianto:n+1,
-          distretto:"Modena",
-          idSap:plant.idSap,
-          denominazione:plant.denominazione,
-          nome:plant.denominazione,
-          comune:plant.comune,
-          indirizzo:plant.indirizzo,
-          via:plant.indirizzo,
-          gpsY:plant.lat,
-          gpsX:plant.lng,
-          latitudine:plant.lat,
-          longitudine:plant.lng,
-          stato:"DA FARE",
-          statoGenerale:"DA FARE",
-          done:false,
-          sourceDataset:"06-Attività Sfalci - Ago-2026 - MO.xlsx",
-          sourceDatasetVersion:MODENA_VERSION,
-          replacedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          replacedBy:auth.currentUser?.uid || ""
-        };
-        batch.set(ref.collection("impianti").doc(docId), data);
-        batch.set(ref.collection("impiantiFisici").doc(docId), data);
-      });
-      await batch.commit();
-    }
-
-    await ref.set({
-      [MODENA_FIELD]:MODENA_VERSION,
-      inreteModenaDatasetUpdatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      impiantiCount:MODENA_PLANTS.length,
-      totalPlants:MODENA_PLANTS.length,
-      impiantiFattiCount:0,
-      impiantiDaFareCount:MODENA_PLANTS.length,
-      operationalModelSyncedAt:firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge:true });
-
-    console.info("[INRETE Modena] sostituzione completata", { commessaId:id, impianti:MODENA_PLANTS.length, version:MODENA_VERSION });
-    window.dispatchEvent(new CustomEvent("inrete-modena-dataset-replaced", { detail:{ commessaId:id, count:MODENA_PLANTS.length } }));
-    return true;
-  }
-
-  async function run(force = false) {
+  async function createNewCommessa(force = false) {
     if (running || typeof db === "undefined" || typeof auth === "undefined" || !auth.currentUser) return false;
     running = true;
     try {
-      const snap = await db.collection(collectionName()).get();
-      const targets = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(isModena);
-      if (!targets.length) throw new Error("Commessa INRETE Modena non trovata");
-      for (const c of targets) await replaceOne(c, force);
+      const ref = db.collection(collectionName()).doc(COMMESSA_ID);
+      const existing = await ref.get();
+      if (!force && existing.exists && String(existing.data()?.datasetVersion || "") === DATASET_VERSION) return true;
+
+      await ref.set({
+        id: COMMESSA_ID,
+        nome: "INRETE MODENA - AGOSTO 2026",
+        name: "INRETE MODENA - AGOSTO 2026",
+        codice: "INRETE-MO-AGO-2026",
+        code: "INRETE-MO-AGO-2026",
+        cliente: "INRETE",
+        categoria: "INRETE GAS MODENA",
+        area: "MODENA",
+        stato: "Attiva",
+        attiva: true,
+        datasetVersion: DATASET_VERSION,
+        sourceDataset: "06-Attività Sfalci - Ago-2026 - MO.xlsx",
+        impiantiCount: PLANTS.length,
+        totalPlants: PLANTS.length,
+        impiantiFattiCount: 0,
+        impiantiDaFareCount: PLANTS.length,
+        createdBy: auth.currentUser.uid,
+        createdAt: existing.exists ? (existing.data()?.createdAt || firebase.firestore.FieldValue.serverTimestamp()) : firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        operationalModelSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      for (let offset = 0; offset < PLANTS.length; offset += 200) {
+        const batch = db.batch();
+        PLANTS.slice(offset, offset + 200).forEach((plant, localIndex) => {
+          const index = offset + localIndex;
+          const docId = plantId(plant, index);
+          const data = {
+            commessaId: COMMESSA_ID,
+            physicalPlantId: docId,
+            migrationSourceId: docId,
+            numeroProgressivo: index + 1,
+            numeroProgressivoImpianto: index + 1,
+            distretto: "Modena",
+            idSap: plant.idSap,
+            denominazione: plant.denominazione,
+            nome: plant.denominazione,
+            comune: plant.comune,
+            indirizzo: plant.indirizzo,
+            via: plant.indirizzo,
+            gpsY: plant.lat,
+            gpsX: plant.lng,
+            latitudine: plant.lat,
+            longitudine: plant.lng,
+            stato: "DA FARE",
+            statoGenerale: "DA FARE",
+            done: false,
+            sourceDataset: "06-Attività Sfalci - Ago-2026 - MO.xlsx",
+            sourceDatasetVersion: DATASET_VERSION,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          batch.set(ref.collection("impianti").doc(docId), data, { merge: true });
+          batch.set(ref.collection("impiantiFisici").doc(docId), data, { merge: true });
+        });
+        await batch.commit();
+      }
+
+      console.info("[INRETE Modena nuova commessa] creata", { commessaId: COMMESSA_ID, impianti: PLANTS.length });
+      window.dispatchEvent(new CustomEvent("inrete-modena-new-commessa-created", { detail: { commessaId: COMMESSA_ID, count: PLANTS.length } }));
       return true;
+    } catch (error) {
+      console.error("[INRETE Modena nuova commessa] creazione fallita", error);
+      throw error;
     } finally {
       running = false;
     }
   }
 
-  window.replaceInreteModenaAugust2026 = (options = {}) => run(options.force === true);
+  window.createInreteModenaAugust2026 = (options = {}) => createNewCommessa(options.force === true);
 
   async function tryRun() {
     attempts += 1;
     try {
       if (typeof auth === "undefined" || typeof db === "undefined" || !auth.currentUser) throw new Error("Firebase non pronto");
-      const ok = await run(false);
+      const ok = await createNewCommessa(false);
       if (ok) return;
     } catch (error) {
-      console.warn("[INRETE Modena] tentativo migrazione", attempts, error?.message || error);
+      console.warn("[INRETE Modena nuova commessa] tentativo", attempts, error?.message || error);
     }
     if (attempts < MAX_ATTEMPTS) setTimeout(tryRun, RETRY_MS);
   }

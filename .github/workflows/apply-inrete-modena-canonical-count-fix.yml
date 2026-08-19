@@ -1,0 +1,61 @@
+name: Apply INRETE Modena canonical count fix
+
+on:
+  push:
+    branches:
+      - fix/inrete-modena-canonical-counts-20260819
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[skip canonical patch]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Repair and validate patch applicator
+        run: |
+          node scripts/fix-inrete-patch-script-syntax.js
+          node --check scripts/apply-inrete-modena-canonical-count-fix.js
+
+      - name: Apply guarded fix
+        run: node scripts/apply-inrete-modena-canonical-count-fix.js
+
+      - name: Verify changed runtimes
+        run: |
+          node --check operational-import-repair.js
+          node --check commessa-stats-cache-optimizer.js
+          node --check inrete-work-items-v2.js
+          node --check accounting-v2.js
+          node --check sw.js
+          node scripts/check-commesse-impianti-integrity.js
+          node scripts/check-inrete-work-items-v2.js
+          node scripts/check-accounting-v2.js
+          node scripts/check-auth-startup-flow.js
+          node scripts/check-app-update.js
+          node scripts/check-no-dead-nested-listener-optimizer.js
+          git diff --check
+
+      - name: Commit applied fix
+        run: |
+          if git diff --quiet; then
+            echo "Nessuna modifica da applicare."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add operational-import-repair.js commessa-stats-cache-optimizer.js inrete-work-items-v2.js accounting-v2.js scripts/check-commesse-impianti-integrity.js index.html sw.js scripts/apply-inrete-modena-canonical-count-fix.js
+          git commit -m "Unifica INRETE Modena e corregge i conteggi [skip canonical patch]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

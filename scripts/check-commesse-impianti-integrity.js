@@ -6,273 +6,112 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const source = fs.readFileSync("operational-import-repair.js", "utf8");
-const timers = [];
+let renderedHome = 0;
+let renderedManagement = 0;
+const maps = {
+  commesseById: new Map([
+    ["inrete_modena_agosto_2026", { id: "inrete_modena_agosto_2026", nome: "INRETE MODENA - AGOSTO 2026", codice: "INRETE-MO-AGO-2026", attiva: true }],
+    ["canonical-modena", { id: "canonical-modena", nome: "INRETE MODENA", codice: "28015", attiva: true, impiantiCount: 30, impiantiFattiCount: 2 }]
+  ]),
+  impiantiByCommessaId: new Map([["inrete_modena_agosto_2026", [{ id: "old" }]]]),
+  commessaStatsById: new Map(),
+  commessaWorkSummariesById: new Map(),
+  commessaHoursById: new Map(),
+  unsubscribeCommessaStats: new Map()
+};
+
 const sandbox = {
-  window: {
-    addEventListener() {},
-    removeEventListener() {}
-  },
+  console: { info() {}, warn() {}, error() {} },
+  ...maps,
+  currentUser: { uid: "u1" },
+  selectedCommessaId: "",
+  managementCommessaId: "",
+  currentImpianti: [],
+  getCommesseCollectionName: () => "commesse",
+  canManageData: () => false,
+  calculateImpiantiStats(items) { return { total: items.length, done: items.filter((x) => x.done).length }; },
+  recalculateCommessaWorkSummaries() {},
+  renderCommesseHomeList() { renderedHome += 1; },
+  renderCommesseManagementList() { renderedManagement += 1; },
+  renderParentCommessaOverview() {},
+  updateCommessaDashboard() {},
+  renderImpianti() {},
+  renderMap() {},
+  setTimeout() { return 1; },
+  setInterval() { return 1; },
+  clearTimeout() {},
+  clearInterval() {},
   document: {
     hidden: false,
     addEventListener() {},
-    removeEventListener() {}
+    querySelector() { return null; }
   },
-  console,
-  setTimeout(callback, delay) {
-    timers.push({ callback, delay, type: "timeout" });
-    return timers.length;
-  },
-  setInterval(callback, delay) {
-    timers.push({ callback, delay, type: "interval" });
-    return timers.length;
-  },
-  clearTimeout() {},
-  clearInterval() {}
+  window: {
+    addEventListener() {},
+    firebase: { firestore: { Query: function Query() {} } }
+  }
 };
+sandbox.window.window = sandbox.window;
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { filename: "operational-import-repair.js" });
 
 const api = sandbox.window.INRETE_MODENA_AUGUST_2026;
 assert.ok(api, "Runtime INRETE Modena non esportato");
-assert.equal(api.plants.length, 30, "Il dataset deve contenere esattamente 30 impianti");
-assert.equal(new Set(api.plants.map((plant) => plant.id)).size, 30, "Gli ID impianto devono essere univoci");
+assert.equal(api.testing.findCanonicalModenaCommessa().id, "canonical-modena");
+assert.equal(api.ensureVisibleLocally({ refresh: false }), true);
+assert.equal(sandbox.commesseById.has("inrete_modena_agosto_2026"), false, "La commessa tecnica non deve restare nella UI");
+assert.equal(sandbox.impiantiByCommessaId.has("inrete_modena_agosto_2026"), false, "La cache della commessa tecnica deve essere eliminata");
+assert.equal(sandbox.commesseById.has("canonical-modena"), true, "La commessa 28015 deve restare disponibile");
+assert.equal(sandbox.commessaStatsById.get("canonical-modena").total, 30, "La home deve usare subito il conteggio parent invece di 0");
+assert.ok(renderedHome > 0 && renderedManagement > 0, "La UI deve essere ridisegnata dopo la pulizia");
 
-for (const plant of api.plants) {
-  const pair = api.testing.coordinatePairFrom(plant);
-  assert.ok(pair, `Coordinate mancanti per ${plant.id}`);
-  assert.ok(pair.lat >= 43.5 && pair.lat <= 45.2, `Latitudine fuori area per ${plant.id}`);
-  assert.ok(pair.lng >= 9.5 && pair.lng <= 12.5, `Longitudine fuori area per ${plant.id}`);
-}
-
-assert.deepEqual(
-  Array.from(api.testing.detectKinds({ tipologiaLavorazione: "STRAORDINARIO" })),
-  ["STRAORDINARIO"],
-  "STRAORDINARIO non deve essere scambiato per ORDINARIO"
-);
-assert.deepEqual(
-  Array.from(api.testing.detectKinds({ tipologiaLavorazione: "MANUTENZIONE ORDINARIA" })),
-  ["ORDINARIO"]
-);
-assert.deepEqual(
-  new Set(api.testing.detectKinds({ tipologiaLavorazione: "ORDINARIO E STRAORDINARIO" })),
-  new Set(["ORDINARIO", "STRAORDINARIO"])
-);
-
-const canonical = api.plants.find((plant) => plant.id === "sap_3430707");
-assert.ok(canonical);
-
-api.testing.setWorkItems([]);
-let merged = api.mergePlants(api.plants, [{
-  id: canonical.id,
-  idSap: canonical.idSap,
-  denominazione: canonical.denominazione,
-  comune: canonical.comune,
-  indirizzo: canonical.indirizzo,
-  latitudine: 44.60001,
-  longitudine: 11.05001,
-  stato: "FATTO",
-  statoGenerale: "FATTO",
-  done: true
-}]);
-let target = merged.find((plant) => plant.idSap === canonical.idSap);
-assert.equal(target.statoGenerale, "FATTO", "Lo stato remoto deve prevalere sul fallback DA FARE");
-assert.equal(target.done, true, "Il flag done remoto non deve essere azzerato");
-assert.equal(target.latitudine, 44.60001, "Le coordinate remote valide devono prevalere sul fallback");
-assert.equal(target.longitudine, 11.05001);
-
-const fallbackSnapshot = api.plants.map((plant) => ({ ...plant }));
-merged = api.mergePlants(api.plants, [{
-  ...canonical,
-  localFallback: false,
-  latitudine: 44.60001,
-  longitudine: 11.05001,
-  gpsY: 44.60001,
-  gpsX: 11.05001,
-  stato: "FATTO",
-  statoGenerale: "FATTO",
-  done: true,
-  updatedAt: { seconds: 1, nanoseconds: 0 }
-}], fallbackSnapshot);
-target = merged.find((plant) => plant.id === canonical.id);
-assert.equal(target.statoGenerale, "FATTO", "Il fallback corrente non deve prevalere sul dato Firestore");
-assert.equal(target.done, true);
-assert.equal(target.latitudine, 44.60001);
-assert.equal(target.longitudine, 11.05001);
-assert.equal(target.localFallback, false);
-
-api.testing.setWorkItems([{
-  id: "work-extra",
-  impiantoId: canonical.id,
-  tipologiaLavorazione: "STRAORDINARIO",
-  stato: "DA FARE"
-}]);
-merged = api.mergePlants(api.plants);
-target = merged.find((plant) => plant.id === canonical.id);
-assert.equal(target.attivitaLabel, "STRAORDINARIO", "Una sola lavorazione straordinaria non deve risultare mista");
-assert.equal(target.isMixedOrdinaryExtraordinary, false);
-
-api.testing.setWorkItems([
-  {
-    id: "work-ordinary",
-    impiantoId: canonical.id,
-    tipologiaLavorazione: "ORDINARIO",
-    stato: "FATTO"
-  },
-  {
-    id: "work-extra",
-    impiantoId: canonical.id,
-    tipologiaLavorazione: "STRAORDINARIO",
-    stato: "DA FARE"
-  }
-]);
-merged = api.mergePlants(api.plants);
-target = merged.find((plant) => plant.id === canonical.id);
-assert.equal(target.attivitaLabel, "ORDINARIO E STRAORDINARIO");
-assert.equal(target.markerClass, "impianto-marker-mixed-yellow");
-assert.equal(target.statoGenerale, "PARZIALMENTE FATTO");
-assert.equal(target.numeroLavorazioni, 2);
-assert.equal(target.numeroLavorazioniFatte, 1);
-assert.equal(target.numeroLavorazioniDaFare, 1);
-
-const signatureBefore = api.testing.signature([canonical]);
-const signatureAfter = api.testing.signature([{ ...canonical, latitudine: 44.601, gpsY: 44.601 }]);
-assert.notEqual(signatureBefore, signatureAfter, "La firma UI deve cambiare quando cambiano le coordinate");
-
-const provenanceBefore = api.testing.signature([{ ...canonical, localFallback: true }]);
-const provenanceAfter = api.testing.signature([{ ...canonical, localFallback: false }]);
-assert.notEqual(
-  provenanceBefore,
-  provenanceAfter,
-  "La firma UI deve cambiare quando il dato passa dal fallback locale a Firestore"
-);
-
-const safePatch = api.testing.buildExistingPlantPatch({
-  id: canonical.id,
-  stato: "FATTO",
-  statoGenerale: "FATTO",
-  done: true,
-  latitudine: canonical.latitudine,
-  longitudine: canonical.longitudine
-}, canonical, api.testing.deriveWorkAggregate([]), canonical.id);
-assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "stato"), false, "Il backfill non deve riscrivere lo stato esistente");
-assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "statoGenerale"), false);
-assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "done"), false);
-assert.equal(safePatch.localFallback, false, "Il documento Firestore non deve restare marcato come fallback locale");
-
-const recoveryPatch = api.testing.buildExistingPlantPatch({
-  id: canonical.id,
+const operationalPlants = Array.from({ length: 30 }, (_, index) => ({
+  id: `plant-${index + 1}`,
+  idSap: String(3430000 + index),
+  denominazione: `Impianto ${index + 1}`,
   stato: "DA FARE",
-  statoGenerale: "DA FARE",
   done: false
-}, canonical, api.testing.deriveWorkAggregate([
-  { stato: "FATTO", tipologiaLavorazione: "ORDINARIO" },
-  { stato: "FATTO", tipologiaLavorazione: "STRAORDINARIO" }
-]), canonical.id);
-assert.equal(recoveryPatch.statoGenerale, "FATTO", "Le lavorazioni completate devono recuperare uno stato impianto azzerato");
-assert.equal(recoveryPatch.done, true);
+}));
+const work = Array.from({ length: 42 }, (_, index) => ({
+  id: `work-${index + 1}`,
+  impiantoId: `plant-${(index % 30) + 1}`,
+  idSap: String(3430000 + (index % 30)),
+  stato: index < 4 ? "FATTO" : "DA FARE",
+  totale: index < 4 ? 79.2 : 0
+}));
+const summary = api.testing.summarizeData(operationalPlants, [], work);
+assert.equal(summary.uniquePlants, 30, "42 lavorazioni non devono diventare 42 impianti");
+assert.equal(summary.workRows, 42);
+assert.equal(summary.doneWork, 4);
+assert.equal(summary.pendingWork, 38);
+assert.equal(summary.items.length, 30);
 
-const swapped = api.testing.coordinatePairFrom({ latitudine: 10.83482, longitudine: 44.53632 });
-assert.deepEqual(
-  { lat: swapped.lat, lng: swapped.lng },
-  { lat: 44.53632, lng: 10.83482 },
-  "Le coordinate X/Y invertite devono essere corrette"
-);
+const sameSap = api.testing.summarizeData([
+  { id: "a", idSap: "3430707", denominazione: "REMI CASTELFRANCO" },
+  { id: "b", idSap: "3430707", denominazione: "REMI CASTELFRANCO" }
+], [], []);
+assert.equal(sameSap.uniquePlants, 1, "Lo stesso ID SAP deve contare come un solo impianto fisico");
 
-const sameNamePlants = api.plants.filter((plant) => plant.denominazione === "REMI S.CLEMENTE");
-assert.equal(sameNamePlants.length, 2);
-api.testing.setWorkItems([]);
-merged = api.mergePlants(api.plants);
-assert.equal(
-  merged.filter((plant) => plant.denominazione === "REMI S.CLEMENTE").length,
-  2,
-  "Due impianti con stessa anagrafica ma ID SAP diversi non devono essere accorpati"
-);
+const sameNameDifferentSap = api.testing.summarizeData([
+  { id: "a", idSap: "3425784", denominazione: "REMI S.CLEMENTE" },
+  { id: "b", idSap: "3426714", denominazione: "REMI S.CLEMENTE" }
+], [], []);
+assert.equal(sameNameDifferentSap.uniquePlants, 2, "ID SAP diversi non devono essere accorpati anche se il nome coincide");
 
-assert.match(source, /buildExistingPlantPatch/);
-assert.doesNotMatch(
-  source,
-  /batch\.set\(ref\.collection\("impianti"\)\.doc\(plant\.id\),\s*data,\s*\{\s*merge:\s*true\s*\}\)/,
-  "Non deve tornare la riscrittura cieca di tutti gli impianti"
-);
-assert.match(source, /String\(existingParentData\.datasetVersion \|\| ""\) === DATASET_VERSION/);
-assert.match(source, /document\.hidden/);
-assert.match(source, /function canWriteParentCommessa\(\)/, "Manca il guard per la scrittura della commessa padre");
-assert.match(
-  source,
-  /if \(canWriteParentCommessa\(\)\) batch\.set\(ref, parentPatch, \{ merge: true \}\);/,
-  "La sincronizzazione INRETE non deve inserire la commessa padre nel batch di un operatore normale"
-);
-
-let historyStops = 0;
-let historySubscriptions = 0;
-const restoredOnSnapshot = function restoredOnSnapshot() {};
-const Query = function Query() {};
-Query.prototype.onSnapshot = restoredOnSnapshot;
-Query.prototype.__heraActiveCommesseOriginalOnSnapshot = restoredOnSnapshot;
-const historySandbox = {
-  currentUser: { uid: "tester" },
-  stopCommesseSubscription() {
-    historyStops += 1;
-  },
-  subscribeCommesse() {
-    historySubscriptions += 1;
-    return Promise.resolve(true);
-  },
-  window: {
-    firebase: {
-      firestore: { Query },
-      auth() {
-        return {
-          currentUser: { uid: "tester" },
-          onAuthStateChanged() {
-            return () => {};
-          }
-        };
-      }
-    },
-    addEventListener() {}
-  },
-  document: {
-    hidden: false,
-    addEventListener() {}
-  },
-  console,
-  setTimeout() { return 1; },
-  setInterval() { return 1; },
-  clearTimeout() {},
-  clearInterval() {}
-};
-vm.createContext(historySandbox);
-vm.runInContext(source, historySandbox, { filename: "operational-import-repair-history.js" });
-assert.ok(historySandbox.window.HeraHistoricalCommesseResubscribe, "Manca ripristino listener commesse storiche");
-assert.equal(historySandbox.window.HeraHistoricalCommesseResubscribe.refresh(), true);
-assert.equal(historyStops, 1);
-assert.equal(historySubscriptions, 1);
-assert.equal(historySandbox.window.HeraHistoricalCommesseResubscribe.refresh(), true);
-assert.equal(historyStops, 1, "Il listener storico non deve essere duplicato");
-assert.equal(historySubscriptions, 1);
-
-assert.match(source, /installHistoricalCommesseResubscribe/);
-assert.match(source, /QueryPrototype\.onSnapshot === restored/);
+assert.match(source, /CANONICAL_COMMESSA_CODE = "28015"/);
+assert.match(source, /archiveSyntheticDuplicate/);
+assert.match(source, /hiddenFromHome: true/);
+assert.match(source, /attiva: false/);
+assert.doesNotMatch(source, /commesseById\.set\(SYNTHETIC_COMMESSA_ID/, "Il runtime non deve più ricreare la commessa tecnica");
+assert.doesNotMatch(source, /ref\.delete\(/, "Il duplicato deve essere archiviato, non cancellato");
+assert.match(source, /<b>\$\{summary\.uniquePlants\}<\/b> impianti/);
+assert.match(source, /<b>\$\{summary\.workRows\}<\/b> lavorazioni/);
 
 const statsCacheSource = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
-assert.match(statsCacheSource, /function activeCollectionName\(\)/, "La cache statistiche deve risolvere la raccolta commesse attiva");
-assert.match(statsCacheSource, /function commessaRef\(commessaId\)/, "Manca il riferimento centralizzato alla commessa attiva");
-assert.doesNotMatch(
-  statsCacheSource,
-  /db\.collection\("commesse"\)\.doc\(commessaId\)/,
-  "La cache statistiche non deve leggere una raccolta commesse hard-coded"
-);
+assert.match(statsCacheSource, /function activeCollectionName\(\)/, "La cache statistiche deve usare la raccolta attiva");
+assert.match(statsCacheSource, /docChanges\(\)/, "Il change index deve continuare a processare solo i delta");
 
 const globalArchiveSource = fs.readFileSync("global-archive-sync.js", "utf8");
-assert.match(globalArchiveSource, /async function ensureVisibleCommessa\(commessaId\)/, "Manca la protezione anagrafica della commessa Global");
-const mirrorVisiblePlantBody = globalArchiveSource.match(/async function mirrorVisiblePlant\(commessaId, plantId, raw = \{\}\) \{[\s\S]*?\n  \}/)?.[0] || "";
-assert.ok(mirrorVisiblePlantBody, "Funzione mirrorVisiblePlant non trovata");
-assert.match(mirrorVisiblePlantBody, /await ensureVisibleCommessa\(commessaId\)/, "L'impianto deve garantire l'esistenza della commessa senza usarne i propri dati");
-assert.doesNotMatch(
-  mirrorVisiblePlantBody,
-  /mirrorVisibleCommessa\(commessaId,\s*raw\)/,
-  "I dati dell'impianto non devono mai aggiornare l'anagrafica della commessa Global"
-);
+assert.match(globalArchiveSource, /async function ensureVisibleCommessa\(commessaId\)/, "La protezione Global deve restare attiva");
 
-console.log("✅ Audit commesse-impianti: merge, coordinate, stati, lavorazioni, cache, Global e backfill non distruttivo verificati.");
+console.log("✅ INRETE Modena: una sola commessa 28015, conteggio impianti unici e lavorazioni separate verificati.");

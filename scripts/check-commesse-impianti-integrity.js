@@ -196,6 +196,12 @@ assert.doesNotMatch(
 );
 assert.match(source, /String\(existingParentData\.datasetVersion \|\| ""\) === DATASET_VERSION/);
 assert.match(source, /document\.hidden/);
+assert.match(source, /function canWriteParentCommessa\(\)/, "Manca il guard per la scrittura della commessa padre");
+assert.match(
+  source,
+  /if \(canWriteParentCommessa\(\)\) batch\.set\(ref, parentPatch, \{ merge: true \}\);/,
+  "La sincronizzazione INRETE non deve inserire la commessa padre nel batch di un operatore normale"
+);
 
 let historyStops = 0;
 let historySubscriptions = 0;

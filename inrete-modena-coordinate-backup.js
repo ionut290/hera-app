@@ -35,6 +35,9 @@
     { sap: "3426335", name: "GRMI UMF08 _ EXPORT CERAM", lat: 44.37797, lng: 10.62001 }
   ]);
 
+  const persisted = new Set();
+  let persistenceRunning = null;
+
   function normalize(value) {
     return String(value || "")
       .normalize("NFD")
@@ -89,6 +92,32 @@
     return name ? byName.get(name) || null : null;
   }
 
+  function coordinatePayload(backup) {
+    const payload = {
+      gpsY: backup.lat,
+      gpsX: backup.lng,
+      latitudine: backup.lat,
+      longitudine: backup.lng,
+      latitude: backup.lat,
+      longitude: backup.lng,
+      coordinateStatus: "RESTORED_FROM_BACKUP",
+      coordinateIssue: "",
+      coordinateResolvedFrom: SOURCE,
+      coordinateLatitudineOriginale: backup.lat,
+      coordinateLongitudineOriginale: backup.lng
+    };
+    try {
+      if (root.firebase?.firestore?.FieldValue?.serverTimestamp) {
+        payload.coordinateRestoredAt = root.firebase.firestore.FieldValue.serverTimestamp();
+      }
+    } catch (_) {}
+    try {
+      const user = typeof currentUser !== "undefined" ? currentUser : root.currentUser;
+      payload.coordinateRestoredBy = user?.email || user?.uid || "";
+    } catch (_) {}
+    return payload;
+  }
+
   function restoreRecord(record) {
     if (!record || typeof record !== "object") return false;
     const existing = readCoordinates(record);
@@ -101,22 +130,7 @@
     }
     const backup = findBackupRow(record);
     if (!backup) return false;
-
-    record.gpsY = backup.lat;
-    record.gpsX = backup.lng;
-    record.latitudine = backup.lat;
-    record.longitudine = backup.lng;
-    record.latitude = backup.lat;
-    record.longitude = backup.lng;
-    record.coordinateStatus = "RESTORED_FROM_BACKUP";
-    record.coordinateIssue = "";
-    record.coordinateResolvedFrom = SOURCE;
-    if (!String(record.coordinateLatitudineOriginale ?? "").trim()) {
-      record.coordinateLatitudineOriginale = backup.lat;
-    }
-    if (!String(record.coordinateLongitudineOriginale ?? "").trim()) {
-      record.coordinateLongitudineOriginale = backup.lng;
-    }
+    Object.assign(record, coordinatePayload(backup));
     return true;
   }
 
@@ -126,19 +140,98 @@
     return rows;
   }
 
+  function getRuntimeDb() {
+    try { if (typeof db !== "undefined" && db) return db; } catch (_) {}
+    return root.db || null;
+  }
+
+  function getSelectedCommessaId() {
+    try { if (typeof selectedCommessaId !== "undefined" && selectedCommessaId) return String(selectedCommessaId); } catch (_) {}
+    return String(root.selectedCommessaId || "");
+  }
+
+  function getCurrentRows() {
+    try { if (typeof currentImpianti !== "undefined" && Array.isArray(currentImpianti)) return currentImpianti; } catch (_) {}
+    return Array.isArray(root.currentImpianti) ? root.currentImpianti : [];
+  }
+
+  function isModenaContext(rows, commessaId) {
+    let commessa = null;
+    try {
+      const map = typeof commesseById !== "undefined" ? commesseById : root.commesseById;
+      if (map?.get) commessa = map.get(commessaId) || null;
+    } catch (_) {}
+    const text = normalize([
+      commessa?.nome, commessa?.codice, commessa?.categoria, commessa?.tipo,
+      commessa?.commessaPadre, commessa?.parentName
+    ].filter(Boolean).join(" "));
+    if (text.includes("inrete") && text.includes("modena")) return true;
+    const matchingRows = (rows || []).filter((row) => findBackupRow(row)).length;
+    return matchingRows >= 5;
+  }
+
+  async function updateExistingRef(ref, backup, key) {
+    if (persisted.has(key)) return "cached";
+    const snap = await ref.get();
+    if (!snap.exists) return "missing";
+    const current = snap.data() || {};
+    if (hasCoordinates(current)) {
+      persisted.add(key);
+      return "already-valid";
+    }
+    await ref.set(coordinatePayload(backup), { merge: true });
+    persisted.add(key);
+    return "updated";
+  }
+
+  async function persistRestoredRows(rows) {
+    const runtimeDb = getRuntimeDb();
+    const commessaId = getSelectedCommessaId();
+    if (!runtimeDb || !commessaId || !Array.isArray(rows) || !rows.length) return { updated: 0 };
+    if (!isModenaContext(rows, commessaId)) return { updated: 0 };
+    if (persistenceRunning) return persistenceRunning;
+
+    persistenceRunning = (async () => {
+      let updated = 0;
+      const base = runtimeDb.collection("globalCommesse").doc(commessaId);
+      for (const record of rows) {
+        const id = String(record?.id || record?.impiantoId || "").trim();
+        const backup = findBackupRow(record);
+        if (!id || !backup) continue;
+        const targets = [
+          ["impianti", base.collection("impianti").doc(id)],
+          ["impiantiFisici", base.collection("impiantiFisici").doc(id)]
+        ];
+        for (const [collectionName, ref] of targets) {
+          const key = `${commessaId}/${collectionName}/${id}`;
+          try {
+            const result = await updateExistingRef(ref, backup, key);
+            if (result === "updated") updated += 1;
+          } catch (error) {
+            console.warn(`Ripristino coordinate INRETE Modena non salvato su ${key}:`, error);
+          }
+        }
+      }
+      if (updated) console.info(`Coordinate INRETE Modena salvate in Firestore: ${updated} documenti aggiornati.`);
+      return { updated };
+    })().finally(() => { persistenceRunning = null; });
+
+    return persistenceRunning;
+  }
+
+  function restoreAndPersistRows(rows) {
+    restoreRows(rows);
+    persistRestoredRows(rows).catch((error) => console.warn("Persistenza coordinate INRETE Modena non completata:", error));
+    return rows;
+  }
+
   function installRenderHook() {
     let originalRender = root.renderImpianti;
-    try {
-      if (typeof renderImpianti === "function") originalRender = renderImpianti;
-    } catch (_) {}
+    try { if (typeof renderImpianti === "function") originalRender = renderImpianti; } catch (_) {}
     if (typeof originalRender !== "function" || originalRender.__inreteModenaCoordinateBackup) return false;
 
     const patchedRender = function renderImpiantiWithModenaCoordinateBackup() {
-      try {
-        if (typeof currentImpianti !== "undefined") restoreRows(currentImpianti);
-      } catch (_) {
-        restoreRows(root.currentImpianti);
-      }
+      restoreAndPersistRows(getCurrentRows());
       return originalRender.apply(this, arguments);
     };
     patchedRender.__inreteModenaCoordinateBackup = true;
@@ -156,6 +249,8 @@
     readCoordinates,
     restoreRecord,
     restoreRows,
+    restoreAndPersistRows,
+    persistRestoredRows,
     installRenderHook
   });
   installRenderHook();

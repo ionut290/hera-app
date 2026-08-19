@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v136";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v137";
+const CACHE_RESET_VERSION = "20260819-data-safety1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260813-render-gate1",
   "./data-durability-runtime.js?v=20260818a",
+  "./data-safety-layer.js?v=20260819a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
@@ -75,6 +76,7 @@ const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/shared-static-views-client.js",
   "/data-durability-runtime.js",
+  "/data-safety-layer.js",
   "/firebase-config.js",
   "/auth-login-fix.js",
   "/login-retry-fix.js",
@@ -172,14 +174,13 @@ self.addEventListener("activate", (event) => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     windows.forEach((client) => {
       try {
+        // Segnala che il nuovo controller è pronto, ma NON ricarica la pagina.
+        // Il refresh resta una scelta esplicita e passa dal backup dati.
         client.postMessage({
           type: "HERA_SW_UPDATE_READY",
           version: CACHE_RESET_VERSION,
           activatedAt: Date.now()
         });
-        const url = new URL(client.url);
-        url.searchParams.set("heraAppVersion", CACHE_RESET_VERSION);
-        client.navigate(url.toString()).catch(() => {});
       } catch (_) {}
     });
   })());

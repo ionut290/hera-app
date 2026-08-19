@@ -4,6 +4,7 @@
   const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
   const APP_CACHE_PREFIXES = ["varga-cantieri-shell-", "hera-app-shell-"];
   const DATA_DURABILITY_SRC = "data-durability-runtime.js?v=20260818a";
+  const DATA_SAFETY_SRC = "data-safety-layer.js?v=20260819a";
 
   function ensureDataDurabilityRuntime() {
     if (window.HeraDataDurability) return;
@@ -18,11 +19,31 @@
     }
     const script = document.createElement("script");
     script.src = DATA_DURABILITY_SRC;
+    script.async = false;
     script.setAttribute("data-hera-data-durability", "1");
     document.head.appendChild(script);
   }
 
+  function ensureDataSafetyLayer() {
+    if (window.HeraDataSafety) return;
+    const existing = Array.from(document.scripts || []).find((script) => {
+      try { return new URL(script.src, document.baseURI).pathname.endsWith("/data-safety-layer.js"); }
+      catch (_) { return false; }
+    });
+    if (existing) return;
+    if (document.readyState === "loading") {
+      document.write(`<script src="${DATA_SAFETY_SRC}" data-hera-data-safety="1"><\/script>`);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = DATA_SAFETY_SRC;
+    script.async = false;
+    script.setAttribute("data-hera-data-safety", "1");
+    document.head.appendChild(script);
+  }
+
   ensureDataDurabilityRuntime();
+  ensureDataSafetyLayer();
 
   function isNativeAndroid() {
     return Boolean(

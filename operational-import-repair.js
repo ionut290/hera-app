@@ -8,11 +8,15 @@
   const SUMMARY_REFRESH_MS = 30000;
   const LOCAL_GUARD_MS = 1500;
   const MANAGEMENT_REFRESH_MS = 800;
+  const MANAGEMENT_DATA_REFRESH_MS = 60000;
 
   let summaryPromise = null;
   let lastSummaryAt = 0;
   let lastSummary = null;
   let duplicateArchivePromise = null;
+  const managementSummaryById = new Map();
+  const managementSummaryAtById = new Map();
+  const managementSummaryPromiseById = new Map();
 
   const text = (value) => String(value ?? "").trim();
   const norm = (value) => text(value)
@@ -149,6 +153,24 @@
       pendingWork: Math.max(0, workItems.length - doneWork),
       subtotalCompleted
     };
+  }
+
+  function summarizeManagementData(operationalPlants = [], physicalPlants = [], workItems = []) {
+    const combined = summarizeData(operationalPlants, physicalPlants, workItems);
+    if (!operationalPlants.length) return combined;
+
+    const operational = summarizeData(operationalPlants, [], []);
+    combined.uniquePlants = operational.uniquePlants;
+    combined.donePlants = operational.donePlants;
+    combined.todoPlants = operational.todoPlants;
+
+    if (!workItems.length) {
+      combined.workRows = operational.uniquePlants;
+      combined.doneWork = operational.donePlants;
+      combined.todoWork = operational.todoPlants;
+      combined.pendingWork = operational.todoPlants;
+    }
+    return combined;
   }
 
   function renderDependentUI() {
@@ -366,9 +388,36 @@
     return Boolean(targetCode && getManagementMetaCode() === targetCode);
   }
 
-  function applyManagementStats(canonical = findCanonicalModenaCommessa(), summary = lastSummary) {
-    if (!canonical?.id || !summary || !isManagementForCommessa(canonical)) return false;
+  function findCurrentManagementCommessa() {
+    try {
+      const activeId = typeof managementCommessaId !== "undefined" ? text(managementCommessaId) : "";
+      if (activeId && typeof commesseById !== "undefined" && commesseById?.get) {
+        const current = commesseById.get(activeId);
+        if (current) return { id: activeId, ...current };
+      }
+    } catch (_) {}
 
+    const code = getManagementMetaCode();
+    if (!code || typeof commesseById === "undefined" || !commesseById?.entries) return null;
+    for (const [id, raw] of commesseById.entries()) {
+      const commessa = { id, ...(raw || {}) };
+      if (normalizeCode(commessa.codice || commessa.code) === code) return commessa;
+    }
+    return null;
+  }
+
+  function isManagementScreenVisible() {
+    const screen = document.querySelector?.("#impianti-management-screen");
+    if (!screen) return false;
+    try {
+      return !screen.classList?.contains?.("hidden");
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function renderManagementStatsForCommessa(commessa, summary) {
+    if (!commessa?.id || !summary || !isManagementForCommessa(commessa)) return false;
     const target = document.querySelector?.("#impianti-management-stats");
     if (!target) return false;
     const money = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
@@ -380,6 +429,63 @@
       `<span><b>${money.format(summary.subtotalCompleted || 0)}</b> Subtotale lavorazioni fatte</span>`
     ].join("");
     if (target.innerHTML !== html) target.innerHTML = html;
+    return true;
+  }
+
+  function applyManagementStats(canonical = findCanonicalModenaCommessa(), summary = lastSummary) {
+    return renderManagementStatsForCommessa(canonical, summary);
+  }
+
+  async function refreshCurrentManagementSummary(options = {}) {
+    const commessa = options.commessa || findCurrentManagementCommessa();
+    if (!commessa?.id || typeof db === "undefined" || !db || typeof auth === "undefined" || !auth.currentUser) return false;
+    const force = options.force === true;
+    const cached = managementSummaryById.get(commessa.id);
+    const cachedAt = Number(managementSummaryAtById.get(commessa.id) || 0);
+    if (!force && cached && Date.now() - cachedAt < MANAGEMENT_DATA_REFRESH_MS) {
+      renderManagementStatsForCommessa(commessa, cached);
+      return cached;
+    }
+    if (managementSummaryPromiseById.has(commessa.id)) return managementSummaryPromiseById.get(commessa.id);
+
+    const promise = (async () => {
+      try {
+        const ref = db.collection(activeCollectionName()).doc(commessa.id);
+        const [operationalSnapshot, physicalSnapshot, workSnapshot] = await Promise.all([
+          ref.collection("impianti").get(),
+          ref.collection("impiantiFisici").get(),
+          ref.collection("lavorazioni").get()
+        ]);
+        const operational = operationalSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const physical = physicalSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const work = workSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const summary = summarizeManagementData(operational, physical, work);
+        managementSummaryById.set(commessa.id, summary);
+        managementSummaryAtById.set(commessa.id, Date.now());
+        renderManagementStatsForCommessa(commessa, summary);
+        return summary;
+      } catch (error) {
+        console.warn("[Gestione commessa] riepilogo reale impianti non disponibile", { commessaId: commessa.id, error });
+        return false;
+      } finally {
+        managementSummaryPromiseById.delete(commessa.id);
+      }
+    })();
+    managementSummaryPromiseById.set(commessa.id, promise);
+    return promise;
+  }
+
+  function ensureCurrentManagementSummary(options = {}) {
+    if (!isManagementScreenVisible()) return false;
+    const commessa = findCurrentManagementCommessa();
+    if (!commessa?.id) return false;
+    const cached = managementSummaryById.get(commessa.id);
+    if (cached) renderManagementStatsForCommessa(commessa, cached);
+    const cachedAt = Number(managementSummaryAtById.get(commessa.id) || 0);
+    if ((options.force === true || !cached || Date.now() - cachedAt >= MANAGEMENT_DATA_REFRESH_MS)
+      && (typeof document === "undefined" || !document.hidden)) {
+      refreshCurrentManagementSummary({ commessa, force: options.force === true }).catch(() => {});
+    }
     return true;
   }
 
@@ -446,30 +552,54 @@
       findCanonicalModenaCommessa,
       physicalIdentity,
       summarizeData,
+      summarizeManagementData,
       removeSyntheticCommessaFromLocalState,
       applyMetadataFallback,
       getManagementMetaCode,
       isManagementForCommessa,
+      findCurrentManagementCommessa,
+      renderManagementStatsForCommessa,
+      refreshCurrentManagementSummary,
       applyManagementStats
+    }
+  };
+
+  window.HeraManagementCommessaSummary = {
+    refresh: (commessa) => refreshCurrentManagementSummary({ commessa, force: true }),
+    getCurrent: () => {
+      const commessa = findCurrentManagementCommessa();
+      return commessa?.id ? managementSummaryById.get(commessa.id) || null : null;
     }
   };
 
   installHistoricalCommesseResubscribe();
   setInterval(() => ensureCanonicalState(), LOCAL_GUARD_MS);
-  setInterval(() => applyManagementStats(), MANAGEMENT_REFRESH_MS);
+  setInterval(() => {
+    applyManagementStats();
+    ensureCurrentManagementSummary();
+  }, MANAGEMENT_REFRESH_MS);
 
   try {
     if (typeof auth !== "undefined" && auth?.onAuthStateChanged) {
-      auth.onAuthStateChanged((user) => { if (user) setTimeout(() => ensureCanonicalState({ force: true }), 300); });
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          setTimeout(() => ensureCanonicalState({ force: true }), 300);
+          setTimeout(() => ensureCurrentManagementSummary({ force: true }), 500);
+        }
+      });
     }
   } catch (_) {}
 
   window.addEventListener("load", () => {
     setTimeout(() => ensureCanonicalState({ force: true }), 300);
     setTimeout(() => ensureCanonicalState({ force: true }), 1800);
+    setTimeout(() => ensureCurrentManagementSummary({ force: true }), 1200);
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) ensureCanonicalState({ force: true });
+    if (!document.hidden) {
+      ensureCanonicalState({ force: true });
+      ensureCurrentManagementSummary({ force: true });
+    }
   });
   setTimeout(() => ensureCanonicalState(), 100);
 })();

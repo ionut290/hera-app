@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v135";
-const CACHE_RESET_VERSION = "20260819-modena-coordinate1";
+const CACHE_NAME = "varga-cantieri-shell-v134";
+const CACHE_RESET_VERSION = "20260818-data-durability1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -29,7 +29,7 @@ const APP_SHELL = [
   "./login-retry-fix.js?v=20260726f",
   "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260731-legacy1",
-  "./coordinate-repair.js?v=20260819-modena2",
+  "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
   "./accounting-v2.js?v=20260812-modena2",
   "./accounting-view-guard.js?v=20260728a",
@@ -80,7 +80,6 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/login-retry-fix.js",
   "/first-login-password.js",
   "/approval-access.js",
-  "/coordinate-repair.js",
   "/header-menu-runtime.js"
 ]);
 

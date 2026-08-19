@@ -1,0 +1,75 @@
+name: Inspect Auth backup 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/inspect-auth-backup-2026-08-19.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Count authentication methods without exposing identities
+        id: count
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/auth-users.json"
+          gcloud storage cp "$BACKUP_BUCKET/stable-2026-08-19/authentication/auth-users.json" "$FILE" >/dev/null
+          node - "$FILE" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const users = Array.isArray(payload) ? payload : Array.isArray(payload.users) ? payload.users : [];
+          let passwordUsers = 0;
+          let usersWithProviders = 0;
+          const providers = {};
+          for (const user of users) {
+            if (String(user?.passwordHash || '').trim()) passwordUsers += 1;
+            const list = Array.isArray(user?.providerUserInfo) ? user.providerUserInfo
+              : Array.isArray(user?.providerData) ? user.providerData : [];
+            if (list.length) usersWithProviders += 1;
+            for (const p of list) {
+              const id = String(p?.providerId || p?.provider || 'unknown').trim() || 'unknown';
+              providers[id] = (providers[id] || 0) + 1;
+            }
+          }
+          fs.appendFileSync(process.argv[3], [
+            `total_users=${users.length}`,
+            `password_users=${passwordUsers}`,
+            `users_with_providers=${usersWithProviders}`,
+            `provider_summary=${Object.entries(providers).sort().map(([k,v]) => `${k}:${v}`).join(',') || 'none'}`
+          ].join('\n') + '\n');
+          NODE
+      - name: Report aggregate result
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: [
+                '### Verifica backup Firebase Authentication',
+                '',
+                `- Utenti totali: **${{ steps.count.outputs.total_users }}**`,
+                `- Account con password hash: **${{ steps.count.outputs.password_users }}**`,
+                `- Account con provider esterni: **${{ steps.count.outputs.users_with_providers }}**`,
+                `- Provider aggregati: **${{ steps.count.outputs.provider_summary }}**`,
+                '',
+                'Nessuna identità, email o UID è stata stampata.'
+              ].join('\n')
+            });

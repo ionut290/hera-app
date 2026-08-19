@@ -22,6 +22,16 @@ assert.match(code, /heraCommessaStatsCacheV1:/);
 assert.match(code, /impiantoChangeIndex/);
 assert.match(code, /where\("changedAt", ">", markerDate\)/);
 assert.match(code, /orderBy\("changedAt", "asc"\)/);
+assert.match(
+  code,
+  /const deltaDocs = typeof snapshot\.docChanges === "function"/,
+  "Incremental listener must prefer Firestore snapshot deltas"
+);
+assert.match(
+  code,
+  /snapshot\.docChanges\(\)\.filter\(\(change\) => change\.type !== "removed"\)/,
+  "Incremental listener must ignore removed change-index rows"
+);
 assert.match(code, /\.doc\(impiantoId\)\s*;\s*const snap = await ref\.get\(\)/s);
 assert.match(code, /fallbackFullLoad/);
 assert.match(code, /collection\("impianti"\)\.get\(\)/);

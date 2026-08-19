@@ -8,11 +8,12 @@ on:
       - '.github/workflows/full-backup-2026-08-19.yml'
 
 permissions:
-  contents: write
+  contents: read
+  issues: write
 
 concurrency:
   group: full-stable-backup-2026-08-19
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   backup:
@@ -167,7 +168,7 @@ NODE
             fi
           fi
 
-          node - "$GITHUB_WORKSPACE/backup-status-2026-08-19.json" <<NODE
+          node - "$TMP_DIR/backup-manifest.json" <<NODE
 const fs = require('fs');
 const payload = {
   schemaVersion: 1,
@@ -195,9 +196,19 @@ fs.writeFileSync(process.argv[2], JSON.stringify(payload, null, 2) + '\n');
 NODE
 
           if [ "$bucket_status" != "failed" ]; then
-            gcloud storage cp "$GITHUB_WORKSPACE/backup-status-2026-08-19.json" "$META_URI/backup-manifest.json" >/dev/null 2>&1 || true
+            gcloud storage cp "$TMP_DIR/backup-manifest.json" "$META_URI/backup-manifest.json" >/dev/null 2>&1 || true
             gcloud storage cp "$TMP_DIR/firestore-database.json" "$META_URI/firestore-database.json" >/dev/null 2>&1 || true
           fi
+
+          {
+            echo "prefix=$PREFIX"
+            echo "bucket_status=$bucket_status"
+            echo "firestore_status=$firestore_status"
+            echo "storage_status=$storage_status"
+            echo "auth_status=$auth_status"
+            echo "rtdb_status=$rtdb_status"
+            echo "config_status=$config_status"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Backup bucket: $bucket_status"
           echo "Firestore: $firestore_status"
@@ -210,33 +221,33 @@ NODE
             exit 1
           fi
 
-      - name: Record backup result in operations branch
+      - name: Report backup result
         if: always()
-        shell: bash
-        run: |
-          if [ ! -f backup-status-2026-08-19.json ]; then
-            cat > backup-status-2026-08-19.json <<EOF
-          {
-            "schemaVersion": 1,
-            "label": "VARGA-STABLE-2026-08-19",
-            "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "projectId": "$PROJECT_ID",
-            "stableCodeBranch": "$STABLE_CODE_BRANCH",
-            "stableCodeCommit": "$STABLE_CODE_COMMIT",
-            "runId": "$GITHUB_RUN_ID",
-            "statuses": {
-              "authenticationToCloud": "${{ steps.auth.outcome }}",
-              "gcloudSetup": "${{ steps.gcloud.outcome }}",
-              "backup": "${{ steps.backup.outcome }}"
-            }
-          }
-          EOF
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backup-status-2026-08-19.json
-          git commit -m "Record full backup 2026-08-19 status" || true
-          git push origin HEAD:ops/full-backup-2026-08-19
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ steps.backup.outcome }}';
+            const lines = [
+              `### Esito backup completo — run ${context.runId}`,
+              '',
+              `- Codice stabile: \`${process.env.STABLE_CODE_COMMIT}\``,
+              `- Branch stabile: \`${process.env.STABLE_CODE_BRANCH}\``,
+              `- Backup job: **${outcome}**`,
+              `- Bucket backup: **${{ steps.backup.outputs.bucket_status || 'n/d' }}**`,
+              `- Firestore: **${{ steps.backup.outputs.firestore_status || 'n/d' }}**`,
+              `- Firebase Storage: **${{ steps.backup.outputs.storage_status || 'n/d' }}**`,
+              `- Firebase Authentication: **${{ steps.backup.outputs.auth_status || 'n/d' }}**`,
+              `- Realtime Database: **${{ steps.backup.outputs.rtdb_status || 'n/d' }}**`,
+              `- Configurazione: **${{ steps.backup.outputs.config_status || 'n/d' }}**`,
+              '',
+              'Nessun dato utente, file di backup o segreto è pubblicato in questa issue.'
+            ];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: lines.join('\n')
+            });
 
       - name: Fail if complete backup did not succeed
         if: steps.backup.outcome != 'success'

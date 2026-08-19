@@ -1,0 +1,197 @@
+name: Backup cloud assets 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/backup-cloud-assets-2026-08-19.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT_ID: hera-app-6cd2b
+      BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Back up all project Cloud Storage buckets
+        id: storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+          member="serviceAccount:${active_account}"
+          backup_name="${BACKUP_BUCKET#gs://}"
+          mapfile -t rows < <(gcloud storage buckets list --project="$PROJECT_ID" --format='value(name)')
+          total=0
+          copied=0
+          failed=0
+          for bucket in "${rows[@]}"; do
+            [ -z "$bucket" ] && continue
+            [ "$bucket" = "$backup_name" ] && continue
+            total=$((total + 1))
+            source="gs://${bucket}"
+            target="$BACKUP_BUCKET/stable-2026-08-19/project-buckets/${bucket}"
+            gcloud storage buckets add-iam-policy-binding "$source" \
+              --member="$member" --role="roles/storage.objectViewer" --quiet >/dev/null 2>&1 || true
+            if gcloud storage rsync --recursive "$source" "$target"; then
+              copied=$((copied + 1))
+            else
+              failed=$((failed + 1))
+            fi
+          done
+          echo "bucket_count=$total" >> "$GITHUB_OUTPUT"
+          echo "copied_count=$copied" >> "$GITHUB_OUTPUT"
+          echo "failed_count=$failed" >> "$GITHUB_OUTPUT"
+          [ "$failed" -eq 0 ]
+
+      - name: Back up Firebase Authentication
+        id: auth_export
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/auth-users.json"
+          npx --yes firebase-tools@latest auth:export "$OUT" --format=json --project="$PROJECT_ID" --non-interactive
+          gcloud storage cp "$OUT" "$BACKUP_BUCKET/stable-2026-08-19/authentication/auth-users.json"
+          node - "$OUT" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          let payload = {};
+          try { payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); } catch (_) {}
+          const users = Array.isArray(payload) ? payload : Array.isArray(payload.users) ? payload.users : [];
+          fs.appendFileSync(process.argv[3], `status=success\nuser_count=${users.length}\n`);
+          NODE
+
+      - name: Back up Firebase and app recovery configuration
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/app-config.tar.gz"
+          files=()
+          for f in firestore.rules firestore.indexes.json storage.rules firebase.json firebase-config.js package.json .firebaserc FIRESTORE_BACKUP.md; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          tar -czf "$FILE" "${files[@]}"
+          gcloud storage cp "$FILE" "$BACKUP_BUCKET/stable-2026-08-19/config/app-config.tar.gz"
+          echo "status=success" >> "$GITHUB_OUTPUT"
+          echo "file_count=${#files[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect and back up Realtime Database if present
+        id: rtdb
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+          token="$(gcloud auth print-access-token)"
+          BODY="$RUNNER_TEMP/rtdb-instances.json"
+          HTTP="$(curl -sS -o "$BODY" -w '%{http_code}' \
+            -H "Authorization: Bearer $token" \
+            "https://firebasedatabase.googleapis.com/v1beta/projects/${project_number}/locations/-/instances")"
+          if [ "$HTTP" = "200" ]; then
+            node - "$BODY" "$RUNNER_TEMP/rtdb.tsv" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          let payload = {};
+          try { payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); } catch (_) {}
+          const rows = Array.isArray(payload.instances) ? payload.instances : [];
+          const lines = rows.map((row) => {
+            const name = String(row?.name || '');
+            const id = name.split('/').filter(Boolean).pop() || '';
+            const url = String(row?.databaseUrl || row?.databaseURL || '');
+            return `${id}\t${url}`;
+          }).filter(Boolean);
+          fs.writeFileSync(process.argv[3], lines.join('\n'));
+          fs.appendFileSync(process.argv[4], `instance_count=${rows.length}\nmanagement_status=success\n`);
+          NODE
+            count="$(wc -l < "$RUNNER_TEMP/rtdb.tsv" | tr -d ' ')"
+            if [ ! -s "$RUNNER_TEMP/rtdb.tsv" ]; then
+              echo "status=not-configured" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            mkdir -p "$RUNNER_TEMP/rtdb-data"
+            failed=0
+            while IFS=$'\t' read -r instance url; do
+              [ -z "$instance" ] && continue
+              safe="$(printf '%s' "$instance" | tr -cd 'A-Za-z0-9_-')"
+              if npx --yes firebase-tools@latest database:get / \
+                --project="$PROJECT_ID" --instance="$instance" --pretty --non-interactive \
+                > "$RUNNER_TEMP/rtdb-data/${safe}.json"; then
+                :
+              elif [ -n "$url" ]; then
+                data_http="$(curl -sS -o "$RUNNER_TEMP/rtdb-data/${safe}.json" -w '%{http_code}' \
+                  -H "Authorization: Bearer $token" "${url%/}/.json?format=export")"
+                [ "$data_http" = "200" ] || failed=$((failed + 1))
+              else
+                failed=$((failed + 1))
+              fi
+            done < "$RUNNER_TEMP/rtdb.tsv"
+            if [ "$failed" -eq 0 ]; then
+              gcloud storage rsync --recursive "$RUNNER_TEMP/rtdb-data" "$BACKUP_BUCKET/stable-2026-08-19/realtime-database"
+              echo "status=success" >> "$GITHUB_OUTPUT"
+            else
+              echo "status=partial" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+          elif [ "$HTTP" = "403" ]; then
+            echo "management_status=inaccessible" >> "$GITHUB_OUTPUT"
+            echo "status=inaccessible" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "management_status=http-${HTTP}" >> "$GITHUB_OUTPUT"
+            echo "status=inaccessible" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Report cloud asset backup
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const storageFailed = Number('${{ steps.storage.outputs.failed_count || '0' }}') || 0;
+            const storageStatus = storageFailed === 0 ? 'SUCCESS' : 'INCOMPLETE';
+            const rtdb = '${{ steps.rtdb.outputs.status || 'unknown' }}';
+            const lines = [
+              '### Backup asset cloud',
+              '',
+              `- Bucket Cloud Storage copiati: **${{ steps.storage.outputs.copied_count || '0' }}/${{ steps.storage.outputs.bucket_count || '0' }}** — ${storageStatus}`,
+              `- Firebase Authentication: **${{ steps.auth_export.outputs.status || 'failed' }}** — utenti esportati: **${{ steps.auth_export.outputs.user_count || 'n/d' }}**`,
+              `- Configurazione recovery: **${{ steps.config.outputs.status || 'failed' }}**`,
+              `- Realtime Database: **${rtdb}** — istanze rilevate: **${{ steps.rtdb.outputs.instance_count || '0' }}**`,
+              '',
+              'Destinazione: bucket privato di disaster recovery VARGA-STABLE-2026-08-19.'
+            ];
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: 1194, body: lines.join('\n') });
+
+      - name: Validate core cloud assets
+        shell: bash
+        run: |
+          [ "${{ steps.storage.outputs.failed_count }}" = "0" ]
+          [ "${{ steps.auth_export.outputs.status }}" = "success" ]
+          [ "${{ steps.config.outputs.status }}" = "success" ]
+          rtdb="${{ steps.rtdb.outputs.status }}"
+          if [ "$rtdb" != "success" ] && [ "$rtdb" != "not-configured" ]; then
+            echo "Realtime Database remains unresolved: $rtdb"
+            exit 1
+          fi

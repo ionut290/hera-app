@@ -313,6 +313,16 @@
     ? getCommesseCollectionName()
     : "commesse";
 
+  function canWriteParentCommessa() {
+    try {
+      if (typeof canManageData === "function") return canManageData() === true;
+      if (typeof auth !== "undefined") {
+        return text(auth?.currentUser?.email).toLowerCase() === "ionut29019@gmail.com";
+      }
+    } catch (_) {}
+    return false;
+  }
+
 
   function installHistoricalCommesseResubscribe() {
     const GLOBAL = "HeraHistoricalCommesseResubscribe";
@@ -964,7 +974,7 @@
       if (!hasValue(existingParentData.createdBy)) parentPatch.createdBy = auth.currentUser.uid;
       if (!hasValue(existingParentData.creatoDa)) parentPatch.creatoDa = auth.currentUser.email || "";
 
-      batch.set(ref, parentPatch, { merge: true });
+      if (canWriteParentCommessa()) batch.set(ref, parentPatch, { merge: true });
       await batch.commit();
       applyMergedVisiblePlants();
       console.info("[INRETE Modena] sincronizzazione non distruttiva completata", {

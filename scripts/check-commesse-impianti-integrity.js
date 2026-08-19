@@ -138,6 +138,14 @@ const signatureBefore = api.testing.signature([canonical]);
 const signatureAfter = api.testing.signature([{ ...canonical, latitudine: 44.601, gpsY: 44.601 }]);
 assert.notEqual(signatureBefore, signatureAfter, "La firma UI deve cambiare quando cambiano le coordinate");
 
+const provenanceBefore = api.testing.signature([{ ...canonical, localFallback: true }]);
+const provenanceAfter = api.testing.signature([{ ...canonical, localFallback: false }]);
+assert.notEqual(
+  provenanceBefore,
+  provenanceAfter,
+  "La firma UI deve cambiare quando il dato passa dal fallback locale a Firestore"
+);
+
 const safePatch = api.testing.buildExistingPlantPatch({
   id: canonical.id,
   stato: "FATTO",
@@ -188,6 +196,12 @@ assert.doesNotMatch(
 );
 assert.match(source, /String\(existingParentData\.datasetVersion \|\| ""\) === DATASET_VERSION/);
 assert.match(source, /document\.hidden/);
+assert.match(source, /function canWriteParentCommessa\(\)/, "Manca il guard per la scrittura della commessa padre");
+assert.match(
+  source,
+  /if \(canWriteParentCommessa\(\)\) batch\.set\(ref, parentPatch, \{ merge: true \}\);/,
+  "La sincronizzazione INRETE non deve inserire la commessa padre nel batch di un operatore normale"
+);
 
 let historyStops = 0;
 let historySubscriptions = 0;

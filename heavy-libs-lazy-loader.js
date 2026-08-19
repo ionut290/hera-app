@@ -186,13 +186,40 @@
     }
   }
 
+  function restoreHistoricalCommesseListeners() {
+    const QueryPrototype = window.firebase?.firestore?.Query?.prototype;
+    if (!QueryPrototype) return false;
+
+    const current = QueryPrototype.onSnapshot;
+    const original = current?.__heraActiveCommesseOriginalOnSnapshot
+      || QueryPrototype.__heraActiveCommesseOriginalOnSnapshot;
+
+    if (typeof original !== "function") return false;
+    if (QueryPrototype.onSnapshot === original) return true;
+
+    QueryPrototype.onSnapshot = original;
+    console.info("[COMMESSE STORICHE] filtro globale rimosso: tutte le commesse tornano visibili.");
+    return true;
+  }
+
+  function scheduleHistoricalCommesseRestore() {
+    let attempts = 0;
+    const retry = () => {
+      attempts += 1;
+      if (restoreHistoricalCommesseListeners() || attempts >= 40) return;
+      window.setTimeout(retry, 250);
+    };
+    window.setTimeout(retry, 0);
+  }
+
   document.addEventListener("click", interceptClick, true);
   document.addEventListener("change", interceptFileChange, true);
   document.addEventListener("submit", interceptSubmit, true);
+  window.addEventListener("load", scheduleHistoricalCommesseRestore, { once: true });
 
   window.HeraHeavyLibs = {
     installed: true,
-    version: "1.0.1",
+    version: "1.0.2",
     ensure,
     ensureMany,
     isReady: (name) => Boolean(DEFINITIONS[name]?.ready?.()),

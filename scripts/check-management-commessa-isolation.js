@@ -18,7 +18,7 @@ const stats = { innerHTML: "FERRARA ORIGINALE" };
 
 const sandbox = {
   console: { info() {}, warn() {}, error() {} },
-  window: { addEventListener() {} },
+  addEventListener() {},
   document: {
     hidden: false,
     addEventListener() {},
@@ -115,4 +115,3 @@ assert.equal(testing.isManagementForCommessa(modena), true, "Il codice esatto 28
 assert.doesNotMatch(source, /normalizeCode\(meta\.textContent\)\.includes\(CANONICAL_COMMESSA_CODE\)/);
 
 console.log("✅ Isolamento commesse: Modena, Ferrara e Bologna mantengono statistiche indipendenti.");
-// Trigger workflow after the workflow file is present on the branch.

@@ -1,0 +1,61 @@
+name: Inspect managed Firestore backups 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/inspect-managed-firestore-backups-2026-08-19.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROJECT_ID: hera-app-6cd2b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: List managed backups and schedules
+        id: inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud firestore backups list --project="$PROJECT_ID" --format=json > "$RUNNER_TEMP/backups.json"
+          gcloud firestore backups schedules list --database='(default)' --project="$PROJECT_ID" --format=json > "$RUNNER_TEMP/schedules.json" || printf '[]' > "$RUNNER_TEMP/schedules.json"
+          node - "$RUNNER_TEMP/backups.json" "$RUNNER_TEMP/schedules.json" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const backups = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const schedules = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const ready = backups.filter(r => r?.state === 'READY' && (r.snapshotTime || r.snapshot_time))
+            .sort((a,b) => String(b.snapshotTime || b.snapshot_time).localeCompare(String(a.snapshotTime || a.snapshot_time)));
+          fs.appendFileSync(process.argv[4], [
+            `backup_count=${ready.length}`,
+            `latest_snapshot=${ready[0]?.snapshotTime || ready[0]?.snapshot_time || ''}`,
+            `latest_name=${ready[0]?.name || ''}`,
+            `schedule_count=${Array.isArray(schedules) ? schedules.length : 0}`
+          ].join('\n') + '\n');
+          NODE
+      - name: Report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: [
+                '### Backup Firestore gestiti Google',
+                '',
+                `- Backup READY disponibili: **${{ steps.inspect.outputs.backup_count }}**`,
+                `- Snapshot più recente: **${{ steps.inspect.outputs.latest_snapshot || 'nessuno' }}**`,
+                `- Pianificazioni backup: **${{ steps.inspect.outputs.schedule_count }}**`
+              ].join('\n')
+            });

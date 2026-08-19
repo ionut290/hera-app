@@ -24,6 +24,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Report verification start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: `🧪 Avviata verifica DRY RUN del ripristino Firestore — run ${context.runId}. Nessuna scrittura verrà eseguita.`
+            });
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:

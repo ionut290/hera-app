@@ -578,6 +578,7 @@
       text(item.attivitaLabel || item.tipologiaIntervento || item.tipo),
       text(item.statoGenerale || item.stato),
       item.done === true ? 1 : 0,
+      item.localFallback === true ? 1 : 0,
       Number(item.numeroLavorazioni || 0),
       Number(item.numeroLavorazioniFatte || 0),
       Number(item.numeroLavorazioniDaFare || 0),

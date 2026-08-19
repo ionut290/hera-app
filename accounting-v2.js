@@ -28,10 +28,18 @@
   async function load(options={}){
     const [ps,ws,prices,operational]=await Promise.all([commRef().collection("impiantiFisici").get(),commRef().collection("lavorazioni").get(),commRef().collection("prezziario").get(),commRef().collection("impianti").get()]);
     state.plants=ps.docs.map(d=>({id:d.id,...d.data()})); state.work=ws.docs.map(d=>({id:d.id,...d.data()})); state.prices=prices.docs.map(d=>({id:d.id,...d.data()})); state.operationalPlants=operational.docs.map(d=>({id:d.id,...d.data()})); state.priceMap=core.buildPriceMap(state.prices);
-    if(!state.work.length){ // compatibilità: i documenti storici restano immutati e sono solo adattati in memoria
-      const legacy=getCommessaCachedImpianti(state.commessa.id)||[];
-      state.plants=legacy.map(p=>({id:p.id,legacy:true,numeroProgressivoImpianto:p.numeroProgressivo,...p,latitudine:p.coordinateLatitudineOriginale??p.gpsY,longitudine:p.coordinateLongitudineOriginale??p.gpsX}));
-      state.work=legacy.flatMap(p=>core.adaptLegacyPlantToWorkItems({...p,numeroProgressivoRiga:p.numeroProgressivo,frequenzaAnnua:p.frequenzaAnnua||"",note:p.note||p.noteImpianto||""}));
+    if(!state.work.length){ // compatibilità: nessuna scrittura; gli impianti operativi diventano righe legacy solo in memoria
+      const cachedLegacy=getCommessaCachedImpianti(state.commessa.id)||[];
+      const legacy=state.operationalPlants.length?state.operationalPlants:cachedLegacy;
+      const physicalById=new Map(state.plants.map(p=>[String(p.id||""),p]));
+      state.plants=legacy.map((p,index)=>{
+        const linkedId=String(p.physicalPlantId||p.id||"").trim();
+        const physical=physicalById.get(linkedId)||{};
+        const merged={...physical,...p};
+        const id=linkedId||String(physical.id||`legacy_${index+1}`);
+        return {...merged,id,legacy:true,numeroProgressivoImpianto:merged.numeroProgressivoImpianto??merged.numeroProgressivo??index+1,latitudine:merged.coordinateLatitudineOriginale??merged.latitudine??merged.gpsY,longitudine:merged.coordinateLongitudineOriginale??merged.longitudine??merged.gpsX};
+      });
+      state.work=state.plants.flatMap(p=>core.adaptLegacyPlantToWorkItems({...p,numeroProgressivoRiga:p.numeroProgressivoRiga??p.numeroProgressivo??p.numeroProgressivoImpianto,frequenzaAnnua:p.frequenzaAnnua||"",note:p.note||p.noteImpianto||""}));
     }
     // Risoluzione Firebase/JavaScript: la UI non legge mai risultati dalle formule xlsx.
     state.work=state.work.map(w=>core.enrichWorkItem(w,state.priceMap,state.commessa.percentualeRibassoGenerale));

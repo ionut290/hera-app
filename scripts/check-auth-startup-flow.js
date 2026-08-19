@@ -36,15 +36,16 @@ const signInIndex = loginRetry.indexOf("signInWithEmailAndPassword");
 assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signInIndex,
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
-assert.match(sw, /varga-cantieri-shell-v133/);
-assert.match(sw, /CACHE_RESET_VERSION = "20260814-loading-humor1"/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v\d+";/);
+assert.match(sw, /const CACHE_RESET_VERSION = "[^"]+";/);
 for (const path of [
   "/firebase-config.js",
   "/auth-login-fix.js",
   "/login-retry-fix.js",
   "/first-login-password.js",
   "/approval-access.js",
-  "/header-menu-runtime.js"
+  "/header-menu-runtime.js",
+  "/operational-import-repair.js"
 ]) {
   assert.ok(sw.includes(`"${path}"`), `${path} deve essere network-first`);
 }

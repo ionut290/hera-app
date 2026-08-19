@@ -33,7 +33,12 @@ assert.equal(
   "La registrazione del Service Worker deve usare la stessa versione del reset cache"
 );
 assert.match(serviceWorker, /self\.clients\.matchAll\(\{ type: "window", includeUncontrolled: true \}\)/);
-assert.match(serviceWorker, /client\.navigate\(url\.toString\(\)\)/);
+assert.match(serviceWorker, /type:\s*"HERA_SW_UPDATE_READY"/);
+assert.doesNotMatch(
+  serviceWorker,
+  /client\.navigate\s*\(/,
+  "L'attivazione del Service Worker non deve ricaricare forzatamente una schermata in uso"
+);
 const cacheVersionMatch = serviceWorker.match(/CACHE_NAME\s*=\s*"varga-cantieri-shell-v(\d+)"/);
 assert.ok(cacheVersionMatch, "Versione cache PWA non trovata");
 assert.ok(Number(cacheVersionMatch[1]) >= 115, "La cache PWA deve essere almeno v115");

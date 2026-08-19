@@ -39,7 +39,7 @@
     "check:weather": "node scripts/check-weather.js",
     "check:calendar": "node scripts/check-calendar.js",
     "check:identity-card": "node scripts/check-identity-card-capture.js",
-    "check:accounting-v2": "node scripts/check-accounting-v2.js && node scripts/check-inrete-work-items-v2.js && node scripts/check-coordinate-repair.js",
+    "check:accounting-v2": "node scripts/check-accounting-v2.js && node scripts/check-inrete-work-items-v2.js && node scripts/check-coordinate-repair.js && node scripts/check-inrete-modena-coordinate-backup.js",
     "check:google-sheet-sync": "node scripts/check-google-sheet-two-way-sync.js",
     "check:segnalazione-pdf": "node scripts/check-segnalazione-pdf.js",
     "export:testers": "node scripts/export-firestore-emails.js",

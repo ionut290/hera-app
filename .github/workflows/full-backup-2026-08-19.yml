@@ -27,8 +27,19 @@ jobs:
       STABLE_CODE_BRANCH: backup/stable-2026-08-19
 
     steps:
-      - name: Checkout backup operations branch
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Report backup start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: `▶️ Avviato backup completo VARGA-STABLE-2026-08-19 — run ${context.runId}.`
+            });
 
       - name: Authenticate to Google Cloud
         id: auth
@@ -40,199 +51,23 @@ jobs:
         id: gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Create complete recovery snapshot
+      - name: Run full backup
         id: backup
         continue-on-error: true
         shell: bash
-        run: |
-          set -u
-          PREFIX="stable-2026-08-19/run-${GITHUB_RUN_ID}"
-          FIRESTORE_URI="${BACKUP_BUCKET}/${PREFIX}/firestore"
-          STORAGE_URI="${BACKUP_BUCKET}/${PREFIX}/storage"
-          META_URI="${BACKUP_BUCKET}/${PREFIX}/metadata"
-          TMP_DIR="${RUNNER_TEMP}/varga-stable-backup"
-          mkdir -p "$TMP_DIR"
-
-          bucket_status="pending"
-          firestore_status="pending"
-          storage_status="pending"
-          auth_status="pending"
-          rtdb_status="pending"
-          config_status="pending"
-
-          gcloud config set project "$PROJECT_ID" >/dev/null
-          gcloud firestore databases describe --database='(default)' --format=json > "$TMP_DIR/firestore-database.json" 2>"$TMP_DIR/firestore-database.err" || true
-
-          source_location="$(gcloud storage buckets describe "$SOURCE_BUCKET" --format='value(location)' 2>/dev/null)"
-          if [ -z "$source_location" ]; then source_location="EU"; fi
-
-          if gcloud storage buckets describe "$BACKUP_BUCKET" >/dev/null 2>&1; then
-            bucket_status="existing"
-          else
-            if gcloud storage buckets create "$BACKUP_BUCKET" --location="$source_location" --uniform-bucket-level-access --project="$PROJECT_ID" >/dev/null 2>"$TMP_DIR/bucket-create.err"; then
-              bucket_status="created"
-            else
-              bucket_status="failed"
-            fi
-          fi
-
-          if [ "$bucket_status" != "failed" ]; then
-            project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' 2>/dev/null)"
-            if [ -n "$project_number" ]; then
-              firestore_agent="service-${project_number}@gcp-sa-firestore.iam.gserviceaccount.com"
-              gcloud storage buckets add-iam-policy-binding "$BACKUP_BUCKET" \
-                --member="serviceAccount:${firestore_agent}" \
-                --role="roles/storage.admin" --quiet >/dev/null 2>&1 || true
-            fi
-            legacy_agent="${PROJECT_ID}@appspot.gserviceaccount.com"
-            if gcloud iam service-accounts describe "$legacy_agent" --project="$PROJECT_ID" >/dev/null 2>&1; then
-              gcloud storage buckets add-iam-policy-binding "$BACKUP_BUCKET" \
-                --member="serviceAccount:${legacy_agent}" \
-                --role="roles/storage.admin" --quiet >/dev/null 2>&1 || true
-            fi
-
-            if gcloud firestore export "$FIRESTORE_URI" --database='(default)' --project="$PROJECT_ID" --quiet >"$TMP_DIR/firestore-export.log" 2>"$TMP_DIR/firestore-export.err"; then
-              firestore_status="success"
-            else
-              firestore_status="failed"
-            fi
-
-            if gcloud storage rsync --recursive "$SOURCE_BUCKET" "$STORAGE_URI" >"$TMP_DIR/storage-rsync.log" 2>"$TMP_DIR/storage-rsync.err"; then
-              storage_status="success"
-            else
-              storage_status="failed"
-            fi
-
-            if npx --yes firebase-tools@latest auth:export "$TMP_DIR/auth-users.json" \
-              --format=json --project="$PROJECT_ID" --non-interactive >"$TMP_DIR/auth-export.log" 2>"$TMP_DIR/auth-export.err"; then
-              if gcloud storage cp "$TMP_DIR/auth-users.json" "$META_URI/auth-users.json" >/dev/null 2>"$TMP_DIR/auth-copy.err"; then
-                auth_status="success"
-              else
-                auth_status="failed-copy"
-              fi
-            else
-              auth_status="failed"
-            fi
-
-            if npx --yes firebase-tools@latest database:instances:list --project="$PROJECT_ID" --json --non-interactive > "$TMP_DIR/rtdb-instances.json" 2>"$TMP_DIR/rtdb-list.err"; then
-              node - "$TMP_DIR/rtdb-instances.json" "$TMP_DIR/rtdb-instance-ids.txt" <<'NODE'
-const fs = require('fs');
-const input = process.argv[2];
-const output = process.argv[3];
-let parsed = {};
-try { parsed = JSON.parse(fs.readFileSync(input, 'utf8')); } catch (_) {}
-const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed.result) ? parsed.result : Array.isArray(parsed.instances) ? parsed.instances : [];
-const ids = rows.map((row) => {
-  const raw = String(row?.instance || row?.instanceId || row?.name || row?.databaseUrl || '').trim();
-  if (!raw) return '';
-  if (raw.includes('/')) return raw.split('/').filter(Boolean).pop();
-  if (raw.includes('.firebaseio.com')) return raw.replace(/^https?:\/\//, '').split('.')[0];
-  return raw;
-}).filter(Boolean);
-fs.writeFileSync(output, [...new Set(ids)].join('\n'));
-NODE
-              if [ -s "$TMP_DIR/rtdb-instance-ids.txt" ]; then
-                rtdb_status="success"
-                while IFS= read -r instance; do
-                  [ -z "$instance" ] && continue
-                  safe_instance="$(printf '%s' "$instance" | tr -cd 'A-Za-z0-9_-')"
-                  if ! npx --yes firebase-tools@latest database:get / --project="$PROJECT_ID" --instance="$instance" --pretty --non-interactive > "$TMP_DIR/rtdb-${safe_instance}.json" 2>"$TMP_DIR/rtdb-${safe_instance}.err"; then
-                    rtdb_status="partial"
-                    continue
-                  fi
-                  if ! gcloud storage cp "$TMP_DIR/rtdb-${safe_instance}.json" "$META_URI/realtime-database/${safe_instance}.json" >/dev/null 2>&1; then
-                    rtdb_status="partial"
-                  fi
-                done < "$TMP_DIR/rtdb-instance-ids.txt"
-              else
-                rtdb_status="not-configured"
-              fi
-            else
-              rtdb_status="not-configured-or-inaccessible"
-            fi
-
-            config_files=(firestore.rules firestore.indexes.json storage.rules firebase.json firebase-config.js package.json .firebaserc)
-            present_files=()
-            for file in "${config_files[@]}"; do
-              [ -f "$file" ] && present_files+=("$file")
-            done
-            if [ "${#present_files[@]}" -gt 0 ]; then
-              tar -czf "$TMP_DIR/app-config.tar.gz" "${present_files[@]}"
-              if gcloud storage cp "$TMP_DIR/app-config.tar.gz" "$META_URI/app-config.tar.gz" >/dev/null 2>"$TMP_DIR/config-copy.err"; then
-                config_status="success"
-              else
-                config_status="failed"
-              fi
-            else
-              config_status="failed"
-            fi
-          fi
-
-          node - "$TMP_DIR/backup-manifest.json" <<NODE
-const fs = require('fs');
-const payload = {
-  schemaVersion: 1,
-  label: 'VARGA-STABLE-2026-08-19',
-  createdAt: new Date().toISOString(),
-  projectId: process.env.PROJECT_ID,
-  stableCodeBranch: process.env.STABLE_CODE_BRANCH,
-  stableCodeCommit: process.env.STABLE_CODE_COMMIT,
-  backupBucket: process.env.BACKUP_BUCKET,
-  prefix: '${PREFIX}',
-  firestoreUri: '${FIRESTORE_URI}',
-  storageUri: '${STORAGE_URI}',
-  metadataUri: '${META_URI}',
-  runId: process.env.GITHUB_RUN_ID,
-  statuses: {
-    backupBucket: '${bucket_status}',
-    firestore: '${firestore_status}',
-    storage: '${storage_status}',
-    authentication: '${auth_status}',
-    realtimeDatabase: '${rtdb_status}',
-    configuration: '${config_status}'
-  }
-};
-fs.writeFileSync(process.argv[2], JSON.stringify(payload, null, 2) + '\n');
-NODE
-
-          if [ "$bucket_status" != "failed" ]; then
-            gcloud storage cp "$TMP_DIR/backup-manifest.json" "$META_URI/backup-manifest.json" >/dev/null 2>&1 || true
-            gcloud storage cp "$TMP_DIR/firestore-database.json" "$META_URI/firestore-database.json" >/dev/null 2>&1 || true
-          fi
-
-          {
-            echo "prefix=$PREFIX"
-            echo "bucket_status=$bucket_status"
-            echo "firestore_status=$firestore_status"
-            echo "storage_status=$storage_status"
-            echo "auth_status=$auth_status"
-            echo "rtdb_status=$rtdb_status"
-            echo "config_status=$config_status"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Backup bucket: $bucket_status"
-          echo "Firestore: $firestore_status"
-          echo "Storage: $storage_status"
-          echo "Authentication: $auth_status"
-          echo "Realtime Database: $rtdb_status"
-          echo "Configuration: $config_status"
-
-          if [ "$bucket_status" = "failed" ] || [ "$firestore_status" != "success" ] || [ "$storage_status" != "success" ] || [ "$auth_status" != "success" ] || [ "$config_status" != "success" ]; then
-            exit 1
-          fi
+        run: bash .github/backup/full-backup-2026-08-19.sh
 
       - name: Report backup result
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const outcome = '${{ steps.backup.outcome }}';
             const lines = [
               `### Esito backup completo — run ${context.runId}`,
               '',
               `- Codice stabile: \`${process.env.STABLE_CODE_COMMIT}\``,
               `- Branch stabile: \`${process.env.STABLE_CODE_BRANCH}\``,
-              `- Backup job: **${outcome}**`,
+              `- Backup job: **${{ steps.backup.outcome }}**`,
               `- Bucket backup: **${{ steps.backup.outputs.bucket_status || 'n/d' }}**`,
               `- Firestore: **${{ steps.backup.outputs.firestore_status || 'n/d' }}**`,
               `- Firebase Storage: **${{ steps.backup.outputs.storage_status || 'n/d' }}**`,
@@ -240,7 +75,7 @@ NODE
               `- Realtime Database: **${{ steps.backup.outputs.rtdb_status || 'n/d' }}**`,
               `- Configurazione: **${{ steps.backup.outputs.config_status || 'n/d' }}**`,
               '',
-              'Nessun dato utente, file di backup o segreto è pubblicato in questa issue.'
+              'I dati e i file di backup restano nel bucket privato; qui viene registrato solo lo stato.'
             ];
             await github.rest.issues.createComment({
               owner: context.repo.owner,

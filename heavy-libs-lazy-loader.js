@@ -96,6 +96,26 @@
     const target = event.target?.closest?.("button, [role='button']");
     if (!target || replayed.has(target)) return;
 
+    if (target.id === "toggle-import-impianti-btn") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const card = document.querySelector("#impianti-import-card");
+      if (!card) {
+        console.warn("Scheda import impianti non trovata");
+        return;
+      }
+      const willOpen = card.classList.contains("hidden");
+      card.classList.toggle("hidden", !willOpen);
+      target.setAttribute("aria-expanded", String(willOpen));
+      target.textContent = willOpen ? "Chiudi importazione" : "Importa";
+      if (willOpen) {
+        requestAnimationFrame(() => {
+          card.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+      return;
+    }
+
     let libraries = null;
     if (["hours-table-export-btn", "hours-table-export-global-btn"].includes(target.id)) {
       libraries = ["exceljs"];
@@ -103,7 +123,7 @@
       "download-excel-template-btn", "export-all-impianti-btn", "download-price-template-btn",
       "export-price-list-btn"
     ].includes(target.id)) {
-      libraries = ["xlsx"];
+      libraries = ["exceljs"];
     } else if (target.id === "business-card-share-btn") {
       libraries = ["html2canvas"];
     }
@@ -172,7 +192,7 @@
 
   window.HeraHeavyLibs = {
     installed: true,
-    version: "1.0.0",
+    version: "1.0.1",
     ensure,
     ensureMany,
     isReady: (name) => Boolean(DEFINITIONS[name]?.ready?.()),

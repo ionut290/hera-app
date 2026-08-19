@@ -8,6 +8,9 @@ const admin = require(path.join(process.cwd(), "functions", "node_modules", "fir
 
 const projectId = String(process.env.PROJECT_ID || "hera-app-6cd2b").trim();
 const outputDir = path.resolve(process.argv[2] || path.join(process.cwd(), "firestore-logical-backup"));
+const MAX_COLLECTION_WORKERS = Math.max(2, Number(process.env.FIRESTORE_BACKUP_COLLECTION_WORKERS || 12));
+const MAX_CHILD_LIST_CALLS = Math.max(4, Number(process.env.FIRESTORE_BACKUP_CHILD_WORKERS || 32));
+const PAGE_SIZE = Math.max(50, Math.min(500, Number(process.env.FIRESTORE_BACKUP_PAGE_SIZE || 250)));
 fs.mkdirSync(outputDir, { recursive: true });
 
 if (!admin.apps.length) {
@@ -67,67 +70,175 @@ function timestampIso(value) {
   return null;
 }
 
+function createLimiter(limit) {
+  let active = 0;
+  const queue = [];
+  const runNext = () => {
+    while (active < limit && queue.length) {
+      const task = queue.shift();
+      active += 1;
+      Promise.resolve()
+        .then(task.fn)
+        .then(task.resolve, task.reject)
+        .finally(() => {
+          active -= 1;
+          runNext();
+        });
+    }
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    runNext();
+  });
+}
+
 async function main() {
   const startedAt = new Date().toISOString();
   const jsonlPath = path.join(outputDir, "documents.jsonl");
   const manifestPath = path.join(outputDir, "manifest.json");
   const out = fs.createWriteStream(jsonlPath, { encoding: "utf8", flags: "w" });
-  const seen = new Set();
+  const seenDocuments = new Set();
+  const seenCollections = new Set();
   const topLevelCollections = await db.listCollections();
+  const childListLimit = createLimiter(MAX_CHILD_LIST_CALLS);
+
   let documentCount = 0;
   let collectionCount = 0;
   let maxDepth = 0;
+  let writeChain = Promise.resolve();
+  let fatalError = null;
 
-  async function writeRecord(record) {
-    if (!out.write(`${JSON.stringify(record)}\n`)) {
-      await new Promise((resolve) => out.once("drain", resolve));
+  out.on("error", (error) => {
+    fatalError = fatalError || error;
+  });
+
+  function writeRecord(record) {
+    const line = `${JSON.stringify(record)}\n`;
+    writeChain = writeChain.then(() => new Promise((resolve, reject) => {
+      if (fatalError) return reject(fatalError);
+      if (out.write(line)) return resolve();
+      const cleanup = () => {
+        out.off("drain", onDrain);
+        out.off("error", onError);
+      };
+      const onDrain = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = (error) => {
+        cleanup();
+        reject(error);
+      };
+      out.once("drain", onDrain);
+      out.once("error", onError);
+    }));
+    return writeChain;
+  }
+
+  const collectionQueue = [];
+  let activeCollections = 0;
+  let doneResolve;
+  let doneReject;
+  let settled = false;
+  const allCollectionsDone = new Promise((resolve, reject) => {
+    doneResolve = resolve;
+    doneReject = reject;
+  });
+
+  function finishIfDone() {
+    if (settled) return;
+    if (fatalError && activeCollections === 0) {
+      settled = true;
+      doneReject(fatalError);
+      return;
+    }
+    if (!fatalError && activeCollections === 0 && collectionQueue.length === 0) {
+      settled = true;
+      doneResolve();
     }
   }
 
-  async function walkCollection(collectionRef, depth) {
+  function enqueueCollection(collectionRef, depth) {
+    const collectionPath = String(collectionRef?.path || "").trim();
+    if (!collectionPath || seenCollections.has(collectionPath)) return;
+    seenCollections.add(collectionPath);
+    collectionQueue.push({ collectionRef, depth });
+    pumpCollections();
+  }
+
+  async function processCollection({ collectionRef, depth }) {
     collectionCount += 1;
     maxDepth = Math.max(maxDepth, depth);
     let lastSnapshot = null;
-    const pageSize = 250;
 
-    while (true) {
-      let query = collectionRef.orderBy(FieldPath.documentId()).limit(pageSize);
+    while (!fatalError) {
+      let query = collectionRef.orderBy(FieldPath.documentId()).limit(PAGE_SIZE);
       if (lastSnapshot) query = query.startAfter(lastSnapshot);
       const page = await query.get();
       if (page.empty) break;
 
+      const records = [];
       for (const snapshot of page.docs) {
-        if (seen.has(snapshot.ref.path)) continue;
-        seen.add(snapshot.ref.path);
+        if (seenDocuments.has(snapshot.ref.path)) continue;
+        seenDocuments.add(snapshot.ref.path);
         documentCount += 1;
-        await writeRecord({
+        records.push({
           path: snapshot.ref.path,
           data: encode(snapshot.data()),
           createTime: timestampIso(snapshot.createTime),
           updateTime: timestampIso(snapshot.updateTime),
           readTime: timestampIso(snapshot.readTime)
         });
+        if (documentCount % 500 === 0) {
+          console.log(`[Firestore backup] ${documentCount} documenti letti, ${collectionCount} collezioni scoperte...`);
+        }
+      }
+      await Promise.all(records.map(writeRecord));
 
-        const children = await snapshot.ref.listCollections();
-        for (const child of children) await walkCollection(child, depth + 1);
+      const childGroups = await Promise.all(page.docs.map((snapshot) =>
+        childListLimit(() => snapshot.ref.listCollections())
+      ));
+      for (const children of childGroups) {
+        for (const child of children) enqueueCollection(child, depth + 1);
       }
 
       lastSnapshot = page.docs[page.docs.length - 1];
-      if (page.size < pageSize) break;
+      if (page.size < PAGE_SIZE) break;
     }
   }
 
-  for (const collectionRef of topLevelCollections) await walkCollection(collectionRef, 1);
+  function pumpCollections() {
+    if (settled) return;
+    while (!fatalError && activeCollections < MAX_COLLECTION_WORKERS && collectionQueue.length) {
+      const task = collectionQueue.shift();
+      activeCollections += 1;
+      processCollection(task)
+        .catch((error) => {
+          fatalError = fatalError || error;
+        })
+        .finally(() => {
+          activeCollections -= 1;
+          pumpCollections();
+          finishIfDone();
+        });
+    }
+    finishIfDone();
+  }
+
+  for (const collectionRef of topLevelCollections) enqueueCollection(collectionRef, 1);
+  if (!topLevelCollections.length) finishIfDone();
+  await allCollectionsDone;
+  await writeChain;
 
   await new Promise((resolve, reject) => {
+    out.once("error", reject);
     out.end(resolve);
-    out.on("error", reject);
   });
 
   const stat = fs.statSync(jsonlPath);
   const completedAt = new Date().toISOString();
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     format: "VARGA_FIRESTORE_LOGICAL_JSONL_V1",
     projectId,
     databaseId: "(default)",
@@ -140,7 +251,12 @@ async function main() {
     topLevelCollectionCount: topLevelCollections.length,
     maxDepth,
     bytes: stat.size,
-    dataFile: "documents.jsonl"
+    dataFile: "documents.jsonl",
+    traversal: {
+      collectionWorkers: MAX_COLLECTION_WORKERS,
+      childListWorkers: MAX_CHILD_LIST_CALLS,
+      pageSize: PAGE_SIZE
+    }
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
@@ -149,6 +265,6 @@ async function main() {
 }
 
 main().then(() => process.exit(0)).catch((error) => {
-  console.error("Firestore logical backup failed:", error?.message || error);
+  console.error("Firestore logical backup failed:", error?.stack || error?.message || error);
   process.exit(1);
 });

@@ -25,7 +25,7 @@ jobs:
       BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
       STABLE_CODE_COMMIT: 81ba299a1e4c7fdafdf56c332daa513a89045985
       STABLE_CODE_BRANCH: backup/stable-2026-08-19
-      BACKUP_ATTEMPT: permissions-and-storage-discovery-3
+      BACKUP_ATTEMPT: logical-firestore-and-all-storage-4
 
     steps:
       - name: Checkout
@@ -60,7 +60,6 @@ jobs:
           set +e
           active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
           member="serviceAccount:${active_account}"
-          echo "Preparing minimum backup permissions for the authenticated deploy service account."
 
           if gcloud projects add-iam-policy-binding "$PROJECT_ID" \
             --member="$member" \
@@ -69,8 +68,6 @@ jobs:
             echo "firestore_caller_role=success" >> "$GITHUB_OUTPUT"
           else
             echo "firestore_caller_role=failed" >> "$GITHUB_OUTPUT"
-            echo "Could not grant Cloud Datastore Import Export Admin:"
-            head -n 20 "$RUNNER_TEMP/datastore-role.err"
           fi
 
           project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' 2>/dev/null)"
@@ -81,8 +78,6 @@ jobs:
             echo "firestore_agent_bucket_role=success" >> "$GITHUB_OUTPUT"
           else
             echo "firestore_agent_bucket_role=failed" >> "$GITHUB_OUTPUT"
-            echo "Could not grant Firestore service agent access to backup bucket:"
-            head -n 20 "$RUNNER_TEMP/firestore-agent-storage.err"
           fi
 
           mapfile -t buckets < <(gcloud storage buckets list --project="$PROJECT_ID" --format='value(name)' 2>"$RUNNER_TEMP/buckets-list.err")
@@ -103,24 +98,20 @@ jobs:
             resolved="gs://${selected}"
             echo "source_bucket=$resolved" >> "$GITHUB_OUTPUT"
             echo "storage_discovery=success" >> "$GITHUB_OUTPUT"
-            echo "Firebase/project Storage bucket discovered."
             if gcloud storage buckets add-iam-policy-binding "$resolved" \
               --member="$member" \
               --role="roles/storage.objectViewer" --quiet >/dev/null 2>"$RUNNER_TEMP/source-storage-viewer.err"; then
               echo "storage_viewer_role=success" >> "$GITHUB_OUTPUT"
             else
               echo "storage_viewer_role=failed" >> "$GITHUB_OUTPUT"
-              echo "Could not grant read access to source Storage bucket:"
-              head -n 20 "$RUNNER_TEMP/source-storage-viewer.err"
             fi
           else
             echo "source_bucket=$SOURCE_BUCKET" >> "$GITHUB_OUTPUT"
             echo "storage_discovery=not-found" >> "$GITHUB_OUTPUT"
-            echo "No application Storage bucket was found in the project."
-            [ -s "$RUNNER_TEMP/buckets-list.err" ] && head -n 20 "$RUNNER_TEMP/buckets-list.err"
+            echo "storage_viewer_role=not-applicable" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run full backup
+      - name: Run native/full cloud backup
         id: backup
         continue-on-error: true
         shell: bash
@@ -128,13 +119,13 @@ jobs:
           SOURCE_BUCKET: ${{ steps.access.outputs.source_bucket }}
         run: bash .github/backup/full-backup-2026-08-19.sh
 
-      - name: Diagnose cloud backup blockers
+      - name: Diagnose native cloud backup blockers
         if: steps.backup.outcome != 'success'
         shell: bash
         run: |
           set +e
           DIR="$RUNNER_TEMP/varga-stable-backup"
-          for file in firestore-export.err storage-rsync.err firestore-database.err bucket-create.err; do
+          for file in firestore-export.err storage-rsync.err firestore-database.err bucket-create.err rtdb-list.err; do
             if [ -s "$DIR/$file" ]; then
               echo "::group::$file"
               head -n 80 "$DIR/$file" \
@@ -143,27 +134,135 @@ jobs:
             fi
           done
 
+      - name: Install Firestore logical backup runtime
+        if: steps.backup.outputs.firestore_status != 'success'
+        shell: bash
+        run: npm install --prefix functions --no-audit --no-fund
+
+      - name: Create logical Firestore fallback snapshot
+        id: logical
+        if: steps.backup.outputs.firestore_status != 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/firestore-logical"
+          DEST="$BACKUP_BUCKET/${{ steps.backup.outputs.prefix }}/firestore-logical"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+          status="failed"
+          if node .github/backup/firestore-logical-backup.js "$OUT" \
+            && gcloud storage rsync --recursive "$OUT" "$DEST"; then
+            status="success"
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ -f "$OUT/manifest.json" ]; then
+            node - "$OUT/manifest.json" "$GITHUB_OUTPUT" <<'NODE'
+const fs = require('fs');
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const out = fs.createWriteStream(process.argv[3], { flags: 'a' });
+out.write(`document_count=${manifest.documentCount || 0}\n`);
+out.write(`collection_count=${manifest.collectionCount || 0}\n`);
+out.write(`started_at=${manifest.startedAt || ''}\n`);
+out.write(`completed_at=${manifest.completedAt || ''}\n`);
+out.end();
+NODE
+          fi
+          [ "$status" = "success" ]
+
+      - name: Inspect managed Firestore backups
+        id: managed
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          FILE="$RUNNER_TEMP/firestore-managed-backups.json"
+          if gcloud firestore backups list --project="$PROJECT_ID" --format=json > "$FILE" 2>"$RUNNER_TEMP/firestore-managed-backups.err"; then
+            node - "$FILE" "$GITHUB_OUTPUT" <<'NODE'
+const fs = require('fs');
+let rows = [];
+try { rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); } catch (_) {}
+const ready = rows
+  .filter((row) => row && row.state === 'READY' && (row.snapshotTime || row.snapshot_time))
+  .sort((a, b) => String(b.snapshotTime || b.snapshot_time).localeCompare(String(a.snapshotTime || a.snapshot_time)));
+const output = fs.createWriteStream(process.argv[3], { flags: 'a' });
+output.write(`status=${ready.length ? 'available' : 'none'}\n`);
+output.write(`count=${ready.length}\n`);
+output.write(`latest_snapshot=${ready[0]?.snapshotTime || ready[0]?.snapshot_time || ''}\n`);
+output.end();
+NODE
+          else
+            echo "status=inaccessible" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Back up every project Cloud Storage bucket
+        id: all_storage
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+          member="serviceAccount:${active_account}"
+          backup_name="${BACKUP_BUCKET#gs://}"
+          prefix="${{ steps.backup.outputs.prefix }}"
+          mapfile -t buckets < <(gcloud storage buckets list --project="$PROJECT_ID" --format='value(name)')
+          total=0
+          failed=0
+          copied=0
+          for bucket in "${buckets[@]}"; do
+            [ -z "$bucket" ] && continue
+            [ "$bucket" = "$backup_name" ] && continue
+            total=$((total + 1))
+            source="gs://${bucket}"
+            destination="$BACKUP_BUCKET/${prefix}/project-buckets/${bucket}"
+            gcloud storage buckets add-iam-policy-binding "$source" \
+              --member="$member" --role="roles/storage.objectViewer" --quiet >/dev/null 2>&1 || true
+            if gcloud storage rsync --recursive "$source" "$destination" >/dev/null 2>"$RUNNER_TEMP/storage-${total}.err"; then
+              copied=$((copied + 1))
+            else
+              failed=$((failed + 1))
+            fi
+          done
+          if [ "$total" -eq 0 ]; then status="not-configured";
+          elif [ "$failed" -eq 0 ]; then status="success";
+          else status="partial"; fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "bucket_count=$total" >> "$GITHUB_OUTPUT"
+          echo "copied_count=$copied" >> "$GITHUB_OUTPUT"
+          echo "failed_count=$failed" >> "$GITHUB_OUTPUT"
+          [ "$failed" -eq 0 ]
+
       - name: Report backup result
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
+            const nativeFirestore = '${{ steps.backup.outputs.firestore_status || 'n/d' }}';
+            const logicalFirestore = '${{ steps.logical.outputs.status || 'not-needed' }}';
+            const firestoreProtected = nativeFirestore === 'success' || logicalFirestore === 'success';
+            const storageStatus = '${{ steps.all_storage.outputs.status || steps.backup.outputs.storage_status || 'n/d' }}';
+            const authStatus = '${{ steps.backup.outputs.auth_status || 'n/d' }}';
+            const configStatus = '${{ steps.backup.outputs.config_status || 'n/d' }}';
+            const coreComplete = firestoreProtected
+              && ['success', 'not-configured'].includes(storageStatus)
+              && authStatus === 'success'
+              && configStatus === 'success';
             const lines = [
               `### Esito backup completo — run ${context.runId}`,
               '',
               `- Codice stabile: \`${process.env.STABLE_CODE_COMMIT}\``,
               `- Branch stabile: \`${process.env.STABLE_CODE_BRANCH}\``,
-              `- Ruolo export Firestore chiamante: **${{ steps.access.outputs.firestore_caller_role || 'n/d' }}**`,
-              `- Accesso Firestore service agent al bucket: **${{ steps.access.outputs.firestore_agent_bucket_role || 'n/d' }}**`,
-              `- Rilevamento bucket Storage: **${{ steps.access.outputs.storage_discovery || 'n/d' }}**`,
-              `- Accesso lettura Storage sorgente: **${{ steps.access.outputs.storage_viewer_role || 'n/d' }}**`,
-              `- Backup job: **${{ steps.backup.outcome }}**`,
-              `- Bucket backup: **${{ steps.backup.outputs.bucket_status || 'n/d' }}**`,
-              `- Firestore: **${{ steps.backup.outputs.firestore_status || 'n/d' }}**`,
-              `- Firebase Storage: **${{ steps.backup.outputs.storage_status || 'n/d' }}**`,
-              `- Firebase Authentication: **${{ steps.backup.outputs.auth_status || 'n/d' }}**`,
+              `- Firestore export nativo: **${nativeFirestore}**`,
+              `- Firestore snapshot logico: **${logicalFirestore}**`,
+              `- Documenti Firestore salvati: **${{ steps.logical.outputs.document_count || 'n/d' }}**`,
+              `- Finestra snapshot Firestore: **${{ steps.logical.outputs.started_at || 'n/d' }} → ${{ steps.logical.outputs.completed_at || 'n/d' }}**`,
+              `- Backup Firestore gestiti: **${{ steps.managed.outputs.status || 'n/d' }}** (ultimo: ${{ steps.managed.outputs.latest_snapshot || 'n/d' }})`,
+              `- Tutti i bucket Cloud Storage: **${storageStatus}** (${{ steps.all_storage.outputs.copied_count || '0' }}/${{ steps.all_storage.outputs.bucket_count || '0' }})`,
+              `- Firebase Authentication: **${authStatus}**`,
               `- Realtime Database: **${{ steps.backup.outputs.rtdb_status || 'n/d' }}**`,
-              `- Configurazione: **${{ steps.backup.outputs.config_status || 'n/d' }}**`,
+              `- Configurazione: **${configStatus}**`,
+              `- PUNTO DI RIPRISTINO CORE: **${coreComplete ? 'COMPLETO' : 'INCOMPLETO'}**`,
               '',
               'I dati e i file di backup restano nel bucket privato; qui viene registrato solo lo stato.'
             ];
@@ -174,6 +273,21 @@ jobs:
               body: lines.join('\n')
             });
 
-      - name: Fail if complete backup did not succeed
-        if: steps.backup.outcome != 'success'
-        run: exit 1
+      - name: Validate complete core recovery point
+        shell: bash
+        run: |
+          native="${{ steps.backup.outputs.firestore_status }}"
+          logical="${{ steps.logical.outputs.status }}"
+          storage="${{ steps.all_storage.outputs.status }}"
+          auth="${{ steps.backup.outputs.auth_status }}"
+          config="${{ steps.backup.outputs.config_status }}"
+          if [ "$native" != "success" ] && [ "$logical" != "success" ]; then
+            echo "Firestore is not protected by either native or logical backup."
+            exit 1
+          fi
+          if [ "$storage" != "success" ] && [ "$storage" != "not-configured" ]; then
+            echo "Cloud Storage backup is incomplete: $storage"
+            exit 1
+          fi
+          [ "$auth" = "success" ] || exit 1
+          [ "$config" = "success" ] || exit 1

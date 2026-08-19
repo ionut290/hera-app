@@ -71,25 +71,52 @@ jobs:
             --format=json > "$RUNNER_TEMP/firestore-backups.json"
 
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from datetime import datetime, timezone
+
+          def parse_iso(value):
+              value = str(value or '').strip()
+              if not value:
+                  raise ValueError('timestamp vuoto')
+              if value.endswith('Z'):
+                  value = value[:-1] + '+00:00'
+              m = re.match(r'^(.*?\.)(\d+)([+-]\d\d:\d\d)$', value)
+              if m and len(m.group(2)) > 6:
+                  value = m.group(1) + m.group(2)[:6] + m.group(3)
+              dt = datetime.fromisoformat(value)
+              if dt.tzinfo is None:
+                  dt = dt.replace(tzinfo=timezone.utc)
+              return dt.astimezone(timezone.utc)
+
           path = os.path.join(os.environ['RUNNER_TEMP'], 'firestore-backups.json')
-          target = datetime.fromisoformat(os.environ['TARGET_BEFORE'].replace('Z', '+00:00'))
+          target_raw = os.environ['TARGET_BEFORE']
+          target = parse_iso(target_raw)
           rows = json.load(open(path, encoding='utf-8'))
           eligible = []
+          parsed_rows = []
+
           for row in rows:
               ct = row.get('createTime') or row.get('create_time')
               if not ct:
                   continue
-              dt = datetime.fromisoformat(ct.replace('Z', '+00:00'))
+              try:
+                  dt = parse_iso(ct)
+              except Exception as exc:
+                  print(f"Ignoro timestamp backup non valido {ct!r}: {exc}")
+                  continue
+              parsed_rows.append((dt, row))
               if dt <= target:
                   eligible.append((dt, row))
+
           eligible.sort(key=lambda x: x[0], reverse=True)
+          print('Target normalizzato:', target.isoformat())
           print('Backup disponibili:')
-          for dt, row in sorted([(datetime.fromisoformat((r.get('createTime') or '').replace('Z','+00:00')), r) for r in rows if r.get('createTime')], key=lambda x:x[0], reverse=True):
+          for dt, row in sorted(parsed_rows, key=lambda x: x[0], reverse=True):
               print(dt.isoformat(), row.get('state'), row.get('name'))
+
           if not eligible:
-              raise SystemExit('Nessun backup disponibile non successivo a ' + os.environ['TARGET_BEFORE'])
+              raise SystemExit('Nessun backup disponibile non successivo a ' + target_raw.strip())
+
           dt, selected = eligible[0]
           name = selected['name']
           print('SELECTED_BACKUP=' + name)

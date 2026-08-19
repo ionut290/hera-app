@@ -177,6 +177,9 @@ self.addEventListener("activate", (event) => {
           version: CACHE_RESET_VERSION,
           activatedAt: Date.now()
         });
+        const url = new URL(client.url);
+        url.searchParams.set("heraAppVersion", CACHE_RESET_VERSION);
+        client.navigate(url.toString()).catch(() => {});
       } catch (_) {}
     });
   })());

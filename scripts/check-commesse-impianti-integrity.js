@@ -80,6 +80,26 @@ assert.equal(target.done, true, "Il flag done remoto non deve essere azzerato");
 assert.equal(target.latitudine, 44.60001, "Le coordinate remote valide devono prevalere sul fallback");
 assert.equal(target.longitudine, 11.05001);
 
+const fallbackSnapshot = api.plants.map((plant) => ({ ...plant }));
+merged = api.mergePlants(api.plants, [{
+  ...canonical,
+  localFallback: false,
+  latitudine: 44.60001,
+  longitudine: 11.05001,
+  gpsY: 44.60001,
+  gpsX: 11.05001,
+  stato: "FATTO",
+  statoGenerale: "FATTO",
+  done: true,
+  updatedAt: { seconds: 1, nanoseconds: 0 }
+}], fallbackSnapshot);
+target = merged.find((plant) => plant.id === canonical.id);
+assert.equal(target.statoGenerale, "FATTO", "Il fallback corrente non deve prevalere sul dato Firestore");
+assert.equal(target.done, true);
+assert.equal(target.latitudine, 44.60001);
+assert.equal(target.longitudine, 11.05001);
+assert.equal(target.localFallback, false);
+
 api.testing.setWorkItems([{
   id: "work-extra",
   impiantoId: canonical.id,
@@ -129,6 +149,7 @@ const safePatch = api.testing.buildExistingPlantPatch({
 assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "stato"), false, "Il backfill non deve riscrivere lo stato esistente");
 assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "statoGenerale"), false);
 assert.equal(Object.prototype.hasOwnProperty.call(safePatch, "done"), false);
+assert.equal(safePatch.localFallback, false, "Il documento Firestore non deve restare marcato come fallback locale");
 
 const recoveryPatch = api.testing.buildExistingPlantPatch({
   id: canonical.id,

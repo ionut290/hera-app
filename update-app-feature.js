@@ -5,6 +5,7 @@
   const APP_CACHE_PREFIXES = ["varga-cantieri-shell-", "hera-app-shell-"];
   const DATA_DURABILITY_SRC = "data-durability-runtime.js?v=20260818a";
   const DATA_SAFETY_SRC = "data-safety-layer.js?v=20260819a";
+  const CRITICAL_WRITE_SAFETY_SRC = "critical-write-safety-bridge.js?v=20260819a";
 
   function ensureDataDurabilityRuntime() {
     if (window.HeraDataDurability) return;
@@ -42,8 +43,27 @@
     document.head.appendChild(script);
   }
 
+  function ensureCriticalWriteSafetyBridge() {
+    if (window.HeraCriticalWriteSafetyBridge) return;
+    const existing = Array.from(document.scripts || []).find((script) => {
+      try { return new URL(script.src, document.baseURI).pathname.endsWith("/critical-write-safety-bridge.js"); }
+      catch (_) { return false; }
+    });
+    if (existing) return;
+    if (document.readyState === "loading") {
+      document.write(`<script src="${CRITICAL_WRITE_SAFETY_SRC}" data-hera-critical-write-safety="1"><\/script>`);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = CRITICAL_WRITE_SAFETY_SRC;
+    script.async = false;
+    script.setAttribute("data-hera-critical-write-safety", "1");
+    document.head.appendChild(script);
+  }
+
   ensureDataDurabilityRuntime();
   ensureDataSafetyLayer();
+  ensureCriticalWriteSafetyBridge();
 
   function isNativeAndroid() {
     return Boolean(

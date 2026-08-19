@@ -29,6 +29,9 @@
     "coordinate", "coordinates", "gps", "coordinateGps", "coordinateGPS", "geoPoint",
     "geopoint", "location", "posizione", "position", "coords"
   ]);
+  const EXTRA_FIELD_KEYS = Object.freeze([
+    "extraFields", "campiExtra", "additionalFields", "rawFields"
+  ]);
 
   function cleanRaw(value) {
     return value == null ? "" : String(value).trim();
@@ -183,7 +186,7 @@
   const NORMALIZED_LONGITUDE_KEYS = new Set(LONGITUDE_KEYS.map(normalizeKey));
   const NORMALIZED_PAIR_KEYS = new Set(PAIR_KEYS.map(normalizeKey));
 
-  function resolveRecord(record) {
+  function resolveRecord(record, depth = 0) {
     if (!record || typeof record !== "object") {
       return { ...diagnose("", ""), source: "" };
     }
@@ -236,6 +239,20 @@
       const result = diagnose(pairEntry.value, "");
       if (result.valid) return { ...result, source: pairEntry.key };
       if (!firstInvalid && result.status === "INVALID") firstInvalid = result;
+    }
+
+    // Le importazioni storiche salvavano talvolta le colonne originali del
+    // foglio (per esempio coordinategpsy/coordinategpsx) dentro extraFields.
+    // Limitiamo la ricorsione ai contenitori noti per non scandire dati non
+    // pertinenti e per mantenere invariato il percorso di lettura normale.
+    if (depth < 2) {
+      for (const key of EXTRA_FIELD_KEYS) {
+        const nested = record[key];
+        if (!nested || typeof nested !== "object" || Array.isArray(nested)) continue;
+        const result = resolveRecord(nested, depth + 1);
+        if (result.valid) return { ...result, source: `${key}.${result.source || "coordinate"}` };
+        if (!firstInvalid && result.status === "INVALID") firstInvalid = result;
+      }
     }
 
     return { ...(firstInvalid || diagnose("", "")), source: "" };
@@ -356,6 +373,7 @@
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -370,22 +388,51 @@
 
   function identityKeys(record) {
     const keys = new Set();
-    [record?.id, record?.physicalPlantId, record?.migrationSourceId, record?.impiantoId]
-      .filter(Boolean)
-      .forEach((value) => keys.add(`id:${String(value).trim()}`));
+    [
+      record?.id,
+      record?.physicalPlantId,
+      record?.impiantoFisicoId,
+      record?.sourceImpiantoId,
+      record?.plantId,
+      record?.migrationSourceId,
+      record?.impiantoId
+    ].filter(Boolean).forEach((value) => {
+      const raw = String(value).trim();
+      if (!raw) return;
+      keys.add(`id:${raw}`);
+      ["::", "__"].forEach((separator) => {
+        const separatorIndex = raw.indexOf(separator);
+        if (separatorIndex > 0) keys.add(`id:${raw.slice(0, separatorIndex)}`);
+      });
+    });
     const sap = firstValue(record, ["idSap", "idSAP", "ID SAP", "idsap", "sap"]);
     if (sap) keys.add(`sap:${normalizedText(sap)}`);
     const name = firstValue(record, ["denominazione", "denominazioneImpianto", "Denominazione Impianto", "nome", "impianto"]);
     const comune = firstValue(record, ["comune", "Comune", "ubicazione", "localita", "località"]);
     const address = firstValue(record, ["indirizzo", "descrizioneVia", "Via e civico di ubicazione Impianto", "via", "address"]);
-    if (name) keys.add(`name:${normalizedText(name)}|${normalizedText(comune)}|${normalizedText(address)}`);
+    if (name) {
+      const normalizedName = normalizedText(name);
+      const normalizedComune = normalizedText(comune);
+      const normalizedAddress = normalizedText(address);
+      if (normalizedComune || normalizedAddress) {
+        keys.add(`name-address:${normalizedName}|${normalizedComune}|${normalizedAddress}`);
+      }
+      if (normalizedComune) keys.add(`name-comune:${normalizedName}|${normalizedComune}`);
+      keys.add(`name:${normalizedName}`);
+    }
     return keys;
   }
 
   function physicalIndex(rows) {
     const index = new Map();
     rows.forEach((row) => identityKeys(row).forEach((key) => {
-      if (!index.has(key)) index.set(key, row);
+      if (!index.has(key)) {
+        index.set(key, row);
+      } else if (index.get(key) !== row) {
+        // Un nome/SAP duplicato non deve mai collegare coordinate al sito
+        // sbagliato. I fallback meno specifici sono usati solo se univoci.
+        index.set(key, null);
+      }
     }));
     return index;
   }
@@ -523,9 +570,10 @@
 
   root.HeraCoordinateReadRuntime = Object.freeze({
     installed: true,
-    version: "2.0.0",
+    version: "2.1.0",
     normalizeRows,
     resolveRecord: tools.resolveRecord,
+    matchPhysicalRecord: (row, physicalRows) => matchPhysical(row, physicalIndex(Array.isArray(physicalRows) ? physicalRows : [])),
     getState: () => ({
       ...state,
       cachedPhysicalCommesse: physicalCache.size,

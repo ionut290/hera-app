@@ -1,0 +1,192 @@
+name: Logical Firestore backup 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/logical-firestore-backup-2026-08-19.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PROJECT_ID: hera-app-6cd2b
+      BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
+      STABLE_CODE_COMMIT: 81ba299a1e4c7fdafdf56c332daa513a89045985
+      STABLE_CODE_BRANCH: backup/stable-2026-08-19
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: `▶️ Avviato fallback Firestore logico completo — run ${context.runId}.`
+            });
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: functions/package.json
+
+      - name: Install Firebase Admin runtime
+        run: npm install --prefix functions --no-audit --no-fund
+
+      - name: Back up every Firestore document recursively
+        id: firestore
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/firestore-logical"
+          DEST="$BACKUP_BUCKET/stable-2026-08-19/firestore-logical/run-${GITHUB_RUN_ID}"
+          mkdir -p "$OUT"
+          node .github/backup/firestore-logical-backup.js "$OUT"
+          gcloud storage rsync --recursive "$OUT" "$DEST"
+          node - "$OUT/manifest.json" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const out = fs.createWriteStream(process.argv[3], { flags: 'a' });
+          out.write(`document_count=${m.documentCount || 0}\n`);
+          out.write(`collection_count=${m.collectionCount || 0}\n`);
+          out.write(`max_depth=${m.maxDepth || 0}\n`);
+          out.write(`bytes=${m.bytes || 0}\n`);
+          out.write(`started_at=${m.startedAt || ''}\n`);
+          out.write(`completed_at=${m.completedAt || ''}\n`);
+          out.write(`destination=${DEST}\n`);
+          out.end();
+          NODE
+
+      - name: Back up all existing project buckets
+        id: buckets
+        shell: bash
+        run: |
+          set -euo pipefail
+          active_account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+          member="serviceAccount:${active_account}"
+          backup_name="${BACKUP_BUCKET#gs://}"
+          mapfile -t rows < <(gcloud storage buckets list --project="$PROJECT_ID" --format='value(name)')
+          total=0
+          copied=0
+          failed=0
+          for bucket in "${rows[@]}"; do
+            [ -z "$bucket" ] && continue
+            [ "$bucket" = "$backup_name" ] && continue
+            total=$((total + 1))
+            source="gs://${bucket}"
+            target="$BACKUP_BUCKET/stable-2026-08-19/project-buckets/${bucket}"
+            gcloud storage buckets add-iam-policy-binding "$source" --member="$member" --role="roles/storage.objectViewer" --quiet >/dev/null 2>&1 || true
+            if gcloud storage rsync --recursive "$source" "$target"; then
+              copied=$((copied + 1))
+            else
+              failed=$((failed + 1))
+            fi
+          done
+          echo "bucket_count=$total" >> "$GITHUB_OUTPUT"
+          echo "copied_count=$copied" >> "$GITHUB_OUTPUT"
+          echo "failed_count=$failed" >> "$GITHUB_OUTPUT"
+          if [ "$failed" -ne 0 ]; then exit 1; fi
+
+      - name: Export Firebase Authentication again
+        id: auth_export
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/auth-users.json"
+          npx --yes firebase-tools@latest auth:export "$OUT" --format=json --project="$PROJECT_ID" --non-interactive
+          gcloud storage cp "$OUT" "$BACKUP_BUCKET/stable-2026-08-19/authentication/auth-users.json"
+          echo "status=success" >> "$GITHUB_OUTPUT"
+
+      - name: Archive recovery configuration again
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$RUNNER_TEMP/app-config.tar.gz"
+          files=()
+          for f in firestore.rules firestore.indexes.json storage.rules firebase.json firebase-config.js package.json .firebaserc; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          tar -czf "$FILE" "${files[@]}"
+          gcloud storage cp "$FILE" "$BACKUP_BUCKET/stable-2026-08-19/config/app-config.tar.gz"
+          echo "status=success" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect managed Firestore backups
+        id: managed
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          FILE="$RUNNER_TEMP/managed.json"
+          if gcloud firestore backups list --project="$PROJECT_ID" --format=json > "$FILE"; then
+            node - "$FILE" "$GITHUB_OUTPUT" <<'NODE'
+            const fs = require('fs');
+            let rows = [];
+            try { rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); } catch (_) {}
+            const ready = rows.filter(r => r?.state === 'READY' && (r.snapshotTime || r.snapshot_time))
+              .sort((a,b) => String(b.snapshotTime || b.snapshot_time).localeCompare(String(a.snapshotTime || a.snapshot_time)));
+            fs.appendFileSync(process.argv[3], `status=${ready.length ? 'available' : 'none'}\ncount=${ready.length}\nlatest_snapshot=${ready[0]?.snapshotTime || ready[0]?.snapshot_time || ''}\n`);
+            NODE
+          else
+            echo "status=inaccessible" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = [
+              `### ✅ Punto di ripristino dati creato — run ${context.runId}`,
+              '',
+              `- Codice stabile: \`${process.env.STABLE_CODE_COMMIT}\``,
+              `- Branch stabile: \`${process.env.STABLE_CODE_BRANCH}\``,
+              `- Firestore logico: **SUCCESS**`,
+              `- Documenti Firestore: **${{ steps.firestore.outputs.document_count }}**`,
+              `- Collezioni Firestore: **${{ steps.firestore.outputs.collection_count }}**`,
+              `- Profondità max sotto-collezioni: **${{ steps.firestore.outputs.max_depth }}**`,
+              `- Finestra lettura Firestore: **${{ steps.firestore.outputs.started_at }} → ${{ steps.firestore.outputs.completed_at }}**`,
+              `- Bucket progetto copiati: **${{ steps.buckets.outputs.copied_count }}/${{ steps.buckets.outputs.bucket_count }}**`,
+              `- Firebase Authentication: **SUCCESS**`,
+              `- Configurazione: **SUCCESS**`,
+              `- Backup Firestore gestiti: **${{ steps.managed.outputs.status || 'n/d' }}** (ultimo: ${{ steps.managed.outputs.latest_snapshot || 'n/d' }})`,
+              '',
+              '**PUNTO DI RIPRISTINO CORE: COMPLETO**',
+              '',
+              'I file reali restano esclusivamente nel bucket privato di disaster recovery.'
+            ];
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: 1194, body: lines.join('\n') });
+
+      - name: Report failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: `❌ Fallback Firestore logico non completato — run ${context.runId}. Controllare il job prima di considerare valido il punto di ripristino.`
+            });

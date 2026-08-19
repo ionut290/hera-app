@@ -3,7 +3,7 @@
 
   if (window.HeraCriticalWriteSafetyBridge?.installed) return;
 
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const RETRY_MS = 500;
   const MAX_ATTEMPTS = 40;
   const wrapped = new Set();
@@ -118,7 +118,8 @@
 
       const meta = buildMeta(target, args);
       const operationId = getOperationId(target, args);
-      const dedupeKey = `${target.type}:${meta.commessaId}:${meta.entityId}:${operationId}`;
+      const dedupeIdentity = meta.entityId || operationId;
+      const dedupeKey = `${target.type}:${meta.commessaId}:${dedupeIdentity}`;
       try {
         const outcome = await safety.run(
           target.type,

@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Check syntax
         run: npm run check:syntax
+      - name: Check data safety layer
+        run: npm run check:data-safety
       - name: Check commesse and impianti integrity
         run: npm run check:commesse-impianti
       - name: Check impianto change index

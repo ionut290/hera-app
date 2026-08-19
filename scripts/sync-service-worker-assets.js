@@ -16,7 +16,7 @@ for (const assetName of assetNames) {
     throw new Error(`${indexPath} non contiene una versione cache-busting per ${assetName}`);
   }
 
-  const serviceWorkerPattern = new RegExp(`(?:\\./)?${escapedName}(?:\\?v=[^"']+)?`, "g");
+  const serviceWorkerPattern = new RegExp(`\\./${escapedName}(?:\\?v=[^"']+)?`, "g");
   const expectedAsset = `./${indexMatch[1]}`;
 
   if (!serviceWorkerPattern.test(serviceWorker)) {

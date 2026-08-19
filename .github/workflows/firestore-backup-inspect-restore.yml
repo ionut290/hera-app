@@ -12,7 +12,7 @@ on:
           - inspect
           - restore
       target_before:
-        description: "Seleziona l'ultimo backup creato non dopo questo istante (ISO-8601 UTC)"
+        description: "Seleziona l'ultimo backup con snapshot non dopo questo istante (ISO-8601 UTC)"
         required: true
         default: "2026-08-18T05:00:00Z"
       destination_database:
@@ -89,23 +89,23 @@ jobs:
               return dt.astimezone(timezone.utc)
 
           path = os.path.join(os.environ['RUNNER_TEMP'], 'firestore-backups.json')
-          target_raw = os.environ['TARGET_BEFORE']
+          target_raw = os.environ['TARGET_BEFORE'].strip()
           target = parse_iso(target_raw)
           rows = json.load(open(path, encoding='utf-8'))
           eligible = []
           parsed_rows = []
 
           for row in rows:
-              ct = row.get('createTime') or row.get('create_time')
-              if not ct:
+              ts = row.get('snapshotTime') or row.get('snapshot_time')
+              if not ts:
                   continue
               try:
-                  dt = parse_iso(ct)
+                  dt = parse_iso(ts)
               except Exception as exc:
-                  print(f"Ignoro timestamp backup non valido {ct!r}: {exc}")
+                  print(f"Ignoro timestamp backup non valido {ts!r}: {exc}")
                   continue
               parsed_rows.append((dt, row))
-              if dt <= target:
+              if dt <= target and row.get('state') == 'READY':
                   eligible.append((dt, row))
 
           eligible.sort(key=lambda x: x[0], reverse=True)
@@ -115,15 +115,15 @@ jobs:
               print(dt.isoformat(), row.get('state'), row.get('name'))
 
           if not eligible:
-              raise SystemExit('Nessun backup disponibile non successivo a ' + target_raw.strip())
+              raise SystemExit('Nessun backup READY disponibile con snapshot non successivo a ' + target_raw)
 
           dt, selected = eligible[0]
           name = selected['name']
           print('SELECTED_BACKUP=' + name)
-          print('SELECTED_CREATE_TIME=' + dt.isoformat())
+          print('SELECTED_SNAPSHOT_TIME=' + dt.isoformat())
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write('backup_name=' + name + '\n')
-              fh.write('backup_create_time=' + dt.isoformat() + '\n')
+              fh.write('backup_snapshot_time=' + dt.isoformat() + '\n')
           PY
 
       - name: Summary
@@ -133,7 +133,7 @@ jobs:
             echo "## Firestore backup selezionato"
             echo "- Target massimo: ${{ inputs.target_before }}"
             echo "- Backup: \`${{ steps.backups.outputs.backup_name }}\`"
-            echo "- Create time: ${{ steps.backups.outputs.backup_create_time }}"
+            echo "- Snapshot time: ${{ steps.backups.outputs.backup_snapshot_time }}"
             echo "- Mode: ${{ inputs.mode }}"
           } >> "$GITHUB_STEP_SUMMARY"
 

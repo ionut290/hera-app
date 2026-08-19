@@ -6,6 +6,7 @@
   const MIGRATION_KEY = `hera_global_archive_migrated_${VERSION}`;
   const syncLocks = new Map();
   const verifiedDocuments = new Map();
+  const verifiedVisibleCommesse = new Set();
   let migrationPromise = null;
 
   const db = () => window.firebase?.firestore?.() || null;
@@ -119,18 +120,37 @@
   }
 
   async function mirrorVisibleCommessa(commessaId, raw = {}) {
-    const snapshot = commessaSnapshot(raw, commessaId);
-    await mergeArchiveDocument(visibleCommessaRef(commessaId), {
+    const id = text(commessaId);
+    const snapshot = commessaSnapshot(raw, id);
+    const changed = await mergeArchiveDocument(visibleCommessaRef(id), {
       ...snapshot,
       nome: snapshot.nome || 'Commessa',
       sincronizzataDaArchivio: true
     });
+    if (id) verifiedVisibleCommesse.add(id);
+    return changed;
+  }
+
+  async function ensureVisibleCommessa(commessaId) {
+    const id = text(commessaId);
+    if (!id || !db() || verifiedVisibleCommesse.has(id)) return false;
+
+    const visibleRef = visibleCommessaRef(id);
+    const visible = await visibleRef.get();
+    if (visible.exists) {
+      verifiedVisibleCommesse.add(id);
+      return false;
+    }
+
+    const source = await db().collection(commesseCollectionName()).doc(id).get();
+    if (!source.exists) return false;
+    return mirrorVisibleCommessa(id, source.data() || {});
   }
 
   async function mirrorVisiblePlant(commessaId, plantId, raw = {}) {
     const key = plantKey(raw, plantId);
     const snapshot = plantSnapshot(raw, commessaId, plantId);
-    await mirrorVisibleCommessa(commessaId, raw);
+    await ensureVisibleCommessa(commessaId);
     await mergeArchiveDocument(visiblePlantsRef(commessaId).doc(key), {
       ...snapshot,
       idSAP: snapshot.idSap || '',
@@ -219,7 +239,10 @@
     });
     if (!window.firebase?.auth) return;
     window.firebase.auth().onAuthStateChanged((user) => {
-      if (!user) verifiedDocuments.clear();
+      if (!user) {
+        verifiedDocuments.clear();
+        verifiedVisibleCommesse.clear();
+      }
     });
   }
 

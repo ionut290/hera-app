@@ -41,6 +41,14 @@
     return { uid, collectionName };
   }
 
+  function activeCollectionName() {
+    return getScope()?.collectionName || "commesse";
+  }
+
+  function commessaRef(commessaId) {
+    return db.collection(activeCollectionName()).doc(commessaId);
+  }
+
   function cacheKey(commessaId, scope = getScope()) {
     if (!scope || !commessaId) return "";
     return `${CACHE_PREFIX}${encodeURIComponent(scope.uid)}:${encodeURIComponent(scope.collectionName)}:${encodeURIComponent(commessaId)}`;
@@ -151,7 +159,7 @@
 
   async function latestMarker(commessaId) {
     try {
-      const snapshot = await db.collection("commesse").doc(commessaId).collection("impiantoChangeIndex")
+      const snapshot = await commessaRef(commessaId).collection("impiantoChangeIndex")
         .orderBy("changedAt", "desc").limit(1).get();
       if (snapshot.empty) return 0;
       return timestampMs(snapshot.docs[0]?.data?.()?.changedAt);
@@ -162,7 +170,7 @@
   }
 
   async function readChangedDocument(commessaId, impiantoId) {
-    const ref = db.collection("commesse").doc(commessaId).collection("impianti").doc(impiantoId);
+    const ref = commessaRef(commessaId).collection("impianti").doc(impiantoId);
     const snap = await ref.get();
     state.changedDocumentsRead += snap.exists ? 1 : 0;
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
@@ -171,7 +179,7 @@
   function startIncrementalListener(commessaId, markerMs) {
     if (!markerMs || unsubscribeCommessaStats.has(commessaId)) return;
     const markerDate = new Date(markerMs);
-    const query = db.collection("commesse").doc(commessaId).collection("impiantoChangeIndex")
+    const query = commessaRef(commessaId).collection("impiantoChangeIndex")
       .where("changedAt", ">", markerDate)
       .orderBy("changedAt", "asc");
 
@@ -247,14 +255,14 @@
     state.fullFallbackLoads += 1;
     const markerBefore = await latestMarker(commessaId);
     try {
-      const snapshot = await db.collection("commesse").doc(commessaId).collection("impianti").get();
+      const snapshot = await commessaRef(commessaId).collection("impianti").get();
       const rawItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       applyItems(commessaId, rawItems, markerBefore);
       if (markerBefore > 0) startIncrementalListener(commessaId, markerBefore);
       else {
         // Indice non ancora disponibile: manteniamo il comportamento storico come
         // fallback di sicurezza, senza trasformare una cache non verificabile in fonte primaria.
-        const fallbackUnsubscribe = db.collection("commesse").doc(commessaId).collection("impianti").onSnapshot((live) => {
+        const fallbackUnsubscribe = commessaRef(commessaId).collection("impianti").onSnapshot((live) => {
           const liveItems = live.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
           applyItems(commessaId, liveItems, 0);
         });

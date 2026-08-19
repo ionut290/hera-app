@@ -1,12 +1,15 @@
 /* Mantiene stabile la nuova vista Gestione impianti e contabilità.
    Se uno script non è disponibile dalla cache, lo ricarica prima di aprire la schermata.
-   Ripara inoltre le commesse INRETE già marcate come migrate quando hanno impianti ma 0 lavorazioni. */
+   Ripara inoltre le commesse INRETE già marcate come migrate quando hanno impianti ma 0 lavorazioni.
+   Prima di aprire la contabilità usa direttamente gli impianti Firestore come fonte primaria di fallback. */
 (() => {
   "use strict";
 
   let loadingPromise = null;
   const recoveryInProgress = new Set();
   const IMPIANTI_CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
+  const directFirestoreRows = new Map();
+  let originalGetCommessaCachedImpianti = null;
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -42,8 +45,43 @@
     return Array.isArray(rows) ? rows.map((row) => ({ ...(row || {}) })) : [];
   }
 
+  function installDirectFirestoreGetterFallback() {
+    if (window.__heraAccountingDirectGetterInstalled) return;
+    if (typeof getCommessaCachedImpianti !== "function") return;
+    originalGetCommessaCachedImpianti = getCommessaCachedImpianti;
+    window.getCommessaCachedImpianti = function getCommessaCachedImpiantiAccountingSafe(commessaId) {
+      const direct = cloneRows(directFirestoreRows.get(String(commessaId || "")) || []);
+      if (direct.length) return direct;
+      return originalGetCommessaCachedImpianti.apply(this, arguments);
+    };
+    window.__heraAccountingDirectGetterInstalled = true;
+  }
+
+  async function primeAccountingPlantsFromFirestore(commessa) {
+    const id = String(commessa?.id || "").trim();
+    if (!id || !window.db || typeof getCommesseCollectionName !== "function") return [];
+    const ref = db.collection(getCommesseCollectionName()).doc(id).collection("impianti");
+    const snapshot = await ref.get();
+    const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!rows.length) {
+      directFirestoreRows.delete(id);
+      return [];
+    }
+    directFirestoreRows.set(id, cloneRows(rows));
+    try {
+      if (typeof impiantiByCommessaId !== "undefined" && impiantiByCommessaId?.set) {
+        impiantiByCommessaId.set(id, cloneRows(rows));
+      }
+    } catch (_) {}
+    installDirectFirestoreGetterFallback();
+    console.info(`[AccountingDirectRead] ${commessa?.nome || id}: ${rows.length} impianti letti direttamente da Firestore.`);
+    return rows;
+  }
+
   function getMemoryPlants(commessaId) {
     const candidates = [];
+    const direct = directFirestoreRows.get(String(commessaId || ""));
+    if (direct?.length) candidates.push(direct);
     try {
       if (typeof getCommessaCachedImpianti === "function") {
         candidates.push(getCommessaCachedImpianti(commessaId));
@@ -84,7 +122,7 @@
 
   function recoveryRows(commessaId) {
     const memory = getMemoryPlants(commessaId);
-    if (memory.length) return { rows: memory, source: "memoria app" };
+    if (memory.length) return { rows: memory, source: "Firestore/memoria app" };
     const persistent = readPersistentPlants(commessaId);
     if (persistent.length) return { rows: persistent, source: "cache persistente verificata" };
     return { rows: [], source: "" };
@@ -163,6 +201,11 @@
   window.openImpiantiManagement = async function openStableAccountingManagement(commessa) {
     try {
       await ensureAccountingView();
+      try {
+        await primeAccountingPlantsFromFirestore(commessa);
+      } catch (primeError) {
+        console.warn("Lettura diretta impianti per contabilità non riuscita:", primeError);
+      }
       await window.AccountingV2.open(commessa);
       try {
         await repairEmptyInreteAccounting(commessa);

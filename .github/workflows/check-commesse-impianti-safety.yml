@@ -1,0 +1,23 @@
+name: Check commesse impianti safety
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  commesse-impianti-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check syntax
+        run: node --check operational-import-repair.js
+      - name: Check non-destructive commesse and impianti
+        run: node scripts/check-operational-import-safety.js

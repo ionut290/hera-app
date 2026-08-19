@@ -241,4 +241,24 @@ assert.equal(historySubscriptions, 1);
 assert.match(source, /installHistoricalCommesseResubscribe/);
 assert.match(source, /QueryPrototype\.onSnapshot === restored/);
 
-console.log("✅ Audit commesse-impianti: merge, coordinate, stati, lavorazioni e backfill non distruttivo verificati.");
+const statsCacheSource = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
+assert.match(statsCacheSource, /function activeCollectionName\(\)/, "La cache statistiche deve risolvere la raccolta commesse attiva");
+assert.match(statsCacheSource, /function commessaRef\(commessaId\)/, "Manca il riferimento centralizzato alla commessa attiva");
+assert.doesNotMatch(
+  statsCacheSource,
+  /db\.collection\("commesse"\)\.doc\(commessaId\)/,
+  "La cache statistiche non deve leggere una raccolta commesse hard-coded"
+);
+
+const globalArchiveSource = fs.readFileSync("global-archive-sync.js", "utf8");
+assert.match(globalArchiveSource, /async function ensureVisibleCommessa\(commessaId\)/, "Manca la protezione anagrafica della commessa Global");
+const mirrorVisiblePlantBody = globalArchiveSource.match(/async function mirrorVisiblePlant\(commessaId, plantId, raw = \{\}\) \{[\s\S]*?\n  \}/)?.[0] || "";
+assert.ok(mirrorVisiblePlantBody, "Funzione mirrorVisiblePlant non trovata");
+assert.match(mirrorVisiblePlantBody, /await ensureVisibleCommessa\(commessaId\)/, "L'impianto deve garantire l'esistenza della commessa senza usarne i propri dati");
+assert.doesNotMatch(
+  mirrorVisiblePlantBody,
+  /mirrorVisibleCommessa\(commessaId,\s*raw\)/,
+  "I dati dell'impianto non devono mai aggiornare l'anagrafica della commessa Global"
+);
+
+console.log("✅ Audit commesse-impianti: merge, coordinate, stati, lavorazioni, cache, Global e backfill non distruttivo verificati.");

@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v134";
-const CACHE_RESET_VERSION = "20260818-data-durability1";
+const CACHE_NAME = "varga-cantieri-shell-v135";
+const CACHE_RESET_VERSION = "20260819-modena-coordinate-restore1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,8 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260813-render-gate1",
+  "./app.js?v=20260819-modena-restore1",
+  "./inrete-modena-coordinate-backup.js?v=20260819-restore1",
   "./data-durability-runtime.js?v=20260818a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",

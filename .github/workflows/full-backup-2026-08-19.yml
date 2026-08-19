@@ -25,6 +25,7 @@ jobs:
       BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
       STABLE_CODE_COMMIT: 81ba299a1e4c7fdafdf56c332daa513a89045985
       STABLE_CODE_BRANCH: backup/stable-2026-08-19
+      BACKUP_ATTEMPT: diagnostic-2
 
     steps:
       - name: Checkout
@@ -56,6 +57,21 @@ jobs:
         continue-on-error: true
         shell: bash
         run: bash .github/backup/full-backup-2026-08-19.sh
+
+      - name: Diagnose cloud backup blockers
+        if: steps.backup.outcome != 'success'
+        shell: bash
+        run: |
+          set +e
+          DIR="$RUNNER_TEMP/varga-stable-backup"
+          for file in firestore-export.err storage-rsync.err firestore-database.err bucket-create.err; do
+            if [ -s "$DIR/$file" ]; then
+              echo "::group::$file"
+              head -n 80 "$DIR/$file" \
+                | sed -E 's/(Bearer|Authorization:)[[:space:]]+[A-Za-z0-9._~+\/-]+/\1 [REDACTED]/g; s/(private_key|client_secret)[^,}]*/\1:[REDACTED]/g'
+              echo "::endgroup::"
+            fi
+          done
 
       - name: Report backup result
         if: always()

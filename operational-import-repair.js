@@ -3,11 +3,14 @@
   "use strict";
 
   const COMMESSA_ID = "inrete_modena_agosto_2026";
-  const DATASET_VERSION = "2026-08-19-ago30-ui-fallback-v2";
+  const DATASET_VERSION = "2026-08-19-ago30-ui-fallback-v3-mixed-work";
   const RETRY_MS = 2000;
   const MAX_ATTEMPTS = 90;
+  const MIXED_REFRESH_MS = 30000;
   let attempts = 0;
   let running = false;
+  let mixedRefreshRunning = false;
+  let workItemsCache = [];
 
   const RAW = Object.freeze([
     ["3430707","REMI CASTELFRANCO","CASTELFRANCO EMILIA","Via Loda, 28",44.58931,11.04352],
@@ -42,9 +45,29 @@
     ["3426335","GRMI UMF08 _ EXPORT CERAM","MONTEFIORINO","VIA LA PIANA, 6",44.37797,10.62001]
   ]);
 
+  const text = (value) => String(value ?? "").trim();
+  const norm = (value) => text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
   const plantId = (idSap, name, index) => /^\d+$/.test(String(idSap))
     ? `sap_${idSap}`
     : `modena_${String(name || index + 1).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
+
+  function identity(item = {}) {
+    const sap = norm(item.idSap || item.idSAP || item["ID SAP"] || item.codiceSap);
+    if (sap) return `sap:${sap}`;
+    const name = item.denominazione || item.nome || item.name || "";
+    const comune = item.comune || "";
+    const address = item.indirizzo || item.via || item.descrizioneVia || "";
+    return `anag:${norm(`${name}|${comune}|${address}`)}`;
+  }
+
+  function detectKinds(item = {}) {
+    const raw = [item.tipo, item.categoria, item.tipologia, item.tipologiaLavorazione, item.tipologiaIntervento, item.descrizione, item.note, item.attivitaLabel]
+      .map(text).join(" ").toLocaleUpperCase("it-IT");
+    const kinds = new Set();
+    if (raw.includes("STRAORD")) kinds.add("STRAORDINARIO");
+    if (raw.includes("ORDIN") && !raw.includes("SOLO STRAORD")) kinds.add("ORDINARIO");
+    return kinds;
+  }
 
   const PLANTS = RAW.map((row, index) => {
     const [idSap, denominazione, comune, indirizzo, lat, lng] = row;
@@ -70,6 +93,9 @@
       stato: "DA FARE",
       statoGenerale: "DA FARE",
       done: false,
+      tipo: "ORDINARIO",
+      tipologiaIntervento: "ORDINARIO",
+      attivitaLabel: "ORDINARIO",
       sourceDataset: "06-Attività Sfalci - Ago-2026 - MO.xlsx",
       sourceDatasetVersion: DATASET_VERSION
     };
@@ -103,6 +129,111 @@
 
   const collectionName = () => typeof getCommesseCollectionName === "function" ? getCommesseCollectionName() : "commesse";
 
+  function mergePlants(...collections) {
+    const groups = new Map();
+    const push = (item, sourceKind = "") => {
+      if (!item) return;
+      const key = identity(item);
+      if (!key || key === "anag:") return;
+      let group = groups.get(key);
+      if (!group) {
+        group = { item: { ...item }, kinds: new Set(), sourceIds: new Set() };
+        groups.set(key, group);
+      } else {
+        const preferred = { ...group.item };
+        Object.entries(item).forEach(([field, value]) => {
+          if ((preferred[field] === undefined || preferred[field] === null || preferred[field] === "") && value !== undefined && value !== null && value !== "") preferred[field] = value;
+        });
+        group.item = preferred;
+      }
+      detectKinds(item).forEach((kind) => group.kinds.add(kind));
+      if (sourceKind) group.kinds.add(sourceKind);
+      [item.id, item.physicalPlantId, item.impiantoId, item.migrationSourceId].map(text).filter(Boolean).forEach((id) => group.sourceIds.add(id));
+    };
+
+    collections.flat().filter(Boolean).forEach((item) => push(item));
+    workItemsCache.forEach((item) => push(item));
+
+    return [...groups.values()].map((group) => {
+      const out = { ...group.item, sourceIds: [...group.sourceIds] };
+      const hasOrdinary = group.kinds.has("ORDINARIO");
+      const hasExtraordinary = group.kinds.has("STRAORDINARIO");
+      if (hasOrdinary && hasExtraordinary) {
+        out.tipo = "ORDINARIO E STRAORDINARIO";
+        out.tipologia = "ORDINARIO E STRAORDINARIO";
+        out.tipologiaIntervento = "ORDINARIO E STRAORDINARIO";
+        out.tipologiaLavorazione = "ORDINARIO E STRAORDINARIO";
+        out.attivitaLabel = "ORDINARIO E STRAORDINARIO";
+        out.isMixedOrdinaryExtraordinary = true;
+        out.markerColor = "#f4c542";
+        out.markerFillColor = "#f4c542";
+        out.markerClass = "impianto-marker-mixed-yellow";
+        out.markerTone = "yellow";
+      } else if (hasExtraordinary) {
+        out.tipo = out.tipo || "STRAORDINARIO";
+        out.tipologiaIntervento = out.tipologiaIntervento || "STRAORDINARIO";
+        out.attivitaLabel = out.attivitaLabel || "STRAORDINARIO";
+      } else {
+        out.tipo = out.tipo || "ORDINARIO";
+        out.tipologiaIntervento = out.tipologiaIntervento || "ORDINARIO";
+        out.attivitaLabel = out.attivitaLabel || "ORDINARIO";
+      }
+      return out;
+    }).sort((a, b) => (Number(a.numeroProgressivo || a.numeroProgressivoImpianto) || 9999) - (Number(b.numeroProgressivo || b.numeroProgressivoImpianto) || 9999));
+  }
+
+  function signature(items) {
+    return (Array.isArray(items) ? items : []).map((item) => [identity(item), item.attivitaLabel, item.statoGenerale, item.done ? 1 : 0].join("|")).join(";");
+  }
+
+  function applyMergedVisiblePlants() {
+    let cached = [];
+    try {
+      if (typeof impiantiByCommessaId !== "undefined" && impiantiByCommessaId?.get) cached = impiantiByCommessaId.get(COMMESSA_ID) || [];
+    } catch (_) {}
+    let current = [];
+    try {
+      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId === COMMESSA_ID && typeof currentImpianti !== "undefined" && Array.isArray(currentImpianti)) current = currentImpianti;
+    } catch (_) {}
+
+    const merged = mergePlants(PLANTS, cached, current);
+    try {
+      if (typeof impiantiByCommessaId !== "undefined" && impiantiByCommessaId?.set && signature(cached) !== signature(merged)) {
+        impiantiByCommessaId.set(COMMESSA_ID, merged.map((item) => ({ ...item })));
+      }
+    } catch (_) {}
+
+    try {
+      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId === COMMESSA_ID && typeof currentImpianti !== "undefined" && signature(current) !== signature(merged)) {
+        currentImpianti = merged.map((item) => ({ ...item }));
+        if (typeof renderImpianti === "function") renderImpianti();
+        if (typeof renderMap === "function") renderMap();
+        if (typeof renderHeaderActivitySummary === "function") renderHeaderActivitySummary();
+        if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
+      }
+    } catch (error) {
+      console.warn("[INRETE Modena merge ordinario/straordinario UI]", error);
+    }
+    return merged;
+  }
+
+  async function refreshWorkKinds() {
+    if (mixedRefreshRunning || typeof db === "undefined" || typeof auth === "undefined" || !auth.currentUser) return false;
+    mixedRefreshRunning = true;
+    try {
+      const ref = db.collection(collectionName()).doc(COMMESSA_ID);
+      const snapshot = await ref.collection("lavorazioni").get();
+      workItemsCache = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      applyMergedVisiblePlants();
+      return true;
+    } catch (error) {
+      console.warn("[INRETE Modena] lettura lavorazioni ordinario/straordinario non riuscita", error);
+      return false;
+    } finally {
+      mixedRefreshRunning = false;
+    }
+  }
+
   function ensureVisibleLocally() {
     try {
       let changed = false;
@@ -112,7 +243,7 @@
       }
       if (typeof impiantiByCommessaId !== "undefined" && impiantiByCommessaId?.set) {
         const cached = impiantiByCommessaId.get(COMMESSA_ID);
-        if (!Array.isArray(cached) || cached.length !== PLANTS.length) {
+        if (!Array.isArray(cached) || cached.length === 0) {
           impiantiByCommessaId.set(COMMESSA_ID, PLANTS.map((item) => ({ ...item })));
           changed = true;
         }
@@ -123,13 +254,10 @@
         if (typeof refreshCommesseDependentUI === "function") refreshCommesseDependentUI(false);
       }
       if (typeof selectedCommessaId !== "undefined" && selectedCommessaId === COMMESSA_ID && typeof currentImpianti !== "undefined") {
-        if (!Array.isArray(currentImpianti) || currentImpianti.length !== PLANTS.length) {
+        if (!Array.isArray(currentImpianti) || currentImpianti.length === 0) {
           currentImpianti = PLANTS.map((item) => ({ ...item }));
-          if (typeof renderImpianti === "function") renderImpianti();
-          if (typeof renderMap === "function") renderMap();
-          if (typeof renderHeaderActivitySummary === "function") renderHeaderActivitySummary();
-          if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
         }
+        applyMergedVisiblePlants();
       }
     } catch (error) {
       console.warn("[INRETE Modena fallback UI]", error);
@@ -166,7 +294,7 @@
         batch.set(ref.collection("impiantiFisici").doc(plant.id), data, { merge: true });
       });
       await batch.commit();
-      console.info("[INRETE Modena] nuova commessa salvata", { count: PLANTS.length });
+      console.info("[INRETE Modena] commessa salvata", { count: PLANTS.length, mode: "mixed ordinary/extraordinary" });
       return true;
     } finally {
       running = false;
@@ -178,7 +306,10 @@
     attempts += 1;
     try {
       if (typeof auth === "undefined" || typeof db === "undefined" || !auth.currentUser) throw new Error("Firebase non pronto");
-      if (await createInFirestore(false)) return;
+      if (await createInFirestore(false)) {
+        await refreshWorkKinds();
+        return;
+      }
     } catch (error) {
       console.warn("[INRETE Modena] scrittura Firestore non riuscita, resta attivo il fallback UI", attempts, error?.message || error);
     }
@@ -186,12 +317,18 @@
   }
 
   window.createInreteModenaAugust2026 = (options = {}) => createInFirestore(options.force === true);
-  window.INRETE_MODENA_AUGUST_2026 = { commessa: COMMESSA, plants: PLANTS, ensureVisibleLocally };
+  window.refreshInreteModenaMixedWork = refreshWorkKinds;
+  window.INRETE_MODENA_AUGUST_2026 = { commessa: COMMESSA, plants: PLANTS, ensureVisibleLocally, refreshWorkKinds, mergePlants };
 
   setInterval(ensureVisibleLocally, 1500);
+  setInterval(() => {
+    try {
+      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId === COMMESSA_ID) refreshWorkKinds();
+    } catch (_) {}
+  }, MIXED_REFRESH_MS);
   if (typeof auth !== "undefined" && auth?.onAuthStateChanged) auth.onAuthStateChanged((user) => { if (user) setTimeout(tryRun, 250); });
-  window.addEventListener("load", () => { ensureVisibleLocally(); setTimeout(tryRun, 500); });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureVisibleLocally(); });
+  window.addEventListener("load", () => { ensureVisibleLocally(); setTimeout(tryRun, 500); setTimeout(refreshWorkKinds, 1200); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { ensureVisibleLocally(); refreshWorkKinds(); } });
   setTimeout(ensureVisibleLocally, 100);
   setTimeout(tryRun, 1000);
 })();

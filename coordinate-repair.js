@@ -202,6 +202,25 @@
       }
     }
 
+    // Alcuni archivi INRETE salvano la coppia X/Y completa in uno solo dei
+    // campi storici di latitudine o longitudine. Il parser `diagnose` sa già
+    // separare e invertire la coppia, ma prima questa strada non veniva
+    // tentata da `resolveRecord` quando il campo gemello era vuoto.
+    for (const latitudeEntry of latitudeValues) {
+      const result = diagnose(latitudeEntry.value, "");
+      if (result.valid) {
+        return { ...result, source: `${latitudeEntry.key} (coordinate unite)` };
+      }
+      if (!firstInvalid && result.status === "INVALID") firstInvalid = result;
+    }
+    for (const longitudeEntry of longitudeValues) {
+      const result = diagnose("", longitudeEntry.value);
+      if (result.valid) {
+        return { ...result, source: `${longitudeEntry.key} (coordinate unite)` };
+      }
+      if (!firstInvalid && result.status === "INVALID") firstInvalid = result;
+    }
+
     for (const key of NESTED_KEYS) {
       const nested = record[key];
       if (!nested || typeof nested !== "object") continue;

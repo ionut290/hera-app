@@ -103,7 +103,9 @@
       "download-excel-template-btn", "export-all-impianti-btn", "download-price-template-btn",
       "export-price-list-btn"
     ].includes(target.id)) {
-      libraries = ["xlsx"];
+      // Questi pulsanti usano AccountingV2.exportWorkbook(), che crea il file con ExcelJS.
+      // XLSX resta necessario solo per la lettura/import dei file selezionati.
+      libraries = ["exceljs"];
     } else if (target.id === "business-card-share-btn") {
       libraries = ["html2canvas"];
     }
@@ -172,7 +174,7 @@
 
   window.HeraHeavyLibs = {
     installed: true,
-    version: "1.0.0",
+    version: "1.0.1",
     ensure,
     ensureMany,
     isReady: (name) => Boolean(DEFINITIONS[name]?.ready?.()),

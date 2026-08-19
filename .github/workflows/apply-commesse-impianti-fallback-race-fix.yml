@@ -1,0 +1,46 @@
+name: Apply commesse impianti fallback race fix
+
+on:
+  push:
+    branches:
+      - fix/commesse-impianti-fallback-race-20260819
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[skip fallback patch]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Apply guarded patch
+        run: node scripts/apply-commesse-impianti-fallback-race-fix.js
+
+      - name: Verify runtime and regression test
+        run: |
+          node --check operational-import-repair.js
+          node scripts/check-commesse-impianti-integrity.js
+
+      - name: Commit patched files
+        run: |
+          if git diff --quiet -- operational-import-repair.js scripts/check-commesse-impianti-integrity.js; then
+            echo "Nessuna modifica da applicare."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add operational-import-repair.js scripts/check-commesse-impianti-integrity.js
+          git commit -m "Protegge Firestore dal fallback locale [skip fallback patch]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

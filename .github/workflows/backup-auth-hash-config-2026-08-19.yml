@@ -1,0 +1,91 @@
+name: Backup Firebase Auth hash config 2026-08-19
+
+on:
+  push:
+    branches:
+      - ops/full-backup-2026-08-19
+    paths:
+      - '.github/workflows/backup-auth-hash-config-2026-08-19.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROJECT_ID: hera-app-6cd2b
+      BACKUP_BUCKET: gs://hera-app-6cd2b-dr-backups-645390631375
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Back up password hash parameters privately
+        id: hash
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          token="$(gcloud auth print-access-token)"
+          CONFIG="$RUNNER_TEMP/auth-project-config.json"
+          HTTP="$(curl -sS -o "$CONFIG" -w '%{http_code}' \
+            -H "Authorization: Bearer $token" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/config")"
+          echo "http_status=$HTTP" >> "$GITHUB_OUTPUT"
+          if [ "$HTTP" != "200" ]; then
+            echo "status=inaccessible" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          HASH="$RUNNER_TEMP/auth-hash-config.json"
+          node - "$CONFIG" "$HASH" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const hashConfig = config?.signIn?.email?.hashConfig || null;
+          if (!hashConfig || !hashConfig.algorithm) {
+            fs.appendFileSync(process.argv[4], 'status=not-present\nalgorithm=none\n');
+            process.exit(2);
+          }
+          fs.writeFileSync(process.argv[3], JSON.stringify({
+            schemaVersion: 1,
+            projectId: process.env.PROJECT_ID,
+            capturedAt: new Date().toISOString(),
+            hashConfig
+          }, null, 2) + '\n', { mode: 0o600 });
+          fs.appendFileSync(process.argv[4], `status=success\nalgorithm=${hashConfig.algorithm}\n`);
+          NODE
+          NODE_STATUS=$?
+          if [ "$NODE_STATUS" -eq 2 ]; then exit 0; fi
+          if [ "$NODE_STATUS" -ne 0 ]; then exit "$NODE_STATUS"; fi
+
+          gcloud storage cp "$HASH" "$BACKUP_BUCKET/stable-2026-08-19/authentication/password-hash-config.json" >/dev/null
+          echo "stored=success" >> "$GITHUB_OUTPUT"
+
+      - name: Report hash config status without exposing secrets
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ steps.hash.outputs.status || 'failed' }}';
+            const stored = '${{ steps.hash.outputs.stored || 'not-stored' }}';
+            const algorithm = '${{ steps.hash.outputs.algorithm || 'unknown' }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1194,
+              body: [
+                '### Parametri password Firebase Authentication',
+                '',
+                `- Accesso configurazione: **${status}**`,
+                `- Parametri hash archiviati nel bucket privato: **${stored}**`,
+                `- Algoritmo: **${algorithm}**`,
+                '',
+                'Signer key e salt separator non vengono mai stampati nei log o su GitHub.'
+              ].join('\n')
+            });

@@ -185,9 +185,13 @@
 
     const unsubscribe = query.onSnapshot(async (snapshot) => {
       if (snapshot.empty) return;
+      const deltaDocs = typeof snapshot.docChanges === "function"
+        ? snapshot.docChanges().filter((change) => change.type !== "removed").map((change) => change.doc)
+        : snapshot.docs;
+      if (!deltaDocs.length) return;
       state.incrementalDeliveries += 1;
       try {
-        const changes = snapshot.docs.map((doc) => ({ id: doc.id, markerMs: timestampMs(doc.data()?.changedAt) }));
+        const changes = deltaDocs.map((doc) => ({ id: doc.id, markerMs: timestampMs(doc.data()?.changedAt) }));
         const current = cloneItems(impiantiByCommessaId.get(commessaId) || []);
         const byId = new Map(current.map((item) => [String(item.id || ""), item]));
         let newestMarker = markerMs;

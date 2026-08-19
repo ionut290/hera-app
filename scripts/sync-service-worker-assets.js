@@ -2,7 +2,7 @@ const fs = require("node:fs");
 
 const indexPath = "index.html";
 const serviceWorkerPath = "sw.js";
-const assetNames = ["app.js", "notification-center.js"];
+const assetNames = ["app.js", "notification-center.js", "operational-import-repair.js"];
 
 const index = fs.readFileSync(indexPath, "utf8");
 let serviceWorker = fs.readFileSync(serviceWorkerPath, "utf8");
@@ -16,7 +16,7 @@ for (const assetName of assetNames) {
     throw new Error(`${indexPath} non contiene una versione cache-busting per ${assetName}`);
   }
 
-  const serviceWorkerPattern = new RegExp(`(?:\\./)?${escapedName}(?:\\?v=[^"']+)?`, "g");
+  const serviceWorkerPattern = new RegExp(`\\./${escapedName}(?:\\?v=[^"']+)?`, "g");
   const expectedAsset = `./${indexMatch[1]}`;
 
   if (!serviceWorkerPattern.test(serviceWorker)) {

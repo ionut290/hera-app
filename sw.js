@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v135";
-const CACHE_RESET_VERSION = "20260819-inrete-modena-v3";
+const CACHE_NAME = "varga-cantieri-shell-v136";
+const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -33,7 +33,7 @@ const APP_SHELL = [
   "./inrete-work-items-v2.js?v=20260728b",
   "./accounting-v2.js?v=20260812-modena2",
   "./accounting-view-guard.js?v=20260728a",
-  "./operational-import-repair.js?v=20260819-modena3",
+  "./operational-import-repair.js?v=20260728a",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
   "./notification-center.js?v=20260731-header1",
@@ -177,6 +177,9 @@ self.addEventListener("activate", (event) => {
           version: CACHE_RESET_VERSION,
           activatedAt: Date.now()
         });
+        const url = new URL(client.url);
+        url.searchParams.set("heraAppVersion", CACHE_RESET_VERSION);
+        client.navigate(url.toString()).catch(() => {});
       } catch (_) {}
     });
   })());

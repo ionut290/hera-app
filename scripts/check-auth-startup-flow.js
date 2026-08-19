@@ -36,8 +36,19 @@ const signInIndex = loginRetry.indexOf("signInWithEmailAndPassword");
 assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signInIndex,
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
-assert.match(sw, /varga-cantieri-shell-v133/);
-assert.match(sw, /CACHE_RESET_VERSION = "20260814-loading-humor1"/);
+const cacheNameMatch = sw.match(/CACHE_NAME\s*=\s*"varga-cantieri-shell-v(\d+)"/);
+assert.ok(cacheNameMatch, "Nome cache PWA versionato non trovato");
+assert.ok(Number(cacheNameMatch[1]) >= 133, "La cache PWA non deve regredire sotto v133");
+const resetVersionMatch = sw.match(/CACHE_RESET_VERSION\s*=\s*"([^"]+)"/);
+const registrationVersionMatch = index.match(/navigator\.serviceWorker\.register\("\.\/sw\.js\?v=([^"]+)"/);
+assert.ok(resetVersionMatch, "Versione reset cache Service Worker non trovata");
+assert.ok(registrationVersionMatch, "Versione registrazione Service Worker non trovata");
+assert.equal(
+  registrationVersionMatch[1],
+  resetVersionMatch[1],
+  "La registrazione del Service Worker deve usare la stessa versione del reset cache"
+);
+
 for (const path of [
   "/firebase-config.js",
   "/auth-login-fix.js",

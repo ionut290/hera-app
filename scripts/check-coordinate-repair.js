@@ -20,8 +20,20 @@ const cases = [
   ["coordinate mancanti segnalate", tools.diagnose("", ""), { valid: false, status: "MISSING" }]
 ];
 
+const recordCases = [
+  ["coppia INRETE nel campo latitudine originale", tools.resolveRecord({ coordinateLatitudineOriginale: "10,9252 / 44,6471" }), { valid: true, repaired: true, latitude: 44.6471, longitude: 10.9252 }],
+  ["coppia INRETE nel campo GPS Y", tools.resolveRecord({ gpsY: "10,9252 / 44,6471" }), { valid: true, repaired: true, latitude: 44.6471, longitude: 10.9252 }],
+  ["coppia INRETE nel campo GPS X", tools.resolveRecord({ gpsX: "10,9252 / 44,6471" }), { valid: true, repaired: true, latitude: 44.6471, longitude: 10.9252 }]
+];
+
 let failed = false;
 for (const [name, actual, expected] of cases) {
+  const passed = Object.entries(expected).every(([key, value]) => actual[key] === value);
+  console.log(`${passed ? "OK" : "FAIL"} ${name}`);
+  failed ||= !passed;
+}
+
+for (const [name, actual, expected] of recordCases) {
   const passed = Object.entries(expected).every(([key, value]) => actual[key] === value);
   console.log(`${passed ? "OK" : "FAIL"} ${name}`);
   failed ||= !passed;

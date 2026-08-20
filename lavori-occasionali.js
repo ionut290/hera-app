@@ -699,6 +699,23 @@
     if (window.__heraOccasionalFattoPdfInstalled) return true;
     if (typeof safeOpenWhatsAppMessage !== "function") return false;
     const originalSafeOpen = safeOpenWhatsAppMessage;
+    const installPayloadBridge = () => {
+      const originalBuilder = window.buildImpiantoWhatsAppPayload;
+      if (typeof originalBuilder !== "function" || originalBuilder.__occasionalPayloadWrapped) return false;
+      const wrappedBuilder = function buildImpiantoWhatsAppPayloadWithOccasional(impianto, options) {
+        const payload = originalBuilder.apply(this, arguments);
+        const occasional = impianto?.lavoroOccasionale === true
+          || String(impianto?.commessaId || options?.commessaId || window.selectedCommessaId || "") === COMMESSA_ID;
+        if (!occasional) return payload;
+        const message = buildOccasionalWhatsAppMessage(impianto);
+        const appUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        return { ...(payload || {}), message, text: message, appUrl, url: appUrl, whatsappUrl: appUrl };
+      };
+      wrappedBuilder.__occasionalPayloadWrapped = true;
+      wrappedBuilder.__original = originalBuilder;
+      window.buildImpiantoWhatsAppPayload = wrappedBuilder;
+      return true;
+    };
     const schedulePdfShare = (result) => {
       const pending = pendingOccasionalSharePlant;
       if ((!pending?.plant?.preventivoPdfUrl && !pending?.plant?.preventivoPdfFirestore) || pending.pdfPromise || !result) return result;
@@ -749,6 +766,7 @@
       return true;
     };
     installOpenWhatsAppBridge();
+    installPayloadBridge();
 
     const installPhotoBridge = () => {
       if (typeof shareWhazzupPhotosNativeAndroid !== "function" || shareWhazzupPhotosNativeAndroid.__occasionalPdfWrapped) return false;
@@ -775,8 +793,14 @@
     installPhotoBridge();
     [500, 1500, 4000].forEach((delay) => window.setTimeout(() => {
       installOpenWhatsAppBridge();
+      installPayloadBridge();
       installPhotoBridge();
     }, delay));
+    const payloadTimer = window.setInterval(() => {
+      installPayloadBridge();
+      if (window.buildImpiantoWhatsAppPayload?.__occasionalPayloadWrapped) window.clearInterval(payloadTimer);
+    }, 250);
+    window.setTimeout(() => window.clearInterval(payloadTimer), 30000);
     window.__heraOccasionalFattoPdfInstalled = true;
     return true;
   }

@@ -18,13 +18,8 @@
     }
   }
 
-  function select() {
-    hideWidget();
-  }
-
-  function stop() {
-    hideWidget();
-  }
+  function select() { hideWidget(); }
+  function stop() { hideWidget(); }
 
   function formatEuro(value) {
     const numeric = Number(value);
@@ -51,11 +46,8 @@
 
   function readRenderedCompletedSubtotal() {
     try {
-      const elements = Array.from(document.querySelectorAll("body *"));
-      const match = elements.find((element) => {
-        if (element.children?.length) return false;
-        return /subtotale\s+lavorazioni\s+fatte/i.test(element.textContent || "");
-      });
+      const nodes = Array.from(document.querySelectorAll("body *"));
+      const match = nodes.find((el) => /subtotale\s+lavorazioni\s+fatte/i.test(el.textContent || ""));
       if (!match) return NaN;
       return parseItalianCurrency(match.textContent);
     } catch (_) {
@@ -81,41 +73,41 @@
         }
       }
     } catch (_) {}
-
     const rendered = readRenderedCompletedSubtotal();
     return Number.isFinite(rendered) ? rendered : 0;
   }
 
-  function getDashboardStatItems() {
-    const remainingValue = document.getElementById("commessa-stat-ore");
-    const remainingItem = remainingValue?.closest?.(".commessa-stat-item");
-    const container = remainingItem?.parentElement;
-    if (!container) return [];
-    return Array.from(container.children).filter((element) => element.classList?.contains("commessa-stat-item"));
+  function findAvanzamentoStatItem() {
+    const labels = Array.from(document.querySelectorAll(".commessa-stat-label"));
+    const label = labels.find((el) => /avanzamento/i.test(el.textContent || ""));
+    if (label) return label.closest(".commessa-stat-item");
+
+    const candidates = Array.from(document.querySelectorAll(".commessa-stat-item"));
+    return candidates.find((item) => /avanzamento/i.test(item.textContent || "")) || null;
   }
 
   function updateCompletedAmountStat() {
-    const items = getDashboardStatItems();
-    if (items.length < 3) return;
+    const item = findAvanzamentoStatItem();
+    if (!item) return false;
 
-    const item = items[1];
-    const label = item.querySelector?.(".commessa-stat-label");
-    const value = item.querySelector?.(".commessa-stat-value")
-      || Array.from(item.querySelectorAll?.("[id]") || []).find((element) => element !== label)
-      || Array.from(item.children || []).find((element) => element !== label && !element.classList?.contains("commessa-stat-icon"));
-    if (!value || !label) return;
+    const label = item.querySelector(".commessa-stat-label") || Array.from(item.children).find((el) => /avanzamento/i.test(el.textContent || ""));
+    const value = item.querySelector(".commessa-stat-value")
+      || Array.from(item.querySelectorAll("[id]")).find((el) => el !== label && /%|\d/.test(el.textContent || ""))
+      || Array.from(item.children).find((el) => el !== label && !el.classList?.contains("commessa-stat-icon"));
+    if (!label || !value) return false;
 
     const subtotal = getSelectedCompletedSubtotal();
-    value.textContent = formatEuro(subtotal);
+    const formatted = formatEuro(subtotal);
+    value.textContent = formatted;
     label.textContent = "lavorazioni fatte";
     item.dataset.statAction = "lavorazioni-fatte";
-    item.setAttribute("aria-label", `Lavorazioni fatte: ${formatEuro(subtotal)}`);
-    item.title = `Subtotale lavorazioni fatte: ${formatEuro(subtotal)}`;
+    item.setAttribute("aria-label", `Lavorazioni fatte: ${formatted}`);
+    item.title = `Subtotale lavorazioni fatte: ${formatted}`;
+    return true;
   }
 
   function updateRemainingImpiantiStat() {
     if (typeof getSelectedCommessaDashboardStats !== "function") return;
-
     const value = document.getElementById("commessa-stat-ore");
     const item = value?.closest?.(".commessa-stat-item");
     const label = item?.querySelector?.(".commessa-stat-label");
@@ -123,7 +115,6 @@
 
     const stats = getSelectedCommessaDashboardStats();
     const remaining = Math.max(0, Number(stats?.total || 0) - Number(stats?.done || 0));
-
     value.textContent = String(remaining);
     label.textContent = remaining === 1 ? "impianto da fare" : "impianti da fare";
     item.dataset.statAction = "impianti";
@@ -140,12 +131,28 @@
     const originalUpdateCommessaDashboard = updateCommessaDashboard;
     updateCommessaDashboard = function updateCommessaDashboardWithReplacementStats(...args) {
       const result = originalUpdateCommessaDashboard.apply(this, args);
-      updateDashboardReplacementStats();
+      queueMicrotask(updateDashboardReplacementStats);
       return result;
     };
   }
 
+  let refreshTimer = null;
+  const scheduleRefresh = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(updateDashboardReplacementStats, 40);
+  };
+
+  const observer = new MutationObserver(scheduleRefresh);
+  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+
+  document.addEventListener("click", () => setTimeout(updateDashboardReplacementStats, 80), true);
+  window.addEventListener("hashchange", scheduleRefresh);
+  window.addEventListener("popstate", scheduleRefresh);
+
   hideWidget();
   updateDashboardReplacementStats();
-  window.CommessaProducedWidget = { select, stop, removed: true };
+  setTimeout(updateDashboardReplacementStats, 250);
+  setTimeout(updateDashboardReplacementStats, 1000);
+
+  window.CommessaProducedWidget = { select, stop, removed: true, refresh: updateDashboardReplacementStats };
 })();

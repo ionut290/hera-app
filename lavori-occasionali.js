@@ -591,10 +591,32 @@
 
   function decorateOccasionalPlantCards() {
     getOccasionalPlants().forEach((plant) => {
-      if (!plant.preventivoPdfUrl && !plant.preventivoPdfFirestore) return;
       const name = normalizeName(plant.denominazione || plant.nome);
       document.querySelectorAll("article, .item-card, [class*='impianto']").forEach((card) => {
-        if (!normalizeName(card.textContent).includes(name) || card.querySelector(".preventivo-open-btn")) return;
+        if (!normalizeName(card.textContent).includes(name)) return;
+        const labelRow = (label) => {
+          const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            if (!normalizeName(walker.currentNode.nodeValue).startsWith(normalizeName(label))) continue;
+            const parent = walker.currentNode.parentElement;
+            const row = /^(STRONG|B)$/.test(parent?.tagName || "") ? parent.parentElement : parent;
+            return row && row !== card ? row : null;
+          }
+          return null;
+        };
+        const codeRow = labelRow("Codice prezzo:");
+        if (codeRow) codeRow.hidden = !String(plant.codicePrezzo || plant.codiceVocePrezzo || "").trim();
+        let numberRow = card.querySelector(".preventivo-number-row");
+        const numeroPreventivo = String(plant.numeroPreventivo || "").trim();
+        if (!numeroPreventivo) numberRow?.remove();
+        else if (!numberRow) {
+          numberRow = document.createElement("div");
+          numberRow.className = "preventivo-number-row";
+          numberRow.innerHTML = `<strong>Numero preventivo:</strong> ${escapeHtml(numeroPreventivo)}`;
+          const workRow = labelRow("Lavorazioni richieste:");
+          (workRow || card.firstElementChild)?.insertAdjacentElement(workRow ? "beforebegin" : "afterend", numberRow);
+        }
+        if ((!plant.preventivoPdfUrl && !plant.preventivoPdfFirestore) || card.querySelector(".preventivo-open-btn")) return;
         const actions = [...card.querySelectorAll("button")].find((button) => normalizeName(button.textContent) === "FATTO")?.parentElement;
         if (!actions) return;
         const button = document.createElement("button");
@@ -866,13 +888,28 @@
       observer.disconnect();
       if (!deletingComposition) {
         try {
-          await upsertNormalOccasionalPlant(metadata);
+          const saved = await upsertNormalOccasionalPlant(metadata);
+          const pdfLoaded = Boolean(saved.preventivoPdfUrl || saved.preventivoPdfFirestore);
+          const pdfInput = document.getElementById("lavoro-occasionale-preventivo");
+          const pdfStatus = document.getElementById("lavoro-occasionale-preventivo-status");
+          if (pdfLoaded) {
+            if (pdfInput) pdfInput.value = "";
+            if (pdfStatus) {
+              pdfStatus.className = "preventivo-status-success";
+              pdfStatus.textContent = `✅ PDF caricato: ${saved.preventivoPdfNome || "preventivo.pdf"}`;
+            }
+          }
           feedback.dataset.type = "success";
-          feedback.textContent = `✅ Squadra e impianto ${metadata.nome} salvati.`;
+          feedback.textContent = `✅ Squadra e impianto ${metadata.nome} salvati.${pdfLoaded ? " ✅ Preventivo PDF caricato." : ""}`;
         } catch (error) {
           state.lastError = error;
           feedback.dataset.type = "error";
-          feedback.textContent = `Squadra salvata, ma creazione impianto non riuscita: ${error?.message || error}`;
+          const pdfStatus = document.getElementById("lavoro-occasionale-preventivo-status");
+          if (pendingPreventivoFile && pdfStatus) {
+            pdfStatus.className = "preventivo-status-error";
+            pdfStatus.textContent = "❌ PDF non caricato. Il file è ancora selezionato: premi Fine per riprovare.";
+          }
+          feedback.textContent = `Squadra salvata, ma aggiornamento impianto non riuscito: ${error?.message || error}. Premi Fine per riprovare.`;
         }
       }
       window.setTimeout(() => {
@@ -956,6 +993,24 @@
       border-radius: 12px;
       background: #fff;
     }
+    .preventivo-status-success,
+    .preventivo-status-error {
+      display: block;
+      padding: 9px 11px;
+      border-radius: 10px;
+      font-weight: 800;
+    }
+    .preventivo-status-success {
+      border: 1px solid #22c55e;
+      background: #dcfce7;
+      color: #166534;
+    }
+    .preventivo-status-error {
+      border: 1px solid #ef4444;
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .preventivo-number-row { margin: 2px 0; }
     .preventivo-open-btn {
       width: 100%;
       margin-top: 8px;

@@ -26,6 +26,93 @@
     hideWidget();
   }
 
+  function formatEuro(value) {
+    const numeric = Number(value);
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(Number.isFinite(numeric) ? numeric : 0);
+  }
+
+  function parseItalianCurrency(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return NaN;
+    const normalized = raw
+      .replace(/\s/g, "")
+      .replace(/€/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^0-9.-]/g, "");
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) ? numeric : NaN;
+  }
+
+  function readRenderedCompletedSubtotal() {
+    try {
+      const elements = Array.from(document.querySelectorAll("body *"));
+      const match = elements.find((element) => {
+        if (element.children?.length) return false;
+        return /subtotale\s+lavorazioni\s+fatte/i.test(element.textContent || "");
+      });
+      if (!match) return NaN;
+      return parseItalianCurrency(match.textContent);
+    } catch (_) {
+      return NaN;
+    }
+  }
+
+  function getSelectedCompletedSubtotal() {
+    try {
+      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId && typeof commesseById !== "undefined") {
+        const commessa = commesseById?.get?.(selectedCommessaId) || {};
+        const candidates = [
+          commessa.completedSubtotal,
+          commessa.subtotalCompleted,
+          commessa.subtotaleLavorazioniFatte,
+          commessa.subtotaleFatto,
+          commessa.completedWorkSubtotal,
+          commessa.importoLavorazioniFatte
+        ];
+        for (const candidate of candidates) {
+          const numeric = Number(candidate);
+          if (Number.isFinite(numeric)) return numeric;
+        }
+      }
+    } catch (_) {}
+
+    const rendered = readRenderedCompletedSubtotal();
+    return Number.isFinite(rendered) ? rendered : 0;
+  }
+
+  function getDashboardStatItems() {
+    const remainingValue = document.getElementById("commessa-stat-ore");
+    const remainingItem = remainingValue?.closest?.(".commessa-stat-item");
+    const container = remainingItem?.parentElement;
+    if (!container) return [];
+    return Array.from(container.children).filter((element) => element.classList?.contains("commessa-stat-item"));
+  }
+
+  function updateCompletedAmountStat() {
+    const items = getDashboardStatItems();
+    if (items.length < 3) return;
+
+    const item = items[1];
+    const label = item.querySelector?.(".commessa-stat-label");
+    const value = item.querySelector?.(".commessa-stat-value")
+      || Array.from(item.querySelectorAll?.("[id]") || []).find((element) => element !== label)
+      || Array.from(item.children || []).find((element) => element !== label && !element.classList?.contains("commessa-stat-icon"));
+    if (!value || !label) return;
+
+    const subtotal = getSelectedCompletedSubtotal();
+    value.textContent = formatEuro(subtotal);
+    label.textContent = "lavorazioni fatte";
+    item.dataset.statAction = "lavorazioni-fatte";
+    item.setAttribute("aria-label", `Lavorazioni fatte: ${formatEuro(subtotal)}`);
+    item.title = `Subtotale lavorazioni fatte: ${formatEuro(subtotal)}`;
+  }
+
   function updateRemainingImpiantiStat() {
     if (typeof getSelectedCommessaDashboardStats !== "function") return;
 
@@ -44,16 +131,21 @@
     item.title = `${remaining} impiant${remaining === 1 ? "o" : "i"} ancora da fare`;
   }
 
+  function updateDashboardReplacementStats() {
+    updateCompletedAmountStat();
+    updateRemainingImpiantiStat();
+  }
+
   if (typeof updateCommessaDashboard === "function") {
     const originalUpdateCommessaDashboard = updateCommessaDashboard;
-    updateCommessaDashboard = function updateCommessaDashboardWithRemainingImpianti(...args) {
+    updateCommessaDashboard = function updateCommessaDashboardWithReplacementStats(...args) {
       const result = originalUpdateCommessaDashboard.apply(this, args);
-      updateRemainingImpiantiStat();
+      updateDashboardReplacementStats();
       return result;
     };
   }
 
   hideWidget();
-  updateRemainingImpiantiStat();
+  updateDashboardReplacementStats();
   window.CommessaProducedWidget = { select, stop, removed: true };
 })();

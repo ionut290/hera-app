@@ -65,7 +65,8 @@
     };
 
     try {
-      if (typeof commesseById !== "undefined" && commesseById instanceof Map) {
+      if (typeof commesseById !== "undefined" && commesseById instanceof Map
+        && !commesseById.has(COMMESSA_ID)) {
         commesseById.set(COMMESSA_ID, virtualCommessa);
       }
       if (typeof commesse !== "undefined" && Array.isArray(commesse)
@@ -219,6 +220,18 @@
       if (coordinate && !coordinate.textContent.trim()) {
         coordinate.textContent = String(first?.lavoroOccasionaleCoordinate || "").trim();
       }
+      if (composition && typeof setSquadraRowsFromData === "function") {
+        window.setTimeout(() => {
+          try {
+            setSquadraRowsFromData(composition);
+            if (typeof updateSquadraAutofillHint === "function") {
+              updateSquadraAutofillHint(`Composizione salvata per ${nome || "questo lavoro occasionale"}.`);
+            }
+          } catch (error) {
+            state.lastError = error;
+          }
+        }, 0);
+      }
     } catch (error) {
       state.lastError = error;
     }
@@ -322,18 +335,42 @@
     return items[0] || null;
   }
 
+  function applyWorkNamesToData() {
+    const items = getCompositions();
+    items.forEach((item) => {
+      try {
+        const composition = squadreHistoryByDate.get(item.dateKey)?.get(COMMESSA_ID);
+        if (!composition) return;
+        composition.commessaNome = item.nome;
+        composition.lavoroOccasionaleNome = item.nome;
+        composition.lavoroOccasionaleDescrizione = item.row?.lavoroOccasionaleDescrizione || "";
+      } catch (error) {
+        state.lastError = error;
+      }
+    });
+  }
+
   function dateFromCardText(text) {
     const match = String(text || "").match(/(\d{2})\/(\d{2})\/(\d{4})/);
     return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
   }
 
   function decorateSquadCards() {
-    document.querySelectorAll("h1, h2, h3, h4, strong, b").forEach((title) => {
-      if (normalizeName(title.textContent) !== COMMESSA_NOME) return;
+    applyWorkNamesToData();
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const matches = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const parent = node.parentElement;
+      if (!parent || parent.closest("#squadra-form, select, option, script, style")) continue;
+      if (normalizeName(node.nodeValue) === COMMESSA_NOME) matches.push(node);
+    }
+    matches.forEach((textNode) => {
+      const title = textNode.parentElement;
       const card = title.closest("article, section, .card, [class*='commessa']") || title.parentElement;
       const work = getLatestWork(dateFromCardText(card?.textContent));
       if (!work?.nome) return;
-      title.textContent = work.nome;
+      textNode.nodeValue = textNode.nodeValue.replace(/LAVORI\s+OCCASIONALI/i, work.nome);
       card?.querySelectorAll("span, small").forEach((badge) => {
         if (normalizeName(badge.textContent) === "OCCASIONALI") badge.textContent = "OCCASIONALE";
       });
@@ -434,6 +471,7 @@
     installMapCapture();
     observeSquadCards();
     restoreWorkNameFromComposition();
+    applyWorkNamesToData();
     refreshSuggestions();
     renderHistory();
     decorateSquadCards();

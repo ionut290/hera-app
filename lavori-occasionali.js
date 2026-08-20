@@ -163,6 +163,15 @@
       lavorazioniRichieste: metadata.descrizione,
       note: metadata.descrizione,
       lavoroOccasionale: true,
+      messaggioWhatsAppBase: buildOccasionalWhatsAppBase({
+        denominazione: metadata.nome,
+        comune: metadata.comune,
+        indirizzo: metadata.indirizzo,
+        descrizioneVia: metadata.indirizzo,
+        codicePrezzo: metadata.codicePrezzo,
+        numeroPreventivo: metadata.numeroPreventivo,
+        lavorazioniRichieste: metadata.descrizione
+      }),
       updatedAt: now,
       updatedBy: userId,
       updatedByName: operatorName
@@ -647,14 +656,8 @@
     return { date: `${parts.day}/${parts.month}/${parts.year}`, time: `${parts.hour}:${parts.minute}` };
   }
 
-  function buildOccasionalWhatsAppMessage(plant) {
-    const when = formatOccasionalDateTime();
-    const operator = typeof getOperatorDisplayName === "function"
-      ? getOperatorDisplayName()
-      : String(typeof currentUser !== "undefined" ? currentUser?.displayName || currentUser?.email || "-" : "-");
-    const lines = [
-      "✅ Attività: INTERVENTO DI MANUTENZIONE VERDE"
-    ];
+  function buildOccasionalWhatsAppBase(plant) {
+    const lines = ["✅ Attività: INTERVENTO DI MANUTENZIONE VERDE"];
     const numero = String(plant?.numeroPreventivo || "").trim();
     if (numero) lines.push(`🆔 Numero preventivo: ${numero}`);
     const codice = String(plant?.codicePrezzo || plant?.codiceVocePrezzo || "").trim();
@@ -663,12 +666,23 @@
       `🏗️ Cantiere: ${plant?.denominazione || plant?.nome || "-"}`,
       `📍 Comune: ${plant?.comune || "-"}`,
       `🛣️ Via: ${plant?.indirizzo || plant?.descrizioneVia || "-"}`,
-      `🛠️ Lavorazione: ${plant?.lavorazioniRichieste || plant?.tipologiaLavorazione || plant?.tipologiaIntervento || plant?.note || "-"}`,
+      `🛠️ Lavorazione: ${plant?.lavorazioniRichieste || plant?.tipologiaLavorazione || plant?.tipologiaIntervento || plant?.note || "-"}`
+    );
+    return lines.join("\n");
+  }
+
+  function buildOccasionalWhatsAppMessage(plant) {
+    const when = formatOccasionalDateTime();
+    const operator = typeof getOperatorDisplayName === "function"
+      ? getOperatorDisplayName()
+      : String(typeof currentUser !== "undefined" ? currentUser?.displayName || currentUser?.email || "-" : "-");
+    const base = String(plant?.messaggioWhatsAppBase || "").trim() || buildOccasionalWhatsAppBase(plant);
+    return [
+      base,
       `👷 Operatore: ${operator || "-"}`,
       `📅 Data: ${when.date}`,
       `🕒 Ora: ${when.time}`
-    );
-    return lines.join("\n");
+    ].join("\n");
   }
 
   function fileToBase64(file) {

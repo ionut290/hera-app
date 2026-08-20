@@ -13,6 +13,9 @@
     lastError: null
   };
   let selectorObserver = null;
+  let cardsObserver = null;
+  const leafletMaps = new Set();
+  const mapLayers = new WeakMap();
 
   const normalizeName = (value) => String(value || "")
     .trim()
@@ -26,6 +29,29 @@
   function getWorkName() {
     const editor = document.getElementById("lavoro-occasionale-nome");
     return normalizeName(editor?.textContent || editor?.value);
+  }
+
+  function getEditorText(id) {
+    const editor = document.getElementById(id);
+    return String(editor?.textContent || editor?.value || "").trim();
+  }
+
+  function parseCoordinates(value) {
+    const matches = String(value || "").replace(/;/g, ",").match(/-?\d+(?:[.,]\d+)?/g) || [];
+    if (matches.length < 2) return null;
+    const lat = Number(matches[0].replace(",", "."));
+    const lng = Number(matches[1].replace(",", "."));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng, text: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
+  }
+
+  function getWorkMetadata() {
+    const coordinates = parseCoordinates(getEditorText("lavoro-occasionale-coordinate"));
+    return {
+      nome: getWorkName(),
+      descrizione: getEditorText("lavoro-occasionale-descrizione"),
+      coordinates
+    };
   }
 
   function installVirtualCommessa() {
@@ -88,16 +114,27 @@
       '<div id="lavoro-occasionale-nome" class="lavoro-occasionale-editor" contenteditable="true"',
       ' role="textbox" aria-label="Commessa o luogo del lavoro occasionale"',
       ' data-placeholder="Es. Parco Zucca, Scuole Granarolo" spellcheck="true"></div>',
-      '<datalist id="lavori-occasionali-options"></datalist>',
-      '<small>Il nome verrà salvato nella squadra e nello storico del lavoro.</small>'
+      '<small>Il nome verrà mostrato nella scheda della squadra.</small>',
+      '<span class="lavoro-occasionale-subtitle">Descrizione del lavoro</span>',
+      '<div id="lavoro-occasionale-descrizione" class="lavoro-occasionale-editor lavoro-occasionale-description"',
+      ' contenteditable="true" role="textbox" aria-label="Descrizione del lavoro"',
+      ' data-placeholder="Es. Sfalcio, raccolta, potatura..." spellcheck="true"></div>',
+      '<span class="lavoro-occasionale-subtitle">Coordinate GPS</span>',
+      '<div id="lavoro-occasionale-coordinate" class="lavoro-occasionale-editor"',
+      ' contenteditable="true" role="textbox" aria-label="Coordinate GPS"',
+      ' data-placeholder="Es. 44.494887, 11.342616" inputmode="decimal"></div>',
+      '<small>Con coordinate valide il lavoro comparirà anche sulla mappa.</small>',
+      '<datalist id="lavori-occasionali-options"></datalist>'
     ].join("");
 
     const dateField = form.querySelector(".squadra-date-field");
     (dateField || commessaSelect).insertAdjacentElement("afterend", field);
 
-    const input = field.querySelector("[contenteditable]");
-    ["keydown", "keyup", "keypress", "beforeinput", "input"].forEach((eventName) => {
-      input.addEventListener(eventName, (event) => event.stopPropagation());
+    const input = field.querySelector("#lavoro-occasionale-nome");
+    field.querySelectorAll("[contenteditable]").forEach((editor) => {
+      ["keydown", "keyup", "keypress", "beforeinput", "input"].forEach((eventName) => {
+        editor.addEventListener(eventName, (event) => event.stopPropagation());
+      });
     });
     input.addEventListener("input", () => {
       if (input.textContent.length > 120) input.textContent = input.textContent.slice(0, 120);
@@ -149,11 +186,15 @@
     readSquadraRows = function readSquadraRowsWithOccasionalWork() {
       const rows = original.apply(this, arguments);
       if (!isOccasionalSelected()) return rows;
-      const nome = getWorkName();
+      const metadata = getWorkMetadata();
       return Array.isArray(rows) ? rows.map((row) => ({
         ...row,
         lavoroOccasionale: true,
-        lavoroOccasionaleNome: nome
+        lavoroOccasionaleNome: metadata.nome,
+        lavoroOccasionaleDescrizione: metadata.descrizione,
+        lavoroOccasionaleCoordinate: metadata.coordinates?.text || "",
+        lavoroOccasionaleLat: metadata.coordinates?.lat ?? null,
+        lavoroOccasionaleLng: metadata.coordinates?.lng ?? null
       })) : rows;
     };
     state.rowsWrapped = true;
@@ -170,6 +211,14 @@
       const nome = normalizeName(first?.lavoroOccasionaleNome || composition?.lavoroOccasionaleNome);
       const input = document.getElementById("lavoro-occasionale-nome");
       if (input && !normalizeName(input.textContent)) input.textContent = nome;
+      const description = document.getElementById("lavoro-occasionale-descrizione");
+      if (description && !description.textContent.trim()) {
+        description.textContent = String(first?.lavoroOccasionaleDescrizione || "").trim();
+      }
+      const coordinate = document.getElementById("lavoro-occasionale-coordinate");
+      if (coordinate && !coordinate.textContent.trim()) {
+        coordinate.textContent = String(first?.lavoroOccasionaleCoordinate || "").trim();
+      }
     } catch (error) {
       state.lastError = error;
     }
@@ -178,8 +227,21 @@
   function validateBeforeCoreSave(event) {
     if (!isOccasionalSelected()) return;
     const input = document.getElementById("lavoro-occasionale-nome");
-    const nome = getWorkName();
+    const metadata = getWorkMetadata();
+    const nome = metadata.nome;
     if (nome) {
+      const coordinateText = getEditorText("lavoro-occasionale-coordinate");
+      if (coordinateText && !metadata.coordinates) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        document.getElementById("lavoro-occasionale-coordinate")?.focus();
+        const feedback = document.getElementById("squadra-feedback");
+        if (feedback) {
+          feedback.dataset.type = "error";
+          feedback.textContent = "Coordinate non valide. Usa il formato: 44.494887, 11.342616";
+        }
+        return;
+      }
       input.textContent = nome;
       return;
     }
@@ -253,15 +315,129 @@
     renderHistory();
   }
 
+  function getLatestWork(dateKey = "") {
+    const items = getCompositions()
+      .filter((item) => !dateKey || item.dateKey === dateKey)
+      .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)));
+    return items[0] || null;
+  }
+
+  function dateFromCardText(text) {
+    const match = String(text || "").match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
+  }
+
+  function decorateSquadCards() {
+    document.querySelectorAll("h1, h2, h3, h4, strong, b").forEach((title) => {
+      if (normalizeName(title.textContent) !== COMMESSA_NOME) return;
+      const card = title.closest("article, section, .card, [class*='commessa']") || title.parentElement;
+      const work = getLatestWork(dateFromCardText(card?.textContent));
+      if (!work?.nome) return;
+      title.textContent = work.nome;
+      card?.querySelectorAll("span, small").forEach((badge) => {
+        if (normalizeName(badge.textContent) === "OCCASIONALI") badge.textContent = "OCCASIONALE";
+      });
+      if (work.row?.lavoroOccasionaleDescrizione && !card?.querySelector(".lavoro-occasionale-card-description")) {
+        const description = document.createElement("p");
+        description.className = "lavoro-occasionale-card-description";
+        description.textContent = `📋 ${work.row.lavoroOccasionaleDescrizione}`;
+        title.parentElement?.insertAdjacentElement("afterend", description);
+      }
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[char]));
+  }
+
+  function registerMap(map) {
+    if (map && typeof map.eachLayer === "function" && typeof map.getContainer === "function") leafletMaps.add(map);
+  }
+
+  function discoverMaps() {
+    ["map", "fullscreenMap", "commessaMap", "impiantiMap", "globalMap"].forEach((name) => {
+      try { registerMap(window[name]); } catch (_) {}
+    });
+  }
+
+  function syncMapMarkers() {
+    if (typeof L === "undefined") return;
+    discoverMaps();
+    const points = getCompositions().filter((item) => {
+      const lat = Number(item.row?.lavoroOccasionaleLat);
+      const lng = Number(item.row?.lavoroOccasionaleLng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
+    });
+    leafletMaps.forEach((map) => {
+      try {
+        mapLayers.get(map)?.remove();
+        const group = L.layerGroup();
+        points.forEach((item) => {
+          const marker = L.circleMarker(
+            [Number(item.row.lavoroOccasionaleLat), Number(item.row.lavoroOccasionaleLng)],
+            { radius: 9, color: "#b45309", weight: 3, fillColor: "#f59e0b", fillOpacity: 0.9 }
+          );
+          const description = item.row?.lavoroOccasionaleDescrizione
+            ? `<br><span>${escapeHtml(item.row.lavoroOccasionaleDescrizione)}</span>`
+            : "";
+          marker.bindPopup(`<strong>${escapeHtml(item.nome)}</strong>${description}<br><small>${escapeHtml(item.dateKey)}</small>`);
+          marker.addTo(group);
+        });
+        group.addTo(map);
+        mapLayers.set(map, group);
+      } catch (error) {
+        state.lastError = error;
+      }
+    });
+  }
+
+  function installMapCapture() {
+    try {
+      if (typeof L === "undefined" || typeof L.map !== "function" || L.map.__heraOccasionalWrapped) return;
+      const originalMap = L.map;
+      const wrappedMap = function heraOccasionalLeafletMap() {
+        const map = originalMap.apply(this, arguments);
+        registerMap(map);
+        window.setTimeout(syncMapMarkers, 0);
+        return map;
+      };
+      Object.assign(wrappedMap, originalMap);
+      wrappedMap.__heraOccasionalWrapped = true;
+      L.map = wrappedMap;
+    } catch (error) {
+      state.lastError = error;
+    }
+  }
+
+  function observeSquadCards() {
+    if (cardsObserver || !document.body) return;
+    let queued = false;
+    cardsObserver = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        decorateSquadCards();
+      });
+    });
+    cardsObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
   function refresh() {
     installVirtualCommessa();
     observeCommessaSelector();
     installWorkField();
     wrapRowReader();
     installHistory();
+    installMapCapture();
+    observeSquadCards();
     restoreWorkNameFromComposition();
     refreshSuggestions();
     renderHistory();
+    decorateSquadCards();
+    syncMapMarkers();
     state.installed = state.virtualCommessaReady && state.rowsWrapped;
   }
 
@@ -273,11 +449,27 @@
   }, { once: true });
 
   document.getElementById("squadra-form")?.addEventListener("submit", validateBeforeCoreSave, true);
+  document.getElementById("squadra-form")?.addEventListener("submit", () => {
+    const feedback = document.getElementById("squadra-feedback");
+    if (!feedback || !isOccasionalSelected()) return;
+    const observer = new MutationObserver(() => {
+      if (feedback.dataset.type !== "success") return;
+      observer.disconnect();
+      window.setTimeout(() => {
+        renderHistory();
+        decorateSquadCards();
+        syncMapMarkers();
+      }, 0);
+    });
+    observer.observe(feedback, { childList: true, subtree: true, attributes: true });
+    window.setTimeout(() => observer.disconnect(), 20000);
+  });
   document.getElementById("squadra-commessa")?.addEventListener("change", () => {
     restoreWorkNameFromComposition();
     renderHistory();
   });
   document.getElementById("squadra-riferimento")?.addEventListener("change", restoreWorkNameFromComposition);
+  document.addEventListener("click", () => window.setTimeout(syncMapMarkers, 350), true);
 
   const style = document.createElement("style");
   style.textContent = `
@@ -306,12 +498,25 @@
       color: #7b879c;
       pointer-events: none;
     }
+    .lavoro-occasionale-description {
+      min-height: 72px;
+    }
+    .lavoro-occasionale-subtitle {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .lavoro-occasionale-card-description {
+      margin: 7px 0;
+      color: #334155;
+    }
   `;
   document.head.appendChild(style);
 
   window.HeraLavoriOccasionali = {
     installed: true,
-    version: "1.0.0",
+    version: "1.1.0",
     commessaId: COMMESSA_ID,
     refresh,
     getState: () => ({ ...state, lastError: state.lastError ? String(state.lastError?.message || state.lastError) : null })

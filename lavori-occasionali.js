@@ -699,10 +699,8 @@
     if (window.__heraOccasionalFattoPdfInstalled) return true;
     if (typeof safeOpenWhatsAppMessage !== "function") return false;
     const originalSafeOpen = safeOpenWhatsAppMessage;
-    safeOpenWhatsAppMessage = function safeOpenWhatsAppMessageWithOccasionalPdf(message) {
+    const schedulePdfShare = (result) => {
       const pending = pendingOccasionalSharePlant;
-      const outgoingMessage = pending?.plant ? buildOccasionalWhatsAppMessage(pending.plant) : message;
-      const result = originalSafeOpen.call(this, outgoingMessage);
       if ((!pending?.plant?.preventivoPdfUrl && !pending?.plant?.preventivoPdfFirestore) || pending.pdfPromise || !result) return result;
       pending.messageOpened = true;
       pending.pdfPromise = new Promise((resolve) => window.setTimeout(resolve, 8000))
@@ -720,6 +718,37 @@
         });
       return result;
     };
+    safeOpenWhatsAppMessage = function safeOpenWhatsAppMessageWithOccasionalPdf(message) {
+      const pending = pendingOccasionalSharePlant;
+      const outgoingMessage = pending?.plant ? buildOccasionalWhatsAppMessage(pending.plant) : message;
+      const result = originalSafeOpen.call(this, outgoingMessage);
+      return schedulePdfShare(result);
+    };
+
+    const installOpenWhatsAppBridge = () => {
+      const originalOpen = window.openWhatsApp;
+      if (typeof originalOpen !== "function" || originalOpen.__occasionalMessageWrapped) return false;
+      const wrappedOpen = function openWhatsAppWithOccasionalMessage(value) {
+        const pending = pendingOccasionalSharePlant;
+        let nextValue = value;
+        if (pending?.plant) {
+          const customMessage = buildOccasionalWhatsAppMessage(pending.plant);
+          try {
+            const parsed = new URL(String(value || ""));
+            parsed.searchParams.set("text", customMessage);
+            nextValue = parsed.toString();
+          } catch (_) {
+            nextValue = `whatsapp://send?text=${encodeURIComponent(customMessage)}`;
+          }
+        }
+        return schedulePdfShare(originalOpen.call(this, nextValue));
+      };
+      wrappedOpen.__occasionalMessageWrapped = true;
+      wrappedOpen.__original = originalOpen;
+      window.openWhatsApp = wrappedOpen;
+      return true;
+    };
+    installOpenWhatsAppBridge();
 
     const installPhotoBridge = () => {
       if (typeof shareWhazzupPhotosNativeAndroid !== "function" || shareWhazzupPhotosNativeAndroid.__occasionalPdfWrapped) return false;
@@ -744,7 +773,10 @@
       return true;
     };
     installPhotoBridge();
-    [500, 1500, 4000].forEach((delay) => window.setTimeout(installPhotoBridge, delay));
+    [500, 1500, 4000].forEach((delay) => window.setTimeout(() => {
+      installOpenWhatsAppBridge();
+      installPhotoBridge();
+    }, delay));
     window.__heraOccasionalFattoPdfInstalled = true;
     return true;
   }

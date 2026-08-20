@@ -592,8 +592,18 @@
   function decorateOccasionalPlantCards() {
     getOccasionalPlants().forEach((plant) => {
       const name = normalizeName(plant.denominazione || plant.nome);
-      document.querySelectorAll("article, .item-card, [class*='impianto']").forEach((card) => {
-        if (!normalizeName(card.textContent).includes(name)) return;
+      document.querySelectorAll("button").forEach((fattoButton) => {
+        if (normalizeName(fattoButton.textContent) !== "FATTO") return;
+        let card = fattoButton.parentElement;
+        while (card && card !== document.body) {
+          const hasName = normalizeName(card.textContent).includes(name);
+          const hasNavigate = [...card.querySelectorAll("button")].some((button) => normalizeName(button.textContent) === "NAVIGA");
+          if (hasName && hasNavigate) break;
+          card = card.parentElement;
+        }
+        if (!card || card === document.body || card.dataset.occasionalPlantDecorated === String(plant.id || plant.docId || name)) return;
+        card.dataset.occasionalPlantDecorated = String(plant.id || plant.docId || name);
+        card.querySelectorAll(".preventivo-number-row").forEach((row, index) => { if (index) row.remove(); });
         const labelRow = (label) => {
           const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
           while (walker.nextNode()) {
@@ -617,7 +627,7 @@
           (workRow || card.firstElementChild)?.insertAdjacentElement(workRow ? "beforebegin" : "afterend", numberRow);
         }
         if ((!plant.preventivoPdfUrl && !plant.preventivoPdfFirestore) || card.querySelector(".preventivo-open-btn")) return;
-        const actions = [...card.querySelectorAll("button")].find((button) => normalizeName(button.textContent) === "FATTO")?.parentElement;
+        const actions = fattoButton.parentElement;
         if (!actions) return;
         const button = document.createElement("button");
         button.type = "button";
@@ -627,6 +637,38 @@
         actions.insertAdjacentElement("afterend", button);
       });
     });
+  }
+
+  function formatOccasionalDateTime(date = new Date()) {
+    const parts = new Intl.DateTimeFormat("it-IT", {
+      timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).formatToParts(date).reduce((output, item) => ({ ...output, [item.type]: item.value }), {});
+    return { date: `${parts.day}/${parts.month}/${parts.year}`, time: `${parts.hour}:${parts.minute}` };
+  }
+
+  function buildOccasionalWhatsAppMessage(plant) {
+    const when = formatOccasionalDateTime();
+    const operator = typeof getOperatorDisplayName === "function"
+      ? getOperatorDisplayName()
+      : String(typeof currentUser !== "undefined" ? currentUser?.displayName || currentUser?.email || "-" : "-");
+    const lines = [
+      "✅ Attività: INTERVENTO DI MANUTENZIONE VERDE"
+    ];
+    const numero = String(plant?.numeroPreventivo || "").trim();
+    if (numero) lines.push(`🆔 Numero preventivo: ${numero}`);
+    const codice = String(plant?.codicePrezzo || plant?.codiceVocePrezzo || "").trim();
+    if (codice) lines.push(`🏷️ Codice prezzo: ${codice}`);
+    lines.push(
+      `🏗️ Cantiere: ${plant?.denominazione || plant?.nome || "-"}`,
+      `📍 Comune: ${plant?.comune || "-"}`,
+      `🛣️ Via: ${plant?.indirizzo || plant?.descrizioneVia || "-"}`,
+      `🛠️ Lavorazione: ${plant?.lavorazioniRichieste || plant?.tipologiaLavorazione || plant?.tipologiaIntervento || plant?.note || "-"}`,
+      `👷 Operatore: ${operator || "-"}`,
+      `📅 Data: ${when.date}`,
+      `🕒 Ora: ${when.time}`
+    );
+    return lines.join("\n");
   }
 
   function fileToBase64(file) {
@@ -658,8 +700,9 @@
     if (typeof safeOpenWhatsAppMessage !== "function") return false;
     const originalSafeOpen = safeOpenWhatsAppMessage;
     safeOpenWhatsAppMessage = function safeOpenWhatsAppMessageWithOccasionalPdf(message) {
-      const result = originalSafeOpen.apply(this, arguments);
       const pending = pendingOccasionalSharePlant;
+      const outgoingMessage = pending?.plant ? buildOccasionalWhatsAppMessage(pending.plant) : message;
+      const result = originalSafeOpen.call(this, outgoingMessage);
       if ((!pending?.plant?.preventivoPdfUrl && !pending?.plant?.preventivoPdfFirestore) || pending.pdfPromise || !result) return result;
       pending.messageOpened = true;
       pending.pdfPromise = new Promise((resolve) => window.setTimeout(resolve, 8000))
@@ -712,9 +755,15 @@
     try {
       if (String(selectedCommessaId || "") !== COMMESSA_ID) return;
     } catch (_) { return; }
-    const card = button.closest("article, .item-card, [class*='impianto']") || button.parentElement;
-    const plant = getOccasionalPlants().find((item) => normalizeName(card?.textContent).includes(normalizeName(item.denominazione || item.nome)));
-    if (!plant?.preventivoPdfUrl && !plant?.preventivoPdfFirestore) return;
+    let card = button.parentElement;
+    let plant = null;
+    const plants = getOccasionalPlants();
+    while (card && card !== document.body && !plant) {
+      const cardText = normalizeName(card.textContent);
+      plant = plants.find((item) => cardText.includes(normalizeName(item.denominazione || item.nome))) || null;
+      if (!plant) card = card.parentElement;
+    }
+    if (!plant) return;
     pendingOccasionalSharePlant = { plant, messageOpened: false, pdfPromise: null };
     window.setTimeout(() => {
       if (pendingOccasionalSharePlant?.plant === plant) pendingOccasionalSharePlant = null;

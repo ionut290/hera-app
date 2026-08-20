@@ -876,10 +876,17 @@
         }
       }
       window.setTimeout(() => {
+        installVirtualCommessa();
+        installWorkField();
+        restoreWorkNameFromComposition();
         renderHistory();
         decorateSquadCards();
         decorateOccasionalPlantCards();
       }, 0);
+      [150, 600].forEach((delay) => window.setTimeout(() => {
+        installVirtualCommessa();
+        installWorkField();
+      }, delay));
     });
     observer.observe(feedback, { childList: true, subtree: true, attributes: true });
     window.setTimeout(() => observer.disconnect(), 20000);

@@ -54,6 +54,67 @@
     };
   }
 
+  function stableHash(value) {
+    let hash = 2166136261;
+    const text = String(value || "");
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function occasionalPlantId(metadata) {
+    const slug = metadata.nome.toLocaleLowerCase("it-IT")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "lavoro";
+    return `occasionale-${slug}-${stableHash(`${metadata.nome}|${metadata.coordinates?.text || ""}`)}`;
+  }
+
+  async function upsertNormalOccasionalPlant(metadata = getWorkMetadata()) {
+    if (!metadata.nome || !metadata.coordinates) throw new Error("Nome o coordinate del lavoro occasionale mancanti.");
+    if (typeof db === "undefined" || !db) throw new Error("Database non disponibile.");
+    const collectionName = typeof getCommesseCollectionName === "function"
+      ? getCommesseCollectionName()
+      : "commesse";
+    const plantId = occasionalPlantId(metadata);
+    const now = typeof firebase !== "undefined" && firebase.firestore?.FieldValue?.serverTimestamp
+      ? firebase.firestore.FieldValue.serverTimestamp()
+      : new Date();
+    const operatorName = typeof getOperatorDisplayName === "function" ? getOperatorDisplayName() : "";
+    const userId = typeof currentUser !== "undefined" ? String(currentUser?.uid || "") : "";
+    const payload = {
+      id: plantId,
+      commessaId: COMMESSA_ID,
+      idSap: "",
+      denominazione: metadata.nome,
+      nome: metadata.nome,
+      comune: "",
+      indirizzo: "",
+      descrizioneVia: "",
+      latitudine: metadata.coordinates.lat,
+      longitudine: metadata.coordinates.lng,
+      gpsY: metadata.coordinates.lat,
+      gpsX: metadata.coordinates.lng,
+      coordinate: metadata.coordinates.text,
+      tipologiaImpianto: "LAVORO OCCASIONALE",
+      tipologiaIntervento: metadata.descrizione,
+      tipologiaLavorazione: metadata.descrizione,
+      lavorazioniRichieste: metadata.descrizione,
+      note: metadata.descrizione,
+      lavoroOccasionale: true,
+      updatedAt: now,
+      updatedBy: userId,
+      updatedByName: operatorName
+    };
+    await db.collection(collectionName)
+      .doc(COMMESSA_ID)
+      .collection("impianti")
+      .doc(plantId)
+      .set(payload, { merge: true });
+    return { plantId, metadata };
+  }
+
   function installVirtualCommessa() {
     const virtualCommessa = {
       id: COMMESSA_ID,
@@ -120,7 +181,7 @@
       '<div id="lavoro-occasionale-descrizione" class="lavoro-occasionale-editor lavoro-occasionale-description"',
       ' contenteditable="true" role="textbox" aria-label="Descrizione del lavoro"',
       ' data-placeholder="Es. Sfalcio, raccolta, potatura..." spellcheck="true"></div>',
-      '<span class="lavoro-occasionale-subtitle">Coordinate GPS</span>',
+      '<span class="lavoro-occasionale-subtitle">Coordinate GPS *</span>',
       '<div id="lavoro-occasionale-coordinate" class="lavoro-occasionale-editor"',
       ' contenteditable="true" role="textbox" aria-label="Coordinate GPS"',
       ' data-placeholder="Es. 44.494887, 11.342616" inputmode="decimal"></div>',
@@ -239,19 +300,21 @@
 
   function validateBeforeCoreSave(event) {
     if (!isOccasionalSelected()) return;
+    const rows = typeof readSquadraRows === "function" ? readSquadraRows() : [];
+    if (!Array.isArray(rows) || !rows.length) return;
     const input = document.getElementById("lavoro-occasionale-nome");
     const metadata = getWorkMetadata();
     const nome = metadata.nome;
     if (nome) {
       const coordinateText = getEditorText("lavoro-occasionale-coordinate");
-      if (coordinateText && !metadata.coordinates) {
+      if (!coordinateText || !metadata.coordinates) {
         event.preventDefault();
         event.stopImmediatePropagation();
         document.getElementById("lavoro-occasionale-coordinate")?.focus();
         const feedback = document.getElementById("squadra-feedback");
         if (feedback) {
           feedback.dataset.type = "error";
-          feedback.textContent = "Coordinate non valide. Usa il formato: 44.494887, 11.342616";
+          feedback.textContent = "Inserisci coordinate valide nel formato: 44.494887, 11.342616";
         }
         return;
       }
@@ -374,12 +437,6 @@
       card?.querySelectorAll("span, small").forEach((badge) => {
         if (normalizeName(badge.textContent) === "OCCASIONALI") badge.textContent = "OCCASIONALE";
       });
-      if (work.row?.lavoroOccasionaleDescrizione && !card?.querySelector(".lavoro-occasionale-card-description")) {
-        const description = document.createElement("p");
-        description.className = "lavoro-occasionale-card-description";
-        description.textContent = `📋 ${work.row.lavoroOccasionaleDescrizione}`;
-        title.parentElement?.insertAdjacentElement("afterend", description);
-      }
     });
   }
 
@@ -456,6 +513,8 @@
       queued = true;
       queueMicrotask(() => {
         queued = false;
+        installVirtualCommessa();
+        installWorkField();
         decorateSquadCards();
       });
     });
@@ -468,14 +527,12 @@
     installWorkField();
     wrapRowReader();
     installHistory();
-    installMapCapture();
     observeSquadCards();
     restoreWorkNameFromComposition();
     applyWorkNamesToData();
     refreshSuggestions();
     renderHistory();
     decorateSquadCards();
-    syncMapMarkers();
     state.installed = state.virtualCommessaReady && state.rowsWrapped;
   }
 
@@ -490,13 +547,26 @@
   document.getElementById("squadra-form")?.addEventListener("submit", () => {
     const feedback = document.getElementById("squadra-feedback");
     if (!feedback || !isOccasionalSelected()) return;
-    const observer = new MutationObserver(() => {
+    const rows = typeof readSquadraRows === "function" ? readSquadraRows() : [];
+    const deletingComposition = !Array.isArray(rows) || !rows.length;
+    const metadata = getWorkMetadata();
+    const observer = new MutationObserver(async () => {
       if (feedback.dataset.type !== "success") return;
       observer.disconnect();
+      if (!deletingComposition) {
+        try {
+          await upsertNormalOccasionalPlant(metadata);
+          feedback.dataset.type = "success";
+          feedback.textContent = `✅ Squadra e impianto ${metadata.nome} salvati.`;
+        } catch (error) {
+          state.lastError = error;
+          feedback.dataset.type = "error";
+          feedback.textContent = `Squadra salvata, ma creazione impianto non riuscita: ${error?.message || error}`;
+        }
+      }
       window.setTimeout(() => {
         renderHistory();
         decorateSquadCards();
-        syncMapMarkers();
       }, 0);
     });
     observer.observe(feedback, { childList: true, subtree: true, attributes: true });
@@ -507,7 +577,6 @@
     renderHistory();
   });
   document.getElementById("squadra-riferimento")?.addEventListener("change", restoreWorkNameFromComposition);
-  document.addEventListener("click", () => window.setTimeout(syncMapMarkers, 350), true);
 
   const style = document.createElement("style");
   style.textContent = `
@@ -554,8 +623,9 @@
 
   window.HeraLavoriOccasionali = {
     installed: true,
-    version: "1.1.0",
+    version: "1.2.0",
     commessaId: COMMESSA_ID,
+    firestoreScope: "commesse/lavori-occasionali/impianti",
     refresh,
     getState: () => ({ ...state, lastError: state.lastError ? String(state.lastError?.message || state.lastError) : null })
   };

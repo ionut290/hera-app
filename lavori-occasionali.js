@@ -9,8 +9,10 @@
     installed: false,
     rowsWrapped: false,
     virtualCommessaReady: false,
+    selectorObserved: false,
     lastError: null
   };
+  let selectorObserver = null;
 
   const normalizeName = (value) => String(value || "")
     .trim()
@@ -56,6 +58,20 @@
     });
 
     state.virtualCommessaReady = Boolean(document.querySelector(`#squadra-commessa option[value="${COMMESSA_ID}"]`));
+  }
+
+  function observeCommessaSelector() {
+    const select = document.getElementById("squadra-commessa");
+    if (!select || selectorObserver) return;
+    selectorObserver = new MutationObserver(() => {
+      if (select.querySelector(`option[value="${COMMESSA_ID}"]`)) return;
+      queueMicrotask(() => {
+        installVirtualCommessa();
+        installWorkField();
+      });
+    });
+    selectorObserver.observe(select, { childList: true });
+    state.selectorObserved = true;
   }
 
   function installWorkField() {
@@ -231,6 +247,7 @@
 
   function refresh() {
     installVirtualCommessa();
+    observeCommessaSelector();
     installWorkField();
     wrapRowReader();
     installHistory();

@@ -78,6 +78,55 @@
     return `occasionale-${slug}-${stableHash(`${metadata.nome}|${metadata.coordinates?.text || ""}`)}`;
   }
 
+  async function savePreventivoFirestore(plantRef, file) {
+    const base64 = await fileToBase64(file);
+    const chunkSize = 700000;
+    const uploadId = `${Date.now()}-${stableHash(file.name)}`;
+    const chunks = [];
+    for (let offset = 0; offset < base64.length; offset += chunkSize) chunks.push(base64.slice(offset, offset + chunkSize));
+    for (let index = 0; index < chunks.length; index += 1) {
+      await plantRef.collection("preventiviPdf").doc(`${uploadId}-${String(index).padStart(3, "0")}`).set({
+        uploadId, index, data: chunks[index]
+      });
+    }
+    return {
+      preventivoPdfFirestore: true,
+      preventivoPdfUploadId: uploadId,
+      preventivoPdfChunks: chunks.length,
+      preventivoPdfNome: file.name,
+      preventivoPdfTipo: "application/pdf",
+      preventivoPdfDimensione: file.size
+    };
+  }
+
+  function occasionalPlantRef(plant) {
+    const collectionName = typeof getCommesseCollectionName === "function" ? getCommesseCollectionName() : "commesse";
+    const plantId = String(plant?.id || plant?.docId || "");
+    return db.collection(collectionName).doc(COMMESSA_ID).collection("impianti").doc(plantId);
+  }
+
+  async function loadPreventivoBlob(plant) {
+    if (plant?.preventivoPdfUrl) {
+      const response = await fetch(String(plant.preventivoPdfUrl), { cache: "no-store" });
+      if (!response.ok) throw new Error("Preventivo PDF non raggiungibile");
+      return response.blob();
+    }
+    const uploadId = String(plant?.preventivoPdfUploadId || "");
+    const count = Number(plant?.preventivoPdfChunks || 0);
+    if (!uploadId || !count) throw new Error("Preventivo PDF non disponibile");
+    const parts = [];
+    for (let index = 0; index < count; index += 1) {
+      const snapshot = await occasionalPlantRef(plant).collection("preventiviPdf")
+        .doc(`${uploadId}-${String(index).padStart(3, "0")}`).get();
+      if (!snapshot.exists) throw new Error("Una parte del preventivo PDF è mancante");
+      parts.push(String(snapshot.data()?.data || ""));
+    }
+    const binary = atob(parts.join(""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: "application/pdf" });
+  }
+
   async function upsertNormalOccasionalPlant(metadata = getWorkMetadata()) {
     if (!metadata.nome || !metadata.coordinates) throw new Error("Nome o coordinate del lavoro occasionale mancanti.");
     if (typeof db === "undefined" || !db) throw new Error("Database non disponibile.");
@@ -90,25 +139,7 @@
       : new Date();
     const operatorName = typeof getOperatorDisplayName === "function" ? getOperatorDisplayName() : "";
     const userId = typeof currentUser !== "undefined" ? String(currentUser?.uid || "") : "";
-    let preventivo = {};
-    if (pendingPreventivoFile) {
-      if (pendingPreventivoFile.type !== "application/pdf" && !pendingPreventivoFile.name.toLowerCase().endsWith(".pdf")) {
-        throw new Error("Il preventivo deve essere un file PDF.");
-      }
-      if (pendingPreventivoFile.size > 20 * 1024 * 1024) throw new Error("Il PDF supera il limite di 20 MB.");
-      if (typeof firebase === "undefined" || !firebase.storage) throw new Error("Archivio PDF non disponibile.");
-      const safeName = pendingPreventivoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "preventivo.pdf";
-      const storagePath = `lavori-occasionali/preventivi/${plantId}/${Date.now()}-${safeName}`;
-      const storageRef = firebase.storage().ref(storagePath);
-      await storageRef.put(pendingPreventivoFile, { contentType: "application/pdf" });
-      preventivo = {
-        preventivoPdfUrl: await storageRef.getDownloadURL(),
-        preventivoPdfNome: pendingPreventivoFile.name,
-        preventivoPdfStoragePath: storagePath,
-        preventivoPdfTipo: "application/pdf",
-        preventivoPdfDimensione: pendingPreventivoFile.size
-      };
-    }
+    const plantRef = db.collection(collectionName).doc(COMMESSA_ID).collection("impianti").doc(plantId);
     const payload = {
       id: plantId,
       commessaId: COMMESSA_ID,
@@ -134,14 +165,44 @@
       lavoroOccasionale: true,
       updatedAt: now,
       updatedBy: userId,
-      updatedByName: operatorName,
-      ...preventivo
+      updatedByName: operatorName
     };
-    await db.collection(collectionName)
-      .doc(COMMESSA_ID)
-      .collection("impianti")
-      .doc(plantId)
-      .set(payload, { merge: true });
+    await plantRef.set(payload, { merge: true });
+    let preventivo = {};
+    if (pendingPreventivoFile) {
+      if (pendingPreventivoFile.type !== "application/pdf" && !pendingPreventivoFile.name.toLowerCase().endsWith(".pdf")) {
+        throw new Error("Il preventivo deve essere un file PDF.");
+      }
+      if (pendingPreventivoFile.size > 20 * 1024 * 1024) throw new Error("Il PDF supera il limite di 20 MB.");
+      if (typeof firebase === "undefined" || !firebase.storage) throw new Error("Archivio PDF non disponibile.");
+      const safeName = pendingPreventivoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "preventivo.pdf";
+      const storagePath = `lavori-occasionali/preventivi/${plantId}/${Date.now()}-${safeName}`;
+      try {
+        const storageRef = firebase.storage().ref(storagePath);
+        const uploadTask = storageRef.put(pendingPreventivoFile, { contentType: "application/pdf" });
+        let timeoutId;
+        await Promise.race([
+          uploadTask,
+          new Promise((_, reject) => {
+            timeoutId = window.setTimeout(() => {
+              try { uploadTask.cancel(); } catch (_) {}
+              reject(new Error("Firebase Storage non raggiungibile: uso archivio alternativo."));
+            }, 15000);
+          })
+        ]).finally(() => window.clearTimeout(timeoutId));
+        preventivo = {
+          preventivoPdfUrl: await storageRef.getDownloadURL(),
+          preventivoPdfNome: pendingPreventivoFile.name,
+          preventivoPdfStoragePath: storagePath,
+          preventivoPdfTipo: "application/pdf",
+          preventivoPdfDimensione: pendingPreventivoFile.size
+        };
+      } catch (storageError) {
+        state.lastError = storageError;
+        preventivo = await savePreventivoFirestore(plantRef, pendingPreventivoFile);
+      }
+    }
+    if (Object.keys(preventivo).length) await plantRef.set(preventivo, { merge: true });
     pendingPreventivoFile = null;
     return { plantId, metadata, ...preventivo };
   }
@@ -488,10 +549,16 @@
     document.body.style.overflow = "";
   }
 
-  function openPreventivoViewer(plant) {
-    const url = String(plant?.preventivoPdfUrl || "").trim();
-    if (!url) return;
+  async function openPreventivoViewer(plant) {
+    if (!plant?.preventivoPdfUrl && !plant?.preventivoPdfFirestore) return;
     closePreventivoViewer();
+    let url = String(plant?.preventivoPdfUrl || "").trim();
+    let temporaryUrl = "";
+    if (!url) {
+      const blob = await loadPreventivoBlob(plant);
+      temporaryUrl = URL.createObjectURL(blob);
+      url = temporaryUrl;
+    }
     preventivoViewer = document.createElement("section");
     preventivoViewer.className = "preventivo-pdf-fullscreen";
     preventivoViewer.setAttribute("role", "dialog");
@@ -502,10 +569,13 @@
       <button class="btn btn-primary" type="button" data-share>Condividi</button>
       <button class="btn" type="button" data-close>✕</button></div></header>
       <iframe title="Preventivo PDF" src="${escapeHtml(url)}"></iframe>`;
-    preventivoViewer.querySelector("[data-close]").addEventListener("click", closePreventivoViewer);
+    preventivoViewer.querySelector("[data-close]").addEventListener("click", () => {
+      if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
+      closePreventivoViewer();
+    });
     preventivoViewer.querySelector("[data-share]").addEventListener("click", async () => {
       try {
-        const blob = await fetch(url).then((response) => response.blob());
+        const blob = await loadPreventivoBlob(plant);
         const file = new File([blob], plant.preventivoPdfNome || "preventivo.pdf", { type: "application/pdf" });
         if (navigator.share && navigator.canShare?.({ files: [file] })) {
           await navigator.share({ title: "Preventivo", files: [file] });
@@ -521,7 +591,7 @@
 
   function decorateOccasionalPlantCards() {
     getOccasionalPlants().forEach((plant) => {
-      if (!plant.preventivoPdfUrl) return;
+      if (!plant.preventivoPdfUrl && !plant.preventivoPdfFirestore) return;
       const name = normalizeName(plant.denominazione || plant.nome);
       document.querySelectorAll("article, .item-card, [class*='impianto']").forEach((card) => {
         if (!normalizeName(card.textContent).includes(name) || card.querySelector(".preventivo-open-btn")) return;
@@ -547,9 +617,7 @@
   }
 
   async function sharePreventivoNative(plugin, plant) {
-    const response = await fetch(String(plant.preventivoPdfUrl), { cache: "no-store" });
-    if (!response.ok) throw new Error("Preventivo PDF non raggiungibile");
-    const blob = await response.blob();
+    const blob = await loadPreventivoBlob(plant);
     const file = new File([blob], plant.preventivoPdfNome || "preventivo.pdf", { type: "application/pdf" });
     const session = await plugin.begin();
     const sessionId = String(session?.sessionId || "");
@@ -570,7 +638,7 @@
     safeOpenWhatsAppMessage = function safeOpenWhatsAppMessageWithOccasionalPdf(message) {
       const result = originalSafeOpen.apply(this, arguments);
       const pending = pendingOccasionalSharePlant;
-      if (!pending?.plant?.preventivoPdfUrl || pending.pdfPromise || !result) return result;
+      if ((!pending?.plant?.preventivoPdfUrl && !pending?.plant?.preventivoPdfFirestore) || pending.pdfPromise || !result) return result;
       pending.messageOpened = true;
       pending.pdfPromise = new Promise((resolve) => window.setTimeout(resolve, 8000))
         .then(async () => {
@@ -593,7 +661,7 @@
       const originalPhotoShare = shareWhazzupPhotosNativeAndroid;
       const wrapped = async function shareWhazzupPhotosAfterOccasionalPdf(files, message) {
         const pending = pendingOccasionalSharePlant;
-        if (!pending?.plant?.preventivoPdfUrl) return originalPhotoShare.apply(this, arguments);
+        if (!pending?.plant?.preventivoPdfUrl && !pending?.plant?.preventivoPdfFirestore) return originalPhotoShare.apply(this, arguments);
         if (!pending.messageOpened) safeOpenWhatsAppMessage(message);
         await pending.pdfPromise;
         const plugin = typeof getDedicatedAndroidWhazzupPhotoPlugin === "function" ? getDedicatedAndroidWhazzupPhotoPlugin() : null;
@@ -624,7 +692,7 @@
     } catch (_) { return; }
     const card = button.closest("article, .item-card, [class*='impianto']") || button.parentElement;
     const plant = getOccasionalPlants().find((item) => normalizeName(card?.textContent).includes(normalizeName(item.denominazione || item.nome)));
-    if (!plant?.preventivoPdfUrl) return;
+    if (!plant?.preventivoPdfUrl && !plant?.preventivoPdfFirestore) return;
     pendingOccasionalSharePlant = { plant, messageOpened: false, pdfPromise: null };
     window.setTimeout(() => {
       if (pendingOccasionalSharePlant?.plant === plant) pendingOccasionalSharePlant = null;

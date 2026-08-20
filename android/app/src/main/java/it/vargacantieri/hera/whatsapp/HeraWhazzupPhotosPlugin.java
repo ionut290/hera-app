@@ -35,6 +35,7 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
     private static final long CLEANUP_DELAY_MS = 5 * 60 * 1000L;
     private static final long EXPIRED_SESSION_MS = 12 * 60 * 60 * 1000L;
     private static final int MAX_PHOTO_BYTES = 35 * 1024 * 1024;
+    private static final int MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
     @PluginMethod
     public void begin(PluginCall call) {
@@ -87,6 +88,90 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
             call.resolve(result);
         } catch (IOException error) {
             call.reject("Salvataggio temporaneo della foto non riuscito.", error);
+        }
+    }
+
+    @PluginMethod
+    public void addDocument(PluginCall call) {
+        String sessionId = validatedSessionId(call.getString("sessionId", ""));
+        String data = call.getString("data", "");
+        String mimeType = call.getString("mimeType", "application/pdf");
+        String fileName = safeFileName(call.getString("fileName", "preventivo.pdf"));
+        if (sessionId == null || data.isEmpty() || !"application/pdf".equalsIgnoreCase(mimeType) || !fileName.toLowerCase().endsWith(".pdf")) {
+            call.reject("Preventivo PDF o sessione non valida.");
+            return;
+        }
+
+        byte[] bytes;
+        try {
+            bytes = Base64.decode(data, Base64.DEFAULT);
+        } catch (IllegalArgumentException error) {
+            call.reject("Formato del preventivo PDF non valido.", error);
+            return;
+        }
+        if (bytes.length == 0 || bytes.length > MAX_DOCUMENT_BYTES) {
+            call.reject("Il preventivo PDF è vuoto o troppo grande.");
+            return;
+        }
+
+        File folder = sessionFolder(sessionId);
+        if (!folder.isDirectory() && !folder.mkdirs()) {
+            call.reject("Archivio temporaneo del preventivo non disponibile.");
+            return;
+        }
+        File destination = new File(folder, fileName);
+        try (FileOutputStream output = new FileOutputStream(destination, false)) {
+            output.write(bytes);
+            output.flush();
+            JSObject result = new JSObject();
+            result.put("stored", true);
+            result.put("fileName", fileName);
+            call.resolve(result);
+        } catch (IOException error) {
+            call.reject("Salvataggio temporaneo del preventivo non riuscito.", error);
+        }
+    }
+
+    @PluginMethod
+    public void shareDocument(PluginCall call) {
+        String sessionId = validatedSessionId(call.getString("sessionId", ""));
+        if (sessionId == null) {
+            call.reject("Sessione preventivo WhatsApp non disponibile.");
+            return;
+        }
+        String packageName = resolveInstalledPackage();
+        if (packageName == null) {
+            call.reject("WhatsApp non è installato sul dispositivo.");
+            return;
+        }
+
+        File folder = sessionFolder(sessionId);
+        File[] storedFiles = folder.listFiles(file -> file.isFile() && file.getName().toLowerCase().endsWith(".pdf"));
+        if (storedFiles == null || storedFiles.length == 0) {
+            call.reject("Nessun preventivo PDF disponibile per la condivisione.");
+            return;
+        }
+        Arrays.sort(storedFiles, Comparator.comparing(File::getName));
+
+        try {
+            Uri documentUri = FileProvider.getUriForFile(
+                getContext(),
+                getContext().getPackageName() + ".fileprovider",
+                storedFiles[0]
+            );
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("application/pdf");
+            intent.setPackage(packageName);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.setClipData(ClipData.newRawUri("Preventivo PDF", documentUri));
+            intent.putExtra(Intent.EXTRA_STREAM, documentUri);
+            getContext().grantUriPermission(packageName, documentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(call, intent, "documentActivityResult");
+            scheduleCleanup(folder);
+        } catch (ActivityNotFoundException error) {
+            call.reject("Impossibile aprire WhatsApp installato con il preventivo.", error);
+        } catch (Exception error) {
+            call.reject("Errore durante la condivisione nativa del preventivo.", error);
         }
     }
 
@@ -159,6 +244,16 @@ public class HeraWhazzupPhotosPlugin extends Plugin {
         callResult.put("opened", true);
         callResult.put("returned", true);
         callResult.put("separateTextRequired", true);
+        callResult.put("fallback", false);
+        call.resolve(callResult);
+    }
+
+    @ActivityCallback
+    private void documentActivityResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSObject callResult = new JSObject();
+        callResult.put("opened", true);
+        callResult.put("returned", true);
         callResult.put("fallback", false);
         call.resolve(callResult);
     }

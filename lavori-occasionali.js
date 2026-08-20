@@ -24,7 +24,8 @@
   }
 
   function getWorkName() {
-    return normalizeName(document.getElementById("lavoro-occasionale-nome")?.value);
+    const editor = document.getElementById("lavoro-occasionale-nome");
+    return normalizeName(editor?.textContent || editor?.value);
   }
 
   function installVirtualCommessa() {
@@ -84,8 +85,9 @@
     field.className = "squadra-date-field lavoro-occasionale-field hidden";
     field.innerHTML = [
       "<span>Commessa o luogo del lavoro occasionale *</span>",
-      '<input id="lavoro-occasionale-nome" type="text" list="lavori-occasionali-options"',
-      ' maxlength="120" autocomplete="off" placeholder="Es. Parco Zucca, Scuole Granarolo">',
+      '<div id="lavoro-occasionale-nome" class="lavoro-occasionale-editor" contenteditable="true"',
+      ' role="textbox" aria-label="Commessa o luogo del lavoro occasionale"',
+      ' data-placeholder="Es. Parco Zucca, Scuole Granarolo" spellcheck="true"></div>',
       '<datalist id="lavori-occasionali-options"></datalist>',
       '<small>Il nome verrà salvato nella squadra e nello storico del lavoro.</small>'
     ].join("");
@@ -93,11 +95,17 @@
     const dateField = form.querySelector(".squadra-date-field");
     (dateField || commessaSelect).insertAdjacentElement("afterend", field);
 
-    const input = field.querySelector("input");
+    const input = field.querySelector("[contenteditable]");
+    ["keydown", "keyup", "keypress", "beforeinput", "input"].forEach((eventName) => {
+      input.addEventListener(eventName, (event) => event.stopPropagation());
+    });
+    input.addEventListener("input", () => {
+      if (input.textContent.length > 120) input.textContent = input.textContent.slice(0, 120);
+    });
     const refresh = () => {
       const active = isOccasionalSelected();
       field.classList.toggle("hidden", !active);
-      input.required = active;
+      input.setAttribute("aria-required", active ? "true" : "false");
       if (active) refreshSuggestions();
     };
     commessaSelect.addEventListener("change", refresh);
@@ -161,7 +169,7 @@
       const first = Array.isArray(composition?.squadre) ? composition.squadre[0] : null;
       const nome = normalizeName(first?.lavoroOccasionaleNome || composition?.lavoroOccasionaleNome);
       const input = document.getElementById("lavoro-occasionale-nome");
-      if (input) input.value = nome;
+      if (input && !normalizeName(input.textContent)) input.textContent = nome;
     } catch (error) {
       state.lastError = error;
     }
@@ -172,7 +180,7 @@
     const input = document.getElementById("lavoro-occasionale-nome");
     const nome = getWorkName();
     if (nome) {
-      input.value = nome;
+      input.textContent = nome;
       return;
     }
     event.preventDefault();
@@ -270,6 +278,36 @@
     renderHistory();
   });
   document.getElementById("squadra-riferimento")?.addEventListener("change", restoreWorkNameFromComposition);
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .lavoro-occasionale-editor {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 13px;
+      border: 1px solid #cbd8ec;
+      border-radius: 12px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+      line-height: 1.35;
+      cursor: text;
+      outline: none;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .lavoro-occasionale-editor:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+    }
+    .lavoro-occasionale-editor:empty::before {
+      content: attr(data-placeholder);
+      color: #7b879c;
+      pointer-events: none;
+    }
+  `;
+  document.head.appendChild(style);
 
   window.HeraLavoriOccasionali = {
     installed: true,

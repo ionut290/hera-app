@@ -81,6 +81,16 @@
   }
 })();
 
+(function loadSharedWhazzupPdfAttachments() {
+  "use strict";
+  if (document.querySelector('script[data-shared-whazzup-pdf]')) return;
+  const script = document.createElement("script");
+  script.src = "./shared-pdf-attachments.js?v=20260821a";
+  script.defer = true;
+  script.dataset.sharedWhazzupPdf = "1";
+  document.head.appendChild(script);
+})();
+
 (function installLoadingHumor() {
   "use strict";
 

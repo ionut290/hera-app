@@ -77,31 +77,38 @@
     return Number.isFinite(rendered) ? rendered : 0;
   }
 
-  function findAvanzamentoStatItem() {
+  function findCompletedAmountStatItem() {
     const labels = Array.from(document.querySelectorAll(".commessa-stat-label"));
-    const label = labels.find((el) => /avanzamento/i.test(el.textContent || ""));
+    const label = labels.find((el) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(el.textContent || ""));
     if (label) return label.closest(".commessa-stat-item");
 
     const candidates = Array.from(document.querySelectorAll(".commessa-stat-item"));
-    return candidates.find((item) => /avanzamento/i.test(item.textContent || "")) || null;
+    const semanticMatch = candidates.find((item) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(item.textContent || ""));
+    if (semanticMatch) return semanticMatch;
+
+    const remainingValue = document.getElementById("commessa-stat-ore");
+    const container = remainingValue?.closest?.(".commessa-stat-item")?.parentElement;
+    if (!container) return null;
+    const items = Array.from(container.children).filter((el) => el.classList?.contains("commessa-stat-item"));
+    return items.length >= 3 ? items[1] : null;
   }
 
   function updateCompletedAmountStat() {
-    const item = findAvanzamentoStatItem();
+    const item = findCompletedAmountStatItem();
     if (!item) return false;
 
-    const label = item.querySelector(".commessa-stat-label") || Array.from(item.children).find((el) => /avanzamento/i.test(el.textContent || ""));
+    const label = item.querySelector(".commessa-stat-label") || Array.from(item.children).find((el) => /avanzamento|lavorazioni\s+fatte|guadagnati/i.test(el.textContent || ""));
     const value = item.querySelector(".commessa-stat-value")
-      || Array.from(item.querySelectorAll("[id]")).find((el) => el !== label && /%|\d/.test(el.textContent || ""))
+      || Array.from(item.querySelectorAll("[id]")).find((el) => el !== label && /%|€|\d/.test(el.textContent || ""))
       || Array.from(item.children).find((el) => el !== label && !el.classList?.contains("commessa-stat-icon"));
     if (!label || !value) return false;
 
     const subtotal = getSelectedCompletedSubtotal();
     const formatted = formatEuro(subtotal);
     value.textContent = formatted;
-    label.textContent = "lavorazioni fatte";
-    item.dataset.statAction = "lavorazioni-fatte";
-    item.setAttribute("aria-label", `Lavorazioni fatte: ${formatted}`);
+    label.textContent = "€ guadagnati";
+    item.dataset.statAction = "euro-guadagnati";
+    item.setAttribute("aria-label", `Euro guadagnati: ${formatted}`);
     item.title = `Subtotale lavorazioni fatte: ${formatted}`;
     return true;
   }

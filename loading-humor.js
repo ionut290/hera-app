@@ -1,3 +1,18 @@
+(function loadStorageBucketCompatibility() {
+  "use strict";
+  if (document.querySelector('script[data-storage-bucket-compat]')) return;
+  const src = "./storage-bucket-compat.js?v=20260821a";
+  if (document.readyState === "loading") {
+    document.write(`<script src="${src}" data-storage-bucket-compat="1"><\/script>`);
+    return;
+  }
+  const script = document.createElement("script");
+  script.src = src;
+  script.async = false;
+  script.dataset.storageBucketCompat = "1";
+  document.head.appendChild(script);
+})();
+
 (function loadImpiantiVisualAndFattoGuard() {
   "use strict";
   if (!document.querySelector('link[data-impianti-zebra-style]')) {

@@ -6,6 +6,7 @@
   const DATA_DURABILITY_SRC = "data-durability-runtime.js?v=20260818a";
   const DATA_SAFETY_SRC = "data-safety-layer.js?v=20260819a";
   const CRITICAL_WRITE_SAFETY_SRC = "critical-write-safety-bridge.js?v=20260819a";
+  const SYNC_BADGE_PENDING_FIX_SRC = "sync-badge-pending-fix.js?v=20260821a";
 
   function ensureDataDurabilityRuntime() {
     if (window.HeraDataDurability) return;
@@ -61,9 +62,28 @@
     document.head.appendChild(script);
   }
 
+  function ensureSyncBadgePendingFix() {
+    if (window.HeraSyncBadgePendingFix) return;
+    const existing = Array.from(document.scripts || []).find((script) => {
+      try { return new URL(script.src, document.baseURI).pathname.endsWith("/sync-badge-pending-fix.js"); }
+      catch (_) { return false; }
+    });
+    if (existing) return;
+    if (document.readyState === "loading") {
+      document.write(`<script src="${SYNC_BADGE_PENDING_FIX_SRC}" data-hera-sync-badge-fix="1"><\/script>`);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = SYNC_BADGE_PENDING_FIX_SRC;
+    script.async = false;
+    script.setAttribute("data-hera-sync-badge-fix", "1");
+    document.head.appendChild(script);
+  }
+
   ensureDataDurabilityRuntime();
   ensureDataSafetyLayer();
   ensureCriticalWriteSafetyBridge();
+  ensureSyncBadgePendingFix();
 
   function isNativeAndroid() {
     return Boolean(

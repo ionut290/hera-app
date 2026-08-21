@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.0.1";
+  const VERSION = "1.0.2";
   const DB_NAME = "hera-data-durability-v1";
   const DB_VERSION = 1;
   const SNAPSHOT_STORE = "snapshots";
@@ -25,7 +25,8 @@
     lastError: "",
     pendingCount: 0,
     snapshotInFlight: null,
-    restoreInFlight: null
+    restoreInFlight: null,
+    syncInFlight: null
   };
 
   const byteSize = (value) => {
@@ -276,15 +277,47 @@
     return { pendingCount: getPendingCount(), snapshotAt: state.lastSnapshotAt };
   }
 
+  async function forceSync() {
+    if (state.syncInFlight) return state.syncInFlight;
+    if (!navigator.onLine) throw new Error("Connessione assente: impossibile sincronizzare adesso");
+    const handler = window.syncPendingOfflineMutations;
+    if (typeof handler !== "function") throw new Error("Sincronizzazione offline non disponibile");
+
+    state.syncInFlight = (async () => {
+      const before = getPendingCount();
+      state.lastError = "";
+      updateStatusBadge();
+      await snapshot("before-manual-sync");
+      await Promise.race([
+        Promise.resolve(handler()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Sincronizzazione troppo lenta: riprova")), 20_000))
+      ]);
+      const remaining = getPendingCount();
+      await snapshot("after-manual-sync");
+      state.lastError = "";
+      updateStatusBadge();
+      dispatchEvent(new CustomEvent("hera:manual-sync-complete", { detail: { before, remaining } }));
+      return { before, remaining };
+    })().catch((error) => {
+      state.lastError = String(error?.message || error || "Sincronizzazione manuale fallita");
+      updateStatusBadge();
+      dispatchEvent(new CustomEvent("hera:manual-sync-error", { detail: { message: state.lastError } }));
+      throw error;
+    }).finally(() => { state.syncInFlight = null; });
+
+    return state.syncInFlight;
+  }
+
   const hasPendingOperations = () => getPendingCount() > 0;
   const setSyncError = (error) => { state.lastError = error ? String(error?.message || error) : ""; updateStatusBadge(); };
   const statusText = () => {
+    if (state.syncInFlight) return "Sincronizzazione in corso…";
     if (!navigator.onLine) return state.pendingCount ? `Offline · ${state.pendingCount} da sincronizzare` : "Offline · dati protetti";
     if (state.lastError) return "Sincronizzazione da controllare";
     if (state.pendingCount) return `${state.pendingCount} modifiche da sincronizzare`;
     return "Sincronizzato";
   };
-  const statusIcon = () => !navigator.onLine || state.pendingCount ? "🟡" : state.lastError ? "🔴" : "🟢";
+  const statusIcon = () => state.syncInFlight ? "🔄" : !navigator.onLine || state.pendingCount ? "🟡" : state.lastError ? "🔴" : "🟢";
 
   function ensureStatusBadge() {
     if (!document.body || document.getElementById(BADGE_ID)) return;
@@ -293,9 +326,27 @@
     badge.type = "button";
     badge.setAttribute("aria-live", "polite");
     badge.setAttribute("aria-label", "Stato protezione e sincronizzazione dati");
-    badge.title = "Stato protezione dati";
+    badge.title = "Tocca per sincronizzare subito le modifiche in attesa";
     badge.style.cssText = "position:fixed;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:2147483000;border:1px solid rgba(15,23,42,.14);border-radius:999px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 5px 18px rgba(15,23,42,.14);padding:6px 9px;font:700 11px/1.1 system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:min(78vw,260px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
     badge.addEventListener("click", async () => {
+      const pending = getPendingCount();
+      if (pending > 0) {
+        if (!navigator.onLine) {
+          alert(`Sei offline. Le ${pending} modifiche restano protette e verranno sincronizzate quando torna la connessione.`);
+          return;
+        }
+        try {
+          updateStatusBadge();
+          const result = await forceSync();
+          alert(result.remaining > 0
+            ? `Sincronizzazione eseguita. Restano ${result.remaining} modifiche da sincronizzare.`
+            : `Sincronizzazione completata. ${result.before} modifiche sincronizzate.`);
+        } catch (error) {
+          alert(`Sincronizzazione non completata: ${String(error?.message || error || "errore sconosciuto")}`);
+        }
+        return;
+      }
+
       const backups = await listBackups().catch(() => []);
       const latest = backups[0];
       alert([
@@ -310,7 +361,11 @@
 
   function updateStatusBadge() {
     const badge = document.getElementById(BADGE_ID);
-    if (badge) badge.textContent = `${statusIcon()} ${statusText()}`;
+    if (badge) {
+      badge.textContent = `${statusIcon()} ${statusText()}`;
+      badge.disabled = Boolean(state.syncInFlight);
+      badge.style.cursor = state.syncInFlight ? "wait" : "pointer";
+    }
   }
 
   async function requestPersistentStorage() {
@@ -371,7 +426,7 @@
   window.HeraDataDurability = {
     VERSION, MAX_BACKUPS, DB_NAME,
     ready: () => state.ready,
-    snapshot, restoreMissingState, prepareForUpdate, hasPendingOperations,
+    snapshot, restoreMissingState, prepareForUpdate, forceSync, hasPendingOperations,
     getPendingCount, listBackups, restoreBackup, setSyncError,
     getStatus: () => ({ ...state, online: navigator.onLine, text: statusText() }),
     getMeta

@@ -5,6 +5,7 @@
   const SOURCE = "whazzup-impianto-pdf";
   const MAX_FILE_SIZE = 15 * 1024 * 1024;
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const DRIVE_CALLABLE_URL = "https://europe-west1-hera-app-6cd2b.cloudfunctions.net/uploadWhazzupPdfToDrive";
   const WRAP_RETRY_MS = 250;
   const WRAP_MAX_RETRIES = 80;
   let retryCount = 0;
@@ -19,10 +20,8 @@
       .replace(/[\\/:*?"<>|#%{}\[\]]+/g, "-")
       .replace(/\s+/g, " ")
       .trim();
-    const withoutLongSuffix = normalized.length > 105
-      ? `${normalized.slice(0, 95)}-${Date.now()}.pdf`
-      : normalized;
-    return withoutLongSuffix.toLowerCase().endsWith(".pdf") ? withoutLongSuffix : `${withoutLongSuffix}.pdf`;
+    const shortened = normalized.length > 105 ? `${normalized.slice(0, 95)}-${Date.now()}.pdf` : normalized;
+    return shortened.toLowerCase().endsWith(".pdf") ? shortened : `${shortened}.pdf`;
   }
 
   function getImpiantoKey(impianto) {
@@ -33,33 +32,32 @@
       } catch (_) {}
     }
     return normalize(
-      impianto?.id
-      || impianto?.impiantoId
-      || impianto?.physicalPlantId
-      || impianto?.migrationSourceId
-      || impianto?.idSap
-      || impianto?.["ID SAP"]
-      || impianto?.denominazione
-      || impianto?.["Denominazione Impianto"]
+      impianto?.id || impianto?.impiantoId || impianto?.physicalPlantId || impianto?.migrationSourceId
+      || impianto?.idSap || impianto?.["ID SAP"] || impianto?.denominazione || impianto?.["Denominazione Impianto"]
     );
   }
 
   function getCommessaId(impianto) {
-    return normalize(
-      impianto?.commessaId
-      || impianto?.parentCommessaId
-      || impianto?.commessa?.id
-      || global.selectedCommessaId
-    );
+    return normalize(impianto?.commessaId || impianto?.parentCommessaId || impianto?.commessa?.id || global.selectedCommessaId);
+  }
+
+  function getCommessaName(impianto) {
+    const direct = normalize(impianto?.commessaName || impianto?.commessaNome || impianto?.commessa?.nome);
+    if (direct) return direct;
+    const id = getCommessaId(impianto);
+    try {
+      const item = global.commesseById?.get?.(id);
+      const name = normalize(item?.nome || item?.name);
+      if (name) return name;
+    } catch (_) {}
+    return id || "Generale";
   }
 
   function getFirebaseServices() {
     const firebase = global.firebase;
-    if (!firebase || !firebase.apps?.length || typeof firebase.firestore !== "function" || typeof firebase.storage !== "function") {
-      return null;
-    }
+    if (!firebase || !firebase.apps?.length || typeof firebase.firestore !== "function") return null;
     const db = global.db || firebase.firestore();
-    const storage = firebase.storage();
+    const storage = typeof firebase.storage === "function" ? firebase.storage() : null;
     const user = global.currentUser || firebase.auth?.().currentUser || null;
     return { firebase, db, storage, user };
   }
@@ -88,6 +86,95 @@
     if (isError) global.alert?.(message);
   }
 
+  function shouldUseDriveFallback(error) {
+    const text = `${error?.code || ""} ${error?.message || ""} ${error || ""}`.toLowerCase();
+    return text.includes("storage/unknown") || text.includes("404") || text.includes("not found") || text.includes("bucket");
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error("Lettura PDF non riuscita."));
+      reader.onload = () => {
+        const value = String(reader.result || "");
+        resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : value);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadToDriveFallback(impianto, file, services, docRef, fileName) {
+    const token = await services.user.getIdToken();
+    const base64 = await fileToBase64(file);
+    const response = await fetch(DRIVE_CALLABLE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        data: {
+          base64,
+          fileName,
+          mimeType: "application/pdf",
+          commessaId: getCommessaId(impianto),
+          commessaName: getCommessaName(impianto)
+        }
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.error) {
+      const message = payload?.error?.message || `Fallback Drive non disponibile (${response.status}).`;
+      throw new Error(message);
+    }
+    const result = payload.result || payload.data || {};
+    if (!result.fileId || !result.fileUrl) throw new Error("Drive non ha restituito il PDF caricato.");
+    return {
+      provider: "drive",
+      fileUrl: result.fileUrl,
+      storagePath: `drive:${result.fileId}`,
+      driveFileId: result.fileId
+    };
+  }
+
+  async function persistDocumentMetadata(impianto, file, services, docRef, fileName, uploadResult, expiresAtDate) {
+    const { firebase, user } = services;
+    const commessaId = getCommessaId(impianto);
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    await docRef.set({
+      id: docRef.id,
+      title: normalize(file.name) || fileName,
+      fileName,
+      fileUrl: uploadResult.fileUrl,
+      storagePath: uploadResult.storagePath,
+      storageProvider: uploadResult.provider,
+      driveFileId: uploadResult.driveFileId || "",
+      mimeType: "application/pdf",
+      fileSize: Number(file.size),
+      ownerUserId: user.uid,
+      createdBy: user.uid,
+      createdByEmail: normalize(user.email),
+      createdByName: normalize(user.displayName || user.email || "Operatore"),
+      visibility: "global",
+      sharedToAll: false,
+      sharedUserIds: [],
+      commessaIds: commessaId ? [commessaId] : [],
+      commessaId: commessaId || "",
+      impiantoKey: getImpiantoKey(impianto),
+      impiantoId: normalize(impianto?.id || impianto?.impiantoId),
+      impiantoName: normalize(impianto?.denominazione || impianto?.["Denominazione Impianto"] || impianto?.nome),
+      source: SOURCE,
+      category: "WHAZZUP PDF",
+      uploadStatus: "completed",
+      versionHistoryEnabled: false,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: firebase.firestore.Timestamp.fromDate(expiresAtDate),
+      expiresAtIso: expiresAtDate.toISOString(),
+      autoDeleteAfterDays: 30
+    });
+  }
+
   async function uploadPdf(impianto, file) {
     const services = getFirebaseServices();
     if (!services?.user?.uid) throw new Error("Accedi all'app prima di caricare un PDF.");
@@ -95,66 +182,47 @@
     if (!file.size) throw new Error("Il PDF selezionato è vuoto.");
     if (file.size > MAX_FILE_SIZE) throw new Error("Il PDF supera il limite massimo di 15 MB.");
 
-    const { firebase, db, storage, user } = services;
     const impiantoKey = getImpiantoKey(impianto);
     if (!impiantoKey) throw new Error("Non riesco a identificare l'impianto per questo PDF.");
 
-    const docRef = db.collection(COLLECTION).doc();
+    const docRef = services.db.collection(COLLECTION).doc();
     const fileName = safeFileName(file.name);
-    const storagePath = `documents/${user.uid}/${docRef.id}/${fileName}`;
-    const storageRef = storage.ref().child(storagePath);
-    const commessaId = getCommessaId(impianto);
     const expiresAtDate = new Date(Date.now() + MAX_AGE_MS);
+    let uploadResult = null;
+    let storageRef = null;
 
-    let uploaded = false;
+    if (services.storage) {
+      const storagePath = `documents/${services.user.uid}/${docRef.id}/${fileName}`;
+      storageRef = services.storage.ref().child(storagePath);
+      try {
+        await storageRef.put(file, {
+          contentType: "application/pdf",
+          customMetadata: { source: SOURCE, documentId: docRef.id, ownerUserId: services.user.uid, impiantoKey }
+        });
+        uploadResult = {
+          provider: "storage",
+          fileUrl: await storageRef.getDownloadURL(),
+          storagePath,
+          driveFileId: ""
+        };
+      } catch (error) {
+        if (!shouldUseDriveFallback(error)) throw error;
+        console.warn("Firebase Storage non disponibile per PDF: uso Drive centrale.", error);
+      }
+    }
+
+    if (!uploadResult) {
+      uploadResult = await uploadToDriveFallback(impianto, file, services, docRef, fileName);
+    }
+
     try {
-      await storageRef.put(file, {
-        contentType: "application/pdf",
-        customMetadata: {
-          source: SOURCE,
-          documentId: docRef.id,
-          ownerUserId: user.uid,
-          impiantoKey
-        }
-      });
-      uploaded = true;
-      const fileUrl = await storageRef.getDownloadURL();
-      const now = firebase.firestore.FieldValue.serverTimestamp();
-      await docRef.set({
-        id: docRef.id,
-        title: normalize(file.name) || fileName,
-        fileName,
-        fileUrl,
-        storagePath,
-        mimeType: "application/pdf",
-        fileSize: Number(file.size),
-        ownerUserId: user.uid,
-        createdBy: user.uid,
-        createdByEmail: normalize(user.email),
-        createdByName: normalize(user.displayName || user.email || "Operatore"),
-        visibility: "global",
-        sharedToAll: false,
-        sharedUserIds: [],
-        commessaIds: commessaId ? [commessaId] : [],
-        commessaId: commessaId || "",
-        impiantoKey,
-        impiantoId: normalize(impianto?.id || impianto?.impiantoId),
-        impiantoName: normalize(impianto?.denominazione || impianto?.["Denominazione Impianto"] || impianto?.nome),
-        source: SOURCE,
-        category: "WHAZZUP PDF",
-        uploadStatus: "completed",
-        versionHistoryEnabled: false,
-        createdAt: now,
-        updatedAt: now,
-        expiresAt: firebase.firestore.Timestamp.fromDate(expiresAtDate),
-        expiresAtIso: expiresAtDate.toISOString(),
-        autoDeleteAfterDays: 30
-      });
-      return { id: docRef.id, fileName, fileUrl, fileSize: file.size, expiresAt: expiresAtDate };
+      await persistDocumentMetadata(impianto, file, services, docRef, fileName, uploadResult, expiresAtDate);
     } catch (error) {
-      if (uploaded) await storageRef.delete().catch(() => null);
+      if (uploadResult.provider === "storage" && storageRef) await storageRef.delete().catch(() => null);
       throw error;
     }
+
+    return { id: docRef.id, fileName, fileUrl: uploadResult.fileUrl, fileSize: file.size, expiresAt: expiresAtDate, provider: uploadResult.provider };
   }
 
   async function pickPdfs(impianto, chooser) {
@@ -202,9 +270,7 @@
     const services = getFirebaseServices();
     const impiantoKey = getImpiantoKey(impianto);
     if (!services?.user?.uid || !impiantoKey) return [];
-    const snapshot = await services.db.collection(COLLECTION)
-      .where("impiantoKey", "==", impiantoKey)
-      .get();
+    const snapshot = await services.db.collection(COLLECTION).where("impiantoKey", "==", impiantoKey).get();
     const now = Date.now();
     return snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -213,11 +279,7 @@
         const expires = item.expiresAt?.toMillis?.() || Date.parse(item.expiresAtIso || "") || 0;
         return !expires || expires > now;
       })
-      .sort((a, b) => {
-        const aMs = a.createdAt?.toMillis?.() || 0;
-        const bMs = b.createdAt?.toMillis?.() || 0;
-        return bMs - aMs;
-      });
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   }
 
   async function shareOrOpenPdf(item) {
@@ -256,9 +318,7 @@
         const title = normalize(item.title || item.fileName || "Documento PDF");
         const size = formatSize(item.fileSize);
         const expiry = item.expiresAt?.toDate?.();
-        const expiryText = expiry instanceof Date && !Number.isNaN(expiry.getTime())
-          ? ` • fino al ${expiry.toLocaleDateString("it-IT")}`
-          : "";
+        const expiryText = expiry instanceof Date && !Number.isNaN(expiry.getTime()) ? ` • fino al ${expiry.toLocaleDateString("it-IT")}` : "";
         return `<button type="button" class="whazzup-shared-pdf-item" data-shared-pdf-id="${item.id}"><span aria-hidden="true">📄</span><span><strong>${title.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</strong><small>${size}${expiryText}</small></span></button>`;
       }).join("")}`;
       host.querySelectorAll("[data-shared-pdf-id]").forEach((button) => {
@@ -311,22 +371,16 @@
     const original = global.openWhazzupPhotoSourceChooser;
     if (typeof original !== "function") return false;
     installStyles();
-    global.openWhazzupPhotoSourceChooser = function openWhazzupPhotoSourceChooserWithPdf(impianto, button, options = {}) {
+    global.openWhazzupPhotoSourceChooser = function openWhazzupPhotoSourceChooserWithPdf(impianto) {
       const result = original.apply(this, arguments);
       queueMicrotask(() => {
         const choosers = Array.from(document.querySelectorAll(".whazzup-photo-source-chooser"));
-        const chooser = choosers[choosers.length - 1];
-        enhanceChooser(chooser, impianto);
+        enhanceChooser(choosers[choosers.length - 1], impianto);
       });
       return result;
     };
     installed = true;
-    global.HeraSharedWhazzupPdf = Object.freeze({
-      uploadPdf,
-      loadSharedPdfs,
-      source: SOURCE,
-      maxAgeMs: MAX_AGE_MS
-    });
+    global.HeraSharedWhazzupPdf = Object.freeze({ uploadPdf, loadSharedPdfs, source: SOURCE, maxAgeMs: MAX_AGE_MS });
     return true;
   }
 

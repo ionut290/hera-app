@@ -77,6 +77,28 @@
     return Number.isFinite(rendered) ? rendered : 0;
   }
 
+  function setStatIcon(item, type) {
+    const icon = item?.querySelector?.(".commessa-stat-icon");
+    if (!icon) return;
+    if (icon.dataset.dashboardIcon === type) return;
+
+    if (type === "euro") {
+      icon.innerHTML = `
+        <svg viewBox="0 0 64 64" width="1em" height="1em" aria-hidden="true" focusable="false">
+          <circle cx="32" cy="32" r="25" fill="none" stroke="currentColor" stroke-width="4"/>
+          <text x="32" y="41" text-anchor="middle" font-size="31" font-weight="700" font-family="Arial, Helvetica, sans-serif" fill="currentColor">€</text>
+        </svg>`;
+    } else if (type === "done") {
+      icon.innerHTML = `
+        <svg viewBox="0 0 64 64" width="1em" height="1em" aria-hidden="true" focusable="false">
+          <circle cx="32" cy="32" r="25" fill="none" stroke="currentColor" stroke-width="4"/>
+          <path d="M20 33.5 28.5 42 45 23.5" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+    }
+
+    icon.dataset.dashboardIcon = type;
+  }
+
   function findCompletedAmountStatItem() {
     const labels = Array.from(document.querySelectorAll(".commessa-stat-label"));
     const label = labels.find((el) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(el.textContent || ""));
@@ -86,8 +108,8 @@
     const semanticMatch = candidates.find((item) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(item.textContent || ""));
     if (semanticMatch) return semanticMatch;
 
-    const remainingValue = document.getElementById("commessa-stat-ore");
-    const container = remainingValue?.closest?.(".commessa-stat-item")?.parentElement;
+    const doneValue = document.getElementById("commessa-stat-ore");
+    const container = doneValue?.closest?.(".commessa-stat-item")?.parentElement;
     if (!container) return null;
     const items = Array.from(container.children).filter((el) => el.classList?.contains("commessa-stat-item"));
     return items.length >= 3 ? items[1] : null;
@@ -110,10 +132,11 @@
     item.dataset.statAction = "euro-guadagnati";
     item.setAttribute("aria-label", `Euro guadagnati: ${formatted}`);
     item.title = `Subtotale lavorazioni fatte: ${formatted}`;
+    setStatIcon(item, "euro");
     return true;
   }
 
-  function updateRemainingImpiantiStat() {
+  function updateDoneImpiantiStat() {
     if (typeof getSelectedCommessaDashboardStats !== "function") return;
     const value = document.getElementById("commessa-stat-ore");
     const item = value?.closest?.(".commessa-stat-item");
@@ -121,17 +144,18 @@
     if (!value || !item || !label) return;
 
     const stats = getSelectedCommessaDashboardStats();
-    const remaining = Math.max(0, Number(stats?.total || 0) - Number(stats?.done || 0));
-    value.textContent = String(remaining);
-    label.textContent = remaining === 1 ? "impianto da fare" : "impianti da fare";
-    item.dataset.statAction = "impianti";
-    item.setAttribute("aria-label", `Vai ai ${remaining} impianti da fare`);
-    item.title = `${remaining} impiant${remaining === 1 ? "o" : "i"} ancora da fare`;
+    const done = Math.max(0, Number(stats?.done || 0));
+    value.textContent = String(done);
+    label.textContent = done === 1 ? "impianto fatto" : "impianti fatti";
+    item.dataset.statAction = "impianti-fatti";
+    item.setAttribute("aria-label", `${done} impiant${done === 1 ? "o fatto" : "i fatti"}`);
+    item.title = `${done} impiant${done === 1 ? "o completato" : "i completati"}`;
+    setStatIcon(item, "done");
   }
 
   function updateDashboardReplacementStats() {
     updateCompletedAmountStat();
-    updateRemainingImpiantiStat();
+    updateDoneImpiantiStat();
   }
 
   if (typeof updateCommessaDashboard === "function") {

@@ -29,6 +29,9 @@
   }
 
   function getWorkItemKind(item) {
+    const priceCode = text(item?.codiceVocePrezzo || item?.codicePrezzo || item?.codiceVoce || item?.codice)
+      .toLocaleUpperCase("it-IT");
+    if (priceCode === "A1") return "ORDINARIO";
     const raw = [item?.tipo, item?.categoria, item?.tipologia, item?.tipologiaLavorazione, item?.tipologiaIntervento, item?.descrizione]
       .map(text).join(" ").toLocaleUpperCase("it-IT");
     return raw.includes("STRAORD") ? "STRAORDINARIO" : "ORDINARIO";

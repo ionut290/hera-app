@@ -3,6 +3,7 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { deleteWhazzupDriveFile } = require("./whazzup-pdf-drive");
 
 const SOURCE = "whazzup-impianto-pdf";
 
@@ -29,12 +30,23 @@ exports.cleanupExpiredWhazzupPdfs = onSchedule(
         || 0;
       if (!expiresAtMs || expiresAtMs > now) continue;
 
-      const storagePath = String(data.storagePath || "").trim();
-      if (storagePath) {
-        await bucket.file(storagePath).delete({ ignoreNotFound: true }).catch((error) => {
-          console.warn("PDF Whazzup: file Storage non eliminato", { documentId: doc.id, storagePath, error: error?.message || error });
-        });
+      const provider = String(data.storageProvider || "storage").trim().toLowerCase();
+      if (provider === "drive") {
+        const driveFileId = String(data.driveFileId || "").trim();
+        if (driveFileId) {
+          await deleteWhazzupDriveFile(driveFileId).catch((error) => {
+            console.warn("PDF Whazzup: file Drive non eliminato", { documentId: doc.id, driveFileId, error: error?.message || error });
+          });
+        }
+      } else {
+        const storagePath = String(data.storagePath || "").trim();
+        if (storagePath) {
+          await bucket.file(storagePath).delete({ ignoreNotFound: true }).catch((error) => {
+            console.warn("PDF Whazzup: file Storage non eliminato", { documentId: doc.id, storagePath, error: error?.message || error });
+          });
+        }
       }
+
       await doc.ref.delete();
       deleted += 1;
     }

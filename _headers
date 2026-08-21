@@ -15,3 +15,6 @@
 
 /header-menu-runtime.js
   Cache-Control: no-cache, must-revalidate
+
+/pdf-callable-ios-bridge.js
+  Cache-Control: no-cache, must-revalidate

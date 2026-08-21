@@ -14236,13 +14236,13 @@ function buildRowsForEachCodicePrezzo(impianto) {
 
 function hasOrdinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
-  return codes.includes("A11") || codes.includes("A12");
+  return codes.includes("A1") || codes.includes("A11") || codes.includes("A12");
 }
 
 function hasStraordinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
   if (codes.length === 0) return false;
-  return codes.some((code) => code !== "A11" && code !== "A12");
+  return codes.some((code) => code !== "A1" && code !== "A11" && code !== "A12");
 }
 
 function onImpiantoSearchInput(event) {

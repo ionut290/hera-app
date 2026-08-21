@@ -22,9 +22,16 @@ const elements = {
 };
 
 global.document = {
-  getElementById(id) { return elements[id] || null; }
+  documentElement: {},
+  getElementById(id) { return elements[id] || null; },
+  querySelectorAll() { return []; },
+  addEventListener() {}
 };
-global.window = {};
+global.window = { addEventListener() {} };
+global.MutationObserver = class MutationObserver {
+  observe() {}
+  disconnect() {}
+};
 
 let firestoreTouched = false;
 global.db = new Proxy({}, {

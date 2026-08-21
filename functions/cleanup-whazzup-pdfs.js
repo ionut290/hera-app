@@ -3,19 +3,18 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const legacyFunctions = require("firebase-functions/v1");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
 const { google } = require("googleapis");
 
-const SOURCE = "whazzup-impianto-pdf";
+const SOURCE = "whazzup-pdf-drive-v2";
 
-async function buildDriveClient(db) {
-  const secretSnapshot = await db.collection("appConfig").doc("driveAdminSecret").get();
-  const secret = secretSnapshot.exists ? secretSnapshot.data() : null;
+async function getDrive(db) {
+  const snapshot = await db.collection("appConfig").doc("driveAdminSecret").get();
+  const secret = snapshot.exists ? snapshot.data() : null;
   if (!secret || (!secret.accessToken && !secret.refreshToken)) throw new Error("Drive centrale non configurato");
-  const oauth2 = new google.auth.OAuth2(
-    legacyFunctions.config().google?.client_id,
-    legacyFunctions.config().google?.client_secret
-  );
+  const clientId = legacyFunctions.config().google?.client_id;
+  const clientSecret = legacyFunctions.config().google?.client_secret;
+  if (!clientId || !clientSecret) throw new Error("Credenziali Google Drive mancanti");
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({
     access_token: secret.accessToken || undefined,
     refresh_token: secret.refreshToken || undefined
@@ -32,44 +31,45 @@ exports.cleanupExpiredWhazzupPdfs = onSchedule(
   },
   async () => {
     const db = getFirestore();
-    const bucket = getStorage().bucket();
     const now = Timestamp.now().toMillis();
     const snapshot = await db.collection("documents").where("source", "==", SOURCE).get();
     let drive = null;
     let deleted = 0;
+    let failed = 0;
 
     for (const doc of snapshot.docs) {
       const data = doc.data() || {};
       const expiresAtMs = data.expiresAt?.toMillis?.() || Date.parse(String(data.expiresAtIso || "")) || 0;
       if (!expiresAtMs || expiresAtMs > now) continue;
 
-      const provider = String(data.storageProvider || "storage").trim().toLowerCase();
-      if (provider === "drive") {
-        const driveFileId = String(data.driveFileId || "").trim();
-        if (driveFileId) {
-          try {
-            drive = drive || await buildDriveClient(db);
-            await drive.files.delete({ fileId: driveFileId });
-          } catch (error) {
-            if (!(error?.code === 404 || error?.response?.status === 404)) {
-              console.warn("PDF Whazzup: file Drive non eliminato", { documentId: doc.id, driveFileId, error: error?.message || error });
-              continue;
-            }
-          }
+      const fileId = String(data.driveFileId || "").trim();
+      try {
+        if (fileId) {
+          drive = drive || await getDrive(db);
+          await drive.files.delete({ fileId });
         }
-      } else {
-        const storagePath = String(data.storagePath || "").trim();
-        if (storagePath) {
-          await bucket.file(storagePath).delete({ ignoreNotFound: true }).catch((error) => {
-            console.warn("PDF Whazzup: file Storage non eliminato", { documentId: doc.id, storagePath, error: error?.message || error });
-          });
+        await doc.ref.delete();
+        deleted += 1;
+      } catch (error) {
+        if (error?.code === 404 || error?.response?.status === 404) {
+          await doc.ref.delete();
+          deleted += 1;
+          continue;
         }
+        failed += 1;
+        console.warn("Cleanup PDF Whazzup V2 fallito", {
+          documentId: doc.id,
+          fileId,
+          message: error?.message || String(error)
+        });
       }
-
-      await doc.ref.delete();
-      deleted += 1;
     }
 
-    console.log("Cleanup PDF Whazzup completato", { scanned: snapshot.size, deleted, source: SOURCE });
+    console.log("Cleanup PDF Whazzup V2 completato", {
+      scanned: snapshot.size,
+      deleted,
+      failed,
+      source: SOURCE
+    });
   }
 );

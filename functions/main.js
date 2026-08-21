@@ -10,6 +10,7 @@ const impiantoChangeIndexFunctions = require("./impianto-change-index");
 const errorReportingFunctions = require("./error-reporting");
 const errorEmailUsageFunctions = require("./error-email-usage");
 const cleanupWhazzupPdfFunctions = require("./cleanup-whazzup-pdfs");
+const whazzupPdfDriveFunctions = require("./whazzup-pdf-drive");
 
 Object.assign(
   exports,
@@ -22,5 +23,6 @@ Object.assign(
   impiantoChangeIndexFunctions,
   errorReportingFunctions,
   errorEmailUsageFunctions,
-  cleanupWhazzupPdfFunctions
+  cleanupWhazzupPdfFunctions,
+  whazzupPdfDriveFunctions
 );

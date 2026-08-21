@@ -90,18 +90,3 @@ exports.uploadWhazzupPdfToDrive = functions.region("europe-west1").https.onCall(
   const fileUrl = uploaded.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
   return { fileId, fileUrl, storageProvider: "drive" };
 });
-
-async function deleteWhazzupDriveFile(fileId) {
-  const id = String(fileId || "").trim();
-  if (!id) return false;
-  const drive = await buildDriveClient();
-  try {
-    await drive.files.delete({ fileId: id });
-    return true;
-  } catch (error) {
-    if (error?.code === 404 || error?.response?.status === 404) return true;
-    throw error;
-  }
-}
-
-exports.deleteWhazzupDriveFile = deleteWhazzupDriveFile;

@@ -81,21 +81,11 @@
   }
 })();
 
-(function loadPdfCallableIosBridge() {
-  "use strict";
-  if (document.querySelector('script[data-pdf-callable-ios-bridge]')) return;
-  const script = document.createElement("script");
-  script.src = "./pdf-callable-ios-bridge.js?v=20260821a";
-  script.defer = true;
-  script.dataset.pdfCallableIosBridge = "1";
-  document.head.appendChild(script);
-})();
-
-(function loadSharedWhazzupPdfAttachments() {
+(function loadSharedWhazzupPdfAttachmentsV2() {
   "use strict";
   if (document.querySelector('script[data-shared-whazzup-pdf]')) return;
   const script = document.createElement("script");
-  script.src = "./shared-pdf-attachments.js?v=20260821c";
+  script.src = "./shared-pdf-attachments.js?v=20260821v2";
   script.defer = true;
   script.dataset.sharedWhazzupPdf = "1";
   document.head.appendChild(script);

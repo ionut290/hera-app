@@ -9,7 +9,7 @@ const cleanupCode = fs.readFileSync("functions/cleanup-whazzup-pdfs.js", "utf8")
 const mainCode = fs.readFileSync("functions/main.js", "utf8");
 
 [
-  'data.photoSource = "pdf"',
+  'pdfButton.dataset.photoSource = "pdf"',
   "Aggiungi PDF",
   "Documento condiviso con tutti",
   'const SOURCE = "whazzup-impianto-pdf";',
@@ -23,7 +23,8 @@ const mainCode = fs.readFileSync("functions/main.js", "utf8");
 
 assert.ok(loaderCode.includes("shared-pdf-attachments.js"), "Loader del modulo PDF condiviso mancante");
 assert.ok(cleanupCode.includes("cleanupExpiredWhazzupPdfs"), "Cleanup schedulato PDF mancante");
-assert.ok(cleanupCode.includes('.where("expiresAt", "<=", now)'), "Cleanup non filtra la scadenza");
+assert.ok(cleanupCode.includes('.where("source", "==", SOURCE)'), "Cleanup non limita la lettura ai PDF Whazzup");
+assert.ok(cleanupCode.includes("expiresAtMs > now"), "Cleanup non verifica la scadenza a 30 giorni");
 assert.ok(mainCode.includes('require("./cleanup-whazzup-pdfs")'), "Funzione cleanup non esportata dal main Functions");
 
 console.log("Shared Whazzup PDF checks passed.");

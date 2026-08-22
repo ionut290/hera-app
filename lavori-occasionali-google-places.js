@@ -6,6 +6,7 @@
   const API_SCRIPT_ID = "hera-google-maps-places-api";
   const HOST_ID = "lavoro-occasionale-google-places-host";
   const STATUS_ID = "lavoro-occasionale-google-places-status";
+  const FALLBACK_INPUT_ID = "lavoro-occasionale-google-places-fallback";
   const COMMESSA_ID = "lavori-occasionali";
   let initPromise = null;
   let observer = null;
@@ -86,8 +87,7 @@
         return;
       }
 
-      const existing = document.getElementById(API_SCRIPT_ID);
-      if (existing) {
+      const finishWhenReady = () => {
         const started = Date.now();
         const timer = window.setInterval(() => {
           if (window.google?.maps?.importLibrary) {
@@ -98,6 +98,11 @@
             reject(new Error("Google Maps non disponibile."));
           }
         }, 100);
+      };
+
+      const existing = document.getElementById(API_SCRIPT_ID);
+      if (existing) {
+        finishWhenReady();
         return;
       }
 
@@ -106,7 +111,7 @@
       script.async = true;
       script.defer = true;
       script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&language=it&region=IT&loading=async`;
-      script.onload = () => resolve();
+      script.onload = finishWhenReady;
       script.onerror = () => reject(new Error("Impossibile caricare Google Maps."));
       document.head.appendChild(script);
     });
@@ -114,14 +119,43 @@
     return initPromise;
   }
 
+  function createFallbackInput(host) {
+    if (!host) return null;
+    let input = host.querySelector(`#${FALLBACK_INPUT_ID}`);
+    if (input) return input;
+    input = document.createElement("input");
+    input.id = FALLBACK_INPUT_ID;
+    input.type = "search";
+    input.autocomplete = "off";
+    input.inputMode = "search";
+    input.placeholder = "Cerca strada, azienda, struttura, luogo…";
+    input.setAttribute("aria-label", "Cerca cantiere su Google Maps");
+    input.className = "lavoro-occasionale-google-places-fallback";
+    host.replaceChildren(input);
+    return input;
+  }
+
   async function installAutocomplete(host) {
-    if (!host || host.dataset.ready === "1") return;
+    if (!host || host.dataset.ready === "1" || host.dataset.ready === "loading") return;
     host.dataset.ready = "loading";
-    setStatus("Caricamento ricerca Google Maps…");
+
+    const fallbackInput = createFallbackInput(host);
+    setStatus("Puoi già scrivere qui. Sto collegando i risultati di Google Maps…");
 
     try {
-      await ensureGoogleLoader();
-      const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
+      await Promise.race([
+        ensureGoogleLoader(),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error("Timeout Google Maps")), 15000))
+      ]);
+
+      const placesLibrary = await Promise.race([
+        google.maps.importLibrary("places"),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error("Timeout Places")), 15000))
+      ]);
+      const PlaceAutocompleteElement = placesLibrary?.PlaceAutocompleteElement;
+      if (!PlaceAutocompleteElement) throw new Error("PlaceAutocompleteElement non disponibile.");
+
+      const typedValue = String(fallbackInput?.value || "").trim();
       const autocomplete = new PlaceAutocompleteElement();
       autocomplete.id = "lavoro-occasionale-google-places";
       autocomplete.placeholder = "Cerca strada, azienda, struttura, luogo…";
@@ -148,10 +182,17 @@
       host.replaceChildren(autocomplete);
       host.dataset.ready = "1";
       setStatus("Cerca direttamente su Google Maps: strade, aziende, strutture e luoghi.");
+
+      if (typedValue) {
+        try {
+          autocomplete.value = typedValue;
+        } catch (_) {}
+      }
     } catch (error) {
       console.error("Google Places - inizializzazione", error);
       host.dataset.ready = "error";
-      setStatus("Ricerca Google non disponibile. Verifica che Maps JavaScript API e Places API (New) siano abilitate per la chiave del progetto.", "error");
+      createFallbackInput(host);
+      setStatus("Google Maps non si è collegato. Il campo resta comunque scrivibile; riprova tra poco o riapri la schermata.", "error");
     }
   }
 
@@ -164,23 +205,29 @@
     wrapper.className = "lavoro-occasionale-google-places-wrap";
     wrapper.innerHTML = `
       <span class="lavoro-occasionale-subtitle">🔎 Cerca cantiere su Google Maps</span>
-      <div id="${HOST_ID}" class="lavoro-occasionale-google-places-host"></div>
-      <small id="${STATUS_ID}" class="lavoro-occasionale-google-places-status">Cerca direttamente su Google Maps: strade, aziende, strutture e luoghi.</small>
+      <div id="${HOST_ID}" class="lavoro-occasionale-google-places-host">
+        <input id="${FALLBACK_INPUT_ID}" class="lavoro-occasionale-google-places-fallback" type="search" inputmode="search" autocomplete="off" placeholder="Cerca strada, azienda, struttura, luogo…" aria-label="Cerca cantiere su Google Maps">
+      </div>
+      <small id="${STATUS_ID}" class="lavoro-occasionale-google-places-status">Scrivi subito il luogo da cercare.</small>
     `;
 
     nameEditor.parentNode.insertBefore(wrapper, nameEditor);
 
-    const style = document.createElement("style");
-    style.dataset.heraOccasionalGooglePlaces = "1";
-    style.textContent = `
-      .lavoro-occasionale-google-places-wrap { margin: 0 0 14px; display: grid; gap: 7px; }
-      .lavoro-occasionale-google-places-host { width: 100%; min-height: 48px; }
-      .lavoro-occasionale-google-places-status { display: block; opacity: .78; line-height: 1.35; }
-      .lavoro-occasionale-google-places-status[data-type="success"] { font-weight: 700; opacity: 1; }
-      .lavoro-occasionale-google-places-status[data-type="error"] { font-weight: 700; opacity: 1; }
-      gmp-place-autocomplete { width: 100%; box-sizing: border-box; }
-    `;
-    document.head.appendChild(style);
+    if (!document.querySelector("style[data-hera-occasional-google-places]")) {
+      const style = document.createElement("style");
+      style.dataset.heraOccasionalGooglePlaces = "1";
+      style.textContent = `
+        .lavoro-occasionale-google-places-wrap { margin: 0 0 14px; display: grid; gap: 7px; }
+        .lavoro-occasionale-google-places-host { width: 100%; min-height: 48px; position: relative; z-index: 2; }
+        .lavoro-occasionale-google-places-fallback { width: 100%; min-height: 52px; box-sizing: border-box; border: 1px solid #c9d7ef; border-radius: 14px; padding: 0 16px; font: inherit; font-size: 16px; background: #fff; color: inherit; -webkit-appearance: none; appearance: none; }
+        .lavoro-occasionale-google-places-fallback:focus { outline: 2px solid rgba(59,130,246,.35); outline-offset: 1px; }
+        .lavoro-occasionale-google-places-status { display: block; opacity: .78; line-height: 1.35; }
+        .lavoro-occasionale-google-places-status[data-type="success"] { font-weight: 700; opacity: 1; }
+        .lavoro-occasionale-google-places-status[data-type="error"] { font-weight: 700; opacity: 1; }
+        gmp-place-autocomplete { width: 100%; box-sizing: border-box; min-height: 52px; }
+      `;
+      document.head.appendChild(style);
+    }
 
     if (isOccasionalSelected()) installAutocomplete(wrapper.querySelector(`#${HOST_ID}`));
   }
@@ -205,7 +252,7 @@
 
   window.HeraLavoriOccasionaliGooglePlaces = {
     installed: true,
-    version: "1.0.0",
+    version: "1.0.1",
     refresh,
     disconnect() {
       observer?.disconnect();

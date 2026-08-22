@@ -71,6 +71,7 @@ const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260815-sq
 const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a";
 const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
 const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow.js?v=20260814a";
+const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260822a";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
@@ -92,6 +93,7 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
   document.write(`<script src="${HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC}" data-fatto-ordinary-extraordinary="1"><\/script>`);
+  document.write(`<script src="${HERA_OCCASIONAL_GOOGLE_PLACES_SRC}" data-occasional-google-places="1"><\/script>`);
 } else {
   function normalizeAssetPath(value) {
     try {
@@ -165,4 +167,5 @@ if (document.readyState === "loading") {
   loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
   loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
   loadOnce(HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC, "fatto-ordinary-extraordinary", () => Boolean(window.HeraOrdinaryExtraordinaryFatto));
+  loadOnce(HERA_OCCASIONAL_GOOGLE_PLACES_SRC, "occasional-google-places", () => Boolean(window.HeraLavoriOccasionaliGooglePlaces?.installed));
 }

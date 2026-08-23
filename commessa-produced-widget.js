@@ -187,3 +187,30 @@
 
   window.CommessaProducedWidget = { select, stop, removed: true, refresh: updateDashboardReplacementStats };
 })();
+
+// Carica la funzione opzionale "Impianti consigliati" senza alterare il rendering
+// esistente della commessa, l'ordinamento per distanza, FATTO o NAVIGA.
+(() => {
+  "use strict";
+  const VERSION = "20260823a";
+
+  if (!document.querySelector("link[data-recommended-plants-style]")) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `recommended-plants.css?v=${VERSION}`;
+    link.dataset.recommendedPlantsStyle = "1";
+    document.head.appendChild(link);
+  }
+
+  const load = () => {
+    if (window.HeraRecommendedPlants?.installed || document.querySelector("script[data-recommended-plants-script]")) return;
+    const script = document.createElement("script");
+    script.src = `recommended-plants.js?v=${VERSION}`;
+    script.async = false;
+    script.dataset.recommendedPlantsScript = "1";
+    document.body.appendChild(script);
+  };
+
+  if (document.readyState === "complete") load();
+  else window.addEventListener("load", load, { once: true });
+})();

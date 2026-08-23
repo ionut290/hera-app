@@ -54,6 +54,7 @@ const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
 const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
 const HERA_OCCASIONAL_PDF_STORAGE_SRC = "lavori-occasionali-pdf-storage.js?v=20260823a";
+const HERA_CONTROL_CENTER_API_MONITOR_SRC = "control-center-api-monitor-loader.js?v=20260823-live3";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
@@ -78,6 +79,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_OCCASIONAL_GOOGLE_PLACES_SRC}" data-occasional-google-places="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC}" data-occasional-multi-site-hours="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_PDF_STORAGE_SRC}" data-occasional-pdf-storage="1"><\/script>`);
+  document.write(`<script src="${HERA_CONTROL_CENTER_API_MONITOR_SRC}" data-control-center-api-monitor="1"><\/script>`);
 } else {
   function normalizeAssetPath(value) {
     try { return new URL(String(value || ""), document.baseURI).pathname; }
@@ -124,4 +126,5 @@ if (document.readyState === "loading") {
   loadOnce(HERA_OCCASIONAL_GOOGLE_PLACES_SRC, "occasional-google-places", () => Boolean(window.HeraLavoriOccasionaliGooglePlaces?.installed));
   loadOnce(HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC, "occasional-multi-site-hours", () => Boolean(window.HeraOccasionalMultiSiteHours?.installed));
   loadOnce(HERA_OCCASIONAL_PDF_STORAGE_SRC, "occasional-pdf-storage", () => Boolean(window.HeraOccasionalPdfStorage?.installed));
+  loadOnce(HERA_CONTROL_CENTER_API_MONITOR_SRC, "control-center-api-monitor", () => window.HeraControlCenterApiMonitorLoader?.version === "20260823-live3");
 }

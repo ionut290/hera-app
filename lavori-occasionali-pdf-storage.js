@@ -4,7 +4,9 @@
 
   const COMMESSA_ID = "lavori-occasionali";
   const MAX_FILE_SIZE = 15 * 1024 * 1024;
-  const state = { observer: null, refreshing: false };
+  const POPUP_RETRY_MS = 250;
+  const POPUP_MAX_RETRIES = 80;
+  const state = { observer: null, refreshing: false, popupRetries: 0, popupBridgeInstalled: false };
 
   const text = (value) => String(value ?? "").trim();
   const normalize = (value) => text(value).replace(/\s+/g, " ").toLocaleUpperCase("it-IT");
@@ -67,6 +69,11 @@
     return text(plant?.denominazione || plant?.nome || "Cantiere occasionale");
   }
 
+  function isOccasionalPlant(plant) {
+    const commessaId = text(plant?.commessaId || plant?.parentCommessaId || plant?.commessa?.id || window.selectedCommessaId).toLowerCase();
+    return plant?.lavoroOccasionale === true || plant?.multiCantiere === true || commessaId === COMMESSA_ID;
+  }
+
   function plantRef(plant) {
     const id = plantId(plant);
     if (!id) throw new Error("Cantiere non identificato.");
@@ -121,7 +128,7 @@
         createdAt: serverNow(),
         updatedAt: serverNow()
       });
-      return ref.id;
+      return { id: ref.id, downloadUrl, storagePath: path };
     } catch (error) {
       if (uploaded) await objectRef.delete().catch(() => null);
       throw error;
@@ -166,17 +173,19 @@
       if (invalid) return feedback("Puoi allegare soltanto file PDF.", true);
       const oversized = files.find((file) => file.size > MAX_FILE_SIZE);
       if (oversized) return feedback(`${oversized.name} supera il limite di 15 MB.`, true);
-      const oldText = trigger?.textContent || "📎 PDF";
-      if (trigger) { trigger.disabled = true; trigger.textContent = "⏳ CARICO PDF…"; }
+      const oldHtml = trigger?.innerHTML || trigger?.textContent || "📎 PDF";
+      if (trigger) { trigger.disabled = true; trigger.innerHTML = "⏳ CARICO PDF…"; }
       try {
         for (const file of files) await uploadOnePdf(plant, file);
         feedback(files.length === 1 ? "PDF allegato al cantiere." : `${files.length} PDF allegati al cantiere.`);
-        await renderPdfList(plant, host);
+        if (host) await renderPdfList(plant, host);
       } catch (error) {
         console.error("Upload PDF lavoro occasionale fallito:", error);
-        feedback(`Caricamento PDF non riuscito: ${text(error?.message || error)}`, true);
+        const code = text(error?.code);
+        const message = text(error?.message || error);
+        feedback(`Caricamento PDF non riuscito${code ? ` (${code})` : ""}: ${message || "errore sconosciuto"}`, true);
       } finally {
-        if (trigger) { trigger.disabled = false; trigger.textContent = oldText; }
+        if (trigger) { trigger.disabled = false; trigger.innerHTML = oldHtml; }
       }
     }, { once: true });
     input.addEventListener("cancel", () => input.remove(), { once: true });
@@ -273,6 +282,58 @@
     document.head.appendChild(style);
   }
 
+  function enhanceOccasionalPopup(chooser, plant) {
+    if (!chooser || !isOccasionalPlant(plant) || chooser.dataset.occasionalPdfStorage === "1") return;
+    chooser.dataset.occasionalPdfStorage = "1";
+    const button = chooser.querySelector('[data-photo-source="pdf"], .whazzup-photo-pdf-btn');
+    if (!button) return;
+
+    button.innerHTML = '<span aria-hidden="true">📄</span><strong>Allega PDF</strong><small>Firebase Storage • collegato al cantiere • senza scadenza</small>';
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const section = document.querySelector(`[data-occasional-pdf-plant="${CSS.escape(plantId(plant))}"]`);
+      const host = section?.querySelector(".occasional-pdf-list") || null;
+      choosePdfs(plant, host, button);
+    }, true);
+
+    chooser.querySelector("[data-shared-pdf-list]")?.remove();
+    const heading = chooser.querySelector("#whazzup-photo-source-title");
+    if (heading) heading.textContent = "Come vuoi aggiungere gli allegati?";
+    const description = heading?.nextElementSibling;
+    if (description?.tagName === "P") description.textContent = "Le foto restano nel flusso attuale. I PDF vengono salvati nel Firebase Storage del cantiere occasionale.";
+  }
+
+  function installPopupBridge() {
+    if (state.popupBridgeInstalled) return true;
+    if (!window.HeraWhazzupPdfV2 || typeof window.openWhazzupPhotoSourceChooser !== "function") return false;
+    const original = window.openWhazzupPhotoSourceChooser;
+    if (original.__occasionalPdfStorageBridge === true) {
+      state.popupBridgeInstalled = true;
+      return true;
+    }
+
+    function openWhazzupPhotoSourceChooserWithOccasionalStorage(plant) {
+      const result = original.apply(this, arguments);
+      queueMicrotask(() => {
+        const choosers = Array.from(document.querySelectorAll(".whazzup-photo-source-chooser"));
+        enhanceOccasionalPopup(choosers[choosers.length - 1], plant);
+      });
+      return result;
+    }
+    openWhazzupPhotoSourceChooserWithOccasionalStorage.__occasionalPdfStorageBridge = true;
+    window.openWhazzupPhotoSourceChooser = openWhazzupPhotoSourceChooserWithOccasionalStorage;
+    state.popupBridgeInstalled = true;
+    return true;
+  }
+
+  function retryPopupBridge() {
+    if (installPopupBridge()) return;
+    state.popupRetries += 1;
+    if (state.popupRetries < POPUP_MAX_RETRIES) window.setTimeout(retryPopupBridge, POPUP_RETRY_MS);
+    else console.warn("Bridge PDF Lavori occasionali non installato: popup allegati non disponibile.");
+  }
+
   function refresh() {
     if (state.refreshing) return;
     state.refreshing = true;
@@ -286,5 +347,14 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refresh, { once: true });
   else refresh();
 
-  window.HeraOccasionalPdfStorage = { installed: true, version: "1.0.0", refresh };
+  window.HeraOccasionalPdfStorage = {
+    installed: true,
+    version: "1.1.0",
+    refresh,
+    isOccasionalPlant,
+    uploadOnePdf,
+    choosePdfs,
+    loadPdfs
+  };
+  retryPopupBridge();
 })();

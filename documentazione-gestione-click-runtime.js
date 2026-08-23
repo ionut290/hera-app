@@ -44,30 +44,54 @@
     }) || null;
   }
 
+  function openDocs(plant, event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if (window.HeraAllPlantsDocumentsRuntime?.open) {
+      void window.HeraAllPlantsDocumentsRuntime.open(plant);
+    } else if (window.HeraCantiereDocuments?.open) {
+      window.HeraCantiereDocuments.open(plant);
+    }
+  }
+
+  function findPdfRequestButton(actions) {
+    return Array.from(actions.querySelectorAll('button')).find((button) => {
+      const label = upper(button.textContent);
+      return label.includes('PDF RICHIESTA') || label.includes('INSERISCI PDF');
+    }) || null;
+  }
+
   function ensureButton(stack) {
     if (!isAdmin() || !(stack instanceof HTMLElement)) return;
     const actions = stack.querySelector('.item-actions-gestione');
     if (!actions) return;
-    const existing = actions.querySelector('[data-documentazione-gestione-click], [data-all-doc-runtime], [data-occasional-doc-runtime], [data-cantiere-doc-admin], [data-cantiere-doc-fallback]');
-    if (existing) return;
 
     const plant = findPlant(findCard(stack));
     if (!plant) return;
+
+    const pdfButton = findPdfRequestButton(actions);
+    if (pdfButton && !pdfButton.dataset.documentazioneGestioneClick) {
+      const replacement = pdfButton.cloneNode(true);
+      replacement.type = 'button';
+      replacement.textContent = '📁 ALLEGA DOCUMENTAZIONE';
+      replacement.dataset.documentazioneGestioneClick = '1';
+      replacement.removeAttribute('id');
+      replacement.addEventListener('click', (event) => openDocs(plant, event));
+      pdfButton.replaceWith(replacement);
+    }
+
+    actions.querySelectorAll('[data-all-doc-runtime], [data-occasional-doc-runtime], [data-cantiere-doc-admin], [data-cantiere-doc-fallback]').forEach((button) => {
+      if (!button.dataset.documentazioneGestioneClick) button.remove();
+    });
+
+    if (actions.querySelector('[data-documentazione-gestione-click]')) return;
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn all-doc-runtime-btn';
     button.dataset.documentazioneGestioneClick = '1';
     button.textContent = '📁 ALLEGA DOCUMENTAZIONE';
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (window.HeraAllPlantsDocumentsRuntime?.open) {
-        void window.HeraAllPlantsDocumentsRuntime.open(plant);
-      } else if (window.HeraCantiereDocuments?.open) {
-        window.HeraCantiereDocuments.open(plant);
-      }
-    });
+    button.addEventListener('click', (event) => openDocs(plant, event));
     actions.appendChild(button);
   }
 
@@ -80,6 +104,7 @@
     if (!stack) return;
     queueMicrotask(() => ensureButton(stack));
     window.setTimeout(() => ensureButton(stack), 0);
+    window.setTimeout(() => ensureButton(stack), 80);
   }
 
   document.addEventListener('click', onClick, true);

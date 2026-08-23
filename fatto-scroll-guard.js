@@ -109,6 +109,14 @@
         () => console.warn('Traffico/meteo Impianti consigliati non caricato.')
       );
     }
+    if (!window.HeraStreetViewCards?.installed) {
+      loadScriptOnce(
+        'script[data-street-view-cards]',
+        './street-view-cards.js?v=20260823a',
+        'streetViewCards',
+        () => console.warn('Street View card impianti non caricato.')
+      );
+    }
   }
 
   if (document.readyState === 'loading') {

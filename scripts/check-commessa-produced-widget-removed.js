@@ -9,6 +9,7 @@ function createElement() {
   return {
     hidden: false,
     disabled: false,
+    dataset: {},
     classList: { remove() {} },
     setAttribute(name, value) { attributes.set(name, String(value)); },
     getAttribute(name) { return attributes.get(name) || null; }
@@ -23,7 +24,12 @@ const elements = {
 
 global.document = {
   documentElement: {},
+  readyState: "loading",
+  head: { appendChild() {} },
+  body: { appendChild() {} },
+  createElement() { return createElement(); },
   getElementById(id) { return elements[id] || null; },
+  querySelector() { return null; },
   querySelectorAll() { return []; },
   addEventListener() {}
 };

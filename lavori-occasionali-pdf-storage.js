@@ -4,7 +4,7 @@
   if (window.HeraCantiereDocumentsLoaderInstalled) return;
   window.HeraCantiereDocumentsLoaderInstalled = true;
 
-  const VERSION = '20260823-docs4';
+  const VERSION = '20260823-docs5';
 
   function ensureStyle() {
     if (document.querySelector('link[data-cantiere-doc-style]')) return;
@@ -52,7 +52,15 @@
         datasetKey: 'occasionalDocRuntime'
       });
     }
+    if (!window.HeraAllPlantsDocumentsRuntime?.installed) {
+      await loadScript({
+        selector: 'script[data-all-plants-doc-runtime]',
+        src: `documentazione-tutte-commesse-runtime.js?v=${VERSION}`,
+        datasetKey: 'allPlantsDocRuntime'
+      });
+    }
     window.HeraOccasionalDocumentsRuntime?.refresh?.();
+    window.HeraAllPlantsDocumentsRuntime?.refresh?.();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

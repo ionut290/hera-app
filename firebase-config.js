@@ -7,18 +7,14 @@ window.firebaseConfig = {
   appId: "1:645390631375:web:df3659a23812560e4012ba"
 };
 
-// Recupera i listener diagnostici lasciati attivi da una sessione pagina precedente.
-// È solo telemetria locale: eventuali errori non devono mai bloccare l'avvio dell'app.
 function recoverAbandonedFirestoreDiagnosticListeners() {
   const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Rome" });
   const key = `varga_fs_diag_v4_${today()}`;
   const now = Date.now();
   const closedAt = new Date(now).toISOString();
-
   try {
     const value = JSON.parse(localStorage.getItem(key) || "null");
     if (!value || value.date !== today() || !value.listeners) return;
-
     let recovered = 0;
     Object.values(value.listeners).forEach((listener) => {
       if (!listener?.active) return;
@@ -26,36 +22,20 @@ function recoverAbandonedFirestoreDiagnosticListeners() {
       listener.abandoned = true;
       listener.closeReason = "page-session-ended-without-unsubscribe";
       listener.closedAt = closedAt;
-      listener.durationMs = listener.openedAt
-        ? Math.max(0, now - new Date(listener.openedAt).getTime())
-        : null;
+      listener.durationMs = listener.openedAt ? Math.max(0, now - new Date(listener.openedAt).getTime()) : null;
       recovered += 1;
     });
-
     if (!recovered) return;
     value.totals = value.totals || {};
-    value.totals.abandonedListenersRecovered =
-      Math.max(0, Number(value.totals.abandonedListenersRecovered) || 0) + recovered;
+    value.totals.abandonedListenersRecovered = Math.max(0, Number(value.totals.abandonedListenersRecovered) || 0) + recovered;
     value.lifecycle = Array.isArray(value.lifecycle) ? value.lifecycle : [];
-    value.lifecycle.unshift({
-      at: closedAt,
-      type: "previous-page-listeners-recovered",
-      recoveredListeners: recovered,
-      note: "Listener rimasti attivi nel salvataggio locale dopo ricaricamento, crash o chiusura della pagina."
-    });
+    value.lifecycle.unshift({ at: closedAt, type: "previous-page-listeners-recovered", recoveredListeners: recovered, note: "Listener rimasti attivi nel salvataggio locale dopo ricaricamento, crash o chiusura della pagina." });
     value.updatedAt = closedAt;
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (_) {
-    // Pulizia diagnostica best-effort.
-  }
+  } catch (_) {}
 }
-
 recoverAbandonedFirestoreDiagnosticListeners();
 
-// Carica diagnostica, protezioni Firestore, quota storage e bridge Android prima di app.js.
-// La diagnostica viene installata per prima: l'ottimizzatore la richiama solo
-// quando apre un listener fisico, così il report non conta due volte gli
-// abbonati logici che condividono la stessa query.
 const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260812a";
 const HERA_APP_NOTIFICATIONS_READ_GUARD_SRC = "app-notifications-read-guard.js?v=20260815a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
@@ -72,6 +52,7 @@ const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a
 const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
 const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow.js?v=20260814a";
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
+const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
@@ -94,15 +75,12 @@ if (document.readyState === "loading") {
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
   document.write(`<script src="${HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC}" data-fatto-ordinary-extraordinary="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_GOOGLE_PLACES_SRC}" data-occasional-google-places="1"><\/script>`);
+  document.write(`<script src="${HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC}" data-occasional-multi-site-hours="1"><\/script>`);
 } else {
   function normalizeAssetPath(value) {
-    try {
-      return new URL(String(value || ""), document.baseURI).pathname;
-    } catch (_) {
-      return String(value || "").split("?")[0].split("#")[0];
-    }
+    try { return new URL(String(value || ""), document.baseURI).pathname; }
+    catch (_) { return String(value || "").split("?")[0].split("#")[0]; }
   }
-
   function findExistingScript(src, dataName) {
     const byData = document.querySelector(`script[data-${dataName}="true"], script[data-${dataName}="1"]`);
     if (byData) return byData;
@@ -110,49 +88,23 @@ if (document.readyState === "loading") {
     if (!wantedPath) return null;
     return Array.from(document.scripts || []).find((script) => normalizeAssetPath(script.src) === wantedPath) || null;
   }
-
   function loadOnce(src, dataName, ready, onLoad) {
-    if (ready?.()) {
-      onLoad?.();
-      return;
-    }
+    if (ready?.()) { onLoad?.(); return; }
     const existing = findExistingScript(src, dataName);
-    if (existing) {
-      if (onLoad) existing.addEventListener("load", onLoad, { once: true });
-      return;
-    }
+    if (existing) { if (onLoad) existing.addEventListener("load", onLoad, { once: true }); return; }
     const script = document.createElement("script");
     script.src = src;
     script.setAttribute(`data-${dataName}`, "true");
     if (onLoad) script.addEventListener("load", onLoad, { once: true });
     document.head.appendChild(script);
   }
-
   loadOnce(HERA_STORAGE_QUOTA_GUARD_SRC, "storage-quota-guard", () => window.HeraStorageQuotaGuard?.installed);
   loadOnce(HERA_APP_NOTIFICATIONS_READ_GUARD_SRC, "app-notifications-read-guard", () => window.VargaAppNotificationsReadGuard?.installed);
-
-  const loadSafeOptimizer = () => loadOnce(
-    HERA_FIRESTORE_SAFE_OPTIMIZER_SRC,
-    "firestore-safe-optimizer",
-    () => window.VargaFirestoreSafeOptimizer?.installed
-  );
-
-  const loadDiagnosticsV4 = () => loadOnce(
-    HERA_FIRESTORE_DIAGNOSTICS_V4_SRC,
-    "firestore-diagnostics-v4",
-    () => window.VargaFirestoreDiagnosticsV4?.installed,
-    loadSafeOptimizer
-  );
-
-  loadOnce(
-    HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC,
-    "firestore-operation-diagnostics",
-    () => window.__vargaFsDiagV3,
-    loadDiagnosticsV4
-  );
+  const loadSafeOptimizer = () => loadOnce(HERA_FIRESTORE_SAFE_OPTIMIZER_SRC, "firestore-safe-optimizer", () => window.VargaFirestoreSafeOptimizer?.installed);
+  const loadDiagnosticsV4 = () => loadOnce(HERA_FIRESTORE_DIAGNOSTICS_V4_SRC, "firestore-diagnostics-v4", () => window.VargaFirestoreDiagnosticsV4?.installed, loadSafeOptimizer);
+  loadOnce(HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC, "firestore-operation-diagnostics", () => window.__vargaFsDiagV3, loadDiagnosticsV4);
   window.setTimeout(loadDiagnosticsV4, 150);
   window.setTimeout(loadSafeOptimizer, 300);
-
   loadOnce(HERA_FIRESTORE_INFLIGHT_COALESCER_SRC, "hera-firestore-inflight-coalescer", () => window.HeraFirestoreInflightReadCoalescer?.installed);
   loadOnce(HERA_FIRESTORE_DIAGNOSTICS_OPTIMIZER_SRC, "hera-firestore-diagnostics-optimizer", () => window.__vargaFsOptimizerDiagnosticsExtension);
   loadOnce(HERA_SHARED_STATIC_VIEWS_SRC, "hera-shared-static-views", () => window.HeraSharedStaticViews?.installed);
@@ -168,4 +120,5 @@ if (document.readyState === "loading") {
   loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
   loadOnce(HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC, "fatto-ordinary-extraordinary", () => Boolean(window.HeraOrdinaryExtraordinaryFatto));
   loadOnce(HERA_OCCASIONAL_GOOGLE_PLACES_SRC, "occasional-google-places", () => Boolean(window.HeraLavoriOccasionaliGooglePlaces?.installed));
+  loadOnce(HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC, "occasional-multi-site-hours", () => Boolean(window.HeraOccasionalMultiSiteHours?.installed));
 }

@@ -360,6 +360,15 @@
     });
   }
 
+  function loadMapTodoFilter() {
+    loadScriptOnce({
+      selector: 'script[data-map-todo-filter]',
+      src: './map-todo-filter-runtime.js?v=20260816a',
+      datasetKey: 'mapTodoFilter',
+      errorMessage: 'Filtro mappa impianti da fare non caricato.'
+    });
+  }
+
   function init() {
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
@@ -375,6 +384,7 @@
     loadPerformanceDiagnostic();
     loadModernImpiantiMap();
     loadMapSearchFocus();
+    loadMapTodoFilter();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

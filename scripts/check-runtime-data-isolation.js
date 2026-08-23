@@ -8,12 +8,15 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const bridgePath = path.join(root, 'squad-context-bridge.js');
 const guardPath = path.join(root, 'fatto-scroll-guard.js');
+const widgetPath = path.join(root, 'commessa-produced-widget.js');
 const bridgeSource = fs.readFileSync(bridgePath, 'utf8');
 const guardSource = fs.readFileSync(guardPath, 'utf8');
+const widgetSource = fs.readFileSync(widgetPath, 'utf8');
 
-// Controllo sintattico dei due moduli modificati.
+// Controllo sintattico dei moduli modificati.
 new vm.Script(bridgeSource, { filename: bridgePath });
 new vm.Script(guardSource, { filename: guardPath });
+new vm.Script(widgetSource, { filename: widgetPath });
 
 // Il modulo delle stime non deve mai scrivere nello stato reale delle squadre.
 assert.doesNotMatch(
@@ -113,7 +116,8 @@ assert.equal(intervalCalls, 0, 'Il polling non deve partire quando il contesto �
 assert.match(guardSource, /function\s+initializeLazyHelpers\s*\(/);
 assert.match(guardSource, /getElementById\(['"]impianti-page['"]\)/);
 assert.match(guardSource, /requestIdleCallback/);
-assert.match(guardSource, /20260823-stability1/);
+assert.match(guardSource, /timeout:\s*2500/);
+assert.match(guardSource, /20260823-stability2/);
 assert.doesNotMatch(
   guardSource,
   /DOMContentLoaded['"],\s*loadRecommendedHelpers/,
@@ -125,4 +129,27 @@ assert.doesNotMatch(
   'I moduli accessori non devono essere caricati subito quando il DOM è già pronto'
 );
 
-console.log('OK: stato squadre isolato e moduli Impianti caricati in modo differito.');
+// Il widget della commessa non deve più osservare e scandire tutto il documento.
+assert.doesNotMatch(
+  widgetSource,
+  /querySelectorAll\(\s*["']body\s+\*["']\s*\)/,
+  'commessa-produced-widget.js non deve scandire tutti i nodi di body'
+);
+assert.doesNotMatch(
+  widgetSource,
+  /\.observe\(\s*document\.documentElement\s*,/,
+  'commessa-produced-widget.js non deve osservare l’intero documentElement'
+);
+assert.match(widgetSource, /function\s+installPageVisibilityObserver\s*\(/);
+assert.match(widgetSource, /attributeFilter:\s*\["class",\s*"hidden",\s*"aria-hidden",\s*"style"\]/);
+assert.match(widgetSource, /function\s+loadFattoScrollGuard\s*\(/);
+assert.match(widgetSource, /fatto-scroll-guard\.js\?v=/);
+assert.match(widgetSource, /function\s+scheduleRecommendedCore\s*\(/);
+assert.match(widgetSource, /requestIdleCallback/);
+assert.doesNotMatch(
+  widgetSource,
+  /window\.addEventListener\(\s*["']load["']\s*,\s*load\s*,/,
+  'Impianti consigliati non deve essere caricato globalmente al window.load'
+);
+
+console.log('OK: stato squadre isolato, DOM non scandito globalmente e moduli Impianti differiti.');

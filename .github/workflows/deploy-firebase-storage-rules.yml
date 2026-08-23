@@ -1,0 +1,61 @@
+name: Deploy Firebase Storage Rules
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - storage.rules
+      - firebase.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-storage-rules-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-storage-rules:
+    name: Deploy Storage Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Firebase service account secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Missing repository secret FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B. Add the Firebase/Google Cloud service-account JSON in GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Validate service account JSON
+        run: |
+          python3 - <<'PY'
+          import json, os
+          path = os.path.join(os.environ['RUNNER_TEMP'], 'firebase-service-account.json')
+          with open(path, 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          required = ['type', 'project_id', 'private_key', 'client_email']
+          missing = [k for k in required if not data.get(k)]
+          if missing:
+              raise SystemExit('Service-account JSON incompleto: ' + ', '.join(missing))
+          if data.get('project_id') != 'hera-app-6cd2b':
+              raise SystemExit('Il service account appartiene al progetto sbagliato: ' + str(data.get('project_id')))
+          print('Service account valido per hera-app-6cd2b')
+          PY
+
+      - name: Deploy Firebase Storage Rules only
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          CI: true
+        run: npx --yes firebase-tools@latest deploy --only storage --project hera-app-6cd2b --non-interactive
+
+      - name: Remove temporary credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-service-account.json"

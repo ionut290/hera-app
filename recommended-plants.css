@@ -1,6 +1,8 @@
 .recommended-plants-btn {
+  min-height: 44px;
   white-space: nowrap;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .recommended-plants-panel {
@@ -26,9 +28,17 @@
 .recommended-plants-panel [role="button"] {
   position: static;
   z-index: auto;
+  min-height: 44px;
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recommended-plants-panel button:active,
+.recommended-plants-panel a:active,
+.recommended-plants-btn:active {
+  transform: translateY(1px);
 }
 
 .recommended-head {
@@ -187,6 +197,7 @@
 
 .recommended-loading,
 .recommended-empty {
+  min-height: 74px;
   padding: 18px;
   color: #475569;
   text-align: center;

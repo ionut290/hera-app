@@ -15,10 +15,28 @@ service firebase.storage {
       );
     }
 
+    // Compatibilità con i PDF già caricati nei Lavori occasionali.
     match /lavori-occasionali/{plantId}/{ownerUserId}/{documentId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
         && request.auth.uid == ownerUserId
+        && fileName.size() <= 120
+        && (
+          request.resource == null
+          || (
+            request.resource.size <= 15 * 1024 * 1024
+            && request.resource.contentType == 'application/pdf'
+          )
+        );
+    }
+
+    // Nuovo percorso unico per PDF di impianti/cantieri di qualunque commessa.
+    match /impianti-pdf/{commessaId}/{plantId}/{ownerUserId}/{documentId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == ownerUserId
+        && commessaId.size() > 0
+        && plantId.size() > 0
         && fileName.size() <= 120
         && (
           request.resource == null

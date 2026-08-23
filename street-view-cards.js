@@ -1,11 +1,11 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.0') return;
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.1') return;
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
-  const USAGE_COLLECTION = 'systemUsage';
+  const USAGE_COLLECTION = 'appConfig';
   let observer = null;
   let mapsLoaderPromise = null;
   let activePanorama = null;
@@ -63,7 +63,7 @@
     if (!firestore) throw new Error('Contatore condiviso Firestore non disponibile');
 
     const monthKey = getMonthKey();
-    const ref = firestore.collection(USAGE_COLLECTION).doc(`streetView360_${monthKey}`);
+    const ref = firestore.collection(USAGE_COLLECTION).doc(`streetViewUsage_${monthKey}`);
     const user = getCurrentUserInfo();
 
     return firestore.runTransaction(async (transaction) => {

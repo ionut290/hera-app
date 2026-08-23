@@ -360,6 +360,16 @@
     });
   }
 
+  function loadStreetViewCards() {
+    loadScriptOnce({
+      selector: 'script[data-street-view-cards]',
+      src: './street-view-cards.js?v=20260823b',
+      datasetKey: 'streetViewCards',
+      errorMessage: 'Street View card impianti non caricato.',
+      defer: false
+    });
+  }
+
   function init() {
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
@@ -375,6 +385,7 @@
     loadPerformanceDiagnostic();
     loadModernImpiantiMap();
     loadMapSearchFocus();
+    loadStreetViewCards();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

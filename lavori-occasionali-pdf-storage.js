@@ -4,7 +4,7 @@
   if (window.HeraCantiereDocumentsLoaderInstalled) return;
   window.HeraCantiereDocumentsLoaderInstalled = true;
 
-  const VERSION = '20260823-docs5';
+  const VERSION = '20260823-docs6';
 
   function ensureStyle() {
     if (document.querySelector('link[data-cantiere-doc-style]')) return;
@@ -59,8 +59,16 @@
         datasetKey: 'allPlantsDocRuntime'
       });
     }
+    if (!window.HeraDocumentazioneGestioneClick?.installed) {
+      await loadScript({
+        selector: 'script[data-documentazione-gestione-click]',
+        src: `documentazione-gestione-click-runtime.js?v=${VERSION}`,
+        datasetKey: 'documentazioneGestioneClick'
+      });
+    }
     window.HeraOccasionalDocumentsRuntime?.refresh?.();
     window.HeraAllPlantsDocumentsRuntime?.refresh?.();
+    window.HeraDocumentazioneGestioneClick?.refresh?.();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

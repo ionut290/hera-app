@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v136";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v137";
+const CACHE_RESET_VERSION = "20260823-recommended-unfreeze1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -62,6 +62,12 @@ const APP_SHELL = [
   "./firestore-inflight-read-coalescer.js?v=20260804a",
   "./firestore-diagnostics-optimizer-extension.js?v=20260804a",
   "./app-notifications-read-guard.js?v=20260815a",
+  "./recommended-plants.css?v=20260823-stability2",
+  "./recommended-plants.js?v=20260823-stability2",
+  "./fatto-scroll-guard.js?v=20260823-stability2",
+  "./squad-context-bridge.js?v=20260823-unfreeze1",
+  "./recommended-traffic-weather.js?v=20260823-unfreeze1",
+  "./street-view-cards.js?v=20260823-unfreeze1",
   "./firebase-config.js",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
@@ -83,7 +89,16 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/first-login-password.js",
   "/approval-access.js",
   "/header-menu-runtime.js",
-  "/operational-import-repair.js"
+  "/operational-import-repair.js",
+  "/commessa-produced-widget.js",
+  "/fatto-scroll-guard.js",
+  "/recommended-plants.js",
+  "/recommended-plants.css",
+  "/adaptive-work-learning.js",
+  "/equipment-recommendations.js",
+  "/recommended-traffic-weather.js",
+  "/street-view-cards.js",
+  "/squad-context-bridge.js"
 ]);
 
 const isDynamicEndpoint = (url) => [/^\/api(?:\/|$)/, /^\/graphql(?:\/|$)/, /^\/auth(?:\/|$)/, /^\/socket(?:\/|$)/]

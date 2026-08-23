@@ -66,14 +66,33 @@
     window.setTimeout(() => button.classList.remove('fatto-scroll-guard-blocked'), 260);
   }, true);
 
-  function loadAdaptiveLearning() {
-    if (window.HeraAdaptiveWorkLearning?.installed || document.querySelector('script[data-adaptive-work-learning]')) return;
+  function loadScriptOnce(selector, src, datasetKey, onerror) {
+    if (document.querySelector(selector)) return;
     const script = document.createElement('script');
-    script.src = './adaptive-work-learning.js?v=20260823a';
+    script.src = src;
     script.async = true;
-    script.dataset.adaptiveWorkLearning = 'true';
-    script.onerror = () => console.warn('Apprendimento adattivo non caricato.');
+    script.dataset[datasetKey] = 'true';
+    script.onerror = onerror;
     document.head.appendChild(script);
+  }
+
+  function loadAdaptiveLearning() {
+    if (!window.HeraAdaptiveWorkLearning?.installed) {
+      loadScriptOnce(
+        'script[data-adaptive-work-learning]',
+        './adaptive-work-learning.js?v=20260823a',
+        'adaptiveWorkLearning',
+        () => console.warn('Apprendimento adattivo non caricato.')
+      );
+    }
+    if (!window.HeraRecommendedTrafficWeather?.installed) {
+      loadScriptOnce(
+        'script[data-recommended-traffic-weather]',
+        './recommended-traffic-weather.js?v=20260823a',
+        'recommendedTrafficWeather',
+        () => console.warn('Traffico/meteo Impianti consigliati non caricato.')
+      );
+    }
   }
 
   if (document.readyState === 'loading') {

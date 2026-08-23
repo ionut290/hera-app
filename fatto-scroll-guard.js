@@ -65,4 +65,20 @@
     button.classList.add('fatto-scroll-guard-blocked');
     window.setTimeout(() => button.classList.remove('fatto-scroll-guard-blocked'), 260);
   }, true);
+
+  function loadAdaptiveLearning() {
+    if (window.HeraAdaptiveWorkLearning?.installed || document.querySelector('script[data-adaptive-work-learning]')) return;
+    const script = document.createElement('script');
+    script.src = './adaptive-work-learning.js?v=20260823a';
+    script.async = true;
+    script.dataset.adaptiveWorkLearning = 'true';
+    script.onerror = () => console.warn('Apprendimento adattivo non caricato.');
+    document.head.appendChild(script);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadAdaptiveLearning, { once: true });
+  } else {
+    loadAdaptiveLearning();
+  }
 })();

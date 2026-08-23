@@ -134,7 +134,7 @@
           teamSize: count > 0 ? count : CONFIG.baselineTeamSize,
           hasTrincia: equipmentText.includes("TRINCIA") || equipmentText.includes("TRINCIATR"),
           hasDecespugliatore: equipmentText.includes("DECESPUGLI"),
-          hasDaily: equipmentText.includes("DAILY") || equipmentText.includes("IVECO"),
+          hasDaily: equipmentText.includes("DAILY") || equipmentText.includes("IVECO") || /(?:^|\s)A\s*[-_.]?\s*\d{1,5}(?:\s|$)/.test(equipmentText),
           hasSoffiatore: equipmentText.includes("SOFFIAT"),
           hasTagliasiepe: equipmentText.includes("TAGLIASIEP"),
           hasMotosega: equipmentText.includes("MOTOSEG"),
@@ -515,7 +515,7 @@
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",install,{once:true}); else install();
 
   window.HeraRecommendedPlants={
-    installed:true, version:"2.1.0", config:CONFIG,
+    installed:true, version:"2.1.1", config:CONFIG,
     open:()=>{state.open=true;state.originMode="auto";return render();},
     refresh:render, markRouteStartedToday,
     getState:()=>({...state,lastPlan:state.lastPlan.slice()})

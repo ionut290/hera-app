@@ -1,8 +1,9 @@
 (() => {
   'use strict';
-  if (window.HeraSquadContext?.installed) return;
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0-responsive2';
+  if (window.HeraSquadContext?.version === VERSION) return;
+
   let lastSignature = '';
   let lastContext = null;
   let refreshTimer = 0;
@@ -12,8 +13,8 @@
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
 
   function todayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
   function selectedCommessaIdValue() {
@@ -58,7 +59,8 @@
     try {
       if (typeof doesSquadraMemberMatchCurrentUser !== 'function') return false;
       if (row?.caposquadra && doesSquadraMemberMatchCurrentUser(row.caposquadra)) return true;
-      return splitValues(row?.personale ?? row?.operatori).some((member) => doesSquadraMemberMatchCurrentUser(member));
+      return splitValues(row?.personale ?? row?.operatori)
+        .some((member) => doesSquadraMemberMatchCurrentUser(member));
     } catch (_) {
       return false;
     }
@@ -79,15 +81,21 @@
     if (!rows.length) return null;
     const mine = rows.find(rowMatchesCurrentUser);
     if (mine) return mine;
-    return [...rows].sort((a, b) => rowScore(b) - rowScore(a))[0] || rows[0];
+    return [...rows].sort((left, right) => rowScore(right) - rowScore(left))[0] || rows[0];
   }
 
   function classifyVehicle(raw) {
     const value = upper(raw).replace(/\s+/g, ' ');
     const compact = value.replace(/[\s._-]+/g, '');
-    if (/^A\d{1,6}/.test(compact)) return { code: compact.match(/^A\d{1,6}/)?.[0] || compact, kind: 'daily' };
-    if (/^T\d{1,6}/.test(compact)) return { code: compact.match(/^T\d{1,6}/)?.[0] || compact, kind: 'trincia-big' };
-    if (/^R\d{1,6}/.test(compact)) return { code: compact.match(/^R\d{1,6}/)?.[0] || compact, kind: 'trincia-small' };
+    if (/^A\d{1,6}/.test(compact)) {
+      return { code: compact.match(/^A\d{1,6}/)?.[0] || compact, kind: 'daily' };
+    }
+    if (/^T\d{1,6}/.test(compact)) {
+      return { code: compact.match(/^T\d{1,6}/)?.[0] || compact, kind: 'trincia-big' };
+    }
+    if (/^R\d{1,6}/.test(compact)) {
+      return { code: compact.match(/^R\d{1,6}/)?.[0] || compact, kind: 'trincia-small' };
+    }
     return { code: text(raw), kind: 'other' };
   }
 
@@ -148,30 +156,27 @@
 
   function isContextCurrent(context) {
     return Boolean(
-      context &&
-      context.commessaId === selectedCommessaIdValue() &&
-      context.data === todayKey()
+      context
+      && context.commessaId === selectedCommessaIdValue()
+      && context.data === todayKey()
     );
   }
 
   function getCurrent() {
-    const current = buildContext();
-    if (current) return current;
-    return isContextCurrent(lastContext) ? lastContext : null;
+    if (isContextCurrent(lastContext)) return lastContext;
+    return sync({ notify: false });
   }
 
-  function refreshConsumers() {
-    clearTimeout(refreshTimer);
+  function refreshConsumers(context) {
+    window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
       try {
-        const state = window.HeraRecommendedPlants?.getState?.();
-        if (state?.open) window.HeraRecommendedPlants.refresh?.();
+        window.HeraRecommendedPlants?.applySquadContext?.(context);
       } catch (_) {}
-      window.setTimeout(() => {
-        try { window.HeraEquipmentAdvisor?.refresh?.(); } catch (_) {}
-        try { window.HeraAdaptiveWorkLearning?.applyToRecommendedPanel?.(); } catch (_) {}
-      }, 220);
-    }, 80);
+      try {
+        window.HeraEquipmentAdvisor?.refresh?.();
+      } catch (_) {}
+    }, 40);
   }
 
   function clearStaleContext() {
@@ -194,21 +199,30 @@
       operatori: context.operatori,
       mezzi: context.mezziOriginali
     });
+    const changed = signature !== lastSignature;
 
-    // Il contesto per le stime resta separato dai dati reali dell'app.
-    // Non modificare currentSquadre: è lo stato usato dalle schermate e dai listener Firestore.
     lastContext = context;
     window.HeraRecommendedSquadContext = context;
 
-    if (signature !== lastSignature || options.force) {
+    if (changed) {
       lastSignature = signature;
-      window.dispatchEvent(new CustomEvent('hera:squad-context-updated', { detail: {
-        commessaId: context.commessaId,
-        teamSize: context.teamSize,
-        mezzi: context.mezziCodici,
-        source: context.source
-      }}));
-      refreshConsumers();
+      window.dispatchEvent(new CustomEvent('hera:squad-context-updated', {
+        detail: {
+          commessaId: context.commessaId,
+          teamSize: context.teamSize,
+          mezzi: context.mezziCodici,
+          source: context.source
+        }
+      }));
+      refreshConsumers(context);
+    } else if (options.notify) {
+      window.dispatchEvent(new CustomEvent('hera:squad-context-current', {
+        detail: {
+          commessaId: context.commessaId,
+          teamSize: context.teamSize,
+          source: context.source
+        }
+      }));
     }
     return context;
   }
@@ -223,12 +237,14 @@
 
   document.addEventListener('click', (event) => {
     if (event.target?.closest?.('#recommended-plants-btn, #recommended-origin-avola, #recommended-origin-live, #recommended-start-route')) {
-      sync({ force: true });
+      sync();
     }
   }, true);
   window.addEventListener('focus', () => sync());
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
-  window.addEventListener('hera:squad-context-request', () => sync({ force: true }));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) sync();
+  });
+  window.addEventListener('hera:squad-context-request', () => sync({ notify: true }));
 
   window.HeraSquadContext = {
     installed: true,

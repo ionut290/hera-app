@@ -172,5 +172,75 @@
     console.info('Compatibilità controllo squadra installata: commesse per ID e abilitazioni importate riconosciute.');
   }
 
+  function getDatalistValues(input) {
+    const listId = String(input.getAttribute('list') || '').trim();
+    const list = listId ? document.getElementById(listId) : null;
+    if (!list) return [];
+    return Array.from(list.querySelectorAll('option'))
+      .map((option) => String(option.value || option.textContent || '').trim())
+      .filter(Boolean);
+  }
+
+  function isFreeSquadEntry(input) {
+    if (!(input instanceof HTMLInputElement) || !input.classList.contains('squadra-multi-entry-input')) return false;
+    const container = input.closest('.squadra-personale-list, .squadra-mezzi-list');
+    if (!container) return false;
+    const value = String(input.value || '').trim();
+    if (!value) return false;
+    const normalizedValue = normalize(value);
+    const known = getDatalistValues(input).some((item) => normalize(item) === normalizedValue);
+    return !known;
+  }
+
+  function decorateFreeInput(input) {
+    if (!(input instanceof HTMLInputElement) || input.dataset.freeSquadEntryReady === '1') return;
+    if (!input.closest('.squadra-personale-list, .squadra-mezzi-list')) return;
+    input.dataset.freeSquadEntryReady = '1';
+    const oldPlaceholder = String(input.placeholder || '').trim();
+    if (!/scrivi/i.test(oldPlaceholder)) {
+      input.placeholder = oldPlaceholder ? `${oldPlaceholder} oppure scrivi liberamente` : 'Seleziona oppure scrivi liberamente';
+    }
+  }
+
+  function decorateAllFreeInputs(root = document) {
+    root.querySelectorAll?.('.squadra-personale-list .squadra-multi-entry-input, .squadra-mezzi-list .squadra-multi-entry-input')
+      .forEach(decorateFreeInput);
+  }
+
+  // Il core legge direttamente il valore testuale di questi input quando salva la squadra.
+  // Per una voce non presente nei registri impediamo soltanto al vecchio handler blur
+  // di cancellarla/validarla come record esistente. Le voci già registrate continuano
+  // invece a seguire il comportamento precedente (autocomplete e controlli disponibilità).
+  document.addEventListener('blur', (event) => {
+    const input = event.target;
+    if (!isFreeSquadEntry(input)) return;
+    const value = String(input.value || '').trim();
+    input.value = value;
+    input.dataset.freeSquadEntry = '1';
+    event.stopImmediatePropagation();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, true);
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+      if (!(node instanceof Element)) return;
+      if (node.matches?.('.squadra-multi-entry-input')) decorateFreeInput(node);
+      decorateAllFreeInputs(node);
+    }));
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => decorateAllFreeInputs(), { once: true });
+  } else {
+    decorateAllFreeInputs();
+  }
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.HeraSquadFreePersonnelVehicles = {
+    installed: true,
+    version: '1.0.0',
+    refresh: decorateAllFreeInputs
+  };
+
   install();
 })();

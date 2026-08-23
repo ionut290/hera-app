@@ -4,7 +4,7 @@
   if (window.HeraCantiereDocumentsLoaderInstalled) return;
   window.HeraCantiereDocumentsLoaderInstalled = true;
 
-  const VERSION = '20260823-docs7';
+  const VERSION = '20260823-docs4';
 
   function ensureStyle() {
     if (document.querySelector('link[data-cantiere-doc-style]')) return;
@@ -39,20 +39,20 @@
   async function init() {
     ensureStyle();
     if (!window.HeraCantiereDocuments?.installed) {
-      await loadScript({ selector: 'script[data-cantiere-doc-script]', src: `documentazione-cantiere.js?v=${VERSION}`, datasetKey: 'cantiereDocScript' });
+      await loadScript({
+        selector: 'script[data-cantiere-doc-script]',
+        src: `documentazione-cantiere.js?v=${VERSION}`,
+        datasetKey: 'cantiereDocScript'
+      });
     }
     if (!window.HeraOccasionalDocumentsRuntime?.installed) {
-      await loadScript({ selector: 'script[data-occasional-doc-runtime]', src: `documentazione-occasionali-runtime.js?v=${VERSION}`, datasetKey: 'occasionalDocRuntime' });
-    }
-    if (!window.HeraAllPlantsDocumentsRuntime?.installed) {
-      await loadScript({ selector: 'script[data-all-plants-doc-runtime]', src: `documentazione-tutte-commesse-runtime.js?v=${VERSION}`, datasetKey: 'allPlantsDocRuntime' });
-    }
-    if (!window.HeraDocumentazioneGestioneClick?.installed) {
-      await loadScript({ selector: 'script[data-documentazione-gestione-click]', src: `documentazione-gestione-click-runtime.js?v=${VERSION}`, datasetKey: 'documentazioneGestioneClick' });
+      await loadScript({
+        selector: 'script[data-occasional-doc-runtime]',
+        src: `documentazione-occasionali-runtime.js?v=${VERSION}`,
+        datasetKey: 'occasionalDocRuntime'
+      });
     }
     window.HeraOccasionalDocumentsRuntime?.refresh?.();
-    window.HeraAllPlantsDocumentsRuntime?.refresh?.();
-    window.HeraDocumentazioneGestioneClick?.refresh?.();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

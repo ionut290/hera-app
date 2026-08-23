@@ -1,11 +1,11 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.0.0') return;
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.0') return;
 
-  const VERSION = '2.0.0';
-  const CACHE_KEY = 'heraStreetViewMetadataV2';
-  const CACHE_TTL = 24 * 60 * 60 * 1000;
+  const VERSION = '2.1.0';
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
+  const MONTHLY_LIMIT = 4800;
+  const USAGE_COLLECTION = 'systemUsage';
   let observer = null;
   let mapsLoaderPromise = null;
   let activePanorama = null;
@@ -26,6 +26,68 @@
     try { return text(window.firebase?.app?.()?.options?.apiKey); } catch (_) {}
     try { return text(window.firebaseApp?.options?.apiKey); } catch (_) {}
     return '';
+  }
+
+  function resolveFirestore() {
+    try { if (typeof db !== 'undefined' && db?.runTransaction) return db; } catch (_) {}
+    try {
+      if (window.firebase?.firestore && typeof window.firebase.firestore === 'function') {
+        const firestore = window.firebase.firestore();
+        if (firestore?.runTransaction) return firestore;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function getMonthKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
+  function getCurrentUserInfo() {
+    try {
+      const user = window.firebase?.auth?.()?.currentUser;
+      if (user) return { uid: user.uid || null, email: user.email || null };
+    } catch (_) {}
+    try {
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        return { uid: currentUser.uid || null, email: currentUser.email || null };
+      }
+    } catch (_) {}
+    return { uid: null, email: null };
+  }
+
+  async function reserveSharedMonthlySlot() {
+    const firestore = resolveFirestore();
+    if (!firestore) throw new Error('Contatore condiviso Firestore non disponibile');
+
+    const monthKey = getMonthKey();
+    const ref = firestore.collection(USAGE_COLLECTION).doc(`streetView360_${monthKey}`);
+    const user = getCurrentUserInfo();
+
+    return firestore.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const data = snap.exists ? (snap.data() || {}) : {};
+      const currentCount = Math.max(0, Number(data.count || 0));
+      if (currentCount >= MONTHLY_LIMIT) {
+        return { allowed: false, count: currentCount, limit: MONTHLY_LIMIT, monthKey };
+      }
+
+      const nextCount = currentCount + 1;
+      const payload = {
+        type: 'streetView360',
+        month: monthKey,
+        count: nextCount,
+        limit: MONTHLY_LIMIT,
+        updatedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString(),
+        lastUserUid: user.uid || null,
+        lastUserEmail: user.email || null
+      };
+      if (!snap.exists) payload.createdAt = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+      transaction.set(ref, payload, { merge: true });
+      return { allowed: true, count: nextCount, limit: MONTHLY_LIMIT, monthKey };
+    });
   }
 
   function getPlants() {
@@ -68,7 +130,6 @@
       .hera-street-view-mini{position:absolute;left:8px;top:calc(100% + 5px);width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:30;overflow:hidden}
       .hera-street-view-mini:active{transform:scale(.96)}
       .hera-street-view-mini[data-state="loading"]{opacity:.6;pointer-events:none}
-      .hera-street-view-mini img{width:100%;height:100%;object-fit:cover;display:block}
       .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:12px}
       .hera-sv-modal.hidden{display:none}
       .hera-sv-dialog{width:min(920px,100%);height:min(82vh,760px);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column}
@@ -79,12 +140,7 @@
       .hera-sv-panorama{position:absolute;inset:0;width:100%;height:100%}
       .hera-sv-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#475569;font-weight:700;background:#fff;z-index:2}
       .hera-sv-badge{position:absolute;left:12px;bottom:12px;z-index:3;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800;pointer-events:none}
-      .hera-sv-static{display:block;width:100%;height:100%;object-fit:cover;background:#e5e7eb}
-      @media(max-width:480px){
-        .hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}
-        .hera-sv-modal{padding:6px}
-        .hera-sv-dialog{height:78vh;border-radius:14px}
-      }
+      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-modal{padding:6px}.hera-sv-dialog{height:78vh;border-radius:14px}}
     `;
     document.head.appendChild(style);
   }
@@ -113,42 +169,9 @@
     modal.classList.remove('hidden');
   }
 
-  function readCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch (_) { return {}; } }
-  function writeCache(cache) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (_) {} }
-
-  async function getMetadata(apiKey, coords) {
-    const key = `${coords.lat.toFixed(5)},${coords.lng.toFixed(5)}`;
-    const cache = readCache();
-    const cached = cache[key];
-    if (cached && Date.now() - Number(cached.at || 0) < CACHE_TTL) return cached.value;
-    const url = new URL('https://maps.googleapis.com/maps/api/streetview/metadata');
-    url.searchParams.set('location', `${coords.lat},${coords.lng}`);
-    url.searchParams.set('source', 'outdoor');
-    url.searchParams.set('key', apiKey);
-    const response = await fetch(url.toString());
-    if (!response.ok) throw new Error(`Street View metadata ${response.status}`);
-    const value = await response.json();
-    cache[key] = { at: Date.now(), value };
-    writeCache(cache);
-    return value;
-  }
-
-  function buildImageUrl(apiKey, coords) {
-    const url = new URL('https://maps.googleapis.com/maps/api/streetview');
-    url.searchParams.set('size', '640x420');
-    url.searchParams.set('location', `${coords.lat},${coords.lng}`);
-    url.searchParams.set('fov', '90');
-    url.searchParams.set('pitch', '0');
-    url.searchParams.set('source', 'outdoor');
-    url.searchParams.set('return_error_code', 'true');
-    url.searchParams.set('key', apiKey);
-    return url.toString();
-  }
-
   function loadGoogleMaps(apiKey) {
     if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) return Promise.resolve(window.google.maps);
     if (mapsLoaderPromise) return mapsLoaderPromise;
-
     mapsLoaderPromise = new Promise((resolve, reject) => {
       const existing = Array.from(document.scripts).find((s) => /maps\.googleapis\.com\/maps\/api\/js/.test(s.src || ''));
       if (existing) {
@@ -165,7 +188,6 @@
         }, 150);
         return;
       }
-
       const callbackName = `__heraStreetViewMapsReady_${Date.now()}`;
       const script = document.createElement('script');
       const url = new URL('https://maps.googleapis.com/maps/api/js');
@@ -189,7 +211,6 @@
       mapsLoaderPromise = null;
       throw error;
     });
-
     return mapsLoaderPromise;
   }
 
@@ -241,16 +262,21 @@
         return showStatus('Street View 360° non disponibile entro 1 km da questo impianto.');
       }
 
+      const usage = await reserveSharedMonthlySlot();
+      if (!usage.allowed) {
+        mini.textContent = '⛔';
+        return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}). Il contatore riparte automaticamente il mese prossimo.`);
+      }
+
       const panoLocation = found.data.location.latLng;
       const panoCoords = { lat: panoLocation.lat(), lng: panoLocation.lng() };
       const heading = computeHeading(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · panorama trovato entro ${found.radius} m</div>`;
+      body.innerHTML = `<div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama entro ${found.radius} m</div>`;
       modal.classList.remove('hidden');
 
-      const target = body.querySelector('.hera-sv-panorama');
-      activePanorama = new maps.StreetViewPanorama(target, {
+      activePanorama = new maps.StreetViewPanorama(body.querySelector('.hera-sv-panorama'), {
         pano: found.data.location.pano,
         pov: { heading, pitch: 0 },
         zoom: 1,
@@ -266,18 +292,16 @@
         scrollwheel: true,
         disableDefaultUI: false
       });
-
-      try {
-        const metadata = await getMetadata(apiKey, panoCoords);
-        if (metadata?.status === 'OK') mini.innerHTML = `<img alt="" aria-hidden="true" src="${buildImageUrl(apiKey, panoCoords)}">`;
-        else mini.textContent = '🌐';
-      } catch (_) {
-        mini.textContent = '🌐';
-      }
+      mini.textContent = '🌐';
     } catch (error) {
       console.warn('[STREET VIEW 360]', error);
       mini.textContent = '📷';
-      showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${text(error?.message)}`);
+      const message = text(error?.message);
+      if (/contatore condiviso|permission|permesso|firestore/i.test(message)) {
+        showStatus('⚠️ Street View bloccato per sicurezza: non riesco a verificare il contatore condiviso dei 4.800 utilizzi mensili.');
+      } else {
+        showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${message}`);
+      }
     } finally {
       delete mini.dataset.state;
     }
@@ -339,7 +363,7 @@
   window.HeraStreetViewCards = {
     installed: true,
     version: VERSION,
-    refresh: scan,
-    clearMetadataCache: () => { try { localStorage.removeItem(CACHE_KEY); } catch (_) {} }
+    monthlyLimit: MONTHLY_LIMIT,
+    refresh: scan
   };
 })();

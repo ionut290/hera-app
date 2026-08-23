@@ -26,6 +26,55 @@ const FRIENDLY_NAMES = {
   "storage.googleapis.com": "Cloud Storage API"
 };
 
+// Riferimenti Google Maps Platform global pricing, aggiornati ad agosto 2026.
+// Queste soglie servono per AVVISI nel Centro di Controllo: Service Runtime request_count
+// non coincide necessariamente con gli eventi fatturabili di uno SKU, quindi non viene
+// usato come hard-stop. Street View 360° mantiene invece il contatore applicativo esatto
+// e il blocco separato a 4.800/mese.
+const COST_POLICIES = {
+  "maps-backend.googleapis.com": {
+    sku: "Dynamic Maps",
+    freeCap: 10000,
+    warningAt: 8000,
+    dangerAt: 9500,
+    pricePer1000Usd: 7,
+    hardBlock: false,
+    note: "Cap gratuito Dynamic Maps: 10.000 eventi/mese. Conteggio Service Runtime indicativo."
+  },
+  "places.googleapis.com": {
+    sku: "Places (prudenziale: Place Details Pro)",
+    freeCap: 5000,
+    warningAt: 4000,
+    dangerAt: 4800,
+    pricePer1000Usd: 17,
+    hardBlock: false,
+    note: "L'app richiede displayName, che può attivare Place Details Pro: usata soglia prudenziale 5.000/mese. Autocomplete Requests ha cap gratuito 10.000/mese."
+  },
+  "street-view-image-backend.googleapis.com": {
+    sku: "Static Street View",
+    freeCap: 10000,
+    warningAt: 8000,
+    dangerAt: 9500,
+    pricePer1000Usd: 7,
+    hardBlock: false,
+    note: "Cap gratuito Static Street View: 10.000 eventi/mese."
+  },
+  "maps-android-backend.googleapis.com": {
+    sku: "Maps SDK",
+    freeCap: null,
+    unlimitedFree: true,
+    hardBlock: false,
+    note: "Maps SDK indicato da Google con free usage cap illimitato."
+  },
+  "maps-ios-backend.googleapis.com": {
+    sku: "Maps SDK",
+    freeCap: null,
+    unlimitedFree: true,
+    hardBlock: false,
+    note: "Maps SDK indicato da Google con free usage cap illimitato."
+  }
+};
+
 function json(statusCode, payload) {
   return {
     statusCode,
@@ -74,7 +123,7 @@ async function accessToken() {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion })
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth2:grant-type:jwt-bearer", assertion })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token) throw new Error(data.error_description || "Autorizzazione Cloud Monitoring non riuscita.");
@@ -103,6 +152,36 @@ function friendlyName(service) {
     .replace(/\.googleapis\.com$/i, "")
     .replace(/[-_.]+/g, " ")
     .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function policyStatus(requests, policy) {
+  if (!policy) return { tone: "neutral", label: "ℹ️ Monitoraggio", percent: null, remaining: null };
+  if (policy.unlimitedFree) return { tone: "safe", label: "🟢 Cap gratuito illimitato", percent: 0, remaining: null };
+  const cap = Number(policy.freeCap || 0);
+  if (!cap) return { tone: "neutral", label: "ℹ️ Nessuna soglia automatica", percent: null, remaining: null };
+  const percent = Math.min(999, requests / cap * 100);
+  const remaining = Math.max(0, cap - requests);
+  if (requests >= cap) return { tone: "danger", label: "🔴 Oltre riferimento gratuito", percent, remaining };
+  if (requests >= Number(policy.dangerAt || cap * 0.95)) return { tone: "danger", label: "🔴 Quasi al limite", percent, remaining };
+  if (requests >= Number(policy.warningAt || cap * 0.8)) return { tone: "warning", label: "🟡 Attenzione", percent, remaining };
+  return { tone: "safe", label: "🟢 Consumo regolare", percent, remaining };
+}
+
+function applyCostPolicy(item) {
+  const policy = COST_POLICIES[item.service] || null;
+  const status = policyStatus(item.requests, policy);
+  const capLabel = policy?.unlimitedFree
+    ? "illimitato"
+    : policy?.freeCap
+      ? new Intl.NumberFormat("it-IT").format(policy.freeCap)
+      : "n/d";
+  return {
+    ...item,
+    baseName: item.name,
+    name: `${item.name} · ${status.label}${policy ? ` · riferimento ${capLabel}/mese` : ""}`,
+    costPolicy: policy ? { ...policy, ...status } : { ...status, hardBlock: false },
+    pricingGuard: policy?.hardBlock ? "hard" : "monitor-only"
+  };
 }
 
 async function readApiUsage(start, end, token) {
@@ -135,6 +214,7 @@ async function readApiUsage(start, end, token) {
   return [...totals.entries()]
     .map(([service, requests]) => ({ service, name: friendlyName(service), requests: Math.round(requests) }))
     .filter((item) => item.requests > 0)
+    .map(applyCostPolicy)
     .sort((a, b) => b.requests - a.requests);
 }
 
@@ -159,9 +239,12 @@ exports.handler = async (event) => {
       periodEnd: end.toISOString(),
       totalRequests,
       services,
+      costPolicyUpdatedAt: "2026-08-23",
+      costPolicyMode: "monitor-only-except-street-view-360",
+      policyNotice: "Le soglie API Google sono avvisi prudenti basati su Service Runtime e non bloccano funzioni critiche. Street View 360° resta l'unico hard-stop a 4.800/mese perché usa un contatore applicativo condiviso esatto.",
       externalProviders: [
-        { name: "Open-Meteo", tracking: "proxy Netlify", note: "Non incluso nei contatori Google Cloud" },
-        { name: "MET Norway", tracking: "fallback meteo", note: "Non incluso nei contatori Google Cloud" }
+        { name: "Open-Meteo", tracking: "proxy Netlify", note: "Non incluso nei contatori Google Cloud; nessun blocco automatico" },
+        { name: "MET Norway", tracking: "fallback meteo", note: "Non incluso nei contatori Google Cloud; nessun blocco automatico" }
       ],
       generatedAt: new Date().toISOString(),
       source: "Google Cloud Monitoring — Service Runtime API request count",

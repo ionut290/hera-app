@@ -9,9 +9,10 @@
   let touchStartY = 0;
   let trackingTouch = false;
   let moved = false;
-  let helpersLoaded = false;
   let helperTask = 0;
   let helperTaskKind = "";
+  let trafficTask = 0;
+  let streetViewTask = 0;
   let impiantiPageObserver = null;
 
   function cleanText(value) {
@@ -68,65 +69,122 @@
     window.setTimeout(() => button.classList.remove("fatto-scroll-guard-blocked"), 260);
   }, true);
 
-  function loadScriptOnce(selector, src, datasetKey, errorMessage) {
-    if (document.querySelector(selector)) return;
+  function loadScriptOnce(selector, src, datasetKey, errorMessage, onload) {
+    const existing = document.querySelector(selector);
+    if (existing) {
+      onload?.();
+      return existing;
+    }
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
     script.dataset[datasetKey] = "true";
     script.onerror = () => console.warn(errorMessage);
+    if (onload) script.addEventListener("load", onload, { once: true });
     document.head.appendChild(script);
+    return script;
   }
 
-  function loadRecommendedHelpers() {
-    if (helpersLoaded) return;
-    helpersLoaded = true;
-    helperTask = 0;
-    helperTaskKind = "";
+  function loadSquadContext() {
+    if (window.HeraSquadContext?.installed) return;
+    loadScriptOnce(
+      'script[data-squad-context-bridge]',
+      `./squad-context-bridge.js?v=${HELPER_VERSION}`,
+      "squadContextBridge",
+      "Contesto squadra reale non caricato."
+    );
+  }
 
-    if (!window.HeraSquadContext?.installed) {
-      loadScriptOnce(
-        'script[data-squad-context-bridge]',
-        `./squad-context-bridge.js?v=${HELPER_VERSION}`,
-        "squadContextBridge",
-        "Contesto squadra reale non caricato."
-      );
+  function loadTrafficWeather() {
+    trafficTask = 0;
+    if (window.HeraRecommendedTrafficWeather?.installed) {
+      window.HeraRecommendedTrafficWeather.refresh?.();
+      return;
     }
+    loadScriptOnce(
+      'script[data-recommended-traffic-weather]',
+      `./recommended-traffic-weather.js?v=${HELPER_VERSION}`,
+      "recommendedTrafficWeather",
+      "Traffico/meteo Impianti consigliati non caricato.",
+      () => window.HeraRecommendedTrafficWeather?.refresh?.()
+    );
+  }
 
-    // Il motore stabile integra direttamente stime adattive e attrezzature.
-    // Non vengono più caricati i due vecchi observer ricorsivi che congelavano la PWA.
-    if (!window.HeraRecommendedTrafficWeather?.installed) {
-      loadScriptOnce(
-        'script[data-recommended-traffic-weather]',
-        `./recommended-traffic-weather.js?v=${HELPER_VERSION}`,
-        "recommendedTrafficWeather",
-        "Traffico/meteo Impianti consigliati non caricato."
-      );
-    }
+  function recommendedPanelOpen() {
+    const panel = document.getElementById("recommended-plants-panel");
+    return Boolean(panel && !panel.classList.contains("hidden"));
+  }
 
-    if (!window.HeraStreetViewCards?.installed) {
-      loadScriptOnce(
-        'script[data-street-view-cards]',
-        `./street-view-cards.js?v=${HELPER_VERSION}`,
-        "streetViewCards",
-        "Street View card impianti non caricato."
-      );
+  function loadStreetView() {
+    streetViewTask = 0;
+    if (recommendedPanelOpen()) {
+      scheduleStreetView(3500);
+      return;
     }
+    if (window.HeraStreetViewCards?.installed) return;
+    loadScriptOnce(
+      'script[data-street-view-cards]',
+      `./street-view-cards.js?v=${HELPER_VERSION}`,
+      "streetViewCards",
+      "Street View card impianti non caricato."
+    );
   }
 
   function cancelScheduledHelpers() {
-    if (!helperTask) return;
-    if (helperTaskKind === "idle" && typeof window.cancelIdleCallback === "function") {
-      window.cancelIdleCallback(helperTask);
-    } else {
-      window.clearTimeout(helperTask);
+    if (helperTask) {
+      if (helperTaskKind === "idle" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(helperTask);
+      } else {
+        window.clearTimeout(helperTask);
+      }
     }
     helperTask = 0;
     helperTaskKind = "";
   }
 
+  function cancelTrafficTask() {
+    if (!trafficTask) return;
+    window.clearTimeout(trafficTask);
+    trafficTask = 0;
+  }
+
+  function cancelStreetViewTask() {
+    if (!streetViewTask) return;
+    window.clearTimeout(streetViewTask);
+    streetViewTask = 0;
+  }
+
+  function scheduleTraffic(delay = 700) {
+    cancelTrafficTask();
+    trafficTask = window.setTimeout(() => {
+      if (!recommendedPanelOpen()) return;
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(loadTrafficWeather, { timeout: 1600 });
+      } else {
+        loadTrafficWeather();
+      }
+    }, delay);
+  }
+
+  function scheduleStreetView(delay = 5500) {
+    cancelStreetViewTask();
+    streetViewTask = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(loadStreetView, { timeout: 3000 });
+      } else {
+        loadStreetView();
+      }
+    }, delay);
+  }
+
+  function loadRecommendedHelpers() {
+    helperTask = 0;
+    helperTaskKind = "";
+    loadSquadContext();
+    if (recommendedPanelOpen()) scheduleTraffic(650);
+  }
+
   function scheduleRecommendedHelpers(options = {}) {
-    if (helpersLoaded) return;
     if (options.immediate) {
       cancelScheduledHelpers();
       loadRecommendedHelpers();
@@ -138,7 +196,7 @@
       helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2500 });
     } else {
       helperTaskKind = "timeout";
-      helperTask = window.setTimeout(loadRecommendedHelpers, 1000);
+      helperTask = window.setTimeout(loadRecommendedHelpers, 1200);
     }
   }
 
@@ -152,19 +210,22 @@
     const page = document.getElementById("impianti-page");
     if (!page) return false;
     const checkVisibility = () => {
-      if (!isImpiantiPageVisible(page)) return;
+      if (!isImpiantiPageVisible(page)) {
+        cancelTrafficTask();
+        cancelStreetViewTask();
+        return;
+      }
       scheduleRecommendedHelpers();
-      impiantiPageObserver?.disconnect();
-      impiantiPageObserver = null;
+      scheduleStreetView();
     };
-    checkVisibility();
-    if (!helpersLoaded && !helperTask && !impiantiPageObserver) {
+    if (!impiantiPageObserver) {
       impiantiPageObserver = new MutationObserver(checkVisibility);
       impiantiPageObserver.observe(page, {
         attributes: true,
         attributeFilter: ["class", "hidden", "aria-hidden", "style"]
       });
     }
+    checkVisibility();
     return true;
   }
 
@@ -180,8 +241,16 @@
   document.addEventListener("click", (event) => {
     if (event.target?.closest?.("#recommended-plants-btn")) {
       scheduleRecommendedHelpers({ immediate: true });
+      cancelStreetViewTask();
+      scheduleStreetView(7000);
     }
   }, true);
+
+  window.addEventListener("hera:recommended-ready", () => scheduleTraffic(500));
+  window.addEventListener("hera:recommended-closed", () => {
+    cancelTrafficTask();
+    scheduleStreetView(1800);
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initializeLazyHelpers, { once: true });

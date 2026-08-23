@@ -1,9 +1,9 @@
 (() => {
-  'use strict';
+  "use strict";
 
   const MOVE_THRESHOLD_PX = 8;
   const BLOCK_AFTER_SCROLL_MS = 450;
-  const HELPER_VERSION = '20260823-stability2';
+  const HELPER_VERSION = "20260823-stability2";
   let lastTouchScrollAt = 0;
   let touchStartX = 0;
   let touchStartY = 0;
@@ -11,21 +11,21 @@
   let moved = false;
   let helpersLoaded = false;
   let helperTask = 0;
-  let helperTaskKind = '';
+  let helperTaskKind = "";
   let impiantiPageObserver = null;
 
   function cleanText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    return String(value || "").replace(/\s+/g, " ").trim().toUpperCase();
   }
 
   function findFattoButton(target) {
     const button = target?.closest?.('button, [role="button"], input[type="button"], input[type="submit"]');
     if (!button) return null;
-    const label = cleanText(button.value || button.getAttribute('aria-label') || button.textContent);
+    const label = cleanText(button.value || button.getAttribute("aria-label") || button.textContent);
     return /(^|\s)FATTO($|\s)/.test(label) ? button : null;
   }
 
-  document.addEventListener('touchstart', (event) => {
+  document.addEventListener("touchstart", (event) => {
     const touch = event.touches?.[0];
     if (!touch) return;
     trackingTouch = true;
@@ -34,7 +34,7 @@
     touchStartY = touch.clientY;
   }, { capture: true, passive: true });
 
-  document.addEventListener('touchmove', (event) => {
+  document.addEventListener("touchmove", (event) => {
     if (!trackingTouch) return;
     const touch = event.touches?.[0];
     if (!touch) return;
@@ -44,40 +44,37 @@
     if (moved) lastTouchScrollAt = Date.now();
   }, { capture: true, passive: true });
 
-  document.addEventListener('touchend', () => {
+  document.addEventListener("touchend", () => {
     if (moved) lastTouchScrollAt = Date.now();
     trackingTouch = false;
     moved = false;
   }, { capture: true, passive: true });
 
-  document.addEventListener('touchcancel', () => {
+  document.addEventListener("touchcancel", () => {
     if (moved) lastTouchScrollAt = Date.now();
     trackingTouch = false;
     moved = false;
   }, { capture: true, passive: true });
 
-  document.addEventListener('click', (event) => {
+  document.addEventListener("click", (event) => {
     const button = findFattoButton(event.target);
-    if (!button) return;
-    if ((Date.now() - lastTouchScrollAt) > BLOCK_AFTER_SCROLL_MS) return;
-
+    if (!button || Date.now() - lastTouchScrollAt > BLOCK_AFTER_SCROLL_MS) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-
-    button.classList.remove('fatto-scroll-guard-blocked');
+    button.classList.remove("fatto-scroll-guard-blocked");
     void button.offsetWidth;
-    button.classList.add('fatto-scroll-guard-blocked');
-    window.setTimeout(() => button.classList.remove('fatto-scroll-guard-blocked'), 260);
+    button.classList.add("fatto-scroll-guard-blocked");
+    window.setTimeout(() => button.classList.remove("fatto-scroll-guard-blocked"), 260);
   }, true);
 
-  function loadScriptOnce(selector, src, datasetKey, onerror) {
+  function loadScriptOnce(selector, src, datasetKey, errorMessage) {
     if (document.querySelector(selector)) return;
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.dataset[datasetKey] = 'true';
-    script.onerror = onerror;
+    script.dataset[datasetKey] = "true";
+    script.onerror = () => console.warn(errorMessage);
     document.head.appendChild(script);
   }
 
@@ -85,59 +82,47 @@
     if (helpersLoaded) return;
     helpersLoaded = true;
     helperTask = 0;
-    helperTaskKind = '';
+    helperTaskKind = "";
 
     if (!window.HeraSquadContext?.installed) {
       loadScriptOnce(
         'script[data-squad-context-bridge]',
         `./squad-context-bridge.js?v=${HELPER_VERSION}`,
-        'squadContextBridge',
-        () => console.warn('Contesto squadra reale non caricato.')
+        "squadContextBridge",
+        "Contesto squadra reale non caricato."
       );
     }
-    if (!window.HeraEquipmentAdvisor?.installed) {
-      loadScriptOnce(
-        'script[data-equipment-recommendations]',
-        `./equipment-recommendations.js?v=${HELPER_VERSION}`,
-        'equipmentRecommendations',
-        () => console.warn('Consigli attrezzature non caricati.')
-      );
-    }
-    if (!window.HeraAdaptiveWorkLearning?.installed) {
-      loadScriptOnce(
-        'script[data-adaptive-work-learning]',
-        `./adaptive-work-learning.js?v=${HELPER_VERSION}`,
-        'adaptiveWorkLearning',
-        () => console.warn('Apprendimento adattivo non caricato.')
-      );
-    }
+
+    // Il motore stabile integra direttamente stime adattive e attrezzature.
+    // Non vengono più caricati i due vecchi observer ricorsivi che congelavano la PWA.
     if (!window.HeraRecommendedTrafficWeather?.installed) {
       loadScriptOnce(
         'script[data-recommended-traffic-weather]',
         `./recommended-traffic-weather.js?v=${HELPER_VERSION}`,
-        'recommendedTrafficWeather',
-        () => console.warn('Traffico/meteo Impianti consigliati non caricato.')
+        "recommendedTrafficWeather",
+        "Traffico/meteo Impianti consigliati non caricato."
       );
     }
+
     if (!window.HeraStreetViewCards?.installed) {
       loadScriptOnce(
         'script[data-street-view-cards]',
         `./street-view-cards.js?v=${HELPER_VERSION}`,
-        'streetViewCards',
-        () => console.warn('Street View card impianti non caricato.')
+        "streetViewCards",
+        "Street View card impianti non caricato."
       );
     }
   }
 
   function cancelScheduledHelpers() {
     if (!helperTask) return;
-    if (helperTaskKind === 'idle' && typeof window.cancelIdleCallback === 'function') {
+    if (helperTaskKind === "idle" && typeof window.cancelIdleCallback === "function") {
       window.cancelIdleCallback(helperTask);
     } else {
       window.clearTimeout(helperTask);
     }
     helperTask = 0;
-    helperTaskKind = '';
+    helperTaskKind = "";
   }
 
   function scheduleRecommendedHelpers(options = {}) {
@@ -148,43 +133,36 @@
       return;
     }
     if (helperTask) return;
-
-    // All'apertura della commessa Firestore deve completare prima squadre e impianti.
-    // I moduli opzionali partono in idle; il click su “Impianti consigliati” resta immediato.
-    if (typeof window.requestIdleCallback === 'function') {
-      helperTaskKind = 'idle';
+    if (typeof window.requestIdleCallback === "function") {
+      helperTaskKind = "idle";
       helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2500 });
     } else {
-      helperTaskKind = 'timeout';
-      helperTask = window.setTimeout(loadRecommendedHelpers, 1200);
+      helperTaskKind = "timeout";
+      helperTask = window.setTimeout(loadRecommendedHelpers, 1000);
     }
   }
 
   function isImpiantiPageVisible(page) {
-    if (!page || page.hidden) return false;
-    if (page.classList.contains('hidden')) return false;
-    if (page.getAttribute('aria-hidden') === 'true') return false;
-    if (page.style?.display === 'none' || page.style?.visibility === 'hidden') return false;
-    return true;
+    if (!page || page.hidden || page.classList.contains("hidden")) return false;
+    if (page.getAttribute("aria-hidden") === "true") return false;
+    return page.style?.display !== "none" && page.style?.visibility !== "hidden";
   }
 
   function bindImpiantiPage() {
-    const page = document.getElementById('impianti-page');
+    const page = document.getElementById("impianti-page");
     if (!page) return false;
-
     const checkVisibility = () => {
       if (!isImpiantiPageVisible(page)) return;
       scheduleRecommendedHelpers();
       impiantiPageObserver?.disconnect();
       impiantiPageObserver = null;
     };
-
     checkVisibility();
     if (!helpersLoaded && !helperTask && !impiantiPageObserver) {
       impiantiPageObserver = new MutationObserver(checkVisibility);
       impiantiPageObserver.observe(page, {
         attributes: true,
-        attributeFilter: ['class', 'hidden', 'aria-hidden', 'style']
+        attributeFilter: ["class", "hidden", "aria-hidden", "style"]
       });
     }
     return true;
@@ -199,14 +177,14 @@
     }, 500);
   }
 
-  document.addEventListener('click', (event) => {
-    if (event.target?.closest?.('#recommended-plants-btn')) {
+  document.addEventListener("click", (event) => {
+    if (event.target?.closest?.("#recommended-plants-btn")) {
       scheduleRecommendedHelpers({ immediate: true });
     }
   }, true);
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeLazyHelpers, { once: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeLazyHelpers, { once: true });
   } else {
     initializeLazyHelpers();
   }

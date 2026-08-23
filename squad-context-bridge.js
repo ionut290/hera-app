@@ -2,8 +2,9 @@
   'use strict';
   if (window.HeraSquadContext?.installed) return;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   let lastSignature = '';
+  let lastContext = null;
   let refreshTimer = 0;
   let pollCount = 0;
 
@@ -145,6 +146,20 @@
     };
   }
 
+  function isContextCurrent(context) {
+    return Boolean(
+      context &&
+      context.commessaId === selectedCommessaIdValue() &&
+      context.data === todayKey()
+    );
+  }
+
+  function getCurrent() {
+    const current = buildContext();
+    if (current) return current;
+    return isContextCurrent(lastContext) ? lastContext : null;
+  }
+
   function refreshConsumers() {
     clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
@@ -159,9 +174,20 @@
     }, 80);
   }
 
+  function clearStaleContext() {
+    if (isContextCurrent(lastContext)) return;
+    lastContext = null;
+    lastSignature = '';
+    window.HeraRecommendedSquadContext = null;
+  }
+
   function sync(options = {}) {
     const context = buildContext();
-    if (!context) return null;
+    if (!context) {
+      clearStaleContext();
+      return null;
+    }
+
     const signature = JSON.stringify({
       commessaId: context.commessaId,
       data: context.data,
@@ -169,9 +195,10 @@
       mezzi: context.mezziOriginali
     });
 
-    // I moduli Impianti consigliati leggono currentSquadre per retrocompatibilità.
-    // Qui gli forniamo la stessa composizione realmente salvata nella schermata Squadre.
-    window.currentSquadre = [context];
+    // Il contesto per le stime resta separato dai dati reali dell'app.
+    // Non modificare currentSquadre: è lo stato usato dalle schermate e dai listener Firestore.
+    lastContext = context;
+    window.HeraRecommendedSquadContext = context;
 
     if (signature !== lastSignature || options.force) {
       lastSignature = signature;
@@ -189,9 +216,9 @@
   function startShortPolling() {
     const timer = window.setInterval(() => {
       pollCount += 1;
-      sync();
-      if (pollCount >= 20) window.clearInterval(timer);
-    }, 1500);
+      const context = sync();
+      if (context || pollCount >= 10) window.clearInterval(timer);
+    }, 1000);
   }
 
   document.addEventListener('click', (event) => {
@@ -206,11 +233,10 @@
   window.HeraSquadContext = {
     installed: true,
     version: VERSION,
-    getCurrent: buildContext,
+    getCurrent,
     sync,
     classifyVehicle
   };
 
-  sync();
-  startShortPolling();
+  if (!sync()) startShortPolling();
 })();

@@ -3,7 +3,7 @@
 
   const MOVE_THRESHOLD_PX = 8;
   const BLOCK_AFTER_SCROLL_MS = 450;
-  const HELPER_VERSION = '20260823-stability1';
+  const HELPER_VERSION = '20260823-stability2';
   let lastTouchScrollAt = 0;
   let touchStartX = 0;
   let touchStartY = 0;
@@ -149,12 +149,14 @@
     }
     if (helperTask) return;
 
+    // All'apertura della commessa Firestore deve completare prima squadre e impianti.
+    // I moduli opzionali partono in idle; il click su “Impianti consigliati” resta immediato.
     if (typeof window.requestIdleCallback === 'function') {
       helperTaskKind = 'idle';
-      helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 900 });
+      helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2500 });
     } else {
       helperTaskKind = 'timeout';
-      helperTask = window.setTimeout(loadRecommendedHelpers, 250);
+      helperTask = window.setTimeout(loadRecommendedHelpers, 1200);
     }
   }
 

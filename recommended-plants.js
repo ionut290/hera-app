@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VERSION = '3.0.0-unfreeze1';
+  const VERSION = '3.0.1-observer-scope1';
   if (window.HeraRecommendedPlants?.version === VERSION) return;
 
   const CFG = Object.freeze({
@@ -227,7 +227,7 @@
   function bindPanel(p){if(p.dataset.bound)return;p.dataset.bound='1';p.addEventListener('click',ev=>{if(ev.target.closest?.('#recommended-close-btn')){ev.preventDefault();close();return;}if(ev.target.closest?.('#recommended-origin-avola')){state.originMode='avola';render();return;}if(ev.target.closest?.('#recommended-origin-live')){state.originMode='position';render();return;}const start=ev.target.closest?.('#recommended-start-route');if(start){markRoute();state.originMode='position';start.textContent='✓ GIRO AVVIATO';return;}const nav=ev.target.closest?.('[data-recommended-nav="1"]');if(nav){markRoute();startLearning(entryFrom(nav));}});}
   async function render(){const seq=++state.seq,current=()=>seq===state.seq&&state.open,p=panel(),b=button();if(!p||!b||!state.open)return;state.signature='';p.classList.remove('hidden');p.setAttribute('aria-busy','true');b.classList.add('btn-primary');b.setAttribute('aria-pressed','true');p.innerHTML='<div class="recommended-loading">Calcolo gli impianti consigliati…</div>';await sleep0();if(!current())return;const items=globalValue('currentImpianti');if(!Array.isArray(items)||!items.length){p.innerHTML='<div class="recommended-empty"><strong>Nessun impianto disponibile.</strong><span>Attendi il caricamento della commessa e riprova.</span></div>';p.setAttribute('aria-busy','false');return;}const o=await origin(current);if(!o||!current())return;const t=teamInfo(),list=await plan(items,o,t,current);if(!current())return;state.origin=o;state.team=t;state.plan=list;draw(true);}
   const pageVisible=p=>Boolean(p&&!p.hidden&&!p.classList.contains('hidden')&&p.getAttribute('aria-hidden')!=='true'&&p.style?.display!=='none'&&p.style?.visibility!=='hidden');
-  function install(){button();panel();const page=document.getElementById('impianti-page');if(page)new MutationObserver(()=>pageVisible(page)?(button(),panel()):close()).observe(page,{attributes:true,attributeFilter:['class','hidden','aria-hidden','style'],childList:true,subtree:true});}
+  function install(){button();panel();const page=document.getElementById('impianti-page');if(page)new MutationObserver(()=>pageVisible(page)?(button(),panel()):close()).observe(page,{attributes:true,attributeFilter:['class','hidden','aria-hidden','style']});}
   document.addEventListener('click',ev=>{const b=ev.target?.closest?.('button,[role="button"],input[type="button"],input[type="submit"]');if(b&&/(^|\s)FATTO($|\s)/.test(up(b.textContent||b.getAttribute('aria-label')||b.value||'')))setTimeout(()=>finishLearning(b),900);},true);
   window.addEventListener('popstate',()=>setTimeout(()=>{if(!pageVisible(document.getElementById('impianti-page')))close();},0));
   window.addEventListener('hashchange',()=>setTimeout(()=>{if(!pageVisible(document.getElementById('impianti-page')))close();},0));

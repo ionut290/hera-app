@@ -3,7 +3,7 @@
 
   const MOVE_THRESHOLD_PX = 8;
   const BLOCK_AFTER_SCROLL_MS = 450;
-  const HELPER_VERSION = "20260823-stability2";
+  const HELPER_VERSION = "20260823-stability3";
   let lastTouchScrollAt = 0;
   let touchStartX = 0;
   let touchStartY = 0;

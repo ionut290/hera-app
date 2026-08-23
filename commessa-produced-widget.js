@@ -236,7 +236,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260823-stability2";
+  const VERSION = "20260823-stability3";
   let pageObserver = null;
   let recommendedTask = 0;
   let recommendedTaskKind = "";

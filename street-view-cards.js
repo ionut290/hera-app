@@ -1,14 +1,20 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.1') return;
 
-  const VERSION = '2.1.1';
+  const VERSION = '2.2.0-responsive2';
+  if (window.HeraStreetViewCards?.version === VERSION) return;
+
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
   const USAGE_COLLECTION = 'appConfig';
+  const ROWS_PER_BATCH = 12;
   let observer = null;
+  let observedList = null;
   let mapsLoaderPromise = null;
   let activePanorama = null;
+  let queueTask = 0;
+  let queueTaskKind = '';
+  const queuedRows = new Set();
 
   const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
@@ -84,14 +90,18 @@
         lastUserUid: user.uid || null,
         lastUserEmail: user.email || null
       };
-      if (!snap.exists) payload.createdAt = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+      if (!snap.exists) {
+        payload.createdAt = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+      }
       transaction.set(ref, payload, { merge: true });
       return { allowed: true, count: nextCount, limit: MONTHLY_LIMIT, monthKey };
     });
   }
 
   function getPlants() {
-    try { if (typeof currentImpianti !== 'undefined' && Array.isArray(currentImpianti)) return currentImpianti; } catch (_) {}
+    try {
+      if (typeof currentImpianti !== 'undefined' && Array.isArray(currentImpianti)) return currentImpianti;
+    } catch (_) {}
     return Array.isArray(window.currentImpianti) ? window.currentImpianti : [];
   }
 
@@ -99,13 +109,17 @@
     if (!item) return null;
     try {
       if (typeof getImpiantoNavigationCoordinates === 'function') {
-        const c = getImpiantoNavigationCoordinates(item);
-        if (Number.isFinite(Number(c?.lat)) && Number.isFinite(Number(c?.lng))) return { lat: Number(c.lat), lng: Number(c.lng) };
+        const coords = getImpiantoNavigationCoordinates(item);
+        if (Number.isFinite(Number(coords?.lat)) && Number.isFinite(Number(coords?.lng))) {
+          return { lat: Number(coords.lat), lng: Number(coords.lng) };
+        }
       }
     } catch (_) {}
     try {
-      const c = window.HeraCoordinateRepair?.getCoordinates?.(item);
-      if (Number.isFinite(Number(c?.lat)) && Number.isFinite(Number(c?.lng))) return { lat: Number(c.lat), lng: Number(c.lng) };
+      const coords = window.HeraCoordinateRepair?.getCoordinates?.(item);
+      if (Number.isFinite(Number(coords?.lat)) && Number.isFinite(Number(coords?.lng))) {
+        return { lat: Number(coords.lat), lng: Number(coords.lng) };
+      }
     } catch (_) {}
     const lat = Number(item.lat ?? item.latitude ?? item.Latitudine ?? item.gpsY ?? item.GPSY);
     const lng = Number(item.lng ?? item.lon ?? item.longitude ?? item.Longitudine ?? item.gpsX ?? item.GPSX);
@@ -113,10 +127,15 @@
   }
 
   function findPlantFromRow(row) {
-    const body = upper(row?.closest?.('.impianto-actions')?.parentElement?.textContent || row?.parentElement?.textContent || '');
+    const body = upper(
+      row?.closest?.('.impianto-actions')?.parentElement?.textContent
+      || row?.parentElement?.textContent
+      || ''
+    );
     return getPlants().find((item) => {
       const values = [item?.denominazione, item?.nome, item?.impianto, item?.idSap, item?.idSAP, item?.sap]
-        .map(text).filter(Boolean);
+        .map(text)
+        .filter(Boolean);
       return values.some((value) => body.includes(upper(value)));
     }) || null;
   }
@@ -127,7 +146,7 @@
     style.id = 'hera-street-view-card-style';
     style.textContent = `
       .impianto-primary-actions.hera-sv-row{position:relative!important}
-      .hera-street-view-mini{position:absolute;left:8px;top:calc(100% + 5px);width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:30;overflow:hidden}
+      .hera-street-view-mini{position:absolute;left:8px;top:calc(100% + 5px);width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:30;overflow:hidden;touch-action:manipulation}
       .hera-street-view-mini:active{transform:scale(.96)}
       .hera-street-view-mini[data-state="loading"]{opacity:.6;pointer-events:none}
       .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:12px}
@@ -135,7 +154,7 @@
       .hera-sv-dialog{width:min(920px,100%);height:min(82vh,760px);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column}
       .hera-sv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:800;flex:0 0 auto}
       .hera-sv-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:40px;height:40px;min-width:40px;font-size:22px}
+      .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:40px;height:40px;min-width:40px;font-size:22px;touch-action:manipulation}
       .hera-sv-body{position:relative;flex:1 1 auto;min-height:0;background:#e5e7eb}
       .hera-sv-panorama{position:absolute;inset:0;width:100%;height:100%}
       .hera-sv-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#475569;font-weight:700;background:#fff;z-index:2}
@@ -151,7 +170,7 @@
     modal = document.createElement('div');
     modal.id = 'hera-street-view-modal';
     modal.className = 'hera-sv-modal hidden';
-    modal.innerHTML = `<div class="hera-sv-dialog" role="dialog" aria-modal="true" aria-label="Street View 360 impianto"><div class="hera-sv-head"><span class="hera-sv-title">🌐 Street View 360° impianto</span><button type="button" class="hera-sv-close" aria-label="Chiudi">×</button></div><div class="hera-sv-body"><div class="hera-sv-status">Caricamento Street View 360°…</div></div></div>`;
+    modal.innerHTML = '<div class="hera-sv-dialog" role="dialog" aria-modal="true" aria-label="Street View 360 impianto"><div class="hera-sv-head"><span class="hera-sv-title">🌐 Street View 360° impianto</span><button type="button" class="hera-sv-close" aria-label="Chiudi">×</button></div><div class="hera-sv-body"><div class="hera-sv-status">Caricamento Street View 360°…</div></div></div>';
     document.body.appendChild(modal);
     const close = () => {
       modal.classList.add('hidden');
@@ -159,7 +178,9 @@
       activePanorama = null;
     };
     modal.querySelector('.hera-sv-close')?.addEventListener('click', close);
-    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) close();
+    });
     return modal;
   }
 
@@ -170,24 +191,29 @@
   }
 
   function loadGoogleMaps(apiKey) {
-    if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) return Promise.resolve(window.google.maps);
+    if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) {
+      return Promise.resolve(window.google.maps);
+    }
     if (mapsLoaderPromise) return mapsLoaderPromise;
+
     mapsLoaderPromise = new Promise((resolve, reject) => {
-      const existing = Array.from(document.scripts).find((s) => /maps\.googleapis\.com\/maps\/api\/js/.test(s.src || ''));
+      const existing = Array.from(document.scripts)
+        .find((script) => /maps\.googleapis\.com\/maps\/api\/js/.test(script.src || ''));
       if (existing) {
         let attempts = 0;
-        const timer = setInterval(() => {
+        const timer = window.setInterval(() => {
           attempts += 1;
           if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) {
-            clearInterval(timer);
+            window.clearInterval(timer);
             resolve(window.google.maps);
           } else if (attempts >= 60) {
-            clearInterval(timer);
+            window.clearInterval(timer);
             reject(new Error('Maps JavaScript API non disponibile'));
           }
         }, 150);
         return;
       }
+
       const callbackName = `__heraStreetViewMapsReady_${Date.now()}`;
       const script = document.createElement('script');
       const url = new URL('https://maps.googleapis.com/maps/api/js');
@@ -199,8 +225,11 @@
       script.defer = true;
       window[callbackName] = () => {
         try { delete window[callbackName]; } catch (_) {}
-        if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) resolve(window.google.maps);
-        else reject(new Error('Street View JavaScript non inizializzato'));
+        if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) {
+          resolve(window.google.maps);
+        } else {
+          reject(new Error('Street View JavaScript non inizializzato'));
+        }
       };
       script.onerror = () => {
         try { delete window[callbackName]; } catch (_) {}
@@ -228,7 +257,9 @@
   async function findNearbyPanorama(service, coords) {
     for (const radius of SEARCH_RADII) {
       const result = await getPanoramaAtRadius(service, coords, radius);
-      if (result.status === window.google.maps.StreetViewStatus.OK && result.data?.location?.pano) return result;
+      if (result.status === window.google.maps.StreetViewStatus.OK && result.data?.location?.pano) {
+        return result;
+      }
     }
     return null;
   }
@@ -238,7 +269,8 @@
     const lat2 = to.lat * Math.PI / 180;
     const dLng = (to.lng - from.lng) * Math.PI / 180;
     const y = Math.sin(dLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    const x = Math.cos(lat1) * Math.sin(lat2)
+      - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
@@ -309,8 +341,8 @@
 
   function enhanceRow(row) {
     if (!(row instanceof HTMLElement) || row.dataset.streetViewReady === '1') return;
-    const nav = row.querySelector('[data-action-key="navigate"]');
-    if (!nav) return;
+    const navigate = row.querySelector('[data-action-key="navigate"]');
+    if (!navigate) return;
     row.dataset.streetViewReady = '1';
     row.classList.add('hera-sv-row');
     const mini = document.createElement('button');
@@ -327,38 +359,90 @@
     row.appendChild(mini);
   }
 
+  function queueRow(row) {
+    if (!(row instanceof HTMLElement) || row.dataset.streetViewReady === '1') return;
+    queuedRows.add(row);
+  }
+
+  function collectRows(root) {
+    if (!(root instanceof HTMLElement)) return;
+    if (root.matches?.('.impianto-primary-actions')) queueRow(root);
+    root.querySelectorAll?.('.impianto-primary-actions').forEach(queueRow);
+    scheduleQueue();
+  }
+
+  function cancelQueueTask() {
+    if (!queueTask) return;
+    if (queueTaskKind === 'idle' && typeof window.cancelIdleCallback === 'function') {
+      window.cancelIdleCallback(queueTask);
+    } else {
+      window.clearTimeout(queueTask);
+    }
+    queueTask = 0;
+    queueTaskKind = '';
+  }
+
+  function processQueue(deadline) {
+    queueTask = 0;
+    queueTaskKind = '';
+    let processed = 0;
+    while (queuedRows.size && processed < ROWS_PER_BATCH) {
+      if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 2) break;
+      const iterator = queuedRows.values().next();
+      if (iterator.done) break;
+      const row = iterator.value;
+      queuedRows.delete(row);
+      if (row.isConnected) enhanceRow(row);
+      processed += 1;
+    }
+    if (queuedRows.size) scheduleQueue();
+  }
+
+  function scheduleQueue() {
+    if (queueTask || !queuedRows.size) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      queueTaskKind = 'idle';
+      queueTask = window.requestIdleCallback(processQueue, { timeout: 900 });
+    } else {
+      queueTaskKind = 'timeout';
+      queueTask = window.setTimeout(() => processQueue(null), 32);
+    }
+  }
+
+  function installObserver(list) {
+    if (observer && observedList === list) return;
+    observer?.disconnect();
+    observedList = list;
+    observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLElement) collectRows(node);
+        }
+      }
+    });
+    observer.observe(list, { childList: true, subtree: true });
+  }
+
   function scan() {
     const list = document.getElementById('impianti-lista');
     if (!list) return false;
-    list.querySelectorAll('.impianto-primary-actions').forEach(enhanceRow);
-    if (!observer) {
-      observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          for (const node of mutation.addedNodes) {
-            if (!(node instanceof HTMLElement)) continue;
-            if (node.matches?.('.impianto-primary-actions')) enhanceRow(node);
-            node.querySelectorAll?.('.impianto-primary-actions').forEach(enhanceRow);
-          }
-        }
-      });
-      observer.observe(list, { childList: true, subtree: true });
-    }
+    collectRows(list);
+    installObserver(list);
     return true;
   }
 
   function install() {
     ensureStyles();
-    ensureModal();
-    scan();
+    if (scan()) return;
     let attempts = 0;
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       attempts += 1;
-      if (scan() || attempts >= 20) clearInterval(timer);
+      if (scan() || attempts >= 20) window.clearInterval(timer);
     }, 250);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-  else install();
+  window.addEventListener('hera:recommended-ready', cancelQueueTask);
+  window.addEventListener('hera:recommended-closed', scheduleQueue);
 
   window.HeraStreetViewCards = {
     installed: true,
@@ -366,4 +450,10 @@
     monthlyLimit: MONTHLY_LIMIT,
     refresh: scan
   };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install, { once: true });
+  } else {
+    install();
+  }
 })();

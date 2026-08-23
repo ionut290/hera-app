@@ -281,57 +281,29 @@
     return null;
   }
 
-  function isGearButton(button) {
-    if (!(button instanceof Element)) return false;
-    const label = normalize([
-      button.textContent,
-      button.getAttribute("aria-label"),
-      button.getAttribute("title")
-    ].filter(Boolean).join(" "));
-    return label.includes("⚙") || label.includes("INGRAN") || label.includes("IMPOSTAZ") || label.includes("GESTIONE");
-  }
-
-  function findGearAnchorForPlant(plant) {
-    const name = normalize(plantName(plant));
-    if (!name) return null;
-    const gears = Array.from(document.querySelectorAll("button")).filter(isGearButton);
-    for (const gear of gears) {
-      let node = gear;
-      for (let depth = 0; node && node !== document.body && depth < 10; depth += 1, node = node.parentElement) {
-        if (!normalize(node.textContent).includes(name)) continue;
-        const row = gear.parentElement || gear;
-        return { card: node, gear, anchor: row };
-      }
-    }
-    return null;
-  }
-
-  function createPdfSection(plant) {
-    const section = document.createElement("section");
-    section.className = "occasional-pdf-section occasional-pdf-under-gear";
-    section.dataset.occasionalPdfPlant = plantId(plant);
-    section.innerHTML = `<div class="occasional-pdf-head"><button type="button" class="btn occasional-pdf-add">📎 ALLEGA PDF</button><small class="muted">Il PDF verrà mostrato prima di NAVIGA • max 15 MB</small></div><div class="occasional-pdf-list"></div>`;
-    const host = section.querySelector(".occasional-pdf-list");
-    const add = section.querySelector(".occasional-pdf-add");
-    add.addEventListener("click", () => choosePdfs(plant, host, add));
-    void renderPdfList(plant, host);
-    return section;
-  }
-
   function decorateCards() {
     plants().forEach((plant) => {
       const id = plantId(plant);
-      if (!id) return;
-      const placement = findGearAnchorForPlant(plant);
-      if (!placement?.anchor?.isConnected) return;
+      const name = normalize(plantName(plant));
+      if (!id || !name) return;
+      document.querySelectorAll("button").forEach((button) => {
+        if (normalize(button.textContent) !== "FATTO") return;
+        let card = button.parentElement;
+        while (card && card !== document.body && !normalize(card.textContent).includes(name)) card = card.parentElement;
+        if (!card || card === document.body || card.querySelector(`[data-occasional-pdf-plant="${CSS.escape(id)}"]`)) return;
 
-      let section = document.querySelector(`[data-occasional-pdf-plant="${CSS.escape(id)}"]`);
-      if (!section) section = createPdfSection(plant);
-
-      const expectedPrevious = placement.anchor;
-      if (section.previousElementSibling !== expectedPrevious) {
-        expectedPrevious.insertAdjacentElement("afterend", section);
-      }
+        const section = document.createElement("section");
+        section.className = "occasional-pdf-section";
+        section.dataset.occasionalPdfPlant = id;
+        section.innerHTML = `<div class="occasional-pdf-head"><button type="button" class="btn occasional-pdf-add">📎 ALLEGA PDF</button><small class="muted">Il PDF verrà mostrato prima di NAVIGA • max 15 MB</small></div><div class="occasional-pdf-list"></div>`;
+        const hours = card.querySelector(".occasional-hours-actions");
+        if (hours) hours.insertAdjacentElement("afterend", section);
+        else button.parentElement?.insertAdjacentElement("afterend", section);
+        const host = section.querySelector(".occasional-pdf-list");
+        const add = section.querySelector(".occasional-pdf-add");
+        add.addEventListener("click", () => choosePdfs(plant, host, add));
+        void renderPdfList(plant, host);
+      });
     });
   }
 
@@ -476,7 +448,6 @@
     style.id = "occasional-pdf-storage-style";
     style.textContent = `
       .occasional-pdf-section{margin-top:10px;padding:10px;border:1px solid #dbe4ef;border-radius:14px;background:#f8fafc}
-      .occasional-pdf-under-gear{width:100%;box-sizing:border-box}
       .occasional-pdf-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.occasional-pdf-head .occasional-pdf-add{font-weight:800}
       .occasional-pdf-list{display:grid;gap:7px;margin-top:8px}.occasional-pdf-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center}
       .occasional-pdf-open{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:center;width:100%;padding:9px 10px;border:1px solid #dbe4ef;border-radius:12px;background:#fff;text-align:left;color:inherit}
@@ -518,7 +489,7 @@
 
   window.HeraOccasionalPdfStorage = {
     installed: true,
-    version: "2.1.0",
+    version: "2.0.0",
     refresh,
     isOccasionalPlant,
     uploadOnePdf,

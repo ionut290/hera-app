@@ -18,3 +18,21 @@
 
 /shared-pdf-attachments.js
   Cache-Control: no-cache, must-revalidate
+
+/recommended-plants.js
+  Cache-Control: no-cache, must-revalidate
+
+/recommended-plants.css
+  Cache-Control: no-cache, must-revalidate
+
+/fatto-scroll-guard.js
+  Cache-Control: no-cache, must-revalidate
+
+/squad-context-bridge.js
+  Cache-Control: no-cache, must-revalidate
+
+/recommended-traffic-weather.js
+  Cache-Control: no-cache, must-revalidate
+
+/street-view-cards.js
+  Cache-Control: no-cache, must-revalidate

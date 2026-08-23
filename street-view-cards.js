@@ -2,11 +2,13 @@
   'use strict';
   if (window.HeraStreetViewCards?.installed) return;
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const METADATA_CACHE_KEY = 'heraStreetViewMetadataV1';
   const METADATA_TTL = 7 * 24 * 60 * 60 * 1000;
   const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
+  let listObserver = null;
+  let observedList = null;
 
   function resolveApiKey() {
     const globals = [window.HERA_GOOGLE_MAPS_API_KEY, window.GOOGLE_MAPS_API_KEY, window.GOOGLE_API_KEY, window.mapsApiKey, window.googleMapsApiKey, window.__GOOGLE_MAPS_API_KEY__]
@@ -23,9 +25,7 @@
   }
 
   function getIds(item) {
-    try {
-      if (typeof getImpiantoDocIds === 'function') return getImpiantoDocIds(item).map(text).filter(Boolean);
-    } catch (_) {}
+    try { if (typeof getImpiantoDocIds === 'function') return getImpiantoDocIds(item).map(text).filter(Boolean); } catch (_) {}
     return [item?.physicalPlantId, item?.impiantoId, item?.id, item?.idSap, item?.idSAP, item?.sap].map(text).filter(Boolean);
   }
 
@@ -63,20 +63,16 @@
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   }
 
-  function isNavigate(el) {
-    return /(^|\s)NAVIGA($|\s)/i.test(text(el?.textContent || el?.value || el?.getAttribute?.('aria-label')));
-  }
+  function labelOf(el) { return upper(el?.textContent || el?.value || el?.getAttribute?.('aria-label') || el?.title); }
+  function isNavigate(el) { return labelOf(el).includes('NAVIGA'); }
+  function isDone(el) { return labelOf(el).includes('FATTO'); }
 
-  function isDone(el) {
-    return /(^|\s)FATTO($|\s)/i.test(text(el?.textContent || el?.value || el?.getAttribute?.('aria-label')));
-  }
-
-  function findCard(nav) {
+  function findCard(nav, list) {
     let node = nav.parentElement;
-    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-      if (node.matches?.('.map-popup-actions,.recommended-item')) continue;
+    while (node && node !== list) {
       const actions = Array.from(node.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]'));
       if (actions.some(isNavigate) && actions.some(isDone)) return node;
+      node = node.parentElement;
     }
     return null;
   }
@@ -87,7 +83,7 @@
     style.id = 'hera-street-view-card-style';
     style.textContent = `
       .hera-street-view-anchor{position:relative!important}
-      .hera-street-view-mini{position:absolute;left:8px;bottom:8px;width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:4;overflow:hidden}
+      .hera-street-view-mini{position:absolute;left:8px;bottom:8px;width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:20;overflow:hidden}
       .hera-street-view-mini:active{transform:scale(.96)}
       .hera-street-view-mini[data-state="loading"]{opacity:.6;pointer-events:none}
       .hera-street-view-mini img{width:100%;height:100%;object-fit:cover;display:block}
@@ -161,7 +157,8 @@
     if (!apiKey) return showStatus('⚠️ Chiave Google API non disponibile.');
     const coords = getCoords(findPlant(nav, card));
     if (!coords) return showStatus('⚠️ Coordinate impianto non disponibili.');
-    mini.dataset.state = 'loading'; mini.textContent = '…';
+    mini.dataset.state = 'loading';
+    mini.textContent = '…';
     try {
       const data = await metadata(apiKey, coords);
       if (data?.status !== 'OK') { mini.textContent = '📷'; return showStatus('Street View non disponibile vicino a questo impianto.'); }
@@ -172,43 +169,78 @@
       modal.classList.remove('hidden');
       mini.innerHTML = `<img alt="" aria-hidden="true" src="${src}">`;
     } catch (error) {
-      console.warn('[STREET VIEW]', error); mini.textContent = '📷'; showStatus('⚠️ Street View non disponibile in questo momento.');
+      console.warn('[STREET VIEW]', error);
+      mini.textContent = '📷';
+      showStatus('⚠️ Street View non disponibile in questo momento.');
     } finally { delete mini.dataset.state; }
   }
 
-  function enhance(nav) {
+  function enhanceNavigate(nav, list) {
     if (!(nav instanceof HTMLElement) || nav.dataset.streetViewBound === '1' || !isNavigate(nav)) return;
-    if (nav.closest('.map-popup-actions,.recommended-item')) return;
-    const card = findCard(nav);
-    if (!card || card.querySelector('.hera-street-view-mini')) return;
+    const card = findCard(nav, list);
+    if (!card || card.querySelector(':scope > .hera-street-view-mini')) return;
     card.classList.add('hera-street-view-anchor');
     const mini = document.createElement('button');
-    mini.type = 'button'; mini.className = 'hera-street-view-mini'; mini.textContent = '📸';
-    mini.title = 'Vedi ingresso con Street View'; mini.setAttribute('aria-label', 'Vedi ingresso con Street View');
-    mini.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); openStreetView(nav, card, mini); });
-    card.appendChild(mini); nav.dataset.streetViewBound = '1';
+    mini.type = 'button';
+    mini.className = 'hera-street-view-mini';
+    mini.textContent = '📸';
+    mini.title = 'Vedi ingresso con Street View';
+    mini.setAttribute('aria-label', 'Vedi ingresso con Street View');
+    mini.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openStreetView(nav, card, mini);
+    });
+    card.appendChild(mini);
+    nav.dataset.streetViewBound = '1';
   }
 
-  function scan(root = document) {
-    root.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]').forEach(enhance);
+  function scanList(list = document.getElementById('impianti-lista')) {
+    if (!list) return;
+    list.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]').forEach((el) => {
+      if (isNavigate(el)) enhanceNavigate(el, list);
+    });
   }
 
-  function scanVisibleCommessa() {
-    const root = document.querySelector('#commessa-page:not(.hidden),#commessa-detail:not(.hidden),[data-page="commessa"]:not(.hidden)') || document;
-    scan(root);
+  function bindList() {
+    const list = document.getElementById('impianti-lista');
+    if (!list) return false;
+    if (list === observedList) { scanList(list); return true; }
+    listObserver?.disconnect();
+    observedList = list;
+    scanList(list);
+    listObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (isNavigate(node)) enhanceNavigate(node, list);
+          node.querySelectorAll?.('button,a,[role="button"],input[type="button"],input[type="submit"]').forEach((el) => {
+            if (isNavigate(el)) enhanceNavigate(el, list);
+          });
+        }
+      }
+    });
+    listObserver.observe(list, { childList: true, subtree: true });
+    return true;
   }
 
   function install() {
     ensureStyles();
     ensureModal();
-    // Nessun MutationObserver globale: scansione iniziale + eventi operativi già esistenti.
-    requestAnimationFrame(scanVisibleCommessa);
-    ['click','hera:commessa-rendered','hera:impianti-rendered','hera:recommended-traffic-weather'].forEach((name) => {
-      window.addEventListener(name, () => setTimeout(scanVisibleCommessa, 80), { passive: true });
-    });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(scanVisibleCommessa, 80); });
+    bindList();
+    // Solo fallback leggero per il caso in cui #impianti-lista non esista ancora al caricamento.
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (bindList() || attempts >= 20) clearInterval(timer);
+    }, 250);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true }); else install();
-  window.HeraStreetViewCards = { installed: true, version: VERSION, refresh: scanVisibleCommessa, clearMetadataCache: () => { try { localStorage.removeItem(METADATA_CACHE_KEY); } catch (_) {} } };
+  window.HeraStreetViewCards = {
+    installed: true,
+    version: VERSION,
+    refresh: () => bindList(),
+    clearMetadataCache: () => { try { localStorage.removeItem(METADATA_CACHE_KEY); } catch (_) {} }
+  };
 })();

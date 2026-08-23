@@ -1,0 +1,25 @@
+name: Lavori occasionali - isolamento cantieri
+
+on:
+  pull_request:
+    paths:
+      - 'lavori-occasionali*.js'
+      - 'scripts/check-lavori-occasionali-isolation.js'
+      - '.github/workflows/lavori-occasionali-isolation-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolation-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verifica che i Lavori occasionali non tocchino le cache globali
+        run: node scripts/check-lavori-occasionali-isolation.js

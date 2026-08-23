@@ -4,9 +4,11 @@
   if (window.HeraCantiereDocumentsLoaderInstalled) return;
   window.HeraCantiereDocumentsLoaderInstalled = true;
 
-  const VERSION = "20260823-docs2";
+  const VERSION = "20260823-docs3";
   const COMMESSA_ID = "lavori-occasionali";
   const normalize = (value) => String(value || "").trim().replace(/\s+/g, " ").toLocaleUpperCase("it-IT");
+  let listObserver = null;
+  let observedList = null;
 
   function ensureStyle() {
     if (document.querySelector('link[data-cantiere-doc-style]')) return;
@@ -77,57 +79,91 @@
     if (!cardText) return null;
     return occasionalPlants().find((plant) => {
       const name = normalize(plant.denominazione || plant.nome || plant.impianto);
-      return name && cardText.includes(name);
+      const id = normalize(plant.id || plant.docId || plant.impiantoId || plant.idSap || plant["ID SAP"]);
+      return (name && cardText.includes(name)) || (id && cardText.includes(id));
     }) || null;
   }
 
-  function findCardFromGear(gear) {
-    let node = gear?.parentElement || null;
-    for (let depth = 0; node && node !== document.body && depth < 10; depth += 1, node = node.parentElement) {
-      const buttons = [...node.querySelectorAll("button")];
-      const hasFatto = buttons.some((button) => normalize(button.textContent) === "FATTO");
-      const hasNav = buttons.some((button) => normalize(button.textContent).includes("NAVIGA"));
-      if (hasFatto && hasNav) return node;
+  function cardFromManagementStack(stack) {
+    if (!stack) return null;
+    let node = stack.parentElement;
+    for (let depth = 0; node && node !== document.body && depth < 8; depth += 1, node = node.parentElement) {
+      if (node.querySelector?.('.impianto-primary-actions [data-action-key="navigate"]')) return node;
     }
     return null;
   }
 
-  function isGear(button) {
-    const label = normalize([button?.textContent, button?.title, button?.getAttribute?.("aria-label")].filter(Boolean).join(" "));
-    return label.includes("⚙") || label.includes("INGRAN") || label.includes("GESTIONE");
+  function addDocumentationButton(stack) {
+    if (!(stack instanceof HTMLElement)) return;
+    if (!isAdmin() || !window.HeraCantiereDocuments?.open) return;
+    if (stack.querySelector("[data-cantiere-doc-admin], [data-cantiere-doc-fallback]")) return;
+
+    const gear = stack.querySelector(".gestione-toggle-btn");
+    const managementActions = stack.querySelector(".item-actions-gestione");
+    if (!gear || !managementActions) return;
+
+    const card = cardFromManagementStack(stack);
+    const plant = findPlantForCard(card);
+    if (!plant) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn cantiere-doc-admin";
+    button.dataset.cantiereDocFallback = "1";
+    button.innerHTML = "📁 ALLEGA DOCUMENTAZIONE";
+    button.title = "Allega o gestisci documentazione cantiere";
+    button.setAttribute("aria-label", "Allega documentazione cantiere");
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.HeraCantiereDocuments.open(plant);
+    });
+
+    // Dentro il pannello Gestione: resta nascosto finché non si preme l'ingranaggio.
+    managementActions.appendChild(button);
+  }
+
+  function decorateList(list = document.getElementById("impianti-lista")) {
+    if (!list) return;
+    list.querySelectorAll(".impianto-management-stack").forEach(addDocumentationButton);
+  }
+
+  function bindList() {
+    const list = document.getElementById("impianti-lista");
+    if (!list) return false;
+    if (list === observedList) {
+      decorateList(list);
+      return true;
+    }
+
+    listObserver?.disconnect();
+    observedList = list;
+    decorateList(list);
+    listObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.matches?.(".impianto-management-stack")) addDocumentationButton(node);
+          node.querySelectorAll?.(".impianto-management-stack").forEach(addDocumentationButton);
+        }
+      }
+    });
+    listObserver.observe(list, { childList: true, subtree: true });
+    return true;
   }
 
   function installAdminFallback() {
     if (!isAdmin() || !window.HeraCantiereDocuments?.open) return;
-    [...document.querySelectorAll("button")].filter(isGear).forEach((gear) => {
-      const card = findCardFromGear(gear);
-      if (!card || card.querySelector("[data-cantiere-doc-admin], [data-cantiere-doc-fallback]")) return;
-      const plant = findPlantForCard(card);
-      if (!plant) return;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "cantiere-doc-admin";
-      button.dataset.cantiereDocFallback = "1";
-      button.innerHTML = "📁<br>DOCUMENTAZIONE";
-      button.title = "Documentazione cantiere";
-      button.setAttribute("aria-label", "Apri documentazione cantiere");
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        window.HeraCantiereDocuments.open(plant);
-      });
-      gear.insertAdjacentElement("afterend", button);
-    });
+    bindList();
   }
 
   function installObserver() {
-    let timer = 0;
-    const observer = new MutationObserver(() => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(installAdminFallback, 120);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    [0, 500, 1500, 3500, 7000].forEach((delay) => window.setTimeout(installAdminFallback, delay));
+    bindList();
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (bindList() || attempts >= 20) window.clearInterval(timer);
+    }, 250);
   }
 
   ensureStyle();

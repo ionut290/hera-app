@@ -117,7 +117,7 @@ assert.match(guardSource, /function\s+initializeLazyHelpers\s*\(/);
 assert.match(guardSource, /getElementById\(['"]impianti-page['"]\)/);
 assert.match(guardSource, /requestIdleCallback/);
 assert.match(guardSource, /timeout:\s*2500/);
-assert.match(guardSource, /20260823-stability2/);
+assert.match(guardSource, /20260823-stability3/);
 assert.doesNotMatch(
   guardSource,
   /DOMContentLoaded['"],\s*loadRecommendedHelpers/,

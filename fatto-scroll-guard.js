@@ -77,6 +77,14 @@
   }
 
   function loadRecommendedHelpers() {
+    if (!window.HeraSquadContext?.installed) {
+      loadScriptOnce(
+        'script[data-squad-context-bridge]',
+        './squad-context-bridge.js?v=20260823a',
+        'squadContextBridge',
+        () => console.warn('Contesto squadra reale non caricato.')
+      );
+    }
     if (!window.HeraEquipmentAdvisor?.installed) {
       loadScriptOnce(
         'script[data-equipment-recommendations]',

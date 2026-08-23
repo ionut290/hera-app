@@ -18,6 +18,7 @@ jobs:
           node --check identity-card-feature.js
           node --check squad-context-bridge.js
           node --check fatto-scroll-guard.js
+          node --check commessa-produced-widget.js
       - name: Check lazy loading boundaries
         run: node scripts/check-heavy-libs-lazy.js
       - name: Check runtime state isolation

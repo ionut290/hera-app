@@ -6,9 +6,12 @@
 
   const ENDPOINT = '/.netlify/functions/firestore-usage';
   const CARD_ID = 'firestore-usage-control-card';
+  const STREET_VIEW_CARD_ID = 'street-view-usage-control-card';
   const CACHE_KEY = 'hera_firestore_usage_cache_v1';
   const CACHE_MS = 15 * 60 * 1000;
+  const STREET_VIEW_LIMIT = 4800;
   let loading = false;
+  let streetViewUnsubscribe = null;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
@@ -19,6 +22,7 @@
   }
 
   function dateTime(value) {
+    if (value?.toDate) value = value.toDate();
     const date = new Date(value || 0);
     return Number.isNaN(date.getTime()) ? 'Non disponibile' : date.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
   }
@@ -28,6 +32,13 @@
     if (percent >= 80) return { label: 'Consumo elevato', tone: 'orange' };
     if (percent >= 60) return { label: 'Attenzione', tone: 'warning' };
     return { label: 'Consumo regolare', tone: 'safe' };
+  }
+
+  function streetViewLevel(used, limit) {
+    if (used >= limit) return { label: '⛔ Limite raggiunto · Street View bloccato', tone: 'danger' };
+    if (used >= 4500) return { label: '🔴 Quasi esaurito', tone: 'danger' };
+    if (used >= 4000) return { label: '🟡 Attenzione', tone: 'warning' };
+    return { label: '🟢 Consumo regolare', tone: 'safe' };
   }
 
   function cachedValue() {
@@ -47,7 +58,7 @@
     const style = document.createElement('style');
     style.id = 'firestore-usage-control-style';
     style.textContent = `
-      #${CARD_ID}{grid-column:1/-1}.fs-usage-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.fs-usage-title{display:flex;align-items:center;gap:8px;font-weight:800}.fs-usage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.fs-usage-item{border:1px solid rgba(148,163,184,.35);border-radius:14px;padding:14px;background:rgba(255,255,255,.72)}.fs-usage-label{font-weight:800;margin-bottom:6px}.fs-usage-value{font-size:1.25rem;font-weight:900}.fs-usage-meta{font-size:.82rem;opacity:.75;margin-top:5px}.fs-usage-bar{height:10px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin-top:10px}.fs-usage-fill{height:100%;border-radius:inherit;background:#22c55e}.fs-usage-fill.warning{background:#eab308}.fs-usage-fill.orange{background:#f97316}.fs-usage-fill.danger{background:#dc2626}.fs-usage-status{font-weight:800;margin-top:8px}.fs-usage-error{padding:12px;border-radius:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;margin-top:12px}.fs-usage-note{font-size:.8rem;opacity:.72;margin-top:12px}.fs-usage-refresh{min-width:130px}@media(max-width:720px){.fs-usage-grid{grid-template-columns:1fr}.fs-usage-item{padding:12px}}
+      #${CARD_ID},#${STREET_VIEW_CARD_ID}{grid-column:1/-1}.fs-usage-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.fs-usage-title{display:flex;align-items:center;gap:8px;font-weight:800}.fs-usage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.fs-usage-item{border:1px solid rgba(148,163,184,.35);border-radius:14px;padding:14px;background:rgba(255,255,255,.72)}.fs-usage-label{font-weight:800;margin-bottom:6px}.fs-usage-value{font-size:1.25rem;font-weight:900}.fs-usage-meta{font-size:.82rem;opacity:.75;margin-top:5px}.fs-usage-bar{height:10px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin-top:10px}.fs-usage-fill{height:100%;border-radius:inherit;background:#22c55e}.fs-usage-fill.warning{background:#eab308}.fs-usage-fill.orange{background:#f97316}.fs-usage-fill.danger{background:#dc2626}.fs-usage-status{font-weight:800;margin-top:8px}.fs-usage-error{padding:12px;border-radius:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;margin-top:12px}.fs-usage-note{font-size:.8rem;opacity:.72;margin-top:12px}.fs-usage-refresh{min-width:130px}.sv-usage-main{margin-top:14px;border:1px solid rgba(148,163,184,.35);border-radius:14px;padding:14px;background:rgba(255,255,255,.72)}.sv-usage-value{font-size:1.55rem;font-weight:900}.sv-usage-meta{font-size:.92rem;opacity:.78;margin-top:5px}.sv-usage-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:12px;font-size:.84rem;opacity:.8}.sv-usage-live{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:800;color:#15803d}.sv-usage-live::before{content:'';width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.14)}@media(max-width:720px){.fs-usage-grid{grid-template-columns:1fr}.fs-usage-item{padding:12px}.sv-usage-details{grid-template-columns:1fr}}
     `;
     document.head.appendChild(style);
   }
@@ -65,6 +76,21 @@
       card.id = CARD_ID;
       card.className = 'card control-center-card';
       host.prepend(card);
+    }
+    return card;
+  }
+
+  function ensureStreetViewCard() {
+    const host = cardHost();
+    if (!host) return null;
+    let card = document.getElementById(STREET_VIEW_CARD_ID);
+    if (!card) {
+      card = document.createElement('section');
+      card.id = STREET_VIEW_CARD_ID;
+      card.className = 'card control-center-card';
+      const firestoreCard = ensureCard();
+      if (firestoreCard?.parentNode) firestoreCard.insertAdjacentElement('afterend', card);
+      else host.prepend(card);
     }
     return card;
   }
@@ -98,6 +124,63 @@
     card.querySelector('[data-firestore-usage-refresh]')?.addEventListener('click', () => load(true));
   }
 
+  function currentMonthKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function resolveFirestore() {
+    try { if (typeof db !== 'undefined' && db?.collection) return db; } catch (_) {}
+    try {
+      if (window.firebase?.firestore && typeof window.firebase.firestore === 'function') return window.firebase.firestore();
+    } catch (_) {}
+    return null;
+  }
+
+  function renderStreetViewUsage(data = {}) {
+    const card = ensureStreetViewCard();
+    if (!card) return;
+    const used = Math.max(0, Number(data.count || 0));
+    const limit = Math.max(1, Number(data.limit || STREET_VIEW_LIMIT));
+    const remaining = Math.max(0, limit - used);
+    const percent = Math.min(100, Math.max(0, used / limit * 100));
+    const status = streetViewLevel(used, limit);
+    const lastUser = data.lastUserEmail || data.lastUserUid || 'Nessun utilizzo registrato';
+    card.innerHTML = `<div class="fs-usage-head"><div class="fs-usage-title"><span aria-hidden="true">🌐</span><span>Consumo Street View 360° mensile</span></div><span class="sv-usage-live">LIVE</span></div><div class="sv-usage-main"><div class="sv-usage-value">${number(used)} / ${number(limit)}</div><div class="sv-usage-meta">${percent.toFixed(1).replace('.', ',')}% utilizzato • ${number(remaining)} rimanenti</div><div class="fs-usage-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent.toFixed(0)}"><div class="fs-usage-fill ${status.tone}" style="width:${percent}%"></div></div><div class="fs-usage-status">${escapeHtml(status.label)}</div><div class="sv-usage-details"><div><strong>Mese:</strong> ${escapeHtml(data.month || currentMonthKey())}</div><div><strong>Ultimo utilizzo:</strong> ${escapeHtml(data.updatedAt ? dateTime(data.updatedAt) : 'Non ancora registrato')}</div><div><strong>Ultimo utente:</strong> ${escapeHtml(lastUser)}</div><div><strong>Blocco automatico:</strong> ${used >= limit ? 'Attivo' : `a ${number(limit)}`}</div></div></div><div class="fs-usage-note">Dato condiviso Firestore: si aggiorna automaticamente quando Street View viene aperto da qualsiasi dispositivo.</div>`;
+  }
+
+  function renderStreetViewError(message) {
+    const card = ensureStreetViewCard();
+    if (!card) return;
+    card.innerHTML = `<div class="fs-usage-head"><div class="fs-usage-title"><span aria-hidden="true">🌐</span><span>Consumo Street View 360° mensile</span></div></div><div class="fs-usage-error">${escapeHtml(message)}</div>`;
+  }
+
+  function stopStreetViewListener() {
+    if (typeof streetViewUnsubscribe === 'function') {
+      try { streetViewUnsubscribe(); } catch (_) {}
+    }
+    streetViewUnsubscribe = null;
+  }
+
+  function startStreetViewListener() {
+    if (location.hash !== '#centro-controllo' || streetViewUnsubscribe) return;
+    const firestore = resolveFirestore();
+    if (!firestore) {
+      renderStreetViewError('Contatore Street View non disponibile: Firestore non inizializzato.');
+      return;
+    }
+    const ref = firestore.collection('appConfig').doc(`streetViewUsage_${currentMonthKey()}`);
+    try {
+      streetViewUnsubscribe = ref.onSnapshot((snap) => {
+        renderStreetViewUsage(snap.exists ? (snap.data() || {}) : { count: 0, limit: STREET_VIEW_LIMIT, month: currentMonthKey() });
+      }, (error) => {
+        console.warn('[CONTROL CENTER][STREET VIEW]', error);
+        renderStreetViewError('Impossibile leggere in tempo reale il consumo Street View.');
+      });
+    } catch (error) {
+      renderStreetViewError(error?.message || 'Impossibile attivare il monitoraggio Street View.');
+    }
+  }
+
   async function load(force = false) {
     if (loading || location.hash !== '#centro-controllo') return;
     if (!force) {
@@ -123,9 +206,14 @@
   }
 
   function scheduleLoad() {
-    if (location.hash !== '#centro-controllo') return;
+    if (location.hash !== '#centro-controllo') {
+      stopStreetViewListener();
+      return;
+    }
     window.setTimeout(() => load(false), 0);
     window.setTimeout(() => load(false), 300);
+    window.setTimeout(startStreetViewListener, 0);
+    window.setTimeout(startStreetViewListener, 300);
   }
 
   ensureStyle();

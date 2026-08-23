@@ -76,7 +76,15 @@
     document.head.appendChild(script);
   }
 
-  function loadAdaptiveLearning() {
+  function loadRecommendedHelpers() {
+    if (!window.HeraEquipmentAdvisor?.installed) {
+      loadScriptOnce(
+        'script[data-equipment-recommendations]',
+        './equipment-recommendations.js?v=20260823a',
+        'equipmentRecommendations',
+        () => console.warn('Consigli attrezzature non caricati.')
+      );
+    }
     if (!window.HeraAdaptiveWorkLearning?.installed) {
       loadScriptOnce(
         'script[data-adaptive-work-learning]',
@@ -96,8 +104,8 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadAdaptiveLearning, { once: true });
+    document.addEventListener('DOMContentLoaded', loadRecommendedHelpers, { once: true });
   } else {
-    loadAdaptiveLearning();
+    loadRecommendedHelpers();
   }
 })();

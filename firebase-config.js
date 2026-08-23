@@ -54,7 +54,6 @@ const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
 const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
 const HERA_OCCASIONAL_PDF_STORAGE_SRC = "lavori-occasionali-pdf-storage.js?v=20260823a";
-const HERA_OCCASIONAL_ISOLATION_FIX_SRC = "lavori-occasionali-isolation-fix.js?v=20260823a";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);
@@ -76,7 +75,6 @@ if (document.readyState === "loading") {
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
   document.write(`<script src="${HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC}" data-fatto-ordinary-extraordinary="1"><\/script>`);
-  document.write(`<script src="${HERA_OCCASIONAL_ISOLATION_FIX_SRC}" data-occasional-isolation-fix="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_GOOGLE_PLACES_SRC}" data-occasional-google-places="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC}" data-occasional-multi-site-hours="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_PDF_STORAGE_SRC}" data-occasional-pdf-storage="1"><\/script>`);
@@ -123,7 +121,6 @@ if (document.readyState === "loading") {
   loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
   loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
   loadOnce(HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC, "fatto-ordinary-extraordinary", () => Boolean(window.HeraOrdinaryExtraordinaryFatto));
-  loadOnce(HERA_OCCASIONAL_ISOLATION_FIX_SRC, "occasional-isolation-fix", () => Boolean(window.HeraOccasionalIsolationFix?.installed));
   loadOnce(HERA_OCCASIONAL_GOOGLE_PLACES_SRC, "occasional-google-places", () => Boolean(window.HeraLavoriOccasionaliGooglePlaces?.installed));
   loadOnce(HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC, "occasional-multi-site-hours", () => Boolean(window.HeraOccasionalMultiSiteHours?.installed));
   loadOnce(HERA_OCCASIONAL_PDF_STORAGE_SRC, "occasional-pdf-storage", () => Boolean(window.HeraOccasionalPdfStorage?.installed));

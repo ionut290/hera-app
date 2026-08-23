@@ -207,8 +207,21 @@
     refreshWhenVisible();
   }
 
+  function shouldRefreshAfterClick(target) {
+    return Boolean(target?.closest?.([
+      "#back-to-home-btn",
+      ".commessa-stat-item",
+      "#view-todo-btn",
+      "#view-done-btn",
+      "[data-action-key=\"done\"]",
+      "[data-action=\"done\"]",
+      ".impianto-fatto-btn",
+      ".fatto-btn"
+    ].join(",")));
+  }
+
   document.addEventListener("click", (event) => {
-    if (event.target?.closest?.("#impianti-page, #back-to-home-btn, .commessa-stat-item")) scheduleRefresh(80);
+    if (shouldRefreshAfterClick(event.target)) scheduleRefresh(80);
   }, true);
   window.addEventListener("hashchange", () => scheduleRefresh(0));
   window.addEventListener("popstate", () => scheduleRefresh(0));

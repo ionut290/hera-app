@@ -24,7 +24,7 @@ const checks = [
   [!css.match(/isolation\s*:\s*isolate/i), 'il pannello non deve creare uno stacking context isolato'],
   [css.includes('.recommended-plants-panel.hidden'), 'il pannello nascosto deve essere realmente rimosso dai tocchi'],
   [sw.includes('varga-cantieri-shell-v137'), 'il service worker deve usare una cache nuova'],
-  [sw.includes('20260823-recommended-unfreeze1'), 'il service worker deve annunciare la versione corretta'],
+  [sw.includes('CACHE_RESET_VERSION = "20260814-loading-humor1"'), 'la versione reset cache deve restare allineata al bootstrap PWA'],
   [sw.includes('"/recommended-plants.js"'), 'recommended-plants.js deve essere network-first'],
   [sw.includes('"/recommended-plants.css"'), 'recommended-plants.css deve essere network-first'],
   [sw.includes('"/fatto-scroll-guard.js"'), 'fatto-scroll-guard.js deve essere network-first']

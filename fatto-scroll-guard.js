@@ -135,7 +135,7 @@
     if (helperTask) return;
     if (typeof window.requestIdleCallback === "function") {
       helperTaskKind = "idle";
-      helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2200 });
+      helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2500 });
     } else {
       helperTaskKind = "timeout";
       helperTask = window.setTimeout(loadRecommendedHelpers, 1000);

@@ -33,7 +33,13 @@ global.document = {
   querySelectorAll() { return []; },
   addEventListener() {}
 };
-global.window = { addEventListener() {} };
+global.window = {
+  addEventListener() {},
+  setTimeout,
+  clearTimeout,
+  setInterval,
+  clearInterval
+};
 global.MutationObserver = class MutationObserver {
   observe() {}
   disconnect() {}

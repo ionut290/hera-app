@@ -3,11 +3,16 @@
 
   const MOVE_THRESHOLD_PX = 8;
   const BLOCK_AFTER_SCROLL_MS = 450;
+  const HELPER_VERSION = '20260823-stability2';
   let lastTouchScrollAt = 0;
   let touchStartX = 0;
   let touchStartY = 0;
   let trackingTouch = false;
   let moved = false;
+  let helpersLoaded = false;
+  let helperTask = 0;
+  let helperTaskKind = '';
+  let impiantiPageObserver = null;
 
   function cleanText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
@@ -77,10 +82,15 @@
   }
 
   function loadRecommendedHelpers() {
+    if (helpersLoaded) return;
+    helpersLoaded = true;
+    helperTask = 0;
+    helperTaskKind = '';
+
     if (!window.HeraSquadContext?.installed) {
       loadScriptOnce(
         'script[data-squad-context-bridge]',
-        './squad-context-bridge.js?v=20260823a',
+        `./squad-context-bridge.js?v=${HELPER_VERSION}`,
         'squadContextBridge',
         () => console.warn('Contesto squadra reale non caricato.')
       );
@@ -88,7 +98,7 @@
     if (!window.HeraEquipmentAdvisor?.installed) {
       loadScriptOnce(
         'script[data-equipment-recommendations]',
-        './equipment-recommendations.js?v=20260823a',
+        `./equipment-recommendations.js?v=${HELPER_VERSION}`,
         'equipmentRecommendations',
         () => console.warn('Consigli attrezzature non caricati.')
       );
@@ -96,7 +106,7 @@
     if (!window.HeraAdaptiveWorkLearning?.installed) {
       loadScriptOnce(
         'script[data-adaptive-work-learning]',
-        './adaptive-work-learning.js?v=20260823a',
+        `./adaptive-work-learning.js?v=${HELPER_VERSION}`,
         'adaptiveWorkLearning',
         () => console.warn('Apprendimento adattivo non caricato.')
       );
@@ -104,7 +114,7 @@
     if (!window.HeraRecommendedTrafficWeather?.installed) {
       loadScriptOnce(
         'script[data-recommended-traffic-weather]',
-        './recommended-traffic-weather.js?v=20260823a',
+        `./recommended-traffic-weather.js?v=${HELPER_VERSION}`,
         'recommendedTrafficWeather',
         () => console.warn('Traffico/meteo Impianti consigliati non caricato.')
       );
@@ -112,16 +122,92 @@
     if (!window.HeraStreetViewCards?.installed) {
       loadScriptOnce(
         'script[data-street-view-cards]',
-        './street-view-cards.js?v=20260823a',
+        `./street-view-cards.js?v=${HELPER_VERSION}`,
         'streetViewCards',
         () => console.warn('Street View card impianti non caricato.')
       );
     }
   }
 
+  function cancelScheduledHelpers() {
+    if (!helperTask) return;
+    if (helperTaskKind === 'idle' && typeof window.cancelIdleCallback === 'function') {
+      window.cancelIdleCallback(helperTask);
+    } else {
+      window.clearTimeout(helperTask);
+    }
+    helperTask = 0;
+    helperTaskKind = '';
+  }
+
+  function scheduleRecommendedHelpers(options = {}) {
+    if (helpersLoaded) return;
+    if (options.immediate) {
+      cancelScheduledHelpers();
+      loadRecommendedHelpers();
+      return;
+    }
+    if (helperTask) return;
+
+    // All'apertura della commessa Firestore deve completare prima squadre e impianti.
+    // I moduli opzionali partono in idle; il click su “Impianti consigliati” resta immediato.
+    if (typeof window.requestIdleCallback === 'function') {
+      helperTaskKind = 'idle';
+      helperTask = window.requestIdleCallback(loadRecommendedHelpers, { timeout: 2500 });
+    } else {
+      helperTaskKind = 'timeout';
+      helperTask = window.setTimeout(loadRecommendedHelpers, 1200);
+    }
+  }
+
+  function isImpiantiPageVisible(page) {
+    if (!page || page.hidden) return false;
+    if (page.classList.contains('hidden')) return false;
+    if (page.getAttribute('aria-hidden') === 'true') return false;
+    if (page.style?.display === 'none' || page.style?.visibility === 'hidden') return false;
+    return true;
+  }
+
+  function bindImpiantiPage() {
+    const page = document.getElementById('impianti-page');
+    if (!page) return false;
+
+    const checkVisibility = () => {
+      if (!isImpiantiPageVisible(page)) return;
+      scheduleRecommendedHelpers();
+      impiantiPageObserver?.disconnect();
+      impiantiPageObserver = null;
+    };
+
+    checkVisibility();
+    if (!helpersLoaded && !helperTask && !impiantiPageObserver) {
+      impiantiPageObserver = new MutationObserver(checkVisibility);
+      impiantiPageObserver.observe(page, {
+        attributes: true,
+        attributeFilter: ['class', 'hidden', 'aria-hidden', 'style']
+      });
+    }
+    return true;
+  }
+
+  function initializeLazyHelpers() {
+    if (bindImpiantiPage()) return;
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (bindImpiantiPage() || attempts >= 6) window.clearInterval(timer);
+    }, 500);
+  }
+
+  document.addEventListener('click', (event) => {
+    if (event.target?.closest?.('#recommended-plants-btn')) {
+      scheduleRecommendedHelpers({ immediate: true });
+    }
+  }, true);
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadRecommendedHelpers, { once: true });
+    document.addEventListener('DOMContentLoaded', initializeLazyHelpers, { once: true });
   } else {
-    loadRecommendedHelpers();
+    initializeLazyHelpers();
   }
 })();

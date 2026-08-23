@@ -5,6 +5,8 @@
   const widget = document.getElementById("commessa-produced-widget");
   const toggle = document.getElementById("commessa-produced-toggle");
   const popover = document.getElementById("commessa-produced-popover");
+  let refreshTimer = 0;
+  let pageVisibilityObserver = null;
 
   function hideWidget() {
     if (widget) widget.hidden = true;
@@ -46,7 +48,18 @@
 
   function readRenderedCompletedSubtotal() {
     try {
-      const nodes = Array.from(document.querySelectorAll("body *"));
+      const root = document.getElementById("impianti-page");
+      if (!root) return NaN;
+      const nodes = Array.from(root.querySelectorAll([
+        "[data-completed-subtotal]",
+        ".commessa-dashboard-card p",
+        ".commessa-dashboard-card span",
+        ".commessa-dashboard-card strong",
+        ".commessa-dashboard-card small",
+        ".accounting-summary p",
+        ".accounting-summary span",
+        ".accounting-summary strong"
+      ].join(",")));
       const match = nodes.find((el) => /subtotale\s+lavorazioni\s+fatte/i.test(el.textContent || ""));
       if (!match) return NaN;
       return parseItalianCurrency(match.textContent);
@@ -79,8 +92,7 @@
 
   function setStatIcon(item, type) {
     const icon = item?.querySelector?.(".commessa-stat-icon");
-    if (!icon) return;
-    if (icon.dataset.dashboardIcon === type) return;
+    if (!icon || icon.dataset.dashboardIcon === type) return;
 
     if (type === "euro") {
       icon.innerHTML = `
@@ -100,11 +112,12 @@
   }
 
   function findCompletedAmountStatItem() {
-    const labels = Array.from(document.querySelectorAll(".commessa-stat-label"));
+    const root = document.getElementById("impianti-page") || document;
+    const labels = Array.from(root.querySelectorAll(".commessa-stat-label"));
     const label = labels.find((el) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(el.textContent || ""));
     if (label) return label.closest(".commessa-stat-item");
 
-    const candidates = Array.from(document.querySelectorAll(".commessa-stat-item"));
+    const candidates = Array.from(root.querySelectorAll(".commessa-stat-item"));
     const semanticMatch = candidates.find((item) => /avanzamento|lavorazioni\s+fatte|€\s*guadagnati|guadagnati/i.test(item.textContent || ""));
     if (semanticMatch) return semanticMatch;
 
@@ -119,7 +132,8 @@
     const item = findCompletedAmountStatItem();
     if (!item) return false;
 
-    const label = item.querySelector(".commessa-stat-label") || Array.from(item.children).find((el) => /avanzamento|lavorazioni\s+fatte|guadagnati/i.test(el.textContent || ""));
+    const label = item.querySelector(".commessa-stat-label")
+      || Array.from(item.children).find((el) => /avanzamento|lavorazioni\s+fatte|guadagnati/i.test(el.textContent || ""));
     const value = item.querySelector(".commessa-stat-value")
       || Array.from(item.querySelectorAll("[id]")).find((el) => el !== label && /%|€|\d/.test(el.textContent || ""))
       || Array.from(item.children).find((el) => el !== label && !el.classList?.contains("commessa-stat-icon"));
@@ -154,8 +168,14 @@
   }
 
   function updateDashboardReplacementStats() {
+    hideWidget();
     updateCompletedAmountStat();
     updateDoneImpiantiStat();
+  }
+
+  function scheduleRefresh(delay = 40) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(updateDashboardReplacementStats, delay);
   }
 
   if (typeof updateCommessaDashboard === "function") {
@@ -167,34 +187,62 @@
     };
   }
 
-  let refreshTimer = null;
-  const scheduleRefresh = () => {
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(updateDashboardReplacementStats, 40);
-  };
+  function isImpiantiPageVisible(page) {
+    if (!page || page.hidden || page.classList.contains("hidden")) return false;
+    if (page.getAttribute("aria-hidden") === "true") return false;
+    return page.style?.display !== "none" && page.style?.visibility !== "hidden";
+  }
 
-  const observer = new MutationObserver(scheduleRefresh);
-  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  function installPageVisibilityObserver() {
+    const page = document.getElementById("impianti-page");
+    if (!page || pageVisibilityObserver) return;
+    const refreshWhenVisible = () => {
+      if (isImpiantiPageVisible(page)) scheduleRefresh(0);
+    };
+    pageVisibilityObserver = new MutationObserver(refreshWhenVisible);
+    pageVisibilityObserver.observe(page, {
+      attributes: true,
+      attributeFilter: ["class", "hidden", "aria-hidden", "style"]
+    });
+    refreshWhenVisible();
+  }
 
-  document.addEventListener("click", () => setTimeout(updateDashboardReplacementStats, 80), true);
-  window.addEventListener("hashchange", scheduleRefresh);
-  window.addEventListener("popstate", scheduleRefresh);
+  document.addEventListener("click", (event) => {
+    if (event.target?.closest?.("#impianti-page, #back-to-home-btn, .commessa-stat-item")) scheduleRefresh(80);
+  }, true);
+  window.addEventListener("hashchange", () => scheduleRefresh(0));
+  window.addEventListener("popstate", () => scheduleRefresh(0));
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installPageVisibilityObserver, { once: true });
+  } else {
+    installPageVisibilityObserver();
+  }
 
   hideWidget();
-  updateDashboardReplacementStats();
-  setTimeout(updateDashboardReplacementStats, 250);
-  setTimeout(updateDashboardReplacementStats, 1000);
+  scheduleRefresh(0);
+  window.setTimeout(updateDashboardReplacementStats, 250);
 
-  window.CommessaProducedWidget = { select, stop, removed: true, refresh: updateDashboardReplacementStats };
+  window.CommessaProducedWidget = {
+    select,
+    stop,
+    removed: true,
+    refresh: updateDashboardReplacementStats
+  };
 })();
 
-// Carica la funzione opzionale "Impianti consigliati" senza alterare il rendering
-// esistente della commessa, l'ordinamento per distanza, FATTO o NAVIGA.
+// Carica la funzione opzionale "Impianti consigliati" solo quando si entra
+// nella pagina Impianti. La Home e le letture Firestore restano prioritarie.
 (() => {
   "use strict";
-  const VERSION = "20260823a";
 
-  if (!document.querySelector("link[data-recommended-plants-style]")) {
+  const VERSION = "20260823-stability2";
+  let pageObserver = null;
+  let recommendedTask = 0;
+  let recommendedTaskKind = "";
+
+  function loadStyleOnce() {
+    if (document.querySelector("link[data-recommended-plants-style]")) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = `recommended-plants.css?v=${VERSION}`;
@@ -202,15 +250,113 @@
     document.head.appendChild(link);
   }
 
-  const load = () => {
-    if (window.HeraRecommendedPlants?.installed || document.querySelector("script[data-recommended-plants-script]")) return;
+  function loadScriptOnce(selector, src, datasetKey, options = {}) {
+    if (document.querySelector(selector)) return null;
     const script = document.createElement("script");
-    script.src = `recommended-plants.js?v=${VERSION}`;
-    script.async = false;
-    script.dataset.recommendedPlantsScript = "1";
+    script.src = src;
+    script.async = options.async !== false;
+    script.dataset[datasetKey] = "1";
+    script.onerror = () => console.warn(options.errorMessage || `Modulo non caricato: ${src}`);
     document.body.appendChild(script);
-  };
+    return script;
+  }
 
-  if (document.readyState === "complete") load();
-  else window.addEventListener("load", load, { once: true });
+  function loadFattoScrollGuard() {
+    loadScriptOnce(
+      "script[data-fatto-scroll-guard]",
+      `fatto-scroll-guard.js?v=${VERSION}`,
+      "fattoScrollGuard",
+      { async: false, errorMessage: "Protezione pulsante FATTO non caricata." }
+    );
+  }
+
+  function loadRecommendedCore() {
+    recommendedTask = 0;
+    recommendedTaskKind = "";
+    if (window.HeraRecommendedPlants?.installed) return;
+    loadStyleOnce();
+    loadScriptOnce(
+      "script[data-recommended-plants-script]",
+      `recommended-plants.js?v=${VERSION}`,
+      "recommendedPlantsScript",
+      { async: false, errorMessage: "Impianti consigliati non caricati." }
+    );
+  }
+
+  function cancelRecommendedTask() {
+    if (!recommendedTask) return;
+    if (recommendedTaskKind === "idle" && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(recommendedTask);
+    } else {
+      window.clearTimeout(recommendedTask);
+    }
+    recommendedTask = 0;
+    recommendedTaskKind = "";
+  }
+
+  function scheduleRecommendedCore(options = {}) {
+    if (window.HeraRecommendedPlants?.installed || document.querySelector("script[data-recommended-plants-script]")) return;
+    if (options.immediate) {
+      cancelRecommendedTask();
+      loadRecommendedCore();
+      return;
+    }
+    if (recommendedTask) return;
+
+    if (typeof window.requestIdleCallback === "function") {
+      recommendedTaskKind = "idle";
+      recommendedTask = window.requestIdleCallback(loadRecommendedCore, { timeout: 1200 });
+    } else {
+      recommendedTaskKind = "timeout";
+      recommendedTask = window.setTimeout(loadRecommendedCore, 700);
+    }
+  }
+
+  function isPageVisible(page) {
+    if (!page || page.hidden || page.classList.contains("hidden")) return false;
+    if (page.getAttribute("aria-hidden") === "true") return false;
+    return page.style?.display !== "none" && page.style?.visibility !== "hidden";
+  }
+
+  function bindImpiantiPage() {
+    const page = document.getElementById("impianti-page");
+    if (!page) return false;
+
+    const activateWhenVisible = () => {
+      if (!isPageVisible(page)) return;
+      scheduleRecommendedCore();
+      pageObserver?.disconnect();
+      pageObserver = null;
+    };
+
+    activateWhenVisible();
+    if (!pageObserver && !isPageVisible(page)) {
+      pageObserver = new MutationObserver(activateWhenVisible);
+      pageObserver.observe(page, {
+        attributes: true,
+        attributeFilter: ["class", "hidden", "aria-hidden", "style"]
+      });
+    }
+    return true;
+  }
+
+  function install() {
+    loadFattoScrollGuard();
+    if (bindImpiantiPage()) return;
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (bindImpiantiPage() || attempts >= 6) window.clearInterval(timer);
+    }, 500);
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target?.closest?.("#recommended-plants-btn")) scheduleRecommendedCore({ immediate: true });
+  }, true);
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", install, { once: true });
+  } else {
+    install();
+  }
 })();

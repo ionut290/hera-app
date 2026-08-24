@@ -1,11 +1,12 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.1') return;
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.2') return;
 
-  const VERSION = '2.1.1';
+  const VERSION = '2.1.2';
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
   const USAGE_COLLECTION = 'appConfig';
+  const AUTH_WAIT_MS = 4500;
   let observer = null;
   let mapsLoaderPromise = null;
   let activePanorama = null;
@@ -58,14 +59,41 @@
     return { uid: null, email: null };
   }
 
-  async function reserveSharedMonthlySlot() {
-    const firestore = resolveFirestore();
-    if (!firestore) throw new Error('Contatore condiviso Firestore non disponibile');
+  function waitForAuthenticatedUser(timeoutMs = AUTH_WAIT_MS) {
+    let firebaseAuth = null;
+    try { firebaseAuth = window.firebase?.auth?.(); } catch (_) {}
+    if (!firebaseAuth) return Promise.resolve(null);
+    if (firebaseAuth.currentUser) return Promise.resolve(firebaseAuth.currentUser);
 
-    const monthKey = getMonthKey();
-    const ref = firestore.collection(USAGE_COLLECTION).doc(`streetViewUsage_${monthKey}`);
-    const user = getCurrentUserInfo();
+    return new Promise((resolve) => {
+      let settled = false;
+      let unsubscribe = null;
+      const finish = (user) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        try { unsubscribe?.(); } catch (_) {}
+        resolve(user || firebaseAuth.currentUser || null);
+      };
+      const timer = window.setTimeout(() => finish(null), timeoutMs);
+      try {
+        unsubscribe = firebaseAuth.onAuthStateChanged((user) => {
+          if (user) finish(user);
+        }, () => finish(null));
+      } catch (_) {
+        finish(null);
+      }
+    });
+  }
 
+  function isAuthenticationCounterError(error) {
+    const code = text(error?.code).toLowerCase();
+    const message = text(error?.message).toLowerCase();
+    return /permission-denied|unauthenticated/.test(code)
+      || /permission|permesso|autenticazione|insufficient permissions/.test(message);
+  }
+
+  function runSharedCounterTransaction(firestore, ref, user, monthKey) {
     return firestore.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       const data = snap.exists ? (snap.data() || {}) : {};
@@ -88,6 +116,28 @@
       transaction.set(ref, payload, { merge: true });
       return { allowed: true, count: nextCount, limit: MONTHLY_LIMIT, monthKey };
     });
+  }
+
+  async function reserveSharedMonthlySlot() {
+    const firestore = resolveFirestore();
+    if (!firestore) throw new Error('Contatore condiviso Firestore non disponibile');
+
+    const authenticatedUser = await waitForAuthenticatedUser();
+    if (!authenticatedUser) throw new Error('Autenticazione Firebase non disponibile per il contatore condiviso');
+
+    const monthKey = getMonthKey();
+    const ref = firestore.collection(USAGE_COLLECTION).doc(`streetViewUsage_${monthKey}`);
+    const user = getCurrentUserInfo();
+    if (!user.uid) user.uid = authenticatedUser.uid || null;
+    if (!user.email) user.email = authenticatedUser.email || null;
+
+    try {
+      return await runSharedCounterTransaction(firestore, ref, user, monthKey);
+    } catch (error) {
+      if (!isAuthenticationCounterError(error)) throw error;
+      try { await authenticatedUser.getIdToken?.(true); } catch (_) {}
+      return runSharedCounterTransaction(firestore, ref, user, monthKey);
+    }
   }
 
   function getPlants() {

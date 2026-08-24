@@ -91,7 +91,7 @@ assert.doesNotMatch(centerBackend, /setInterval\s*\(/);
 
 // Il deploy deve applicare e rileggere la policy IAM senza rimuovere gli altri binding.
 assert.match(deployWorkflow, /Grant and verify Error Center callable transport/);
-assert.match(deployWorkflow, /roles\\/cloudfunctions\\.invoker/);
+assert.ok(deployWorkflow.includes("roles/cloudfunctions.invoker"));
 assert.match(deployWorkflow, /allUsers/);
 assert.match(deployWorkflow, /:getIamPolicy/);
 assert.match(deployWorkflow, /:setIamPolicy/);

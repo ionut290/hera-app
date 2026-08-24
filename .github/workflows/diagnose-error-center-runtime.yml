@@ -1,0 +1,110 @@
+name: Diagnose Error Center Runtime
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/diagnose-error-center-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install diagnostic dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Write Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HERA_APP_6CD2B }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "Missing Firebase service account"
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Collect sanitized runtime errors
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { GoogleAuth } = require("./functions/node_modules/google-auth-library");
+
+          function redact(value) {
+            return String(value || "")
+              .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+              .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL_REDACTED]")
+              .replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[TOKEN_REDACTED]")
+              .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[API_KEY_REDACTED]")
+              .slice(0, 5000);
+          }
+
+          (async () => {
+            const auth = new GoogleAuth({
+              keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+              scopes: ["https://www.googleapis.com/auth/cloud-platform"]
+            });
+            const client = await auth.getClient();
+            const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+            const filter = [
+              'resource.type="cloud_function"',
+              '(resource.labels.function_name="getErrorCenterDashboard" OR resource.labels.function_name="recordClientErrorGroup")',
+              'severity>=ERROR',
+              `timestamp>="${since}"`
+            ].join(" AND ");
+            const response = await client.request({
+              url: "https://logging.googleapis.com/v2/entries:list",
+              method: "POST",
+              data: {
+                resourceNames: ["projects/hera-app-6cd2b"],
+                filter,
+                orderBy: "timestamp desc",
+                pageSize: 60
+              }
+            });
+            const entries = (response.data.entries || []).map((entry) => ({
+              timestamp: entry.timestamp || "",
+              severity: entry.severity || "",
+              functionName: entry.resource?.labels?.function_name || "",
+              executionId: entry.labels?.execution_id || "",
+              message: redact(
+                entry.textPayload
+                || entry.jsonPayload?.message
+                || entry.protoPayload?.status?.message
+                || ""
+              )
+            }));
+            fs.writeFileSync("error-center-runtime-diagnostics.json", JSON.stringify(entries, null, 2));
+          })().catch((error) => {
+            fs.writeFileSync("error-center-runtime-diagnostics.json", JSON.stringify([{
+              collectorError: redact(error?.message || error)
+            }], null, 2));
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Upload sanitized diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-center-runtime-diagnostics
+          path: error-center-runtime-diagnostics.json
+          retention-days: 1
+          if-no-files-found: error

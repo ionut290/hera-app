@@ -17,7 +17,7 @@ const checks = [
   [core.includes("upsertPlant: upsertNormalOccasionalPlant"), "l'API cantieri deve esporre il salvataggio controllato"],
   [sites.includes("function extractSiteName(value, seen = new WeakSet())"), "l'elenco deve estrarre il nome anche dai vecchi oggetti cantiere"],
   [sites.includes('raw.toLocaleUpperCase("it-IT") === "[OBJECT OBJECT]"'), "l'elenco deve scartare il testo tecnico object Object"],
-  [sites.includes("name: extractSiteName(data.cantiere)"), "le assegnazioni legacy devono leggere il nome interno del cantiere"],
+  [sites.includes("const name = extractSiteName(data.cantiere)"), "le assegnazioni legacy devono leggere il nome interno del cantiere"],
   [!sites.includes('String(item?.name || item?.cantiere || item?.nome || item || "")'), "l'elenco non deve convertire direttamente un oggetto in testo"],
   [loader.includes("HERA_OCCASIONAL_SQUAD_FIRST_SRC"), "firebase-config deve caricare il nuovo modulo"],
   [loader.includes('data-occasional-squad-first="1"'), "il caricamento sincrono deve installare il nuovo flusso prima del modulo storico"],

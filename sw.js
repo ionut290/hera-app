@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v143";
-const CACHE_RESET_VERSION = "20260824-no-partial1";
+const CACHE_NAME = "varga-cantieri-shell-v144";
+const CACHE_RESET_VERSION = "20260824-fatto-stable2";
 const APP_SHELL = [
   "./",
   "./index.html",

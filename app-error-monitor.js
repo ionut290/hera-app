@@ -3,11 +3,12 @@
 
   if (window.HeraAppErrorMonitor?.installed) return;
 
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const REGION = "europe-west1";
   const FUNCTION_NAME = "recordClientErrorGroup";
   const QUEUE_KEY = "hera_error_center_queue_v1";
   const DEDUPE_KEY = "hera_error_center_dedupe_v1";
+  const HEALTH_KEY = "hera_error_center_health_v1";
   const QUEUE_MAX = 30;
   const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
   const DEDUPE_MS = 10 * 60 * 1000;
@@ -21,6 +22,8 @@
   const breadcrumbs = [];
   let flushing = false;
   let authBound = false;
+  let longTaskBound = false;
+  let consoleErrorBound = false;
   let lastTap = { key: "", at: 0, count: 0 };
 
   function redactText(value, max = 1800) {
@@ -62,6 +65,29 @@
 
   function safeJsonWrite(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {}
+  }
+
+  function updateHealth(patch = {}) {
+    const previous = safeJsonRead(HEALTH_KEY, {});
+    safeJsonWrite(HEALTH_KEY, {
+      ...(previous && typeof previous === "object" ? previous : {}),
+      ...sanitizeValue(patch),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  function healthSnapshot() {
+    const saved = safeJsonRead(HEALTH_KEY, {});
+    return {
+      monitorInstalled: true,
+      monitorVersion: VERSION,
+      authenticated: Boolean(currentUser()),
+      online: navigator.onLine !== false,
+      queuedReports: readQueue().length,
+      lastSuccessfulSendAt: saved?.lastSuccessfulSendAt || "",
+      lastFailureAt: saved?.lastFailureAt || "",
+      lastFailure: redactText(saved?.lastFailure || "", 500)
+    };
   }
 
   function hash(value) {
@@ -310,9 +336,22 @@
       const response = await invoke(report);
       if (response?.data?.recorded || response?.data?.rateLimited) {
         markSent(report);
+        updateHealth({
+          lastSuccessfulSendAt: new Date().toISOString(),
+          lastFailureAt: "",
+          lastFailure: ""
+        });
         return true;
       }
-    } catch (_) {
+      updateHealth({
+        lastFailureAt: new Date().toISOString(),
+        lastFailure: "Risposta non valida dal servizio di registrazione errori."
+      });
+    } catch (error) {
+      updateHealth({
+        lastFailureAt: new Date().toISOString(),
+        lastFailure: error?.message || error?.code || "Invio diagnostica non riuscito."
+      });
       enqueue(report);
     }
     return false;
@@ -415,7 +454,9 @@
 
   function installLongTaskObserver() {
     try {
+      if (longTaskBound) return;
       if (!window.PerformanceObserver?.supportedEntryTypes?.includes("longtask")) return;
+      longTaskBound = true;
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (document.visibilityState === "hidden" || Number(entry.duration || 0) < LONG_TASK_MIN_MS) continue;
@@ -430,6 +471,39 @@
       });
       observer.observe({ type: "longtask", buffered: false });
     } catch (_) {}
+  }
+
+  function installConsoleErrorCapture() {
+    if (consoleErrorBound || !window.console?.error) return;
+    try {
+      consoleErrorBound = true;
+      const original = window.console.error.bind(window.console);
+      const wrapped = (...args) => {
+        original(...args);
+        try {
+          const firstError = args.find((item) => item instanceof Error);
+          const message = args.map((item) => {
+            if (item instanceof Error) return item.message;
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object") {
+              return [item.name, item.code, item.message].filter(Boolean).map((value) => redactText(value, 500)).join(" · ");
+            }
+            return redactText(item, 300);
+          }).filter(Boolean).join(" ");
+          if (!message || /Push Centro errori non inviata/i.test(message)) return;
+          void capture(firstError || new Error(message), {
+            kind: "handled-console-error",
+            severity: "high",
+            message,
+            source: "console.error"
+          });
+        } catch (_) {}
+      };
+      wrapped.__heraErrorMonitor = true;
+      window.console.error = wrapped;
+    } catch (_) {
+      consoleErrorBound = false;
+    }
   }
 
   function bindAuthFlush() {
@@ -491,6 +565,8 @@
   }, { once: true });
 
   bindAuthFlush();
+  installLongTaskObserver();
+  installConsoleErrorCapture();
   addBreadcrumb("session", "Monitor errori avviato", { platform: platformKind(), version: appVersion() });
 
   window.HeraAppErrorMonitor = Object.freeze({
@@ -500,7 +576,8 @@
     reportManual,
     flushQueue,
     breadcrumb: addBreadcrumb,
-    getQueueLength: () => readQueue().length
+    getQueueLength: () => readQueue().length,
+    getHealth: healthSnapshot
   });
 
   window.setTimeout(() => { void flushQueue(); }, 0);

@@ -3,7 +3,7 @@
 
   if (window.HeraAdminErrorCenter?.installed) return;
 
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const REGION = "europe-west1";
   const ADMIN_EMAIL = "ionut29019@gmail.com";
   const FUNCTIONS = Object.freeze({
@@ -22,7 +22,11 @@
     pendingTarget: "",
     menuAttempts: 0,
     authAttempts: 0,
-    loading: false
+    loading: false,
+    dataVerified: false,
+    loadError: "",
+    serverTime: "",
+    truncated: false
   };
 
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -56,7 +60,7 @@
     if (document.querySelector('link[data-admin-error-center-style]')) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "./admin-error-center.css?v=20260824a";
+    link.href = "./admin-error-center.css?v=20260824b";
     link.dataset.adminErrorCenterStyle = "1";
     document.head.appendChild(link);
   }
@@ -128,6 +132,7 @@
             <div><h2>⚠️ Centro errori</h2><p>Errori, rallentamenti, blocchi e segnalazioni rilevati nell’app.</p></div>
             <div class="hera-error-head-actions"><button class="btn" type="button" data-error-refresh>AGGIORNA</button><button class="btn" type="button" data-error-close>CHIUDI</button></div>
           </header>
+          <section class="hera-error-health" data-error-health role="status" aria-live="polite"></section>
           <section class="hera-error-summary" data-error-summary></section>
           <section class="hera-error-toolbar">
             <input type="search" data-error-query placeholder="Cerca funzione, pagina, messaggio o commessa" autocomplete="off">
@@ -222,13 +227,41 @@
     if (!root) return;
     const counts = state.counts || {};
     root.innerHTML = [
-      ["Aperti", counts.open || 0, ""],
-      ["In verifica", counts.inVerification || 0, ""],
-      ["Critici", counts.critical || 0, "is-critical"],
-      ["Alti", counts.high || 0, "is-high"],
-      ["Risolti", counts.resolved || 0, ""],
-      ["Ignorati", counts.ignored || 0, ""]
-    ].map(([label, value, className]) => `<div class="hera-error-summary-card ${className}"><strong>${Number(value)}</strong><span>${esc(label)}</span></div>`).join("");
+      ["Aperti", counts.open, ""],
+      ["In verifica", counts.inVerification, ""],
+      ["Critici", counts.critical, "is-critical"],
+      ["Alti", counts.high, "is-high"],
+      ["Risolti", counts.resolved, ""],
+      ["Ignorati", counts.ignored, ""]
+    ].map(([label, value, className]) => {
+      const display = state.dataVerified && Number.isFinite(Number(value)) ? Number(value) : "—";
+      return `<div class="hera-error-summary-card ${className}"><strong>${display}</strong><span>${esc(label)}</span></div>`;
+    }).join("");
+  }
+
+  function renderHealth() {
+    const root = document.querySelector("[data-error-health]");
+    if (!root) return;
+    const monitor = window.HeraAppErrorMonitor;
+    const health = monitor?.getHealth?.() || {};
+    const queue = Math.max(0, Number(health.queuedReports || monitor?.getQueueLength?.() || 0));
+    if (state.loading) {
+      root.className = "hera-error-health is-checking";
+      root.textContent = "⏳ Verifica collegamento con il server…";
+      return;
+    }
+    if (state.loadError) {
+      root.className = "hera-error-health is-error";
+      root.innerHTML = `<strong>❌ Dati non verificati.</strong> ${esc(state.loadError)}${queue ? ` · ${queue} segnalazioni in attesa sul dispositivo.` : ""}`;
+      return;
+    }
+    if (state.dataVerified) {
+      root.className = "hera-error-health is-ok";
+      root.innerHTML = `<strong>✅ Collegato a Firestore.</strong> Contatori verificati dal server ${esc(formatDate(state.serverTime))}.${queue ? ` · ${queue} segnalazioni in attesa di invio.` : " · Nessuna segnalazione in attesa."}${state.truncated ? " · Elenco limitato agli errori più recenti; i contatori restano completi." : ""}`;
+      return;
+    }
+    root.className = "hera-error-health is-checking";
+    root.textContent = "Contatori non ancora verificati.";
   }
 
   function renderList() {
@@ -236,6 +269,10 @@
     if (!root) return;
     if (state.loading) {
       root.innerHTML = '<div class="hera-error-loading">Caricamento errori…</div>';
+      return;
+    }
+    if (state.loadError) {
+      root.innerHTML = `<div class="hera-error-empty"><strong>Centro errori non disponibile.</strong><br>${esc(state.loadError)}<br><small>Gli zeri non vengono mostrati perché non sono stati verificati dal server.</small></div>`;
       return;
     }
     if (!state.items.length) {
@@ -297,16 +334,28 @@
   }
 
   async function loadDashboard() {
-    if (!state.admin || state.loading) return;
+    if (!state.admin || state.loading) return false;
+    let loaded = false;
     state.loading = true;
+    state.dataVerified = false;
+    state.loadError = "";
+    renderHealth();
+    renderSummary();
     renderList();
     const query = document.querySelector("[data-error-query]")?.value || "";
     const status = document.querySelector("[data-error-status]")?.value || "all";
     const severity = document.querySelector("[data-error-severity]")?.value || "all";
     try {
       const result = await callFunction(FUNCTIONS.dashboard, { query, status, severity, limit: 120 });
+      if (!result || result.countsVerified !== true || !result.counts || !Array.isArray(result.items)) {
+        throw new Error("Il server non ha certificato i contatori. È necessario completare il deploy del Centro errori.");
+      }
       state.items = Array.isArray(result.items) ? result.items : [];
       state.counts = result.counts || {};
+      state.dataVerified = true;
+      state.serverTime = result.serverTime || new Date().toISOString();
+      state.truncated = Boolean(result.truncated);
+      loaded = true;
       if (state.pendingTarget && state.items.some((item) => item.id === state.pendingTarget)) state.selectedId = state.pendingTarget;
       else if (!state.items.some((item) => item.id === state.selectedId)) state.selectedId = state.items[0]?.id || "";
       state.pendingTarget = "";
@@ -314,19 +363,27 @@
       console.error("Caricamento Centro errori fallito:", error);
       state.items = [];
       state.counts = {};
-      const root = document.querySelector("[data-error-list]");
-      if (root) root.innerHTML = `<div class="hera-error-empty"><strong>Centro errori non disponibile.</strong><br>${esc(error?.message || "Controlla il deploy delle Cloud Functions.")}</div>`;
+      state.dataVerified = false;
+      state.serverTime = "";
+      state.truncated = false;
+      state.loadError = error?.message || "Controlla il deploy delle Cloud Functions.";
     } finally {
       state.loading = false;
+      renderHealth();
       renderSummary();
       renderList();
       renderDetail();
     }
+    return loaded;
   }
 
   async function markSeen() {
-    setBadge(0);
-    try { await callFunction(FUNCTIONS.seen); } catch (error) { console.warn("Conferma lettura Centro errori non sincronizzata:", error); }
+    try {
+      await callFunction(FUNCTIONS.seen);
+      setBadge(0);
+    } catch (error) {
+      console.warn("Conferma lettura Centro errori non sincronizzata:", error);
+    }
   }
 
   async function openCenter(groupId = "") {
@@ -339,8 +396,8 @@
     closeSideMenu();
     if (groupId) state.pendingTarget = String(groupId);
     showDialog(document.getElementById("hera-error-center-dialog"));
-    void markSeen();
-    await loadDashboard();
+    const loaded = await loadDashboard();
+    if (loaded) void markSeen();
   }
 
   function closeCenter() {

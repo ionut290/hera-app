@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v139";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_NAME = "varga-cantieri-shell-v140";
+const CACHE_RESET_VERSION = "20260824-error-center2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -24,9 +24,9 @@ const APP_SHELL = [
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
   "./client-error-reporter.js?v=20260816a",
-  "./app-error-monitor.js?v=20260824a",
-  "./admin-error-center.js?v=20260824a",
-  "./admin-error-center.css?v=20260824a",
+  "./app-error-monitor.js?v=20260824b",
+  "./admin-error-center.js?v=20260824b",
+  "./admin-error-center.css?v=20260824b",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",

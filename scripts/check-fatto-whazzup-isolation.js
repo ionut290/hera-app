@@ -65,6 +65,12 @@ const BASELINE_EXTERNAL_WRAPPERS = Object.freeze({
     sha: "c0f04b7c1abbe1232dc84d017747cceea17bf53a"
   })
 });
+const BASELINE_EXTERNAL_REGIONS = Object.freeze({
+  "squadra-current-save-sync.js": Object.freeze({
+    startMarker: "// Il salvataggio FATTO ha già completato il batch prima di questa verifica.",
+    sha: "eef00c11bc1a74b5d1628ff139f0161b4ab93116"
+  })
+});
 const ALL_CHANGE_WORKFLOWS = Object.freeze([
   ".github/workflows/check-done-button.yml",
   ".github/workflows/check-critical-flows.yml",
@@ -171,6 +177,20 @@ for (const fileName of runtimeFiles) {
       ]);
     }
     source = source.replace(wrapperSource, "");
+  }
+  const baselineRegion = BASELINE_EXTERNAL_REGIONS[fileName];
+  if (baselineRegion) {
+    const regionStart = source.indexOf(baselineRegion.startMarker);
+    if (regionStart < 0) fail("Regione esterna protetta mancante: " + fileName);
+    const regionSource = source.slice(regionStart);
+    const regionSha = gitBlobSha(regionSource);
+    if (regionSha !== baselineRegion.sha) {
+      fail([
+        "Regione esterna già presente modificata: " + fileName,
+        "La verifica FATTO corrente è congelata e non può essere sostituita o estesa."
+      ]);
+    }
+    source = source.slice(0, regionStart);
   }
   for (const name of CRITICAL_NAMES) {
     const escaped = escapeRegExp(name);

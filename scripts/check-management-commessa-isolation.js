@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const source = fs.readFileSync("operational-import-repair.js", "utf8");
+const appSource = fs.readFileSync("app.js", "utf8");
+const accountingSource = fs.readFileSync("accounting-v2.js", "utf8");
 
 const commesseById = new Map([
   ["modena", { id: "modena", nome: "INRETE MODENA", codice: "28015", impiantiCount: 30 }],
@@ -154,4 +156,43 @@ assert.match(stats.innerHTML, />38<\/b> lavorazioni da fare/);
 
 assert.doesNotMatch(source, /normalizeCode\(meta\.textContent\)\.includes\(CANONICAL_COMMESSA_CODE\)/);
 
-console.log("✅ Gestione commesse: isolamento esatto e numero reale impianti verificati (Ferrara 94).");
+assert.doesNotMatch(
+  appSource,
+  /if\s*\(\s*!ui\.commessaTargetSelect\.value\s*\)/,
+  "Aprendo una commessa il selettore import non deve conservare una destinazione precedente"
+);
+assert.match(
+  appSource,
+  /if\s*\(ui\.commessaTargetSelect\)\s*\{\s*ui\.commessaTargetSelect\.value\s*=\s*id;/,
+  "La destinazione import deve essere riallineata sempre alla commessa aperta"
+);
+
+const loadStart = accountingSource.indexOf("async function load(options={}){");
+const loadEnd = accountingSource.indexOf("\n  const clean=", loadStart);
+assert.ok(loadStart >= 0 && loadEnd > loadStart, "Caricamento contabile non trovato");
+const loadSource = accountingSource.slice(loadStart, loadEnd);
+assert.match(loadSource, /const requestId=Number\(options\.requestId\?\?state\.openRequestId\)/);
+assert.match(loadSource, /const requestedRef=db\.collection\(getCommesseCollectionName\(\)\)\.doc\(requestedCommessaId\)/);
+assert.match(loadSource, /if\(isStale\(\)\)return false;/);
+assert.doesNotMatch(loadSource, /commRef\(\)\.collection\(/, "Il caricamento non deve rileggere la commessa globale mutabile");
+
+const syncStart = accountingSource.indexOf("async function synchronizeOperationalModel(options={}){");
+const syncEnd = accountingSource.indexOf("\n  async function verifyOperationalModel", syncStart);
+assert.ok(syncStart >= 0 && syncEnd > syncStart, "Sincronizzazione operativa non trovata");
+const syncSource = accountingSource.slice(syncStart, syncEnd);
+assert.match(syncSource, /const workItems=state\.work\.map\(item=>\(\{\.\.\.item\}\)\)/);
+assert.match(syncSource, /requestedRef\.collection\("impianti"\)/);
+assert.match(syncSource, /commessaId:requestedCommessaId/);
+assert.doesNotMatch(syncSource, /commRef\(\)/, "La sincronizzazione non deve cambiare riferimento durante gli await");
+assert.doesNotMatch(syncSource, /commessaId:state\.commessa\.id/, "Nessun dato deve ricevere l’ID di una commessa cambiata");
+
+assert.match(
+  accountingSource,
+  /const requestId=\+\+state\.openRequestId;state\.commessa=commessa;managementCommessaId=requestedCommessaId;/
+);
+assert.match(
+  accountingSource,
+  /return load\(\{commessa,commessaId:requestedCommessaId,requestId\}\);/
+);
+
+console.log("✅ Gestione commesse: isolamento esatto, destinazione import e concorrenza asincrona verificati.");

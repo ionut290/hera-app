@@ -99,12 +99,12 @@ function assertClassicOrderedScript(html, fileName) {
       .replace(/^\.\//, "");
     if (normalizedSrc !== fileName) continue;
     if (/\b(?:async|defer)\b/i.test(attributes) || /\btype\s*=\s*["']module["']/i.test(attributes)) {
-      fail(\`Lo script critico \${fileName} deve restare classico e sincrono.\`);
+      fail("Lo script critico " + fileName + " deve restare classico e sincrono.");
     }
     matches.push(scriptMatch.index);
   }
   if (matches.length !== 1) {
-    fail(\`Lo script critico \${fileName} deve essere caricato una sola volta, in modo classico e sincrono.\`);
+    fail("Lo script critico " + fileName + " deve essere caricato una sola volta, in modo classico e sincrono.");
   }
   return matches[0];
 }

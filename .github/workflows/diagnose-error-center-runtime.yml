@@ -62,6 +62,46 @@ jobs:
               scopes: ["https://www.googleapis.com/auth/cloud-platform"]
             });
             const client = await auth.getClient();
+            const endpointNames = ["getErrorCenterDashboard", "recordClientErrorGroup"];
+            const endpoints = [];
+            for (const functionName of endpointNames) {
+              const endpoint = `https://europe-west1-hera-app-6cd2b.cloudfunctions.net/${functionName}`;
+              const metadata = await client.request({
+                url: `https://cloudfunctions.googleapis.com/v1/projects/hera-app-6cd2b/locations/europe-west1/functions/${functionName}`,
+                method: "GET"
+              });
+              const policy = await client.request({
+                url: `https://cloudfunctions.googleapis.com/v1/projects/hera-app-6cd2b/locations/europe-west1/functions/${functionName}:getIamPolicy`,
+                method: "GET"
+              });
+              const preflight = await fetch(endpoint, {
+                method: "OPTIONS",
+                headers: {
+                  Origin: "https://example.invalid",
+                  "Access-Control-Request-Method": "POST",
+                  "Access-Control-Request-Headers": "content-type"
+                }
+              });
+              const unauthenticated = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ data: {} })
+              });
+              endpoints.push({
+                functionName,
+                status: metadata.data.status || "",
+                entryPoint: metadata.data.entryPoint || "",
+                httpsTrigger: Boolean(metadata.data.httpsTrigger?.url),
+                publicInvoker: (policy.data.bindings || []).some((binding) =>
+                  ["roles/cloudfunctions.invoker", "roles/run.invoker"].includes(binding.role)
+                  && (binding.members || []).includes("allUsers")
+                ),
+                preflightStatus: preflight.status,
+                allowOrigin: preflight.headers.get("access-control-allow-origin") || "",
+                unauthenticatedStatus: unauthenticated.status,
+                unauthenticatedBody: redact(await unauthenticated.text())
+              });
+            }
             const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
             const filter = [
               'resource.type="cloud_function"',
@@ -92,7 +132,7 @@ jobs:
                 || ""
               )
             }));
-            fs.writeFileSync("error-center-runtime-diagnostics.json", JSON.stringify(entries, null, 2));
+            fs.writeFileSync("error-center-runtime-diagnostics.json", JSON.stringify({ endpoints, entries }, null, 2));
           })().catch((error) => {
             fs.writeFileSync("error-center-runtime-diagnostics.json", JSON.stringify([{
               collectorError: redact(error?.message || error)

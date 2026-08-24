@@ -32,8 +32,8 @@ if (!stampedIndex.includes(`navigator.serviceWorker.register("./sw.js?v=${versio
   throw new Error("La registrazione del Service Worker non riceve la versione build");
 }
 
-const indexAppVersion = index.match(/<script src="app\\.js\\?v=([^"]+)"><\\/script>/)?.[1] || "";
-const serviceWorkerAppVersion = sw.match(/"\\.\\/app\\.js\\?v=([^"]+)"/)?.[1] || "";
+const indexAppVersion = index.match(/app\.js\?v=([^"]+)/)?.[1] || "";
+const serviceWorkerAppVersion = sw.match(/app\.js\?v=([^"]+)/)?.[1] || "";
 if (!indexAppVersion || indexAppVersion !== serviceWorkerAppVersion) {
   throw new Error("La versione cache di app.js deve coincidere tra index.html e sw.js");
 }

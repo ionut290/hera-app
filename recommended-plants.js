@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VERSION = '3.0.1-observer-scope1';
+  const VERSION = '3.0.2-squad-context1';
   if (window.HeraRecommendedPlants?.version === VERSION) return;
 
   const CFG = Object.freeze({
@@ -73,7 +73,9 @@
   }
   function teamInfo() {
     const id = commessaId(), day = today();
-    const sources = [globalValue('currentSquadre'),window.squadre,window.squadreOggi,window.todaySquads,window.squadreByCommessa];
+    let recommendedContext = null;
+    try { recommendedContext = window.HeraSquadContext?.getCurrent?.() || window.HeraRecommendedSquadContext; } catch (_) {}
+    const sources = [recommendedContext ? [recommendedContext] : null,globalValue('currentSquadre'),window.squadre,window.squadreOggi,window.todaySquads,window.squadreByCommessa];
     let found = null;
     for (const source of sources) for (const squad of rows(source, id)) {
       if (!squad || typeof squad !== 'object') continue;

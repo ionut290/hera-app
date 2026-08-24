@@ -9,14 +9,17 @@ const root = path.resolve(__dirname, '..');
 const bridgePath = path.join(root, 'squad-context-bridge.js');
 const guardPath = path.join(root, 'fatto-scroll-guard.js');
 const widgetPath = path.join(root, 'commessa-produced-widget.js');
+const recommendedPath = path.join(root, 'recommended-plants.js');
 const bridgeSource = fs.readFileSync(bridgePath, 'utf8');
 const guardSource = fs.readFileSync(guardPath, 'utf8');
 const widgetSource = fs.readFileSync(widgetPath, 'utf8');
+const recommendedSource = fs.readFileSync(recommendedPath, 'utf8');
 
 // Controllo sintattico dei moduli modificati.
 new vm.Script(bridgeSource, { filename: bridgePath });
 new vm.Script(guardSource, { filename: guardPath });
 new vm.Script(widgetSource, { filename: widgetPath });
+new vm.Script(recommendedSource, { filename: recommendedPath });
 
 // Il modulo delle stime non deve mai scrivere nello stato reale delle squadre.
 assert.doesNotMatch(
@@ -111,6 +114,56 @@ assert.equal(windowStub.HeraRecommendedSquadContext?.teamSize, 2);
 assert.equal(windowStub.HeraRecommendedSquadContext?.hasDaily, true);
 assert.equal(windowStub.HeraRecommendedSquadContext?.hasTrincia, true);
 assert.equal(intervalCalls, 0, 'Il polling non deve partire quando il contesto è già disponibile');
+
+// Il motore deve usare il contesto dedicato: A121 è un Daily e R61 una trincia piccola.
+const recommendedWindow = {
+  selectedCommessaId: 'commessa-1',
+  HeraSquadContext: {
+    getCurrent() {
+      return {
+        commessaId: 'commessa-1',
+        data: '2026-08-23',
+        teamSize: 2,
+        operatori: ['VARGA IONEL', 'BARONE ANTONIO'],
+        mezzi: 'A121 DAILY IVECO R61 TRINCIA TRINCIATRICE TRATTORE PICCOLO'
+      };
+    }
+  },
+  addEventListener() {}
+};
+recommendedWindow.window = recommendedWindow;
+const recommendedDocument = {
+  readyState: 'loading',
+  addEventListener() {},
+  getElementById() { return null; }
+};
+vm.runInNewContext(recommendedSource, {
+  window: recommendedWindow,
+  document: recommendedDocument,
+  navigator: {},
+  localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
+  Date: FixedDate,
+  Map,
+  Set,
+  JSON,
+  Math,
+  Number,
+  String,
+  Array,
+  Object,
+  RegExp,
+  console,
+  setTimeout() { return 1; },
+  clearTimeout() {},
+  selectedCommessaId: 'commessa-1',
+  currentSquadre: []
+}, { filename: recommendedPath });
+const recommendedTeam = recommendedWindow.HeraRecommendedPlants.getTeamInfo();
+assert.equal(recommendedTeam.daily, true, 'A121 deve essere rilevato come Daily');
+assert.equal(recommendedTeam.dailyCode, 'A121', 'Il codice Daily deve essere A121');
+assert.equal(recommendedTeam.trincia, true, 'R61 deve essere rilevato come trincia');
+assert.equal(recommendedTeam.small, true, 'R61 deve essere rilevato come trincia piccola');
+assert.equal(recommendedTeam.smallCode, 'R61', 'Il codice trincia piccola deve essere R61');
 
 // I moduli accessori devono partire solo nella pagina Impianti o su azione esplicita.
 assert.match(guardSource, /function\s+initializeLazyHelpers\s*\(/);

@@ -69,7 +69,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_SHARED_STATIC_VIEWS_UI_SRC}"><\/script>`);
   document.write(`<script src="${HERA_NATIVE_RUNTIME_SRC}"><\/script>`);
   document.write(`<script src="${HERA_ADMIN_USER_ACCESS_TOOLS_SRC}"><\/script>`);
-  document.write(`<script src="${HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC}" data-hera-admin-user-access-share-fix="1"><\/script>`);
+  document.write(`<script src="${HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
   document.write('<script src="update-app-feature.js?v=20260824-oneclick1"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');

@@ -21304,7 +21304,7 @@ async function isImpiantoPersistedAsDone(impianto, commessaIdOverride = selected
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Errore salvataggio: WhatsApp verrà aperto comunque. Il completamento dell’impianto resterà in recupero automatico.");
+  alert("Errore salvataggio: WhatsApp verrà aperto comunque. L’impianto sarà spostato nei FATTI e resterà in recupero automatico fino alla sincronizzazione.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

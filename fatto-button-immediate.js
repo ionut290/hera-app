@@ -598,9 +598,7 @@
         return false;
       }
 
-      const pressedButton = findPressedFattoButton();
       const doneAt = new Date().toISOString();
-      applyPermanentYellowFeedback(pressedButton, doneAt);
 
       const operation = await enqueue(impianto, {
         commessaId: window.selectedCommessaId,

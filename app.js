@@ -1121,6 +1121,12 @@ const ui = {
 let pendingRows = [];
 let selectedCommessaId = "";
 let selectedCommessaName = "";
+
+function getSelectedCommessaIdForFatto() {
+  return String(selectedCommessaId || "").trim();
+}
+
+window.getSelectedCommessaIdForFatto = getSelectedCommessaIdForFatto;
 let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
 let unsubscribeFattoVisualEvidence = null;
@@ -12366,6 +12372,33 @@ function getCurrentUserPendingActions() {
   return pendingImpiantoActions.filter((action) => !action.userId || action.userId === uid);
 }
 
+function applyWhazzupPendingDoneEntriesToImpianti(impianti, commessaId) {
+  const requestedCommessaId = String(commessaId || "").trim();
+  const uid = String(currentUser?.uid || auth.currentUser?.uid || "").trim();
+  if (!requestedCommessaId) return Array.isArray(impianti) ? impianti : [];
+
+  const pendingEntries = loadWhazzupPendingDoneEntries().filter((entry) => (
+    entry.commessaId === requestedCommessaId
+    && (!entry.userId || (uid && entry.userId === uid))
+  ));
+  if (!pendingEntries.length) return Array.isArray(impianti) ? impianti : [];
+
+  return (Array.isArray(impianti) ? impianti : []).map((impianto) => {
+    if (impianto?.done) return impianto;
+    const entry = pendingEntries.find((candidate) => doesPendingActionMatchImpianto(candidate, requestedCommessaId, impianto));
+    if (!entry) return impianto;
+    const doneAt = entry.pendingAt ? new Date(entry.pendingAt) : new Date();
+    return {
+      ...impianto,
+      done: true,
+      stato: "FATTO",
+      doneAt: Number.isNaN(doneAt.getTime()) ? new Date() : doneAt,
+      doneBy: entry.doneBy || impianto.doneBy || "Operatore",
+      pendingWhatsappStatus: "pending"
+    };
+  });
+}
+
 function isPendingWhatsappAction(action) {
   return action
     && action.type === "done"
@@ -12836,7 +12869,10 @@ function saveImpiantiIncrementalState(commessaId, lastChangedAtMs) {
 
 function renderImpiantiAfterRemoteSync(rawImpianti, previousDoneSignatureRef) {
   currentImpianti = applyFattoVisualEvidenceToImpianti(
-    applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId)
+    applyPendingActionsToImpianti(
+      applyWhazzupPendingDoneEntriesToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId),
+      selectedCommessaId
+    )
   );
   refreshImpiantoWhatsAppTemplateCache(currentImpianti);
   impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
@@ -12925,7 +12961,12 @@ function subscribeImpianti() {
     return;
   }
 
-  currentImpianti = cachedImpianti.slice();
+  currentImpianti = applyFattoVisualEvidenceToImpianti(
+    applyPendingActionsToImpianti(
+      applyWhazzupPendingDoneEntriesToImpianti(cachedImpianti.slice(), requestedCommessaId),
+      requestedCommessaId
+    )
+  );
   renderImpianti();
   renderMap();
 
@@ -21391,6 +21432,7 @@ async function runWhazzupPendingDoneSafetyCheck() {
   }
   const untouched = allEntries.filter((entry) => !(entry.commessaId === commessaId && (!entry.userId || entry.userId === uid)));
   saveWhazzupPendingDoneEntries([...untouched, ...remaining]);
+  currentImpianti = applyWhazzupPendingDoneEntriesToImpianti(currentImpianti, commessaId);
   renderImpianti();
 }
 

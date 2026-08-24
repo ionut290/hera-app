@@ -13,6 +13,18 @@
   const text = (value) => String(value ?? "").trim();
   const clone = (value) => JSON.parse(JSON.stringify(value || {}));
 
+  function getActiveCommessaId() {
+    try {
+      if (typeof window.getSelectedCommessaIdForFatto === "function") {
+        const selected = text(window.getSelectedCommessaIdForFatto());
+        if (selected) return selected;
+      }
+    } catch (error) {
+      console.warn("[Cassaforte FATTO] lettura commessa selezionata non disponibile", error);
+    }
+    return text(window.selectedCommessaId);
+  }
+
   function openDb() {
     return new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) return reject(new Error("IndexedDB non disponibile"));
@@ -166,7 +178,7 @@
       type: "IMPIANTO_FATTO",
       status: "PENDING",
       impianto: clone(impianto),
-      commessaId: text(metadata.commessaId || window.selectedCommessaId),
+      commessaId: text(metadata.commessaId || getActiveCommessaId()),
       doneAt: metadata.doneAt || new Date(now).toISOString(),
       doneBy: text(metadata.doneBy || window.auth?.currentUser?.displayName || window.auth?.currentUser?.email),
       attempts: 0,
@@ -286,6 +298,8 @@
       const items = (await list()).sort((a, b) => a.createdAt - b.createdAt);
       publishStatus(items);
       for (let operation of items) {
+        const activeCommessaId = getActiveCommessaId();
+        if (operation.commessaId && operation.commessaId !== activeCommessaId) continue;
         if (operation.status === "SYNCING" && Date.now() - Number(operation.updatedAt || 0) < STALE_MS) continue;
         if (Number(operation.attempts || 0) >= MAX_ATTEMPTS) {
           await setStatus(operation, "BLOCKED", operation.lastError || "Troppi tentativi");
@@ -370,7 +384,7 @@
       applyPermanentYellowFeedback(pressedButton, doneAt);
 
       const operation = await enqueueSafely(impianto, {
-        commessaId: window.selectedCommessaId,
+        commessaId: getActiveCommessaId(),
         doneAt
       });
       try {

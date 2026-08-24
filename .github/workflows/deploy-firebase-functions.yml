@@ -40,6 +40,28 @@ jobs:
       - name: Validate Firebase functions
         run: node -e "require('./functions/main.js'); console.log('Functions loaded successfully')"
 
+      - name: Prepare approved function entrypoint
+        shell: bash
+        run: |
+          # reportClientError is not in the approved --only list below. Avoid
+          # loading its separately managed email secrets during this deploy.
+          node <<'NODE'
+          const fs = require("node:fs");
+          const entrypointPath = "functions/main.js";
+          const source = fs.readFileSync(entrypointPath, "utf8");
+          const prepared = source
+            .replace(/^const errorReportingFunctions = require\("\.\/error-reporting"\);\r?\n/m, "")
+            .replace(/^\s*errorReportingFunctions,\r?\n/m, "");
+
+          if (prepared === source || prepared.includes("errorReportingFunctions")) {
+            throw new Error("Unable to isolate the approved deploy entrypoint.");
+          }
+
+          fs.writeFileSync(entrypointPath, prepared);
+          require("./functions/main.js");
+          console.log("Approved deploy entrypoint loaded successfully");
+          NODE
+
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
 

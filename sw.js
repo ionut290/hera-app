@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v148";
-const CACHE_RESET_VERSION = "20260824-fatto-stable6";
+const CACHE_NAME = "varga-cantieri-shell-v149";
+const CACHE_RESET_VERSION = "20260824-fatto-stable7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -70,7 +70,7 @@ const APP_SHELL = [
   "./app-notifications-read-guard.js?v=20260815a",
   "./recommended-plants.css?v=20260823-stability3",
   "./recommended-plants.js?v=20260823-stability3",
-  "./fatto-scroll-guard.js?v=20260823-stability3",
+  "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260823-stability3",

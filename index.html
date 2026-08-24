@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#111214">
   <script>
     (() => {
-      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260824-fatto-stable6";
+      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260824-fatto-stable7";
       const ANDROID_EMERGENCY_CACHE_RESET_VERSION = "20260812-android1";
       const PWA_EMERGENCY_CACHE_RESET_KEY = "heraPwaCacheResetVersion";
       const url = new URL(window.location.href);
@@ -477,7 +477,7 @@
   <script src="coordinate-repair.js?v=20260728a"></script>
   <script src="inrete-work-items-v2.js?v=20260728b"></script>
   <script src="accounting-v2.js?v=20260812-modena2"></script>
-  <script src="commessa-produced-widget.js?v=20260728a"></script>
+  <script src="commessa-produced-widget.js?v=20260824-oneclick2"></script>
   <script src="accounting-view-guard.js?v=20260728a"></script>
   <script src="operational-import-repair.js?v=20260824-state-race1"></script>
   <script src="today-summary-interactions.js?v=20260731-repair1"></script>
@@ -492,7 +492,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260824-fatto-stable6", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260824-fatto-stable7", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

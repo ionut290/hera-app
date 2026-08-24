@@ -20989,13 +20989,12 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
-    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
+    // 1) Tenta di salvare subito la pressione e la data. Questa prova cloud è
+    // separata dal trasferimento, ma un suo errore non deve mai bloccare WhatsApp:
+    // il recupero FATTO prosegue con il salvataggio principale e la coda offline.
     const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
     if (!evidenceSaved && !isNetworkOffline()) {
-      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
       await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
-      return false;
     }
 
     cacheFattoVisualEvidence(impianto, doneAt);
@@ -21305,7 +21304,7 @@ async function isImpiantoPersistedAsDone(impianto, commessaIdOverride = selected
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Errore salvataggio. Riprova.");
+  alert("Errore salvataggio: WhatsApp verrà aperto comunque. Il completamento dell’impianto resterà in recupero automatico.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

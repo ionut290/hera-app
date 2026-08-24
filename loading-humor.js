@@ -41,6 +41,32 @@
   document.head.appendChild(script);
 })();
 
+(function loadAdminErrorCenterRuntime() {
+  "use strict";
+  const version = "20260824a";
+  if (!document.querySelector('link[data-admin-error-center-style]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `./admin-error-center.css?v=${version}`;
+    link.dataset.adminErrorCenterStyle = "1";
+    document.head.appendChild(link);
+  }
+  if (!window.HeraAppErrorMonitor?.installed && !document.querySelector('script[data-app-error-monitor]')) {
+    const script = document.createElement("script");
+    script.src = `./app-error-monitor.js?v=${version}`;
+    script.async = false;
+    script.dataset.appErrorMonitor = "1";
+    document.head.appendChild(script);
+  }
+  if (!window.HeraAdminErrorCenter?.installed && !document.querySelector('script[data-admin-error-center]')) {
+    const script = document.createElement("script");
+    script.src = `./admin-error-center.js?v=${version}`;
+    script.async = false;
+    script.dataset.adminErrorCenter = "1";
+    document.head.appendChild(script);
+  }
+})();
+
 (function loadPwaWhazzupContinuousCamera() {
   "use strict";
   const isNative = Boolean(

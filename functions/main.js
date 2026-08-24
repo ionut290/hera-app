@@ -8,6 +8,7 @@ const sharedOperationalViewFunctions = require("./shared-operational-views");
 const adminPasswordPrivateRequestFunctions = require("./admin-password-private-requests");
 const impiantoChangeIndexFunctions = require("./impianto-change-index");
 const errorReportingFunctions = require("./error-reporting");
+const errorCenterFunctions = require("./error-center");
 const errorEmailUsageFunctions = require("./error-email-usage");
 const cleanupWhazzupPdfFunctions = require("./cleanup-whazzup-pdfs");
 const whazzupPdfDriveFunctions = require("./whazzup-pdf-drive");
@@ -22,6 +23,7 @@ Object.assign(
   adminPasswordPrivateRequestFunctions,
   impiantoChangeIndexFunctions,
   errorReportingFunctions,
+  errorCenterFunctions,
   errorEmailUsageFunctions,
   cleanupWhazzupPdfFunctions,
   whazzupPdfDriveFunctions

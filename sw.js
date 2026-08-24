@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v138";
+const CACHE_NAME = "varga-cantieri-shell-v139";
 const CACHE_RESET_VERSION = "20260814-loading-humor1";
 const APP_SHELL = [
   "./",
@@ -23,6 +23,10 @@ const APP_SHELL = [
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
+  "./client-error-reporter.js?v=20260816a",
+  "./app-error-monitor.js?v=20260824a",
+  "./admin-error-center.js?v=20260824a",
+  "./admin-error-center.css?v=20260824a",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
@@ -91,6 +95,11 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/header-menu-runtime.js",
   "/operational-import-repair.js",
   "/commessa-produced-widget.js",
+  "/loading-humor.js",
+  "/client-error-reporter.js",
+  "/app-error-monitor.js",
+  "/admin-error-center.js",
+  "/admin-error-center.css",
   "/fatto-scroll-guard.js",
   "/recommended-plants.js",
   "/recommended-plants.css",

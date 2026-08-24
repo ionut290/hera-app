@@ -1125,6 +1125,7 @@ let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
 let unsubscribeFattoVisualEvidence = null;
 const fattoVisualEvidenceByImpianto = new Map();
+const fattoVisualEvidenceDoneByImpianto = new Map();
 let unsubscribeCommessaNotes = null;
 const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
@@ -12732,12 +12733,39 @@ function getFattoVisualEvidenceAt(impianto) {
   return evidenceAt > resetAt ? evidenceAt : 0;
 }
 
+function getFattoVisualEvidenceDoneBy(impianto) {
+  const impiantoKey = buildImpiantoKey(impianto);
+  const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
+  return String(
+    fattoVisualEvidenceDoneByImpianto.get(`key:${impiantoKey}`)
+      || fattoVisualEvidenceDoneByImpianto.get(`sap:${idSap}`)
+      || impianto?.doneBy
+      || "Operatore"
+  ).trim() || "Operatore";
+}
+
+function applyFattoVisualEvidenceToImpianti(impianti) {
+  return (Array.isArray(impianti) ? impianti : []).map((impianto) => {
+    if (impianto?.done) return impianto;
+    const evidenceAt = getFattoVisualEvidenceAt(impianto);
+    if (!evidenceAt) return impianto;
+    return {
+      ...impianto,
+      done: true,
+      stato: "FATTO",
+      doneAt: new Date(evidenceAt),
+      doneBy: getFattoVisualEvidenceDoneBy(impianto)
+    };
+  });
+}
+
 function stopFattoVisualEvidenceSubscription() {
   if (unsubscribeFattoVisualEvidence) {
     unsubscribeFattoVisualEvidence();
     unsubscribeFattoVisualEvidence = null;
   }
   fattoVisualEvidenceByImpianto.clear();
+  fattoVisualEvidenceDoneByImpianto.clear();
 }
 
 function subscribeFattoVisualEvidence(commessaId) {
@@ -12753,6 +12781,7 @@ function subscribeFattoVisualEvidence(commessaId) {
     .onSnapshot((snapshot) => {
       if (requestedCommessaId !== selectedCommessaId) return;
       fattoVisualEvidenceByImpianto.clear();
+      fattoVisualEvidenceDoneByImpianto.clear();
       snapshot.forEach((doc) => {
         const log = doc.data() || {};
         const clickedAt = firestoreDateToMillis(log.createdAt)
@@ -12762,15 +12791,19 @@ function subscribeFattoVisualEvidence(commessaId) {
 
         const impiantoKey = String(log.impiantoKey || "").trim();
         const idSap = String(log.impiantoIdSap || "").trim().toLowerCase();
+        const doneBy = String(log.doneBy || "Operatore").trim() || "Operatore";
         if (impiantoKey) {
           const mapKey = `key:${impiantoKey}`;
           fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
+          fattoVisualEvidenceDoneByImpianto.set(mapKey, doneBy);
         }
         if (idSap) {
           const mapKey = `sap:${idSap}`;
           fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
+          fattoVisualEvidenceDoneByImpianto.set(mapKey, doneBy);
         }
       });
+      currentImpianti = applyFattoVisualEvidenceToImpianti(currentImpianti);
       renderImpianti();
     }, (error) => {
       console.warn("Prova visiva FATTO condivisa non disponibile:", error);
@@ -12802,7 +12835,9 @@ function saveImpiantiIncrementalState(commessaId, lastChangedAtMs) {
 }
 
 function renderImpiantiAfterRemoteSync(rawImpianti, previousDoneSignatureRef) {
-  currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
+  currentImpianti = applyFattoVisualEvidenceToImpianti(
+    applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId)
+  );
   refreshImpiantoWhatsAppTemplateCache(currentImpianti);
   impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
   renderSquadre();
@@ -20958,9 +20993,16 @@ async function forceMarkDone(impianto) {
     return false;
   }
 
+  const forcedAt = new Date();
+  const forcedBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
+  cacheFattoVisualEvidence(impianto, forcedAt, forcedBy);
+  markImpiantoDoneVisualFallback(impianto, { doneAt: forcedAt, doneBy: forcedBy });
+  await recordFattoVisualEvidence(impianto, forcedAt, forcedBy);
   const moved = await markImpiantoDone(impianto, {
     source: "force",
-    skipImpiantoCoordinatesValidation: true
+    skipImpiantoCoordinatesValidation: true,
+    doneAt: forcedAt,
+    doneBy: forcedBy
   });
   if (!moved) return false;
   const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
@@ -20978,12 +21020,19 @@ async function forceMarkDone(impianto) {
 }
 
 
-function cacheFattoVisualEvidence(impianto, clickedAt) {
+function cacheFattoVisualEvidence(impianto, clickedAt, doneBy = "Operatore") {
   const millis = (clickedAt instanceof Date ? clickedAt : new Date(clickedAt)).getTime();
   const impiantoKey = buildImpiantoKey(impianto);
   const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
-  if (impiantoKey) fattoVisualEvidenceByImpianto.set(`key:${impiantoKey}`, millis);
-  if (idSap) fattoVisualEvidenceByImpianto.set(`sap:${idSap}`, millis);
+  const operatorName = String(doneBy || "Operatore").trim() || "Operatore";
+  if (impiantoKey) {
+    fattoVisualEvidenceByImpianto.set(`key:${impiantoKey}`, millis);
+    fattoVisualEvidenceDoneByImpianto.set(`key:${impiantoKey}`, operatorName);
+  }
+  if (idSap) {
+    fattoVisualEvidenceByImpianto.set(`sap:${idSap}`, millis);
+    fattoVisualEvidenceDoneByImpianto.set(`sap:${idSap}`, operatorName);
+  }
 }
 
 function setImpiantoFattoSavingState(impianto, saving) {
@@ -21035,12 +21084,16 @@ async function handleImpiantoWhatsAppClick(impianto) {
       await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
     }
 
-    cacheFattoVisualEvidence(impianto, doneAt);
+    cacheFattoVisualEvidence(impianto, doneAt, doneBy);
     markWhazzupSafetyPressed(impianto, doneAt);
     upsertWhazzupPendingDoneEntry(impianto, doneAt);
+    // Sposta prima la scheda: iOS può sospendere la PWA appena apre WhatsApp.
+    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
+    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
+    setImpiantiViewMode("done");
     renderImpianti();
 
-    // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
+    // 2) Dopo avere protetto e spostato la scheda, apri WhatsApp.
     const whazzupOptions = {
       doneAt,
       operatorName: doneBy,
@@ -21057,12 +21110,8 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
     }
 
-    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
+    // 3) La conferma cloud parte comunque, anche se WhatsApp non è installato o
     // l'utente torna indietro senza inviare il messaggio.
-    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
-    setImpiantiViewMode("done");
-    renderImpianti();
 
     const auditLogId = await auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,

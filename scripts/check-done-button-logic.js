@@ -124,13 +124,13 @@ else {
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = hasWhazzupPhotos');
   const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
-  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
-    pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');
+  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && localMoveIndex > evidenceIndex && openWhatsappIndex > localMoveIndex) {
+    pass('Fatto protegge e trasferisce nei FATTI prima di aprire WhatsApp');
   } else {
-    fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
+    fail('Ordine richiesto: prova FATTO -> trasferimento FATTI -> WhatsApp');
   }
   const evidenceFailureStart = whatsappHandler.indexOf('if (!evidenceSaved && !isNetworkOffline())');
-  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt)', evidenceFailureStart);
+  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt, doneBy)', evidenceFailureStart);
   const evidenceFailureBlock = evidenceFailureStart >= 0 && evidenceFailureEnd > evidenceFailureStart
     ? whatsappHandler.slice(evidenceFailureStart, evidenceFailureEnd)
     : '';
@@ -162,6 +162,14 @@ else {
     pass('recupero FATTO non riporta l’impianto nei Da fare');
   }
 }
+
+const forceMarkDone = extractFunction('forceMarkDone');
+requireIncludes(forceMarkDone, 'cacheFattoVisualEvidence(impianto, forcedAt, forcedBy)', 'FORZA conserva la prova FATTO locale');
+requireIncludes(forceMarkDone, 'recordFattoVisualEvidence(impianto, forcedAt, forcedBy)', 'FORZA conserva la prova FATTO condivisa');
+requireIncludes(forceMarkDone, 'markImpiantoDoneVisualFallback(impianto, { doneAt: forcedAt, doneBy: forcedBy })', 'FORZA sposta subito la scheda nei Fatti');
+
+requireIncludes(source, 'function applyFattoVisualEvidenceToImpianti(impianti)', 'prova FATTO recupera lo stato alla riapertura');
+requireIncludes(source, 'currentImpianti = applyFattoVisualEvidenceToImpianti(currentImpianti)', 'listener prova FATTO aggiorna gli impianti già caricati');
 
 const persistedCheck = extractFunction('isImpiantoPersistedAsDone');
 requireIncludes(persistedCheck, 'snapshots.every(', 'verifica FATTO richiede tutti i documenti raggruppati');

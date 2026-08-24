@@ -221,26 +221,32 @@
     if (typeof original !== "function" || original.__heraQueueWrapped) return;
     const wrapped = async function (impianto, ...args) {
       const doneAt = new Date().toISOString();
-      let operation = null;
-      try {
-        operation = await enqueue(impianto, {
-          commessaId: window.selectedCommessaId,
-          doneAt
+      // Avvia la cassaforte locale, ma non aspettare IndexedDB prima di dare
+      // seguito al click. Su alcuni iPhone l'apertura del database puo restare
+      // sospesa e in precedenza rendeva FATTO apparentemente morto.
+      const operationTask = enqueue(impianto, {
+        commessaId: window.selectedCommessaId,
+        doneAt
+      })
+        .catch((error) => {
+          console.warn("Coda locale FATTO non disponibile; continuo con il flusso principale.", error);
+          return null;
         });
-      } catch (error) {
-        // La cassaforte locale e' best-effort: IndexedDB non deve mai bloccare
-        // il FATTO reale ne' l'apertura di WhatsApp.
-        console.warn("Coda locale FATTO non disponibile; continuo con il flusso principale.", error);
-      }
       try {
         const result = await original.call(this, impianto, ...args);
-        if (operation && result === true) await remove(operation.operationId);
-        else if (operation) await setStatus(operation, "FAILED", "Flusso FATTO non completato");
-        await refreshStatus();
+        void operationTask.then(async (operation) => {
+          if (!operation) return;
+          if (result === true) await remove(operation.operationId);
+          else await setStatus(operation, "FAILED", "Flusso FATTO non completato");
+          await refreshStatus();
+        }).catch((error) => console.warn("Aggiornamento coda FATTO non riuscito.", error));
         return result;
       } catch (error) {
-        if (operation) await setStatus(operation, "FAILED", error);
-        await refreshStatus();
+        void operationTask.then(async (operation) => {
+          if (!operation) return;
+          await setStatus(operation, "FAILED", error);
+          await refreshStatus();
+        }).catch((queueError) => console.warn("Aggiornamento coda FATTO non riuscito.", queueError));
         throw error;
       }
     };

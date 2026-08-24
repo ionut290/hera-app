@@ -107,11 +107,13 @@ else {
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = hasWhazzupPhotos');
   const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
-  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
-    pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');
+  if (validationIndex >= 0 && localMoveIndex > validationIndex && evidenceIndex > localMoveIndex && openWhatsappIndex > evidenceIndex) {
+    pass('Fatto sposta subito nei FATTI e avvia prova accessoria e WhatsApp senza blocchi');
   } else {
-    fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
+    fail('Ordine richiesto: trasferimento locale immediato -> prova accessoria -> WhatsApp');
   }
+  if (whatsappHandler.includes('await recordFattoVisualEvidence')) fail('Fatto non deve aspettare la prova accessoria');
+  else pass('Fatto non aspetta la prova accessoria');
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');

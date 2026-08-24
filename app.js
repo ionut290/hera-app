@@ -20978,23 +20978,25 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
-    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
-    let evidenceSaved = false;
-    if (!isNetworkOffline()) {
-      try {
-        evidenceSaved = Boolean(await recordFattoVisualEvidence(impianto, doneAt, doneBy));
-      } catch (error) {
-        console.error("Prova iniziale FATTO non salvata; WhatsApp e FATTO continuano.", error);
-      }
-    }
-
+    // Il click deve avere effetto immediato. Le scritture accessorie (prova
+    // visiva e audit) partono in background e non possono bloccare la UI.
     cacheFattoVisualEvidence(impianto, doneAt);
     markWhazzupSafetyPressed(impianto, doneAt);
     upsertWhazzupPendingDoneEntry(impianto, doneAt);
+    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
+    setImpiantiViewMode("done");
     renderImpianti();
 
-    // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
+    const evidenceTask = isNetworkOffline()
+      ? Promise.resolve(false)
+      : Promise.resolve(recordFattoVisualEvidence(impianto, doneAt, doneBy))
+        .then(Boolean)
+        .catch((error) => {
+          console.error("Prova iniziale FATTO non salvata; WhatsApp e FATTO continuano.", error);
+          return false;
+        });
+
+    // WhatsApp viene aperto direttamente dal gesto dell'utente.
     const whazzupOptions = {
       doneAt,
       operatorName: doneBy,
@@ -21011,22 +21013,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
     }
 
-    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
-    // l'utente torna indietro senza inviare il messaggio.
-    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-    setImpiantiViewMode("done");
-    renderImpianti();
-
-    // La prova visiva e' accessoria: un suo errore non deve bloccare WhatsApp
-    // e non deve riportare l'impianto in Da fare.
-    if (!evidenceSaved && !isNetworkOffline()) {
-      void handleImpiantoDoneSaveFailure(
-        impianto,
-        "Prova iniziale FATTO non salvata; operazione mantenuta in coda."
-      );
-    }
-
-    const auditLogId = await auditLogWhazzupClick(impianto, {
+    const auditTask = auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,
       whatsappOpened,
       fattoEsito: "pending",
@@ -21034,6 +21021,14 @@ async function handleImpiantoWhatsAppClick(impianto) {
     }).catch((error) => {
       console.error("Errore avvio audit log Whazzup:", error);
       return null;
+    });
+
+    void evidenceTask.then((evidenceSaved) => {
+      if (evidenceSaved || isNetworkOffline()) return;
+      return handleImpiantoDoneSaveFailure(
+        impianto,
+        "Prova iniziale FATTO non salvata; operazione mantenuta in coda."
+      );
     });
 
     const doneMarked = await forceMoveImpiantoToFatti(impianto, {
@@ -21044,7 +21039,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
       doneBy
     });
     if (!doneMarked) {
-      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false });
+      void auditTask.then((auditLogId) => updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "save_failed", fattoConfermato: false }));
       await markImpiantoDoneRecoveryRequired(impianto, "Salvataggio FATTO non riuscito.");
       return false;
     }
@@ -21055,21 +21050,20 @@ async function handleImpiantoWhatsAppClick(impianto) {
         whatsappStatus: "whatsappOpened",
         whatsappOpenedAt: new Date().toISOString()
       });
-      await updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "queued_offline", fattoConfermato: false });
+      void auditTask.then((auditLogId) => updateAuditLogWhazzupClick(auditLogId, { fattoEsito: "queued_offline", fattoConfermato: false }));
       updateConnectivityStatus();
       renderImpianti();
       return true;
     }
 
-    const persisted = await verifyImpiantoDoneBackground(impianto);
-    await updateAuditLogWhazzupClick(auditLogId, {
-      fattoEsito: persisted ? "persisted" : "verify_failed",
-      fattoConfermato: Boolean(persisted)
-    });
-    if (!persisted) {
-      await markImpiantoDoneRecoveryRequired(impianto, "Verifica Firebase FATTO non confermata.");
-      return false;
-    }
+    // La verifica e l'audit restano diagnostici: il click non aspetta altri
+    // 3,2 secondi e un errore accessorio non annulla il FATTO gia accodato.
+    void verifyImpiantoDoneBackground(impianto).then((persisted) =>
+      auditTask.then((auditLogId) => updateAuditLogWhazzupClick(auditLogId, {
+        fattoEsito: persisted ? "persisted" : "verify_failed",
+        fattoConfermato: Boolean(persisted)
+      }))
+    );
     updateConnectivityStatus();
     renderImpianti();
     return true;

@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v147";
-const CACHE_RESET_VERSION = "20260824-fatto-stable5";
+const CACHE_NAME = "varga-cantieri-shell-v148";
+const CACHE_RESET_VERSION = "20260824-fatto-stable6";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,11 +17,11 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260824-fatto-stable2",
+  "./app.js?v=20260824-fatto-oneclick1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
-  "./critical-write-safety-bridge.js?v=20260824-deadlock1",
-  "./update-app-feature.js?v=20260824-deadlock1",
+  "./critical-write-safety-bridge.js?v=20260824-oneclick1",
+  "./update-app-feature.js?v=20260824-oneclick1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
@@ -50,7 +50,7 @@ const APP_SHELL = [
   "./squad-operator-profile.js?v=20260731a",
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
-  "./fatto-button-immediate.js?v=20260824-fatto-stable1",
+  "./fatto-button-immediate.js?v=20260824-fatto-oneclick1",
   "./header-menu-runtime.js?v=20260804-diagnostics-reset1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",

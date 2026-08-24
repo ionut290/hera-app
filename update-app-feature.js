@@ -5,7 +5,7 @@
   const APP_CACHE_PREFIXES = ["varga-cantieri-shell-", "hera-app-shell-"];
   const DATA_DURABILITY_SRC = "data-durability-runtime.js?v=20260818a";
   const DATA_SAFETY_SRC = "data-safety-layer.js?v=20260819a";
-  const CRITICAL_WRITE_SAFETY_SRC = "critical-write-safety-bridge.js?v=20260824-deadlock1";
+  const CRITICAL_WRITE_SAFETY_SRC = "critical-write-safety-bridge.js?v=20260824-oneclick1";
   const SYNC_BADGE_PENDING_FIX_SRC = "sync-badge-pending-fix.js?v=20260821a";
 
   function ensureDataDurabilityRuntime() {

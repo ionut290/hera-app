@@ -4,7 +4,7 @@
   const GLOBAL_NAME = "VargaFirestoreSafeOptimizer";
   const WRAPPED_FLAG = "__vargaSharedListenerOptimizerWrapped";
   const ORIGINAL_FLAG = "__vargaSharedListenerOptimizerOriginal";
-  const VERSION = "3.0.1";
+  const VERSION = "3.0.2";
   const RETRY_MS = 25;
   const RETRY_LIMIT = 800;
   const DIAGNOSTIC_WAIT_ATTEMPTS = 24;
@@ -155,6 +155,12 @@
     const path = queryPath(query);
     const collection = firstCollection(path);
     if (!TARGET_COLLECTIONS.has(collection)) return null;
+
+    // Le sottocollezioni di una commessa (in particolare
+    // commesse/{id}/impianti) devono mantenere il listener Firestore originale.
+    // In passato la condivisione dei listener annidati ha già causato regressioni:
+    // qui ottimizziamo soltanto la raccolta top-level `commesse`.
+    if (collection === "commesse" && path !== "commesse") return null;
 
     const canonical = canonicalQuery(query);
     // Una CollectionReference semplice ha `path`. Per una Query filtrata,

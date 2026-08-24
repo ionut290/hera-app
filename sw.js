@@ -1,5 +1,5 @@
 const CACHE_NAME = "varga-cantieri-shell-v140";
-const CACHE_RESET_VERSION = "20260814-loading-humor1";
+const CACHE_RESET_VERSION = "20260824-fatto-cache1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260813-render-gate1",
+  "./app.js?v=20260824-fatto-cache1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
@@ -84,6 +84,8 @@ const APP_SHELL = [
 const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", "font"]);
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
+  "/app.js",
+  "/fatto-button-immediate.js",
   "/shared-static-views-client.js",
   "/data-durability-runtime.js",
   "/data-safety-layer.js",

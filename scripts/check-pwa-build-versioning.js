@@ -32,6 +32,17 @@ if (!stampedIndex.includes(`navigator.serviceWorker.register("./sw.js?v=${versio
   throw new Error("La registrazione del Service Worker non riceve la versione build");
 }
 
+const indexAppVersion = index.match(/app\.js\?v=([^"]+)/)?.[1] || "";
+const serviceWorkerAppVersion = sw.match(/app\.js\?v=([^"]+)/)?.[1] || "";
+if (!indexAppVersion || indexAppVersion !== serviceWorkerAppVersion) {
+  throw new Error("La versione cache di app.js deve coincidere tra index.html e sw.js");
+}
+for (const criticalPath of ["/app.js", "/fatto-button-immediate.js"]) {
+  if (!sw.includes(`  "${criticalPath}",`)) {
+    throw new Error(`${criticalPath} deve usare network-first: FATTO/FORZA non possono avviarsi con logica obsoleta`);
+  }
+}
+
 if (!/\[build\][\s\S]*command\s*=\s*["']node scripts\/stamp-pwa-build-version\.js["']/.test(netlify)) {
   throw new Error("Netlify non esegue lo stamp automatico della versione PWA");
 }

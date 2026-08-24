@@ -451,3 +451,37 @@ rifiutare quella parte della richiesta e può proporre soltanto interventi
 esterni che non cambino né aggirino il flusso bloccato. Non deve chiedere una
 nuova autorizzazione e non deve considerare sufficiente alcun consenso.
 
+## 14. PERIMETRO ISOLATO DA TUTTE LE ALTRE MODIFICHE
+
+Identificatore permanente: `PERIMETRO_ISOLATO_FATTO_WHAZZUP_V1`.
+
+Il flusso sigillato FATTO/WHAZZUP deve essere trattato come un componente
+esterno e indipendente, anche se resta fisicamente nello stesso repository.
+Qualsiasi modifica futura a qualunque sezione dell’app deve dimostrare di non
+interferire direttamente o indirettamente con il flusso protetto.
+
+Sono obbligatori per ogni push e ogni pull request, senza filtri per percorso:
+
+- la cassaforte delle impronte definitive;
+- il controllo del perimetro isolato;
+- tutti i controlli critici dell’app;
+- il test browser E2E;
+- il controllo Android quando previsto dal workflow.
+
+Nessun nuovo file può ridefinire, sostituire, avvolgere, cancellare o
+intercettare le funzioni protette. L’ordine classico e sincrono
+`native-android-runtime.js -> app.js -> fatto-button-immediate.js` deve
+rimanere invariato. È vietato introdurre un percorso alternativo per FATTO,
+WHAZZUP, FORZA o RESET.
+
+Il controllo `scripts/check-fatto-whazzup-isolation.js` deve rimanere attivo
+in `package.json` e nei tre workflow indipendenti. La sua impronta è
+controllata direttamente dai workflow. È vietato aggiungere filtri `paths`
+che evitino l’esecuzione dei controlli quando vengono modificate altre parti
+dell’app.
+
+Se una modifica non supera anche uno solo di questi controlli, non deve essere
+unita né pubblicata. La soluzione ammessa consiste nel modificare o ritirare
+la nuova funzionalità interferente; il componente FATTO/WHAZZUP sigillato non
+deve essere adattato.
+

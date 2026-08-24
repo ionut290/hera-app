@@ -1,0 +1,241 @@
+#!/usr/bin/env node
+"use strict";
+
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const ISOLATION_MARKER = "PERIMETRO_ISOLATO_FATTO_WHAZZUP_V1";
+const IMMUTABLE_LOCK_SHA = "982c5015da3590311fb52d4395e13387f3f2958e";
+const CRITICAL_NAMES = Object.freeze([
+  "isImpiantoDoneState",
+  "combineImpiantiForView",
+  "markImpiantoDone",
+  "markImpiantoDoneVisualFallback",
+  "retrySetImpiantoDone",
+  "resetImpianto",
+  "setImpiantoDone",
+  "validateImpiantoCoordinates",
+  "canUseForceImpiantoDone",
+  "forceMarkDone",
+  "setImpiantoFattoSavingState",
+  "handleImpiantoWhatsAppClick",
+  "handleCompletedImpiantoWhatsAppClick",
+  "forceMoveImpiantoToFatti",
+  "verifyImpiantoDoneBackground",
+  "runWhazzupPendingDoneSafetyCheck",
+  "isImpiantoPersistedAsDone",
+  "getWhazzupSafetyState",
+  "markWhazzupSafetyPressed",
+  "updateWhazzupSafetyAfterBackgroundCheck",
+  "markImpiantoDoneRecoveryRequired",
+  "handleImpiantoDoneSaveFailure",
+  "loadWhazzupPendingDoneEntries",
+  "saveWhazzupPendingDoneEntries",
+  "upsertWhazzupPendingDoneEntry",
+  "clearWhazzupPendingDoneEntry",
+  "upsertPendingDoneAction",
+  "removePendingDoneActionsForImpianto",
+  "markPendingActionStatus",
+  "updateImpiantoLocalState",
+  "getImpiantoDocIds",
+  "safeOpenWhatsAppMessage",
+  "openDeferredWhatsAppTargetWindow",
+  "getImpiantoWhatsAppTemplateSignature",
+  "buildImpiantoWhatsAppTemplate",
+  "prepareImpiantoWhatsAppTemplate",
+  "refreshImpiantoWhatsAppTemplateCache",
+  "buildImpiantoWhatsAppPayload",
+  "shareWhazzupWithPhotos",
+  "openWhatsApp"
+]);
+const APPROVED_RUNTIME_FILES = new Set([
+  "app.js",
+  "fatto-button-immediate.js",
+  "fatto-scroll-guard.js",
+  "native-android-runtime.js",
+  "whazzup-preload-cache.js",
+  "android-whazzup-photo-order.js",
+  "varga-branding.js"
+]);
+const BASELINE_EXTERNAL_WRAPPERS = Object.freeze({
+  "lavori-occasionali.js": Object.freeze({
+    functionName: "installOccasionalFattoPdfFlow",
+    sha: "c0f04b7c1abbe1232dc84d017747cceea17bf53a"
+  })
+});
+const BASELINE_EXTERNAL_REGIONS = Object.freeze({
+  "squadra-current-save-sync.js": Object.freeze({
+    startMarker: "// Il salvataggio FATTO ha già completato il batch prima di questa verifica.",
+    sha: "eef00c11bc1a74b5d1628ff139f0161b4ab93116"
+  })
+});
+const ALL_CHANGE_WORKFLOWS = Object.freeze([
+  ".github/workflows/check-done-button.yml",
+  ".github/workflows/check-critical-flows.yml",
+  ".github/workflows/check-e2e-smoke.yml"
+]);
+
+function fail(lines) {
+  const message = Array.isArray(lines) ? lines.join("\n") : String(lines);
+  console.error("\n❌ PERIMETRO ISOLATO FATTO/WHAZZUP BLOCCATO\n" + message + "\n");
+  process.exit(1);
+}
+
+function read(relativePath) {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) fail(`File necessario mancante: ${relativePath}`);
+  return fs.readFileSync(absolutePath);
+}
+
+function gitBlobSha(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+  const header = Buffer.from(`blob ${buffer.length}\0`, "utf8");
+  return crypto.createHash("sha1").update(Buffer.concat([header, buffer])).digest("hex");
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractFunction(source, name) {
+  const signatures = ["async function " + name + "(", "function " + name + "("];
+  let start = -1;
+  for (const signature of signatures) {
+    start = source.indexOf(signature);
+    if (start >= 0) break;
+  }
+  if (start < 0) fail("Wrapper esterno protetto mancante: " + name);
+  const signatureEnd = source.indexOf(") {", start);
+  const bodyStart = source.indexOf("{", signatureEnd);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  fail("Wrapper esterno protetto non chiuso: " + name);
+}
+
+function assertClassicOrderedScript(html, fileName) {
+  const matches = [];
+  const scriptExpression = /<script\b([^>]*)>\s*<\/script>/gi;
+  for (const scriptMatch of html.matchAll(scriptExpression)) {
+    const attributes = scriptMatch[1];
+    const srcMatch = attributes.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i);
+    if (!srcMatch) continue;
+    const normalizedSrc = srcMatch[2]
+      .split(/[?#]/, 1)[0]
+      .replace(/^\.\//, "");
+    if (normalizedSrc !== fileName) continue;
+    if (/\b(?:async|defer)\b/i.test(attributes) || /\btype\s*=\s*["']module["']/i.test(attributes)) {
+      fail("Lo script critico " + fileName + " deve restare classico e sincrono.");
+    }
+    matches.push(scriptMatch.index);
+  }
+  if (matches.length !== 1) {
+    fail("Lo script critico " + fileName + " deve essere caricato una sola volta, in modo classico e sincrono.");
+  }
+  return matches[0];
+}
+
+const agents = read("AGENTS.md").toString("utf8");
+if (!agents.includes("BLOCCO_IRREVOCABILE_FATTO_WHAZZUP_V1") || !agents.includes(ISOLATION_MARKER)) {
+  fail("Le regole permanenti della cassaforte o del perimetro isolato sono assenti.");
+}
+
+const immutableLock = read("scripts/check-fatto-whazzup-immutable.js");
+if (gitBlobSha(immutableLock) !== IMMUTABLE_LOCK_SHA) {
+  fail("La cassaforte primaria è stata modificata. Ripristinare l’impronta definitiva.");
+}
+
+const html = read("index.html").toString("utf8");
+const nativeIndex = assertClassicOrderedScript(html, "native-android-runtime.js");
+const appIndex = assertClassicOrderedScript(html, "app.js");
+const immediateIndex = assertClassicOrderedScript(html, "fatto-button-immediate.js");
+if (!(nativeIndex < appIndex && appIndex < immediateIndex)) {
+  fail("Ordine critico alterato: native-android-runtime.js -> app.js -> fatto-button-immediate.js.");
+}
+
+const runtimeFiles = fs.readdirSync(root, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
+  .map((entry) => entry.name)
+  .sort();
+
+for (const fileName of runtimeFiles) {
+  if (APPROVED_RUNTIME_FILES.has(fileName)) continue;
+  let source = read(fileName).toString("utf8");
+  const baselineWrapper = BASELINE_EXTERNAL_WRAPPERS[fileName];
+  if (baselineWrapper) {
+    const wrapperSource = extractFunction(source, baselineWrapper.functionName);
+    const wrapperSha = gitBlobSha(wrapperSource);
+    if (wrapperSha !== baselineWrapper.sha) {
+      fail([
+        "Wrapper esterno già presente modificato: " + fileName + " -> " + baselineWrapper.functionName,
+        "La sua forma attuale è congelata e non può cambiare né estendere l’interferenza."
+      ]);
+    }
+    source = source.replace(wrapperSource, "");
+  }
+  const baselineRegion = BASELINE_EXTERNAL_REGIONS[fileName];
+  if (baselineRegion) {
+    const regionStart = source.indexOf(baselineRegion.startMarker);
+    if (regionStart < 0) fail("Regione esterna protetta mancante: " + fileName);
+    const regionSource = source.slice(regionStart);
+    const regionSha = gitBlobSha(regionSource);
+    if (regionSha !== baselineRegion.sha) {
+      fail([
+        "Regione esterna già presente modificata: " + fileName,
+        "La verifica FATTO corrente è congelata e non può essere sostituita o estesa."
+      ]);
+    }
+    source = source.slice(0, regionStart);
+  }
+  for (const name of CRITICAL_NAMES) {
+    const escaped = escapeRegExp(name);
+    const forbiddenPatterns = [
+      new RegExp(`\\b(?:async\\s+)?function\\s+${escaped}\\s*\\(`),
+      new RegExp(`(?:window|globalThis)\\s*\\.\\s*${escaped}\\s*=`),
+      new RegExp(`(?:window|globalThis)\\s*\\[\\s*["']${escaped}["']\\s*\\]\\s*=`),
+      new RegExp(`Object\\.defineProperty\\s*\\(\\s*(?:window|globalThis)\\s*,\\s*["']${escaped}["']`),
+      new RegExp(`delete\\s+(?:window|globalThis)\\s*\\.\\s*${escaped}\\b`),
+      new RegExp(`^\\s*${escaped}\\s*=`, "m")
+    ];
+    if (forbiddenPatterns.some((pattern) => pattern.test(source))) {
+      fail([
+        `Interferenza esterna rilevata in ${fileName}`,
+        `La funzione protetta ${name} non può essere ridefinita, sostituita, cancellata o intercettata.`
+      ]);
+    }
+  }
+}
+
+for (const fileName of runtimeFiles) {
+  const source = read(fileName).toString("utf8");
+  if (fileName !== "app.js" && (source.includes('window.open("about:blank"') || source.includes("Preparazione messaggio in corso"))) {
+    fail(`Pagina intermedia Whazzup reintrodotta da ${fileName}.`);
+  }
+}
+
+for (const workflowPath of ALL_CHANGE_WORKFLOWS) {
+  const workflow = read(workflowPath).toString("utf8");
+  if (/^\s+paths(?:-ignore)?:\s*$/m.test(workflow)) {
+    fail(`Il workflow ${workflowPath} deve eseguire i controlli su ogni modifica, senza filtri paths.`);
+  }
+  if (!workflow.includes("check-fatto-whazzup-isolation.js")) {
+    fail(`Il workflow ${workflowPath} non esegue il perimetro isolato.`);
+  }
+}
+
+const packageJson = JSON.parse(read("package.json").toString("utf8"));
+if (packageJson.scripts?.["check:fatto-isolation"] !== "node scripts/check-fatto-whazzup-isolation.js") {
+  fail("Script npm check:fatto-isolation mancante o alterato.");
+}
+if (!String(packageJson.scripts?.["check:fatto-critical"] || "").startsWith("npm run check:fatto-whazzup-immutable && npm run check:fatto-isolation &&")) {
+  fail("Il controllo critico non esegue prima cassaforte e isolamento.");
+}
+
+console.log(`✅ Perimetro FATTO/WHAZZUP isolato da ${runtimeFiles.length} file runtime esterni.`);
+console.log("✅ Ogni modifica futura attiva cassaforte, controlli critici e browser E2E.");
+console.log("✅ Ordine di caricamento e assenza di sostituzioni esterne verificati.");

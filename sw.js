@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v142";
-const CACHE_RESET_VERSION = "20260824-week-restore1";
+const CACHE_NAME = "varga-cantieri-shell-v143";
+const CACHE_RESET_VERSION = "20260824-1908restore1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260824-week-restore1",
+  "./app.js?v=20260824-1908restore1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
@@ -72,7 +72,7 @@ const APP_SHELL = [
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260823-stability3",
-  "./firebase-config.js?v=20260824-week-restore1",
+  "./firebase-config.js?v=20260824-1908restore1",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
   "./icons/varga-cantieri-180.png",

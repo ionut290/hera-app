@@ -11,12 +11,7 @@ assert.match(source, /Cosa hai eseguito\?/);
 assert.match(source, /input\.type = "checkbox"/);
 assert.match(source, /Manutenzione ordinaria/);
 assert.match(source, /Manutenzione straordinaria/);
-assert.match(source, /priceCode === "A1"/, "Il codice prezzo A1 deve essere classificato come ordinario");
-assert.match(source, /codiceVocePrezzo/, "La classificazione deve leggere il codice voce prezzo");
-assert.ok(
-  source.indexOf('if (priceCode === "A1") return "ORDINARIO"') < source.indexOf('raw.includes("STRAORD")'),
-  "La regola A1 ordinario deve avere priorità sulla descrizione straordinaria"
-);
+assert.doesNotMatch(source, /priceCode === "A1"/, "La regola speciale A1 successiva al 19/08 non deve essere presente");
 assert.match(source, /Hai scelto solo la manutenzione ordinaria/);
 assert.match(source, /Hai scelto solo la manutenzione straordinaria/);
 assert.match(source, /TORNA INDIETRO/);
@@ -36,6 +31,6 @@ assert.ok(
   "La scelta ordinaria/straordinaria deve avvenire prima del FATTO definitivo"
 );
 assert.doesNotMatch(source, /IMPIANTO FATTO/);
-assert.match(config, /fatto-ordinary-extraordinary-flow\.js\?v=20260814a/);
+assert.match(config, /fatto-ordinary-extraordinary-flow\.js\?v=20260824-1908restore1/);
 
 console.log("✅ FATTO ordinario/straordinario: controlli superati.");

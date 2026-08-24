@@ -46,11 +46,9 @@ function loadFunctions(context, names) {
 async function main() {
   const maintenanceContext = createContext();
   loadFunctions(maintenanceContext, ["splitCodes", "hasOrdinario", "hasStraordinario", "classifyTipoManutenzione"]);
-  assert.equal(maintenanceContext.hasOrdinario("A1"), true, "A1 deve essere ordinario");
-  assert.equal(maintenanceContext.hasStraordinario("A1"), false, "A1 non deve essere straordinario");
-  assert.equal(maintenanceContext.classifyTipoManutenzione("A1"), "Ordinaria");
-  assert.equal(maintenanceContext.classifyTipoManutenzione("A1 | B4"), "Ordinaria + Straordinaria");
-  assert.equal(maintenanceContext.hasStraordinario("B4"), true, "Gli altri codici restano straordinari");
+  assert.equal(maintenanceContext.hasOrdinario("A1"), false, "Il ripristino del 19/08 non tratta A1 come ordinario");
+  assert.equal(maintenanceContext.hasStraordinario("A1"), true, "Il ripristino del 19/08 tratta A1 come straordinario");
+  assert.equal(maintenanceContext.classifyTipoManutenzione("A1"), "Straordinaria");
 
   const groupedContext = createContext({
     buildImpiantoKey: (row) => `sap:${row.idSap}`,

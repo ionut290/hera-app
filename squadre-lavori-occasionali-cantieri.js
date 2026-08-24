@@ -17,18 +17,97 @@
     .replace(/\s+/g, " ")
     .toLocaleUpperCase("it-IT");
 
+  function cleanSiteText(value) {
+    const raw = String(value ?? "").trim().replace(/\s+/g, " ");
+    if (!raw || raw.toLocaleUpperCase("it-IT") === "[OBJECT OBJECT]") return "";
+    return raw;
+  }
+
+  function extractSiteName(value, seen = new WeakSet()) {
+    if (value === null || value === undefined) return "";
+
+    if (typeof value === "string") {
+      const raw = cleanSiteText(value);
+      if (!raw) return "";
+      if ((raw.startsWith("{") && raw.endsWith("}")) || (raw.startsWith("[") && raw.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(raw);
+          const nestedName = extractSiteName(parsed, seen);
+          if (nestedName) return nestedName;
+        } catch (_) {}
+      }
+      return raw;
+    }
+
+    if (typeof value === "number" || typeof value === "boolean") return cleanSiteText(value);
+    if (typeof value !== "object" || seen.has(value)) return "";
+
+    seen.add(value);
+    const candidates = Array.isArray(value)
+      ? value
+      : [
+          value.name,
+          value.nome,
+          value.denominazione,
+          value.cantiere,
+          value.lavoroOccasionaleNome,
+          value.impiantoNome,
+          value.plantName,
+          value.placeName,
+          value.displayName,
+          value.label,
+          value.title,
+          value.luogo,
+          value.value,
+          value.text,
+          value.metadata,
+          value.data,
+          value.impianto,
+          value.plant,
+          value.place
+        ];
+
+    for (const candidate of candidates) {
+      const name = extractSiteName(candidate, seen);
+      if (name) {
+        seen.delete(value);
+        return name;
+      }
+    }
+
+    seen.delete(value);
+    return "";
+  }
+
+  function extractSiteId(value) {
+    if (!value || typeof value !== "object") return "";
+    const candidates = [
+      value.id,
+      value.plantId,
+      value.impiantoId,
+      value.docId,
+      value.cantiere?.id,
+      value.cantiere?.plantId,
+      value.impianto?.id,
+      value.plant?.id
+    ];
+    for (const candidate of candidates) {
+      const id = cleanSiteText(candidate);
+      if (id) return id;
+    }
+    return "";
+  }
+
   function uniqueSites(items) {
     const output = [];
     const seen = new Set();
     items.forEach((item) => {
-      const name = String(item?.name || item?.cantiere || item?.nome || item || "")
-        .trim()
-        .replace(/\s+/g, " ");
+      const name = extractSiteName(item);
       const key = normalize(name);
-      if (!key || seen.has(key)) return;
+      if (!key || key === "[OBJECT OBJECT]" || seen.has(key)) return;
       seen.add(key);
       output.push({
-        id: String(item?.id || item?.plantId || "").trim(),
+        id: extractSiteId(item),
         name: name.toLocaleUpperCase("it-IT")
       });
     });
@@ -89,9 +168,14 @@
         const sites = [];
         snapshot.forEach((doc) => {
           const data = doc.data() || {};
+          const name = extractSiteName(data.cantiere)
+            || extractSiteName(data.nome)
+            || extractSiteName(data.denominazione)
+            || extractSiteName(data.impianto)
+            || extractSiteName(data);
           sites.push({
-            id: data.plantId || "",
-            name: data.cantiere || data.nome || data.denominazione || ""
+            id: cleanSiteText(data.plantId) || extractSiteId(data.cantiere) || cleanSiteText(doc.id),
+            name
           });
         });
         return uniqueSites(sites);
@@ -287,7 +371,8 @@
 
   window.HeraOccasionalSquadSites = {
     installed: true,
-    version: "1.0.1",
-    refresh: () => refresh({ clearCache: true })
+    version: "1.0.2",
+    refresh: () => refresh({ clearCache: true }),
+    extractSiteName
   };
 })();

@@ -54,7 +54,7 @@ const HERA_OCCASIONAL_SQUAD_FIRST_SRC = "lavori-occasionali-squad-first.js?v=202
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
 const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
 const HERA_OCCASIONAL_PDF_STORAGE_SRC = "lavori-occasionali-pdf-storage.js?v=20260823a";
-const HERA_OCCASIONAL_SQUAD_SITES_SRC = "squadre-lavori-occasionali-cantieri.js?v=20260824a";
+const HERA_OCCASIONAL_SQUAD_SITES_SRC = "squadre-lavori-occasionali-cantieri.js?v=20260824b";
 
 if (document.readyState === "loading") {
   document.write(`<script src="${HERA_STORAGE_QUOTA_GUARD_SRC}" data-storage-quota-guard="1"><\/script>`);

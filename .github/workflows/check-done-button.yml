@@ -16,6 +16,8 @@ on:
       - "scripts/check-done-button-*.js"
       - "scripts/check-android-done-push.js"
       - "scripts/check-whatsapp-protection.js"
+      - "scripts/check-fatto-whazzup-immutable.js"
+      - "AGENTS.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/check-done-button.yml"
@@ -32,6 +34,8 @@ on:
       - "scripts/check-done-button-*.js"
       - "scripts/check-android-done-push.js"
       - "scripts/check-whatsapp-protection.js"
+      - "scripts/check-fatto-whazzup-immutable.js"
+      - "AGENTS.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/check-done-button.yml"
@@ -58,6 +62,11 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+
+      - name: Verify immutable FATTO Whazzup lock
+        run: |
+          test "$(git hash-object scripts/check-fatto-whazzup-immutable.js)" = "982c5015da3590311fb52d4395e13387f3f2958e"
+          node scripts/check-fatto-whazzup-immutable.js
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund

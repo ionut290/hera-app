@@ -96,3 +96,95 @@ jobs:
           --project hera-app-6cd2b
           --non-interactive
           --force
+
+      - name: Grant and verify Error Center callable transport
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          node <<'NODE'
+          const { GoogleAuth } = require("./functions/node_modules/google-auth-library");
+
+          const projectId = "hera-app-6cd2b";
+          const region = "europe-west1";
+          const functionNames = [
+            "recordClientErrorGroup",
+            "getErrorCenterSummary",
+            "getErrorCenterDashboard",
+            "markErrorCenterSeen",
+            "updateErrorCenterStatus"
+          ];
+
+          async function main() {
+            const auth = new GoogleAuth({
+              keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+              scopes: ["https://www.googleapis.com/auth/cloud-platform"]
+            });
+            const client = await auth.getClient();
+
+            for (const functionName of functionNames) {
+              const resource =
+                `https://cloudfunctions.googleapis.com/v1/projects/${projectId}/locations/${region}/functions/${functionName}`;
+              const currentResponse = await client.request({
+                method: "GET",
+                url: `${resource}:getIamPolicy`
+              });
+              const currentPolicy = currentResponse.data || {};
+              const bindings = Array.isArray(currentPolicy.bindings)
+                ? currentPolicy.bindings.map((binding) => ({
+                    ...binding,
+                    members: Array.isArray(binding.members) ? [...binding.members] : []
+                  }))
+                : [];
+              let invokerBinding = bindings.find(
+                (binding) =>
+                  binding.role === "roles/cloudfunctions.invoker" &&
+                  !binding.condition
+              );
+
+              if (!invokerBinding) {
+                invokerBinding = {
+                  role: "roles/cloudfunctions.invoker",
+                  members: []
+                };
+                bindings.push(invokerBinding);
+              }
+              if (!invokerBinding.members.includes("allUsers")) {
+                invokerBinding.members.push("allUsers");
+              }
+
+              await client.request({
+                method: "POST",
+                url: `${resource}:setIamPolicy`,
+                data: {
+                  policy: {
+                    ...currentPolicy,
+                    bindings
+                  }
+                }
+              });
+
+              const verificationResponse = await client.request({
+                method: "GET",
+                url: `${resource}:getIamPolicy`
+              });
+              const publicInvoker = (verificationResponse.data.bindings || []).some(
+                (binding) =>
+                  binding.role === "roles/cloudfunctions.invoker" &&
+                  !binding.condition &&
+                  (binding.members || []).includes("allUsers")
+              );
+              if (!publicInvoker) {
+                throw new Error(
+                  `Public callable transport was not applied to ${functionName}`
+                );
+              }
+              console.log(`Verified public callable transport: ${functionName}`);
+            }
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE

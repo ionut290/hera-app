@@ -4,6 +4,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
+const vm = require("node:vm");
 
 function read(path) {
   assert.ok(fs.existsSync(path), `File mancante: ${path}`);
@@ -50,6 +51,7 @@ assert.match(criticalBridge, /saveSquadra/);
 assert.match(criticalBridge, /safety\.run\(/);
 assert.match(criticalBridge, /safety\.snapshot/);
 assert.match(criticalBridge, /const dedupeIdentity = meta\.entityId \|\| operationId;/);
+assert.match(criticalBridge, /const dedupeKey = `\$\{target\.name\}:\$\{target\.type\}:/);
 assert.match(criticalBridge, /__heraCriticalWriteSafetyWrapped/);
 assert.doesNotMatch(criticalBridge, /\.collection\s*\(/, "Il bridge non deve creare proprie scritture Firestore");
 assert.doesNotMatch(criticalBridge, /localStorage\.clear\s*\(/, "Il bridge non deve cancellare dati locali");
@@ -58,7 +60,7 @@ assert.match(durability, /window\.HeraDataDurability/);
 assert.match(durability, /async function snapshot\(/);
 assert.match(updater, /data-safety-layer\.js\?v=20260819a/);
 assert.match(updater, /ensureDataSafetyLayer/);
-assert.match(updater, /critical-write-safety-bridge\.js\?v=20260819a/);
+assert.match(updater, /critical-write-safety-bridge\.js\?v=20260824-deadlock1/);
 assert.match(updater, /ensureCriticalWriteSafetyBridge/);
 assert.match(sw, /\.\/data-safety-layer\.js\?v=20260819a/);
 assert.match(sw, /"\/data-safety-layer\.js"/);
@@ -66,4 +68,64 @@ assert.doesNotMatch(sw, /client\.navigate\s*\(/, "L'attivazione del Service Work
 
 assert.equal(pkg.scripts["check:data-safety"], "node scripts/check-data-safety-layer.js");
 
-console.log("✅ Data Safety Layer e bridge scritture critiche: controlli statici superati.");
+async function checkNestedFattoFlowDoesNotDeadlock() {
+  const storage = new Map();
+  const sandbox = {
+    console,
+    Blob,
+    crypto: globalThis.crypto,
+    navigator: { onLine: true },
+    localStorage: {
+      getItem: (key) => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, String(value))
+    },
+    CustomEvent: class {
+      constructor(type, init = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+    setInterval: () => 0,
+    clearInterval: () => {},
+    addEventListener: () => {},
+    dispatchEvent: () => {},
+    selectedCommessaId: "commessa-inrete"
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(safety, sandbox, { filename: "data-safety-layer.js" });
+  vm.runInContext(`
+    var markCalls = 0;
+    async function markImpiantoDone() {
+      markCalls += 1;
+      return true;
+    }
+    async function forceMoveImpiantoToFatti(impianto, options = {}) {
+      return Boolean(await markImpiantoDone(impianto, options));
+    }
+  `, sandbox);
+  vm.runInContext(criticalBridge, sandbox, { filename: "critical-write-safety-bridge.js" });
+
+  const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 250));
+  const result = await Promise.race([
+    sandbox.forceMoveImpiantoToFatti(
+      { id: "impianto-6" },
+      { commessaId: "commessa-inrete" }
+    ),
+    timeout
+  ]);
+
+  assert.equal(result, true, "FORZA/FATTO non deve restare in attesa circolare");
+  assert.equal(sandbox.markCalls, 1, "La scrittura FATTO interna deve essere eseguita una sola volta");
+  assert.equal(sandbox.HeraDataSafety.getState().inflightCount, 0, "La coda sicurezza deve liberarsi");
+}
+
+checkNestedFattoFlowDoesNotDeadlock()
+  .then(() => console.log("✅ Data Safety Layer e bridge scritture critiche: controlli statici e deadlock FATTO superati."))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

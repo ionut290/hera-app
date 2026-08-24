@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v145";
-const CACHE_RESET_VERSION = "20260824-fatto-stable3";
+const CACHE_NAME = "varga-cantieri-shell-v146";
+const CACHE_RESET_VERSION = "20260824-fatto-stable4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -20,6 +20,8 @@ const APP_SHELL = [
   "./app.js?v=20260824-fatto-stable2",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
+  "./critical-write-safety-bridge.js?v=20260824-deadlock1",
+  "./update-app-feature.js?v=20260824-deadlock1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260814a",
@@ -89,6 +91,8 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/shared-static-views-client.js",
   "/data-durability-runtime.js",
   "/data-safety-layer.js",
+  "/critical-write-safety-bridge.js",
+  "/update-app-feature.js",
   "/firebase-config.js",
   "/auth-login-fix.js",
   "/login-retry-fix.js",

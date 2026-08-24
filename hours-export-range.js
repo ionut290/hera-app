@@ -692,7 +692,7 @@ async function heraExportHoursRangeWorkbook(options = {}) {
 (function loadAppUpdateFeature() {
   if (document.querySelector('script[data-hera-app-update="true"]')) return;
   const script = document.createElement("script");
-  script.src = "update-app-feature.js?v=20260727a";
+  script.src = "update-app-feature.js?v=20260824-deadlock1";
   script.dataset.heraAppUpdate = "true";
   document.head.appendChild(script);
 })();

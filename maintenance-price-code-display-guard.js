@@ -50,15 +50,13 @@
     }
 
     card.querySelectorAll(".badge-extra-work").forEach((badge) => {
-      badge.hidden = true;
-      badge.setAttribute("aria-hidden", "true");
+      badge.remove();
     });
 
     card.querySelectorAll(".impianto-details > p").forEach((row) => {
       const label = row.querySelector("b");
       if (!label || !/Lavori straordinari aperti/i.test(String(label.textContent || ""))) return;
-      row.hidden = true;
-      row.setAttribute("aria-hidden", "true");
+      row.remove();
     });
   }
 

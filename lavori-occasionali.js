@@ -379,6 +379,10 @@
   }
 
   function wrapRowReader() {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) {
+      state.rowsWrapped = true;
+      return;
+    }
     if (state.rowsWrapped || typeof readSquadraRows !== "function") return;
     const original = readSquadraRows;
     readSquadraRows = function readSquadraRowsWithOccasionalWork() {
@@ -403,6 +407,30 @@
   }
 
   function restoreWorkNameFromComposition() {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) {
+      if (!isOccasionalSelected()) return;
+      const dateKey = document.getElementById("squadra-riferimento")?.value || "";
+      try {
+        const composition = squadreHistoryByDate instanceof Map
+          ? squadreHistoryByDate.get(dateKey)?.get(COMMESSA_ID)
+          : null;
+        if (composition && typeof setSquadraRowsFromData === "function") {
+          window.setTimeout(() => {
+            try {
+              setSquadraRowsFromData(composition);
+              if (typeof updateSquadraAutofillHint === "function") {
+                updateSquadraAutofillHint("Composizione salvata per LAVORI OCCASIONALI.");
+              }
+            } catch (error) {
+              state.lastError = error;
+            }
+          }, 0);
+        }
+      } catch (error) {
+        state.lastError = error;
+      }
+      return;
+    }
     if (!isOccasionalSelected()) return;
     const dateKey = document.getElementById("squadra-riferimento")?.value || "";
     try {
@@ -447,6 +475,7 @@
   }
 
   function validateBeforeCoreSave(event) {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) return;
     if (!isOccasionalSelected()) return;
     const rows = typeof readSquadraRows === "function" ? readSquadraRows() : [];
     if (!Array.isArray(rows) || !rows.length) return;
@@ -848,6 +877,7 @@
   }
 
   function applyWorkNamesToData() {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) return;
     const items = getCompositions();
     items.forEach((item) => {
       try {
@@ -868,6 +898,7 @@
   }
 
   function decorateSquadCards() {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) return;
     applyWorkNamesToData();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const matches = [];
@@ -997,6 +1028,7 @@
 
   document.getElementById("squadra-form")?.addEventListener("submit", validateBeforeCoreSave, true);
   document.getElementById("squadra-form")?.addEventListener("submit", () => {
+    if (window.HeraOccasionalSquadFirstFlow?.installed) return;
     const feedback = document.getElementById("squadra-feedback");
     if (!feedback || !isOccasionalSelected()) return;
     const rows = typeof readSquadraRows === "function" ? readSquadraRows() : [];
@@ -1186,9 +1218,11 @@
 
   window.HeraLavoriOccasionali = {
     installed: true,
-    version: "1.3.0",
+    version: "1.4.0",
     commessaId: COMMESSA_ID,
     firestoreScope: "commesse/lavori-occasionali/impianti",
+    getWorkMetadata,
+    upsertPlant: upsertNormalOccasionalPlant,
     refresh,
     getState: () => ({ ...state, lastError: state.lastError ? String(state.lastError?.message || state.lastError) : null })
   };

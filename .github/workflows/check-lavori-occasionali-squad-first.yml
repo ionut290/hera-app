@@ -1,0 +1,41 @@
+name: Check occasional squad-first flow
+
+on:
+  pull_request:
+    paths:
+      - lavori-occasionali.js
+      - lavori-occasionali-squad-first.js
+      - lavori-occasionali-multi-cantiere-ore.js
+      - squadre-lavori-occasionali-cantieri.js
+      - firebase-config.js
+      - scripts/check-lavori-occasionali-squad-first.js
+      - .github/workflows/check-lavori-occasionali-squad-first.yml
+  push:
+    branches:
+      - main
+    paths:
+      - lavori-occasionali.js
+      - lavori-occasionali-squad-first.js
+      - lavori-occasionali-multi-cantiere-ore.js
+      - squadre-lavori-occasionali-cantieri.js
+      - firebase-config.js
+      - scripts/check-lavori-occasionali-squad-first.js
+      - .github/workflows/check-lavori-occasionali-squad-first.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          node --check lavori-occasionali.js
+          node --check lavori-occasionali-squad-first.js
+          node --check firebase-config.js
+      - name: Check squad-first behavior
+        run: node scripts/check-lavori-occasionali-squad-first.js
+      - name: Check plant cache isolation
+        run: node scripts/check-lavori-occasionali-isolation.js

@@ -21022,7 +21022,7 @@ async function handleImpiantoWhatsAppClick(impianto) {
     // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
     // l'utente torna indietro senza inviare il messaggio.
     markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-    updateCommessaDashboard();
+    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
     setImpiantiViewMode("done");
     renderImpianti();
 

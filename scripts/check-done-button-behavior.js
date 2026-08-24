@@ -8,6 +8,7 @@ const photoOrderSource = fs.readFileSync("android-whazzup-photo-order.js", "utf8
 const styleSource = fs.readFileSync("style.css", "utf8");
 const nativeSource = fs.readFileSync("native-android-runtime.js", "utf8");
 const immediateSource = fs.readFileSync("fatto-button-immediate.js", "utf8");
+const touchGuardSource = fs.readFileSync("fatto-scroll-guard.js", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 function extractFunctionFrom(source, name) {
@@ -395,6 +396,8 @@ async function main() {
 
   assert.doesNotMatch(immediateSource, /document\.addEventListener\("pointerup"/);
   assert.doesNotMatch(immediateSource, /document\.addEventListener\("click"/);
+  assert.doesNotMatch(touchGuardSource, /BLOCK_AFTER_SCROLL_MS|MOVE_THRESHOLD_PX|findFattoButton/);
+  assert.doesNotMatch(touchGuardSource, /stopImmediatePropagation\(\)/, "Nessun guard deve mangiare il primo click FATTO");
   assert.doesNotMatch(immediateSource, /operation\s*=\s*await enqueue/);
   assert.match(immediateSource, /const operationTask = enqueue/);
 

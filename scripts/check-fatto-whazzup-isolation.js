@@ -59,6 +59,12 @@ const APPROVED_RUNTIME_FILES = new Set([
   "android-whazzup-photo-order.js",
   "varga-branding.js"
 ]);
+const BASELINE_EXTERNAL_WRAPPERS = Object.freeze({
+  "lavori-occasionali.js": Object.freeze({
+    functionName: "installOccasionalFattoPdfFlow",
+    sha: "c0f04b7c1abbe1232dc84d017747cceea17bf53a"
+  })
+});
 const ALL_CHANGE_WORKFLOWS = Object.freeze([
   ".github/workflows/check-done-button.yml",
   ".github/workflows/check-critical-flows.yml",
@@ -85,6 +91,25 @@ function gitBlobSha(value) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractFunction(source, name) {
+  const signatures = ["async function " + name + "(", "function " + name + "("];
+  let start = -1;
+  for (const signature of signatures) {
+    start = source.indexOf(signature);
+    if (start >= 0) break;
+  }
+  if (start < 0) fail("Wrapper esterno protetto mancante: " + name);
+  const signatureEnd = source.indexOf(") {", start);
+  const bodyStart = source.indexOf("{", signatureEnd);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  fail("Wrapper esterno protetto non chiuso: " + name);
 }
 
 function assertClassicOrderedScript(html, fileName) {
@@ -134,7 +159,19 @@ const runtimeFiles = fs.readdirSync(root, { withFileTypes: true })
 
 for (const fileName of runtimeFiles) {
   if (APPROVED_RUNTIME_FILES.has(fileName)) continue;
-  const source = read(fileName).toString("utf8");
+  let source = read(fileName).toString("utf8");
+  const baselineWrapper = BASELINE_EXTERNAL_WRAPPERS[fileName];
+  if (baselineWrapper) {
+    const wrapperSource = extractFunction(source, baselineWrapper.functionName);
+    const wrapperSha = gitBlobSha(wrapperSource);
+    if (wrapperSha !== baselineWrapper.sha) {
+      fail([
+        "Wrapper esterno già presente modificato: " + fileName + " -> " + baselineWrapper.functionName,
+        "La sua forma attuale è congelata e non può cambiare né estendere l’interferenza."
+      ]);
+    }
+    source = source.replace(wrapperSource, "");
+  }
   for (const name of CRITICAL_NAMES) {
     const escaped = escapeRegExp(name);
     const forbiddenPatterns = [
@@ -142,7 +179,8 @@ for (const fileName of runtimeFiles) {
       new RegExp(`(?:window|globalThis)\\s*\\.\\s*${escaped}\\s*=`),
       new RegExp(`(?:window|globalThis)\\s*\\[\\s*["']${escaped}["']\\s*\\]\\s*=`),
       new RegExp(`Object\\.defineProperty\\s*\\(\\s*(?:window|globalThis)\\s*,\\s*["']${escaped}["']`),
-      new RegExp(`delete\\s+(?:window|globalThis)\\s*\\.\\s*${escaped}\\b`)
+      new RegExp(`delete\\s+(?:window|globalThis)\\s*\\.\\s*${escaped}\\b`),
+      new RegExp(`^\\s*${escaped}\\s*=`, "m")
     ];
     if (forbiddenPatterns.some((pattern) => pattern.test(source))) {
       fail([

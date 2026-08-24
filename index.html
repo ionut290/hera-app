@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#111214">
   <script>
     (() => {
-      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260824-fatto-stable3";
+      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260824-fatto-stable4";
       const ANDROID_EMERGENCY_CACHE_RESET_VERSION = "20260812-android1";
       const PWA_EMERGENCY_CACHE_RESET_KEY = "heraPwaCacheResetVersion";
       const url = new URL(window.location.href);
@@ -492,7 +492,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260824-fatto-stable3", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260824-fatto-stable4", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

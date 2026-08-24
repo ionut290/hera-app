@@ -119,7 +119,12 @@
       const meta = buildMeta(target, args);
       const operationId = getOperationId(target, args);
       const dedupeIdentity = meta.entityId || operationId;
-      const dedupeKey = `${target.type}:${meta.commessaId}:${dedupeIdentity}`;
+      // forceMoveImpiantoToFatti compone markImpiantoDone: le due funzioni
+      // possono essere attive nello stesso momento per la stessa scheda. Se la
+      // chiave non distingue il punto d'ingresso, la chiamata interna riceve la
+      // Promise della chiamata esterna e le due operazioni si attendono a
+      // vicenda senza mai arrivare alla scrittura Firestore.
+      const dedupeKey = `${target.name}:${target.type}:${meta.commessaId}:${dedupeIdentity}`;
       try {
         const outcome = await safety.run(
           target.type,

@@ -1,0 +1,35 @@
+name: Check Lavori occasionali workflow v2
+
+on:
+  pull_request:
+    paths:
+      - lavori-occasionali-workflow-v2.js
+      - firebase-config.js
+      - scripts/check-lavori-occasionali-workflow-v2.js
+      - .github/workflows/check-lavori-occasionali-workflow-v2.yml
+  push:
+    branches: [main]
+    paths:
+      - lavori-occasionali-workflow-v2.js
+      - firebase-config.js
+      - scripts/check-lavori-occasionali-workflow-v2.js
+      - .github/workflows/check-lavori-occasionali-workflow-v2.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          node --check lavori-occasionali-workflow-v2.js
+          node --check firebase-config.js
+      - name: Check isolated occasional workflow
+        run: node scripts/check-lavori-occasionali-workflow-v2.js
+      - name: Check FATTO and Whazzup protection
+        run: |
+          node scripts/check-fatto-whazzup-immutable.js
+          node scripts/check-fatto-whazzup-isolation.js

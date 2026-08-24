@@ -352,6 +352,39 @@ async function main() {
   assert.match(recoveryHandler, /setImpiantiViewMode\("done"\)/);
   assert.doesNotMatch(recoveryHandler, /done:\s*false|setImpiantiViewMode\("todo"\)/);
 
+  const pendingDoneContext = createContext({
+    currentUser: { uid: "u1" },
+    auth: { currentUser: { uid: "u1" } },
+    loadWhazzupPendingDoneEntries: () => [{
+      commessaId: "inrete-modena",
+      impiantoKey: "sap:100",
+      impiantoIds: ["a", "b"],
+      userId: "u1",
+      pendingAt: "2026-08-24T10:30:00Z",
+      doneBy: "Operatore prova"
+    }],
+    doesPendingActionMatchImpianto: (entry, commessaId, impianto) => (
+      entry.commessaId === commessaId && entry.impiantoKey === `sap:${impianto.idSap}`
+    )
+  });
+  loadFunctions(pendingDoneContext, ["applyWhazzupPendingDoneEntriesToImpianti"]);
+  const protectedInrete = pendingDoneContext.applyWhazzupPendingDoneEntriesToImpianti([
+    { id: "a", sourceIds: ["a", "b"], idSap: "100", done: false, stato: "DA FARE" }
+  ], "inrete-modena");
+  assert.equal(protectedInrete[0].done, true, "Il rientro dalla PWA deve mantenere INRETE Modena nei FATTI");
+  assert.equal(protectedInrete[0].stato, "FATTO");
+  assert.equal(protectedInrete[0].doneBy, "Operatore prova");
+  assert.equal(protectedInrete[0].doneAt.toISOString(), "2026-08-24T10:30:00.000Z");
+  const unrelatedCommessa = pendingDoneContext.applyWhazzupPendingDoneEntriesToImpianti([
+    { id: "a", idSap: "100", done: false, stato: "DA FARE" }
+  ], "depurazione");
+  assert.equal(unrelatedCommessa[0].done, false, "Il recupero non deve modificare altre commesse");
+
+  assert.match(appSource, /window\.getSelectedCommessaIdForFatto\s*=\s*getSelectedCommessaIdForFatto/);
+  assert.match(immediateSource, /commessaId:\s*getActiveCommessaId\(\)/);
+  assert.doesNotMatch(immediateSource, /commessaId:\s*window\.selectedCommessaId/);
+  assert.match(immediateSource, /operation\.commessaId\s*&&\s*operation\.commessaId\s*!==\s*activeCommessaId/);
+
   const setDoneHandler = extractFunction("setImpiantoDone");
   assert.ok(
     setDoneHandler.indexOf("await batch.commit()") < setDoneHandler.indexOf("workRef.where("),

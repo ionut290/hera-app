@@ -44,6 +44,7 @@
     state.prices=prices.docs.map(d=>({id:d.id,...d.data()}));
     state.operationalPlants=operational.docs.map(d=>({id:d.id,...d.data()}));
     state.priceMap=core.buildPriceMap(state.prices);
+    // compatibilità: nessuna scrittura; gli impianti operativi diventano righe legacy solo in memoria
     if(!state.work.length){
       const cachedLegacy=getCommessaCachedImpianti(requestedCommessaId)||[];
       const legacy=state.operationalPlants.length?state.operationalPlants:cachedLegacy;
@@ -57,6 +58,7 @@
       });
       state.work=state.plants.flatMap(p=>core.adaptLegacyPlantToWorkItems({...p,numeroProgressivoRiga:p.numeroProgressivoRiga??p.numeroProgressivo??p.numeroProgressivoImpianto,frequenzaAnnua:p.frequenzaAnnua||"",note:p.note||p.noteImpianto||""}));
     }
+    // Risoluzione Firebase/JavaScript: la UI non legge mai risultati dalle formule xlsx.
     state.work=state.work.map(w=>core.enrichWorkItem(w,state.priceMap,requestedCommessa.percentualeRibassoGenerale));
     if(isStale())return false;
     if(options.autoRepair!==false&&needsOperationalRepair()&&!state.autoRepairing){

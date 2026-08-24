@@ -52,12 +52,20 @@ else {
   requireIncludes(markDone, 'isNetworkOffline()', 'Fatto mantiene il ramo offline');
   requireIncludes(markDone, 'upsertPendingDoneAction', 'Fatto offline conserva azione pending WhatsApp');
   requireIncludes(markDone, 'setImpiantoDone(selectedCommessaId, ids, true', 'Fatto salva su Firebase con stato true');
-  requireIncludes(markDone, 'updateImpiantoLocalState(ids, {\n      done: true', 'Fatto aggiorna lo stato locale a done true');
+  requireIncludes(markDone, 'updateImpiantoLocalState(ids, {', 'Fatto aggiorna lo stato locale');
+  requireIncludes(markDone, 'done: true', 'Fatto mantiene lo stato locale a done true');
   requireIncludes(markDone, 'setImpiantiViewMode("done")', 'Fatto continua a spostare la UI sulla lista Fatti');
   requireIncludes(markDone, 'retrySetImpiantoDone', 'Fatto mantiene il retry Firebase');
   requireIncludes(markDone, 'queueSheetExportForAdmin', 'Fatto operatori conserva export/admin queue');
   requireIncludes(markDone, 'scheduleCommessaSheetSync', 'Fatto admin conserva sincronizzazione sheet');
   requireIncludes(markDone, 'publishGlobalNotificationEvent("impianto-done"', 'Fatto conserva notifica globale impianto-done');
+  const pendingIntentIndex = markDone.indexOf('upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal)');
+  const cloudWriteIndex = markDone.indexOf('setImpiantoDone(selectedCommessaId, ids, true');
+  if (pendingIntentIndex >= 0 && cloudWriteIndex > pendingIntentIndex) {
+    pass('Fatto registra la pending action prima della scrittura cloud');
+  } else {
+    fail('Fatto deve registrare la pending action prima della scrittura cloud');
+  }
 }
 
 const forceDone = extractFunction('canUseForceImpiantoDone');
@@ -82,6 +90,15 @@ else {
   requireIncludes(setDone, 'const batch = db.batch()', 'setImpiantoDone usa una scrittura atomica');
   requireIncludes(setDone, 'await batch.commit()', 'setImpiantoDone conferma il batch atomico');
   requireIncludes(setDone, 'throw new Error("Sessione scaduta', 'setImpiantoDone non simula successo senza login');
+  const authoritativeCommitIndex = setDone.indexOf('await batch.commit()');
+  const relatedReadIndex = setDone.indexOf('workRef.where(');
+  if (authoritativeCommitIndex >= 0 && relatedReadIndex > authoritativeCommitIndex) {
+    pass('setImpiantoDone conferma gli impianti prima delle collezioni collegate');
+  } else {
+    fail('setImpiantoDone deve confermare gli impianti prima delle collezioni collegate');
+  }
+  requireIncludes(setDone, 'catch (error)', 'setImpiantoDone isola gli errori della sincronizzazione collegata');
+  requireIncludes(setDone, 'Stato impianto confermato; sincronizzazione collegata rinviata', 'setImpiantoDone non annulla FATTO per errori accessori');
 }
 
 const renderStart = source.indexOf('Questo è il pulsante operativo visibile');
@@ -131,6 +148,19 @@ else {
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');
   requireIncludes(whatsappHandler, 'skipImpiantoCoordinatesValidation: true', 'Fatto non ripete la validazione coordinate già superata');
   requireIncludes(whatsappHandler, 'queued_offline', 'Fatto registra l’esito accodato offline');
+}
+
+const recoveryRequired = extractFunction('markImpiantoDoneRecoveryRequired');
+if (!recoveryRequired) fail('funzione markImpiantoDoneRecoveryRequired presente');
+else {
+  pass('funzione markImpiantoDoneRecoveryRequired presente');
+  requireIncludes(recoveryRequired, 'done: true', 'recupero FATTO mantiene l’impianto nei Fatti');
+  requireIncludes(recoveryRequired, 'setImpiantiViewMode("done")', 'recupero FATTO mantiene la vista Fatti');
+  if (/done:\s*false|setImpiantiViewMode\("todo"\)/.test(recoveryRequired)) {
+    fail('recupero FATTO non deve riportare l’impianto nei Da fare');
+  } else {
+    pass('recupero FATTO non riporta l’impianto nei Da fare');
+  }
 }
 
 const persistedCheck = extractFunction('isImpiantoPersistedAsDone');

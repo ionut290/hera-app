@@ -117,44 +117,54 @@
     return Array.from(card.querySelectorAll?.("span, small") || []).some(isOccasionalBadge);
   }
 
-  function findTextHost(card, wantedValues) {
-    const wanted = new Set(wantedValues.map(normalize).filter(Boolean));
-    if (!wanted.size) return null;
-    const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+  function findTitleTextNode(root, wantedValues) {
+    if (!root) return null;
+    const wanted = wantedValues.map(normalize).filter(Boolean);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
-      if (!wanted.has(normalize(node.nodeValue))) continue;
-      return node.parentElement || null;
+      if (node.parentElement?.closest?.(".occasional-squad-sites")) continue;
+      const value = normalize(node.nodeValue);
+      if (!value) continue;
+      if (wanted.some((item) => value === item || value.includes(item))) return node;
     }
     return null;
   }
 
   function findHeaderRow(card, sites) {
-    let titleHost = findTextHost(card, [COMMESSA_NAME, ...sites.map((site) => site.name)]);
-    if (!titleHost) {
-      const badge = Array.from(card.querySelectorAll("span, small")).find(isOccasionalBadge);
-      const row = badge?.parentElement || null;
-      titleHost = row?.querySelector("strong, b, h1, h2, h3, h4") || null;
+    const badge = Array.from(card.querySelectorAll("span, small")).find(isOccasionalBadge);
+    const headerZone = badge?.parentElement || card.firstElementChild || card;
+    const wantedTitles = [COMMESSA_NAME, ...sites.map((site) => site.name)];
+    let titleNode = findTitleTextNode(headerZone, wantedTitles);
+    let titleHost = titleNode?.parentElement || null;
+
+    if (!titleNode) {
+      titleHost = headerZone.querySelector?.("strong, b, h1, h2, h3, h4") || null;
+      if (titleHost) {
+        const walker = document.createTreeWalker(titleHost, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          if (String(walker.currentNode.nodeValue || "").trim()) {
+            titleNode = walker.currentNode;
+            break;
+          }
+        }
+      }
     }
 
-    if (titleHost && titleHost.dataset.occasionalCommessaTitle !== "1") {
-      const hadFolder = /📁|📂/.test(titleHost.textContent || "");
+    if (titleNode && titleHost?.dataset.occasionalCommessaTitle !== "1") {
+      const hadFolder = /📁|📂/.test(titleNode.nodeValue || titleHost.textContent || "");
+      const fragment = document.createDocumentFragment();
+      if (hadFolder) fragment.append(document.createTextNode("📁 "));
       const first = document.createElement("span");
       const second = document.createElement("span");
       first.textContent = "LAVORI ";
       second.textContent = "OCCASIONALI";
-      titleHost.replaceChildren();
-      if (hadFolder) titleHost.append(document.createTextNode("📁 "));
-      titleHost.append(first, second);
+      fragment.append(first, second);
+      titleNode.replaceWith(fragment);
       titleHost.dataset.occasionalCommessaTitle = "1";
     }
 
-    let anchor = titleHost;
-    while (anchor?.parentElement && anchor.parentElement !== card) anchor = anchor.parentElement;
-    if (anchor?.parentElement === card) return anchor;
-
-    const badge = Array.from(card.querySelectorAll("span, small")).find(isOccasionalBadge);
-    anchor = badge?.parentElement || card.firstElementChild || null;
+    let anchor = titleHost || headerZone;
     while (anchor?.parentElement && anchor.parentElement !== card) anchor = anchor.parentElement;
     return anchor?.parentElement === card ? anchor : null;
   }
@@ -277,7 +287,7 @@
 
   window.HeraOccasionalSquadSites = {
     installed: true,
-    version: "1.0.0",
+    version: "1.0.1",
     refresh: () => refresh({ clearCache: true })
   };
 })();

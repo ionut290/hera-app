@@ -20997,9 +20997,7 @@ async function forceMarkDone(impianto) {
   const forcedBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   cacheFattoVisualEvidence(impianto, forcedAt, forcedBy);
   markImpiantoDoneVisualFallback(impianto, { doneAt: forcedAt, doneBy: forcedBy });
-  if (!isNetworkOffline()) {
-    await recordFattoVisualEvidence(impianto, forcedAt, forcedBy);
-  }
+  await recordFattoVisualEvidence(impianto, forcedAt, forcedBy);
   const moved = await markImpiantoDone(impianto, {
     source: "force",
     skipImpiantoCoordinatesValidation: true,

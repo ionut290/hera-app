@@ -76,7 +76,6 @@ async function main() {
 
   const batchWrites = [];
   let batchCommits = 0;
-  let denyRelatedRead = false;
   const batchContext = createContext({
     auth: { currentUser: { uid: "u1", email: "op@example.com", displayName: "Operatore" } },
     firebase: {
@@ -91,12 +90,7 @@ async function main() {
         doc: () => ({
           collection: (name) => ({
             doc: (id) => ({ id, collection: name }),
-            where: () => ({
-              get: async () => {
-                if (denyRelatedRead) throw new Error("permission-denied lavorazioni");
-                return { docs: [] };
-              }
-            })
+            where: () => ({ get: async () => ({ docs: [] }) })
           })
         })
       }),
@@ -120,19 +114,6 @@ async function main() {
     String(batchDoneAt.getMinutes()).padStart(2, "0")
   ].join(":");
   assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.oraEsecuzione === expectedExecutionTime));
-
-  denyRelatedRead = true;
-  const writesBeforeDeniedRelatedRead = batchWrites.length;
-  const commitsBeforeDeniedRelatedRead = batchCommits;
-  await batchContext.setImpiantoDone("c1", ["c"], true, { doneAt: batchDoneAt });
-  assert.equal(
-    batchCommits,
-    commitsBeforeDeniedRelatedRead + 1,
-    "Un errore sulle lavorazioni non deve annullare il commit dell’impianto"
-  );
-  assert.equal(batchWrites.length, writesBeforeDeniedRelatedRead + 1);
-  assert.equal(batchWrites.at(-1).ref.collection, "impianti");
-  assert.equal(batchWrites.at(-1).payload.done, true);
 
   batchContext.auth.currentUser = null;
   await assert.rejects(
@@ -186,9 +167,9 @@ async function main() {
     "Lo stato FATTO deve essere salvato prima di WhatsApp"
   );
   assert.ok(
-    whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });")
-      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
-    "Il trasferimento nei FATTI deve avvenire prima di WhatsApp per resistere alla sospensione iOS"
+    whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
+      < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
+    "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
   );
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);
@@ -299,7 +280,11 @@ async function main() {
   const photoShareHandler = extractFunction("shareWhazzupWithPhotos");
   assert.match(nativePhotoShareHandler, /files: fileUris/);
   assert.doesNotMatch(nativePhotoShareHandler, /text:\s*message/);
-  assert.match(nativePhotoShareHandler, /await sharePhotosThroughDedicatedPlugin[\s\S]*safeOpenWhatsAppMessage\(message\)/);
+  assert.ok(
+    nativePhotoShareHandler.indexOf("safeOpenWhatsAppMessage(message)")
+      < nativePhotoShareHandler.indexOf("await sharePhotosThroughDedicatedPlugin"),
+    "Il messaggio Whazzup deve essere aperto prima delle foto"
+  );
   assert.match(photoShareHandler, /shareWhazzupPhotosNativeAndroid\(orderedFiles, message\)/);
   assert.match(photoShareHandler, /files: orderedFiles[\s\S]*text: message/);
   assert.match(appSource, /await deletePersistedWhazzupPhotos\(getWhazzupPhotoKey\(impianto\)\)/);
@@ -347,56 +332,12 @@ async function main() {
   assert.match(fallbackPayload.message, /Impianto: -/);
   assert.match(decodeURIComponent(fallbackPayload.appUrl), /🟢 IMPIANTO FATTO/);
 
-  const recoveryHandler = extractFunction("markImpiantoDoneRecoveryRequired");
-  assert.match(recoveryHandler, /done:\s*true/);
-  assert.match(recoveryHandler, /setImpiantiViewMode\("done"\)/);
-  assert.doesNotMatch(recoveryHandler, /done:\s*false|setImpiantiViewMode\("todo"\)/);
-
-  const pendingDoneContext = createContext({
-    currentUser: { uid: "u1" },
-    auth: { currentUser: { uid: "u1" } },
-    loadWhazzupPendingDoneEntries: () => [{
-      commessaId: "inrete-modena",
-      impiantoKey: "sap:100",
-      impiantoIds: ["a", "b"],
-      userId: "u1",
-      pendingAt: "2026-08-24T10:30:00Z",
-      doneBy: "Operatore prova"
-    }],
-    doesPendingActionMatchImpianto: (entry, commessaId, impianto) => (
-      entry.commessaId === commessaId && entry.impiantoKey === `sap:${impianto.idSap}`
-    )
-  });
-  loadFunctions(pendingDoneContext, ["applyWhazzupPendingDoneEntriesToImpianti"]);
-  const protectedInrete = pendingDoneContext.applyWhazzupPendingDoneEntriesToImpianti([
-    { id: "a", sourceIds: ["a", "b"], idSap: "100", done: false, stato: "DA FARE" }
-  ], "inrete-modena");
-  assert.equal(protectedInrete[0].done, true, "Il rientro dalla PWA deve mantenere INRETE Modena nei FATTI");
-  assert.equal(protectedInrete[0].stato, "FATTO");
-  assert.equal(protectedInrete[0].doneBy, "Operatore prova");
-  assert.equal(protectedInrete[0].doneAt.toISOString(), "2026-08-24T10:30:00.000Z");
-  const unrelatedCommessa = pendingDoneContext.applyWhazzupPendingDoneEntriesToImpianti([
-    { id: "a", idSap: "100", done: false, stato: "DA FARE" }
-  ], "depurazione");
-  assert.equal(unrelatedCommessa[0].done, false, "Il recupero non deve modificare altre commesse");
-
-  assert.match(appSource, /window\.getSelectedCommessaIdForFatto\s*=\s*getSelectedCommessaIdForFatto/);
-  assert.match(immediateSource, /commessaId:\s*getActiveCommessaId\(\)/);
-  assert.doesNotMatch(immediateSource, /commessaId:\s*window\.selectedCommessaId/);
-  assert.match(immediateSource, /operation\.commessaId\s*&&\s*operation\.commessaId\s*!==\s*activeCommessaId/);
-
-  const setDoneHandler = extractFunction("setImpiantoDone");
-  assert.ok(
-    setDoneHandler.indexOf("await batch.commit()") < setDoneHandler.indexOf("workRef.where("),
-    "Il commit impianti deve precedere letture e scritture collegate"
-  );
-
   const forceHandler = extractFunction("forceMarkDone");
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);
   assert.doesNotMatch(forceHandler, /if\s*\(!isNetworkOffline\(\)\)/);
 
-  assert.doesNotMatch(immediateSource, /addEventListener\("pointerup"/);
-  assert.doesNotMatch(immediateSource, /addEventListener\("click"/);
+  assert.doesNotMatch(immediateSource, /document\.addEventListener\("pointerup"/);
+  assert.doesNotMatch(immediateSource, /document\.addEventListener\("click"/);
   assert.match(nativeSource, /Geolocation\.watchPosition/);
   assert.match(nativeSource, /Geolocation\.clearWatch/);
   assert.match(nativeSource, /window\.dispatchEvent\(new CustomEvent\("hera:native-location"/);

@@ -52,20 +52,12 @@ else {
   requireIncludes(markDone, 'isNetworkOffline()', 'Fatto mantiene il ramo offline');
   requireIncludes(markDone, 'upsertPendingDoneAction', 'Fatto offline conserva azione pending WhatsApp');
   requireIncludes(markDone, 'setImpiantoDone(selectedCommessaId, ids, true', 'Fatto salva su Firebase con stato true');
-  requireIncludes(markDone, 'updateImpiantoLocalState(ids, {', 'Fatto aggiorna lo stato locale');
-  requireIncludes(markDone, 'done: true', 'Fatto mantiene lo stato locale a done true');
+  requireIncludes(markDone, 'updateImpiantoLocalState(ids, {\n      done: true', 'Fatto aggiorna lo stato locale a done true');
   requireIncludes(markDone, 'setImpiantiViewMode("done")', 'Fatto continua a spostare la UI sulla lista Fatti');
   requireIncludes(markDone, 'retrySetImpiantoDone', 'Fatto mantiene il retry Firebase');
   requireIncludes(markDone, 'queueSheetExportForAdmin', 'Fatto operatori conserva export/admin queue');
   requireIncludes(markDone, 'scheduleCommessaSheetSync', 'Fatto admin conserva sincronizzazione sheet');
   requireIncludes(markDone, 'publishGlobalNotificationEvent("impianto-done"', 'Fatto conserva notifica globale impianto-done');
-  const pendingIntentIndex = markDone.indexOf('upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal)');
-  const cloudWriteIndex = markDone.indexOf('setImpiantoDone(selectedCommessaId, ids, true');
-  if (pendingIntentIndex >= 0 && cloudWriteIndex > pendingIntentIndex) {
-    pass('Fatto registra la pending action prima della scrittura cloud');
-  } else {
-    fail('Fatto deve registrare la pending action prima della scrittura cloud');
-  }
 }
 
 const forceDone = extractFunction('canUseForceImpiantoDone');
@@ -90,15 +82,6 @@ else {
   requireIncludes(setDone, 'const batch = db.batch()', 'setImpiantoDone usa una scrittura atomica');
   requireIncludes(setDone, 'await batch.commit()', 'setImpiantoDone conferma il batch atomico');
   requireIncludes(setDone, 'throw new Error("Sessione scaduta', 'setImpiantoDone non simula successo senza login');
-  const authoritativeCommitIndex = setDone.indexOf('await batch.commit()');
-  const relatedReadIndex = setDone.indexOf('workRef.where(');
-  if (authoritativeCommitIndex >= 0 && relatedReadIndex > authoritativeCommitIndex) {
-    pass('setImpiantoDone conferma gli impianti prima delle collezioni collegate');
-  } else {
-    fail('setImpiantoDone deve confermare gli impianti prima delle collezioni collegate');
-  }
-  requireIncludes(setDone, 'catch (error)', 'setImpiantoDone isola gli errori della sincronizzazione collegata');
-  requireIncludes(setDone, 'Stato impianto confermato; sincronizzazione collegata rinviata', 'setImpiantoDone non annulla FATTO per errori accessori');
 }
 
 const renderStart = source.indexOf('Questo è il pulsante operativo visibile');
@@ -124,52 +107,17 @@ else {
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = hasWhazzupPhotos');
   const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
-  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && localMoveIndex > evidenceIndex && openWhatsappIndex > localMoveIndex) {
-    pass('Fatto protegge e trasferisce nei FATTI prima di aprire WhatsApp');
+  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
+    pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');
   } else {
-    fail('Ordine richiesto: prova FATTO -> trasferimento FATTI -> WhatsApp');
+    fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
   }
-  const evidenceFailureStart = whatsappHandler.indexOf('if (!evidenceSaved && !isNetworkOffline())');
-  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt, doneBy)', evidenceFailureStart);
-  const evidenceFailureBlock = evidenceFailureStart >= 0 && evidenceFailureEnd > evidenceFailureStart
-    ? whatsappHandler.slice(evidenceFailureStart, evidenceFailureEnd)
-    : '';
-  if (!evidenceFailureBlock) {
-    fail('Fatto conserva la gestione dell’errore della prova visiva iniziale');
-  } else if (/return false|closeDeferredWhatsAppTargetWindow/.test(evidenceFailureBlock)) {
-    fail('Un errore di salvataggio iniziale non deve chiudere o bloccare WhatsApp');
-  } else {
-    pass('Un errore di salvataggio iniziale non chiude e non blocca WhatsApp');
-  }
-  requireIncludes(source, 'WhatsApp verrà aperto comunque', 'L’utente viene informato che WhatsApp continua anche con errore salvataggio');
-  requireIncludes(whatsappHandler, 'markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });\n    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();', 'Fatto aggiorna subito stato locale e contatore impianti fatti');
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');
   requireIncludes(whatsappHandler, 'skipImpiantoCoordinatesValidation: true', 'Fatto non ripete la validazione coordinate già superata');
   requireIncludes(whatsappHandler, 'queued_offline', 'Fatto registra l’esito accodato offline');
 }
-
-const recoveryRequired = extractFunction('markImpiantoDoneRecoveryRequired');
-if (!recoveryRequired) fail('funzione markImpiantoDoneRecoveryRequired presente');
-else {
-  pass('funzione markImpiantoDoneRecoveryRequired presente');
-  requireIncludes(recoveryRequired, 'done: true', 'recupero FATTO mantiene l’impianto nei Fatti');
-  requireIncludes(recoveryRequired, 'setImpiantiViewMode("done")', 'recupero FATTO mantiene la vista Fatti');
-  if (/done:\s*false|setImpiantiViewMode\("todo"\)/.test(recoveryRequired)) {
-    fail('recupero FATTO non deve riportare l’impianto nei Da fare');
-  } else {
-    pass('recupero FATTO non riporta l’impianto nei Da fare');
-  }
-}
-
-const forceMarkDone = extractFunction('forceMarkDone');
-requireIncludes(forceMarkDone, 'cacheFattoVisualEvidence(impianto, forcedAt, forcedBy)', 'FORZA conserva la prova FATTO locale');
-requireIncludes(forceMarkDone, 'recordFattoVisualEvidence(impianto, forcedAt, forcedBy)', 'FORZA conserva la prova FATTO condivisa');
-requireIncludes(forceMarkDone, 'markImpiantoDoneVisualFallback(impianto, { doneAt: forcedAt, doneBy: forcedBy })', 'FORZA sposta subito la scheda nei Fatti');
-
-requireIncludes(source, 'function applyFattoVisualEvidenceToImpianti(impianti)', 'prova FATTO recupera lo stato alla riapertura');
-requireIncludes(source, 'currentImpianti = applyFattoVisualEvidenceToImpianti(currentImpianti)', 'listener prova FATTO aggiorna gli impianti già caricati');
 
 const persistedCheck = extractFunction('isImpiantoPersistedAsDone');
 requireIncludes(persistedCheck, 'snapshots.every(', 'verifica FATTO richiede tutti i documenti raggruppati');

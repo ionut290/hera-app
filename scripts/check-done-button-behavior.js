@@ -164,6 +164,11 @@ async function main() {
       < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
     "Lo stato FATTO deve essere salvato prima di WhatsApp"
   );
+  assert.doesNotMatch(
+    whatsappHandler,
+    /if \(!evidenceSaved && !isNetworkOffline\(\)\) \{\s*closeDeferredWhatsAppTargetWindow\([\s\S]*?return false;/,
+    "Un errore della prova visiva non deve bloccare WhatsApp"
+  );
   assert.ok(
     whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
       < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
@@ -182,22 +187,24 @@ async function main() {
   assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: 44, gpsX: -181 }).valid, false);
 
   let evidenceWrites = 0;
+  let evidenceShouldSave = true;
   let whatsappOpens = 0;
   let doneMoves = 0;
+  let accessorySaveFailures = 0;
   const flowContext = createContext({
     auth: { currentUser: { uid: "u1", displayName: "Operatore" } },
     selectedCommessaId: "c1",
     validateImpiantoCoordinates: coordinatesContext.validateImpiantoCoordinates,
     notifyInvalidImpiantoCoordinates: () => {},
-    getWhazzupProcessingKey: () => "c1:sap:100",
+    getWhazzupProcessingKey: (impianto) => `c1:${impianto.id}`,
     isImpiantoWhazzupProcessing: () => false,
     whazzupProcessingByImpianto: new Set(),
     openDeferredWhatsAppTargetWindow: () => null,
     closeDeferredWhatsAppTargetWindow: () => {},
-    clearImpiantoWhazzupProcessing: () => {},
+    clearImpiantoWhazzupProcessing: (impianto) => flowContext.whazzupProcessingByImpianto.delete(`c1:${impianto.id}`),
     setImpiantoFattoSavingState: () => {},
     isNetworkOffline: () => false,
-    recordFattoVisualEvidence: async () => { evidenceWrites += 1; return true; },
+    recordFattoVisualEvidence: async () => { evidenceWrites += 1; return evidenceShouldSave; },
     cacheFattoVisualEvidence: () => {},
     markWhazzupSafetyPressed: () => {},
     upsertWhazzupPendingDoneEntry: () => {},
@@ -215,6 +222,7 @@ async function main() {
     markPendingActionStatus: () => {},
     updateConnectivityStatus: () => {},
     markImpiantoDoneRecoveryRequired: async () => {},
+    handleImpiantoDoneSaveFailure: async () => { accessorySaveFailures += 1; },
     alert: () => {}
   });
   vm.runInContext(whatsappHandler, flowContext);
@@ -226,6 +234,13 @@ async function main() {
   assert.equal(await flowContext.handleImpiantoWhatsAppClick({ id: "b", gpsY: "", gpsX: "11.34" }), false);
   assert.equal(evidenceWrites, 1, "Coordinate mancanti bloccano prima del salvataggio FATTO");
   assert.equal(whatsappOpens, 1, "Coordinate mancanti bloccano prima di WhatsApp");
+
+  evidenceShouldSave = false;
+  assert.equal(await flowContext.handleImpiantoWhatsAppClick({ id: "c", gpsY: "44.50", gpsX: "11.34" }), true);
+  assert.equal(evidenceWrites, 2, "Il tentativo della prova visiva viene mantenuto");
+  assert.equal(whatsappOpens, 2, "WhatsApp deve aprirsi anche se la prova visiva non si salva");
+  assert.equal(doneMoves, 2, "L'impianto deve passare nei FATTI anche se la prova visiva non si salva");
+  assert.equal(accessorySaveFailures, 1, "L'errore accessorio viene segnalato senza bloccare il flusso");
 
   let completedWhatsappOpens = 0;
   const completedContext = createContext({

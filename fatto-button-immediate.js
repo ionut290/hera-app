@@ -5,8 +5,6 @@
   const STORE = "operations";
   const MAX_ATTEMPTS = 12;
   const STALE_MS = 120000;
-  const YELLOW = "#f4c542";
-  const YELLOW_BORDER = "#c99700";
   let processing = false;
 
   const text = (value) => String(value ?? "").trim();
@@ -113,62 +111,6 @@
     return updated;
   }
 
-  function formatDoneLabel(doneAt) {
-    const date = new Date(doneAt);
-    if (Number.isNaN(date.getTime())) return "";
-    return new Intl.DateTimeFormat("it-IT", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(date);
-  }
-
-  function findPressedFattoButton() {
-    const active = document.activeElement;
-    if (!(active instanceof HTMLElement)) return null;
-    const button = active.closest("button, [role='button'], input[type='button'], input[type='submit']");
-    if (!(button instanceof HTMLElement)) return null;
-    const label = text(button.textContent || button.getAttribute("value") || button.getAttribute("aria-label"));
-    return /fatto|whazzup|whatsapp/i.test(label) ? button : null;
-  }
-
-  function applyPermanentYellowFeedback(button, doneAt) {
-    if (!(button instanceof HTMLElement)) return;
-    const label = formatDoneLabel(doneAt);
-    button.dataset.fattoImmediate = "true";
-    button.dataset.fattoDoneAt = doneAt;
-    button.disabled = true;
-    button.setAttribute("aria-disabled", "true");
-    button.style.setProperty("background", YELLOW, "important");
-    button.style.setProperty("background-color", YELLOW, "important");
-    button.style.setProperty("border-color", YELLOW_BORDER, "important");
-    button.style.setProperty("color", "#1d1d1d", "important");
-    button.style.setProperty("opacity", "1", "important");
-    button.style.setProperty("pointer-events", "none", "important");
-    button.style.setProperty("cursor", "default", "important");
-
-    let dateNode = button.previousElementSibling;
-    if (!(dateNode instanceof HTMLElement) || dateNode.dataset.fattoImmediateDate !== "true") {
-      dateNode = document.createElement("div");
-      dateNode.dataset.fattoImmediateDate = "true";
-      dateNode.style.fontWeight = "700";
-      dateNode.style.fontSize = "0.82rem";
-      dateNode.style.marginBottom = "4px";
-      dateNode.style.textAlign = "center";
-      button.parentNode?.insertBefore(dateNode, button);
-    }
-    dateNode.textContent = label;
-
-    if ("value" in button && /^(INPUT|BUTTON)$/i.test(button.tagName)) {
-      if (button.tagName === "INPUT") button.value = "FATTO";
-      else button.textContent = "FATTO";
-    } else {
-      button.textContent = "FATTO";
-    }
-  }
-
   async function syncOperation(operation) {
     const options = {
       source: "resume-persistent-queue",
@@ -179,10 +121,14 @@
       reopenWhatsApp: false
     };
     if (typeof window.forceMoveImpiantoToFatti === "function") {
-      return window.forceMoveImpiantoToFatti(operation.impianto, options);
+      const result = await window.forceMoveImpiantoToFatti(operation.impianto, options);
+      if (result !== true) throw new Error("Sincronizzazione FATTO non confermata");
+      return true;
     }
     if (typeof window.markImpiantoDone === "function") {
-      return window.markImpiantoDone(operation.impianto, options);
+      const result = await window.markImpiantoDone(operation.impianto, options);
+      if (result !== true) throw new Error("Sincronizzazione FATTO non confermata");
+      return true;
     }
     throw new Error("Funzione FATTO non ancora pronta");
   }
@@ -274,22 +220,26 @@
     const original = window.handleImpiantoWhatsAppClick;
     if (typeof original !== "function" || original.__heraQueueWrapped) return;
     const wrapped = async function (impianto, ...args) {
-      const pressedButton = findPressedFattoButton();
       const doneAt = new Date().toISOString();
-      applyPermanentYellowFeedback(pressedButton, doneAt);
-
-      const operation = await enqueue(impianto, {
-        commessaId: window.selectedCommessaId,
-        doneAt
-      });
+      let operation = null;
+      try {
+        operation = await enqueue(impianto, {
+          commessaId: window.selectedCommessaId,
+          doneAt
+        });
+      } catch (error) {
+        // La cassaforte locale e' best-effort: IndexedDB non deve mai bloccare
+        // il FATTO reale ne' l'apertura di WhatsApp.
+        console.warn("Coda locale FATTO non disponibile; continuo con il flusso principale.", error);
+      }
       try {
         const result = await original.call(this, impianto, ...args);
-        if (result === true) await remove(operation.operationId);
-        else await setStatus(operation, "FAILED", "Flusso FATTO non completato");
+        if (operation && result === true) await remove(operation.operationId);
+        else if (operation) await setStatus(operation, "FAILED", "Flusso FATTO non completato");
         await refreshStatus();
         return result;
       } catch (error) {
-        await setStatus(operation, "FAILED", error);
+        if (operation) await setStatus(operation, "FAILED", error);
         await refreshStatus();
         throw error;
       }

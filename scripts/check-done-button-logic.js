@@ -125,6 +125,7 @@ else {
     pass('Un errore di salvataggio iniziale non chiude e non blocca WhatsApp');
   }
   requireIncludes(source, 'WhatsApp verrà aperto comunque', 'L’utente viene informato che WhatsApp continua anche con errore salvataggio');
+  requireIncludes(whatsappHandler, 'markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });\n    updateCommessaDashboard();', 'Fatto aggiorna subito stato locale e contatore impianti fatti');
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');

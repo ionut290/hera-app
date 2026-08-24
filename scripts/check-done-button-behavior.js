@@ -76,6 +76,7 @@ async function main() {
 
   const batchWrites = [];
   let batchCommits = 0;
+  let denyRelatedRead = false;
   const batchContext = createContext({
     auth: { currentUser: { uid: "u1", email: "op@example.com", displayName: "Operatore" } },
     firebase: {
@@ -90,7 +91,12 @@ async function main() {
         doc: () => ({
           collection: (name) => ({
             doc: (id) => ({ id, collection: name }),
-            where: () => ({ get: async () => ({ docs: [] }) })
+            where: () => ({
+              get: async () => {
+                if (denyRelatedRead) throw new Error("permission-denied lavorazioni");
+                return { docs: [] };
+              }
+            })
           })
         })
       }),
@@ -114,6 +120,19 @@ async function main() {
     String(batchDoneAt.getMinutes()).padStart(2, "0")
   ].join(":");
   assert.ok(batchWrites.slice(0, 2).every((entry) => entry.payload.oraEsecuzione === expectedExecutionTime));
+
+  denyRelatedRead = true;
+  const writesBeforeDeniedRelatedRead = batchWrites.length;
+  const commitsBeforeDeniedRelatedRead = batchCommits;
+  await batchContext.setImpiantoDone("c1", ["c"], true, { doneAt: batchDoneAt });
+  assert.equal(
+    batchCommits,
+    commitsBeforeDeniedRelatedRead + 1,
+    "Un errore sulle lavorazioni non deve annullare il commit dell’impianto"
+  );
+  assert.equal(batchWrites.length, writesBeforeDeniedRelatedRead + 1);
+  assert.equal(batchWrites.at(-1).ref.collection, "impianti");
+  assert.equal(batchWrites.at(-1).payload.done, true);
 
   batchContext.auth.currentUser = null;
   await assert.rejects(
@@ -327,6 +346,17 @@ async function main() {
   assert.ok(fallbackPayload.message.trim(), "Dati secondari mancanti non devono produrre un messaggio vuoto");
   assert.match(fallbackPayload.message, /Impianto: -/);
   assert.match(decodeURIComponent(fallbackPayload.appUrl), /🟢 IMPIANTO FATTO/);
+
+  const recoveryHandler = extractFunction("markImpiantoDoneRecoveryRequired");
+  assert.match(recoveryHandler, /done:\s*true/);
+  assert.match(recoveryHandler, /setImpiantiViewMode\("done"\)/);
+  assert.doesNotMatch(recoveryHandler, /done:\s*false|setImpiantiViewMode\("todo"\)/);
+
+  const setDoneHandler = extractFunction("setImpiantoDone");
+  assert.ok(
+    setDoneHandler.indexOf("await batch.commit()") < setDoneHandler.indexOf("workRef.where("),
+    "Il commit impianti deve precedere letture e scritture collegate"
+  );
 
   const forceHandler = extractFunction("forceMarkDone");
   assert.match(forceHandler, /markImpiantoDone\(impianto,\s*\{\s*source:\s*"force"/);

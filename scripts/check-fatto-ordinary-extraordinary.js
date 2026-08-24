@@ -4,33 +4,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const source = fs.readFileSync("fatto-ordinary-extraordinary-flow.js", "utf8");
+const immediate = fs.readFileSync("fatto-button-immediate.js", "utf8");
 const config = fs.readFileSync("firebase-config.js", "utf8");
 
-assert.match(source, /Cosa hai eseguito\?/);
-assert.match(source, /input\.type = "checkbox"/);
-assert.match(source, /Manutenzione ordinaria/);
-assert.match(source, /Manutenzione straordinaria/);
-assert.doesNotMatch(source, /priceCode === "A1"/, "La regola speciale A1 successiva al 19/08 non deve essere presente");
-assert.match(source, /Hai scelto solo la manutenzione ordinaria/);
-assert.match(source, /Hai scelto solo la manutenzione straordinaria/);
-assert.match(source, /TORNA INDIETRO/);
-assert.match(source, /CONFERMA E INVIA/);
-assert.match(source, /Intervento eseguito: manutenzione ordinaria/);
-assert.match(source, /Intervento eseguito: manutenzione straordinaria/);
-assert.match(source, /Interventi eseguiti: manutenzione ordinaria e straordinaria/);
-assert.match(source, /selectedKinds\.includes\(getWorkItemKind\(entry\)\)/);
-assert.match(source, /PARZIALMENTE FATTO/);
-assert.match(source, /impianto\.done = allDone/);
-assert.match(source, /sourceIds/);
-assert.match(source, /processingPlants/);
-assert.match(source, /if \(selectedKinds\.length === 2\) return \{ handled: false \}/);
-assert.match(source, /!original\.__heraQueueWrapped/, "Il selettore deve installarsi sopra la coda FATTO stabile");
-assert.ok(
-  source.indexOf("const partial = await handleSelection(impianto)") < source.indexOf("return original.call(this, impianto, ...args)"),
-  "La scelta ordinaria/straordinaria deve avvenire prima del FATTO definitivo"
-);
-assert.doesNotMatch(source, /IMPIANTO FATTO/);
-assert.match(config, /fatto-ordinary-extraordinary-flow\.js\?v=20260824-1908restore1/);
+assert.equal(fs.existsSync("fatto-ordinary-extraordinary-flow.js"), false, "Il modulo separato deve essere eliminato");
+assert.doesNotMatch(config, /HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC|fatto-ordinary-extraordinary-flow/);
+assert.doesNotMatch(immediate, /ORDINARIO|STRAORDINARIO|selectedKinds|inretePartialFatto/);
+assert.doesNotMatch(immediate, /HeraFattoSync = Object\.freeze\(\{[^}]*maybeHandlePartialInreteDone/);
+assert.match(immediate, /window\.HeraFattoSync = Object\.freeze\(\{ enqueue, processQueue, refreshStatus, list \}\)/);
 
-console.log("✅ FATTO ordinario/straordinario: controlli superati.");
+console.log("✅ Selettore ordinario/straordinario eliminato; FATTO usa solo il flusso definitivo.");

@@ -48,7 +48,8 @@
 
   function readFallbackOperations() {
     try {
-      const raw = window.localStorage?.getItem(FALLBACK_STORE_KEY);
+      if (!window.localStorage) return [];
+      const raw = window.localStorage.getItem(FALLBACK_STORE_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed.filter((entry) => entry?.operationId) : [];
@@ -60,7 +61,8 @@
 
   function writeFallbackOperations(items) {
     try {
-      window.localStorage?.setItem(FALLBACK_STORE_KEY, JSON.stringify(items || []));
+      if (!window.localStorage) return false;
+      window.localStorage.setItem(FALLBACK_STORE_KEY, JSON.stringify(items || []));
       return true;
     } catch (error) {
       console.warn("[Cassaforte FATTO] ripiego locale non scrivibile", error);

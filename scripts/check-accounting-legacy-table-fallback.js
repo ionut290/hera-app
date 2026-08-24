@@ -15,7 +15,7 @@ assert.match(
 assert.match(source, /const physicalById=new Map\(state\.plants\.map/);
 assert.match(source, /state\.work=state\.plants\.flatMap\(p=>core\.adaptLegacyPlantToWorkItems/);
 
-const blockMatch = source.match(/if\(!state\.work\.length\)\{[\s\S]*?\n    \}\n    state\.work=state\.work\.map/);
+const blockMatch = source.match(/if\(!state\.work\.length\)\{[\s\S]*?\n    \}\n    \/\/ Risoluzione Firebase\/JavaScript/);
 assert.ok(blockMatch, "Blocco fallback Gestione non trovato");
 assert.doesNotMatch(blockMatch[0], /\.set\s*\(/, "Il fallback non deve scrivere su Firestore");
 assert.doesNotMatch(blockMatch[0], /\.delete\s*\(/, "Il fallback non deve cancellare dati Firestore");

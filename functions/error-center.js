@@ -198,7 +198,7 @@ async function isAdminContext(context) {
   if (email === ADMIN_EMAIL || context.auth.token?.admin === true || context.auth.token?.isAdmin === true) return true;
   try {
     const snapshot = await db().collection("appConfig").doc("adminUsers").get();
-    const emails = Array.isArray(snapshot.data()?.emails) ? snapshot.data().emails.map(normalizeEmail) : [];
+    const emails = Array.isArray(snapshot.data()?.emails) ? snapshot.data()?.emails.map(normalizeEmail) : [];
     return emails.includes(email);
   } catch (_) {
     return false;
@@ -244,7 +244,17 @@ function notificationPriority(severity) {
   return "NORMALE";
 }
 
+function isReadNoiseNotification(report) {
+  if (report?.manual) return false;
+  const text = `${report?.kind || ""} ${report?.message || ""} ${report?.stack || ""} ${report?.feature || ""} ${report?.source || ""}`.toLowerCase();
+  const appNotificationsRead = /appnotifications/.test(text)
+    && /(lettur|read|listener|snapshot|legacy|guardia|guard|blocked)/.test(text);
+  const explicitReadGuard = /(guardia\s+(?:delle\s+)?letture|read[- ]guard|letture?\s+legacy\s+bloccat|blockedreads|blockedlisteners)/.test(text);
+  return appNotificationsRead || explicitReadGuard;
+}
+
 async function createAdminNotification(report, occurrences, isNew, reopened) {
+  if (isReadNoiseNotification(report)) return { created: false, id: "" };
   const shouldNotify = report.manual || isNew || reopened || ["critical", "high"].includes(report.diagnosis.severity);
   if (!shouldNotify) return { created: false, id: "" };
 

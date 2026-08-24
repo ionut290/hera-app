@@ -29,4 +29,16 @@ assert.ok(
 );
 assert.doesNotMatch(source, /🟡 LAVORAZIONE FATTA/, "Il completamento parziale non deve usare il vecchio titolo generico");
 
-console.log("✅ Controlli FATTO ordinario/straordinario completati.");
+assert.match(source, /FALLBACK_STORE_KEY = "heraFattoSyncOperationsFallbackV1"/, "Manca il ripiego persistente della cassaforte FATTO");
+assert.match(source, /async function enqueueSafely\(impianto, metadata = \{\}\)/, "La cassaforte deve avere un ingresso mai bloccante");
+assert.match(source, /salvataggio locale non disponibile; il flusso operativo continua/, "Un errore della cassaforte non deve fermare FATTO");
+assert.match(source, /const operation = await enqueueSafely\(impianto, \{[\s\S]*const result = await original\.call\(this, impianto, \.\.\.args\)/, "Il flusso FATTO deve continuare anche senza operazione in cassaforte");
+assert.match(source, /if \(operation\) \{[\s\S]*result === true[\s\S]*setStatus\(operation, "FAILED"/, "Lo stato cassaforte deve essere aggiornato solo quando l'operazione esiste");
+assert.match(source, /type: "IMPIANTO_FATTO_PARZIALE"/, "Il FATTO parziale fallito deve essere conservato con un tipo dedicato");
+assert.match(source, /workItems: context\.items/, "La cassaforte parziale deve conservare le lavorazioni esatte");
+assert.match(source, /salvataggio non riuscito; conservo nella cassaforte e apro Whazzup/, "Un errore parziale deve aprire Whazzup e attivare il recupero");
+assert.match(source, /const opened = openPartialWhatsApp\(impianto, selectedKinds, selectedItems, doneAt, doneBy, remaining\)/, "Whazzup parziale deve aprirsi anche dopo errore di salvataggio");
+assert.match(source, /operation\?\.type === "IMPIANTO_FATTO_PARZIALE"/, "Il recupero deve riconoscere le operazioni parziali");
+assert.match(source, /return saveSelectedWorkItems\(context, operation\.selectedKinds \|\| \[\], operation\.impianto \|\| \{\}\)/, "Il recupero deve risalvare le lavorazioni selezionate senza riaprire Whazzup");
+
+console.log("✅ Controlli FATTO ordinario/straordinario e cassaforte completati.");

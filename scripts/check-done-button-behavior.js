@@ -186,9 +186,9 @@ async function main() {
     "Lo stato FATTO deve essere salvato prima di WhatsApp"
   );
   assert.ok(
-    whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
-      < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
-    "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
+    whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });")
+      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
+    "Il trasferimento nei FATTI deve avvenire prima di WhatsApp per resistere alla sospensione iOS"
   );
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);

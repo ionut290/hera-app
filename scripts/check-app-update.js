@@ -16,7 +16,7 @@ assert.match(app, new RegExp(`play\\.google\\.com/store/apps/details\\?id=${capa
 assert.match(app, /navigator\.serviceWorker\?\.getRegistration/);
 assert.match(app, /Capacitor\?\.getPlatform\?\.\(\) === "android"/);
 assert.doesNotMatch(app, /window\.location\.assign\(updateUrl/);
-assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260812-opera1"/);
+assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260824-whazzup-ready1"/);
 assert.match(html, /ANDROID_EMERGENCY_CACHE_RESET_VERSION\s*=\s*"20260812-android1"/);
 assert.match(html, /const cacheResetVersion\s*=\s*isNativeAndroid/);
 assert.doesNotMatch(html, /if\s*\(isNativeAndroid\s*\|\|/);

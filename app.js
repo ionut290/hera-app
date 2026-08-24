@@ -20862,18 +20862,10 @@ function notifyInvalidImpiantoCoordinates() {
 }
 
 function openDeferredWhatsAppTargetWindow() {
-  if (window.Capacitor?.isNativePlatform?.()) return null;
-  try {
-    const targetWindow = window.open("about:blank", "_blank");
-    if (targetWindow?.document?.body) {
-      targetWindow.document.title = "Preparazione Whazzup";
-      targetWindow.document.body.textContent = "Preparazione messaggio in corso…";
-    }
-    return targetWindow;
-  } catch (error) {
-    console.warn("Finestra Whazzup differita non disponibile:", error);
-    return null;
-  }
+  // Il modello del messaggio è già precaricato quando arrivano gli impianti.
+  // Restituendo null, openWhatsApp usa subito l'URL whatsapp:// completo nello
+  // stesso gesto dell'utente, senza mostrare una scheda about:blank intermedia.
+  return null;
 }
 
 function closeDeferredWhatsAppTargetWindow(targetWindow) {

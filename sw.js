@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v149";
-const CACHE_RESET_VERSION = "20260824-fatto-stable7";
+const CACHE_NAME = "varga-cantieri-shell-v150";
+const CACHE_RESET_VERSION = "20260824-whazzup-ready1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260824-fatto-oneclick1",
+  "./app.js?v=20260824-whazzup-ready1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./critical-write-safety-bridge.js?v=20260824-oneclick1",

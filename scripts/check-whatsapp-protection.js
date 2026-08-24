@@ -112,7 +112,9 @@ const appForbiddenFallbackMarkers = [
   'window.location.href = webUrl',
   'targetWindow.location.replace(webUrl)',
   'if (!opened && !disableWebFallback)',
-  'Errore fallback WhatsApp wa.me:'
+  'Errore fallback WhatsApp wa.me:',
+  'window.open("about:blank", "_blank")',
+  'Preparazione messaggio in corso'
 ];
 
 for (const marker of appForbiddenFallbackMarkers) {

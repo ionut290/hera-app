@@ -24,10 +24,6 @@
     return codes.includes("A1") && codes.every((code) => ORDINARY_PRICE_CODES.has(code));
   }
 
-  function hasExplicitExtraWork(impianto) {
-    return Boolean(String(impianto?.extraWorkText || "").trim());
-  }
-
   function getVisibleImpiantoByKey(key) {
     try {
       if (!Array.isArray(currentImpianti) || typeof buildImpiantoKey !== "function") return null;
@@ -52,8 +48,6 @@
       typeBadge.classList.add("badge-ordinaria");
       typeBadge.setAttribute("aria-label", "Lavoro ordinario");
     }
-
-    if (hasExplicitExtraWork(impianto)) return;
 
     card.querySelectorAll(".badge-extra-work").forEach((badge) => {
       badge.hidden = true;

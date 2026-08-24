@@ -12089,7 +12089,7 @@ function selectCommessa(id, nome, codice = "") {
   localStorage.setItem(LAST_SELECTED_COMMESSA_KEY, id);
   ensureImpiantoWeatherPersistentCacheLoaded();
   setImpiantiViewMode("todo");
-  if (!ui.commessaTargetSelect.value) {
+  if (ui.commessaTargetSelect) {
     ui.commessaTargetSelect.value = id;
   }
   const codeText = String(codice || "").trim();

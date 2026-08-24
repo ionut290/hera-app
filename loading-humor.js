@@ -43,7 +43,7 @@
 
 (function loadAdminErrorCenterRuntime() {
   "use strict";
-  const version = "20260824a";
+  const version = "20260824b";
   if (!document.querySelector('link[data-admin-error-center-style]')) {
     const link = document.createElement("link");
     link.rel = "stylesheet";

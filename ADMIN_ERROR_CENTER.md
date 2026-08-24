@@ -10,6 +10,7 @@
 `app-error-monitor.js` registra soltanto segnali tecnici:
 
 - errori JavaScript e Promise non gestite;
+- errori gestiti dall’app e pubblicati tramite `console.error`, limitandosi a nome, codice e messaggio tecnico;
 - risorse locali non caricate;
 - operazioni lunghe sul thread principale, quando il browser supporta `PerformanceObserver`;
 - ritardo dell’interfaccia subito dopo un tocco;
@@ -45,6 +46,17 @@ Le raccolte tecniche non sono leggibili direttamente dal client. Il pannello usa
 - `getErrorCenterDashboard`;
 - `markErrorCenterSeen`;
 - `updateErrorCenterStatus`.
+
+## Affidabilità dei contatori
+
+I sei contatori vengono mostrati soltanto dopo una risposta autenticata della Cloud Function. Le quantità sono calcolate con aggregazioni Firestore complete, separate dall’elenco degli ultimi errori.
+
+- risposta verificata: il pannello mostra `✅ Collegato a Firestore`, l’ora del server e i valori numerici;
+- backend non raggiungibile, non distribuito o non autorizzato: i valori diventano `—`, compare `❌ Dati non verificati` e non vengono mai presentati falsi zeri;
+- l’eventuale coda offline locale e l’ultimo errore di invio restano consultabili tramite lo stato del monitor;
+- il badge viene azzerato soltanto dopo che il dashboard è stato caricato e la conferma di lettura è stata salvata dal server.
+
+L’elenco visualizza al massimo i 200 gruppi più recenti, mentre i contatori restano completi anche oltre tale limite.
 
 ## Stati disponibili
 

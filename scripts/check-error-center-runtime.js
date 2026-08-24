@@ -49,7 +49,7 @@ function makeSandbox() {
     execCommand() { return true; }
   };
   const sandbox = {
-    console,
+    console: { log() {}, warn() {}, error() {}, info() {}, debug() {} },
     document,
     navigator: {
       onLine: true,
@@ -107,6 +107,8 @@ const monitorSandbox = makeSandbox();
 vm.runInNewContext(fs.readFileSync("app-error-monitor.js", "utf8"), monitorSandbox, { filename: "app-error-monitor.js" });
 if (!monitorSandbox.HeraAppErrorMonitor?.installed) throw new Error("Monitor globale non esportato");
 if (typeof monitorSandbox.HeraAppErrorMonitor.reportManual !== "function") throw new Error("Segnalazione manuale non disponibile");
+if (typeof monitorSandbox.HeraAppErrorMonitor.getHealth !== "function") throw new Error("Stato salute monitor non disponibile");
+if (monitorSandbox.HeraAppErrorMonitor.getHealth().queuedReports !== 0) throw new Error("Coda monitor iniziale non valida");
 
 const adminSandbox = makeSandbox();
 adminSandbox.canManageData = () => false;

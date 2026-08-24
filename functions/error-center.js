@@ -488,12 +488,19 @@ exports.getErrorCenterDashboard = functions.region(REGION).https.onCall(async (d
   const queryText = cleanText(input.query, 160).toLowerCase();
   const requestedLimit = Math.max(1, Math.min(150, Number(input.limit || 100)));
 
-  const snapshot = await db().collection(GROUPS_COLLECTION)
-    .orderBy("lastSeenAt", "desc")
-    .limit(DASHBOARD_READ_LIMIT)
-    .get();
+  const groups = db().collection(GROUPS_COLLECTION);
+  const [snapshot, totalCount, openCount, verificationCount, resolvedCount, ignoredCount, criticalCount, highCount] = await Promise.all([
+    groups.orderBy("lastSeenAt", "desc").limit(DASHBOARD_READ_LIMIT + 1).get(),
+    groups.count().get(),
+    groups.where("status", "==", "open").count().get(),
+    groups.where("status", "==", "in_verification").count().get(),
+    groups.where("status", "==", "resolved").count().get(),
+    groups.where("status", "==", "ignored").count().get(),
+    groups.where("severity", "==", "critical").count().get(),
+    groups.where("severity", "==", "high").count().get()
+  ]);
 
-  const all = snapshot.docs.map((doc) => serializeGroup(doc.id, doc.data() || {}));
+  const all = snapshot.docs.slice(0, DASHBOARD_READ_LIMIT).map((doc) => serializeGroup(doc.id, doc.data() || {}));
   const items = all.filter((item) => {
     if (status !== "all" && item.status !== status) return false;
     if (severity !== "all" && item.severity !== severity) return false;
@@ -505,16 +512,23 @@ exports.getErrorCenterDashboard = functions.region(REGION).https.onCall(async (d
   }).slice(0, requestedLimit);
 
   const counts = {
-    total: all.length,
-    open: all.filter((item) => item.status === "open").length,
-    inVerification: all.filter((item) => item.status === "in_verification").length,
-    resolved: all.filter((item) => item.status === "resolved").length,
-    ignored: all.filter((item) => item.status === "ignored").length,
-    critical: all.filter((item) => item.severity === "critical" && !["resolved", "ignored"].includes(item.status)).length,
-    high: all.filter((item) => item.severity === "high" && !["resolved", "ignored"].includes(item.status)).length
+    total: Math.max(0, Number(totalCount.data().count || 0)),
+    open: Math.max(0, Number(openCount.data().count || 0)),
+    inVerification: Math.max(0, Number(verificationCount.data().count || 0)),
+    resolved: Math.max(0, Number(resolvedCount.data().count || 0)),
+    ignored: Math.max(0, Number(ignoredCount.data().count || 0)),
+    critical: Math.max(0, Number(criticalCount.data().count || 0)),
+    high: Math.max(0, Number(highCount.data().count || 0))
   };
 
-  return { items, counts, truncated: snapshot.size >= DASHBOARD_READ_LIMIT };
+  return {
+    items,
+    counts,
+    countsVerified: true,
+    countSource: "firestore-aggregate",
+    serverTime: new Date().toISOString(),
+    truncated: snapshot.size > DASHBOARD_READ_LIMIT
+  };
 });
 
 exports.updateErrorCenterStatus = functions.region(REGION).https.onCall(async (data, context) => {

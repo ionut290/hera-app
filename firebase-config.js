@@ -50,6 +50,7 @@ const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimi
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260815-squadre-board1";
 const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a";
 const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
+const HERA_OCCASIONAL_WORKFLOW_V2_SRC = "lavori-occasionali-workflow-v2.js?v=20260824a";
 const HERA_OCCASIONAL_SQUAD_FIRST_SRC = "lavori-occasionali-squad-first.js?v=20260824a";
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
 const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
@@ -75,6 +76,7 @@ if (document.readyState === "loading") {
   document.write('<script src="update-app-feature.js?v=20260824-oneclick1"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
+  document.write(`<script src="${HERA_OCCASIONAL_WORKFLOW_V2_SRC}" data-occasional-workflow-v2="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_SQUAD_FIRST_SRC}" data-occasional-squad-first="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_GOOGLE_PLACES_SRC}" data-occasional-google-places="1"><\/script>`);
   document.write(`<script src="${HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC}" data-occasional-multi-site-hours="1"><\/script>`);
@@ -122,6 +124,7 @@ if (document.readyState === "loading") {
   loadOnce("update-app-feature.js?v=20260824-oneclick1", "hera-app-update", () => false);
   loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
   loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
+  loadOnce(HERA_OCCASIONAL_WORKFLOW_V2_SRC, "occasional-workflow-v2", () => Boolean(window.HeraOccasionalWorkflowV2?.installed));
   loadOnce(HERA_OCCASIONAL_SQUAD_FIRST_SRC, "occasional-squad-first", () => Boolean(window.HeraOccasionalSquadFirstFlow?.installed));
   loadOnce(HERA_OCCASIONAL_GOOGLE_PLACES_SRC, "occasional-google-places", () => Boolean(window.HeraLavoriOccasionaliGooglePlaces?.installed));
   loadOnce(HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC, "occasional-multi-site-hours", () => Boolean(window.HeraOccasionalMultiSiteHours?.installed));

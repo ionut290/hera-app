@@ -12,6 +12,7 @@ const main = fs.readFileSync("functions/main.js", "utf8");
 const loader = fs.readFileSync("loading-humor.js", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
 const headers = fs.readFileSync("_headers", "utf8");
+const deployWorkflow = fs.readFileSync(".github/workflows/deploy-firebase-functions.yml", "utf8");
 
 // Reporter email preesistente: deve restare isolato e silenzioso.
 assert.match(client, /addEventListener\("error"/);
@@ -87,6 +88,25 @@ assert.match(centerBackend, /scopeType:\s*"ADMIN"/);
 assert.match(centerBackend, /actionType:\s*"ERROR_CENTER"/);
 assert.doesNotMatch(centerBackend, /onSnapshot\s*\(/);
 assert.doesNotMatch(centerBackend, /setInterval\s*\(/);
+
+// Il deploy deve applicare e rileggere la policy IAM senza rimuovere gli altri binding.
+assert.match(deployWorkflow, /Grant and verify Error Center callable transport/);
+assert.ok(deployWorkflow.includes("roles/cloudfunctions.invoker"));
+assert.match(deployWorkflow, /allUsers/);
+assert.match(deployWorkflow, /:getIamPolicy/);
+assert.match(deployWorkflow, /:setIamPolicy/);
+for (const callableName of [
+  "recordClientErrorGroup",
+  "getErrorCenterSummary",
+  "getErrorCenterDashboard",
+  "markErrorCenterSeen",
+  "updateErrorCenterStatus"
+]) {
+  assert.ok(
+    deployWorkflow.includes(`"${callableName}"`),
+    `${callableName} deve ricevere il binding invoker durante il deploy`
+  );
+}
 
 // Sistema email preesistente protetto.
 assert.match(emailBackend, /defineSecret\("RESEND_API_KEY"\)/);

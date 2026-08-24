@@ -112,6 +112,20 @@ else {
   } else {
     fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
   }
+  const evidenceFailureStart = whatsappHandler.indexOf('if (!evidenceSaved && !isNetworkOffline())');
+  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt)', evidenceFailureStart);
+  const evidenceFailureBlock = evidenceFailureStart >= 0 && evidenceFailureEnd > evidenceFailureStart
+    ? whatsappHandler.slice(evidenceFailureStart, evidenceFailureEnd)
+    : '';
+  if (!evidenceFailureBlock) {
+    fail('Fatto conserva la gestione dell’errore della prova visiva iniziale');
+  } else if (/return false|closeDeferredWhatsAppTargetWindow/.test(evidenceFailureBlock)) {
+    fail('Un errore di salvataggio iniziale non deve chiudere o bloccare WhatsApp');
+  } else {
+    pass('Un errore di salvataggio iniziale non chiude e non blocca WhatsApp');
+  }
+  requireIncludes(source, 'WhatsApp verrà aperto comunque', 'L’utente viene informato che WhatsApp continua anche con errore salvataggio');
+  requireIncludes(whatsappHandler, 'markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });\n    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();', 'Fatto aggiorna subito stato locale e contatore impianti fatti');
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
   requireIncludes(whatsappHandler, 'requireFirestoreConfirmation: false', 'Fatto conserva il salvataggio Firebase con coda offline');

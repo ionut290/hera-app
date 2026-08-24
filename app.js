@@ -20991,11 +20991,13 @@ async function handleImpiantoWhatsAppClick(impianto) {
   try {
     // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
     // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
-    const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
-    if (!evidenceSaved && !isNetworkOffline()) {
-      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
-      await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
-      return false;
+    let evidenceSaved = false;
+    if (!isNetworkOffline()) {
+      try {
+        evidenceSaved = Boolean(await recordFattoVisualEvidence(impianto, doneAt, doneBy));
+      } catch (error) {
+        console.error("Prova iniziale FATTO non salvata; WhatsApp e FATTO continuano.", error);
+      }
     }
 
     cacheFattoVisualEvidence(impianto, doneAt);
@@ -21025,6 +21027,15 @@ async function handleImpiantoWhatsAppClick(impianto) {
     markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
     setImpiantiViewMode("done");
     renderImpianti();
+
+    // La prova visiva e' accessoria: un suo errore non deve bloccare WhatsApp
+    // e non deve riportare l'impianto in Da fare.
+    if (!evidenceSaved && !isNetworkOffline()) {
+      void handleImpiantoDoneSaveFailure(
+        impianto,
+        "Prova iniziale FATTO non salvata; operazione mantenuta in coda."
+      );
+    }
 
     const auditLogId = await auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,
@@ -21207,21 +21218,24 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
 
 async function markImpiantoDoneRecoveryRequired(impianto, reason = "") {
   const ids = getImpiantoDocIds(impianto);
+  const doneAt = impianto?.doneAt instanceof Date ? impianto.doneAt : new Date();
+  const doneBy = impianto?.doneBy || auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
   if (ids.length) {
+    const pendingAction = upsertPendingDoneAction(impianto, ids, doneAt, doneBy);
     updateImpiantoLocalState(ids, {
-      done: false,
-      doneAt: null,
-      doneBy: "",
-      pendingActionId: "",
-      pendingActionStatus: "",
-      pendingWhatsappStatus: ""
+      done: true,
+      doneAt,
+      doneBy,
+      pendingActionId: pendingAction.id,
+      pendingActionStatus: "pending",
+      pendingWhatsappStatus: pendingAction.whatsappStatus || "pending"
     });
   }
   markWhazzupSafetyPressed(impianto);
   const state = getWhazzupSafetyState(impianto);
-  if (state) state.needsManualMove = true;
-  setImpiantiViewMode("todo");
-  if (ui.gpsStatus) ui.gpsStatus.textContent = FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE;
+  if (state) state.needsManualMove = false;
+  setImpiantiViewMode("done");
+  if (ui.gpsStatus) ui.gpsStatus.textContent = "FATTO salvato localmente: sincronizzazione Firebase in attesa.";
   renderImpianti();
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
@@ -21305,7 +21319,7 @@ async function isImpiantoPersistedAsDone(impianto, commessaIdOverride = selected
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Errore salvataggio. Riprova.");
+  console.warn("Salvataggio accessorio FATTO non riuscito; il flusso operativo continua.", reason);
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

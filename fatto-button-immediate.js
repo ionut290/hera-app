@@ -3,6 +3,7 @@
 
   const DB_NAME = "hera-fatto-sync";
   const STORE = "operations";
+  const FALLBACK_STORE_KEY = "heraFattoSyncOperationsFallbackV1";
   const MAX_ATTEMPTS = 12;
   const STALE_MS = 120000;
   const YELLOW = "#f4c542";
@@ -45,20 +46,94 @@
     }
   }
 
-  const put = (operation) => transact("readwrite", (store) => store.put(operation));
-  const remove = (operationId) => transact("readwrite", (store) => store.delete(operationId));
+  function readFallbackOperations() {
+    try {
+      const raw = window.localStorage?.getItem(FALLBACK_STORE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((entry) => entry?.operationId) : [];
+    } catch (error) {
+      console.warn("[Cassaforte FATTO] ripiego locale non leggibile", error);
+      return [];
+    }
+  }
+
+  function writeFallbackOperations(items) {
+    try {
+      window.localStorage?.setItem(FALLBACK_STORE_KEY, JSON.stringify(items || []));
+      return true;
+    } catch (error) {
+      console.warn("[Cassaforte FATTO] ripiego locale non scrivibile", error);
+      return false;
+    }
+  }
+
+  function upsertFallbackOperation(operation) {
+    const operations = readFallbackOperations();
+    const index = operations.findIndex((entry) => entry.operationId === operation.operationId);
+    if (index >= 0) operations[index] = clone(operation);
+    else operations.push(clone(operation));
+    return writeFallbackOperations(operations);
+  }
+
+  function removeFallbackOperation(operationId) {
+    const operations = readFallbackOperations();
+    const next = operations.filter((entry) => entry.operationId !== operationId);
+    return next.length === operations.length || writeFallbackOperations(next);
+  }
+
+  async function put(operation) {
+    try {
+      await transact("readwrite", (store) => store.put(operation));
+      removeFallbackOperation(operation.operationId);
+      return "indexeddb";
+    } catch (error) {
+      if (upsertFallbackOperation(operation)) {
+        console.warn("[Cassaforte FATTO] IndexedDB non disponibile: operazione salvata nel ripiego locale", error);
+        return "localstorage";
+      }
+      throw error;
+    }
+  }
+
+  async function remove(operationId) {
+    let removedFromIndexedDb = false;
+    try {
+      await transact("readwrite", (store) => store.delete(operationId));
+      removedFromIndexedDb = true;
+    } catch (error) {
+      console.warn("[Cassaforte FATTO] rimozione IndexedDB rinviata", error);
+    }
+    const removedFromFallback = removeFallbackOperation(operationId);
+    return removedFromIndexedDb || removedFromFallback;
+  }
 
   async function list() {
-    const db = await openDb();
+    let indexedOperations = [];
     try {
-      return await new Promise((resolve, reject) => {
-        const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
-        request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-        request.onerror = () => reject(request.error || new Error("Lettura coda FATTO fallita"));
-      });
-    } finally {
-      db.close();
+      const db = await openDb();
+      try {
+        indexedOperations = await new Promise((resolve, reject) => {
+          const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
+          request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+          request.onerror = () => reject(request.error || new Error("Lettura coda FATTO fallita"));
+        });
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.warn("[Cassaforte FATTO] lettura IndexedDB non disponibile: uso il ripiego locale", error);
     }
+
+    const merged = new Map();
+    [...indexedOperations, ...readFallbackOperations()].forEach((operation) => {
+      if (!operation?.operationId) return;
+      const previous = merged.get(operation.operationId);
+      if (!previous || Number(operation.updatedAt || 0) >= Number(previous.updatedAt || 0)) {
+        merged.set(operation.operationId, operation);
+      }
+    });
+    return [...merged.values()];
   }
 
   function publishStatus(items) {
@@ -89,10 +164,13 @@
     const now = Date.now();
     const operation = {
       operationId: metadata.operationId || createOperationId(impianto),
-      type: "IMPIANTO_FATTO",
+      type: text(metadata.type || "IMPIANTO_FATTO"),
       status: "PENDING",
       impianto: clone(impianto),
       commessaId: text(metadata.commessaId || window.selectedCommessaId),
+      plantId: text(metadata.plantId || getPlantId(impianto)),
+      selectedKinds: Array.isArray(metadata.selectedKinds) ? [...metadata.selectedKinds] : [],
+      workItems: Array.isArray(metadata.workItems) ? clone(metadata.workItems) : [],
       doneAt: metadata.doneAt || new Date(now).toISOString(),
       doneBy: text(metadata.doneBy || window.auth?.currentUser?.displayName || window.auth?.currentUser?.email),
       attempts: 0,
@@ -103,6 +181,20 @@
     await put(operation);
     await refreshStatus();
     return operation;
+  }
+
+  async function enqueueSafely(impianto, metadata = {}) {
+    try {
+      return await enqueue(impianto, metadata);
+    } catch (error) {
+      console.error("[Cassaforte FATTO] salvataggio locale non disponibile; il flusso operativo continua", error);
+      try {
+        window.dispatchEvent(new CustomEvent("hera:fatto-vault-error", {
+          detail: { message: text(error?.message || error), impianto: clone(impianto) }
+        }));
+      } catch (_) {}
+      return null;
+    }
   }
 
   async function setStatus(operation, status, error = "") {
@@ -478,13 +570,76 @@
     if (!selectedKinds) return { handled: true, result: false };
     if (!selectedKinds.length) return { handled: false };
 
-    const saved = await saveSelectedWorkItems(context, selectedKinds, impianto);
-    if (saved.allDone) return { handled: false, selectedKinds, availableKinds };
-    openPartialWhatsApp(impianto, selectedKinds, saved.selectedItems, saved.doneAt, saved.doneBy, saved.remaining);
-    return { handled: true, result: true };
+    try {
+      const saved = await saveSelectedWorkItems(context, selectedKinds, impianto);
+      if (saved.allDone) return { handled: false, selectedKinds, availableKinds };
+      openPartialWhatsApp(impianto, selectedKinds, saved.selectedItems, saved.doneAt, saved.doneBy, saved.remaining);
+      return { handled: true, result: true };
+    } catch (error) {
+      console.error("[FATTO parziale] salvataggio non riuscito; conservo nella cassaforte e apro Whazzup", error);
+      const selectedItems = unfinished.filter((entry) => selectedKinds.includes(getWorkItemKind(entry)));
+      const now = new Date();
+      const doneAt = now.toISOString();
+      const doneBy = text(window.auth?.currentUser?.displayName || window.auth?.currentUser?.email || "Operatore");
+      const remaining = Math.max(0, unfinished.length - selectedItems.length);
+      const allDone = remaining === 0;
+      const operation = await enqueueSafely(impianto, {
+        type: "IMPIANTO_FATTO_PARZIALE",
+        commessaId: window.selectedCommessaId,
+        plantId: context.plantId,
+        selectedKinds,
+        workItems: context.items,
+        doneAt,
+        doneBy
+      });
+
+      try {
+        impianto.stato = allDone ? "FATTO" : "PARZIALMENTE FATTO";
+        impianto.statoGenerale = impianto.stato;
+        impianto.done = allDone;
+        impianto.numeroLavorazioni = context.items.length;
+        impianto.numeroLavorazioniFatte = context.items.filter(isWorkItemDone).length + selectedItems.length;
+        impianto.numeroLavorazioniDaFare = remaining;
+        if (allDone) {
+          impianto.doneAt = doneAt;
+          impianto.doneBy = doneBy;
+        }
+      } catch (_) {}
+      try {
+        if (allDone && typeof window.setImpiantiViewMode === "function") window.setImpiantiViewMode("done");
+        if (typeof window.renderImpianti === "function") window.renderImpianti();
+        if (typeof window.updateCommessaDashboard === "function") window.updateCommessaDashboard();
+      } catch (_) {}
+
+      const opened = openPartialWhatsApp(impianto, selectedKinds, selectedItems, doneAt, doneBy, remaining);
+      window.setTimeout(() => {
+        if (typeof window.alert === "function") {
+          window.alert(operation
+            ? "Errore salvataggio: Whazzup è stato aperto e il FATTO è protetto nella cassaforte. La sincronizzazione ripartirà automaticamente."
+            : "Errore salvataggio locale: Whazzup è stato aperto comunque. Riapri l’app per ritentare la sincronizzazione.");
+        }
+      }, 0);
+      return { handled: true, result: Boolean(opened), queued: Boolean(operation) };
+    }
+  }
+
+  function buildPartialContextFromOperation(operation) {
+    const firestore = window.db;
+    const commessaId = text(operation?.commessaId);
+    const plantId = text(operation?.plantId || getPlantId(operation?.impianto));
+    const items = Array.isArray(operation?.workItems) ? clone(operation.workItems) : [];
+    if (!firestore || !commessaId || !plantId || !items.length) return null;
+    const commessaRef = firestore.collection(getCommesseCollection()).doc(commessaId);
+    return { commessaRef, plantId, items };
   }
 
   async function syncOperation(operation) {
+    if (operation?.type === "IMPIANTO_FATTO_PARZIALE") {
+      const context = buildPartialContextFromOperation(operation);
+      if (!context) throw new Error("Dati cassaforte FATTO parziale incompleti");
+      return saveSelectedWorkItems(context, operation.selectedKinds || [], operation.impianto || {});
+    }
+
     const options = {
       source: "resume-persistent-queue",
       operationId: operation.operationId,
@@ -602,18 +757,27 @@
       const doneAt = new Date().toISOString();
       applyPermanentYellowFeedback(pressedButton, doneAt);
 
-      const operation = await enqueue(impianto, {
+      const operation = await enqueueSafely(impianto, {
         commessaId: window.selectedCommessaId,
         doneAt
       });
       try {
         const result = await original.call(this, impianto, ...args);
-        if (result === true) await remove(operation.operationId);
-        else await setStatus(operation, "FAILED", "Flusso FATTO non completato");
+        if (operation) {
+          try {
+            if (result === true) await remove(operation.operationId);
+            else await setStatus(operation, "FAILED", "Flusso FATTO non completato");
+          } catch (vaultError) {
+            console.error("[Cassaforte FATTO] aggiornamento stato coda rinviato", vaultError);
+          }
+        }
         await refreshStatus();
         return result;
       } catch (error) {
-        await setStatus(operation, "FAILED", error);
+        if (operation) {
+          try { await setStatus(operation, "FAILED", error); }
+          catch (vaultError) { console.error("[Cassaforte FATTO] registrazione errore rinviata", vaultError); }
+        }
         await refreshStatus();
         throw error;
       }
@@ -649,7 +813,7 @@
     }
   }, 250);
 
-  window.HeraFattoSync = Object.freeze({ enqueue, processQueue, refreshStatus, list, maybeHandlePartialInreteDone });
+  window.HeraFattoSync = Object.freeze({ enqueue, enqueueSafely, processQueue, refreshStatus, list, maybeHandlePartialInreteDone });
   refreshStatus();
   resume("startup");
 })();

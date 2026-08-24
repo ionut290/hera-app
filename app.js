@@ -14676,20 +14676,9 @@ function renderImpianti() {
       });
       primaryActionsRow.appendChild(whazzupAttachmentBtn);
 
-      // Solo stato visivo: se esiste già una data FATTO salvata, mantieni
-      // l'avviso giallo anche quando l'impianto è rimasto per errore nei Da fare.
-      const completionEvidenceButton = primaryActionsRow.querySelector(
-        '.action-icon-btn[data-action-key="whatsapp"]'
-      );
-      const completionEvidenceAt = getFattoVisualEvidenceAt(impianto);
-      if (completionEvidenceButton && completionEvidenceAt > 0) {
-        const completionLabel = formatDoneButtonLabel(new Date(completionEvidenceAt));
-        completionEvidenceButton.textContent = "";
-        completionEvidenceButton.classList.add("is-completed-done", "has-completion-evidence");
-        completionEvidenceButton.dataset.doneLabel = completionLabel;
-        completionEvidenceButton.setAttribute("aria-label", `Già premuto FATTO: ${completionLabel}`);
-        completionEvidenceButton.title = `Già premuto FATTO: ${completionLabel}`;
-      }
+      // Un impianto ancora in "Da fare" deve mostrare sempre il pulsante verde.
+      // Le prove visive pregresse restano disponibili per audit, ma non devono
+      // creare un falso FATTO giallo quando il completamento non è confermato.
     } else {
       const completedDoneBtn = document.createElement("button");
       completedDoneBtn.type = "button";

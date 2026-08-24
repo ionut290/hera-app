@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v146";
-const CACHE_RESET_VERSION = "20260824-fatto-stable4";
+const CACHE_NAME = "varga-cantieri-shell-v147";
+const CACHE_RESET_VERSION = "20260824-fatto-stable5";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -40,7 +40,7 @@ const APP_SHELL = [
   "./inrete-work-items-v2.js?v=20260728b",
   "./accounting-v2.js?v=20260812-modena2",
   "./accounting-view-guard.js?v=20260728a",
-  "./operational-import-repair.js?v=20260728a",
+  "./operational-import-repair.js?v=20260824-state-race1",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
   "./notification-center.js?v=20260731-header1",

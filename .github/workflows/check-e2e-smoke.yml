@@ -20,7 +20,7 @@ jobs:
       - name: Verify isolated FATTO Whazzup perimeter
         run: |
           test "$(git hash-object scripts/check-fatto-whazzup-immutable.js)" = "982c5015da3590311fb52d4395e13387f3f2958e"
-          test "$(git hash-object scripts/check-fatto-whazzup-isolation.js)" = "5165a30e4867a7018b7147848076a2d36bc478c3"
+          test "$(git hash-object scripts/check-fatto-whazzup-isolation.js)" = "47b272968fdb7e45fc0c61cfe8457a9af295b052"
           node scripts/check-fatto-whazzup-immutable.js
           node scripts/check-fatto-whazzup-isolation.js
       - name: Install Playwright test runner

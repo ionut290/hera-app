@@ -1121,17 +1121,10 @@ const ui = {
 let pendingRows = [];
 let selectedCommessaId = "";
 let selectedCommessaName = "";
-
-function getSelectedCommessaIdForFatto() {
-  return String(selectedCommessaId || "").trim();
-}
-
-window.getSelectedCommessaIdForFatto = getSelectedCommessaIdForFatto;
 let unsubscribeCommesse = null;
 let unsubscribeImpianti = null;
 let unsubscribeFattoVisualEvidence = null;
 const fattoVisualEvidenceByImpianto = new Map();
-const fattoVisualEvidenceDoneByImpianto = new Map();
 let unsubscribeCommessaNotes = null;
 const unsubscribeCommessaStats = new Map();
 let unsubscribeHoursStats = null;
@@ -12372,33 +12365,6 @@ function getCurrentUserPendingActions() {
   return pendingImpiantoActions.filter((action) => !action.userId || action.userId === uid);
 }
 
-function applyWhazzupPendingDoneEntriesToImpianti(impianti, commessaId) {
-  const requestedCommessaId = String(commessaId || "").trim();
-  const uid = String(currentUser?.uid || auth.currentUser?.uid || "").trim();
-  if (!requestedCommessaId) return Array.isArray(impianti) ? impianti : [];
-
-  const pendingEntries = loadWhazzupPendingDoneEntries().filter((entry) => (
-    entry.commessaId === requestedCommessaId
-    && (!entry.userId || (uid && entry.userId === uid))
-  ));
-  if (!pendingEntries.length) return Array.isArray(impianti) ? impianti : [];
-
-  return (Array.isArray(impianti) ? impianti : []).map((impianto) => {
-    if (impianto?.done) return impianto;
-    const entry = pendingEntries.find((candidate) => doesPendingActionMatchImpianto(candidate, requestedCommessaId, impianto));
-    if (!entry) return impianto;
-    const doneAt = entry.pendingAt ? new Date(entry.pendingAt) : new Date();
-    return {
-      ...impianto,
-      done: true,
-      stato: "FATTO",
-      doneAt: Number.isNaN(doneAt.getTime()) ? new Date() : doneAt,
-      doneBy: entry.doneBy || impianto.doneBy || "Operatore",
-      pendingWhatsappStatus: "pending"
-    };
-  });
-}
-
 function isPendingWhatsappAction(action) {
   return action
     && action.type === "done"
@@ -12474,15 +12440,10 @@ function upsertPendingDoneAction(impianto, impiantoIds, doneAtLocal, doneByLocal
     && action.whatsappStatus !== "sent"
   ));
   const actionId = existingIndex >= 0 ? pendingImpiantoActions[existingIndex].id : `${currentUser?.uid || "user"}:${selectedCommessaId}:${impiantoKey || impiantoIds[0] || "impianto"}:${Date.now()}`;
-  let payload = { message: "" };
-  try {
-    payload = buildImpiantoWhatsAppPayload({ ...impianto, doneAt: doneAtLocal, doneBy: doneByLocal }, {
-      doneAt: doneAtLocal,
-      operatorName: doneByLocal
-    });
-  } catch (error) {
-    console.warn("Payload Whazzup pending non disponibile; il FATTO resta sincronizzabile:", error);
-  }
+  const payload = buildImpiantoWhatsAppPayload({ ...impianto, doneAt: doneAtLocal, doneBy: doneByLocal }, {
+    doneAt: doneAtLocal,
+    operatorName: doneByLocal
+  });
   const action = {
     ...(existingIndex >= 0 ? pendingImpiantoActions[existingIndex] : {}),
     id: actionId,
@@ -12766,39 +12727,12 @@ function getFattoVisualEvidenceAt(impianto) {
   return evidenceAt > resetAt ? evidenceAt : 0;
 }
 
-function getFattoVisualEvidenceDoneBy(impianto) {
-  const impiantoKey = buildImpiantoKey(impianto);
-  const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
-  return String(
-    fattoVisualEvidenceDoneByImpianto.get(`key:${impiantoKey}`)
-      || fattoVisualEvidenceDoneByImpianto.get(`sap:${idSap}`)
-      || impianto?.doneBy
-      || "Operatore"
-  ).trim() || "Operatore";
-}
-
-function applyFattoVisualEvidenceToImpianti(impianti) {
-  return (Array.isArray(impianti) ? impianti : []).map((impianto) => {
-    if (impianto?.done) return impianto;
-    const evidenceAt = getFattoVisualEvidenceAt(impianto);
-    if (!evidenceAt) return impianto;
-    return {
-      ...impianto,
-      done: true,
-      stato: "FATTO",
-      doneAt: new Date(evidenceAt),
-      doneBy: getFattoVisualEvidenceDoneBy(impianto)
-    };
-  });
-}
-
 function stopFattoVisualEvidenceSubscription() {
   if (unsubscribeFattoVisualEvidence) {
     unsubscribeFattoVisualEvidence();
     unsubscribeFattoVisualEvidence = null;
   }
   fattoVisualEvidenceByImpianto.clear();
-  fattoVisualEvidenceDoneByImpianto.clear();
 }
 
 function subscribeFattoVisualEvidence(commessaId) {
@@ -12814,7 +12748,6 @@ function subscribeFattoVisualEvidence(commessaId) {
     .onSnapshot((snapshot) => {
       if (requestedCommessaId !== selectedCommessaId) return;
       fattoVisualEvidenceByImpianto.clear();
-      fattoVisualEvidenceDoneByImpianto.clear();
       snapshot.forEach((doc) => {
         const log = doc.data() || {};
         const clickedAt = firestoreDateToMillis(log.createdAt)
@@ -12824,19 +12757,15 @@ function subscribeFattoVisualEvidence(commessaId) {
 
         const impiantoKey = String(log.impiantoKey || "").trim();
         const idSap = String(log.impiantoIdSap || "").trim().toLowerCase();
-        const doneBy = String(log.doneBy || "Operatore").trim() || "Operatore";
         if (impiantoKey) {
           const mapKey = `key:${impiantoKey}`;
           fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
-          fattoVisualEvidenceDoneByImpianto.set(mapKey, doneBy);
         }
         if (idSap) {
           const mapKey = `sap:${idSap}`;
           fattoVisualEvidenceByImpianto.set(mapKey, Math.max(clickedAt, Number(fattoVisualEvidenceByImpianto.get(mapKey) || 0)));
-          fattoVisualEvidenceDoneByImpianto.set(mapKey, doneBy);
         }
       });
-      currentImpianti = applyFattoVisualEvidenceToImpianti(currentImpianti);
       renderImpianti();
     }, (error) => {
       console.warn("Prova visiva FATTO condivisa non disponibile:", error);
@@ -12868,12 +12797,7 @@ function saveImpiantiIncrementalState(commessaId, lastChangedAtMs) {
 }
 
 function renderImpiantiAfterRemoteSync(rawImpianti, previousDoneSignatureRef) {
-  currentImpianti = applyFattoVisualEvidenceToImpianti(
-    applyPendingActionsToImpianti(
-      applyWhazzupPendingDoneEntriesToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId),
-      selectedCommessaId
-    )
-  );
+  currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
   refreshImpiantoWhatsAppTemplateCache(currentImpianti);
   impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
   renderSquadre();
@@ -12961,12 +12885,7 @@ function subscribeImpianti() {
     return;
   }
 
-  currentImpianti = applyFattoVisualEvidenceToImpianti(
-    applyPendingActionsToImpianti(
-      applyWhazzupPendingDoneEntriesToImpianti(cachedImpianti.slice(), requestedCommessaId),
-      requestedCommessaId
-    )
-  );
+  currentImpianti = cachedImpianti.slice();
   renderImpianti();
   renderMap();
 
@@ -18488,7 +18407,6 @@ async function markImpiantoDone(impianto, options = {}) {
       return false;
     }
   }
-
   const exportPayload = {
     commessaId: selectedCommessaId,
     commessaName: selectedCommessaName || "Commessa",
@@ -18504,35 +18422,24 @@ async function markImpiantoDone(impianto, options = {}) {
     return false;
   }
 
-  // Registra subito l'intenzione FATTO. Il listener Firestore può arrivare mentre
-  // la scrittura è in corso: la pending action impedisce che rimetta la scheda
-  // nei Da fare prima della conferma o del retry.
-  const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
-  const pendingWhatsappStatus = source === "whatsapp" ? "pending" : "sent";
-  if (source !== "whatsapp") {
-    markPendingActionStatus(pendingAction.id, { whatsappStatus: "sent" });
-  }
-  expandedImpiantoKey = buildImpiantoKey(impianto);
-  setImpiantiViewMode("done");
-  updateImpiantoLocalState(ids, {
-    done: true,
-    doneAt: doneAtLocal,
-    doneBy: doneByLocal,
-    doneByUid: auth.currentUser?.uid || "",
-    doneByEmail: auth.currentUser?.email || "",
-    pendingActionId: pendingAction.id,
-    pendingActionStatus: "pending",
-    pendingWhatsappStatus
-  });
-
   if (isNetworkOffline()) {
+    const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    updateImpiantoLocalState(ids, {
+      done: true,
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      pendingActionId: pendingAction.id,
+      pendingActionStatus: "pending",
+      pendingWhatsappStatus: "pending"
+    });
+    setImpiantiViewMode("done");
     alert(source === "whatsapp"
       ? "Sei offline: FATTO salvato localmente. Whazzup è stato preparato e Firebase si sincronizzerà automaticamente quando torna Internet."
-      : "Sei offline: FATTO salvato localmente. Firebase si sincronizzerà automaticamente quando torna Internet.");
+      : "Sei offline: FATTO salvato localmente. Firebase e WhatsApp saranno disponibili quando torna Internet.");
     return true;
   }
 
-  let persisted = false;
   try {
     await setImpiantoDone(selectedCommessaId, ids, true, {
       doneAt: doneAtLocal,
@@ -18540,48 +18447,67 @@ async function markImpiantoDone(impianto, options = {}) {
       doneByUid: auth.currentUser?.uid || "",
       doneByEmail: auth.currentUser?.email || ""
     });
-    persisted = true;
+    updateImpiantoLocalState(ids, {
+      done: true,
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      doneByUid: auth.currentUser?.uid || "",
+      doneByEmail: auth.currentUser?.email || ""
+    });
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    setImpiantiViewMode("done");
   } catch (error) {
     console.error("Aggiornamento stato FATTO non completato al primo tentativo:", error);
-    if (!isNetworkOffline()) {
-      persisted = await retrySetImpiantoDone(selectedCommessaId, ids, true, {
+    if (isNetworkOffline()) {
+      if (requireFirestoreConfirmation) {
+        alert("Connessione assente: impossibile confermare FATTO su Firebase. Riprova quando sei online.");
+        return false;
+      }
+      const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+      updateImpiantoLocalState(ids, {
+        done: true,
         doneAt: doneAtLocal,
         doneBy: doneByLocal,
-        doneByUid: auth.currentUser?.uid || "",
-        doneByEmail: auth.currentUser?.email || ""
+        pendingActionId: pendingAction.id,
+        pendingActionStatus: "pending",
+        pendingWhatsappStatus: "pending"
       });
+      setImpiantiViewMode("done");
+      return true;
     }
-    if (!persisted) {
-      console.error("Aggiornamento stato FATTO in attesa di sincronizzazione.", {
-        commessaId: selectedCommessaId,
-        impiantoIds: ids
-      });
-      markPendingActionStatus(pendingAction.id, {
-        status: "syncFailed",
-        lastError: String(error && error.message ? error.message : error).slice(0, 500)
-      });
-      // La scheda resta nei FATTI e la pending action ritenterà automaticamente.
-      return !requireFirestoreConfirmation;
+    const retrySucceeded = await retrySetImpiantoDone(selectedCommessaId, ids, true, {
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      doneByUid: auth.currentUser?.uid || "",
+      doneByEmail: auth.currentUser?.email || ""
+    });
+    if (!retrySucceeded) {
+      console.error("Aggiornamento stato FATTO fallito anche dopo i tentativi di retry.", { commessaId: selectedCommessaId, impiantoIds: ids });
+      if (!requireFirestoreConfirmation) {
+        const pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
+        updateImpiantoLocalState(ids, {
+          done: true,
+          doneAt: doneAtLocal,
+          doneBy: doneByLocal,
+          pendingActionId: pendingAction.id,
+          pendingActionStatus: "pending",
+          pendingWhatsappStatus: "pending"
+        });
+        setImpiantiViewMode("done");
+        return true;
+      }
+      return false;
     }
+    updateImpiantoLocalState(ids, {
+      done: true,
+      doneAt: doneAtLocal,
+      doneBy: doneByLocal,
+      doneByUid: auth.currentUser?.uid || "",
+      doneByEmail: auth.currentUser?.email || ""
+    });
+    expandedImpiantoKey = buildImpiantoKey(impianto);
+    setImpiantiViewMode("done");
   }
-
-  updateImpiantoLocalState(ids, {
-    done: true,
-    doneAt: doneAtLocal,
-    doneBy: doneByLocal,
-    doneByUid: auth.currentUser?.uid || "",
-    doneByEmail: auth.currentUser?.email || "",
-    pendingActionId: "",
-    pendingActionStatus: "",
-    pendingWhatsappStatus: ""
-  });
-  markPendingActionStatus(pendingAction.id, {
-    status: "synced",
-    syncedAt: new Date().toISOString(),
-    lastError: ""
-  });
-  expandedImpiantoKey = buildImpiantoKey(impianto);
-  setImpiantiViewMode("done");
 
   if (!canManageData()) {
     try {
@@ -18589,23 +18515,6 @@ async function markImpiantoDone(impianto, options = {}) {
     } catch (error) {
       console.error("Impianto FATTO ma coda admin non salvata:", error);
     }
-    try {
-      await publishGlobalNotificationEvent("impianto-done", {
-        title: "Impianto completato",
-        body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : (source === "force" ? "FORZA" : "FATTO")} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
-        commessaId: selectedCommessaId,
-        commessaName: selectedCommessaName || "Commessa",
-        impiantoName: impianto.denominazione || "Impianto",
-        impiantoKey: buildImpiantoKey(impianto)
-      });
-    } catch (error) {
-      console.error("Impianto FATTO ma notifica globale non salvata:", error);
-    }
-    return true;
-  }
-
-  scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
-  try {
     await publishGlobalNotificationEvent("impianto-done", {
       title: "Impianto completato",
       body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : (source === "force" ? "FORZA" : "FATTO")} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
@@ -18614,9 +18523,18 @@ async function markImpiantoDone(impianto, options = {}) {
       impiantoName: impianto.denominazione || "Impianto",
       impiantoKey: buildImpiantoKey(impianto)
     });
-  } catch (error) {
-    console.error("Impianto FATTO ma notifica globale non salvata:", error);
+    return true;
   }
+
+  scheduleCommessaSheetSync(exportPayload.commessaId, exportPayload.commessaName, 200);
+  await publishGlobalNotificationEvent("impianto-done", {
+    title: "Impianto completato",
+    body: `${doneByLocal} ha premuto ${source === "whatsapp" ? "WHAZZUP" : (source === "force" ? "FORZA" : "FATTO")} su ${impianto.denominazione || "Impianto"} (${selectedCommessaName || "Commessa"}).`,
+    commessaId: selectedCommessaId,
+    commessaName: selectedCommessaName || "Commessa",
+    impiantoName: impianto.denominazione || "Impianto",
+    impiantoKey: buildImpiantoKey(impianto)
+  });
   return true;
 }
 
@@ -20882,12 +20800,16 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
   const uniqueImpiantoIds = [...new Set((Array.isArray(impiantoIds) ? impiantoIds : []).filter(Boolean))];
   if (!uniqueImpiantoIds.length) throw new Error("Nessun impianto disponibile per l'aggiornamento.");
   if (uniqueImpiantoIds.length > 500) throw new Error("Troppi documenti impianto per un singolo aggiornamento atomico.");
-
-  // Il documento impianto è la fonte autorevole per Da fare/Fatti: va confermato
-  // prima di qualsiasi sincronizzazione accessoria, così un permesso mancante su
-  // lavorazioni o impiantiFisici non può annullare il FATTO appena premuto.
+  const ref = db.collection(getCommesseCollectionName()).doc(commessaId).collection("impianti");
   const commessaRef = db.collection(getCommesseCollectionName()).doc(commessaId);
-  const ref = commessaRef.collection("impianti");
+  const workRef = commessaRef.collection("lavorazioni");
+  const workDocs = [];
+  for (let index = 0; index < uniqueImpiantoIds.length; index += 30) {
+    const snapshot = await workRef.where("impiantoId", "in", uniqueImpiantoIds.slice(index, index + 30)).get();
+    snapshot.docs.forEach((doc) => workDocs.push(doc));
+  }
+  const physicalPlantIds = [...new Set(workDocs.map((doc) => doc.data()?.impiantoId).filter(Boolean))];
+  if (uniqueImpiantoIds.length + workDocs.length + physicalPlantIds.length > 500) throw new Error("Troppe lavorazioni per un singolo aggiornamento atomico.");
   const batch = db.batch();
   uniqueImpiantoIds.forEach((impiantoId) => {
     const payload = {
@@ -20902,7 +20824,7 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
       dataEsecuzione: execution.dataEsecuzione,
       oraEsecuzione: execution.oraEsecuzione,
       operatore: options.doneBy || user.displayName || user.email || "Operatore"
-    } : { stato: "DA FARE", dataEsecuzione: "", oraEsecuzione: "", operatore: "" });
+    } : {stato:"DA FARE",dataEsecuzione:"",oraEsecuzione:"",operatore:""});
     if (done) {
       payload.resetAt = null;
       payload.resetBy = "";
@@ -20916,48 +20838,12 @@ async function setImpiantoDone(commessaId, impiantoIds, done, options = {}) {
     }
     batch.set(ref.doc(impiantoId), payload, { merge: true });
   });
+  workDocs.forEach((doc) => batch.set(doc.ref, done ? {
+    stato:"FATTO", dataEsecuzione:execution.dataEsecuzione, oraEsecuzione:execution.oraEsecuzione,
+    operatoreNome:options.doneBy || user.displayName || user.email || "Operatore", operatoreUid:String(options.doneByUid || user.uid || ""), doneAt
+  } : {stato:"DA FARE",dataEsecuzione:"",oraEsecuzione:"",operatoreNome:"",operatoreUid:"",doneAt:null}, {merge:true}));
+  physicalPlantIds.forEach((impiantoId) => batch.set(commessaRef.collection("impiantiFisici").doc(impiantoId), {stato:done?"FATTO":"DA FARE",updatedAt:firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}));
   await batch.commit();
-
-  // Le collezioni derivate restano sincronizzate in best effort. Gli stessi
-  // accessi già esistenti sono mantenuti, ma fuori dal commit autorevole.
-  try {
-    const workRef = commessaRef.collection("lavorazioni");
-    const workDocs = [];
-    for (let index = 0; index < uniqueImpiantoIds.length; index += 30) {
-      const snapshot = await workRef.where("impiantoId", "in", uniqueImpiantoIds.slice(index, index + 30)).get();
-      snapshot.docs.forEach((doc) => workDocs.push(doc));
-    }
-    const physicalPlantIds = [...new Set(workDocs.map((doc) => doc.data()?.impiantoId).filter(Boolean))];
-    if (workDocs.length + physicalPlantIds.length > 500) {
-      throw new Error("Troppe lavorazioni per un singolo aggiornamento accessorio.");
-    }
-    if (!workDocs.length && !physicalPlantIds.length) return;
-
-    const relatedBatch = db.batch();
-    workDocs.forEach((doc) => relatedBatch.set(doc.ref, done ? {
-      stato: "FATTO",
-      dataEsecuzione: execution.dataEsecuzione,
-      oraEsecuzione: execution.oraEsecuzione,
-      operatoreNome: options.doneBy || user.displayName || user.email || "Operatore",
-      operatoreUid: String(options.doneByUid || user.uid || ""),
-      doneAt
-    } : {
-      stato: "DA FARE",
-      dataEsecuzione: "",
-      oraEsecuzione: "",
-      operatoreNome: "",
-      operatoreUid: "",
-      doneAt: null
-    }, { merge: true }));
-    physicalPlantIds.forEach((impiantoId) => relatedBatch.set(
-      commessaRef.collection("impiantiFisici").doc(impiantoId),
-      { stato: done ? "FATTO" : "DA FARE", updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-      { merge: true }
-    ));
-    await relatedBatch.commit();
-  } catch (error) {
-    console.warn("[FATTO] Stato impianto confermato; sincronizzazione collegata rinviata:", error);
-  }
 }
 
 const FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE = "L’impianto risulta ancora nell’elenco ‘Da fare’. Se hai già eseguito il lavoro, premi FORZA per completare manualmente lo spostamento.";
@@ -21034,16 +20920,9 @@ async function forceMarkDone(impianto) {
     return false;
   }
 
-  const forcedAt = new Date();
-  const forcedBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-  cacheFattoVisualEvidence(impianto, forcedAt, forcedBy);
-  markImpiantoDoneVisualFallback(impianto, { doneAt: forcedAt, doneBy: forcedBy });
-  await recordFattoVisualEvidence(impianto, forcedAt, forcedBy);
   const moved = await markImpiantoDone(impianto, {
     source: "force",
-    skipImpiantoCoordinatesValidation: true,
-    doneAt: forcedAt,
-    doneBy: forcedBy
+    skipImpiantoCoordinatesValidation: true
   });
   if (!moved) return false;
   const pendingAction = getPendingActionForImpianto(selectedCommessaId, impianto);
@@ -21061,19 +20940,12 @@ async function forceMarkDone(impianto) {
 }
 
 
-function cacheFattoVisualEvidence(impianto, clickedAt, doneBy = "Operatore") {
+function cacheFattoVisualEvidence(impianto, clickedAt) {
   const millis = (clickedAt instanceof Date ? clickedAt : new Date(clickedAt)).getTime();
   const impiantoKey = buildImpiantoKey(impianto);
   const idSap = String(impianto?.idSap || impianto?.codiceHera || "").trim().toLowerCase();
-  const operatorName = String(doneBy || "Operatore").trim() || "Operatore";
-  if (impiantoKey) {
-    fattoVisualEvidenceByImpianto.set(`key:${impiantoKey}`, millis);
-    fattoVisualEvidenceDoneByImpianto.set(`key:${impiantoKey}`, operatorName);
-  }
-  if (idSap) {
-    fattoVisualEvidenceByImpianto.set(`sap:${idSap}`, millis);
-    fattoVisualEvidenceDoneByImpianto.set(`sap:${idSap}`, operatorName);
-  }
+  if (impiantoKey) fattoVisualEvidenceByImpianto.set(`key:${impiantoKey}`, millis);
+  if (idSap) fattoVisualEvidenceByImpianto.set(`sap:${idSap}`, millis);
 }
 
 function setImpiantoFattoSavingState(impianto, saving) {
@@ -21117,24 +20989,21 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    // 1) Tenta di salvare subito la pressione e la data. Questa prova cloud è
-    // separata dal trasferimento, ma un suo errore non deve mai bloccare WhatsApp:
-    // il recupero FATTO prosegue con il salvataggio principale e la coda offline.
+    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
+    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
     const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
     if (!evidenceSaved && !isNetworkOffline()) {
+      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
       await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
+      return false;
     }
 
-    cacheFattoVisualEvidence(impianto, doneAt, doneBy);
+    cacheFattoVisualEvidence(impianto, doneAt);
     markWhazzupSafetyPressed(impianto, doneAt);
     upsertWhazzupPendingDoneEntry(impianto, doneAt);
-    // Sposta prima la scheda: iOS può sospendere la PWA appena apre WhatsApp.
-    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-    if (typeof updateCommessaDashboard === "function") updateCommessaDashboard();
-    setImpiantiViewMode("done");
     renderImpianti();
 
-    // 2) Dopo avere protetto e spostato la scheda, apri WhatsApp.
+    // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
     const whazzupOptions = {
       doneAt,
       operatorName: doneBy,
@@ -21151,8 +21020,11 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
     }
 
-    // 3) La conferma cloud parte comunque, anche se WhatsApp non è installato o
+    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
     // l'utente torna indietro senza inviare il messaggio.
+    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
+    setImpiantiViewMode("done");
+    renderImpianti();
 
     const auditLogId = await auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,
@@ -21336,37 +21208,20 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
 async function markImpiantoDoneRecoveryRequired(impianto, reason = "") {
   const ids = getImpiantoDocIds(impianto);
   if (ids.length) {
-    const existingDoneAtMillis = firestoreDateToMillis(impianto?.doneAt);
-    const doneAtLocal = existingDoneAtMillis > 0 ? new Date(existingDoneAtMillis) : new Date();
-    const doneByLocal = impianto?.doneBy || auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
-    let pendingAction = null;
-    try {
-      pendingAction = upsertPendingDoneAction(impianto, ids, doneAtLocal, doneByLocal);
-    } catch (error) {
-      console.warn("Azione FATTO locale non registrata durante il recupero:", error);
-    }
-    setImpiantiViewMode("done");
     updateImpiantoLocalState(ids, {
-      done: true,
-      doneAt: doneAtLocal,
-      doneBy: doneByLocal,
-      pendingActionId: pendingAction?.id || "",
-      pendingActionStatus: pendingAction ? "syncFailed" : "",
-      pendingWhatsappStatus: pendingAction?.whatsappStatus || "pending"
+      done: false,
+      doneAt: null,
+      doneBy: "",
+      pendingActionId: "",
+      pendingActionStatus: "",
+      pendingWhatsappStatus: ""
     });
-    if (pendingAction) {
-      markPendingActionStatus(pendingAction.id, {
-        status: "syncFailed",
-        lastError: String(reason || "Verifica FATTO non confermata").slice(0, 500)
-      });
-    }
   }
   markWhazzupSafetyPressed(impianto);
   const state = getWhazzupSafetyState(impianto);
   if (state) state.needsManualMove = true;
-  if (ui.gpsStatus) {
-    ui.gpsStatus.textContent = "FATTO salvato localmente: sincronizzazione Firebase in corso. L’impianto resta nei FATTI.";
-  }
+  setImpiantiViewMode("todo");
+  if (ui.gpsStatus) ui.gpsStatus.textContent = FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE;
   renderImpianti();
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
@@ -21432,7 +21287,6 @@ async function runWhazzupPendingDoneSafetyCheck() {
   }
   const untouched = allEntries.filter((entry) => !(entry.commessaId === commessaId && (!entry.userId || entry.userId === uid)));
   saveWhazzupPendingDoneEntries([...untouched, ...remaining]);
-  currentImpianti = applyWhazzupPendingDoneEntriesToImpianti(currentImpianti, commessaId);
   renderImpianti();
 }
 
@@ -21451,7 +21305,7 @@ async function isImpiantoPersistedAsDone(impianto, commessaIdOverride = selected
 }
 
 async function handleImpiantoDoneSaveFailure(impianto, reason = "") {
-  alert("Errore salvataggio: WhatsApp verrà aperto comunque. L’impianto sarà spostato nei FATTI e resterà in recupero automatico fino alla sincronizzazione.");
+  alert("Errore salvataggio. Riprova.");
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
   } catch (error) {

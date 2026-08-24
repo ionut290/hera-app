@@ -4,22 +4,38 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const source = fs.readFileSync("fatto-button-immediate.js", "utf8");
+const source = fs.readFileSync("fatto-ordinary-extraordinary-flow.js", "utf8");
 const config = fs.readFileSync("firebase-config.js", "utf8");
 
-assert.doesNotMatch(
-  config,
-  /fatto-ordinary-extraordinary-flow\.js|HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC|data-fatto-ordinary-extraordinary/,
-  "La gestione FATTO ordinario/straordinario deve restare disattivata"
+assert.match(source, /Cosa hai eseguito\?/);
+assert.match(source, /input\.type = "checkbox"/);
+assert.match(source, /Manutenzione ordinaria/);
+assert.match(source, /Manutenzione straordinaria/);
+assert.match(source, /priceCode === "A1"/, "Il codice prezzo A1 deve essere classificato come ordinario");
+assert.match(source, /codiceVocePrezzo/, "La classificazione deve leggere il codice voce prezzo");
+assert.ok(
+  source.indexOf('if (priceCode === "A1") return "ORDINARIO"') < source.indexOf('raw.includes("STRAORD")'),
+  "La regola A1 ordinario deve avere priorità sulla descrizione straordinaria"
 );
-assert.doesNotMatch(
-  source,
-  /const partial = await maybeHandlePartialInreteDone\(impianto\)/,
-  "Il wrapper principale non deve avviare la selezione delle lavorazioni"
+assert.match(source, /Hai scelto solo la manutenzione ordinaria/);
+assert.match(source, /Hai scelto solo la manutenzione straordinaria/);
+assert.match(source, /TORNA INDIETRO/);
+assert.match(source, /CONFERMA E INVIA/);
+assert.match(source, /Intervento eseguito: manutenzione ordinaria/);
+assert.match(source, /Intervento eseguito: manutenzione straordinaria/);
+assert.match(source, /Interventi eseguiti: manutenzione ordinaria e straordinaria/);
+assert.match(source, /selectedKinds\.includes\(getWorkItemKind\(entry\)\)/);
+assert.match(source, /PARZIALMENTE FATTO/);
+assert.match(source, /impianto\.done = allDone/);
+assert.match(source, /sourceIds/);
+assert.match(source, /processingPlants/);
+assert.match(source, /if \(selectedKinds\.length === 2\) return \{ handled: false \}/);
+assert.match(source, /!original\.__heraQueueWrapped/, "Il selettore deve installarsi sopra la coda FATTO stabile");
+assert.ok(
+  source.indexOf("const partial = await handleSelection(impianto)") < source.indexOf("return original.call(this, impianto, ...args)"),
+  "La scelta ordinaria/straordinaria deve avvenire prima del FATTO definitivo"
 );
-assert.match(source, /window\.handleImpiantoWhatsAppClick = wrapped/);
-assert.match(source, /const result = await original\.call\(this, impianto, \.\.\.args\)/);
-assert.match(source, /enqueueSafely/);
-assert.match(source, /processQueue/);
+assert.doesNotMatch(source, /IMPIANTO FATTO/);
+assert.match(config, /fatto-ordinary-extraordinary-flow\.js\?v=20260814a/);
 
-console.log("✅ Gestione ordinario/straordinario disattivata; FATTO standard protetto.");
+console.log("✅ FATTO ordinario/straordinario: controlli superati.");

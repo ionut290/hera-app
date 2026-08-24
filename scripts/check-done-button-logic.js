@@ -130,7 +130,7 @@ else {
     fail('Ordine richiesto: prova FATTO -> trasferimento FATTI -> WhatsApp');
   }
   const evidenceFailureStart = whatsappHandler.indexOf('if (!evidenceSaved && !isNetworkOffline())');
-  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt)', evidenceFailureStart);
+  const evidenceFailureEnd = whatsappHandler.indexOf('cacheFattoVisualEvidence(impianto, doneAt, doneBy)', evidenceFailureStart);
   const evidenceFailureBlock = evidenceFailureStart >= 0 && evidenceFailureEnd > evidenceFailureStart
     ? whatsappHandler.slice(evidenceFailureStart, evidenceFailureEnd)
     : '';

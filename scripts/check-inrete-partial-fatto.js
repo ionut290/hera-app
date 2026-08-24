@@ -15,7 +15,8 @@ for (const source of [immediate, config, operational, inreteCore]) {
 assert.doesNotMatch(immediate, /maybeHandlePartialInreteDone|loadInreteWorkContext|chooseWorkKinds|saveSelectedWorkItems/);
 assert.doesNotMatch(immediate, /Cosa hai eseguito\?|Manutenzione ordinaria|Manutenzione straordinaria/);
 assert.doesNotMatch(config, /fatto-ordinary-extraordinary-flow|data-fatto-ordinary-extraordinary/);
-assert.match(immediate, /operation = await enqueue\(impianto/);
+assert.match(immediate, /const operationTask = enqueue\(impianto/);
+assert.doesNotMatch(immediate, /operation = await enqueue\(impianto/);
 assert.match(immediate, /const result = await original\.call\(this, impianto, \.\.\.args\)/);
 assert.doesNotMatch(immediate, /applyPermanentYellowFeedback|fattoImmediateDate|YELLOW_BORDER/);
 assert.match(immediate, /Coda locale FATTO non disponibile; continuo con il flusso principale/);

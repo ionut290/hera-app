@@ -160,19 +160,20 @@ async function main() {
   assert.match(whatsappHandler, /shareWhazzupWithPhotos/);
   assert.match(whatsappHandler, /openWhatsApp\(/);
   assert.ok(
-    whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)")
-      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
-    "Lo stato FATTO deve essere salvato prima di WhatsApp"
+    whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });")
+      < whatsappHandler.indexOf("recordFattoVisualEvidence(impianto, doneAt, doneBy)"),
+    "Il click deve spostare subito la scheda prima delle scritture accessorie"
   );
+  assert.doesNotMatch(whatsappHandler, /await recordFattoVisualEvidence/);
   assert.doesNotMatch(
     whatsappHandler,
     /if \(!evidenceSaved && !isNetworkOffline\(\)\) \{\s*closeDeferredWhatsAppTargetWindow\([\s\S]*?return false;/,
     "Un errore della prova visiva non deve bloccare WhatsApp"
   );
   assert.ok(
-    whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
-      < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
-    "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
+    whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });")
+      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
+    "Il trasferimento visivo nei FATTI deve precedere WhatsApp"
   );
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);
@@ -247,6 +248,43 @@ async function main() {
   assert.equal(whatsappOpens, 2, "WhatsApp deve aprirsi anche se la prova visiva non si salva");
   assert.equal(doneMoves, 2, "L'impianto deve passare nei FATTI anche se la prova visiva non si salva");
   assert.equal(accessorySaveFailures, 1, "L'errore accessorio viene segnalato senza bloccare il flusso");
+
+  flowContext.recordFattoVisualEvidence = () => new Promise(() => {});
+  const nonBlockingResult = await Promise.race([
+    flowContext.handleImpiantoWhatsAppClick({ id: "d", gpsY: "44.50", gpsX: "11.34" }),
+    new Promise((resolve) => setTimeout(() => resolve("timeout"), 150))
+  ]);
+  assert.equal(nonBlockingResult, true, "Una scrittura accessoria sospesa non deve bloccare FATTO");
+  assert.equal(whatsappOpens, 3, "WhatsApp deve aprirsi anche con la prova visiva sospesa");
+  assert.equal(doneMoves, 3, "Il salvataggio reale deve partire anche con la prova visiva sospesa");
+
+  let resetWrites = 0;
+  let resetLocalState = null;
+  const resetContext = createContext({
+    selectedCommessaId: "c1",
+    selectedCommessaName: "Commessa prova",
+    currentUser: { displayName: "Operatore" },
+    getImpiantoDocIds: () => ["a"],
+    canUseImpiantoAction: () => true,
+    isNetworkOffline: () => false,
+    retrySetImpiantoDone: async (_commessaId, _ids, done) => { resetWrites += 1; return done === false; },
+    clearImpiantoWhazzupProcessing: () => {},
+    getWhazzupSafetyState: () => null,
+    clearWhazzupPendingDoneEntry: () => {},
+    removePendingDoneActionsForImpianto: () => {},
+    trackLocalSheetMutation: () => {},
+    updateImpiantoLocalState: (_ids, patch) => { resetLocalState = patch; },
+    buildImpiantoKey: () => "id:a",
+    clearActionUsed: () => {},
+    updateConnectivityStatus: () => {},
+    renderImpianti: () => {},
+    scheduleCommessaSheetSync: () => {},
+    alert: () => {}
+  });
+  loadFunctions(resetContext, ["resetImpianto"]);
+  assert.equal(await resetContext.resetImpianto({ id: "a", done: true }), true, "RESET deve completarsi con un click");
+  assert.equal(resetWrites, 1, "RESET deve avviare una sola scrittura");
+  assert.equal(resetLocalState.done, false, "RESET deve riportare localmente l'impianto in Da fare");
 
   let completedWhatsappOpens = 0;
   const completedContext = createContext({
@@ -357,6 +395,47 @@ async function main() {
 
   assert.doesNotMatch(immediateSource, /document\.addEventListener\("pointerup"/);
   assert.doesNotMatch(immediateSource, /document\.addEventListener\("click"/);
+  assert.doesNotMatch(immediateSource, /operation\s*=\s*await enqueue/);
+  assert.match(immediateSource, /const operationTask = enqueue/);
+
+  let wrappedClicks = 0;
+  const hangingQueueContext = createContext({
+    Blob,
+    JSON,
+    Date,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    navigator: { onLine: true },
+    indexedDB: { open: () => ({}) },
+    CustomEvent: class {
+      constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+    },
+    document: {
+      visibilityState: "visible",
+      documentElement: { dataset: {} },
+      addEventListener: () => {},
+      querySelector: () => null,
+      createElement: () => ({ dataset: {} }),
+      head: { appendChild: () => {} }
+    },
+    selectedCommessaId: "c1",
+    auth: { currentUser: { uid: "u1" } },
+    handleImpiantoWhatsAppClick: async () => { wrappedClicks += 1; return true; },
+    openWhatsApp: () => true,
+    addEventListener: () => {},
+    dispatchEvent: () => {},
+    setInterval: () => 0,
+    clearInterval: () => {}
+  });
+  hangingQueueContext.window = hangingQueueContext;
+  vm.runInContext(immediateSource, hangingQueueContext, { filename: "fatto-button-immediate.js" });
+  const hangingQueueResult = await Promise.race([
+    hangingQueueContext.handleImpiantoWhatsAppClick({ id: "queue-hang" }),
+    new Promise((resolve) => setTimeout(() => resolve("timeout"), 150))
+  ]);
+  assert.equal(hangingQueueResult, true, "IndexedDB sospeso non deve bloccare il click FATTO");
+  assert.equal(wrappedClicks, 1, "Il wrapper deve inoltrare il click una sola volta");
   assert.match(nativeSource, /Geolocation\.watchPosition/);
   assert.match(nativeSource, /Geolocation\.clearWatch/);
   assert.match(nativeSource, /window\.dispatchEvent\(new CustomEvent\("hera:native-location"/);

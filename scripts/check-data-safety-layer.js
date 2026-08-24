@@ -41,9 +41,9 @@ assert.doesNotMatch(safety, /localStorage\.clear\s*\(/, "Il safety layer non dev
 assert.doesNotMatch(safety, /indexedDB\.deleteDatabase\s*\(/, "Il safety layer non deve cancellare IndexedDB");
 
 assert.match(criticalBridge, /window\.HeraCriticalWriteSafetyBridge\s*=\s*\{/);
-assert.match(criticalBridge, /forceMoveImpiantoToFatti/);
-assert.match(criticalBridge, /markImpiantoDone/);
-assert.match(criticalBridge, /resetImpianto/);
+assert.doesNotMatch(criticalBridge, /name:\s*"forceMoveImpiantoToFatti"/);
+assert.doesNotMatch(criticalBridge, /name:\s*"markImpiantoDone"/);
+assert.doesNotMatch(criticalBridge, /name:\s*"resetImpianto"/);
 assert.match(criticalBridge, /deleteImpianto/);
 assert.match(criticalBridge, /saveCommessaNote/);
 assert.match(criticalBridge, /saveHoursReport/);
@@ -60,7 +60,7 @@ assert.match(durability, /window\.HeraDataDurability/);
 assert.match(durability, /async function snapshot\(/);
 assert.match(updater, /data-safety-layer\.js\?v=20260819a/);
 assert.match(updater, /ensureDataSafetyLayer/);
-assert.match(updater, /critical-write-safety-bridge\.js\?v=20260824-deadlock1/);
+assert.match(updater, /critical-write-safety-bridge\.js\?v=20260824-oneclick1/);
 assert.match(updater, /ensureCriticalWriteSafetyBridge/);
 assert.match(sw, /\.\/data-safety-layer\.js\?v=20260819a/);
 assert.match(sw, /"\/data-safety-layer\.js"/);
@@ -118,9 +118,10 @@ async function checkNestedFattoFlowDoesNotDeadlock() {
     timeout
   ]);
 
-  assert.equal(result, true, "FORZA/FATTO non deve restare in attesa circolare");
+  assert.equal(result, true, "FORZA/FATTO deve restare sul percorso diretto senza attese del bridge");
   assert.equal(sandbox.markCalls, 1, "La scrittura FATTO interna deve essere eseguita una sola volta");
   assert.equal(sandbox.HeraDataSafety.getState().inflightCount, 0, "La coda sicurezza deve liberarsi");
+  assert.equal(sandbox.forceMoveImpiantoToFatti.__heraCriticalWriteSafetyWrapped, undefined, "Il bridge non deve avvolgere FATTO");
 }
 
 checkNestedFattoFlowDoesNotDeadlock()

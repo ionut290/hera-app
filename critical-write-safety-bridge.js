@@ -3,7 +3,7 @@
 
   if (window.HeraCriticalWriteSafetyBridge?.installed) return;
 
-  const VERSION = "1.0.1";
+  const VERSION = "1.1.0";
   const RETRY_MS = 500;
   const MAX_ATTEMPTS = 40;
   const wrapped = new Set();
@@ -16,9 +16,9 @@
   };
 
   const TARGETS = [
-    { name: "forceMoveImpiantoToFatti", type: "impianto:fatto" },
-    { name: "markImpiantoDone", type: "impianto:fatto" },
-    { name: "resetImpianto", type: "impianto:reset" },
+    // FATTO e RESET hanno gia una coda persistente e un retry dedicati.
+    // Non avvolgere le funzioni composte: lo snapshot IndexedDB eseguito prima
+    // della chiamata puo restare sospeso su iOS e bloccare il pulsante.
     { name: "deleteImpianto", type: "impianto:delete" },
     { name: "saveImpianto", type: "impianto:save" },
     { name: "updateImpianto", type: "impianto:update" },

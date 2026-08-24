@@ -452,7 +452,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-messaging.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="heavy-libs-lazy-loader.js?v=20260815a"></script>
-  <script src="firebase-config.js"></script>
+  <script src="firebase-config.js?v=20260824-standard-fatto1"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260731-header1"></script>
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
@@ -484,7 +484,7 @@
   <script src="today-live-hours-vehicles.js?v=20260731-codes1"></script>
   <script src="identity-feature-lazy-loader.js?v=20260815a"></script>
   <script src="fuel-stations-integration.js?v=20260723a"></script>
-  <script src="fatto-button-immediate.js?v=20260824-vault-nonblocking1"></script>
+  <script src="fatto-button-immediate.js?v=20260824-standard-fatto1"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
@@ -492,7 +492,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260824-fatto-persist1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260824-standard-fatto1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

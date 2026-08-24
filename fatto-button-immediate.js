@@ -746,15 +746,6 @@
     const original = window.handleImpiantoWhatsAppClick;
     if (typeof original !== "function" || original.__heraQueueWrapped) return;
     const wrapped = async function (impianto, ...args) {
-      try {
-        const partial = await maybeHandlePartialInreteDone(impianto);
-        if (partial.handled) return partial.result;
-      } catch (error) {
-        console.error("[FATTO parziale] errore; nessuna lavorazione è stata marcata senza conferma", error);
-        if (typeof window.alert === "function") window.alert(`Impossibile completare la lavorazione: ${text(error?.message || error)}`);
-        return false;
-      }
-
       const pressedButton = findPressedFattoButton();
       const doneAt = new Date().toISOString();
       applyPermanentYellowFeedback(pressedButton, doneAt);
@@ -815,7 +806,7 @@
     }
   }, 250);
 
-  window.HeraFattoSync = Object.freeze({ enqueue, enqueueSafely, processQueue, refreshStatus, list, maybeHandlePartialInreteDone });
+  window.HeraFattoSync = Object.freeze({ enqueue, enqueueSafely, processQueue, refreshStatus, list });
   refreshStatus();
   resume("startup");
 })();

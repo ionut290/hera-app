@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v150";
-const CACHE_RESET_VERSION = "20260824-whazzup-ready1";
+const CACHE_NAME = "varga-cantieri-shell-v151";
+const CACHE_RESET_VERSION = "20260824-commessa-isolation1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260824-whazzup-ready1",
+  "./app.js?v=20260824-commessa-isolation1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./critical-write-safety-bridge.js?v=20260824-oneclick1",
@@ -38,7 +38,7 @@ const APP_SHELL = [
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
-  "./accounting-v2.js?v=20260812-modena2",
+  "./accounting-v2.js?v=20260824-commessa-isolation1",
   "./accounting-view-guard.js?v=20260728a",
   "./operational-import-repair.js?v=20260824-state-race1",
   "./google-sheet-two-way-sync.js?v=20260729b",

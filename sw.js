@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v142";
-const CACHE_RESET_VERSION = "20260824-fatto-lock1";
+const CACHE_NAME = "varga-cantieri-shell-v143";
+const CACHE_RESET_VERSION = "20260824-1908restore1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,7 @@ const APP_SHELL = [
   "./app-calendar.js?v=20260815-mod1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260824-fatto-lock1",
+  "./app.js?v=20260824-1908restore1",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./heavy-libs-lazy-loader.js?v=20260815a",
@@ -48,7 +48,7 @@ const APP_SHELL = [
   "./squad-operator-profile.js?v=20260731a",
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
-  "./fatto-button-immediate.js?v=20260824-fatto-lock1",
+  "./fatto-button-immediate.js?v=20260824-week-restore1",
   "./header-menu-runtime.js?v=20260804-diagnostics-reset1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
@@ -72,7 +72,7 @@ const APP_SHELL = [
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260823-stability3",
-  "./firebase-config.js?v=20260824-fatto-lock1",
+  "./firebase-config.js?v=20260824-1908restore1",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
   "./icons/varga-cantieri-180.png",

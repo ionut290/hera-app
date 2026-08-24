@@ -12349,29 +12349,6 @@ function clearWhazzupPendingDoneEntry(impianto) {
   saveWhazzupPendingDoneEntries(nextEntries);
 }
 
-function applyWhazzupPendingDoneEntriesToImpianti(impianti, commessaId) {
-  const activeCommessaId = String(commessaId || "").trim();
-  const uid = currentUser?.uid || "";
-  if (!activeCommessaId || !uid) return impianti;
-  const pendingEntries = loadWhazzupPendingDoneEntries().filter((entry) => (
-    entry.commessaId === activeCommessaId
-    && (!entry.userId || entry.userId === uid)
-  ));
-  if (!pendingEntries.length) return impianti;
-  return impianti.map((impianto) => {
-    const entry = pendingEntries.find((candidate) => doesPendingActionMatchImpianto(candidate, activeCommessaId, impianto));
-    if (!entry) return impianto;
-    const pendingAt = entry.pendingAt ? new Date(entry.pendingAt) : new Date();
-    return {
-      ...impianto,
-      done: true,
-      stato: "FATTO",
-      doneAt: Number.isNaN(pendingAt.getTime()) ? (impianto.doneAt || new Date()) : pendingAt,
-      doneBy: entry.doneBy || impianto.doneBy || "Operatore"
-    };
-  });
-}
-
 function removePendingDoneActionsForImpianto(commessaId, impianto) {
   const beforeCount = pendingImpiantoActions.length;
   pendingImpiantoActions = pendingImpiantoActions.filter((action) => (
@@ -12820,9 +12797,7 @@ function saveImpiantiIncrementalState(commessaId, lastChangedAtMs) {
 }
 
 function renderImpiantiAfterRemoteSync(rawImpianti, previousDoneSignatureRef) {
-  const combinedImpianti = combineImpiantiForView(rawImpianti);
-  const locallyLockedImpianti = applyWhazzupPendingDoneEntriesToImpianti(combinedImpianti, selectedCommessaId);
-  currentImpianti = applyPendingActionsToImpianti(locallyLockedImpianti, selectedCommessaId);
+  currentImpianti = applyPendingActionsToImpianti(combineImpiantiForView(rawImpianti), selectedCommessaId);
   refreshImpiantoWhatsAppTemplateCache(currentImpianti);
   impiantiByCommessaId.set(selectedCommessaId, currentImpianti);
   renderSquadre();
@@ -12910,8 +12885,7 @@ function subscribeImpianti() {
     return;
   }
 
-  const locallyLockedCachedImpianti = applyWhazzupPendingDoneEntriesToImpianti(cachedImpianti.slice(), requestedCommessaId);
-  currentImpianti = applyPendingActionsToImpianti(locallyLockedCachedImpianti, requestedCommessaId);
+  currentImpianti = cachedImpianti.slice();
   renderImpianti();
   renderMap();
 
@@ -14262,13 +14236,13 @@ function buildRowsForEachCodicePrezzo(impianto) {
 
 function hasOrdinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
-  return codes.includes("A1") || codes.includes("A11") || codes.includes("A12");
+  return codes.includes("A11") || codes.includes("A12");
 }
 
 function hasStraordinario(codicePrezzo) {
   const codes = splitCodes(codicePrezzo);
   if (codes.length === 0) return false;
-  return codes.some((code) => code !== "A1" && code !== "A11" && code !== "A12");
+  return codes.some((code) => code !== "A11" && code !== "A12");
 }
 
 function onImpiantoSearchInput(event) {
@@ -21015,23 +20989,21 @@ async function handleImpiantoWhatsAppClick(impianto) {
   const doneBy = auth.currentUser?.displayName || auth.currentUser?.email || "Operatore";
 
   try {
-    // 1) Registra la pressione e la data. La prova cloud è accessoria: se non è
-    // disponibile, il FATTO resta comunque protetto localmente e sarà sincronizzato.
+    // 1) Salva prima la pressione e la data. Questa prova cloud è separata dal
+    // trasferimento, così l'ordine FATTO -> WhatsApp -> FATTI resta esplicito.
     const evidenceSaved = isNetworkOffline() ? false : await recordFattoVisualEvidence(impianto, doneAt, doneBy);
     if (!evidenceSaved && !isNetworkOffline()) {
-      console.warn("Prova visiva FATTO non salvata; proseguo con blocco locale e sincronizzazione principale.");
+      closeDeferredWhatsAppTargetWindow(deferredWhatsAppTarget);
+      await handleImpiantoDoneSaveFailure(impianto, "Stato iniziale FATTO non salvato.");
+      return false;
     }
 
     cacheFattoVisualEvidence(impianto, doneAt);
     markWhazzupSafetyPressed(impianto, doneAt);
     upsertWhazzupPendingDoneEntry(impianto, doneAt);
-    // Sposta prima dell'apertura di Whazzup: su iOS l'app può essere sospesa non
-    // appena cambia applicazione e il codice successivo potrebbe non eseguirsi.
-    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
-    setImpiantiViewMode("done");
     renderImpianti();
 
-    // 2) Dopo il blocco locale definitivo apri Whazzup con il messaggio invariato.
+    // 2) Solo dopo il salvataggio (o l'accodamento offline) apri WhatsApp.
     const whazzupOptions = {
       doneAt,
       operatorName: doneBy,
@@ -21048,8 +21020,12 @@ async function handleImpiantoWhatsAppClick(impianto) {
       alert("Stato FATTO salvato. Impossibile aprire WhatsApp automaticamente: puoi riprovare dalla coda WhatsApp.");
     }
 
-    // 3) La persistenza Firebase parte comunque, anche se Whazzup non è
-    // installato o l'utente torna indietro senza inviare il messaggio.
+    // 3) Il trasferimento parte comunque, anche se WhatsApp non è installato o
+    // l'utente torna indietro senza inviare il messaggio.
+    markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });
+    setImpiantiViewMode("done");
+    renderImpianti();
+
     const auditLogId = await auditLogWhazzupClick(impianto, {
       clickedAt: doneAt,
       whatsappOpened,
@@ -21230,20 +21206,22 @@ function updateWhazzupSafetyAfterBackgroundCheck(impianto, isDonePersisted) {
 }
 
 async function markImpiantoDoneRecoveryRequired(impianto, reason = "") {
-  const pendingEntry = loadWhazzupPendingDoneEntries().find((entry) => (
-    entry.commessaId === String(selectedCommessaId || "").trim()
-    && doesPendingActionMatchImpianto(entry, selectedCommessaId, impianto)
-  ));
-  const pendingAt = pendingEntry?.pendingAt ? new Date(pendingEntry.pendingAt) : new Date();
-  markImpiantoDoneVisualFallback(impianto, {
-    doneAt: Number.isNaN(pendingAt.getTime()) ? new Date() : pendingAt,
-    doneBy: pendingEntry?.doneBy || auth.currentUser?.displayName || auth.currentUser?.email || "Operatore"
-  });
+  const ids = getImpiantoDocIds(impianto);
+  if (ids.length) {
+    updateImpiantoLocalState(ids, {
+      done: false,
+      doneAt: null,
+      doneBy: "",
+      pendingActionId: "",
+      pendingActionStatus: "",
+      pendingWhatsappStatus: ""
+    });
+  }
   markWhazzupSafetyPressed(impianto);
   const state = getWhazzupSafetyState(impianto);
   if (state) state.needsManualMove = true;
-  setImpiantiViewMode("done");
-  if (ui.gpsStatus) ui.gpsStatus.textContent = "FATTO salvato localmente: sincronizzazione Firebase in attesa.";
+  setImpiantiViewMode("todo");
+  if (ui.gpsStatus) ui.gpsStatus.textContent = FORCE_IMPIANTO_DONE_SYNC_FAILED_MESSAGE;
   renderImpianti();
   try {
     await notifyAdminsForImpiantoDoneSaveError(impianto, reason);
@@ -21309,7 +21287,6 @@ async function runWhazzupPendingDoneSafetyCheck() {
   }
   const untouched = allEntries.filter((entry) => !(entry.commessaId === commessaId && (!entry.userId || entry.userId === uid)));
   saveWhazzupPendingDoneEntries([...untouched, ...remaining]);
-  currentImpianti = applyWhazzupPendingDoneEntriesToImpianti(currentImpianti, commessaId);
   renderImpianti();
 }
 

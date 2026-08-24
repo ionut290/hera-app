@@ -107,10 +107,10 @@ else {
   const evidenceRenderIndex = whatsappHandler.indexOf('renderImpianti();', evidenceIndex);
   const openWhatsappIndex = whatsappHandler.indexOf('const opened = hasWhazzupPhotos');
   const localMoveIndex = whatsappHandler.indexOf('markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });');
-  if (validationIndex >= 0 && evidenceIndex > validationIndex && localMoveIndex > evidenceIndex && evidenceRenderIndex > localMoveIndex && openWhatsappIndex > evidenceRenderIndex) {
-    pass('Fatto salva e trasferisce subito nei FATTI prima di aprire WhatsApp');
+  if (validationIndex >= 0 && evidenceIndex > validationIndex && evidenceRenderIndex > evidenceIndex && openWhatsappIndex > evidenceRenderIndex && localMoveIndex > openWhatsappIndex) {
+    pass('Fatto salva e mostra lo stato, apre WhatsApp e solo dopo trasferisce nei FATTI');
   } else {
-    fail('Ordine richiesto: salvataggio/visuale -> trasferimento FATTI -> WhatsApp');
+    fail('Ordine richiesto: salvataggio/visuale -> WhatsApp -> trasferimento FATTI');
   }
   requireIncludes(whatsappHandler, 'setImpiantoFattoSavingState(impianto, true)', 'Fatto disabilita il pulsante durante il salvataggio');
   requireIncludes(whatsappHandler, 'if (!impianto || impianto.done) return false', 'Fatto ignora impianti già completati');
@@ -129,18 +129,6 @@ else {
   requireIncludes(backgroundSafetyCheck, 'if (!persisted && !isNetworkOffline())', 'rientro in app ritenta FATTO solo quando online');
   requireIncludes(backgroundSafetyCheck, 'await forceMoveImpiantoToFatti(impianto, { source: "whatsapp" })', 'rientro in app completa automaticamente il passaggio nei FATTI');
 }
-
-const localPendingLock = extractFunction('applyWhazzupPendingDoneEntriesToImpianti');
-requireIncludes(localPendingLock, 'entry.commessaId === activeCommessaId', 'blocco FATTO locale separato per commessa');
-requireIncludes(localPendingLock, 'entry.userId === uid', 'blocco FATTO locale separato per utente');
-requireIncludes(localPendingLock, 'done: true', 'blocco FATTO locale impedisce il ritorno in Da fare');
-requireIncludes(localPendingLock, 'stato: "FATTO"', 'blocco FATTO locale conserva lo stato FATTO');
-
-const resetHandler = extractFunction('resetImpianto');
-requireIncludes(resetHandler, 'if (!resetSaved)', 'RESET non modifica lo stato locale se Firebase non conferma');
-requireIncludes(resetHandler, 'clearWhazzupPendingDoneEntry(impianto)', 'RESET confermato rimuove il blocco FATTO locale');
-requireIncludes(resetHandler, 'removePendingDoneActionsForImpianto(selectedCommessaId, impianto)', 'RESET confermato elimina le azioni FATTO pendenti');
-requireIncludes(resetHandler, 'done: false', 'RESET confermato riporta esplicitamente in Da fare');
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ Controlli logica pulsante Fatto completati.');

@@ -50,7 +50,7 @@ const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimi
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260815-squadre-board1";
 const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a";
 const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
-const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow.js?v=20260814a";
+const HERA_FATTO_ORDINARY_EXTRAORDINARY_SRC = "fatto-ordinary-extraordinary-flow.js?v=20260824-1908restore1";
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";
 const HERA_OCCASIONAL_MULTI_SITE_HOURS_SRC = "lavori-occasionali-multi-cantiere-ore.js?v=20260823a";
 const HERA_OCCASIONAL_PDF_STORAGE_SRC = "lavori-occasionali-pdf-storage.js?v=20260823a";

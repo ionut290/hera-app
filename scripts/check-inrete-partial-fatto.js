@@ -24,10 +24,9 @@ assert.match(source, /numeroLavorazioniDaFare/, "Manca conteggio lavorazioni res
 assert.match(source, /if \(saved\.allDone\) return \{ handled: false/, "L'ultima lavorazione deve rientrare nel FATTO completo");
 assert.match(source, /const partial = await maybeHandlePartialInreteDone\(impianto\)/, "Il wrapper FATTO deve verificare prima il completamento parziale");
 assert.ok(
-  source.indexOf("const partial = await maybeHandlePartialInreteDone(impianto)") < source.indexOf("const operation = await enqueue(impianto"),
-  "La scelta parziale deve avvenire prima dell'accodamento FATTO completo"
+  source.indexOf("const partial = await maybeHandlePartialInreteDone(impianto)") < source.indexOf("applyPermanentYellowFeedback(pressedButton, doneAt)"),
+  "La scelta parziale deve avvenire prima del blocco definitivo del pulsante"
 );
-assert.doesNotMatch(source.slice(source.indexOf("function installFattoWrapper()")), /applyPermanentYellowFeedback\(/, "Il wrapper non deve lasciare FATTO giallo prima del trasferimento");
 assert.doesNotMatch(source, /🟡 LAVORAZIONE FATTA/, "Il completamento parziale non deve usare il vecchio titolo generico");
 
 console.log("✅ Controlli FATTO ordinario/straordinario completati.");

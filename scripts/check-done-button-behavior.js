@@ -46,11 +46,9 @@ function loadFunctions(context, names) {
 async function main() {
   const maintenanceContext = createContext();
   loadFunctions(maintenanceContext, ["splitCodes", "hasOrdinario", "hasStraordinario", "classifyTipoManutenzione"]);
-  assert.equal(maintenanceContext.hasOrdinario("A1"), true, "A1 deve essere ordinario");
-  assert.equal(maintenanceContext.hasStraordinario("A1"), false, "A1 non deve essere straordinario");
-  assert.equal(maintenanceContext.classifyTipoManutenzione("A1"), "Ordinaria");
-  assert.equal(maintenanceContext.classifyTipoManutenzione("A1 | B4"), "Ordinaria + Straordinaria");
-  assert.equal(maintenanceContext.hasStraordinario("B4"), true, "Gli altri codici restano straordinari");
+  assert.equal(maintenanceContext.hasOrdinario("A1"), false, "Il ripristino del 19/08 non tratta A1 come ordinario");
+  assert.equal(maintenanceContext.hasStraordinario("A1"), true, "Il ripristino del 19/08 tratta A1 come straordinario");
+  assert.equal(maintenanceContext.classifyTipoManutenzione("A1"), "Straordinaria");
 
   const groupedContext = createContext({
     buildImpiantoKey: (row) => `sap:${row.idSap}`,
@@ -151,38 +149,6 @@ async function main() {
   assert.equal(waitingContext.isActionWaitingForSync(null), false);
   assert.equal(waitingContext.isActionWaitingForSync({ status: "pending" }), true);
 
-  const pendingLockStorage = JSON.stringify([{
-    commessaId: "c1",
-    impiantoKey: "sap:100",
-    impiantoIds: ["a"],
-    userId: "u1",
-    doneBy: "Operatore",
-    pendingAt: "2026-08-24T10:00:00.000Z"
-  }]);
-  const pendingLockContext = createContext({
-    WHAZZUP_PENDING_DONE_KEY: "pending",
-    currentUser: { uid: "u1" },
-    localStorage: { getItem: () => pendingLockStorage },
-    buildImpiantoKey: (impianto) => `sap:${impianto.idSap}`,
-    getImpiantoDocIds: (impianto) => impianto.sourceIds || [impianto.id].filter(Boolean)
-  });
-  loadFunctions(pendingLockContext, [
-    "loadWhazzupPendingDoneEntries",
-    "doesPendingActionMatchImpianto",
-    "applyWhazzupPendingDoneEntriesToImpianti"
-  ]);
-  const locallyLocked = pendingLockContext.applyWhazzupPendingDoneEntriesToImpianti([
-    { id: "a", idSap: "100", done: false, stato: "DA FARE" },
-    { id: "b", idSap: "200", done: false, stato: "DA FARE" }
-  ], "c1");
-  assert.equal(locallyLocked[0].done, true, "Il FATTO locale deve impedire il ritorno in Da fare");
-  assert.equal(locallyLocked[0].stato, "FATTO");
-  assert.equal(locallyLocked[1].done, false, "Il blocco locale non deve coinvolgere altri impianti");
-  const otherCommessa = pendingLockContext.applyWhazzupPendingDoneEntriesToImpianti([
-    { id: "a", idSap: "100", done: false, stato: "DA FARE" }
-  ], "c2");
-  assert.equal(otherCommessa[0].done, false, "Il blocco locale non deve coinvolgere altre commesse");
-
   const whatsappHandler = extractFunction("handleImpiantoWhatsAppClick");
   assert.ok(
     whatsappHandler.indexOf("validateImpiantoCoordinates(impianto)")
@@ -199,9 +165,9 @@ async function main() {
     "Lo stato FATTO deve essere salvato prima di WhatsApp"
   );
   assert.ok(
-    whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });")
-      < whatsappHandler.indexOf("const opened = hasWhazzupPhotos"),
-    "Il trasferimento nei FATTI deve avvenire prima di WhatsApp"
+    whatsappHandler.indexOf("const opened = hasWhazzupPhotos")
+      < whatsappHandler.indexOf("markImpiantoDoneVisualFallback(impianto, { doneAt, doneBy });"),
+    "Il trasferimento nei FATTI deve iniziare dopo WhatsApp"
   );
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);

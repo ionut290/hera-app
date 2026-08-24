@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
 const rules = fs.readFileSync("firestore.rules", "utf8");
-const fattoSource = fs.readFileSync("fatto-button-immediate.js", "utf8");
+const fattoSource = fs.readFileSync("app.js", "utf8");
 
 assert.match(rules, /^rules_version = '2';/m, "Le regole Firestore devono restare in versione 2");
 

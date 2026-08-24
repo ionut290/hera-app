@@ -11,7 +11,7 @@ assert.equal(core.calculateCompletedSubtotal([a,ac,missing,{stato:'DA FARE',tota
 assert.deepEqual(core.splitLegacyValues('A11 | A12; A11,\n A1'),['A11','A12','A1']);
 assert(core.isInreteCommessa({categoria:'gas INRETE'})); assert(!core.isInreteCommessa({nome:'HERA Bologna'}));
 assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'FATTO'}]),'FATTO');
-assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'DA FARE'}]),'PARZIALMENTE FATTO');
+assert.equal(core.derivePlantStatus([{stato:'FATTO'},{stato:'DA FARE'}]),'DA FARE');
 const split=core.adaptLegacyPlantToWorkItems({id:'i1',codicePrezzo:'A11 | A12',quantitaPerCodice:'2 | 3',done:true,doneAt:new Date(2026,6,28,14,5),doneBy:'Mario'});
 assert.equal(split.length,2); assert.equal(split[0].codiceVocePrezzo,'A11'); assert.equal(split[1].quantita,3);
 assert.equal(split[0].dataEsecuzione,'2026-07-28'); assert.equal(split[0].oraEsecuzione,'14:05'); assert.equal(split[0].operatoreNome,'Mario');

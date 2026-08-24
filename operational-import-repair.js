@@ -122,13 +122,12 @@
       });
 
       const allWorkDone = group.work.length > 0 && group.work.every(isDone);
-      const someWorkDone = group.work.some(isDone);
       const plantDone = group.work.length ? allWorkDone : isDone(group.plant);
       if (plantDone) donePlants += 1;
 
       let plantState = status(group.plant.statoGenerale || group.plant.stato) || "DA FARE";
       if (group.work.length) {
-        plantState = allWorkDone ? "FATTO" : (someWorkDone ? "PARZIALMENTE FATTO" : "DA FARE");
+        plantState = allWorkDone ? "FATTO" : "DA FARE";
       }
       items.push({
         ...group.plant,

@@ -87,7 +87,7 @@
     if (states.includes("IN LAVORAZIONE")) return "IN LAVORAZIONE";
     if (states.every(s=>s==="FATTO")) return "FATTO";
     if (states.every(s=>s==="DA FARE")) return "DA FARE";
-    if (states.includes("FATTO")) return "PARZIALMENTE FATTO";
+    if (states.includes("FATTO")) return "DA FARE";
     return states[0] || "DA FARE";
   };
 

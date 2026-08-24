@@ -22,8 +22,7 @@ for (const asset of [
   "active-commesse-first-boot-guard.js",
   "firestore-startup-cost-optimizer.js",
   "native-android-runtime.js",
-  "admin-user-access-tools.js",
-  "fatto-ordinary-extraordinary-flow.js"
+  "admin-user-access-tools.js"
 ]) {
   assert.match(source, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Bootstrap mancante: ${asset}`);
 }

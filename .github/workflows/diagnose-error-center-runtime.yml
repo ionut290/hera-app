@@ -66,7 +66,6 @@ jobs:
             const filter = [
               'resource.type="cloud_function"',
               '(resource.labels.function_name="getErrorCenterDashboard" OR resource.labels.function_name="recordClientErrorGroup")',
-              'severity>=ERROR',
               `timestamp>="${since}"`
             ].join(" AND ");
             const response = await client.request({
@@ -76,7 +75,7 @@ jobs:
                 resourceNames: ["projects/hera-app-6cd2b"],
                 filter,
                 orderBy: "timestamp desc",
-                pageSize: 60
+                pageSize: 200
               }
             });
             const entries = (response.data.entries || []).map((entry) => ({
@@ -84,6 +83,8 @@ jobs:
               severity: entry.severity || "",
               functionName: entry.resource?.labels?.function_name || "",
               executionId: entry.labels?.execution_id || "",
+              logName: String(entry.logName || "").split("/").pop() || "",
+              httpStatus: entry.httpRequest?.status || null,
               message: redact(
                 entry.textPayload
                 || entry.jsonPayload?.message

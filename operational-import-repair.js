@@ -277,9 +277,6 @@
         const current = commesseById.get(canonical.id) || canonical;
         commesseById.set(canonical.id, { ...current, ...commessaPatch });
       }
-      if (typeof impiantiByCommessaId !== "undefined" && impiantiByCommessaId?.set) {
-        impiantiByCommessaId.set(canonical.id, summary.items.map((item) => ({ ...item, commessaId: canonical.id })));
-      }
       if (typeof commessaStatsById !== "undefined" && commessaStatsById?.set) {
         let stats = {};
         try {
@@ -287,11 +284,10 @@
         } catch (_) {}
         commessaStatsById.set(canonical.id, { ...stats, total: summary.uniquePlants, done: summary.donePlants });
       }
-      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId === canonical.id && typeof currentImpianti !== "undefined") {
-        currentImpianti = summary.items.map((item) => ({ ...item, commessaId: canonical.id }));
-        try { if (typeof renderImpianti === "function") renderImpianti(); } catch (_) {}
-        try { if (typeof renderMap === "function") renderMap(); } catch (_) {}
-      }
+      // Il riepilogo INRETE aggiorna soltanto contatori e valori economici.
+      // La lista operativa appartiene al listener commesse/{id}/impianti e alle
+      // mutazioni locali FATTO/RESET: sostituirla qui con il riepilogo in cache
+      // causava l'oscillazione FATTO -> DA FARE ogni 1,5 secondi.
     } catch (error) {
       console.warn("[INRETE Modena] applicazione riepilogo locale non riuscita", error);
     }
@@ -559,7 +555,8 @@
       findCurrentManagementCommessa,
       renderManagementStatsForCommessa,
       refreshCurrentManagementSummary,
-      applyManagementStats
+      applyManagementStats,
+      applySummary
     }
   };
 

@@ -98,6 +98,25 @@ const sameNameDifferentSap = api.testing.summarizeData([
 ], [], []);
 assert.equal(sameNameDifferentSap.uniquePlants, 2, "ID SAP diversi non devono essere accorpati anche se il nome coincide");
 
+// Regressione: il riepilogo INRETE viene riapplicato ogni 1,5 secondi e può
+// restare in cache per 30 secondi. Non deve mai sovrascrivere un FATTO/RESET
+// appena applicato dal listener operativo o dallo stato locale.
+sandbox.selectedCommessaId = "canonical-modena";
+sandbox.currentImpianti = [{ id: "plant-1", idSap: "3430707", done: true, stato: "FATTO" }];
+sandbox.impiantiByCommessaId.set("canonical-modena", sandbox.currentImpianti.map((item) => ({ ...item })));
+api.testing.applySummary(sandbox.commesseById.get("canonical-modena"), {
+  uniquePlants: 1,
+  donePlants: 0,
+  todoPlants: 1,
+  workRows: 1,
+  doneWork: 0,
+  pendingWork: 1,
+  subtotalCompleted: 0,
+  items: [{ id: "plant-1", idSap: "3430707", done: false, stato: "DA FARE" }]
+});
+assert.equal(sandbox.currentImpianti[0].done, true, "Un riepilogo vecchio non deve annullare FATTO nella lista aperta");
+assert.equal(sandbox.impiantiByCommessaId.get("canonical-modena")[0].done, true, "Un riepilogo vecchio non deve avvelenare la cache operativa");
+
 assert.match(source, /CANONICAL_COMMESSA_CODE = "28015"/);
 assert.match(source, /archiveSyntheticDuplicate/);
 assert.match(source, /hiddenFromHome: true/);
@@ -106,6 +125,8 @@ assert.doesNotMatch(source, /commesseById\.set\(SYNTHETIC_COMMESSA_ID/, "Il runt
 assert.doesNotMatch(source, /ref\.delete\(/, "Il duplicato deve essere archiviato, non cancellato");
 assert.match(source, /<b>\$\{summary\.uniquePlants\}<\/b> impianti/);
 assert.match(source, /<b>\$\{summary\.workRows\}<\/b> lavorazioni/);
+assert.doesNotMatch(source, /currentImpianti\s*=\s*summary\.items/, "Il riepilogo periodico non deve sostituire la lista operativa");
+assert.doesNotMatch(source, /impiantiByCommessaId\.set\(canonical\.id,\s*summary\.items/, "Il riepilogo periodico non deve sostituire la cache operativa");
 
 const statsCacheSource = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
 assert.match(statsCacheSource, /function activeCollectionName\(\)/, "La cache statistiche deve usare la raccolta attiva");

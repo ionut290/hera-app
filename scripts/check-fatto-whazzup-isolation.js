@@ -89,22 +89,22 @@ function escapeRegExp(value) {
 
 function assertClassicOrderedScript(html, fileName) {
   const matches = [];
-  const scriptExpression = /<script\\b([^>]*)>\\s*<\\/script>/gi;
+  const scriptExpression = /<script\b([^>]*)>\s*<\/script>/gi;
   for (const scriptMatch of html.matchAll(scriptExpression)) {
     const attributes = scriptMatch[1];
-    const srcMatch = attributes.match(/\\bsrc\\s*=\\s*(["'])([^"']+)\\1/i);
+    const srcMatch = attributes.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i);
     if (!srcMatch) continue;
     const normalizedSrc = srcMatch[2]
       .split(/[?#]/, 1)[0]
-      .replace(/^\\.\\//, "");
+      .replace(/^\.\//, "");
     if (normalizedSrc !== fileName) continue;
-    if (/\\b(?:async|defer)\\b/i.test(attributes) || /\\btype\\s*=\\s*["']module["']/i.test(attributes)) {
-      fail(`Lo script critico ${fileName} deve restare classico e sincrono.`);
+    if (/\b(?:async|defer)\b/i.test(attributes) || /\btype\s*=\s*["']module["']/i.test(attributes)) {
+      fail(\`Lo script critico \${fileName} deve restare classico e sincrono.\`);
     }
     matches.push(scriptMatch.index);
   }
   if (matches.length !== 1) {
-    fail(`Lo script critico ${fileName} deve essere caricato una sola volta, in modo classico e sincrono.`);
+    fail(\`Lo script critico \${fileName} deve essere caricato una sola volta, in modo classico e sincrono.\`);
   }
   return matches[0];
 }

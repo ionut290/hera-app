@@ -12,6 +12,8 @@ const capacitorBundleSource = fs.readFileSync(
   path.join(root, "scripts", "prepare-capacitor-web.js"),
   "utf8"
 );
+const capacitorConfigSource = fs.readFileSync(path.join(root, "capacitor.config.json"), "utf8");
+const packageSource = fs.readFileSync(path.join(root, "package.json"), "utf8");
 
 const rulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
@@ -46,12 +48,12 @@ for (const obsolete of ["TESTER_TEMP_PASSWORD", "functions:registerTester"]) {
   }
 }
 
-if (!fixSource.includes('googleLoginButton.hidden = !webGoogleEnabled')) {
-  throw new Error("La visibilità del pulsante Google non dipende correttamente dalla piattaforma.");
+if (!fixSource.includes('googleLoginButton.hidden = false')) {
+  throw new Error("Il pulsante Google non resta disponibile come seconda scelta su Android.");
 }
 
-if (!fixSource.includes('divider.hidden = !webGoogleEnabled')) {
-  throw new Error("Il separatore Google non viene ripristinato sul web.");
+if (!fixSource.includes('divider.hidden = false')) {
+  throw new Error("Il separatore della seconda scelta Google non resta visibile.");
 }
 
 if (!fixSource.includes('Accedi con Google oppure con la tua email e password.')) {
@@ -62,15 +64,35 @@ if (!fixSource.includes('emailLoginButton.textContent = nativeAndroid ? "Accedi"
   throw new Error("Il pulsante email/password non cambia testo correttamente in base alla piattaforma.");
 }
 
-if (
-  !fixSource.includes("message.textContent = nativeAndroid")
-  || !fixSource.includes('"Accedi con la tua email e password."')
-) {
-  throw new Error("Il messaggio login Android non richiede email e password.");
+if (!fixSource.includes('"Accedi con email/username e password. In alternativa puoi usare Google."')) {
+  throw new Error("Android non presenta email/username e password come accesso principale e Google come alternativa.");
 }
 
-if (!fixSource.includes("Nell'app Android è disponibile solo l'accesso con email e password.")) {
-  throw new Error("Il login Google non è bloccato esplicitamente su Android.");
+for (const expected of [
+  "signInWithNativeGoogle",
+  "nativeAuth.signInWithGoogle({ skipNativeAuth: true })",
+  "firebase.auth.GoogleAuthProvider.credential(idToken)",
+  "firebase.auth().signInWithCredential(credential)",
+  "firebase.auth.Auth.Persistence.LOCAL",
+  "isNativeAndroid() ? signInWithNativeGoogle() : signInWithWebGoogle()"
+]) {
+  if (!fixSource.includes(expected)) throw new Error(`Login Google Android incompleto: ${expected}`);
+}
+
+if (fixSource.includes("Nell'app Android è disponibile solo l'accesso con email e password.")) {
+  throw new Error("È ricomparso il blocco esplicito del login Google su Android.");
+}
+
+if (!packageSource.includes('"@capacitor-firebase/authentication"')) {
+  throw new Error("Plugin Firebase Authentication Android non installato.");
+}
+
+if (!capacitorConfigSource.includes('"providers": ["google.com"]')) {
+  throw new Error("Provider Google Android non configurato in Capacitor.");
+}
+
+if (!capacitorConfigSource.includes('"skipNativeAuth": true')) {
+  throw new Error("La configurazione Capacitor non mantiene skipNativeAuth per il bridge con Firebase Web.");
 }
 
 if (!fixSource.includes("installProfileAccessGuard")) {
@@ -163,4 +185,4 @@ if (
   throw new Error("Il workflow Android non include auth-login-fix.js.");
 }
 
-console.log("Login check passed: web keeps Google; Android remains email/password-only.");
+console.log("Login check passed: email/password resta principale; Google è una seconda scelta funzionale su Android e web.");

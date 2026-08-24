@@ -4,9 +4,6 @@
   if (window.__heraAuthStartupControllerInstalled) return;
   window.__heraAuthStartupControllerInstalled = true;
 
-  // L'auto-login legacy viene caricato tardi dal runtime menu. Il controllo
-  // sessione ora vive qui, prima di app.js, quindi impediamo un secondo
-  // controller concorrente di modificare l'auth gate dopo l'avvio.
   window.__heraSavedCredentialsAutoLoginInstalled = true;
 
   const AUTH_GATE_ID = "auth-gate";
@@ -72,8 +69,6 @@
       return true;
     }
 
-    // Durante il ripristino Firebase nessun altro modulo deve poter mostrare
-    // prematuramente "Login richiesto".
     if (!authResolved) {
       applyGateHidden(true);
       return false;
@@ -171,7 +166,37 @@
   "use strict";
 
   const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn"]);
+  const FIREBASE_READY_MAX_ATTEMPTS = 50;
+  const FIREBASE_READY_RETRY_MS = 100;
   let loginInProgress = false;
+
+  function isFirebaseDefaultAppReady() {
+    try {
+      return Boolean(
+        window.firebase &&
+        Array.isArray(firebase.apps) &&
+        firebase.apps.length > 0
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function waitForFirebaseReady(callback, attempt = 0) {
+    if (isFirebaseDefaultAppReady()) {
+      callback();
+      return;
+    }
+
+    if (attempt >= FIREBASE_READY_MAX_ATTEMPTS) {
+      console.error("[auth-login-fix] Firebase [DEFAULT] non inizializzato entro il timeout.");
+      return;
+    }
+
+    window.setTimeout(() => {
+      waitForFirebaseReady(callback, attempt + 1);
+    }, FIREBASE_READY_RETRY_MS);
+  }
 
   function normalizeEmail(value) {
     return String(value || "").trim().toLowerCase();
@@ -196,29 +221,15 @@
 
     if (email) {
       try {
-        const exactSnapshot = await database
-          .collection("platformUsers")
-          .where("email", "==", email)
-          .limit(1)
-          .get();
-
+        const exactSnapshot = await database.collection("platformUsers").where("email", "==", email).limit(1).get();
         if (!exactSnapshot.empty) {
           existingProfile = exactSnapshot.docs[0].data() || null;
         } else {
-          const originalEmailSnapshot = await database
-            .collection("platformUsers")
-            .where("email", "==", String(user.email || "").trim())
-            .limit(1)
-            .get();
-          if (!originalEmailSnapshot.empty) {
-            existingProfile = originalEmailSnapshot.docs[0].data() || null;
-          }
+          const originalEmailSnapshot = await database.collection("platformUsers").where("email", "==", String(user.email || "").trim()).limit(1).get();
+          if (!originalEmailSnapshot.empty) existingProfile = originalEmailSnapshot.docs[0].data() || null;
         }
       } catch (lookupError) {
-        console.warn(
-          "Profilo precedente non leggibile: creo un profilo utente standard.",
-          lookupError
-        );
+        console.warn("Profilo precedente non leggibile: creo un profilo utente standard.", lookupError);
       }
     }
 
@@ -246,21 +257,15 @@
       permissions: {}
     };
 
-    const existingStatus = String(
-      existingProfile?.statoAccount || existingProfile?.accountStatus || ""
-    ).trim().toLowerCase();
-    const initialStatus = existingProfile
-      ? (existingProfile.banned === true ? "bloccato" : (existingStatus || "attivo"))
-      : "in_attesa";
+    const existingStatus = String(existingProfile?.statoAccount || existingProfile?.accountStatus || "").trim().toLowerCase();
+    const initialStatus = existingProfile ? (existingProfile.banned === true ? "bloccato" : (existingStatus || "attivo")) : "in_attesa";
 
     await currentRef.set({
       ...safeProfile,
       uid: user.uid,
       statoAccount: initialStatus,
       accountStatus: initialStatus,
-      authProviders: Array.isArray(user.providerData)
-        ? user.providerData.map((provider) => provider && provider.providerId).filter(Boolean)
-        : [],
+      authProviders: Array.isArray(user.providerData) ? user.providerData.map((provider) => provider && provider.providerId).filter(Boolean) : [],
       profileMigratedByEmail: Boolean(existingProfile),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -281,9 +286,18 @@
   }
 
   function installProfileAccessGuard() {
-    if (!window.firebase || typeof firebase.auth !== "function") return;
-    const authInstance = firebase.auth();
-    if (!authInstance || authInstance.__heraEmailAccessGuardInstalled) return;
+    if (!isFirebaseDefaultAppReady()) return false;
+    if (typeof firebase.auth !== "function") return false;
+
+    let authInstance = null;
+    try {
+      authInstance = firebase.auth();
+    } catch (error) {
+      console.warn("[auth-login-fix] Auth non ancora disponibile:", error);
+      return false;
+    }
+
+    if (!authInstance || authInstance.__heraEmailAccessGuardInstalled) return true;
 
     const originalOnAuthStateChanged = authInstance.onAuthStateChanged.bind(authInstance);
     authInstance.onAuthStateChanged = function onAuthStateChangedWithProfile(nextOrObserver, error, completed) {
@@ -301,9 +315,7 @@
         if (emailVerificationRequired) window.__heraEmailVerificationRequired = true;
         else if (user) window.__heraEmailVerificationRequired = false;
 
-        const result = typeof callback === "function"
-          ? await callback(effectiveUser)
-          : undefined;
+        const result = typeof callback === "function" ? await callback(effectiveUser) : undefined;
         if (emailVerificationRequired) showEmailVerificationRequired();
         return result;
       };
@@ -325,6 +337,8 @@
       configurable: false,
       enumerable: false
     });
+
+    return true;
   }
 
   function isNativeAndroid() {
@@ -340,21 +354,11 @@
   function configurePlatformLoginOptions() {
     const nativeAndroid = isNativeAndroid();
     const webGoogleEnabled = !nativeAndroid;
-
     document.documentElement.classList.toggle("android-email-password-only", nativeAndroid);
-
     const message = document.getElementById("auth-gate-message");
-    if (message) {
-      message.textContent = nativeAndroid
-        ? "Accedi con la tua email e password."
-        : "Accedi con Google oppure con la tua email e password.";
-    }
-
+    if (message) message.textContent = nativeAndroid ? "Accedi con la tua email e password." : "Accedi con Google oppure con la tua email e password.";
     const emailLoginButton = document.getElementById("auth-email-login-btn");
-    if (emailLoginButton) {
-      emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra";
-    }
-
+    if (emailLoginButton) emailLoginButton.textContent = nativeAndroid ? "Accedi" : "Entra";
     const googleLoginButton = document.getElementById("auth-gate-login-btn");
     if (googleLoginButton) {
       googleLoginButton.hidden = !webGoogleEnabled;
@@ -362,7 +366,6 @@
       if (webGoogleEnabled) googleLoginButton.removeAttribute("aria-hidden");
       else googleLoginButton.setAttribute("aria-hidden", "true");
     }
-
     const divider = document.querySelector(".auth-gate-divider");
     if (divider) {
       divider.hidden = !webGoogleEnabled;
@@ -373,46 +376,27 @@
 
   function getNativeFirebaseAuthentication() {
     if (!window.Capacitor) return null;
-    if (window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) {
-      return window.Capacitor.Plugins.FirebaseAuthentication;
-    }
-    if (typeof window.Capacitor.registerPlugin === "function") {
-      return window.Capacitor.registerPlugin("FirebaseAuthentication");
-    }
+    if (window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) return window.Capacitor.Plugins.FirebaseAuthentication;
+    if (typeof window.Capacitor.registerPlugin === "function") return window.Capacitor.registerPlugin("FirebaseAuthentication");
     return null;
   }
 
   function formatError(error) {
     const code = String(error && error.code ? error.code : "");
     if (code === "auth/popup-closed-by-user") return "Accesso Google annullato.";
-    if (code === "12501" || code === "16" || code === "auth/cancelled-popup-request") {
-      return "Accesso Google annullato.";
-    }
-    if (code === "10" || code.includes("DEVELOPER_ERROR")) {
-      return "Login Google Android non configurato correttamente. Verifica SHA-1 e google-services.json.";
-    }
-    if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") {
-      return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
-    }
+    if (code === "12501" || code === "16" || code === "auth/cancelled-popup-request") return "Accesso Google annullato.";
+    if (code === "10" || code.includes("DEVELOPER_ERROR")) return "Login Google Android non configurato correttamente. Verifica SHA-1 e google-services.json.";
+    if (code === "auth/popup-blocked" || code === "auth/cancelled-popup-request") return "Il browser ha bloccato la finestra Google. Consenti i popup per Varga Cantieri e riprova.";
     return String(error && error.message ? error.message : "Accesso Google non riuscito.");
   }
 
   async function signInWithNativeGoogle() {
-    if (isNativeAndroid()) {
-      throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
-    }
-
+    if (isNativeAndroid()) throw new Error("Nell'app Android è disponibile solo l'accesso con email e password.");
     const nativeAuth = getNativeFirebaseAuthentication();
-    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") {
-      throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
-    }
-
+    if (!nativeAuth || typeof nativeAuth.signInWithGoogle !== "function") throw new Error("Plugin Firebase Authentication non disponibile nell'app Android.");
     const result = await nativeAuth.signInWithGoogle({ skipNativeAuth: true });
     const idToken = result && result.credential && result.credential.idToken;
-    if (!idToken) {
-      throw new Error("Google non ha restituito un token di accesso valido.");
-    }
-
+    if (!idToken) throw new Error("Google non ha restituito un token di accesso valido.");
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     return firebase.auth().signInWithCredential(credential);
   }
@@ -421,11 +405,7 @@
 
   queueMicrotask(() => {
     window.loginWithGoogle = function loginWithGoogleFixed() {
-      if (isNativeAndroid()) {
-        return Promise.reject(
-          new Error("Nell'app Android è disponibile solo l'accesso con email e password.")
-        );
-      }
+      if (isNativeAndroid()) return Promise.reject(new Error("Nell'app Android è disponibile solo l'accesso con email e password."));
       return signInWithWebGoogle();
     };
   });
@@ -438,11 +418,8 @@
   }
 
   async function handleGoogleLoginClick(event) {
-    const button = event.target && event.target.closest
-      ? event.target.closest("button")
-      : null;
+    const button = event.target && event.target.closest ? event.target.closest("button") : null;
     if (!button || !LOGIN_BUTTON_IDS.has(button.id)) return;
-
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -455,8 +432,7 @@
     }
 
     if (loginInProgress) return;
-
-    if (!window.firebase || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
+    if (!isFirebaseDefaultAppReady() || !firebase.auth || !firebase.auth.GoogleAuthProvider) {
       alert("Login Google non disponibile: configurazione Firebase non caricata.");
       return;
     }
@@ -465,7 +441,6 @@
     button.disabled = true;
     const previousText = button.textContent;
     button.textContent = "Accesso Google...";
-
     try {
       await signInWithWebGoogle();
     } catch (error) {
@@ -478,7 +453,9 @@
     }
   }
 
-  installProfileAccessGuard();
+  waitForFirebaseReady(() => {
+    installProfileAccessGuard();
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", configurePlatformLoginOptions, { once: true });
@@ -495,19 +472,16 @@
   function install() {
     const input = document.getElementById("auth-password-input");
     if (!input || document.getElementById("auth-password-toggle")) return;
-
     const wrapper = document.createElement("div");
     wrapper.className = "auth-password-wrapper";
     wrapper.style.position = "relative";
     wrapper.style.display = "flex";
     wrapper.style.alignItems = "center";
     wrapper.style.width = "100%";
-
     input.parentNode.insertBefore(wrapper, input);
     wrapper.appendChild(input);
     input.style.paddingRight = "48px";
     input.style.width = "100%";
-
     const button = document.createElement("button");
     button.id = "auth-password-toggle";
     button.type = "button";
@@ -526,7 +500,6 @@
     button.style.padding = "6px";
     button.style.lineHeight = "1";
     button.style.zIndex = "2";
-
     button.addEventListener("click", () => {
       const visible = input.type === "text";
       input.type = visible ? "password" : "text";
@@ -540,7 +513,6 @@
         input.setSelectionRange(end, end);
       } catch (_) {}
     });
-
     wrapper.appendChild(button);
   }
 

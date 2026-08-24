@@ -177,6 +177,12 @@ async function main() {
   assert.match(whatsappHandler, /requireFirestoreConfirmation:\s*false/);
   assert.match(whatsappHandler, /queued_offline/);
 
+  assert.doesNotMatch(
+    appSource,
+    /has-completion-evidence|Già premuto FATTO/,
+    "Una prova FATTO pregressa non deve rendere giallo un impianto ancora Da fare"
+  );
+
   const coordinatesContext = createContext();
   loadFunctions(coordinatesContext, ["validateImpiantoCoordinates"]);
   assert.equal(coordinatesContext.validateImpiantoCoordinates({ gpsY: "44.50", gpsX: "11.34" }).valid, true);

@@ -71,6 +71,12 @@ assert.match(centerBackend, /runTransaction/);
 assert.match(centerBackend, /recordClientErrorGroup/);
 assert.match(centerBackend, /getErrorCenterSummary/);
 assert.match(centerBackend, /getErrorCenterDashboard/);
+assert.match(centerBackend, /PUBLIC_CALLABLE_OPTIONS\s*=\s*Object\.freeze\(\{\s*invoker:\s*"public"\s*\}\)/);
+assert.equal(
+  (centerBackend.match(/runWith\(PUBLIC_CALLABLE_OPTIONS\)\.https\.onCall/g) || []).length,
+  5,
+  "all five Error Center callable functions must explicitly allow public transport access"
+);
 assert.match(centerBackend, /markErrorCenterSeen/);
 assert.match(centerBackend, /updateErrorCenterStatus/);
 assert.match(centerBackend, /countSource:\s*"firestore-aggregate"/);

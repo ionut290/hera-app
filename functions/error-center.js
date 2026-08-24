@@ -14,6 +14,7 @@ const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_PER_USER = 40;
 const NOTIFICATION_BUCKET_MS = 30 * 60 * 1000;
 const DASHBOARD_READ_LIMIT = 200;
+const PUBLIC_CALLABLE_OPTIONS = Object.freeze({ invoker: "public" });
 const VALID_STATUSES = new Set(["open", "in_verification", "resolved", "ignored"]);
 const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
 const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
@@ -370,7 +371,7 @@ function serializeGroup(id, data = {}) {
   };
 }
 
-exports.recordClientErrorGroup = functions.region(REGION).https.onCall(async (data, context) => {
+exports.recordClientErrorGroup = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
   if (!context.auth?.uid) throw new functions.https.HttpsError("unauthenticated", "Accesso richiesto per registrare la diagnostica.");
   if (!enforceRateLimit(context.auth.uid)) return { recorded: false, rateLimited: true };
 
@@ -453,7 +454,7 @@ exports.recordClientErrorGroup = functions.region(REGION).https.onCall(async (da
   };
 });
 
-exports.getErrorCenterSummary = functions.region(REGION).https.onCall(async (_data, context) => {
+exports.getErrorCenterSummary = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (_data, context) => {
   await requireAdmin(context);
   const snapshot = await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).get();
   const data = snapshot.exists ? snapshot.data() || {} : {};
@@ -468,7 +469,7 @@ exports.getErrorCenterSummary = functions.region(REGION).https.onCall(async (_da
   };
 });
 
-exports.markErrorCenterSeen = functions.region(REGION).https.onCall(async (_data, context) => {
+exports.markErrorCenterSeen = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (_data, context) => {
   await requireAdmin(context);
   await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).set({
     unseenAlerts: 0,
@@ -480,7 +481,7 @@ exports.markErrorCenterSeen = functions.region(REGION).https.onCall(async (_data
   return { updated: true };
 });
 
-exports.getErrorCenterDashboard = functions.region(REGION).https.onCall(async (data, context) => {
+exports.getErrorCenterDashboard = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
   await requireAdmin(context);
   const input = data && typeof data === "object" ? data : {};
   const status = String(input.status || "all");
@@ -531,7 +532,7 @@ exports.getErrorCenterDashboard = functions.region(REGION).https.onCall(async (d
   };
 });
 
-exports.updateErrorCenterStatus = functions.region(REGION).https.onCall(async (data, context) => {
+exports.updateErrorCenterStatus = functions.region(REGION).runWith(PUBLIC_CALLABLE_OPTIONS).https.onCall(async (data, context) => {
   await requireAdmin(context);
   const input = data && typeof data === "object" ? data : {};
   const groupId = safeFingerprint(input.groupId, "");

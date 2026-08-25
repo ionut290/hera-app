@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.1.0";
+  const VERSION = "1.1.1";
   const SEARCH_LIST_IDS = [
     "pending-users-list",
     "admin-users-list",
@@ -61,6 +61,13 @@
   }
 
   function buildAndroidLoginLink(email, password) {
+    const payload = buildTemporaryLoginPayload(email, password);
+    const url = new URL("android-login.html", window.location.href);
+    url.searchParams.set(TEMP_LOGIN_HASH_KEY, payload);
+    return url.toString();
+  }
+
+  function buildAndroidDeepLink(email, password) {
     const payload = buildTemporaryLoginPayload(email, password);
     return `${ANDROID_DEEP_LINK_SCHEME}://login?${TEMP_LOGIN_HASH_KEY}=${encodeURIComponent(payload)}`;
   }
@@ -258,7 +265,7 @@
       const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const opened = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
       if (!opened) window.location.href = whatsappUrl;
-      setDialogFeedback("Messaggio WhatsApp preparato con password, copia password, link PWA e link Android.");
+      setDialogFeedback("Messaggio WhatsApp preparato con password, copia password, link PWA e link Android cliccabile.");
     } catch (error) {
       setDialogFeedback(error?.message || "Impossibile preparare il messaggio WhatsApp.");
     }
@@ -316,6 +323,7 @@
     refresh: enhance,
     buildTemporaryLoginLink,
     buildAndroidLoginLink,
+    buildAndroidDeepLink,
     buildCopyPasswordLink,
     applyTemporaryLoginLink
   };

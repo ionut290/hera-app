@@ -2,57 +2,158 @@
   "use strict";
 
   const STORAGE_KEY = "heraSavedLoginAccountsV1";
-  let unlockedUntil = 0;
+  const NATIVE_UNLOCK_MS = 60000;
+  let pendingCredential = null;
+  let nativeAccountsCache = [];
+  let nativeUnlockedUntil = 0;
+  let authHookInstalled = false;
 
   function isNativeAndroid() {
     try { return Boolean(window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === "android"); }
     catch (_) { return false; }
   }
 
-  function biometricPlugin() {
-    try { return window.Capacitor?.Plugins?.HeraBiometric || null; }
+  function vaultPlugin() {
+    try { return window.Capacitor?.Plugins?.HeraCredentialVault || null; }
     catch (_) { return null; }
   }
 
-  function readAccounts() {
+  function normalizeEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function readLocalAccounts() {
     try {
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       return Array.isArray(data) ? data.filter((item) => item?.email && item?.password) : [];
     } catch (_) { return []; }
   }
 
-  function writeAccounts(items) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  function writeLocalAccounts(items) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch (_) {}
   }
 
-  function upsertAccount(email, password) {
-    email = String(email || "").trim().toLowerCase();
+  function upsertLocalAccount(email, password) {
+    email = normalizeEmail(email);
     password = String(password || "");
     if (!email || !password) return;
-    const next = readAccounts().filter((item) => String(item.email).toLowerCase() !== email);
+    const next = readLocalAccounts().filter((item) => normalizeEmail(item.email) !== email);
     next.unshift({ email, password, savedAt: Date.now() });
-    writeAccounts(next.slice(0, 10));
+    writeLocalAccounts(next.slice(0, 10));
   }
 
-  async function requireBiometric() {
-    if (!isNativeAndroid()) {
-      const ok = window.confirm("Le password sono salvate solo su questo browser/dispositivo. Continuare?");
-      if (!ok) throw new Error("Operazione annullata.");
-      unlockedUntil = Date.now() + 60000;
+  async function storeAccount(email, password) {
+    email = normalizeEmail(email);
+    password = String(password || "");
+    if (!email || !password) return false;
+
+    if (isNativeAndroid()) {
+      const plugin = vaultPlugin();
+      if (!plugin?.storeCredential) throw new Error("Vault sicuro Android non disponibile. Aggiorna l'app.");
+      await plugin.storeCredential({ email, password });
+      nativeAccountsCache = nativeAccountsCache.filter((item) => normalizeEmail(item.email) !== email);
+      nativeAccountsCache.unshift({ email, password, savedAt: Date.now() });
+      return true;
+    }
+
+    upsertLocalAccount(email, password);
+    return true;
+  }
+
+  async function readAccountsSecure() {
+    if (isNativeAndroid()) {
+      if (Date.now() < nativeUnlockedUntil && nativeAccountsCache.length) return nativeAccountsCache;
+      const plugin = vaultPlugin();
+      if (!plugin?.listCredentials) throw new Error("Vault sicuro Android non disponibile. Aggiorna l'app.");
+      const result = await plugin.listCredentials({ title: "Password salvate", subtitle: "Conferma la tua identità" });
+      nativeAccountsCache = Array.isArray(result?.accounts) ? result.accounts : [];
+      nativeUnlockedUntil = Date.now() + NATIVE_UNLOCK_MS;
+      return nativeAccountsCache;
+    }
+
+    const ok = window.confirm("Le password sono salvate solo su questo browser/dispositivo. Continuare?");
+    if (!ok) throw new Error("Operazione annullata.");
+    return readLocalAccounts();
+  }
+
+  async function deleteAccount(email) {
+    email = normalizeEmail(email);
+    if (!email) return;
+    if (isNativeAndroid()) {
+      const plugin = vaultPlugin();
+      if (!plugin?.deleteCredential) throw new Error("Vault sicuro Android non disponibile.");
+      await plugin.deleteCredential({ email });
+      nativeAccountsCache = nativeAccountsCache.filter((item) => normalizeEmail(item.email) !== email);
       return;
     }
-    if (Date.now() < unlockedUntil) return;
-    const plugin = biometricPlugin();
-    if (!plugin) throw new Error("Protezione biometrica Android non disponibile.");
-    let status = null;
-    try { status = await plugin.status(); } catch (_) {}
-    if (!status?.available) throw new Error("Configura impronta o riconoscimento biometrico sul telefono.");
-    if (!status?.enabled) {
-      await plugin.enable({ title: "Proteggi password salvate", subtitle: "Conferma la tua identità" });
-    } else {
-      await plugin.authenticate({ title: "Password salvate", subtitle: "Conferma la tua identità" });
+    writeLocalAccounts(readLocalAccounts().filter((saved) => normalizeEmail(saved.email) !== email));
+  }
+
+  async function migrateLegacyAndroidAccounts() {
+    if (!isNativeAndroid()) return;
+    const plugin = vaultPlugin();
+    if (!plugin?.storeCredential) return;
+    const legacy = readLocalAccounts();
+    if (!legacy.length) return;
+    try {
+      for (const item of legacy) {
+        await plugin.storeCredential({ email: normalizeEmail(item.email), password: String(item.password || "") });
+      }
+      localStorage.removeItem(STORAGE_KEY);
+      console.info(`[credential-vault] Migrate ${legacy.length} credenziali legacy nel vault Android cifrato.`);
+    } catch (error) {
+      console.warn("Migrazione credenziali legacy Android non completata:", error);
     }
-    unlockedUntil = Date.now() + 60000;
+  }
+
+  function rememberEnabled() {
+    const checkbox = document.getElementById("saved-password-remember");
+    return !checkbox || checkbox.checked;
+  }
+
+  function capturePendingCredential() {
+    if (!rememberEnabled()) {
+      pendingCredential = null;
+      return;
+    }
+    const email = normalizeEmail(document.getElementById("auth-email-input")?.value || "");
+    const password = String(document.getElementById("auth-password-input")?.value || "");
+    pendingCredential = email && password ? { email, password, capturedAt: Date.now() } : null;
+  }
+
+  async function savePendingAfterSuccessfulLogin(user) {
+    if (!pendingCredential || !user?.email) return;
+    const userEmail = normalizeEmail(user.email);
+    if (!userEmail || userEmail !== pendingCredential.email) return;
+    if (Date.now() - pendingCredential.capturedAt > 120000) {
+      pendingCredential = null;
+      return;
+    }
+
+    const credential = pendingCredential;
+    pendingCredential = null;
+    try {
+      await storeAccount(credential.email, credential.password);
+      console.info("[credential-vault] Password aggiornata nel vault locale dopo login riuscito.");
+    } catch (error) {
+      console.warn("Salvataggio password nel vault locale non riuscito:", error);
+    }
+  }
+
+  function installFirebaseSuccessHook() {
+    if (authHookInstalled) return true;
+    try {
+      if (!window.firebase || typeof firebase.auth !== "function") return false;
+      const auth = firebase.auth();
+      if (!auth?.onAuthStateChanged) return false;
+      authHookInstalled = true;
+      auth.onAuthStateChanged((user) => {
+        if (user) void savePendingAfterSuccessfulLogin(user);
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function escapeHtml(value) {
@@ -73,17 +174,11 @@
     ensureStyles();
     const wrap = document.createElement("div");
     wrap.className = "saved-password-tools";
-    wrap.innerHTML = '<label class="saved-password-remember"><input id="saved-password-remember" type="checkbox"> Memorizza password su questo dispositivo</label><button id="saved-password-open-btn" class="btn" type="button">🔐 PASSWORD SALVATE</button>';
+    wrap.innerHTML = '<label class="saved-password-remember"><input id="saved-password-remember" type="checkbox" checked> Memorizza password su questo dispositivo</label><button id="saved-password-open-btn" class="btn" type="button">🔐 PASSWORD SALVATE</button>';
     const feedback = document.getElementById("auth-email-feedback");
     form.insertBefore(wrap, feedback || null);
     wrap.querySelector("#saved-password-open-btn")?.addEventListener("click", () => void openVault());
-
-    form.addEventListener("submit", () => {
-      if (!document.getElementById("saved-password-remember")?.checked) return;
-      const email = document.getElementById("auth-email-input")?.value || "";
-      const password = document.getElementById("auth-password-input")?.value || "";
-      if (email && password) upsertAccount(email, password);
-    }, true);
+    form.addEventListener("submit", capturePendingCredential, true);
   }
 
   function ensureDialog() {
@@ -105,20 +200,20 @@
   async function openVault() {
     const dialog = ensureDialog();
     if (!dialog.open) dialog.showModal();
-    setFeedback("Verifica identità...");
+    setFeedback(isNativeAndroid() ? "Verifica biometrica..." : "Apertura password salvate...");
     try {
-      await requireBiometric();
-      renderVault();
+      const items = await readAccountsSecure();
+      renderVault(items);
       setFeedback("");
     } catch (error) {
       setFeedback(error?.message || "Impossibile aprire le password salvate.");
     }
   }
 
-  function renderVault() {
+  function renderVault(items) {
     const list = document.getElementById("saved-password-vault-list");
     if (!list) return;
-    const items = readAccounts();
+    items = Array.isArray(items) ? items : [];
     if (!items.length) {
       list.innerHTML = '<p class="muted">Nessuna password salvata.</p>';
       return;
@@ -128,42 +223,67 @@
       const row = document.createElement("div");
       row.className = "saved-password-item";
       row.innerHTML = `<strong>${escapeHtml(item.email)}</strong><div class="saved-password-value" data-password>••••••••</div><div class="saved-password-actions"><button class="btn" type="button" data-action="show">👁 MOSTRA</button><button class="btn" type="button" data-action="copy">COPIA</button><button class="btn btn-primary" type="button" data-action="use">USA PER ACCEDERE</button><button class="btn" type="button" data-action="delete">ELIMINA</button></div>`;
-      row.addEventListener("click", (event) => void handleAction(event, item));
+      row.addEventListener("click", (event) => void handleAction(event, item, row));
       list.appendChild(row);
     });
   }
 
-  async function handleAction(event, item) {
+  async function handleAction(event, item, row) {
     const action = event.target?.closest?.("[data-action]")?.dataset?.action;
     if (!action) return;
-    try { await requireBiometric(); }
-    catch (error) { setFeedback(error?.message || "Verifica non riuscita."); return; }
-    const row = event.currentTarget;
-    if (action === "show") {
-      const node = row.querySelector("[data-password]");
-      node.textContent = node.textContent === item.password ? "••••••••" : item.password;
-    } else if (action === "copy") {
-      await navigator.clipboard.writeText(item.password);
-      setFeedback("Password copiata.");
-    } else if (action === "use") {
-      const email = document.getElementById("auth-email-input");
-      const password = document.getElementById("auth-password-input");
-      if (email) email.value = item.email;
-      if (password) password.value = item.password;
-      document.getElementById("saved-password-vault-dialog")?.close();
-      password?.focus();
-    } else if (action === "delete") {
-      writeAccounts(readAccounts().filter((saved) => saved.email !== item.email));
-      renderVault();
-      setFeedback("Password eliminata da questo dispositivo.");
+    try {
+      if (isNativeAndroid() && Date.now() >= nativeUnlockedUntil) {
+        const refreshed = await readAccountsSecure();
+        const fresh = refreshed.find((saved) => normalizeEmail(saved.email) === normalizeEmail(item.email));
+        if (fresh) item = fresh;
+      }
+      if (action === "show") {
+        const node = row.querySelector("[data-password]");
+        node.textContent = node.textContent === item.password ? "••••••••" : item.password;
+      } else if (action === "copy") {
+        await navigator.clipboard.writeText(item.password);
+        setFeedback("Password copiata.");
+      } else if (action === "use") {
+        const email = document.getElementById("auth-email-input");
+        const password = document.getElementById("auth-password-input");
+        if (email) email.value = item.email;
+        if (password) password.value = item.password;
+        const remember = document.getElementById("saved-password-remember");
+        if (remember) remember.checked = true;
+        document.getElementById("saved-password-vault-dialog")?.close();
+        password?.focus();
+      } else if (action === "delete") {
+        await deleteAccount(item.email);
+        const items = isNativeAndroid() ? nativeAccountsCache : readLocalAccounts();
+        renderVault(items);
+        setFeedback("Password eliminata da questo dispositivo.");
+      }
+    } catch (error) {
+      setFeedback(error?.message || "Operazione non riuscita.");
     }
   }
 
   function install() {
     ensureUi();
-    const observer = new MutationObserver(ensureUi);
+    void migrateLegacyAndroidAccounts();
+    installFirebaseSuccessHook();
+    const observer = new MutationObserver(() => {
+      ensureUi();
+      installFirebaseSuccessHook();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
+    let attempts = 0;
+    const authTimer = window.setInterval(() => {
+      attempts += 1;
+      if (installFirebaseSuccessHook() || attempts >= 60) window.clearInterval(authTimer);
+    }, 250);
   }
+
+  window.HeraLoginCredentialVault = {
+    installed: true,
+    storeAccount,
+    migrateLegacyAndroidAccounts
+  };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

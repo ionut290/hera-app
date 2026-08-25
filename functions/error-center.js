@@ -9,10 +9,8 @@ const ADMIN_EMAIL = "ionut29019@gmail.com";
 const GROUPS_COLLECTION = "appErrorGroups";
 const SUMMARY_COLLECTION = "systemCounters";
 const SUMMARY_DOCUMENT = "errorCenterSummary";
-const NOTIFICATIONS_COLLECTION = "notifications";
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_PER_USER = 40;
-const NOTIFICATION_BUCKET_MS = 30 * 60 * 1000;
 const DASHBOARD_READ_LIMIT = 200;
 const PUBLIC_CALLABLE_OPTIONS = Object.freeze({ invoker: "public" });
 const VALID_STATUSES = new Set(["open", "in_verification", "resolved", "ignored"]);
@@ -238,93 +236,6 @@ function recentEvent(report) {
   };
 }
 
-function notificationPriority(severity) {
-  if (severity === "critical") return "CRITICA";
-  if (severity === "high") return "ALTA";
-  return "NORMALE";
-}
-
-async function createAdminNotification(report, occurrences, isNew, reopened) {
-  const shouldNotify = report.manual || isNew || reopened || ["critical", "high"].includes(report.diagnosis.severity);
-  if (!shouldNotify) return { created: false, id: "" };
-
-  const bucket = isNew ? "new" : String(Math.floor(Date.now() / NOTIFICATION_BUCKET_MS));
-  const notificationId = `error_${report.fingerprint}_${bucket}`.slice(0, 480);
-  const ref = db().collection(NOTIFICATIONS_COLLECTION).doc(notificationId);
-  const body = report.durationMs
-    ? `${report.message} · durata ${report.durationMs} ms`
-    : report.message;
-  const value = {
-    id: notificationId,
-    type: "SYNC_ERROR",
-    priority: notificationPriority(report.diagnosis.severity),
-    title: `${report.diagnosis.severity === "critical" ? "🔴" : report.manual ? "🐞" : "⚠️"} ${report.diagnosis.title}`.slice(0, 160),
-    preview: cleanText(body, 500),
-    message: cleanText(`${body}\n\nCategoria: ${report.diagnosis.category}\nFunzione: ${report.feature}\nOccorrenze: ${occurrences}`, 4000),
-    actorId: "app-error-monitor",
-    actorName: report.user.name || report.user.emailMasked || "Monitor app",
-    scopeType: "ADMIN",
-    recipientUserIds: [],
-    commessaId: report.commessaId,
-    commessaName: report.commessaName,
-    impiantoId: report.impiantoId,
-    impiantoName: "",
-    actionType: "ERROR_CENTER",
-    actionTarget: report.fingerprint,
-    dedupeKey: notificationId,
-    readBy: {},
-    deletedBy: {},
-    metadata: {
-      actionLabel: "APRI CENTRO ERRORI",
-      groupId: report.fingerprint,
-      severity: report.diagnosis.severity,
-      category: report.diagnosis.category,
-      feature: report.feature,
-      occurrences
-    },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  };
-
-  try {
-    await ref.create(value);
-    return { created: true, id: notificationId };
-  } catch (error) {
-    if (error?.code === 6 || error?.code === "already-exists") return { created: false, id: notificationId };
-    throw error;
-  }
-}
-
-async function sendAdminPush(report, notificationId) {
-  if (!notificationId || !["critical", "high"].includes(report.diagnosis.severity) && !report.manual) return;
-  try {
-    const snapshot = await db().collection("platformUsers").where("email", "==", ADMIN_EMAIL).limit(5).get();
-    const tokens = [...new Set(snapshot.docs.map((doc) => String(doc.data()?.pushToken || "").trim()).filter(Boolean))];
-    if (!tokens.length) return;
-    await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: {
-        title: report.manual ? "🐞 Nuova segnalazione app" : `${report.diagnosis.severity === "critical" ? "🔴" : "⚠️"} Errore rilevato in Varga Cantieri`,
-        body: cleanText(`${report.diagnosis.title}: ${report.message}`, 450)
-      },
-      data: {
-        eventType: "app-error",
-        notificationId,
-        groupId: report.fingerprint,
-        severity: report.diagnosis.severity,
-        destination: "error-center",
-        url: `./index.html?openErrorCenter=${encodeURIComponent(report.fingerprint)}`
-      },
-      android: {
-        priority: "high",
-        notification: { channelId: "hera_operational_updates", sound: "default", tag: notificationId.slice(0, 100) }
-      }
-    });
-  } catch (error) {
-    console.error("Push Centro errori non inviata.", { message: cleanText(error?.message, 300) });
-  }
-}
-
 function toIso(value) {
   try {
     if (value?.toDate) return value.toDate().toISOString();
@@ -425,32 +336,22 @@ exports.recordClientErrorGroup = functions.region(REGION).runWith(PUBLIC_CALLABL
     return { isNew: !snapshot.exists, reopened, occurrences, severity };
   });
 
-  const notification = await createAdminNotification(
-    report,
-    transactionResult.occurrences,
-    transactionResult.isNew,
-    transactionResult.reopened
-  );
-
-  const summaryPayload = {
+  await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).set({
     totalEvents: admin.firestore.FieldValue.increment(1),
     totalGroups: admin.firestore.FieldValue.increment(transactionResult.isNew ? 1 : 0),
+    unseenAlerts: admin.firestore.FieldValue.increment(1),
     lastErrorAt: admin.firestore.FieldValue.serverTimestamp(),
     lastGroupId: report.fingerprint,
     lastSeverity: report.diagnosis.severity,
     lastTitle: report.diagnosis.title,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  };
-  if (notification.created) summaryPayload.unseenAlerts = admin.firestore.FieldValue.increment(1);
-  await db().collection(SUMMARY_COLLECTION).doc(SUMMARY_DOCUMENT).set(summaryPayload, { merge: true });
-
-  if (notification.created) await sendAdminPush(report, notification.id);
+  }, { merge: true });
 
   return {
     recorded: true,
     groupId: report.fingerprint,
     severity: report.diagnosis.severity,
-    notified: notification.created
+    notified: false
   };
 });
 

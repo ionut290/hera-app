@@ -2343,6 +2343,14 @@ function runAfterFirstRender(callback) {
   window.requestAnimationFrame(() => setTimeout(runner, 0));
 }
 
+function yieldToBrowserDuringStartup() {
+  return new Promise((resolve) => {
+    const resume = () => setTimeout(resolve, 0);
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(resume);
+    else resume();
+  });
+}
+
 function runDeferredStartupTasks(tasks = []) {
   runAfterFirstRender(() => {
     tasks.forEach((task, index) => {
@@ -3416,16 +3424,19 @@ if (!auth || firebaseInitError) {
   posDocuments = [];
   gpsUpdateRequests = [];
   operatorPositions = [];
+    await yieldToBrowserDuringStartup();
   hoursApprovalRequests = [];
   renderPrivateDocsList();
   renderPosDocuments();
   renderResourceButtonsForCommessa();
   closeCommessaResourceViewer();
+    await yieldToBrowserDuringStartup();
   renderParentCommessaOverview();
   ui.impiantiLista.innerHTML = loggedIn
     ? "<p class='muted'>Seleziona una commessa.</p>"
     : "<p class='muted'>Fai login per vedere le commesse.</p>";
   clearMap();
+    await yieldToBrowserDuringStartup();
   lastReadChatAt = null;
   resetDriveState();
   renderChat([]);

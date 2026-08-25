@@ -168,6 +168,11 @@
   const LOGIN_BUTTON_IDS = new Set(["login-btn", "auth-gate-login-btn"]);
   const FIREBASE_READY_MAX_ATTEMPTS = 50;
   const FIREBASE_READY_RETRY_MS = 100;
+  const PROFILE_READ_RETRY_MS = 400;
+  const PROFILE_DEFERRED_RETRY_MS = 2500;
+  const profileBootstrapInFlight = new Map();
+  const profileBootstrapCompleted = new Set();
+  const profileDeferredRetryScheduled = new Set();
   let loginInProgress = false;
 
   function isFirebaseDefaultAppReady() {
@@ -202,31 +207,140 @@
     return String(value || "").trim().toLowerCase();
   }
 
-  async function ensurePlatformProfileForAuthenticatedUser(user) {
-    if (!user || !user.uid || !window.firebase || typeof firebase.firestore !== "function") return;
+  function wait(milliseconds) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
 
+  function isFirestoreUnexpectedState(error) {
+    const value = `${error?.code || ""} ${error?.message || error || ""}`;
+    return /INTERNAL ASSERTION FAILED:\s*Unexpected state/i.test(value);
+  }
+
+  async function readFirestoreWithSingleRecovery(defaultRead, serverRead, operationName) {
+    try {
+      return await defaultRead();
+    } catch (error) {
+      if (!isFirestoreUnexpectedState(error)) throw error;
+
+      console.warn(`[auth-login-fix] Firestore instabile durante ${operationName}: eseguo un solo recupero.`);
+      await wait(PROFILE_READ_RETRY_MS);
+
+      try {
+        return await serverRead();
+      } catch (retryError) {
+        if (!isFirestoreUnexpectedState(retryError)) throw retryError;
+        console.warn(`[auth-login-fix] Sincronizzazione profilo rinviata dopo ${operationName}.`);
+        return null;
+      }
+    }
+  }
+
+  function publishDeferredProfileState(user, operationName) {
+    window.__heraPlatformProfileSyncDeferred = true;
+    window.HeraPlatformProfileBootstrap = {
+      uid: user.uid,
+      exists: false,
+      data: null,
+      loadedAt: Date.now(),
+      deferred: true,
+      reason: "firestore-internal-unexpected-state",
+      operation: operationName
+    };
+
+    try {
+      window.dispatchEvent(new CustomEvent("platform-profile-sync-deferred", {
+        detail: {
+          uid: user.uid,
+          reason: "firestore-internal-unexpected-state",
+          operation: operationName
+        }
+      }));
+    } catch (_) {}
+  }
+
+  function scheduleDeferredProfileBootstrap(user) {
+    const uid = String(user?.uid || "");
+    if (!uid || profileBootstrapCompleted.has(uid) || profileDeferredRetryScheduled.has(uid)) return;
+
+    profileDeferredRetryScheduled.add(uid);
+    window.setTimeout(() => {
+      void ensurePlatformProfileForAuthenticatedUser(user, { allowDeferredRetry: false })
+        .catch((error) => {
+          console.warn("[auth-login-fix] Recupero differito profilo non riuscito:", error);
+        })
+        .finally(() => {
+          profileDeferredRetryScheduled.delete(uid);
+        });
+    }, PROFILE_DEFERRED_RETRY_MS);
+  }
+
+  async function bootstrapPlatformProfile(user, options = {}) {
     const database = firebase.firestore();
     const currentRef = database.collection("platformUsers").doc(user.uid);
-    const currentDoc = await currentRef.get();
+    const currentDoc = await readFirestoreWithSingleRecovery(
+      () => currentRef.get(),
+      () => currentRef.get({ source: "server" }),
+      "lettura platformUsers/{uid}"
+    );
+
+    if (!currentDoc) {
+      publishDeferredProfileState(user, "lettura platformUsers/{uid}");
+      if (options.allowDeferredRetry !== false) scheduleDeferredProfileBootstrap(user);
+      return false;
+    }
+
+    window.__heraPlatformProfileSyncDeferred = false;
     window.HeraPlatformProfileBootstrap = {
       uid: user.uid,
       exists: currentDoc.exists === true,
       data: currentDoc.exists ? (currentDoc.data() || {}) : null,
-      loadedAt: Date.now()
+      loadedAt: Date.now(),
+      deferred: false
     };
-    if (currentDoc.exists) return;
+    if (currentDoc.exists) return true;
 
     const email = normalizeEmail(user.email);
     let existingProfile = null;
 
     if (email) {
       try {
-        const exactSnapshot = await database.collection("platformUsers").where("email", "==", email).limit(1).get();
+        const exactQuery = database.collection("platformUsers").where("email", "==", email).limit(1);
+        const exactSnapshot = await readFirestoreWithSingleRecovery(
+          () => exactQuery.get(),
+          () => exactQuery.get({ source: "server" }),
+          "ricerca profilo per email normalizzata"
+        );
+
+        if (!exactSnapshot) {
+          publishDeferredProfileState(user, "ricerca profilo per email normalizzata");
+          if (options.allowDeferredRetry !== false) scheduleDeferredProfileBootstrap(user);
+          return false;
+        }
+
         if (!exactSnapshot.empty) {
           existingProfile = exactSnapshot.docs[0].data() || null;
         } else {
-          const originalEmailSnapshot = await database.collection("platformUsers").where("email", "==", String(user.email || "").trim()).limit(1).get();
-          if (!originalEmailSnapshot.empty) existingProfile = originalEmailSnapshot.docs[0].data() || null;
+          const originalEmail = String(user.email || "").trim();
+          if (originalEmail && originalEmail !== email) {
+            const originalEmailQuery = database.collection("platformUsers").where("email", "==", originalEmail).limit(1);
+            const originalEmailSnapshot = await readFirestoreWithSingleRecovery(
+              () => originalEmailQuery.get(),
+              () => originalEmailQuery.get({ source: "server" }),
+              "ricerca profilo per email originale"
+            );
+
+            if (!originalEmailSnapshot) {
+              publishDeferredProfileState(user, "ricerca profilo per email originale");
+              if (options.allowDeferredRetry !== false) scheduleDeferredProfileBootstrap(user);
+              return false;
+            }
+
+            if (!originalEmailSnapshot.empty) {
+              existingProfile = originalEmailSnapshot.docs[0].data() || null;
+            }
+          }
         }
       } catch (lookupError) {
         console.warn("Profilo precedente non leggibile: creo un profilo utente standard.", lookupError);
@@ -271,6 +385,47 @@
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+
+    window.HeraPlatformProfileBootstrap = {
+      uid: user.uid,
+      exists: true,
+      data: {
+        ...safeProfile,
+        uid: user.uid,
+        statoAccount: initialStatus,
+        accountStatus: initialStatus
+      },
+      loadedAt: Date.now(),
+      deferred: false,
+      created: true
+    };
+    return true;
+  }
+
+  function ensurePlatformProfileForAuthenticatedUser(user, options = {}) {
+    if (!user || !user.uid || !window.firebase || typeof firebase.firestore !== "function") {
+      return Promise.resolve(false);
+    }
+
+    const uid = String(user.uid);
+    if (profileBootstrapCompleted.has(uid)) return Promise.resolve(true);
+
+    const running = profileBootstrapInFlight.get(uid);
+    if (running) return running;
+
+    const operation = bootstrapPlatformProfile(user, options)
+      .then((completed) => {
+        if (completed) profileBootstrapCompleted.add(uid);
+        return completed;
+      })
+      .finally(() => {
+        if (profileBootstrapInFlight.get(uid) === operation) {
+          profileBootstrapInFlight.delete(uid);
+        }
+      });
+
+    profileBootstrapInFlight.set(uid, operation);
+    return operation;
   }
 
   function requiresEmailVerification(user) {

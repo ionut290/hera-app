@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v151";
-const CACHE_RESET_VERSION = "20260824-commessa-isolation1";
+const CACHE_NAME = "varga-cantieri-shell-v152";
+const CACHE_RESET_VERSION = "20260825-notification-push-off1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -94,6 +94,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/critical-write-safety-bridge.js",
   "/update-app-feature.js",
   "/firebase-config.js",
+  "/notification-session-enhancements.js",
   "/auth-login-fix.js",
   "/login-retry-fix.js",
   "/first-login-password.js",

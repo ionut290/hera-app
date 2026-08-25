@@ -52,34 +52,18 @@ replaceOnce(
     const text = normalizeImpactText(item);
     const match = (pattern) => pattern.test(text);
 
-    if (match(/\b(crash|fatal|freeze|frozen|hang|hung|unresponsive|uncaught)\b|blocca(?:to|ta|re)?|bloccato|schermata bianca|non risponde|non reagisce|maximum call stack|out of memory/)) {
-      return IMPACT_CATEGORIES[0];
-    }
-    if (match(/commessa|impianto/) && match(/mescol|sovrascr|perdit|pers[oi]|cancell|elimin|spostat|assegnat.*sbagli|id errat|integrit|isolament|altra commessa|commessa sbagliata|impianti di un altra|impianti di un'altra/)) {
-      return IMPACT_CATEGORIES[1];
-    }
-    if (match(/notific|notification|push|messaging|fcm|vapid|applicationserverkey|p-256|service.?worker.*push/)) {
-      return IMPACT_CATEGORIES[5];
-    }
-    if (match(/mappa|\bmap\b|gps|geoloc|leaflet|google maps|coordinate|latitud|longitud|navigaz/)) {
-      return IMPACT_CATEGORIES[6];
-    }
-    if (match(/\bauth\b|login|permission-denied|permess|unauthor|forbidden|credential|sessione|token.*scad|accesso negato/)) {
-      return IMPACT_CATEGORIES[4];
-    }
-    if (match(/rallent|\bslow\b|performance|long task|listener duplic|listener.*multip|render.*ripet|memory leak|troppe letture|richieste ripet|latency|latenza|timeout/)) {
-      return IMPACT_CATEGORIES[2];
-    }
-    if (match(/firestore|database|storage|sincron|\bsync\b|offline|salvat|scritt|\bwrite\b|network|rete|quota/)) {
-      return IMPACT_CATEGORIES[3];
-    }
+    if (match(/\b(crash|fatal|freeze|frozen|hang|hung|unresponsive|uncaught)\b|blocca(?:to|ta|re)?|bloccato|schermata bianca|non risponde|non reagisce|maximum call stack|out of memory/)) return IMPACT_CATEGORIES[0];
+    if (match(/commessa|impianto/) && match(/mescol|sovrascr|perdit|pers[oi]|cancell|elimin|spostat|assegnat.*sbagli|id errat|integrit|isolament|altra commessa|commessa sbagliata|impianti di un altra|impianti di un'altra/)) return IMPACT_CATEGORIES[1];
+    if (match(/notific|notification|push|messaging|fcm|vapid|applicationserverkey|p-256|service.?worker.*push/)) return IMPACT_CATEGORIES[5];
+    if (match(/mappa|\bmap\b|gps|geoloc|leaflet|google maps|coordinate|latitud|longitud|navigaz/)) return IMPACT_CATEGORIES[6];
+    if (match(/\bauth\b|login|permission-denied|permess|unauthor|forbidden|credential|sessione|token.*scad|accesso negato/)) return IMPACT_CATEGORIES[4];
+    if (match(/rallent|\bslow\b|performance|long task|listener duplic|listener.*multip|render.*ripet|memory leak|troppe letture|richieste ripet|latency|latenza|timeout/)) return IMPACT_CATEGORIES[2];
+    if (match(/firestore|database|storage|sincron|\bsync\b|offline|salvat|scritt|\bwrite\b|network|rete|quota/)) return IMPACT_CATEGORIES[3];
     return IMPACT_CATEGORIES[7];
   }
 
   function impactItems() {
-    return state.impactFilter === "all"
-      ? state.items
-      : state.items.filter((item) => impactCategory(item).id === state.impactFilter);
+    return state.impactFilter === "all" ? state.items : state.items.filter((item) => impactCategory(item).id === state.impactFilter);
   }
 
   function ensureImpactStyle() {
@@ -99,15 +83,9 @@ replaceOnce(
       return;
     }
     const counts = Object.fromEntries(IMPACT_CATEGORIES.map((category) => [category.id, 0]));
-    state.items.forEach((item) => {
-      const category = impactCategory(item);
-      counts[category.id] += Math.max(1, Number(item.occurrences || 0));
-    });
-    const cards = IMPACT_CATEGORIES.map((category) => `
-      <button type="button" class="hera-error-impact-card ${state.impactFilter === category.id ? "is-active" : ""}" data-error-impact="${esc(category.id)}" title="${esc(category.note)}">
-        <span aria-hidden="true">${category.icon}</span><b>${esc(category.label)}</b><span>${counts[category.id]}</span>
-      </button>`).join("");
-    root.innerHTML = `<div class="hera-error-impact-head"><div><strong>Tipo di impatto</strong><br><small>Classificazione automatica delle occorrenze caricate</small></div><button type="button" class="btn ${state.impactFilter === "all" ? "btn-primary" : ""}" data-error-impact="all">TUTTI</button></div><div class="hera-error-impact-grid">${cards}</div>`;
+    state.items.forEach((item) => { counts[impactCategory(item).id] += Math.max(1, Number(item.occurrences || 0)); });
+    const cards = IMPACT_CATEGORIES.map((category) => '<button type="button" class="hera-error-impact-card ' + (state.impactFilter === category.id ? 'is-active' : '') + '" data-error-impact="' + esc(category.id) + '" title="' + esc(category.note) + '"><span aria-hidden="true">' + category.icon + '</span><b>' + esc(category.label) + '</b><span>' + counts[category.id] + '</span></button>').join("");
+    root.innerHTML = '<div class="hera-error-impact-head"><div><strong>Tipo di impatto</strong><br><small>Classificazione automatica delle occorrenze caricate</small></div><button type="button" class="btn ' + (state.impactFilter === 'all' ? 'btn-primary' : '') + '" data-error-impact="all">TUTTI</button></div><div class="hera-error-impact-grid">' + cards + '</div>';
   }
 
   function formatDate(value) {`
@@ -137,17 +115,8 @@ replaceOnce(
   '      <h4>Impatto operativo</h4><div class="hera-error-action"><strong>${impactCategory(item).icon} ${esc(impactCategory(item).label)}</strong><br>${esc(impactCategory(item).note)}</div>\n      <h4>Problema</h4><div class="hera-error-message">${esc(item.lastMessage || "Nessun messaggio")}</div>\n      <h4>Azione tecnica consigliata</h4>'
 );
 
-replaceOnce(
-  'loading impact render',
-  '    renderHealth();\n    renderSummary();\n    renderList();',
-  '    renderHealth();\n    renderSummary();\n    renderImpactSummary();\n    renderList();'
-);
-
-replaceOnce(
-  'final impact render',
-  '      renderHealth();\n      renderSummary();\n      renderList();\n      renderDetail();',
-  '      renderHealth();\n      renderSummary();\n      renderImpactSummary();\n      renderList();\n      renderDetail();'
-);
+replaceOnce('loading impact render', '    renderHealth();\n    renderSummary();\n    renderList();', '    renderHealth();\n    renderSummary();\n    renderImpactSummary();\n    renderList();');
+replaceOnce('final impact render', '      renderHealth();\n      renderSummary();\n      renderList();\n      renderDetail();', '      renderHealth();\n      renderSummary();\n      renderImpactSummary();\n      renderList();\n      renderDetail();');
 
 replaceOnce(
   'impact click handler',

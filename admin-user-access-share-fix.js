@@ -130,7 +130,7 @@
   function getSearchText(item) {
     if (!(item instanceof HTMLElement)) return "";
     const datasetText = Object.values(item.dataset || {}).join(" ");
-    const nestedDatasetText = Array.from(item.querySelectorAll("[data-user-id],[data-uid],[data-user],[data-ban-user],[data-user-permission]"))
+    const nestedDatasetText = Array.from(item.querySelectorAll("[data-user-id],[data-uid],[data-user],[data-ban-user],[data-user-ban],[data-user-permission]"))
       .map((node) => Object.values(node.dataset || {}).join(" "))
       .join(" ");
     return normalize(`${item.textContent || ""} ${datasetText} ${nestedDatasetText}`);
@@ -325,4 +325,14 @@
   } else {
     initialize();
   }
+})();
+
+(() => {
+  if (window.__heraLoginPasswordVaultLoaderInstalled) return;
+  window.__heraLoginPasswordVaultLoaderInstalled = true;
+  const script = document.createElement("script");
+  script.src = "login-password-vault.js?v=20260825a";
+  script.defer = true;
+  script.onerror = () => console.warn("Password vault non caricato.");
+  document.head.appendChild(script);
 })();

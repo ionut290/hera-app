@@ -3,7 +3,7 @@
 
   if (window.HeraAdminErrorCenter?.installed) return;
 
-  const VERSION = "1.3.0";
+  const VERSION = "1.4.0";
   const REGION = "europe-west1";
   const ADMIN_EMAIL = "ionut29019@gmail.com";
   const FUNCTIONS = Object.freeze({
@@ -360,6 +360,61 @@
     return generic;
   }
 
+  function githubRepairIssueUrl(item) {
+    const impact = impactCategory(item);
+    const diagnostic = {
+      errorCenterId: item?.id || "",
+      title: item?.title || "",
+      category: item?.category || "",
+      impact: impact?.label || "",
+      severity: item?.severity || "",
+      feature: item?.feature || "",
+      page: item?.lastPage || item?.lastActiveView || "",
+      platform: item?.lastPlatform || "",
+      appVersion: item?.lastAppVersion || "",
+      message: item?.lastMessage || "",
+      stack: String(item?.lastStack || "").slice(0, 5000),
+      commessaId: item?.commessaId || "",
+      commessaName: item?.commessaName || "",
+      impiantoId: item?.impiantoId || ""
+    };
+    const title = '[AUTO-REPAIR] ' + String(item?.title || item?.category || 'Errore app').slice(0, 160);
+    const advice = repairAdvice(item);
+    const body = [
+      '## Richiesta automatica dal Centro errori',
+      '',
+      '**Obiettivo:** correggere questo errore con la modifica minima e sicura, senza alterare i flussi non coinvolti.',
+      '',
+      '**Impatto:** ' + (impact?.icon || '') + ' ' + (impact?.label || ''),
+      '**Gravità:** ' + (item?.severity || ''),
+      '',
+      '### Diagnostica',
+      '~~~json',
+      JSON.stringify(diagnostic, null, 2),
+      '~~~',
+      '',
+      '### Indicazione del Centro errori',
+      advice.summary || '',
+      '',
+      '### Vincoli di sicurezza',
+      '- Non modificare né indebolire la protezione FATTO / Whazzup.',
+      '- Non modificare automaticamente dati di commesse o impianti.',
+      '- Non eseguire merge automatico.',
+      '- Creare una PR in bozza solo se i controlli critici passano.'
+    ].join('\n');
+    return 'https://github.com/ionut290/hera-app/issues/new?title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+  }
+
+  function startGithubRepair() {
+    const item = selectedItem();
+    if (!item) return;
+    const root = document.querySelector('[data-error-repair-result]');
+    const url = githubRepairIssueUrl(item);
+    if (root) root.innerHTML = '<div class="hera-error-solution-note">🚀 Sto aprendo GitHub con la diagnostica già compilata. Dopo aver creato la richiesta, il workflow Codex prepara una correzione su branch separato, esegue i controlli critici e crea una PR in bozza solo se i test passano.</div>';
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) location.href = url;
+  }
+
   function solutionHtml(item) {
     const advice = repairAdvice(item);
     const steps = advice.steps.map((step, index) => '<li><strong>' + (index + 1) + '.</strong> ' + esc(step) + '</li>').join('');
@@ -502,7 +557,7 @@
       <section class="hera-error-admin">
         <label>Stato<select data-error-detail-status>${["open", "in_verification", "resolved", "ignored"].map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${esc(statusLabel(status))}</option>`).join("")}</select></label>
         <label>Nota amministratore<textarea class="hera-error-note" data-error-note rows="4" maxlength="3000" placeholder="Annota verifica, causa o correzione applicata.">${esc(item.adminNote || "")}</textarea></label>
-        <div class="hera-error-repair-actions"><button class="btn hera-error-repair-btn" type="button" data-error-find-solution>🧠 TROVA SOLUZIONE</button><button class="btn hera-error-repair-btn ${repairAdvice(item).safeAutoRepair ? "is-safe" : ""}" type="button" data-error-repair>🛠️ RIPARA ERRORE</button></div>
+        <div class="hera-error-repair-actions"><button class="btn hera-error-repair-btn" type="button" data-error-find-solution>🧠 TROVA SOLUZIONE</button><button class="btn hera-error-repair-btn ${repairAdvice(item).safeAutoRepair ? "is-safe" : ""}" type="button" data-error-repair>🛠️ RIPARA ERRORE</button><button class="btn hera-error-repair-btn" type="button" data-error-github-repair>🚀 RIPARA SU GITHUB</button></div>
         <div class="hera-error-repair-result" data-error-repair-result></div>
         <p class="hera-error-status" data-error-feedback></p>
         <div class="hera-error-admin-actions"><button class="btn btn-primary" type="button" data-error-save>SALVA STATO</button><button class="btn" type="button" data-error-copy>COPIA DIAGNOSTICA</button></div>
@@ -742,6 +797,7 @@
     }
     if (event.target.closest?.("[data-error-find-solution]")) return showSelectedSolution();
     if (event.target.closest?.("[data-error-repair]")) return void repairSelectedError();
+    if (event.target.closest?.("[data-error-github-repair]")) return startGithubRepair();
     if (event.target.closest?.("[data-error-save]")) return void saveSelectedStatus();
     if (event.target.closest?.("[data-error-copy]")) return void copySelectedDiagnostic();
   }

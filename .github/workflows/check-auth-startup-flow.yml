@@ -16,3 +16,4 @@ jobs:
         with:
           node-version: 20
       - run: node scripts/check-auth-startup-flow.js
+      - run: node scripts/check-auth-profile-recovery.js

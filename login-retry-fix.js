@@ -25,6 +25,16 @@
     return "Accesso non riuscito. Controlla email e password e riprova.";
   }
 
+  async function ensureLocalPersistenceWithoutBlocking(auth) {
+    try {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      return true;
+    } catch (error) {
+      console.warn("Persistenza Firebase LOCAL non disponibile: continuo comunque con il login.", error);
+      return false;
+    }
+  }
+
   function registrationElements() {
     return {
       dialog: document.getElementById("registration-dialog"),
@@ -41,10 +51,7 @@
   }
 
   async function createSelfRegisteredProfile(user, details) {
-    if (!user?.uid || typeof firebase.firestore !== "function") {
-      throw new Error("Profilo Firebase non disponibile.");
-    }
-
+    if (!user?.uid || typeof firebase.firestore !== "function") throw new Error("Profilo Firebase non disponibile.");
     const displayName = [details.firstName, details.lastName].filter(Boolean).join(" ");
     await firebase.firestore().collection("platformUsers").doc(user.uid).set({
       uid: user.uid,
@@ -89,9 +96,7 @@
 
   function openRegistrationDialog(email, password) {
     const elements = registrationElements();
-    if (!elements.dialog || !elements.form) {
-      return Promise.reject(new Error("Finestra di registrazione non disponibile."));
-    }
+    if (!elements.dialog || !elements.form) return Promise.reject(new Error("Finestra di registrazione non disponibile."));
 
     elements.form.reset();
     elements.email.value = email;
@@ -102,33 +107,27 @@
 
     return new Promise((resolve, reject) => {
       registrationPending = true;
-
       const cleanup = () => {
         elements.form.removeEventListener("submit", submit);
         elements.cancel.removeEventListener("click", cancel);
         elements.dialog.removeEventListener("cancel", preventDialogCancel);
       };
-
       const cancel = () => {
         cleanup();
         closeRegistrationDialog();
         reject(new Error("Creazione account annullata."));
       };
-
       const preventDialogCancel = (event) => {
         event.preventDefault();
         cancel();
       };
-
       const submit = async (event) => {
         event.preventDefault();
         if (!registrationPending) return;
-
         const firstName = String(elements.firstName.value || "").trim();
         const lastName = String(elements.lastName.value || "").trim();
         const chosenPassword = String(elements.password.value || "");
         const confirmation = String(elements.passwordConfirm.value || "");
-
         if (!firstName || !lastName) {
           elements.feedback.textContent = "Inserisci nome e cognome.";
           return;
@@ -141,64 +140,41 @@
           elements.feedback.textContent = "Le due password non coincidono.";
           return;
         }
-
         registrationPending = false;
         elements.submit.disabled = true;
         elements.feedback.textContent = "Creazione account in corso...";
-
         let createdUser = null;
         try {
           const auth = firebase.auth();
           const credential = await auth.createUserWithEmailAndPassword(email, chosenPassword);
           createdUser = credential.user;
-          await createdUser.updateProfile({
-            displayName: [firstName, lastName].filter(Boolean).join(" ")
-          });
+          await createdUser.updateProfile({ displayName: [firstName, lastName].filter(Boolean).join(" ") });
           await createdUser.sendEmailVerification();
           await createSelfRegisteredProfile(createdUser, { email, firstName, lastName });
-          try {
-            await auth.signOut();
-          } catch (signOutError) {
-            console.warn("Uscita dopo registrazione non riuscita:", signOutError);
-          }
+          try { await auth.signOut(); } catch (signOutError) { console.warn("Uscita dopo registrazione non riuscita:", signOutError); }
           cleanup();
           closeRegistrationDialog();
           resolve({ verificationRequired: true });
         } catch (error) {
           registrationPending = true;
           if (createdUser?.uid && firebase.auth().currentUser?.uid === createdUser.uid) {
-            try {
-              await createdUser.delete();
-            } catch (cleanupError) {
+            try { await createdUser.delete(); }
+            catch (cleanupError) {
               console.error("Pulizia account incompleto fallita:", cleanupError);
-              try {
-                await firebase.auth().signOut();
-              } catch (signOutError) {
-                console.error("Uscita dopo registrazione fallita:", signOutError);
-              }
+              try { await firebase.auth().signOut(); } catch (signOutError) { console.error("Uscita dopo registrazione fallita:", signOutError); }
             }
           }
-
           const code = String(error?.code || "").toLowerCase();
           const message = String(error?.message || "");
-          if (code.includes("email-already-in-use")) {
-            elements.feedback.textContent = "Questa email ha già un account. Torna al login e controlla la password.";
-          } else if (code.includes("weak-password")) {
-            elements.feedback.textContent = `La password deve contenere almeno ${MIN_REGISTRATION_PASSWORD_LENGTH} caratteri.`;
-          } else if (code.includes("operation-not-allowed")) {
-            elements.feedback.textContent = "La registrazione con email non è abilitata. Contatta l’amministratore.";
-          } else if (code.includes("network-request-failed")) {
-            elements.feedback.textContent = "Connessione non disponibile. Controlla internet e riprova.";
-          } else {
-            elements.feedback.textContent = message && message.toLowerCase() !== "internal"
-              ? message
-              : "Creazione account non riuscita. Riprova tra poco.";
-          }
+          if (code.includes("email-already-in-use")) elements.feedback.textContent = "Questa email ha già un account. Torna al login e controlla la password.";
+          else if (code.includes("weak-password")) elements.feedback.textContent = `La password deve contenere almeno ${MIN_REGISTRATION_PASSWORD_LENGTH} caratteri.`;
+          else if (code.includes("operation-not-allowed")) elements.feedback.textContent = "La registrazione con email non è abilitata. Contatta l’amministratore.";
+          else if (code.includes("network-request-failed")) elements.feedback.textContent = "Connessione non disponibile. Controlla internet e riprova.";
+          else elements.feedback.textContent = message && message.toLowerCase() !== "internal" ? message : "Creazione account non riuscita. Riprova tra poco.";
         } finally {
           elements.submit.disabled = false;
         }
       };
-
       elements.form.addEventListener("submit", submit);
       elements.cancel.addEventListener("click", cancel);
       elements.dialog.addEventListener("cancel", preventDialogCancel);
@@ -212,30 +188,21 @@
     const feedback = document.getElementById("auth-email-feedback");
     const email = String(emailInput?.value || "").trim().toLowerCase();
     const password = String(passwordInput?.value || "");
-
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       if (feedback) feedback.textContent = "Inserisci prima un indirizzo email valido.";
       emailInput?.focus();
       return;
     }
-
     if (createButton) createButton.disabled = true;
     if (feedback) feedback.textContent = "Compila i dati per creare il nuovo account.";
-
     try {
       const auth = firebase.auth();
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      await ensureLocalPersistenceWithoutBlocking(auth);
       const registration = await openRegistrationDialog(email, password);
       if (passwordInput) passwordInput.value = "";
-      if (registration.verificationRequired && feedback) {
-        feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
-      }
+      if (registration.verificationRequired && feedback) feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
     } catch (error) {
-      if (feedback) {
-        feedback.textContent = error?.message === "Creazione account annullata."
-          ? "Creazione account annullata."
-          : friendlyLoginError(error);
-      }
+      if (feedback) feedback.textContent = error?.message === "Creazione account annullata." ? "Creazione account annullata." : friendlyLoginError(error);
     } finally {
       if (createButton) createButton.disabled = false;
     }
@@ -254,12 +221,10 @@
     const feedback = document.getElementById("auth-email-feedback");
     const email = String(emailInput?.value || "").trim().toLowerCase();
     const password = String(passwordInput?.value || "");
-
     if (!email || !password) {
       if (feedback) feedback.textContent = "Inserisci email e password.";
       return;
     }
-
     if (loginButton) {
       loginButton.disabled = true;
       loginButton.textContent = "Accesso...";
@@ -268,7 +233,7 @@
 
     try {
       const auth = firebase.auth();
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      await ensureLocalPersistenceWithoutBlocking(auth);
       try {
         await auth.signInWithEmailAndPassword(email, password);
       } catch (loginError) {
@@ -277,20 +242,14 @@
         if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
         const registration = await openRegistrationDialog(email, password);
         if (passwordInput) passwordInput.value = "";
-        if (registration.verificationRequired && feedback) {
-          feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
-        }
+        if (registration.verificationRequired && feedback) feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
         return;
       }
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
     } catch (error) {
       console.error("Errore login email/password:", error);
-      if (feedback) {
-        feedback.textContent = error?.message === "Creazione account annullata."
-          ? "Creazione account annullata. Puoi riprovare quando vuoi."
-          : friendlyLoginError(error);
-      }
+      if (feedback) feedback.textContent = error?.message === "Creazione account annullata." ? "Creazione account annullata. Puoi riprovare quando vuoi." : friendlyLoginError(error);
       if (passwordInput) {
         passwordInput.value = "";
         passwordInput.focus({ preventScroll: true });
@@ -306,13 +265,9 @@
 
   function initialize() {
     document.addEventListener("submit", handleLogin, true);
-    document.getElementById("auth-create-account-btn")
-      ?.addEventListener("click", startRegistrationFromLogin);
+    document.getElementById("auth-create-account-btn")?.addEventListener("click", startRegistrationFromLogin);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialize, { once: true });
-  } else {
-    initialize();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });
+  else initialize();
 })();

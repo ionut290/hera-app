@@ -1,0 +1,118 @@
+name: Codex guarded error repair
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  repair:
+    if: >-
+      startsWith(github.event.issue.title, '[AUTO-REPAIR]') &&
+      (github.event.issue.author_association == 'OWNER' ||
+       github.event.issue.author_association == 'MEMBER' ||
+       github.event.issue.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REPAIR_BRANCH: codex/error-${{ github.event.issue.number }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify OpenAI secret
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY is not configured in repository Actions secrets."
+            exit 2
+          fi
+
+      - name: Install dependencies before sandbox
+        run: npm ci
+
+      - name: Create repair branch
+        run: git switch -c "$REPAIR_BRANCH"
+
+      - name: Run Codex repair
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ':workspace'
+          prompt: |
+            You are repairing a production PWA repository from a trusted administrator error report.
+
+            Issue #${{ github.event.issue.number }}
+            Title: ${{ github.event.issue.title }}
+            Body:
+            ${{ github.event.issue.body }}
+
+            Rules:
+            - Diagnose first, then make the smallest safe code change that addresses the reported error.
+            - NEVER modify scripts/check-fatto-whazzup-immutable.js or scripts/check-fatto-whazzup-isolation.js.
+            - NEVER weaken or bypass FATTO/Whazzup safety protections.
+            - Do not alter commessa or impianto data schemas unless the issue explicitly proves that is required.
+            - Do not delete user data, change authentication policy, or loosen Firestore permissions.
+            - Preserve existing behavior outside the affected feature.
+            - If a safe fix cannot be proven, do not make speculative changes; leave a concise explanation in your final message.
+            - Do not commit or push. The workflow will test and create the PR only after checks pass.
+
+      - name: Guard immutable FATTO Whazzup perimeter
+        run: |
+          test "$(git hash-object scripts/check-fatto-whazzup-immutable.js)" = "982c5015da3590311fb52d4395e13387f3f2958e"
+          test "$(git hash-object scripts/check-fatto-whazzup-isolation.js)" = "7f2f7f4be8f08ebd65ac69fe21139b7eb601d4d1"
+          node scripts/check-fatto-whazzup-immutable.js
+          node scripts/check-fatto-whazzup-isolation.js
+
+      - name: Verify there is a proposed change
+        run: |
+          if git diff --quiet; then
+            echo "Codex did not produce a code change."
+            exit 3
+          fi
+
+      - name: Run critical safety checks
+        run: |
+          npm run check:syntax
+          npm run check:data-safety
+          npm run check:commesse-impianti
+          npm run check:done-button
+          npm run check:whatsapp-protection
+          node scripts/check-critical-flows.js
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: Codex repair for error #${{ github.event.issue.number }}"
+          git push origin "$REPAIR_BRANCH"
+
+      - name: Open draft pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          CODEX_MESSAGE: ${{ steps.codex.outputs.final-message }}
+        run: |
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$REPAIR_BRANCH" \
+            --draft \
+            --title "[AUTO-REPAIR] #$ISSUE_NUMBER ${ISSUE_TITLE#\[AUTO-REPAIR\] }" \
+            --body "Correzione automatica preparata da Codex per l'errore #$ISSUE_NUMBER.\n\nI controlli critici sono passati prima della creazione di questa PR. La PR resta in bozza: nessun merge automatico.\n\n### Esito Codex\n$CODEX_MESSAGE\n\nCloses #$ISSUE_NUMBER")
+          gh issue comment "$ISSUE_NUMBER" --body "✅ Correzione preparata e verificata. PR in bozza: $PR_URL"

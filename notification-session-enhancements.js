@@ -1,37 +1,62 @@
 (function installNotificationCompatibilityShim() {
   "use strict";
 
-  const CORRECTED_DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoA";
+  const AUTO_ENABLE_NOTIFICATIONS_KEY = "heraAutoEnableNotifications";
+  const PUSH_TOKEN_KEY = "heraPushFcmToken";
 
-  function isValidPushPublicVapidKey(value) {
-    const key = String(value || "").trim();
-    if (!key || !/^[A-Za-z0-9_-]+$/.test(key)) return false;
+  // Le notifiche push web sono intenzionalmente disattivate.
+  // Il Centro Notifiche interno e la relativa cronologia restano disponibili.
+  function installWebPushDisabledGuard() {
     try {
-      const normalized = key.replace(/-/g, "+").replace(/_/g, "/");
-      const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-      const bytes = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
-      return bytes.length === 65 && bytes[0] === 4;
-    } catch (_) {
-      return false;
+      localStorage.setItem(AUTO_ENABLE_NOTIFICATIONS_KEY, "false");
+      localStorage.removeItem(PUSH_TOKEN_KEY);
+    } catch (_) {}
+
+    const storagePrototype = window.Storage?.prototype;
+    if (storagePrototype && !storagePrototype.setItem?.__heraWebPushDisabledGuard) {
+      const originalSetItem = storagePrototype.setItem;
+      const guardedSetItem = function guardedSetItem(key, value) {
+        if (String(key) === AUTO_ENABLE_NOTIFICATIONS_KEY) {
+          return originalSetItem.call(this, key, "false");
+        }
+        return originalSetItem.call(this, key, value);
+      };
+      try {
+        Object.defineProperty(guardedSetItem, "__heraWebPushDisabledGuard", {
+          value: true,
+          configurable: false,
+          enumerable: false,
+          writable: false
+        });
+        storagePrototype.setItem = guardedSetItem;
+      } catch (_) {}
     }
+
+    // Neutralizza solo il token push web. Auth, Firestore e flussi operativi restano invariati.
+    try {
+      if (window.firebase?.messaging && typeof window.firebase.messaging === "function") {
+        const messaging = window.firebase.messaging();
+        if (messaging && !messaging.__heraWebPushDisabled) {
+          messaging.getToken = async () => "";
+          Object.defineProperty(messaging, "__heraWebPushDisabled", {
+            value: true,
+            configurable: false,
+            enumerable: false,
+            writable: false
+          });
+        }
+      }
+    } catch (_) {}
+
+    window.HERA_WEB_PUSH_DISABLED = true;
   }
 
-  let storedPushPublicVapidKey = "";
-  try {
-    storedPushPublicVapidKey = String(localStorage.getItem("heraPushPublicVapidKey") || "").trim();
-    if (storedPushPublicVapidKey && !isValidPushPublicVapidKey(storedPushPublicVapidKey)) {
-      localStorage.removeItem("heraPushPublicVapidKey");
-      storedPushPublicVapidKey = "";
-    }
-  } catch (_) {}
-
-  const configuredPushPublicVapidKey = [
-    window.HERA_PUSH_PUBLIC_VAPID_KEY,
-    document.querySelector('meta[name="hera-push-vapid-key"]')?.content,
-    storedPushPublicVapidKey
-  ].find(isValidPushPublicVapidKey);
-
-  window.HERA_PUSH_PUBLIC_VAPID_KEY = configuredPushPublicVapidKey || CORRECTED_DEFAULT_PUSH_PUBLIC_VAPID_KEY;
+  installWebPushDisabledGuard();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installWebPushDisabledGuard, { once: true });
+  }
+  window.setTimeout(installWebPushDisabledGuard, 250);
+  window.setTimeout(installWebPushDisabledGuard, 1000);
 
   const LAST_NOTIFICATION_KEY = "hera_last_received_notification_v1";
   const NOTIFICATION_HISTORY_KEY = "hera_notification_history_v1";
@@ -154,6 +179,7 @@
   }
 
   function start() {
+    installWebPushDisabledGuard();
     removeLegacyUi();
     installNativeListeners();
     installWebListeners();

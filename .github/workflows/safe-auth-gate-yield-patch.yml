@@ -11,11 +11,11 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.issue.title == '[SAFE-PATCH-V4] auth-gate longtask 17814qt'
+    if: github.event.issue.title == '[SAFE-PATCH-V5] auth-gate longtask 17814qt'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PATCH_BRANCH: fix/auth-gate-longtask-17814qt-v4
+      PATCH_BRANCH: fix/auth-gate-longtask-17814qt-v5
     steps:
       - uses: actions/checkout@v5
         with:
@@ -145,7 +145,9 @@ jobs:
       - name: Scope guard
         run: |
           git diff --check
-          test "$(git diff --name-only | sort)" = $'app.js\nscripts/check-auth-main-thread-yields.js'
+          CHANGED=$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort )
+          printf '%s\n' "$CHANGED"
+          test "$CHANGED" = $'app.js\nscripts/check-auth-main-thread-yields.js'
 
       - name: Commit, push and PR
         env:
@@ -158,4 +160,4 @@ jobs:
           git commit -m "fix: yield main thread during auth startup"
           git push origin "$PATCH_BRANCH"
           PR_URL=$(gh pr create --base main --head "$PATCH_BRANCH" --draft --title "Riduci freeze del thread principale durante auth-gate" --body "Patch mirata per 17814qt: tre yield nel solo blocco onAuthStateChanged -> APP READY. Nessuna modifica a FATTO/WHAZZUP, schema dati o listener. Il test auth-startup ha lo stesso mismatch Service Worker/cache già presente in main; tutti gli altri controlli critici richiesti sono passati.\n\nCloses #$ISSUE_NUMBER")
-          gh issue comment "$ISSUE_NUMBER" --body "✅ Patch V4 e controlli completati: $PR_URL"
+          gh issue comment "$ISSUE_NUMBER" --body "✅ Patch V5 e controlli completati: $PR_URL"

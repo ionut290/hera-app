@@ -1,8 +1,10 @@
 package it.vargacantieri.hera;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
@@ -18,6 +20,7 @@ import it.vargacantieri.hera.whatsapp.HeraWhatsAppPlugin;
 public class MainActivity extends BridgeActivity {
     private static final String CACHE_PREFS_NAME = "hera_native_cache";
     private static final String CACHE_VERSION_CODE_KEY = "clearedForVersionCode";
+    private static final String TEMP_LOGIN_PARAM = "temp-login";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -28,6 +31,39 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraContinuousCameraPlugin.class);
         super.onCreate(savedInstanceState);
         clearWebViewCacheAfterAppUpdate();
+        applyTemporaryLoginDeepLink(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        applyTemporaryLoginDeepLink(intent);
+    }
+
+    private void applyTemporaryLoginDeepLink(Intent intent) {
+        try {
+            Uri data = intent == null ? null : intent.getData();
+            if (data == null) return;
+            if (!"vargacantieri".equalsIgnoreCase(data.getScheme())) return;
+            if (!"login".equalsIgnoreCase(data.getHost())) return;
+
+            String payload = data.getQueryParameter(TEMP_LOGIN_PARAM);
+            if (payload == null || payload.trim().isEmpty()) return;
+
+            WebView webView = getBridge() == null ? null : getBridge().getWebView();
+            if (webView == null) return;
+
+            String safePayload = payload
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "")
+                .replace("\r", "");
+            String javascript = "window.location.hash='temp-login=" + safePayload + "';";
+            webView.postDelayed(() -> webView.evaluateJavascript(javascript, null), 350L);
+        } catch (Exception ignored) {
+            // Il deep link non deve mai impedire l'avvio normale dell'app.
+        }
     }
 
     private void clearWebViewCacheAfterAppUpdate() {

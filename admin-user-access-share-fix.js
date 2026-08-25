@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const SEARCH_LIST_IDS = [
     "pending-users-list",
     "admin-users-list",
@@ -9,6 +9,7 @@
     "user-permissions-list"
   ];
   const TEMP_LOGIN_HASH_KEY = "temp-login";
+  const ANDROID_DEEP_LINK_SCHEME = "vargacantieri";
   let observer = null;
   let scheduled = false;
 
@@ -45,13 +46,28 @@
     return JSON.parse(new TextDecoder().decode(bytes));
   }
 
+  function buildTemporaryLoginPayload(email, password) {
+    return encodePayload({
+      email: String(email || "").trim().toLowerCase(),
+      password: String(password || "")
+    });
+  }
+
   function buildTemporaryLoginLink(email, password) {
     const url = new URL(window.location.href);
     url.search = "";
-    url.hash = `${TEMP_LOGIN_HASH_KEY}=${encodeURIComponent(encodePayload({
-      email: String(email || "").trim().toLowerCase(),
-      password: String(password || "")
-    }))}`;
+    url.hash = `${TEMP_LOGIN_HASH_KEY}=${encodeURIComponent(buildTemporaryLoginPayload(email, password))}`;
+    return url.toString();
+  }
+
+  function buildAndroidLoginLink(email, password) {
+    const payload = buildTemporaryLoginPayload(email, password);
+    return `${ANDROID_DEEP_LINK_SCHEME}://login?${TEMP_LOGIN_HASH_KEY}=${encodeURIComponent(payload)}`;
+  }
+
+  function buildCopyPasswordLink(password) {
+    const url = new URL("copy-password.html", window.location.href);
+    url.searchParams.set("password", String(password || ""));
     return url.toString();
   }
 
@@ -114,7 +130,7 @@
   function getSearchText(item) {
     if (!(item instanceof HTMLElement)) return "";
     const datasetText = Object.values(item.dataset || {}).join(" ");
-    const nestedDatasetText = Array.from(item.querySelectorAll("[data-user-id],[data-uid],[data-user],[data-ban-user],[data-user-ban],[data-user-permission]"))
+    const nestedDatasetText = Array.from(item.querySelectorAll("[data-user-id],[data-uid],[data-user],[data-ban-user],[data-user-permission]"))
       .map((node) => Object.values(node.dataset || {}).join(" "))
       .join(" ");
     return normalize(`${item.textContent || ""} ${datasetText} ${nestedDatasetText}`);
@@ -191,7 +207,7 @@
     actions.className = "actions-row admin-password-share-actions";
     actions.innerHTML = `
       <button id="admin-password-private-whatsapp" class="btn btn-primary" type="button">INVIA SU WHATSAPP</button>
-      <button id="admin-password-private-copy-link" class="btn" type="button">COPIA LINK ACCESSO</button>`;
+      <button id="admin-password-private-copy-link" class="btn" type="button">COPIA LINK PWA</button>`;
     result.appendChild(actions);
 
     actions.querySelector("#admin-password-private-whatsapp")?.addEventListener("click", shareTemporaryPasswordWhatsApp);
@@ -207,7 +223,10 @@
     const password = temporaryPasswordValue();
     const { displayName, email } = parseDialogProfile();
     if (!password || !email) throw new Error("Genera prima la nuova password temporanea.");
-    const link = buildTemporaryLoginLink(email, password);
+
+    const pwaLink = buildTemporaryLoginLink(email, password);
+    const androidLink = buildAndroidLoginLink(email, password);
+    const copyPasswordLink = buildCopyPasswordLink(password);
     const greetingName = displayName && displayName !== "Utente" ? ` ${displayName}` : "";
     const text = [
       `Ciao${greetingName},`,
@@ -216,14 +235,21 @@
       `Email: ${email}`,
       `Password temporanea: ${password}`,
       "",
-      "Puoi aprire direttamente questo link:",
-      link,
+      "📋 COPIA PASSWORD:",
+      copyPasswordLink,
       "",
-      "Il login si aprirà con email e password già compilate. Premi ENTRA.",
+      "🌐 ACCEDI DA PWA:",
+      pwaLink,
+      "",
+      "📱 ACCEDI DA ANDROID:",
+      androidLink,
+      "",
+      "I link di accesso contengono già email e password temporanea.",
+      "Se usi COPIA PASSWORD, premi il pulsante Copia password e poi incollala nell'app.",
       "Al primo accesso dovrai scegliere una nuova password personale.",
       "Per sicurezza non inoltrare questo messaggio ad altre persone."
     ].join("\n");
-    return { text, link };
+    return { text, link: pwaLink, pwaLink, androidLink, copyPasswordLink };
   }
 
   function shareTemporaryPasswordWhatsApp() {
@@ -232,7 +258,7 @@
       const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const opened = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
       if (!opened) window.location.href = whatsappUrl;
-      setDialogFeedback("Messaggio WhatsApp preparato con password temporanea e link di accesso.");
+      setDialogFeedback("Messaggio WhatsApp preparato con password, copia password, link PWA e link Android.");
     } catch (error) {
       setDialogFeedback(error?.message || "Impossibile preparare il messaggio WhatsApp.");
     }
@@ -240,9 +266,9 @@
 
   async function copyTemporaryLoginLink() {
     try {
-      const { link } = createShareMessage();
-      await navigator.clipboard.writeText(link);
-      setDialogFeedback("Link di accesso copiato. Contiene la password temporanea: condividilo solo con l'utente interessato.");
+      const { pwaLink } = createShareMessage();
+      await navigator.clipboard.writeText(pwaLink);
+      setDialogFeedback("Link PWA copiato. Contiene la password temporanea: condividilo solo con l'utente interessato.");
     } catch (error) {
       setDialogFeedback(error?.message || "Impossibile copiare il link di accesso.");
     }
@@ -289,6 +315,8 @@
     version: VERSION,
     refresh: enhance,
     buildTemporaryLoginLink,
+    buildAndroidLoginLink,
+    buildCopyPasswordLink,
     applyTemporaryLoginLink
   };
 

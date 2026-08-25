@@ -322,3 +322,12 @@
     initialize();
   }
 })();
+
+(function loadSecureDevicePasswordManager() {
+  if (document.querySelector('script[data-hera-device-password-manager="1"]')) return;
+  const script = document.createElement("script");
+  script.src = "device-password-manager.js?v=20260825a";
+  script.setAttribute("data-hera-device-password-manager", "1");
+  script.async = false;
+  document.head.appendChild(script);
+})();

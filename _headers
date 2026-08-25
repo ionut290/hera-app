@@ -7,6 +7,12 @@
 /sw.js
   Cache-Control: no-cache, must-revalidate
 
+/firebase-config.js
+  Cache-Control: no-cache, must-revalidate
+
+/notification-session-enhancements.js
+  Cache-Control: no-cache, must-revalidate
+
 /loading-humor.js
   Cache-Control: no-cache, must-revalidate
 

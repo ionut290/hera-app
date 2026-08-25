@@ -1,6 +1,38 @@
 (function installNotificationCompatibilityShim() {
   "use strict";
 
+  const CORRECTED_DEFAULT_PUSH_PUBLIC_VAPID_KEY = "BLWYWSC_rEbfAoOnOaO6JYhaYVBCa7IDZaN-2cGMt6uqUYLWwl6mKq8hng9V5B5GPVUOlgjLPLhqz2KvdsuJUoA";
+
+  function isValidPushPublicVapidKey(value) {
+    const key = String(value || "").trim();
+    if (!key || !/^[A-Za-z0-9_-]+$/.test(key)) return false;
+    try {
+      const normalized = key.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+      const bytes = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+      return bytes.length === 65 && bytes[0] === 4;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  let storedPushPublicVapidKey = "";
+  try {
+    storedPushPublicVapidKey = String(localStorage.getItem("heraPushPublicVapidKey") || "").trim();
+    if (storedPushPublicVapidKey && !isValidPushPublicVapidKey(storedPushPublicVapidKey)) {
+      localStorage.removeItem("heraPushPublicVapidKey");
+      storedPushPublicVapidKey = "";
+    }
+  } catch (_) {}
+
+  const configuredPushPublicVapidKey = [
+    window.HERA_PUSH_PUBLIC_VAPID_KEY,
+    document.querySelector('meta[name="hera-push-vapid-key"]')?.content,
+    storedPushPublicVapidKey
+  ].find(isValidPushPublicVapidKey);
+
+  window.HERA_PUSH_PUBLIC_VAPID_KEY = configuredPushPublicVapidKey || CORRECTED_DEFAULT_PUSH_PUBLIC_VAPID_KEY;
+
   const LAST_NOTIFICATION_KEY = "hera_last_received_notification_v1";
   const NOTIFICATION_HISTORY_KEY = "hera_notification_history_v1";
   const MAX_HISTORY_ITEMS = 100;

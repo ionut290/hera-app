@@ -40,10 +40,19 @@
     } catch (_) {}
   }
 
+  function captureCredential(email, password) {
+    const emailValue = normalizeEmail(email?.value);
+    const passwordValue = String(password?.value || "");
+    pendingCredential = emailValue && passwordValue
+      ? { email: emailValue, password: passwordValue, capturedAt: Date.now() }
+      : null;
+  }
+
   function configureLoginFields() {
     const form = document.getElementById("auth-email-form");
     const email = document.getElementById("auth-email-input");
     const password = document.getElementById("auth-password-input");
+    const submit = document.getElementById("auth-email-login-btn");
     if (!form || !email || !password) return false;
 
     form.setAttribute("autocomplete", "on");
@@ -59,13 +68,16 @@
 
     if (!formHookInstalled) {
       formHookInstalled = true;
-      form.addEventListener("submit", () => {
-        const emailValue = normalizeEmail(email.value);
-        const passwordValue = String(password.value || "");
-        pendingCredential = emailValue && passwordValue
-          ? { email: emailValue, password: passwordValue, capturedAt: Date.now() }
-          : null;
+      const capture = () => captureCredential(email, password);
+      email.addEventListener("input", capture, true);
+      email.addEventListener("change", capture, true);
+      password.addEventListener("input", capture, true);
+      password.addEventListener("change", capture, true);
+      password.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") capture();
       }, true);
+      submit?.addEventListener("pointerdown", capture, true);
+      submit?.addEventListener("click", capture, true);
     }
     return true;
   }

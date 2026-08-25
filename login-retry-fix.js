@@ -20,7 +20,7 @@
       return "Connessione non disponibile. Controlla internet e riprova.";
     }
     if (code === "auth/email-not-verified") {
-      return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma l’indirizzo.";
+      return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma il tuo indirizzo.";
     }
     return "Accesso non riuscito. Controlla email e password e riprova.";
   }
@@ -321,13 +321,4 @@
   } else {
     initialize();
   }
-})();
-
-(function loadSecureDevicePasswordManager() {
-  if (document.querySelector('script[data-hera-device-password-manager="1"]')) return;
-  const script = document.createElement("script");
-  script.src = "device-password-manager.js?v=20260825a";
-  script.setAttribute("data-hera-device-password-manager", "1");
-  script.async = false;
-  document.head.appendChild(script);
 })();

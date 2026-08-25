@@ -25,6 +25,9 @@ jobs:
       - name: Apply patch
         run: node scripts/apply-error-impact-categories.js
 
+      - name: Syntax check
+        run: node --check admin-error-center.js
+
       - name: Verify Centro errori
         run: node scripts/check-error-center-runtime.js
 

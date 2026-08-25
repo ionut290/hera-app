@@ -270,13 +270,7 @@
       const auth = firebase.auth();
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       try {
-        const credential = await auth.signInWithEmailAndPassword(email, password);
-        if (credential.user && credential.user.emailVerified === false) {
-          await auth.signOut();
-          const verificationError = new Error("Email non verificata.");
-          verificationError.code = "auth/email-not-verified";
-          throw verificationError;
-        }
+        await auth.signInWithEmailAndPassword(email, password);
       } catch (loginError) {
         const code = String(loginError?.code || "").toLowerCase();
         if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;

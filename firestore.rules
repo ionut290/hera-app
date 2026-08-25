@@ -348,6 +348,22 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    // Audit Whazzup: ogni operatore puo creare e aggiornare soltanto il proprio log.
+    // Lettura e cancellazione restano riservate agli amministratori.
+    match /auditLogsWhazzup/{logId} {
+      allow read, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.userUid == request.auth.uid;
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.userUid == request.auth.uid
+        && request.resource.data.userUid == resource.data.userUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "fattoEsito", "fattoConfermato", "errorMessage", "updatedAt", "whatsappOpened"
+        ])
+      );
+    }
+
     match /operatorPositions/{userId} {
       allow read: if isAdmin();
       allow create, update: if validOperatorPositionWrite(userId);

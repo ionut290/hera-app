@@ -201,3 +201,61 @@
     sync(surface);
   });
 })();
+
+(function installErrorCenterResetButton() {
+  "use strict";
+  const REGION = "europe-west1";
+  let attempts = 0;
+
+  function attach() {
+    const dialog = document.getElementById("hera-error-center-dialog");
+    const actions = dialog?.querySelector?.(".hera-error-head-actions");
+    if (!dialog || !actions) {
+      if (attempts < 30) {
+        attempts += 1;
+        window.setTimeout(attach, 500);
+      }
+      return;
+    }
+    if (actions.querySelector("[data-error-reset]")) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn";
+    button.dataset.errorReset = "1";
+    button.textContent = "AZZERA";
+    button.style.background = "#b91c1c";
+    button.style.borderColor = "#b91c1c";
+    button.style.color = "#fff";
+
+    const closeButton = actions.querySelector("[data-error-close]");
+    actions.insertBefore(button, closeButton || null);
+
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      const confirmed = window.confirm("Azzerare definitivamente tutti gli errori e i contatori del Centro errori? Questa operazione cancella solo la diagnostica del Centro errori e non modifica commesse, impianti, FATTO o WHAZZUP.");
+      if (!confirmed) return;
+
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "AZZERAMENTO…";
+      try {
+        if (!window.firebase?.apps?.length || !window.firebase?.functions) throw new Error("Firebase non disponibile.");
+        const callable = window.firebase.app().functions(REGION).httpsCallable("resetErrorCenter");
+        const response = await callable({});
+        const deleted = Math.max(0, Number(response?.data?.deletedGroups || 0));
+        await window.HeraAdminErrorCenter?.refresh?.();
+        window.alert(`✅ Centro errori azzerato. Eliminati ${deleted} gruppi di errore.`);
+      } catch (error) {
+        console.error("Azzeramento Centro errori fallito:", error);
+        window.alert(`⚠️ Azzeramento non riuscito: ${error?.message || "errore sconosciuto"}`);
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attach, { once: true });
+  else attach();
+})();

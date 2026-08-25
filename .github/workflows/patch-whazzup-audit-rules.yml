@@ -1,0 +1,46 @@
+name: Patch Whazzup audit rules
+
+on:
+  push:
+    branches:
+      - fix/whazzup-audit-permissions
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/whazzup-audit-permissions
+          fetch-depth: 0
+      - name: Add narrow Whazzup audit permissions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('firestore.rules')
+          text = p.read_text(encoding='utf-8')
+          if 'match /auditLogsWhazzup/{logId}' in text:
+              raise SystemExit(0)
+          marker = '''    match /activityLogs/{logId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+    }
+'''
+          block = marker + '''\n    // Audit Whazzup: ogni operatore puo creare e aggiornare soltanto il proprio log.\n    // Lettura e cancellazione restano riservate agli amministratori.\n    match /auditLogsWhazzup/{logId} {\n      allow read, delete: if isAdmin();\n      allow create: if signedIn()\n        && request.resource.data.userUid == request.auth.uid;\n      allow update: if isAdmin() || (\n        signedIn()\n        && resource.data.userUid == request.auth.uid\n        && request.resource.data.userUid == resource.data.userUid\n        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\n          "fattoEsito", "fattoConfermato", "errorMessage", "updatedAt", "whatsappOpened"\n        ])\n      );\n    }\n'''
+          if marker not in text:
+              raise SystemExit('Blocco activityLogs non trovato: patch annullata')
+          p.write_text(text.replace(marker, block, 1), encoding='utf-8')
+          PY
+          rm -f .github/workflows/patch-whazzup-audit-rules.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules .github/workflows/patch-whazzup-audit-rules.yml
+          git commit -m "Fix Whazzup audit Firestore permissions"
+          git push origin HEAD:fix/whazzup-audit-permissions

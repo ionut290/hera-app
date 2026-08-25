@@ -13,15 +13,9 @@
     ) {
       return "Email o password non corretta. Controlla i dati e riprova.";
     }
-    if (code === "auth/too-many-requests") {
-      return "Troppi tentativi. Attendi qualche minuto e riprova.";
-    }
-    if (code === "auth/network-request-failed") {
-      return "Connessione non disponibile. Controlla internet e riprova.";
-    }
-    if (code === "auth/email-not-verified") {
-      return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma il tuo indirizzo.";
-    }
+    if (code === "auth/too-many-requests") return "Troppi tentativi. Attendi qualche minuto e riprova.";
+    if (code === "auth/network-request-failed") return "Connessione non disponibile. Controlla internet e riprova.";
+    if (code === "auth/email-not-verified") return "Email non ancora verificata. Apri il messaggio ricevuto da Firebase e conferma il tuo indirizzo.";
     return "Accesso non riuscito. Controlla email e password e riprova.";
   }
 
@@ -32,6 +26,30 @@
     } catch (error) {
       console.warn("Persistenza Firebase LOCAL non disponibile: continuo comunque con il login.", error);
       return false;
+    }
+  }
+
+  function completeSuccessfulLoginUi() {
+    try {
+      document.body?.classList.remove("auth-pending");
+      document.documentElement?.classList.remove("auth-pending");
+      const loader = document.getElementById("app-startup-loading");
+      if (loader) {
+        loader.classList.add("hidden");
+        loader.hidden = true;
+        loader.setAttribute("aria-hidden", "true");
+      }
+      const gate = document.getElementById("auth-gate");
+      if (gate) {
+        gate.hidden = true;
+        gate.classList.add("hidden");
+        gate.style.setProperty("display", "none", "important");
+        gate.setAttribute("aria-hidden", "true");
+      }
+      window.HeraAuthStartupController?.reconcile?.();
+      window.dispatchEvent(new CustomEvent("hera-login-ui-ready", { detail: { at: Date.now() } }));
+    } catch (error) {
+      console.warn("Ripristino UI dopo login non riuscito:", error);
     }
   }
 
@@ -245,6 +263,7 @@
         if (registration.verificationRequired && feedback) feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
         return;
       }
+      completeSuccessfulLoginUi();
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";
     } catch (error) {

@@ -3,7 +3,7 @@
 
   if (window.HeraAdminErrorCenter?.installed) return;
 
-  const VERSION = "1.2.0";
+  const VERSION = "1.3.0";
   const REGION = "europe-west1";
   const ADMIN_EMAIL = "ionut29019@gmail.com";
   const FUNCTIONS = Object.freeze({
@@ -256,11 +256,121 @@
     return state.impactFilter === "all" ? state.items : state.items.filter((item) => impactCategory(item).id === state.impactFilter);
   }
 
+  function repairAdvice(item) {
+    const text = normalizeImpactText(item);
+    const impact = impactCategory(item).id;
+    const generic = {
+      title: "Analisi guidata",
+      summary: item?.diagnosisAction || "Analizzare il dettaglio tecnico e riprodurre l'errore in modo controllato.",
+      steps: [
+        "Riprodurre l'errore una sola volta e verificare l'ultimo evento registrato.",
+        "Controllare stack, pagina, funzione e piattaforma coinvolta.",
+        "Applicare una correzione su branch dedicato e verificare i flussi critici prima del merge."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Richiede una modifica tecnica verificata: il Centro errori non cambia automaticamente il codice sorgente."
+    };
+
+    if (/applicationserverkey|p-256|vapid/.test(text)) return {
+      title: "Configurazione Web Push / VAPID",
+      summary: "La chiave applicationServerKey non è una chiave pubblica P-256 valida. Se le notifiche push non servono, la soluzione più sicura è impedire la registrazione automatica del Web Push; altrimenti va configurata una chiave VAPID pubblica valida.",
+      steps: [
+        "Bloccare la subscribe Push quando Web Push è disattivato o non configurato.",
+        "Non richiedere il permesso notifiche automaticamente all'avvio.",
+        "Se si vuole usare Web Push, validare la VAPID public key prima di chiamare pushManager.subscribe().",
+        "Pulire eventuali subscription locali non valide e verificare su PWA iOS."
+      ],
+      safeAutoRepair: true,
+      repairNote: "Riparazione sicura disponibile sul dispositivo: rimuove una subscription Web Push locale non valida e disattiva i tentativi automatici per questa installazione. Non modifica FATTO, WHAZZUP o i dati delle commesse."
+    };
+
+    if (impact === "performance") return {
+      title: "Riduzione rallentamenti",
+      summary: "Probabile lavoro ripetuto, listener duplicato, timeout o render eccessivo.",
+      steps: [
+        "Individuare listener/observer registrati più volte e garantire una sola sottoscrizione attiva.",
+        "Evitare refresh completi della schermata quando basta aggiornare il singolo elemento.",
+        "Spostare caricamenti non essenziali dopo il primo render e misurare nuovamente il tempo di risposta."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Serve una correzione nel codice: nessuna modifica automatica viene applicata senza test."
+    };
+
+    if (impact === "commesse") return {
+      title: "Protezione isolamento commessa",
+      summary: "L'errore può coinvolgere associazioni fra commesse e impianti. La priorità è evitare qualsiasi scrittura o render con un commessaId non corrispondente.",
+      steps: [
+        "Verificare che ogni query/listener sia filtrato dal commessaId attivo.",
+        "Scartare snapshot arrivati dopo il cambio commessa se appartengono alla commessa precedente.",
+        "Prima del render, validare che ogni impianto appartenga realmente alla commessa aperta.",
+        "Non eseguire correzioni automatiche sui dati finché la causa non è verificata."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Per sicurezza non viene mai modificato automaticamente alcun dato di commesse o impianti."
+    };
+
+    if (impact === "sync") return {
+      title: "Ripristino salvataggio / sincronizzazione",
+      summary: "Il problema riguarda Firestore, rete, offline o una scrittura non completata.",
+      steps: [
+        "Verificare permission-denied, rete e percorso Firestore esatto.",
+        "Mantenere la modifica locale in coda senza annullare lo stato UI già confermato dall'utente.",
+        "Ritentare la sincronizzazione in modo idempotente e impedire scritture duplicate."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Il Centro errori prepara la diagnosi ma non riscrive automaticamente dati operativi."
+    };
+
+    if (impact === "auth") return {
+      title: "Sessione / permessi",
+      summary: "Controllare sessione Firebase, ruolo utente e regole di accesso senza cancellare credenziali salvate.",
+      steps: [
+        "Verificare che Firebase sia inizializzato prima di usare auth/firestore.",
+        "Controllare token e ruolo senza forzare logout automatici.",
+        "Verificare regole e Cloud Functions interessate dal permission-denied."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Nessun logout o cambio permessi viene eseguito automaticamente."
+    };
+
+    if (impact === "map") return {
+      title: "Mappa / GPS",
+      summary: "Controllare coordinate, permessi di posizione e stato della mappa senza cancellare dati impianto.",
+      steps: [
+        "Validare latitudine e longitudine prima di creare marker o avviare la navigazione.",
+        "Gestire il rifiuto del permesso GPS con fallback esplicito.",
+        "Evitare ricreazioni complete della mappa che chiudono popup o bloccano i controlli."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Le coordinate salvate non vengono cambiate automaticamente."
+    };
+
+    if (impact === "blocking") return {
+      title: "Sblocco app",
+      summary: "Il problema impedisce o ostacola l'uso dell'app. Va isolata la funzione responsabile prima di qualunque modifica automatica.",
+      steps: [
+        "Controllare l'ultimo evento e l'azione immediatamente precedente al blocco.",
+        "Verificare overlay, pointer-events, loop di render e task sincroni lunghi.",
+        "Correggere su branch dedicato e testare Home, apertura commesse, FATTO e navigazione prima del merge."
+      ],
+      safeAutoRepair: false,
+      repairNote: "Riparazione automatica disabilitata per evitare regressioni sui flussi critici."
+    };
+
+    return generic;
+  }
+
+  function solutionHtml(item) {
+    const advice = repairAdvice(item);
+    const steps = advice.steps.map((step, index) => '<li><strong>' + (index + 1) + '.</strong> ' + esc(step) + '</li>').join('');
+    return '<div class="hera-error-solution-card"><div class="hera-error-solution-title">🧠 ' + esc(advice.title) + '</div><p>' + esc(advice.summary) + '</p><ol>' + steps + '</ol><div class="hera-error-solution-note">' + esc(advice.repairNote) + '</div></div>';
+  }
+
   function ensureImpactStyle() {
     if (document.getElementById("hera-error-impact-style")) return;
     const style = document.createElement("style");
     style.id = "hera-error-impact-style";
-    style.textContent = ".hera-error-impact-summary{margin:10px 14px 0;padding:11px;border:1px solid #dbe3ef;border-radius:14px;background:#fff}.hera-error-impact-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.hera-error-impact-head strong{font-size:.82rem}.hera-error-impact-head small{color:#64748b;font-size:.68rem}.hera-error-impact-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.hera-error-impact-card{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;padding:9px;border:1px solid #e2e8f0;border-radius:11px;background:#f8fafc;color:#172033;text-align:left;cursor:pointer}.hera-error-impact-card:hover,.hera-error-impact-card.is-active{border-color:#93c5fd;background:#eff6ff}.hera-error-impact-card b{font-size:.75rem}.hera-error-impact-card span:last-child{min-width:28px;padding:3px 6px;border-radius:999px;background:#e2e8f0;font-size:.68rem;font-weight:900;text-align:center}.hera-error-impact-pill{display:inline-flex!important;width:max-content!important;margin-top:6px!important;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#334155;font-size:.67rem!important;font-weight:800}.hera-error-tag[data-impact=blocking]{background:#fee2e2;color:#991b1b}.hera-error-tag[data-impact=commesse]{background:#fff1f2;color:#9f1239}.hera-error-tag[data-impact=performance]{background:#fef3c7;color:#92400e}.hera-error-tag[data-impact=sync]{background:#e0f2fe;color:#075985}.hera-error-tag[data-impact=notifications]{background:#f3e8ff;color:#6b21a8}.hera-error-impact-empty{padding:8px 2px;color:#64748b;font-size:.72rem}@media(max-width:880px){.hera-error-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.hera-error-impact-summary{margin:8px 8px 0}.hera-error-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hera-error-impact-card{padding:8px 7px}.hera-error-impact-card b{font-size:.7rem}.hera-error-impact-head{align-items:flex-start;flex-direction:column}}";
+    style.textContent = ".hera-error-impact-summary{margin:10px 14px 0;padding:11px;border:1px solid #dbe3ef;border-radius:14px;background:#fff}.hera-error-impact-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.hera-error-impact-head strong{font-size:.82rem}.hera-error-impact-head small{color:#64748b;font-size:.68rem}.hera-error-impact-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.hera-error-impact-card{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;padding:9px;border:1px solid #e2e8f0;border-radius:11px;background:#f8fafc;color:#172033;text-align:left;cursor:pointer}.hera-error-impact-card:hover,.hera-error-impact-card.is-active{border-color:#93c5fd;background:#eff6ff}.hera-error-impact-card b{font-size:.75rem}.hera-error-impact-card span:last-child{min-width:28px;padding:3px 6px;border-radius:999px;background:#e2e8f0;font-size:.68rem;font-weight:900;text-align:center}.hera-error-impact-pill{display:inline-flex!important;width:max-content!important;margin-top:6px!important;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#334155;font-size:.67rem!important;font-weight:800}.hera-error-tag[data-impact=blocking]{background:#fee2e2;color:#991b1b}.hera-error-tag[data-impact=commesse]{background:#fff1f2;color:#9f1239}.hera-error-tag[data-impact=performance]{background:#fef3c7;color:#92400e}.hera-error-tag[data-impact=sync]{background:#e0f2fe;color:#075985}.hera-error-tag[data-impact=notifications]{background:#f3e8ff;color:#6b21a8}.hera-error-impact-empty{padding:8px 2px;color:#64748b;font-size:.72rem}.hera-error-solution-card{margin:10px 0;padding:12px;border:1px solid #bfdbfe;border-radius:12px;background:#f8fbff}.hera-error-solution-title{font-weight:900;margin-bottom:6px}.hera-error-solution-card p{margin:0 0 8px}.hera-error-solution-card ol{margin:0;padding-left:21px}.hera-error-solution-card li{margin:6px 0}.hera-error-solution-note{margin-top:10px;padding:8px 10px;border-radius:9px;background:#eef2ff;font-size:.76rem}.hera-error-repair-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.hera-error-repair-btn{font-weight:900}.hera-error-repair-btn.is-safe{background:#15803d;color:#fff;border-color:#15803d}.hera-error-repair-result{margin:8px 0 0}@media(max-width:880px){.hera-error-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.hera-error-impact-summary{margin:8px 8px 0}.hera-error-impact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hera-error-impact-card{padding:8px 7px}.hera-error-impact-card b{font-size:.7rem}.hera-error-impact-head{align-items:flex-start;flex-direction:column}}";
     document.head.appendChild(style);
   }
 
@@ -392,6 +502,8 @@
       <section class="hera-error-admin">
         <label>Stato<select data-error-detail-status>${["open", "in_verification", "resolved", "ignored"].map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${esc(statusLabel(status))}</option>`).join("")}</select></label>
         <label>Nota amministratore<textarea class="hera-error-note" data-error-note rows="4" maxlength="3000" placeholder="Annota verifica, causa o correzione applicata.">${esc(item.adminNote || "")}</textarea></label>
+        <div class="hera-error-repair-actions"><button class="btn hera-error-repair-btn" type="button" data-error-find-solution>🧠 TROVA SOLUZIONE</button><button class="btn hera-error-repair-btn ${repairAdvice(item).safeAutoRepair ? "is-safe" : ""}" type="button" data-error-repair>🛠️ RIPARA ERRORE</button></div>
+        <div class="hera-error-repair-result" data-error-repair-result></div>
         <p class="hera-error-status" data-error-feedback></p>
         <div class="hera-error-admin-actions"><button class="btn btn-primary" type="button" data-error-save>SALVA STATO</button><button class="btn" type="button" data-error-copy>COPIA DIAGNOSTICA</button></div>
       </section>`;
@@ -566,6 +678,48 @@
     }
   }
 
+  function showSelectedSolution() {
+    const item = selectedItem();
+    const root = document.querySelector("[data-error-repair-result]");
+    if (!item || !root) return;
+    root.innerHTML = solutionHtml(item);
+  }
+
+  async function repairSelectedError() {
+    const item = selectedItem();
+    const root = document.querySelector("[data-error-repair-result]");
+    const feedback = document.querySelector("[data-error-feedback]");
+    if (!item || !root) return;
+    const advice = repairAdvice(item);
+    root.innerHTML = solutionHtml(item);
+
+    if (!advice.safeAutoRepair) {
+      if (feedback) feedback.textContent = "🛡️ Riparazione automatica bloccata: serve una modifica tecnica verificata. La soluzione guidata è pronta sopra.";
+      return;
+    }
+
+    const confirmed = window.confirm("Questa riparazione agisce solo sulla configurazione locale sicura del dispositivo e non modifica commesse, impianti, FATTO o WHAZZUP. Procedere?");
+    if (!confirmed) return;
+
+    if (/applicationserverkey|p-256|vapid/.test(normalizeImpactText(item))) {
+      try {
+        localStorage.setItem("hera:webPushAutoDisabled", "1");
+        localStorage.setItem("hera:disableWebPush", "1");
+      } catch (_) {}
+      try {
+        const registration = await navigator.serviceWorker?.ready;
+        const subscription = await registration?.pushManager?.getSubscription?.();
+        if (subscription) await subscription.unsubscribe();
+      } catch (error) {
+        console.warn("Pulizia subscription Web Push non completata:", error);
+      }
+      if (feedback) feedback.textContent = "✅ Tentativi Web Push automatici disattivati su questo dispositivo e subscription locale rimossa. Ora verifica se l'errore ricompare.";
+      return;
+    }
+
+    if (feedback) feedback.textContent = "ℹ️ Nessuna azione automatica disponibile per questo errore.";
+  }
+
   function handleCenterClick(event) {
     if (event.target.closest?.("[data-error-close]")) return closeCenter();
     if (event.target.closest?.("[data-error-refresh], [data-error-apply]")) return void loadDashboard();
@@ -586,6 +740,8 @@
       renderDetail();
       return;
     }
+    if (event.target.closest?.("[data-error-find-solution]")) return showSelectedSolution();
+    if (event.target.closest?.("[data-error-repair]")) return void repairSelectedError();
     if (event.target.closest?.("[data-error-save]")) return void saveSelectedStatus();
     if (event.target.closest?.("[data-error-copy]")) return void copySelectedDiagnostic();
   }

@@ -267,6 +267,102 @@
 (() => {
   "use strict";
 
+  let pendingCredential = null;
+  let authUnsubscribe = null;
+
+  function normalizeEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function isNativeAndroid() {
+    try {
+      return Boolean(window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === "android");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function storeCredential(email, password) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !password) return;
+
+    try { localStorage.setItem("heraSavedLoginEmailV1", normalizedEmail); } catch (_) {}
+
+    if (isNativeAndroid()) {
+      try {
+        const vault = window.Capacitor?.Plugins?.HeraCredentialVault;
+        if (vault?.storeCredential) {
+          await vault.storeCredential({ email: normalizedEmail, password: String(password) });
+          return;
+        }
+      } catch (error) {
+        console.warn("Salvataggio credenziale Android non riuscito:", error);
+      }
+    }
+
+    try {
+      if (window.PasswordCredential && navigator.credentials?.store) {
+        const credential = new PasswordCredential({ id: normalizedEmail, name: normalizedEmail, password: String(password) });
+        await navigator.credentials.store(credential);
+      }
+    } catch (error) {
+      console.info("Password manager browser non disponibile; resta attivo autocomplete.", error);
+    }
+  }
+
+  function attachAuthWatcher() {
+    if (authUnsubscribe) return;
+    try {
+      const auth = window.firebase && typeof firebase.auth === "function" ? firebase.auth() : null;
+      if (!auth?.onAuthStateChanged) return;
+      authUnsubscribe = auth.onAuthStateChanged((user) => {
+        const pending = pendingCredential;
+        if (!pending || !user?.email) return;
+        if (normalizeEmail(user.email) !== pending.email) return;
+        if (Date.now() - pending.capturedAt > 120000) {
+          pendingCredential = null;
+          return;
+        }
+        pendingCredential = null;
+        void storeCredential(pending.email, pending.password);
+      });
+    } catch (_) {}
+  }
+
+  function captureLogin(event) {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.id !== "auth-email-form") return;
+    const email = normalizeEmail(document.getElementById("auth-email-input")?.value);
+    const password = String(document.getElementById("auth-password-input")?.value || "");
+    if (!email || !password) return;
+    pendingCredential = { email, password, capturedAt: Date.now() };
+    attachAuthWatcher();
+  }
+
+  function prefillSavedEmail() {
+    const emailInput = document.getElementById("auth-email-input");
+    if (!emailInput || emailInput.value) return;
+    try {
+      const savedEmail = localStorage.getItem("heraSavedLoginEmailV1") || "";
+      if (savedEmail) emailInput.value = savedEmail;
+    } catch (_) {}
+  }
+
+  function install() {
+    document.addEventListener("submit", captureLogin, true);
+    prefillSavedEmail();
+    document.getElementById("auth-email-input")?.setAttribute("autocomplete", "username");
+    document.getElementById("auth-password-input")?.setAttribute("autocomplete", "current-password");
+    document.getElementById("auth-email-form")?.setAttribute("autocomplete", "on");
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+  else install();
+})();
+
+(() => {
+  "use strict";
+
   function addStyle(href, dataName) {
     if (document.querySelector(`link[data-${dataName}]`)) return;
     const link = document.createElement("link");

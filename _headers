@@ -31,6 +31,15 @@
 /auth-login-fix.js
   Cache-Control: no-cache, must-revalidate
 
+/login-retry-fix.js
+  Cache-Control: no-cache, must-revalidate
+
+/first-login-password.js
+  Cache-Control: no-cache, must-revalidate
+
+/approval-access.js
+  Cache-Control: no-cache, must-revalidate
+
 /update-app-feature.js
   Cache-Control: no-cache, must-revalidate
 

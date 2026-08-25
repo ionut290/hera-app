@@ -92,11 +92,25 @@
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const firestore = window.firebase?.firestore?.();
       const user = window.firebase?.auth?.()?.currentUser;
-      const isManager = typeof window.canManageData === 'function' && window.canManageData();
 
-      if (!firestore || !user || !isManager) {
+      if (!firestore || !user) {
         await wait(250);
         continue;
+      }
+
+      const canCheckManager = typeof window.canManageData === 'function';
+      if (!canCheckManager) {
+        await wait(250);
+        continue;
+      }
+
+      const isManager = Boolean(window.canManageData());
+      if (!isManager) {
+        console.info('Pulizia sicura duplicati Personale saltata: utente senza permessi amministratore.');
+        return {
+          skipped: true,
+          reason: 'not-admin'
+        };
       }
 
       const collectionName = typeof window.getPersonaleCollectionName === 'function'
@@ -186,10 +200,20 @@
           unsafeGroupsSkipped: skippedUnsafeGroups
         }
       }));
-      return;
+      return {
+        skipped: false,
+        duplicatesDeleted: deletedIds.length,
+        canonicalRecordsUpdated: canonicalUpdates,
+        unsafeGroupsSkipped: skippedUnsafeGroups
+      };
     }
 
-    throw new Error('Firestore o permessi amministratore non disponibili.');
+    console.info('Pulizia sicura duplicati Personale saltata: Firebase, autenticazione o controllo permessi non ancora disponibili.');
+    window.__vargaPersonaleSafeDedup20260803 = false;
+    return {
+      skipped: true,
+      reason: 'dependencies-unavailable'
+    };
   }
 
   removeSafeDuplicates().catch((error) => {

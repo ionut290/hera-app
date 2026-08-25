@@ -11,11 +11,11 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.issue.title == '[SAFE-PATCH-V2] auth-gate longtask 17814qt'
+    if: github.event.issue.title == '[SAFE-PATCH-V3] auth-gate longtask 17814qt'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PATCH_BRANCH: fix/auth-gate-longtask-17814qt-v2
+      PATCH_BRANCH: fix/auth-gate-longtask-17814qt-v3
     steps:
       - uses: actions/checkout@v5
         with:
@@ -27,7 +27,7 @@ jobs:
       - run: npm ci
       - run: git switch -c "$PATCH_BRANCH"
 
-      - name: Apply deterministic auth startup yields
+      - name: Apply scoped auth startup yields
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -49,31 +49,45 @@ jobs:
                   raise SystemExit(f'helper anchor count={s.count(helper_anchor)}')
               s = s.replace(helper_anchor, helper + helper_anchor, 1)
 
-          replacements = [
-            (
-              'gpsUpdateRequests = [];\n    operatorPositions = [];\n    hoursApprovalRequests = [];',
-              'gpsUpdateRequests = [];\n    operatorPositions = [];\n    await yieldToBrowserDuringStartup();\n    hoursApprovalRequests = [];'
-            ),
-            (
-              'renderResourceButtonsForCommessa();\n    closeCommessaResourceViewer();\n    renderParentCommessaOverview();',
-              'renderResourceButtonsForCommessa();\n    closeCommessaResourceViewer();\n    await yieldToBrowserDuringStartup();\n    renderParentCommessaOverview();'
-            ),
-            (
-              'clearMap();\n    lastReadChatAt = null;\n    resetDriveState();',
-              'clearMap();\n    await yieldToBrowserDuringStartup();\n    lastReadChatAt = null;\n    resetDriveState();'
-            ),
-          ]
+          ready = s.find('console.log("APP READY")')
+          if ready < 0:
+              ready = s.find("console.log('APP READY')")
+          if ready < 0:
+              raise SystemExit('APP READY marker non trovato')
 
-          for old, new in replacements:
-              if new in s:
-                  continue
-              count = s.count(old)
+          auth_pos = s.rfind('onAuthStateChanged', 0, ready)
+          if auth_pos < 0:
+              raise SystemExit('onAuthStateChanged marker non trovato prima di APP READY')
+
+          # Bound the patch to the authenticated startup callback only.
+          block_start = auth_pos
+          block_end = ready
+          block = s[block_start:block_end]
+          tokens = [
+              'operatorPositions = [];',
+              'closeCommessaResourceViewer();',
+              'clearMap();'
+          ]
+          for token in tokens:
+              count = block.count(token)
               if count != 1:
-                  raise SystemExit(f'auth anchor count={count}: {old[:70]}')
-              s = s.replace(old, new, 1)
+                  raise SystemExit(f'auth block token count={count}: {token}')
+
+          # Require an async callback before introducing await.
+          prefix = s[max(0, auth_pos - 120):auth_pos + 240]
+          if 'async' not in prefix:
+              raise SystemExit('callback auth non riconosciuto come async; patch annullata')
+
+          block = block.replace('operatorPositions = [];', 'operatorPositions = [];\n    await yieldToBrowserDuringStartup();', 1)
+          block = block.replace('closeCommessaResourceViewer();', 'closeCommessaResourceViewer();\n    await yieldToBrowserDuringStartup();', 1)
+          block = block.replace('clearMap();', 'clearMap();\n    await yieldToBrowserDuringStartup();', 1)
+          s = s[:block_start] + block + s[block_end:]
+
+          if s.count('await yieldToBrowserDuringStartup();') != 3:
+              raise SystemExit('numero yield inatteso dopo patch')
 
           path.write_text(s, encoding='utf-8')
-          print('Auth startup yields applied')
+          print(f'Auth block scoped: {block_start}-{block_end}; 3 yield applicati')
           PY
 
       - name: Add regression test
@@ -81,15 +95,18 @@ jobs:
           cat > scripts/check-auth-main-thread-yields.js <<'JS'
           const fs = require('fs');
           const s = fs.readFileSync('app.js', 'utf8');
-          const required = [
-            'function yieldToBrowserDuringStartup()',
-            'gpsUpdateRequests = [];\n    operatorPositions = [];\n    await yieldToBrowserDuringStartup();\n    hoursApprovalRequests = [];',
-            'closeCommessaResourceViewer();\n    await yieldToBrowserDuringStartup();\n    renderParentCommessaOverview();',
-            'clearMap();\n    await yieldToBrowserDuringStartup();\n    lastReadChatAt = null;'
-          ];
-          for (const token of required) if (!s.includes(token)) process.exit(1);
-          if ((s.match(/await yieldToBrowserDuringStartup\(\);/g) || []).length < 3) process.exit(1);
-          console.log('Auth startup yields OK');
+          if (!s.includes('function yieldToBrowserDuringStartup()')) process.exit(1);
+          const readyCandidates = [s.indexOf('console.log("APP READY")'), s.indexOf("console.log('APP READY')")].filter(v => v >= 0);
+          if (!readyCandidates.length) process.exit(1);
+          const ready = Math.min(...readyCandidates);
+          const auth = s.lastIndexOf('onAuthStateChanged', ready);
+          if (auth < 0) process.exit(1);
+          const block = s.slice(auth, ready);
+          for (const token of ['operatorPositions = [];', 'closeCommessaResourceViewer();', 'clearMap();']) {
+            if ((block.match(new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 1) process.exit(1);
+          }
+          if ((block.match(/await yieldToBrowserDuringStartup\(\);/g) || []).length !== 3) process.exit(1);
+          console.log('Auth startup scoped yields OK');
           JS
 
       - name: Immutable FATTO Whazzup guards
@@ -127,5 +144,5 @@ jobs:
           git add app.js scripts/check-auth-main-thread-yields.js
           git commit -m "fix: yield main thread during auth startup"
           git push origin "$PATCH_BRANCH"
-          PR_URL=$(gh pr create --base main --head "$PATCH_BRANCH" --draft --title "Riduci freeze del thread principale durante auth-gate" --body "Patch mirata per 17814qt: tre yield durante il reset/render post-auth. Nessuna modifica a FATTO/WHAZZUP, schema dati o listener. Tutti i controlli critici del workflow sono passati.\n\nCloses #$ISSUE_NUMBER")
+          PR_URL=$(gh pr create --base main --head "$PATCH_BRANCH" --draft --title "Riduci freeze del thread principale durante auth-gate" --body "Patch mirata per 17814qt: tre yield nel solo blocco onAuthStateChanged -> APP READY. Nessuna modifica a FATTO/WHAZZUP, schema dati o listener. Tutti i controlli critici del workflow sono passati.\n\nCloses #$ISSUE_NUMBER")
           gh issue comment "$ISSUE_NUMBER" --body "✅ Patch e controlli completati: $PR_URL"

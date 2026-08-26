@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.3.1';
+  const VERSION = '2.3.2';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -15,6 +15,7 @@
   let activeRouteMarker = null;
   let activeRouteAnimationFrame = null;
   let activeRoutePolyline = null;
+  let openRequestId = 0;
 
   const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
@@ -102,12 +103,60 @@
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   }
 
+  function parseLatLngPair(value) {
+    const raw = decodeURIComponent(text(value));
+    const match = raw.match(/(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)/);
+    if (!match) return null;
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  }
+
+  function getCoordsFromNavigate(nav) {
+    if (!(nav instanceof HTMLElement)) return null;
+    const datasetPairs = [
+      [nav.dataset?.lat, nav.dataset?.lng],
+      [nav.dataset?.latitude, nav.dataset?.longitude],
+      [nav.dataset?.destinationLat, nav.dataset?.destinationLng],
+      [nav.dataset?.targetLat, nav.dataset?.targetLng]
+    ];
+    for (const [rawLat, rawLng] of datasetPairs) {
+      const lat = Number(rawLat);
+      const lng = Number(rawLng);
+      if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+    }
+
+    const candidates = [nav.getAttribute('href'), nav.dataset?.href, nav.dataset?.url, nav.dataset?.destination, nav.dataset?.coords, nav.dataset?.coordinates].map(text).filter(Boolean);
+    for (const candidate of candidates) {
+      try {
+        const url = new URL(candidate, window.location.href);
+        for (const key of ['destination', 'query', 'q', 'daddr', 'll']) {
+          const pair = parseLatLngPair(url.searchParams.get(key));
+          if (pair) return pair;
+        }
+        const pathPair = parseLatLngPair(url.pathname);
+        if (pathPair) return pathPair;
+      } catch (_) {
+        const pair = parseLatLngPair(candidate);
+        if (pair) return pair;
+      }
+    }
+    return null;
+  }
+
   function findPlantFromRow(row) {
     const body = upper(row?.closest?.('.impianto-actions')?.parentElement?.textContent || row?.parentElement?.textContent || '');
     return getPlants().find((item) => {
       const values = [item?.denominazione, item?.nome, item?.impianto, item?.idSap, item?.idSAP, item?.sap].map(text).filter(Boolean);
       return values.some((value) => body.includes(upper(value)));
     }) || null;
+  }
+
+  function resolveRowCoords(row, nav) {
+    const direct = getCoordsFromNavigate(nav);
+    if (direct) return direct;
+    return getCoords(findPlantFromRow(row));
   }
 
   function ensureStyles() {
@@ -169,6 +218,7 @@
     modal.innerHTML = `<div class="hera-sv-dialog" role="dialog" aria-modal="true" aria-label="Street View 360 impianto"><div class="hera-sv-head"><span class="hera-sv-title">🌐 Street View 360° impianto</span><button type="button" class="hera-sv-close" aria-label="Chiudi">×</button></div><div class="hera-sv-body"><div class="hera-sv-status">Caricamento Street View 360°…</div></div></div>`;
     document.body.appendChild(modal);
     const close = () => {
+      openRequestId += 1;
       modal.classList.add('hidden');
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
@@ -418,11 +468,11 @@
     }
   }
 
-  async function openStreetView(row, mini) {
+  async function openStreetView(row, mini, nav) {
+    const requestId = ++openRequestId;
     const apiKey = resolveApiKey();
     if (!apiKey) return showStatus('⚠️ Chiave Google API non disponibile.');
-    const plant = findPlantFromRow(row);
-    const coords = getCoords(plant);
+    const coords = resolveRowCoords(row, nav);
     if (!coords) return showStatus('⚠️ Coordinate impianto non disponibili.');
 
     mini.dataset.state = 'loading';
@@ -431,11 +481,14 @@
 
     try {
       const maps = await loadGoogleMaps(apiKey);
+      if (requestId !== openRequestId) return;
       const service = new maps.StreetViewService();
       const found = await findNearbyPanorama(service, coords);
+      if (requestId !== openRequestId) return;
       if (!found) { mini.textContent = '📷'; return showStatus('Street View 360° non disponibile entro 1 km da questo impianto.'); }
 
       const usage = await reserveSharedMonthlySlot();
+      if (requestId !== openRequestId) return;
       if (!usage.allowed) { mini.textContent = '⛔'; return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}).`); }
 
       const panoLocation = found.data.location.latLng;
@@ -458,15 +511,17 @@
       });
 
       await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), panoCoords, coords);
+      if (requestId !== openRequestId) return;
       mini.textContent = '🌐';
     } catch (error) {
+      if (requestId !== openRequestId) return;
       console.warn('[STREET VIEW 360]', error);
       mini.textContent = '📷';
       const message = text(error?.message);
       if (/contatore condiviso|permission|permesso|firestore/i.test(message)) showStatus('⚠️ Street View bloccato: non riesco a verificare il contatore condiviso.');
       else showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${message}`);
     } finally {
-      delete mini.dataset.state;
+      if (requestId === openRequestId) delete mini.dataset.state;
     }
   }
 
@@ -482,7 +537,7 @@
     mini.textContent = '🌐';
     mini.title = 'Apri Street View 360°';
     mini.setAttribute('aria-label', 'Apri Street View 360 gradi');
-    mini.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); openStreetView(row, mini); });
+    mini.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); openStreetView(row, mini, nav); });
     row.appendChild(mini);
   }
 

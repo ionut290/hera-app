@@ -119,9 +119,9 @@ assert.match(main, /require\("\.\/error-reporting"\)/);
 assert.match(main, /require\("\.\/error-center"\)/);
 assert.match(main, /errorCenterFunctions/);
 assert.match(loader, /client-error-reporter\.js\?v=20260816a/);
-assert.match(loader, /app-error-monitor\.js\?v=\$\{version\}/);
-assert.match(loader, /admin-error-center\.js\?v=\$\{version\}/);
-assert.match(loader, /admin-error-center\.css\?v=\$\{version\}/);
+assert.match(loader, /app-error-monitor\.js\?v=20260824b/);
+assert.match(loader, /admin-error-center\.js\?v=20260824b/);
+assert.match(loader, /admin-error-center\.css\?v=20260824b/);
 assert.match(serviceWorker, /varga-cantieri-shell-v152/);
 for (const path of ["/loading-humor.js", "/client-error-reporter.js", "/app-error-monitor.js", "/admin-error-center.js", "/admin-error-center.css"]) {
   assert.ok(serviceWorker.includes(`"${path}"`), `${path} deve essere network-first`);

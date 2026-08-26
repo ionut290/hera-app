@@ -370,6 +370,15 @@
     });
   }
 
+  function loadUpdateCenter() {
+    loadScriptOnce({
+      selector: 'script[data-update-center-feature]',
+      src: './update-center-feature.js?v=20260826a',
+      datasetKey: 'updateCenterFeature',
+      errorMessage: 'Centro aggiornamenti non caricato.'
+    });
+  }
+
   function init() {
     loadFirestorePresenceCostGuard();
     loadBrandingFeature();
@@ -386,6 +395,7 @@
     loadModernImpiantiMap();
     loadMapSearchFocus();
     loadStreetViewCards();
+    loadUpdateCenter();
     if (window.firebase?.auth) {
       try {
         window.firebase.auth().onAuthStateChanged(setLoginPhoto);

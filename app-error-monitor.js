@@ -3,7 +3,7 @@
 
   if (window.HeraAppErrorMonitor?.installed) return;
 
-  const VERSION = "1.1.1";
+  const VERSION = "1.1.2";
   const REGION = "europe-west1";
   const FUNCTION_NAME = "recordClientErrorGroup";
   const QUEUE_KEY = "hera_error_center_queue_v1";
@@ -418,7 +418,13 @@
   function monitorInteraction(event) {
     if (event.isTrusted === false) return;
     const target = event.target;
-    const info = targetLabel(target);
+    const actionable = target?.closest?.("button, a, [role='button'], input, select, textarea, [data-action], [data-action-key]");
+    const isMapSurface = Boolean(target?.closest?.(".leaflet-container, .leaflet-map-pane, .leaflet-tile-pane, .leaflet-overlay-pane, .leaflet-marker-pane"));
+    if (!actionable) {
+      if (isMapSurface) addBreadcrumb("tap", "Mappa", { view: currentView() });
+      return;
+    }
+    const info = targetLabel(actionable);
     const now = Date.now();
     if (lastTap.key === info.key && now - lastTap.at <= REPEATED_TAP_WINDOW_MS) lastTap.count += 1;
     else lastTap = { key: info.key, at: now, count: 1 };

@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v152";
-const CACHE_RESET_VERSION = "20260824-commessa-isolation1";
+const CACHE_NAME = "varga-cantieri-shell-v153";
+const CACHE_RESET_VERSION = "20260826-login-white-screen1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -33,7 +33,7 @@ const APP_SHELL = [
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./auth-login-fix.js?v=20260731-legacy1",
-  "./login-retry-fix.js?v=20260726f",
+  "./login-retry-fix.js?v=20260826-white-screen1",
   "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",

@@ -459,7 +459,7 @@
       const hasData = summary.groups.length > 0;
       const classes = ["calendar-day", "administrative-calendar-day", date.getMonth() === month ? "" : "is-outside", key === today ? "is-today" : "", key === calendarSelectedDate ? "is-selected" : "", hasData ? "has-administrative-data" : ""].filter(Boolean).join(" ");
       const aria = hasData ? `${summary.groups.length} commesse, ${summary.plants} impianti fatti, ${formatHours(summary.hours)} ore, ${money.format(summary.earnings)}` : "nessuna attività disponibile";
-      cells.push(`<button class="${classes}" type="button" role="gridcell" data-calendar-date="${key}" aria-label="${escape(formatCalendarLongDate(key))}, ${escape(aria)}"><span class="calendar-day-number">${date.getDate()}</span>${hasData ? `<span class="administrative-day-counts"><b>${summary.plants} ✓</b><b>${formatHours(summary.hours)} h</b>${summary.earnings > 0 || summary.missingAmounts ? `<b>${money.format(summary.earnings)}${summary.missingAmounts ? "+" : ""}</b>` : ""}</span>` : ""}</button>`);
+      cells.push(`<button class="${classes}" type="button" role="gridcell" data-calendar-date="${key}" aria-label="${escape(formatCalendarLongDate(key))}, ${escape(aria)}"><span class="calendar-day-number">${date.getDate()}</span>${hasData ? `<span class="administrative-day-counts"><b>${summary.plants} ✓</b><b>${formatHours(summary.hours)} h</b><b>${money.format(summary.earnings)}${summary.missingAmounts ? "+" : ""}</b></span>` : ""}</button>`);
     }
     ui.calendarGrid.innerHTML = cells.join("");
     ui.calendarGrid.querySelectorAll("[data-calendar-date]").forEach((button) => {

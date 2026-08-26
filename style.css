@@ -4878,9 +4878,86 @@ body.squadre-impianto-detail-open { overflow: hidden; }
 .commessa-title-wrap {
   min-width: 0;
   display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.commessa-title-copy {
+  min-width: 0;
+  display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.commessa-plants-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.commessa-plants-menu-btn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  font-size: 1.55rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.commessa-plants-menu-btn:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 2px;
+}
+
+.commessa-plants-menu {
+  position: absolute;
+  z-index: 1250;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(292px, calc(100vw - 28px));
+  padding: 10px;
+  border: 1px solid #d8e1ec;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.2);
+}
+
+.commessa-plants-menu > strong {
+  display: block;
+  padding: 5px 8px 9px;
+  color: #166534;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.commessa-plants-menu button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commessa-plants-menu button:hover,
+.commessa-plants-menu button:focus-visible {
+  background: #eef7f1;
+  color: #166534;
+  outline: none;
 }
 
 .commessa-focus-label {
@@ -11658,4 +11735,14 @@ body.worklimate-page-open {
   .whazzup-photo-open { height: 190px; }
   .whazzup-photo-item-actions { display: grid; grid-template-columns: 1fr; }
   .whazzup-photo-manager-actions .btn:not(.whazzup-photo-manager-submit) { flex: 1 1 calc(50% - 4px); }
+}
+
+/* Accesso rapido Gestione impianti: override finale per evitare clipping del popover. */
+.commessa-dashboard-head .commessa-title-wrap {
+  overflow: visible;
+}
+
+.commessa-dashboard-head .commessa-title-copy {
+  min-width: 0;
+  overflow: hidden;
 }

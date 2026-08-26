@@ -182,6 +182,13 @@
     const dataAttribute=calculated?`data-mobile-display-field="${field}"`:`data-v2-field="${field}"`;
     return `<label class="${calculated?"is-calculated":""}"><span>${esc(label)}${field==="denominazione"?' <b aria-hidden="true">*</b>':""}</span><input ${dataAttribute} type="${type}" value="${esc(shown)}"${readonly}${list}${required}${decimal}></label>`;
   }
+  function ensureMobileAddWorkButton(form){
+    let button=document.querySelector("#commessa-mobile-add-work");
+    if(button||!form)return button;
+    button=document.createElement("button");button.id="commessa-mobile-add-work";button.className="btn commessa-mobile-add-work hidden";button.type="button";button.textContent="＋ Nuova lavorazione sullo stesso impianto";
+    const feedback=form.querySelector("#commessa-mobile-plant-feedback");form.insertBefore(button,feedback||form.querySelector(".commessa-mobile-form-actions"));
+    return button;
+  }
   function showMobileEditor(workId="",requestedMode=""){
     const source=workId?joined(state.work.find(w=>w.id===workId)||{}):{stato:"DA FARE"},mode=requestedMode||(workId?"edit":"add"),isNewPlant=mode==="add",isNewWork=mode==="add-work";
     const row=isNewWork?{...source,numeroProgressivoRiga:"",codiceVocePrezzo:"",unitaMisura:"",prezzoBase:null,prezzoRibassato:null,totale:null,dataEsecuzione:"",oraEsecuzione:"",operatoreNome:"",stato:"DA FARE"}:source;
@@ -190,7 +197,7 @@
     document.querySelector("#commessa-mobile-editor-eyebrow").textContent=isNewPlant?"NUOVO IMPIANTO":isNewWork?"NUOVA LAVORAZIONE":"MODIFICA IMPIANTO";
     document.querySelector("#commessa-mobile-editor-title").textContent=isNewPlant?"Aggiungi impianto":isNewWork?`Nuova lavorazione · ${row.denominazione||"Impianto"}`:row.denominazione||"Modifica impianto";
     document.querySelector("#commessa-mobile-plant-feedback").textContent="";
-    const addWorkButton=document.querySelector("#commessa-mobile-add-work");addWorkButton?.classList.toggle("hidden",mode!=="edit");
+    const addWorkButton=ensureMobileAddWorkButton(form);addWorkButton?.classList.toggle("hidden",mode!=="edit");
     const saveButton=document.querySelector("#commessa-mobile-plant-save");if(saveButton)saveButton.textContent=isNewWork?"Salva nuova lavorazione":isNewPlant?"Salva impianto":"Salva modifiche";
     const labels=new Map(columns);
     document.querySelector("#commessa-mobile-plant-fields").innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNewPlant||isNewWork)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;

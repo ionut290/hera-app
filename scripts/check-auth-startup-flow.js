@@ -36,6 +36,18 @@ const signInIndex = loginRetry.indexOf("signInWithEmailAndPassword");
 assert.ok(persistenceIndex >= 0 && signInIndex >= 0 && persistenceIndex < signInIndex,
   "La persistenza LOCAL deve essere impostata prima del login email/password");
 
+assert.match(loginRetry, /installNonBlockingAuthStateBridge/,
+  "Deve esistere il bridge che impedisce al bootstrap profilo di bloccare la Home dopo il login");
+assert.match(loginRetry, /findFirebasePrototypeMethod\(auth, "onAuthStateChanged"\)/,
+  "Il bridge deve usare il listener Firebase originale, non il wrapper bloccante");
+assert.match(loginRetry, /callback\(effectiveUser\)/,
+  "Il callback applicativo deve ricevere subito lo stato auth utilizzabile");
+assert.doesNotMatch(
+  loginRetry.match(/function installNonBlockingAuthStateBridge[\s\S]*$/)?.[0] || "",
+  /await\s+ensurePlatformProfileForAuthenticatedUser/,
+  "Il bridge post-login non deve attendere Firestore prima di notificare l'app"
+);
+
 const cacheNameMatch = sw.match(/CACHE_NAME\s*=\s*"varga-cantieri-shell-v(\d+)"/);
 assert.ok(cacheNameMatch, "Nome cache PWA versionato non trovato");
 assert.ok(Number(cacheNameMatch[1]) >= 133, "La cache PWA non deve regredire sotto v133");
@@ -77,4 +89,4 @@ assert.match(sw, /NETWORK_FIRST_ASSET_PATHS\.has\(url\.pathname\)/);
 assert.match(sw, /networkFirstForCriticalAsset/);
 assert.match(authFix, /__heraSavedCredentialsAutoLoginInstalled/);
 
-console.log("Auth startup flow checks passed: auth unico, header runtime consolidato, persistence LOCAL e asset critici network-first.");
+console.log("Auth startup flow checks passed: auth unico, bridge post-login non bloccante, header runtime consolidato, persistence LOCAL e asset critici network-first.");

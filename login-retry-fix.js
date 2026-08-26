@@ -290,3 +290,89 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });
   else initialize();
 })();
+
+(function installNonBlockingAuthStateBridge() {
+  "use strict";
+
+  if (window.__heraNonBlockingAuthStateBridgeInstalled) return;
+
+  function findFirebasePrototypeMethod(instance, methodName) {
+    let prototype = Object.getPrototypeOf(instance);
+    while (prototype) {
+      if (Object.prototype.hasOwnProperty.call(prototype, methodName) && typeof prototype[methodName] === "function") {
+        return prototype[methodName];
+      }
+      prototype = Object.getPrototypeOf(prototype);
+    }
+    return null;
+  }
+
+  function showEmailVerificationRequired() {
+    const message = "Prima di accedere ai dati, apri l’email di verifica e conferma il tuo indirizzo.";
+    const gateMessage = document.getElementById("auth-gate-message");
+    const feedback = document.getElementById("auth-email-feedback");
+    if (gateMessage) gateMessage.textContent = message;
+    if (feedback) feedback.textContent = message;
+  }
+
+  function install() {
+    if (!window.firebase || typeof firebase.auth !== "function") return false;
+
+    let auth;
+    try {
+      auth = firebase.auth();
+    } catch (_) {
+      return false;
+    }
+    if (!auth || auth.__heraNonBlockingAuthStateBridgeInstalled) return true;
+
+    const firebaseOnAuthStateChanged = findFirebasePrototypeMethod(auth, "onAuthStateChanged");
+    if (typeof firebaseOnAuthStateChanged !== "function") {
+      console.warn("[login-retry-fix] Metodo Firebase originale onAuthStateChanged non trovato.");
+      return false;
+    }
+
+    auth.onAuthStateChanged = function onAuthStateChangedWithoutProfileBlocking(nextOrObserver, error, completed) {
+      const wrapCallback = (callback) => (user) => {
+        const verificationRequired = Boolean(user?.email && user.emailVerified === false);
+        const effectiveUser = verificationRequired ? null : user;
+
+        window.__heraEmailVerificationRequired = verificationRequired;
+        let result;
+        try {
+          result = typeof callback === "function" ? callback(effectiveUser) : undefined;
+        } finally {
+          if (verificationRequired) queueMicrotask(showEmailVerificationRequired);
+        }
+        return result;
+      };
+
+      if (typeof nextOrObserver === "function") {
+        return firebaseOnAuthStateChanged.call(auth, wrapCallback(nextOrObserver), error, completed);
+      }
+
+      const observer = nextOrObserver || {};
+      return firebaseOnAuthStateChanged.call(auth, {
+        next: wrapCallback(observer.next),
+        error: observer.error,
+        complete: observer.complete
+      });
+    };
+
+    Object.defineProperty(auth, "__heraNonBlockingAuthStateBridgeInstalled", {
+      value: true,
+      configurable: false,
+      enumerable: false
+    });
+    window.__heraNonBlockingAuthStateBridgeInstalled = true;
+    return true;
+  }
+
+  if (!install()) {
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (install() || attempts >= 50) window.clearInterval(timer);
+    }, 100);
+  }
+})();

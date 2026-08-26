@@ -1,5 +1,5 @@
 const CACHE_NAME = "varga-cantieri-shell-v152";
-const CACHE_RESET_VERSION = "20260825-notification-push-off1";
+const CACHE_RESET_VERSION = "20260824-commessa-isolation1";
 const APP_SHELL = [
   "./",
   "./index.html",

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#111214">
   <script>
     (() => {
-      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260826-login-white-screen1";
+      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260826-login-stability1";
       const ANDROID_EMERGENCY_CACHE_RESET_VERSION = "20260812-android1";
       const PWA_EMERGENCY_CACHE_RESET_KEY = "heraPwaCacheResetVersion";
       const url = new URL(window.location.href);
@@ -458,7 +458,7 @@
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
   <script src="approval-access.js?v=20260731-legacy1"></script>
   <script src="first-login-password.js?v=20260726b"></script>
-  <script src="login-retry-fix.js?v=20260826-white-screen1"></script>
+  <script src="login-retry-fix.js?v=20260826-stability1"></script>
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
@@ -493,7 +493,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260826-login-white-screen1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260826-login-stability1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

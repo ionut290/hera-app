@@ -1,8 +1,9 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.2.1') return;
 
-  const VERSION = '2.2.1';
+  const VERSION = '2.3.0';
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
+
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
   const USAGE_COLLECTION = 'appConfig';
@@ -43,12 +44,6 @@
     return null;
   }
 
-  function getMonthKey(date = new Date()) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-  }
-
   function getCurrentUserInfo() {
     try {
       const user = window.firebase?.auth?.()?.currentUser;
@@ -62,33 +57,28 @@
     return { uid: null, email: null };
   }
 
+  function getMonthKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
   async function reserveSharedMonthlySlot() {
     const firestore = resolveFirestore();
     if (!firestore) throw new Error('Contatore condiviso Firestore non disponibile');
-
     const monthKey = getMonthKey();
     const ref = firestore.collection(USAGE_COLLECTION).doc(`streetViewUsage_${monthKey}`);
     const user = getCurrentUserInfo();
-
     return firestore.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       const data = snap.exists ? (snap.data() || {}) : {};
       const currentCount = Math.max(0, Number(data.count || 0));
-      if (currentCount >= MONTHLY_LIMIT) {
-        return { allowed: false, count: currentCount, limit: MONTHLY_LIMIT, monthKey };
-      }
-
+      if (currentCount >= MONTHLY_LIMIT) return { allowed: false, count: currentCount, limit: MONTHLY_LIMIT, monthKey };
       const nextCount = currentCount + 1;
+      const serverNow = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
       const payload = {
-        type: 'streetView360',
-        month: monthKey,
-        count: nextCount,
-        limit: MONTHLY_LIMIT,
-        updatedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString(),
-        lastUserUid: user.uid || null,
-        lastUserEmail: user.email || null
+        type: 'streetView360', month: monthKey, count: nextCount, limit: MONTHLY_LIMIT,
+        updatedAt: serverNow, lastUserUid: user.uid || null, lastUserEmail: user.email || null
       };
-      if (!snap.exists) payload.createdAt = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+      if (!snap.exists) payload.createdAt = serverNow;
       transaction.set(ref, payload, { merge: true });
       return { allowed: true, count: nextCount, limit: MONTHLY_LIMIT, monthKey };
     });
@@ -119,44 +109,43 @@
   function findPlantFromRow(row) {
     const body = upper(row?.closest?.('.impianto-actions')?.parentElement?.textContent || row?.parentElement?.textContent || '');
     return getPlants().find((item) => {
-      const values = [item?.denominazione, item?.nome, item?.impianto, item?.idSap, item?.idSAP, item?.sap]
-        .map(text).filter(Boolean);
+      const values = [item?.denominazione, item?.nome, item?.impianto, item?.idSap, item?.idSAP, item?.sap].map(text).filter(Boolean);
       return values.some((value) => body.includes(upper(value)));
     }) || null;
   }
 
   function ensureStyles() {
-    if (document.getElementById('hera-street-view-card-style')) return;
-    const style = document.createElement('style');
-    style.id = 'hera-street-view-card-style';
+    let style = document.getElementById('hera-street-view-card-style');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'hera-street-view-card-style';
+      document.head.appendChild(style);
+    }
     style.textContent = `
       .impianto-primary-actions.hera-sv-row{position:relative!important}
-      .hera-street-view-mini{position:absolute;left:8px;top:calc(100% + 5px);width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:30;overflow:hidden}
-      .hera-street-view-mini:active{transform:scale(.96)}
+      .hera-street-view-mini{position:absolute;left:8px;top:calc(100% + 5px);width:44px;height:30px;min-width:44px;min-height:30px;padding:0;border:1.5px solid #9ca3af;border-radius:8px;background:#fff;box-shadow:0 2px 5px rgba(15,23,42,.14);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;z-index:30}
       .hera-street-view-mini[data-state="loading"]{opacity:.6;pointer-events:none}
-      .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:12px}
+      .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:#fff;display:block;padding:0}
       .hera-sv-modal.hidden{display:none}
-      .hera-sv-dialog{width:min(920px,100%);height:min(92vh,900px);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column}
-      .hera-sv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:800;flex:0 0 auto}
+      .hera-sv-dialog{position:absolute;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;background:#fff;border-radius:0;overflow:hidden;display:flex;flex-direction:column}
+      .hera-sv-head{height:52px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 14px;font-weight:800;border-bottom:1px solid #dbe2ea;background:#fff;flex:0 0 52px;z-index:5}
       .hera-sv-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:40px;height:40px;min-width:40px;font-size:22px}
+      .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:38px;height:38px;min-width:38px;font-size:21px}
       .hera-sv-body{position:relative;flex:1 1 auto;min-height:0;background:#e5e7eb}
-      .hera-sv-layout{height:100%;display:grid;grid-template-rows:minmax(260px,1.7fr) minmax(215px,1fr);background:#fff}
-      .hera-sv-panorama-wrap{position:relative;min-height:0;background:#e5e7eb}
+      .hera-sv-layout{position:absolute;inset:0;display:grid;grid-template-rows:50% 50%;background:#fff}
+      .hera-sv-panorama-wrap{position:relative;min-height:0;background:#e5e7eb;border-bottom:1px solid #fff}
       .hera-sv-panorama{position:absolute;inset:0;width:100%;height:100%}
+      .hera-sv-badge{position:absolute;left:10px;bottom:10px;z-index:3;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;pointer-events:none}
       .hera-sv-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#475569;font-weight:700;background:#fff;z-index:2}
-      .hera-sv-badge{position:absolute;left:12px;bottom:12px;z-index:3;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800;pointer-events:none}
-      .hera-sv-route-panel{display:grid;grid-template-rows:auto 1fr auto;min-height:0;border-top:1px solid #dbe2ea;background:#fff}
-      .hera-sv-route-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;font-weight:800}
-      .hera-sv-route-summary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .hera-sv-route-map{min-height:145px;width:100%;background:#eef2f7}
-      .hera-sv-route-actions{display:flex;gap:8px;align-items:center;padding:8px 10px;overflow-x:auto}
-      .hera-sv-route-btn{border:0;border-radius:10px;padding:8px 11px;font-weight:800;font-size:12px;white-space:nowrap;background:#eef2f7;color:#111827}
+      .hera-sv-route-panel{position:relative;min-height:0;background:#111827;overflow:hidden}
+      .hera-sv-route-map{position:absolute;inset:0;width:100%;height:100%;background:#111827}
+      .hera-sv-route-overlay{position:absolute;left:10px;right:10px;top:10px;z-index:4;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+      .hera-sv-route-summary,.hera-sv-route-note{background:rgba(15,23,42,.82);color:#fff;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:800;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hera-sv-route-actions{position:absolute;left:10px;right:10px;bottom:10px;z-index:4;display:flex;gap:8px;align-items:center;pointer-events:none}
+      .hera-sv-route-btn{pointer-events:auto;border:0;border-radius:10px;padding:8px 11px;font-weight:800;font-size:12px;white-space:nowrap;background:#fff;color:#111827;box-shadow:0 2px 10px rgba(0,0,0,.18)}
       .hera-sv-route-btn.primary{background:#111827;color:#fff}
-      .hera-sv-route-note{font-size:11px;color:#64748b;font-weight:700;white-space:nowrap}
-      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-modal{padding:4px}.hera-sv-dialog{height:94vh;border-radius:12px}.hera-sv-layout{grid-template-rows:minmax(245px,1.35fr) minmax(250px,1fr)}.hera-sv-route-head{padding:7px 9px}.hera-sv-route-actions{padding:7px 8px}.hera-sv-route-map{min-height:165px}}
+      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-head{height:48px;flex-basis:48px;padding:6px 10px}.hera-sv-route-summary,.hera-sv-route-note{font-size:10px}.hera-sv-route-btn{padding:7px 9px;font-size:11px}}
     `;
-    document.head.appendChild(style);
   }
 
   function stopRouteAnimation() {
@@ -183,12 +172,13 @@
     document.body.appendChild(modal);
     const close = () => {
       modal.classList.add('hidden');
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
       try { activePanorama?.setVisible(false); } catch (_) {}
       activePanorama = null;
       clearRouteRuntime();
     };
     modal.querySelector('.hera-sv-close')?.addEventListener('click', close);
-    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     return modal;
   }
 
@@ -197,6 +187,8 @@
     clearRouteRuntime();
     modal.querySelector('.hera-sv-body').innerHTML = `<div class="hera-sv-status">${message}</div>`;
     modal.classList.remove('hidden');
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
   }
 
   function loadGoogleMaps(apiKey) {
@@ -208,13 +200,8 @@
         let attempts = 0;
         const timer = setInterval(() => {
           attempts += 1;
-          if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) {
-            clearInterval(timer);
-            resolve(window.google.maps);
-          } else if (attempts >= 60) {
-            clearInterval(timer);
-            reject(new Error('Maps JavaScript API non disponibile'));
-          }
+          if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) { clearInterval(timer); resolve(window.google.maps); }
+          else if (attempts >= 60) { clearInterval(timer); reject(new Error('Maps JavaScript API non disponibile')); }
         }, 150);
         return;
       }
@@ -232,33 +219,23 @@
         if (window.google?.maps?.StreetViewService && window.google?.maps?.StreetViewPanorama) resolve(window.google.maps);
         else reject(new Error('Street View JavaScript non inizializzato'));
       };
-      script.onerror = () => {
-        try { delete window[callbackName]; } catch (_) {}
-        reject(new Error('Caricamento Maps JavaScript API fallito'));
-      };
+      script.onerror = () => reject(new Error('Caricamento Maps JavaScript API fallito'));
       document.head.appendChild(script);
-    }).catch((error) => {
-      mapsLoaderPromise = null;
-      throw error;
-    });
+    }).catch((error) => { mapsLoaderPromise = null; throw error; });
     return mapsLoaderPromise;
   }
 
   function getPanoramaAtRadius(service, coords, radius) {
     return new Promise((resolve) => {
-      service.getPanorama({
-        location: coords,
-        radius,
-        source: window.google.maps.StreetViewSource.OUTDOOR,
-        preference: window.google.maps.StreetViewPreference.NEAREST
-      }, (data, status) => resolve({ data, status, radius }));
+      service.getPanorama({ location: coords, radius, source: window.google.maps.StreetViewSource.OUTDOOR, preference: window.google.maps.StreetViewPreference.NEAREST },
+        (data, status) => resolve({ data, status, radius }));
     });
   }
 
   async function findNearbyPanorama(service, coords) {
     for (const radius of SEARCH_RADII) {
       const result = await getPanoramaAtRadius(service, coords, radius);
-      if (result.status === window.google.maps.StreetViewStatus.OK && result.data?.location?.pano) return result;
+      if ((String(result.status) === 'OK' || result.status === window.google.maps.StreetViewStatus.OK) && result.data?.location?.pano) return result;
     }
     return null;
   }
@@ -284,72 +261,65 @@
 
   function formatDistance(meters) {
     const value = Math.max(0, Number(meters || 0));
-    if (value < 1000) return `${Math.round(value)} m`;
-    return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+    return value < 1000 ? `${Math.round(value)} m` : `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
   }
 
-  function openGoogleMapsRoute(from, to) {
+  function openGoogleMapsRoute(from, to, mode = 'driving') {
     const url = new URL('https://www.google.com/maps/dir/');
     url.searchParams.set('api', '1');
     url.searchParams.set('origin', `${from.lat},${from.lng}`);
     url.searchParams.set('destination', `${to.lat},${to.lng}`);
-    url.searchParams.set('travelmode', 'driving');
+    url.searchParams.set('travelmode', mode);
     window.open(url.toString(), '_blank', 'noopener');
   }
 
   function requestDirections(maps, from, to, travelMode) {
     return new Promise((resolve) => {
-      if (typeof maps.DirectionsService !== 'function') return resolve(null);
-      const service = new maps.DirectionsService();
-      service.route({
-        origin: from,
-        destination: to,
-        travelMode,
-        provideRouteAlternatives: false
-      }, (result, status) => {
-        resolve(status === maps.DirectionsStatus.OK ? result : null);
-      });
+      if (typeof maps.DirectionsService !== 'function') return resolve({ result: null, status: 'SERVICE_UNAVAILABLE' });
+      try {
+        const service = new maps.DirectionsService();
+        service.route({ origin: from, destination: to, travelMode, provideRouteAlternatives: true }, (result, status) => {
+          const ok = String(status) === 'OK' || status === maps.DirectionsStatus?.OK;
+          const hasRoute = Array.isArray(result?.routes) && result.routes.length > 0;
+          resolve({ result: ok && hasRoute ? result : null, status: String(status || 'UNKNOWN') });
+        });
+      } catch (error) {
+        resolve({ result: null, status: text(error?.message) || 'ERROR' });
+      }
     });
+  }
+
+  function chooseBestRoute(result) {
+    const routes = Array.isArray(result?.routes) ? result.routes : [];
+    if (!routes.length) return null;
+    return routes.reduce((best, route) => {
+      const d = Number(route?.legs?.[0]?.distance?.value || Number.MAX_SAFE_INTEGER);
+      if (!best) return { route, distance: d };
+      return d < best.distance ? { route, distance: d } : best;
+    }, null);
   }
 
   function animateRouteMarker(maps, path, replayButton) {
     stopRouteAnimation();
     if (!activeRouteMap || !Array.isArray(path) || path.length < 2) return;
-
     try { activeRouteMarker?.setMap(null); } catch (_) {}
-    activeRouteMarker = new maps.Marker({
-      map: activeRouteMap,
-      position: path[0],
-      title: 'Percorso verso impianto',
-      label: { text: '➜', fontSize: '18px', fontWeight: '900' },
-      zIndex: 999
-    });
-
+    activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: path[0], title: 'Percorso verso impianto', label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
     if (replayButton) replayButton.disabled = true;
-    const duration = Math.min(8500, Math.max(3200, path.length * 95));
+    const duration = Math.min(9000, Math.max(3200, path.length * 95));
     const startedAt = performance.now();
-
     const frame = (now) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const scaled = progress * (path.length - 1);
       const index = Math.min(path.length - 2, Math.floor(scaled));
       const fraction = scaled - index;
-      const a = path[index];
-      const b = path[index + 1];
+      const a = path[index], b = path[index + 1];
       const aLat = typeof a.lat === 'function' ? a.lat() : Number(a.lat);
       const aLng = typeof a.lng === 'function' ? a.lng() : Number(a.lng);
       const bLat = typeof b.lat === 'function' ? b.lat() : Number(b.lat);
       const bLng = typeof b.lng === 'function' ? b.lng() : Number(b.lng);
-      activeRouteMarker?.setPosition({
-        lat: aLat + (bLat - aLat) * fraction,
-        lng: aLng + (bLng - aLng) * fraction
-      });
-      if (progress < 1) {
-        activeRouteAnimationFrame = requestAnimationFrame(frame);
-      } else {
-        activeRouteAnimationFrame = null;
-        if (replayButton) replayButton.disabled = false;
-      }
+      activeRouteMarker?.setPosition({ lat: aLat + (bLat - aLat) * fraction, lng: aLng + (bLng - aLng) * fraction });
+      if (progress < 1) activeRouteAnimationFrame = requestAnimationFrame(frame);
+      else { activeRouteAnimationFrame = null; if (replayButton) replayButton.disabled = false; }
     };
     activeRouteAnimationFrame = requestAnimationFrame(frame);
   }
@@ -359,6 +329,7 @@
     activeRouteMap = new maps.Map(container, {
       center: { lat: (from.lat + to.lat) / 2, lng: (from.lng + to.lng) / 2 },
       zoom: 18,
+      mapTypeId: maps.MapTypeId?.SATELLITE || 'satellite',
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
@@ -368,35 +339,32 @@
     const panoramaMarker = new maps.Marker({ map: activeRouteMap, position: from, title: 'Punto panoramico', label: '📷' });
     const plantMarker = new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
 
-    let result = null;
-    try {
-      result = await requestDirections(maps, from, to, maps.TravelMode.DRIVING);
-      if (!result) result = await requestDirections(maps, from, to, maps.TravelMode.WALKING);
-    } catch (_) {
-      result = null;
+    let chosen = null;
+    let modeUsed = 'driving';
+    const drive = await requestDirections(maps, from, to, maps.TravelMode?.DRIVING || 'DRIVING');
+    if (drive.result) chosen = chooseBestRoute(drive.result);
+
+    if (!chosen) {
+      const walk = await requestDirections(maps, from, to, maps.TravelMode?.WALKING || 'WALKING');
+      if (walk.result) { chosen = chooseBestRoute(walk.result); modeUsed = 'walking'; }
+      else console.warn('[STREET VIEW ROUTE] Directions non disponibile', { driving: drive.status, walking: walk.status, from, to });
     }
 
     let path = [];
     let routeDistance = distanceMeters(from, to);
-    let routeLabel = 'linea diretta';
+    let routeLabel = 'indicazione diretta';
 
-    if (result?.routes?.[0]) {
-      activeRouteRenderer = new maps.DirectionsRenderer({
-        map: activeRouteMap,
-        directions: result,
-        suppressMarkers: true,
-        preserveViewport: false,
-        polylineOptions: { strokeWeight: 6, strokeOpacity: 0.82 }
-      });
-      path = result.routes[0].overview_path || [];
-      routeDistance = Number(result.routes[0].legs?.[0]?.distance?.value || routeDistance);
-      routeLabel = 'percorso stradale';
+    if (chosen?.route) {
+      const oneRouteResult = { ...((modeUsed === 'driving' ? drive.result : null) || {}), routes: [chosen.route] };
+      activeRouteRenderer = new maps.DirectionsRenderer({ map: activeRouteMap, directions: oneRouteResult, suppressMarkers: true, preserveViewport: false, polylineOptions: { strokeWeight: 6, strokeOpacity: 0.9 } });
+      path = chosen.route.overview_path || [];
+      routeDistance = Number(chosen.route.legs?.[0]?.distance?.value || routeDistance);
+      routeLabel = modeUsed === 'driving' ? 'percorso carrabile reale' : 'percorso pedonale reale';
     } else {
       path = [from, to];
-      new maps.Polyline({ map: activeRouteMap, path, strokeWeight: 5, strokeOpacity: 0.78, geodesic: true });
+      new maps.Polyline({ map: activeRouteMap, path, strokeWeight: 5, strokeOpacity: 0.86, geodesic: true });
       const bounds = new maps.LatLngBounds();
-      bounds.extend(from);
-      bounds.extend(to);
+      bounds.extend(from); bounds.extend(to);
       activeRouteMap.fitBounds(bounds, 42);
     }
 
@@ -405,12 +373,10 @@
     const replay = panel?.querySelector('[data-sv-route-replay]');
     const navigate = panel?.querySelector('[data-sv-route-navigate]');
     const note = panel?.querySelector('.hera-sv-route-note');
-
     if (summary) summary.textContent = `📷 Panorama → 📍 Impianto · ${formatDistance(routeDistance)}`;
-    if (note) note.textContent = routeLabel === 'percorso stradale' ? 'Animazione sul percorso carrabile reale' : 'Percorso stradale non disponibile: indicazione diretta';
+    if (note) note.textContent = chosen ? routeLabel : 'Percorso Google non disponibile: linea diretta';
     replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
-    navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to));
-
+    navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to, modeUsed));
     panoramaMarker.setMap(activeRouteMap);
     plantMarker.setMap(activeRouteMap);
     window.setTimeout(() => animateRouteMarker(maps, path, replay), 350);
@@ -431,16 +397,10 @@
       const maps = await loadGoogleMaps(apiKey);
       const service = new maps.StreetViewService();
       const found = await findNearbyPanorama(service, coords);
-      if (!found) {
-        mini.textContent = '📷';
-        return showStatus('Street View 360° non disponibile entro 1 km da questo impianto.');
-      }
+      if (!found) { mini.textContent = '📷'; return showStatus('Street View 360° non disponibile entro 1 km da questo impianto.'); }
 
       const usage = await reserveSharedMonthlySlot();
-      if (!usage.allowed) {
-        mini.textContent = '⛔';
-        return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}). Il contatore riparte automaticamente il mese prossimo.`);
-      }
+      if (!usage.allowed) { mini.textContent = '⛔'; return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}).`); }
 
       const panoLocation = found.data.location.latLng;
       const panoCoords = { lat: panoLocation.lat(), lng: panoLocation.lng() };
@@ -448,24 +408,17 @@
       const directDistance = distanceMeters(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-head"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Preparazione mappa…</span></div><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
+      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo Google Maps…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
       modal.classList.remove('hidden');
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
 
       activePanorama = new maps.StreetViewPanorama(body.querySelector('.hera-sv-panorama'), {
         pano: found.data.location.pano,
-        pov: { heading, pitch: 0 },
-        zoom: 1,
-        visible: true,
-        addressControl: true,
-        linksControl: true,
-        panControl: true,
-        zoomControl: true,
-        fullscreenControl: false,
-        motionTracking: false,
-        motionTrackingControl: false,
-        clickToGo: true,
-        scrollwheel: true,
-        disableDefaultUI: false
+        pov: { heading, pitch: 0 }, zoom: 1, visible: true,
+        addressControl: true, linksControl: true, panControl: true, zoomControl: true,
+        fullscreenControl: false, motionTracking: false, motionTrackingControl: false,
+        clickToGo: true, scrollwheel: true, disableDefaultUI: false
       });
 
       await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), panoCoords, coords);
@@ -474,11 +427,8 @@
       console.warn('[STREET VIEW 360]', error);
       mini.textContent = '📷';
       const message = text(error?.message);
-      if (/contatore condiviso|permission|permesso|firestore/i.test(message)) {
-        showStatus('⚠️ Street View bloccato per sicurezza: non riesco a verificare il contatore condiviso dei 4.800 utilizzi mensili.');
-      } else {
-        showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${message}`);
-      }
+      if (/contatore condiviso|permission|permesso|firestore/i.test(message)) showStatus('⚠️ Street View bloccato: non riesco a verificare il contatore condiviso.');
+      else showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${message}`);
     } finally {
       delete mini.dataset.state;
     }
@@ -496,11 +446,7 @@
     mini.textContent = '🌐';
     mini.title = 'Apri Street View 360°';
     mini.setAttribute('aria-label', 'Apri Street View 360 gradi');
-    mini.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openStreetView(row, mini);
-    });
+    mini.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); openStreetView(row, mini); });
     row.appendChild(mini);
   }
 
@@ -510,12 +456,10 @@
     list.querySelectorAll('.impianto-primary-actions').forEach(enhanceRow);
     if (!observer) {
       observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          for (const node of mutation.addedNodes) {
-            if (!(node instanceof HTMLElement)) continue;
-            if (node.matches?.('.impianto-primary-actions')) enhanceRow(node);
-            node.querySelectorAll?.('.impianto-primary-actions').forEach(enhanceRow);
-          }
+        for (const mutation of mutations) for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.matches?.('.impianto-primary-actions')) enhanceRow(node);
+          node.querySelectorAll?.('.impianto-primary-actions').forEach(enhanceRow);
         }
       });
       observer.observe(list, { childList: true, subtree: true });
@@ -528,19 +472,11 @@
     ensureModal();
     scan();
     let attempts = 0;
-    const timer = setInterval(() => {
-      attempts += 1;
-      if (scan() || attempts >= 20) clearInterval(timer);
-    }, 250);
+    const timer = setInterval(() => { attempts += 1; if (scan() || attempts >= 20) clearInterval(timer); }, 250);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
 
-  window.HeraStreetViewCards = {
-    installed: true,
-    version: VERSION,
-    monthlyLimit: MONTHLY_LIMIT,
-    refresh: scan
-  };
+  window.HeraStreetViewCards = { installed: true, version: VERSION, monthlyLimit: MONTHLY_LIMIT, refresh: scan };
 })();

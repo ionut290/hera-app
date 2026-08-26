@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v157";
+const CACHE_NAME = "varga-cantieri-shell-v158";
 const CACHE_RESET_VERSION = "20260826-login-stability1";
 const APP_SHELL = [
   "./",
@@ -39,7 +39,7 @@ const APP_SHELL = [
   "./approval-access.js?v=20260731-legacy1",
   "./coordinate-repair.js?v=20260728a",
   "./inrete-work-items-v2.js?v=20260728b",
-  "./accounting-v2.js?v=20260826-new-work-sync1",
+  "./accounting-v2.js?v=20260826-management-link2",
   "./commessa-impianti-menu.js?v=20260826c",
   "./accounting-view-guard.js?v=20260728a",
   "./operational-import-repair.js?v=20260824-state-race1",

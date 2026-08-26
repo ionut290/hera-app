@@ -122,7 +122,7 @@ assert.match(loader, /client-error-reporter\.js\?v=20260816a/);
 assert.match(loader, /app-error-monitor\.js\?v=20260824b/);
 assert.match(loader, /admin-error-center\.js\?v=20260824b/);
 assert.match(loader, /admin-error-center\.css\?v=20260824b/);
-assert.match(serviceWorker, /varga-cantieri-shell-v157/);
+assert.match(serviceWorker, /varga-cantieri-shell-v158/);
 for (const path of ["/loading-humor.js", "/client-error-reporter.js", "/app-error-monitor.js", "/admin-error-center.js", "/admin-error-center.css"]) {
   assert.ok(serviceWorker.includes(`"${path}"`), `${path} deve essere network-first`);
 }

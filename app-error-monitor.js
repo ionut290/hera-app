@@ -3,7 +3,7 @@
 
   if (window.HeraAppErrorMonitor?.installed) return;
 
-  const VERSION = "1.1.2";
+  const VERSION = "1.2.0";
   const REGION = "europe-west1";
   const FUNCTION_NAME = "recordClientErrorGroup";
   const QUEUE_KEY = "hera_error_center_queue_v1";
@@ -424,38 +424,16 @@
       if (isMapSurface) addBreadcrumb("tap", "Mappa", { view: currentView() });
       return;
     }
+
     const info = targetLabel(actionable);
     const now = Date.now();
     if (lastTap.key === info.key && now - lastTap.at <= REPEATED_TAP_WINDOW_MS) lastTap.count += 1;
     else lastTap = { key: info.key, at: now, count: 1 };
     lastTap.at = now;
-
     addBreadcrumb("tap", info.label, { view: currentView(), count: lastTap.count });
 
-    if (lastTap.count === 3) {
-      void capture(new Error(`Il comando ${info.label} ha richiesto più tocchi`), {
-        kind: "repeated-tap",
-        severity: "high",
-        feature: currentView() || "interfaccia",
-        tapCount: lastTap.count,
-        metadata: { control: info.label }
-      });
-    }
-
-    const startedAt = performance.now?.() || Date.now();
-    window.setTimeout(() => {
-      if (document.visibilityState === "hidden") return;
-      const endedAt = performance.now?.() || Date.now();
-      const delay = Math.max(0, endedAt - startedAt);
-      if (delay < SLOW_INTERACTION_MIN_MS) return;
-      void capture(new Error(`Risposta lenta dopo il comando ${info.label}`), {
-        kind: delay >= 5000 ? "ui-freeze" : "slow-interaction",
-        severity: delay >= 5000 ? "critical" : delay >= 2500 ? "high" : "medium",
-        feature: currentView() || "interfaccia",
-        durationMs: delay,
-        metadata: { control: info.label }
-      });
-    }, 0);
+    // I tocchi ripetuti sono un segnale UX, non la prova di un errore.
+    // Restano nei breadcrumb ma non vengono inviati al Centro Errori.
   }
 
   function installLongTaskObserver() {
@@ -469,26 +447,24 @@
           .filter((entry) => Number(entry.duration || 0) >= LONG_TASK_MIN_MS);
         if (!entries.length) return;
 
-        const longest = entries.reduce((worst, entry) =>
-          Number(entry.duration || 0) > Number(worst.duration || 0) ? entry : worst
-        );
-        const longestDuration = Number(longest.duration || 0);
+        const longestDuration = Math.max(...entries.map((entry) => Number(entry.duration || 0)));
         const totalDuration = entries.reduce((sum, entry) => sum + Number(entry.duration || 0), 0);
-
-        void capture(new Error("Operazione lunga sul thread principale"), {
-          kind: longestDuration >= 5000 ? "ui-freeze" : "main-thread-long-task",
-          severity: longestDuration >= 5000 ? "critical" : longestDuration >= 2500 ? "high" : "medium",
-          feature: currentView() || "app",
-          durationMs: longestDuration,
-          metadata: {
-            entryType: longest.entryType,
-            name: longest.name || "longtask",
+        updateHealth({
+          lastPerformanceSignalAt: new Date().toISOString(),
+          lastPerformanceSignal: {
             taskCount: entries.length,
+            longestDurationMs: Math.round(longestDuration),
             totalDurationMs: Math.round(totalDuration),
-            longestStartTimeMs: Math.round(Number(longest.startTime || 0)),
             navigationAgeMs: Math.round(performance.now?.() || 0)
           }
         });
+        addBreadcrumb("performance", "Rallentamento rilevato", {
+          taskCount: entries.length,
+          longestDurationMs: Math.round(longestDuration)
+        });
+
+        // Un long task è una misura di prestazione, non un errore applicativo.
+        // Viene conservato localmente per la diagnostica senza inviarlo al Centro Errori.
       });
       observer.observe({ type: "longtask", buffered: false });
     } catch (_) {}
@@ -503,16 +479,12 @@
         original(...args);
         try {
           const firstError = args.find((item) => item instanceof Error);
-          const message = args.map((item) => {
-            if (item instanceof Error) return item.message;
-            if (typeof item === "string") return item;
-            if (item && typeof item === "object") {
-              return [item.name, item.code, item.message].filter(Boolean).map((value) => redactText(value, 500)).join(" · ");
-            }
-            return redactText(item, 300);
-          }).filter(Boolean).join(" ");
+          if (!firstError) return;
+          const message = redactText(firstError.message || "", 1600);
           if (!message || /Push Centro errori non inviata/i.test(message)) return;
-          void capture(firstError || new Error(message), {
+          if (/AbortError|operazione annullata|operation (?:was )?aborted|ResizeObserver loop/i.test(`${firstError.name || ""} ${message}`)) return;
+          if (navigator.onLine === false && /network|fetch|offline|unavailable/i.test(message)) return;
+          void capture(firstError, {
             kind: "handled-console-error",
             severity: "high",
             message,
@@ -544,7 +516,7 @@
       const target = event.target;
       if (target && target !== window && target !== document) {
         const tag = String(target.tagName || "").toUpperCase();
-        if (!/^(SCRIPT|LINK|IMG|SOURCE)$/.test(tag)) return;
+        if (!/^(SCRIPT|LINK)$/.test(tag)) return;
         const source = target.src || target.href || "";
         void capture(new Error(`Risorsa non caricata: ${source || tag}`), {
           kind: "resource-error",

@@ -61,6 +61,10 @@
     // Risoluzione Firebase/JavaScript: la UI non legge mai risultati dalle formule xlsx.
     state.work=state.work.map(w=>core.enrichWorkItem(w,state.priceMap,requestedCommessa.percentualeRibassoGenerale));
     if(isStale())return false;
+    if(options.autoRepair!==false&&!state.autoRepairing){
+      const drift=operationalProjectionDrift();
+      if(drift.length){state.autoRepairing=true;try{await commitOperations(drift.map(item=>({ref:requestedRef.collection("impianti").doc(item.id),data:item.data})));if(isStale())return false;const repaired=new Map(drift.map(item=>[item.id,item.data]));state.operationalPlants=state.operationalPlants.map(item=>repaired.has(String(item.id||""))?{...item,...repaired.get(String(item.id||""))}:item);console.info(`[PlantRepair] riallineate ${drift.length} schede operative con le lavorazioni già salvate.`);}catch(error){if(!isStale())console.error("Riallineamento schede operative non riuscito:",error);}finally{if(!isStale())state.autoRepairing=false;}}
+    }
     if(options.autoRepair!==false&&needsOperationalRepair()&&!state.autoRepairing){
       state.autoRepairing=true;
       try{
@@ -91,6 +95,7 @@
   const stableId=(key)=>`matrix_${Array.from(key).reduce((h,c)=>Math.imul(31,h)+c.charCodeAt(0)|0,0).toString(36).replace("-","n")}`;
   const plantStatus=(items)=>core.derivePlantStatus(items.length?items:[{stato:"DA FARE"}]);
   const operationalPayload=(plant,items,commessaId=state.commessa.id)=>{const status=plantStatus(items),doneCount=items.filter(w=>String(w.stato).toUpperCase()==="FATTO").length,gps=coordinateDiagnosis(plant);return {commessaId,physicalPlantId:plant.id,migrationSourceId:plant.migrationSourceId||plant.id,numeroProgressivo:plant.numeroProgressivoImpianto||null,distretto:plant.distretto||"",idSap:clean(plant.idSap),denominazione:clean(plant.denominazione),nome:clean(plant.denominazione),comune:clean(plant.comune),indirizzo:clean(plant.indirizzo),gpsY:gps.valid?gps.latitude:null,gpsX:gps.valid?gps.longitude:null,latitudine:gps.valid?gps.latitude:null,longitudine:gps.valid?gps.longitude:null,...coordinateMeta(gps),codicePrezzo:items.map(w=>clean(w.codiceVocePrezzo)).filter(Boolean).join("; "),tipologiaIntervento:items.map(w=>clean(w.tipologiaLavorazione)).filter(Boolean).join("; "),stato:status,statoGenerale:status,done:status==="FATTO",numeroLavorazioni:items.length,numeroLavorazioniFatte:doneCount,numeroLavorazioniDaFare:items.length-doneCount,...actor()};};
+  function operationalProjectionDrift(){const operationalById=new Map(state.operationalPlants.map(item=>[String(item.physicalPlantId||item.id||""),item])),groups=new Map();state.work.forEach(work=>{const id=String(work.impiantoId||"").trim();if(!id)return;const items=groups.get(id)||[];items.push(work);groups.set(id,items);});const drift=[];groups.forEach((items,id)=>{const operational=operationalById.get(id);if(!operational)return;const expectedCodes=[...new Set(items.map(item=>norm(item.codiceVocePrezzo)).filter(Boolean))].sort().join("|"),actualCodes=[...new Set(String(operational.codicePrezzo||"").split(";").map(norm).filter(Boolean))].sort().join("|");if(Number(operational.numeroLavorazioni)!==items.length||actualCodes!==expectedCodes){const plant=state.plants.find(item=>String(item.id||"")===id)||items[0];drift.push({id,data:operationalPayload({...plant,id},items)});}});return drift;}
   async function commitOperations(operations){let batches=0;for(let i=0;i<operations.length;i+=400){const batch=db.batch();operations.slice(i,i+400).forEach(op=>batch.set(op.ref,op.data,{merge:true}));await batch.commit();batches++;}return batches;}
   async function synchronizeOperationalModel(options={}){
     const requestedCommessaId=String(options.commessaId||state.commessa?.id||"").trim();
@@ -290,6 +295,7 @@
   }
   async function createMobileWork(form){
     const source=state.work.find(work=>work.id===form.dataset.sourceWorkId);if(!source)return feedback(form,"La lavorazione originale non è più disponibile. Riapri l’impianto e riprova.");
+    const physicalPlantId=String(source.impiantoId||source.physicalPlantId||"").trim();if(!physicalPlantId)return feedback(form,"Il collegamento dell’impianto non è disponibile. Riapri la commessa e riprova.");
     const patch={};form.querySelectorAll("[data-v2-field]:not([readonly])").forEach(input=>patch[input.dataset.v2Field]=input.value.trim());
     if(!patch.denominazione)return feedback(form,"La denominazione dell’impianto è obbligatoria.");
     if(!patch.codiceVocePrezzo)return feedback(form,"Seleziona la nuova voce dell’elenco prezzi.");
@@ -300,8 +306,10 @@
     const economic={unitaMisura:pr.unitaMisura||"",prezzoBase:num(pr.prezzoBase),percentualeRibasso:discount(pr),prezzoRibassato:discounted(pr),priceListLinkStatus:"LINKED"};Object.assign(patch,economic,{totale:total({...patch,...economic})});
     const maxW=Math.max(0,...state.work.map(work=>num(work.numeroProgressivoRiga)||0)),ref=commRef().collection("lavorazioni").doc(),button=document.querySelector("#commessa-mobile-plant-save");button.disabled=true;button.textContent="Salvataggio…";
     try{
-      await ref.set({...patch,commessaId:state.commessa.id,impiantoId:source.impiantoId,numeroProgressivoRiga:maxW+1,priceOverride:false,createdAt:server(),createdBy:currentUser?.uid||"",...actor()});
-      await load();mobileSummary();showMobileList();
+      const workDocument={...patch,commessaId:state.commessa.id,impiantoId:physicalPlantId,numeroProgressivoRiga:maxW+1,priceOverride:false,createdAt:server(),createdBy:currentUser?.uid||"",...actor()},plant=state.plants.find(item=>String(item.id||"")===physicalPlantId)||source,plantItems=[...state.work.filter(work=>String(work.impiantoId||"")===physicalPlantId),{id:ref.id,...workDocument}],operationalRef=commRef().collection("impianti").doc(physicalPlantId),batch=db.batch();
+      batch.set(ref,workDocument);batch.set(operationalRef,operationalPayload({...plant,id:physicalPlantId},plantItems),{merge:true});await batch.commit();
+      const loaded=await load({autoRepair:false}),operational=state.operationalPlants.find(item=>String(item.id||"")===physicalPlantId),saved=loaded&&state.work.some(work=>work.id===ref.id&&String(work.impiantoId||"")===physicalPlantId)&&operational&&Number(operational.numeroLavorazioni)===plantItems.length&&String(operational.stato||operational.statoGenerale||"")===plantStatus(plantItems)&&String(operational.codicePrezzo||"").split(";").map(code=>code.trim()).includes(patch.codiceVocePrezzo);if(!saved)throw new Error("La nuova lavorazione è stata registrata, ma la scheda operativa non risulta ancora aggiornata. Riapri la commessa.");
+      mobileSummary();showMobileList();document.querySelector("#commessa-mobile-plant-results")?.insertAdjacentHTML("afterbegin",'<p class="commessa-mobile-save-success" role="status">✅ Nuova lavorazione salvata e scheda operativa aggiornata.</p>');
     }catch(error){feedback(form,error?.message||"Salvataggio della nuova lavorazione non riuscito. Riprova.");}
     finally{button.disabled=false;button.textContent="Salva nuova lavorazione";}
   }

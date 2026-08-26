@@ -11909,6 +11909,9 @@ body.worklimate-page-open {
 .commessa-mobile-plant-form input,
 .commessa-mobile-plant-form select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid #bfd2cd; border-radius: 11px; background: #fff; color: #102f2b; font-size: 16px; }
 .commessa-mobile-plant-form .is-calculated input { background: #f1f5f4; color: #60736f; }
+.commessa-mobile-add-work { min-height: 50px; border-color: #8bcbbd; background: #eaf8f4; color: #08766a; font-weight: 900; }
+.commessa-mobile-add-work:hover,
+.commessa-mobile-add-work:focus-visible { background: #d9f2eb; outline: 3px solid rgba(8, 118, 106, .2); }
 .commessa-mobile-form-actions { position: sticky; z-index: 4; bottom: 0; display: grid; grid-template-columns: 1fr 1.4fr; gap: 9px; padding: 10px 0 max(10px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, #fff 18%); }
 .commessa-mobile-form-actions .btn { min-height: 50px; }
 

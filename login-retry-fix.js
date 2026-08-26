@@ -31,13 +31,18 @@
 
   function completeSuccessfulLoginUi() {
     try {
-      document.body?.classList.remove("auth-pending");
-      document.documentElement?.classList.remove("auth-pending");
+      // L'autenticazione Firebase e la verifica autorizzazioni sono due fasi
+      // distinte. Mantieni visibile lo splash durante la seconda fase: togliere
+      // insieme gate e loader mentre `body.auth-required` nasconde la Home
+      // produce una schermata completamente bianca.
+      document.body?.classList.add("auth-pending");
+      document.body?.classList.remove("auth-required", "auth-banned");
+      document.documentElement?.classList.add("auth-pending");
       const loader = document.getElementById("app-startup-loading");
       if (loader) {
-        loader.classList.add("hidden");
-        loader.hidden = true;
-        loader.setAttribute("aria-hidden", "true");
+        loader.classList.remove("hidden");
+        loader.hidden = false;
+        loader.removeAttribute("aria-hidden");
       }
       const gate = document.getElementById("auth-gate");
       if (gate) {

@@ -35,6 +35,15 @@ for (const expected of [
 }
 
 for (const expected of [
+  'document.body?.classList.add("auth-pending")',
+  'document.body?.classList.remove("auth-required", "auth-banned")',
+  'loader.classList.remove("hidden")',
+  "loader.hidden = false"
+]) {
+  if (!script.includes(expected)) throw new Error(`Transizione post-login anti-schermata-bianca mancante: ${expected}`);
+}
+
+for (const expected of [
   "createUserWithEmailAndPassword(email, chosenPassword)",
   "createdUser.sendEmailVerification()",
   "createSelfRegisteredProfile(createdUser",
@@ -60,7 +69,7 @@ for (const expected of [
   'id="registration-password-confirm"',
   'minlength="10" autocomplete="new-password"',
   "ti invieremo un’email per verificare il nuovo account",
-  "login-retry-fix.js?v=20260726f"
+  "login-retry-fix.js?v=20260826-white-screen1"
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }

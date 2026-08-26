@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.3.2';
+  const VERSION = '2.3.3';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -91,16 +91,25 @@
     try {
       if (typeof getImpiantoNavigationCoordinates === 'function') {
         const c = getImpiantoNavigationCoordinates(item);
-        if (Number.isFinite(Number(c?.lat)) && Number.isFinite(Number(c?.lng))) return { lat: Number(c.lat), lng: Number(c.lng) };
+        const lat = Number(c?.lat);
+        const lng = Number(c?.lng ?? c?.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
       }
-    } catch (_) {}
-    try {
-      const c = window.HeraCoordinateRepair?.getCoordinates?.(item);
-      if (Number.isFinite(Number(c?.lat)) && Number.isFinite(Number(c?.lng))) return { lat: Number(c.lat), lng: Number(c.lng) };
     } catch (_) {}
     const lat = Number(item.lat ?? item.latitude ?? item.Latitudine ?? item.gpsY ?? item.GPSY);
     const lng = Number(item.lng ?? item.lon ?? item.longitude ?? item.Longitudine ?? item.gpsX ?? item.GPSX);
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }
+
+  function getPlantKey(item) {
+    if (!item) return '';
+    try {
+      if (typeof buildImpiantoKey === 'function') return text(buildImpiantoKey(item));
+    } catch (_) {}
+    try {
+      if (typeof window.buildImpiantoKey === 'function') return text(window.buildImpiantoKey(item));
+    } catch (_) {}
+    return text(item.id ?? item.impiantoId ?? item.idSap ?? item.idSAP ?? item.codiceHera);
   }
 
   function parseLatLngPair(value) {
@@ -146,6 +155,12 @@
   }
 
   function findPlantFromRow(row) {
+    const card = row?.closest?.('[data-impianto-key]');
+    const cardKey = text(card?.dataset?.impiantoKey);
+    if (cardKey) {
+      return getPlants().find((item) => getPlantKey(item) === cardKey) || null;
+    }
+
     const body = upper(row?.closest?.('.impianto-actions')?.parentElement?.textContent || row?.parentElement?.textContent || '');
     return getPlants().find((item) => {
       const values = [item?.denominazione, item?.nome, item?.impianto, item?.idSap, item?.idSAP, item?.sap].map(text).filter(Boolean);
@@ -154,6 +169,11 @@
   }
 
   function resolveRowCoords(row, nav) {
+    const card = row?.closest?.('[data-impianto-key]');
+    if (card?.dataset?.impiantoKey) {
+      const exactPlant = findPlantFromRow(row);
+      return getCoords(exactPlant);
+    }
     const direct = getCoordsFromNavigate(nav);
     if (direct) return direct;
     return getCoords(findPlantFromRow(row));
@@ -473,7 +493,7 @@
     const apiKey = resolveApiKey();
     if (!apiKey) return showStatus('⚠️ Chiave Google API non disponibile.');
     const coords = resolveRowCoords(row, nav);
-    if (!coords) return showStatus('⚠️ Coordinate impianto non disponibili.');
+    if (!coords) return showStatus('⚠️ Coordinate impianto non disponibili per la scheda selezionata.');
 
     mini.dataset.state = 'loading';
     mini.textContent = '…';

@@ -1,0 +1,56 @@
+name: Check Firebase Functions dependencies
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - ".github/workflows/check-firebase-functions-dependencies.yml"
+  push:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - ".github/workflows/check-firebase-functions-dependencies.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  functions-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: functions
+        run: npm ci --no-audit --no-fund
+
+      - name: Check function syntax
+        working-directory: functions
+        run: find . -maxdepth 2 -type f -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
+
+      - name: Load all function exports
+        working-directory: functions
+        run: |
+          node <<'NODE'
+          const exported = require("./main.js");
+          const { google } = require("googleapis");
+
+          if (Object.keys(exported).length < 35) {
+            throw new Error(`Function exports missing: ${Object.keys(exported).length}`);
+          }
+          if (!google.drive || !google.auth.OAuth2) {
+            throw new Error("Google Drive or OAuth2 API unavailable");
+          }
+
+          console.log(`Firebase Functions loaded successfully: ${Object.keys(exported).length}`);
+          NODE

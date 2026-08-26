@@ -3,7 +3,7 @@
 
   if (window.HeraAppErrorMonitor?.installed) return;
 
-  const VERSION = "1.1.0";
+  const VERSION = "1.1.1";
   const REGION = "europe-west1";
   const FUNCTION_NAME = "recordClientErrorGroup";
   const QUEUE_KEY = "hera_error_center_queue_v1";
@@ -458,16 +458,31 @@
       if (!window.PerformanceObserver?.supportedEntryTypes?.includes("longtask")) return;
       longTaskBound = true;
       const observer = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          if (document.visibilityState === "hidden" || Number(entry.duration || 0) < LONG_TASK_MIN_MS) continue;
-          void capture(new Error("Operazione lunga sul thread principale"), {
-            kind: Number(entry.duration) >= 5000 ? "ui-freeze" : "main-thread-long-task",
-            severity: Number(entry.duration) >= 5000 ? "critical" : Number(entry.duration) >= 2500 ? "high" : "medium",
-            feature: currentView() || "app",
-            durationMs: Number(entry.duration),
-            metadata: { entryType: entry.entryType, name: entry.name || "longtask" }
-          });
-        }
+        if (document.visibilityState === "hidden") return;
+        const entries = list.getEntries()
+          .filter((entry) => Number(entry.duration || 0) >= LONG_TASK_MIN_MS);
+        if (!entries.length) return;
+
+        const longest = entries.reduce((worst, entry) =>
+          Number(entry.duration || 0) > Number(worst.duration || 0) ? entry : worst
+        );
+        const longestDuration = Number(longest.duration || 0);
+        const totalDuration = entries.reduce((sum, entry) => sum + Number(entry.duration || 0), 0);
+
+        void capture(new Error("Operazione lunga sul thread principale"), {
+          kind: longestDuration >= 5000 ? "ui-freeze" : "main-thread-long-task",
+          severity: longestDuration >= 5000 ? "critical" : longestDuration >= 2500 ? "high" : "medium",
+          feature: currentView() || "app",
+          durationMs: longestDuration,
+          metadata: {
+            entryType: longest.entryType,
+            name: longest.name || "longtask",
+            taskCount: entries.length,
+            totalDurationMs: Math.round(totalDuration),
+            longestStartTimeMs: Math.round(Number(longest.startTime || 0)),
+            navigationAgeMs: Math.round(performance.now?.() || 0)
+          }
+        });
       });
       observer.observe({ type: "longtask", buffered: false });
     } catch (_) {}

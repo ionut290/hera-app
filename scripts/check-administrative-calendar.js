@@ -29,7 +29,10 @@ assert.match(feature, /Ore non ancora inserite/);
 assert.match(feature, /importo da valorizzare/);
 assert.match(feature, /setCalendarMode\("administrative"\)/);
 assert.match(feature, /api\.subscribe\("calendario", month/);
-assert.match(feature, /Un solo riepilogo Firestore mensile condiviso/);
+assert.match(feature, /Riepilogo Firestore mensile/);
+assert.match(feature, /getAdministrativeCalendarMonth/);
+assert.match(feature, /recoveryByMonth\.has\(month\)/);
+assert.match(feature, /recupero mirato solo quando incompleto/);
 assert.match(feature, /deactivate/);
 
 assert.doesNotMatch(feature, /\bdb\s*\./);
@@ -117,4 +120,4 @@ assert.equal(grouped[0].knownEarnings, 175);
 assert.equal(grouped[0].operators[0].name, "Mario Rossi");
 
 console.log("✓ Calendario amministrativo visibile a tutti con riepilogo mensile, ore, attività e guadagni.");
-console.log("✓ Un solo abbonamento per mese; nessuna query diretta per giorno, commessa o impianto.");
+console.log("✓ Un solo abbonamento per mese e recupero mirato soltanto quando il riepilogo è incompleto.");

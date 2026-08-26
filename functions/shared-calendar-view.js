@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const REGION = "europe-west1";
 const SHARED_COLLECTION = "sharedStaticViews";
@@ -11,6 +12,7 @@ const CALENDAR_SCHEMA_VERSION = 2;
 const SOURCE_COLLECTIONS = new Set(["oreReports", "oreApprovalRequests"]);
 const ACTIVITY_COLLECTIONS = new Set(["impianti", "lavorazioni"]);
 const COMPLETED_STATUSES = new Set(["fatto", "done", "completed", "completato"]);
+const MAX_RECOVERED_ACTIVITIES = 5000;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -65,9 +67,18 @@ function monthKeyFromData(data = {}) {
 }
 
 function activityDateKeyFromData(data = {}) {
-  return dateKeyFromData({
-    date: data.dataEsecuzione || data.dataFatto || data.doneAt || data.completedAt || data.executionDate
-  });
+  const direct = dateKeyFromData({ date: data.dataEsecuzione || data.dataFatto || data.executionDate });
+  if (direct) return direct;
+  const timestamp = dateFromValue(data.doneAt || data.completedAt);
+  if (!timestamp) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(timestamp);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function normalizeStatus(value) {
@@ -159,6 +170,94 @@ function compactActivity(sourceCollection, commessaId, itemId, data = {}) {
 
 function stableHash(payload) {
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function nextMonthKey(month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(year, monthNumber, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function activityCoordinatesFromSnapshot(snapshot, sourceCollection) {
+  const segments = text(snapshot?.ref?.path).split("/");
+  if (segments.length !== 4 || segments[0] !== "commesse" || segments[2] !== sourceCollection) return null;
+  return { commessaId: segments[1], itemId: segments[3] };
+}
+
+async function recoverMonthActivities(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "Mese non valido.");
+  const db = admin.firestore();
+  const fromDate = `${month}-01`;
+  const toDate = `${nextMonthKey(month)}-01`;
+  const fromTimestamp = admin.firestore.Timestamp.fromMillis(Date.parse(`${fromDate}T00:00:00Z`) - 3 * 60 * 60 * 1000);
+  const toTimestamp = admin.firestore.Timestamp.fromMillis(Date.parse(`${toDate}T00:00:00Z`) + 3 * 60 * 60 * 1000);
+  const queryLimit = MAX_RECOVERED_ACTIVITIES + 1;
+  const queries = [];
+
+  for (const sourceCollection of ACTIVITY_COLLECTIONS) {
+    const group = db.collectionGroup(sourceCollection);
+    queries.push({
+      sourceCollection,
+      promise: group.where("dataEsecuzione", ">=", fromDate).where("dataEsecuzione", "<", toDate).limit(queryLimit).get()
+    });
+    queries.push({
+      sourceCollection,
+      promise: group.where("doneAt", ">=", fromTimestamp).where("doneAt", "<", toTimestamp).limit(queryLimit).get()
+    });
+  }
+
+  const snapshots = await Promise.all(queries.map((query) => query.promise));
+  const uniqueDocuments = new Map();
+  snapshots.forEach((snapshot, index) => {
+    const sourceCollection = queries[index].sourceCollection;
+    snapshot.docs.forEach((document) => uniqueDocuments.set(document.ref.path, { document, sourceCollection }));
+  });
+  if (uniqueDocuments.size > MAX_RECOVERED_ACTIVITIES) {
+    throw new HttpsError("resource-exhausted", "Troppe attività nel mese selezionato.");
+  }
+
+  const activities = [];
+  uniqueDocuments.forEach(({ document, sourceCollection }) => {
+    const coordinates = activityCoordinatesFromSnapshot(document, sourceCollection);
+    if (!coordinates) return;
+    const activity = compactActivity(sourceCollection, coordinates.commessaId, coordinates.itemId, document.data() || {});
+    if (activity?.date.startsWith(month)) activities.push(activity);
+  });
+  activities.sort((a, b) => `${a.date}|${a.commessaId}|${a.impiantoId}|${a.sourceKey}`
+    .localeCompare(`${b.date}|${b.commessaId}|${b.impiantoId}|${b.sourceKey}`, "it"));
+
+  const ref = db.collection(SHARED_COLLECTION).doc(`calendario__${month}`);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const previous = snapshot.exists ? snapshot.data() || {} : {};
+    const payload = {
+      month,
+      schemaVersion: CALENDAR_SCHEMA_VERSION,
+      completeRecords: true,
+      reports: Array.isArray(previous.payload?.reports) ? previous.payload.reports : [],
+      activities
+    };
+    const contentHash = stableHash(payload);
+    if (previous.contentHash === contentHash) return;
+    const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    if (bytes > MAX_PAYLOAD_BYTES) throw new HttpsError("resource-exhausted", "Riepilogo mensile troppo grande.");
+    transaction.set(ref, {
+      type: "calendario",
+      key: month,
+      version: Number(previous.version || 0) + 1,
+      schemaVersion: CALENDAR_SCHEMA_VERSION,
+      completeRecords: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAtClient: new Date().toISOString(),
+      updatedBy: "cloud-function:controlled-month-recovery",
+      authorName: "Recupero mensile controllato",
+      contentHash,
+      payloadBytes: bytes,
+      payload
+    }, { merge: false });
+  });
+
+  return { month, activities, recovered: activities.length, complete: true };
 }
 
 function buildNextPayload(existingPayload, month, sourceCollection, sourceId, nextData) {
@@ -297,6 +396,14 @@ exports.syncSharedCalendarFromLavorazioni = onDocumentWritten(
   (event) => handleActivityWrite(event, "lavorazioni")
 );
 
+exports.getAdministrativeCalendarMonth = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: "256MiB", invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Login richiesto.");
+    return recoverMonthActivities(text(request.data?.month));
+  }
+);
+
 exports.__test = {
   CALENDAR_SCHEMA_VERSION,
   dateKeyFromData,
@@ -306,5 +413,9 @@ exports.__test = {
   compactActivity,
   buildNextPayload,
   buildNextActivityPayload,
+  nextMonthKey,
+  activityCoordinatesFromSnapshot,
   stableHash
 };
+
+exports.__server = { recoverMonthActivities };

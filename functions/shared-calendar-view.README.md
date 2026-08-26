@@ -6,8 +6,10 @@ I documenti originali restano la fonte autorevole. La vista condivisa contiene s
 
 Il client apre al massimo un listener sul documento del mese visibile. Non esegue query per giorno, commessa, impianto o lavorazione.
 
+Se il documento mensile è ancora privo di attività storiche, `getAdministrativeCalendarMonth` esegue una sola richiesta autenticata e recupera esclusivamente gli impianti e le lavorazioni con data di esecuzione nel mese richiesto. Il risultato viene scritto nel riepilogo condiviso, così gli utenti successivi non ripetono il recupero.
+
 ## Distribuzione
 
 ```bash
-firebase deploy --only functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni
+firebase deploy --only functions:syncSharedCalendarFromOreReports,functions:syncSharedCalendarFromOreApprovalRequests,functions:syncSharedCalendarFromImpianti,functions:syncSharedCalendarFromLavorazioni,functions:getAdministrativeCalendarMonth
 ```

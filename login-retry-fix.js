@@ -2,7 +2,48 @@
   "use strict";
 
   const MIN_REGISTRATION_PASSWORD_LENGTH = 10;
+  const LOGIN_STABILITY_CONTRACT = "LOGIN_STABILITY_CONTRACT_V1";
+  const POST_LOGIN_VISIBILITY_CHECK_DELAYS_MS = [0, 1500, 4000, 8000];
   let registrationPending = false;
+
+  function isElementPresented(element) {
+    return Boolean(element && !element.hidden && !element.classList.contains("hidden"));
+  }
+
+  function hasVisibleAuthenticationSurface() {
+    const body = document.body;
+    const loaderVisible = isElementPresented(document.getElementById("app-startup-loading"));
+    const gateVisible = isElementPresented(document.getElementById("auth-gate"));
+    const approvalVisible = isElementPresented(document.getElementById("access-approval-screen"));
+    const homeVisible = Boolean(
+      isElementPresented(document.getElementById("home-page"))
+      && body
+      && !body.classList.contains("auth-pending")
+      && !body.classList.contains("auth-required")
+      && !body.classList.contains("auth-banned")
+    );
+    return loaderVisible || gateVisible || approvalVisible || homeVisible;
+  }
+
+  function recoverVisibleAuthenticationSurface() {
+    if (hasVisibleAuthenticationSurface()) return true;
+    const loader = document.getElementById("app-startup-loading");
+    document.body?.classList.add("auth-pending");
+    document.body?.classList.remove("auth-required", "auth-banned");
+    if (loader) {
+      loader.classList.remove("hidden");
+      loader.hidden = false;
+      loader.removeAttribute("aria-hidden");
+    }
+    console.warn(`[${LOGIN_STABILITY_CONTRACT}] Recuperata una transizione login senza superficie visibile.`);
+    return false;
+  }
+
+  function schedulePostLoginVisibilityChecks() {
+    POST_LOGIN_VISIBILITY_CHECK_DELAYS_MS.forEach((delay) => {
+      window.setTimeout(recoverVisibleAuthenticationSurface, delay);
+    });
+  }
 
   function friendlyLoginError(error) {
     const code = String(error?.code || "").toLowerCase();
@@ -53,6 +94,7 @@
       }
       window.HeraAuthStartupController?.reconcile?.();
       window.dispatchEvent(new CustomEvent("hera-login-ui-ready", { detail: { at: Date.now() } }));
+      schedulePostLoginVisibilityChecks();
     } catch (error) {
       console.warn("Ripristino UI dopo login non riuscito:", error);
     }

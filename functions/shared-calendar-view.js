@@ -8,7 +8,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const REGION = "europe-west1";
 const SHARED_COLLECTION = "sharedStaticViews";
 const MAX_PAYLOAD_BYTES = 700000;
-const CALENDAR_SCHEMA_VERSION = 2;
+const CALENDAR_SCHEMA_VERSION = 3;
 const SOURCE_COLLECTIONS = new Set(["oreReports", "oreApprovalRequests"]);
 const ACTIVITY_COLLECTIONS = new Set(["impianti", "lavorazioni"]);
 const COMPLETED_STATUSES = new Set(["fatto", "done", "completed", "completato"]);
@@ -126,7 +126,27 @@ function completedAmount(data = {}) {
     const parsed = numberOrNull(value);
     if (parsed != null && parsed >= 0) return parsed;
   }
-  return null;
+  let discountedPrice = null;
+  for (const value of [data.prezzoRibassato, data.prezzoribassato, data.prezzoUnitarioRibassato, data.prezzounitarioribassato]) {
+    const parsed = numberOrNull(value);
+    if (parsed != null && parsed >= 0) {
+      discountedPrice = parsed;
+      break;
+    }
+  }
+  if (discountedPrice == null) {
+    const basePrice = numberOrNull(data.prezzoBase ?? data.prezzobase ?? data.prezzo);
+    const rawDiscount = numberOrNull(data.percentualeRibasso);
+    const discount = rawDiscount != null && rawDiscount > 1 ? rawDiscount / 100 : rawDiscount;
+    if (basePrice != null && basePrice >= 0 && (discount == null || (discount >= 0 && discount <= 1))) {
+      discountedPrice = basePrice * (1 - (discount ?? 0));
+    }
+  }
+  if (discountedPrice == null) return null;
+  const unit = text(data.unitaMisura || data.um).toUpperCase();
+  if (unit === "AC") return discountedPrice;
+  const quantity = numberOrNull(data.quantita);
+  return quantity != null && quantity >= 0 ? quantity * discountedPrice : null;
 }
 
 function isCompletedActivity(sourceCollection, data = {}) {
@@ -257,7 +277,7 @@ async function recoverMonthActivities(month) {
     }, { merge: false });
   });
 
-  return { month, activities, recovered: activities.length, complete: true };
+  return { month, schemaVersion: CALENDAR_SCHEMA_VERSION, activities, recovered: activities.length, complete: true };
 }
 
 function buildNextPayload(existingPayload, month, sourceCollection, sourceId, nextData) {

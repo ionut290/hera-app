@@ -190,7 +190,26 @@
       const parsed = number(candidate);
       if (parsed != null && parsed >= 0) return parsed;
     }
-    return null;
+    let discountedPrice = null;
+    for (const candidate of [plant?.prezzoRibassato, plant?.prezzoribassato, plant?.prezzoUnitarioRibassato, plant?.prezzounitarioribassato]) {
+      const parsed = number(candidate);
+      if (parsed != null && parsed >= 0) {
+        discountedPrice = parsed;
+        break;
+      }
+    }
+    if (discountedPrice == null) {
+      const basePrice = number(plant?.prezzoBase ?? plant?.prezzobase ?? plant?.prezzo);
+      const rawDiscount = number(plant?.percentualeRibasso);
+      const discount = rawDiscount != null && rawDiscount > 1 ? rawDiscount / 100 : rawDiscount;
+      if (basePrice != null && basePrice >= 0 && (discount == null || (discount >= 0 && discount <= 1))) {
+        discountedPrice = basePrice * (1 - (discount ?? 0));
+      }
+    }
+    if (discountedPrice == null) return null;
+    if (text(plant?.unitaMisura || plant?.um).toUpperCase() === "AC") return discountedPrice;
+    const quantity = number(plant?.quantita);
+    return quantity != null && quantity >= 0 ? quantity * discountedPrice : null;
   }
 
   function plantIdentity(plant, index) {
@@ -372,19 +391,25 @@
 
   function recoverMonthActivities(month) {
     const current = monthlyViews.get(month);
-    if (Array.isArray(current?.activities) && current.activities.length) return Promise.resolve(current);
+    if (Number(current?.schemaVersion || 0) >= 3 && Array.isArray(current?.activities) && current.activities.length) return Promise.resolve(current);
     if (recoveryByMonth.has(month)) return recoveryByMonth.get(month);
 
     const request = (async () => {
       const callable = global.firebase?.app?.().functions?.("europe-west1")?.httpsCallable?.("getAdministrativeCalendarMonth");
       if (!callable) return null;
-      monthlyViews.set(month, { ...current, reports: current?.reports || [], activities: [], recovering: true });
+      monthlyViews.set(month, {
+        ...current,
+        reports: current?.reports || [],
+        activities: Array.isArray(current?.activities) ? current.activities : [],
+        recovering: true
+      });
       try {
         const response = await callable({ month });
         const data = response?.data || {};
         const latest = monthlyViews.get(month) || {};
         const recovered = {
           ...latest,
+          schemaVersion: Number(data.schemaVersion || 3),
           reports: Array.isArray(latest.reports) ? latest.reports : [],
           activities: Array.isArray(data.activities) ? data.activities : [],
           source: "recupero-mensile-controllato",
@@ -416,6 +441,7 @@
     const cached = api?.getCached?.("calendario", month);
     if (cached?.payload) {
       monthlyViews.set(month, {
+        schemaVersion: Number(cached.payload.schemaVersion || 0),
         reports: Array.isArray(cached.payload.reports) ? cached.payload.reports : [],
         activities: Array.isArray(cached.payload.activities) ? cached.payload.activities : [],
         source: "cache"
@@ -425,6 +451,7 @@
     unsubscribeMonth = api.subscribe("calendario", month, (view, metadata = {}) => {
       if (!view?.payload || activeMonth !== month) return;
       monthlyViews.set(month, {
+        schemaVersion: Number(view.payload.schemaVersion || 0),
         reports: Array.isArray(view.payload.reports) ? view.payload.reports : [],
         activities: Array.isArray(view.payload.activities) ? view.payload.activities : [],
         source: metadata.source || "firestore"

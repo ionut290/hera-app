@@ -38,13 +38,15 @@
   api.openCalendarPage = openCalendarPage;
   function closeCalendarPage() {
     closeCalendarEventForm();
+    window.HeraAdministrativeCalendar?.deactivate?.();
     calendarMode = "choice";
     window.location.hash = "";
     applyRoute();
   }
   api.closeCalendarPage = closeCalendarPage;
   function setCalendarMode(mode) {
-    if (mode !== "hours" && mode !== "shared") return;
+    if (mode !== "hours" && mode !== "shared" && mode !== "administrative") return;
+    if (mode !== "administrative") window.HeraAdministrativeCalendar?.deactivate?.();
     calendarMode = mode;
     renderCalendarMode();
     renderCalendar();
@@ -53,23 +55,32 @@
   function renderCalendarMode() {
     const isChoice = calendarMode === "choice";
     const isHours = calendarMode === "hours";
+    const isAdministrative = calendarMode === "administrative";
     ui.calendarChoiceCard?.classList.toggle("hidden", !isChoice);
     ui.calendarHeroCard?.classList.toggle("hidden", isChoice);
     ui.calendarMainCard?.classList.toggle("hidden", isChoice);
     ui.calendarDayCard?.classList.toggle("hidden", isChoice);
-    ui.calendarNewEventBtn?.classList.toggle("hidden", isHours);
-    ui.calendarAddSelectedDayBtn?.classList.toggle("hidden", isHours);
+    ui.calendarNewEventBtn?.classList.toggle("hidden", isHours || isAdministrative);
+    ui.calendarAddSelectedDayBtn?.classList.toggle("hidden", isHours || isAdministrative);
     ui.calendarHoursTab?.classList.toggle("is-active", isHours);
     ui.calendarSharedTab?.classList.toggle("is-active", calendarMode === "shared");
+    document.getElementById("calendar-administrative-tab")?.classList.toggle("is-active", isAdministrative);
     ui.calendarHoursTab?.setAttribute("aria-selected", String(isHours));
     ui.calendarSharedTab?.setAttribute("aria-selected", String(calendarMode === "shared"));
-    if (ui.calendarPageHeading) ui.calendarPageHeading.textContent = isHours ? "🕒 Le mie ore" : "🗓️ Calendario condiviso";
+    document.getElementById("calendar-administrative-tab")?.setAttribute("aria-selected", String(isAdministrative));
+    if (ui.calendarPageHeading) ui.calendarPageHeading.textContent = isHours
+      ? "🕒 Le mie ore"
+      : isAdministrative ? "📊 Calendario amministrativo" : "🗓️ Calendario condiviso";
     if (ui.calendarPageDescription) {
       ui.calendarPageDescription.textContent = isHours
         ? "Ore lavorate personali recuperate dalla Gestione ore."
-        : "Ferie, permessi, malattie, interventi e altre informazioni visibili a tutti gli utenti.";
+        : isAdministrative
+          ? "Attività, ore degli operatori e guadagni giornalieri suddivisi per commessa."
+          : "Ferie, permessi, malattie, interventi e altre informazioni visibili a tutti gli utenti.";
     }
-    if (ui.calendarGrid) ui.calendarGrid.setAttribute("aria-label", isHours ? "Calendario mensile delle mie ore" : "Calendario mensile condiviso");
+    if (ui.calendarGrid) ui.calendarGrid.setAttribute("aria-label", isHours
+      ? "Calendario mensile delle mie ore"
+      : isAdministrative ? "Calendario amministrativo mensile" : "Calendario mensile condiviso");
   }
   api.renderCalendarMode = renderCalendarMode;
   function subscribeCalendarEvents() {
@@ -134,6 +145,10 @@
     if (calendarMode === "choice") return;
     if (calendarMode === "hours") {
       renderPersonalHoursCalendar();
+      return;
+    }
+    if (calendarMode === "administrative") {
+      window.HeraAdministrativeCalendar?.render();
       return;
     }
     if (!ui.calendarGrid || !ui.calendarMonthTitle) return;

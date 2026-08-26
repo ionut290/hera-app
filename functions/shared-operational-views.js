@@ -91,9 +91,11 @@ async function rebuildCalendarMonth(month) {
   const db = admin.firestore();
   const from = `${month}-01`;
   const to = `${month}-31`;
-  const [reports, approvals] = await Promise.all([
+  const targetRef = db.collection(SHARED_COLLECTION).doc(`calendario__${month}`);
+  const [reports, approvals, existing] = await Promise.all([
     db.collection("oreReports").where("date", ">=", from).where("date", "<=", to).get(),
-    db.collection("oreApprovalRequests").where("date", ">=", from).where("date", "<=", to).get()
+    db.collection("oreApprovalRequests").where("date", ">=", from).where("date", "<=", to).get(),
+    targetRef.get()
   ]);
   const rows = [
     ...reports.docs.map((doc) => ({ ...cleanRecord(doc), sourceCollection: "oreReports", sourceKey: `oreReports/${doc.id}` })),
@@ -112,7 +114,8 @@ async function rebuildCalendarMonth(month) {
     month,
     schemaVersion: CALENDAR_SCHEMA_VERSION,
     completeRecords: true,
-    reports: rows
+    reports: rows,
+    activities: Array.isArray(existing.data()?.payload?.activities) ? existing.data().payload.activities : []
   };
   return writeSharedView(
     `calendario__${month}`,

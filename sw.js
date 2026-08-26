@@ -1,5 +1,5 @@
 const CACHE_NAME = "varga-cantieri-shell-v155";
-const CACHE_RESET_VERSION = "20260826-login-stability1";
+const CACHE_RESET_VERSION = "20260826-administrative-calendar2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,13 +8,14 @@ const APP_SHELL = [
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260731-legacy1",
   "./accounting-v2.css?v=20260728",
-  "./calendar-feature.css?v=20260728b",
+  "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
   "./app-pure-utils.js?v=20260815-mod1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",
   "./app-documents.js?v=20260815-mod1",
   "./app-calendar.js?v=20260815-mod1",
+  "./administrative-calendar.js?v=20260826-admin2",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260824-commessa-isolation1",
@@ -88,6 +89,7 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/administrative-calendar.js",
   "/fatto-button-immediate.js",
   "/shared-static-views-client.js",
   "/data-durability-runtime.js",

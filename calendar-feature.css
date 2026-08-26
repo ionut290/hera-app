@@ -532,13 +532,174 @@
   justify-content: flex-end;
 }
 
+.calendar-choice-administrative {
+  border-color: #bbf7d0;
+  background: linear-gradient(145deg, #f0fdf4, #ffffff 70%);
+}
+
+.administrative-calendar-day {
+  padding: 27px 3px 4px;
+}
+
+.administrative-calendar-day.has-administrative-data {
+  border-color: #86efac;
+  background: linear-gradient(160deg, #f0fdf4, #ffffff 74%);
+}
+
+.administrative-day-counts {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  color: #166534;
+  font-size: .68rem;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.administrative-day-counts b:last-child {
+  overflow: hidden;
+  color: #047857;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#calendar-feedback:has(.administrative-data-source) {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.administrative-data-source {
+  border-radius: 999px;
+  background: #ecfdf5;
+  padding: 5px 9px;
+  color: #166534;
+  font-weight: 800;
+}
+
+.administrative-day-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.administrative-day-kpis article {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid #dbe7f3;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.administrative-day-kpis article > span { font-size: 1.25rem; }
+.administrative-day-kpis b { overflow: hidden; color: #0f172a; font-size: 1.05rem; text-overflow: ellipsis; }
+.administrative-day-kpis small { color: #64748b; font-weight: 700; }
+
+.administrative-commessa-card {
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+}
+
+.administrative-commessa-card > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 15px;
+  background: linear-gradient(120deg, #ecfdf5, #f8fafc);
+  cursor: pointer;
+  list-style: none;
+}
+
+.administrative-commessa-card > summary::-webkit-details-marker { display: none; }
+.administrative-commessa-card > summary > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.administrative-commessa-card > summary span { color: #15803d; font-size: .7rem; font-weight: 900; letter-spacing: .08em; }
+.administrative-commessa-card > summary strong { overflow-wrap: anywhere; color: #0f172a; font-size: 1.05rem; }
+.administrative-commessa-card > summary small { color: #64748b; }
+
+.administrative-commessa-total {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.administrative-commessa-total b { color: #047857; font-size: 1.08rem; }
+.administrative-commessa-card section { display: grid; gap: 8px; border-top: 1px solid #e2e8f0; padding: 13px 15px; }
+.administrative-commessa-card h4 { margin: 0; color: #334155; font-size: .9rem; }
+.administrative-commessa-card ul { margin: 0; padding: 0; list-style: none; }
+
+.administrative-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid #fde68a;
+  background: #fffbeb;
+  padding: 9px 15px;
+}
+
+.administrative-warnings span { border-radius: 999px; background: #fef3c7; padding: 4px 8px; color: #92400e; font-size: .76rem; font-weight: 800; }
+.administrative-plant-list { display: grid; gap: 8px; }
+
+.administrative-plant {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 11px;
+}
+
+.administrative-plant p { margin: 0; color: #475569; font-size: .83rem; }
+.administrative-plant-head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.administrative-plant-head > div { display: grid; gap: 2px; min-width: 0; }
+.administrative-plant-head strong { overflow-wrap: anywhere; color: #0f172a; }
+.administrative-plant-head small { color: #64748b; }
+.administrative-amount { flex: 0 0 auto; border-radius: 999px; background: #dcfce7; padding: 4px 8px; color: #166534; font-size: .77rem; font-weight: 900; }
+.administrative-amount.is-missing { background: #fef3c7; color: #92400e; }
+.administrative-note { border-left: 3px solid #94a3b8; padding-left: 7px; }
+.administrative-operator-list { display: grid; gap: 6px; }
+
+.administrative-operator-list li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 10px;
+  background: #eff6ff;
+  padding: 9px 10px;
+}
+
+.administrative-operator-list li > div { display: grid; gap: 2px; min-width: 0; }
+.administrative-operator-list strong { color: #1e3a8a; }
+.administrative-operator-list small { overflow-wrap: anywhere; color: #64748b; }
+.administrative-operator-list b { flex: 0 0 auto; color: #1d4ed8; }
+.administrative-empty-inline { margin: 0; color: #64748b; font-size: .84rem; }
+
+.administrative-commessa-card > footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  padding: 11px 15px;
+  color: #166534;
+  font-size: .84rem;
+}
+
 @media (max-width: 600px) {
   .calendar-choice-card { min-height: 0; padding: 70px 14px 18px; }
   .calendar-choice-back { top: 14px; left: 14px; }
   .calendar-choice-heading { margin: 0 auto 18px; }
   .calendar-choice-actions { grid-template-columns: 1fr; gap: 10px; }
   .calendar-choice-btn { min-height: 108px; padding: 14px; }
-  .calendar-mode-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+  .calendar-mode-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
   .calendar-mode-tab { min-width: 0; padding: 8px 5px; font-size: .76rem; }
   .calendar-hero-card .page-head {
     display: grid;
@@ -584,6 +745,15 @@
 
   .calendar-personal-hours { right: 2px; bottom: 5px; left: 2px; font-size: .76rem; }
   .calendar-personal-hours small { display: block; font-size: .58rem; }
+  .administrative-calendar-day { min-height: 78px; padding: 27px 1px 2px; }
+  .administrative-day-counts { font-size: .56rem; }
+  .administrative-day-kpis { grid-template-columns: 1fr 1fr; }
+  .administrative-day-kpis article { padding: 10px; }
+  .administrative-commessa-card > summary { grid-template-columns: 1fr; }
+  .administrative-commessa-total { text-align: left; }
+  .administrative-plant-head { align-items: stretch; flex-direction: column; }
+  .administrative-amount { align-self: flex-start; }
+  .administrative-commessa-card > footer { align-items: flex-start; flex-direction: column; }
 
   .calendar-weekdays span {
     padding: 7px 1px;

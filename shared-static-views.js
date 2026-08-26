@@ -142,12 +142,14 @@
 
     reports.sort((a, b) => `${a.date}|${a.operatore || a.operatorName || ""}|${a.sourceKey}`
       .localeCompare(`${b.date}|${b.operatore || b.operatorName || ""}|${b.sourceKey}`, "it"));
+    const existing = readLocal("calendario", key);
 
     return {
       month: key,
       schemaVersion: CALENDAR_SCHEMA_VERSION,
       completeRecords: true,
-      reports
+      reports,
+      activities: Array.isArray(existing?.payload?.activities) ? existing.payload.activities : []
     };
   }
 

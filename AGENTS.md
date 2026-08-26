@@ -485,3 +485,21 @@ unita né pubblicata. La soluzione ammessa consiste nel modificare o ritirare
 la nuova funzionalità interferente; il componente FATTO/WHAZZUP sigillato non
 deve essere adattato.
 
+## 15. PROTEZIONE FORTE E MODIFICABILE DEL LOGIN
+
+Identificatore: `LOGIN_STABILITY_CONTRACT_V1`.
+
+Il flusso di autenticazione è protetto dal contratto descritto in
+`AUTH_STABILITY_CONTRACT.md` e dal controllo automatico
+`scripts/check-auth-stability-contract.js`.
+
+Le modifiche al login sono vietate durante interventi su altre sezioni. Sono
+consentite esclusivamente quando il proprietario dell'app fornisce un consenso
+esplicito a modificare il login. In quel caso la protezione può essere
+aggiornata in modo consapevole insieme ai suoi test; non è irrevocabile.
+
+Ogni versione deve garantire che login, caricamento, verifica autorizzazione,
+Home o errore recuperabile forniscano sempre almeno una superficie visibile.
+È vietata la schermata bianca. La protezione non deve aggiungere letture,
+scritture o listener Firebase e non deve interferire con FATTO, Whazzup,
+impianti, Personale, Utenti o relativi collegamenti.

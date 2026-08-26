@@ -133,6 +133,90 @@
   async function saveRow(tr){if(state.saving)return;const old=state.work.find(w=>w.id===tr.dataset.v2Work),plant=state.plants.find(p=>p.id===old.impiantoId);let patch={};tr.querySelectorAll("[data-v2-field]").forEach(i=>patch[i.dataset.v2Field]=i.value.trim());if(!patch.denominazione)return feedback(tr,"Denominazione obbligatoria.");for(const f of ["quantita","frequenzaAnnua"])patch[f]=num(patch[f]);const gps=coordinateTools.diagnose(patch.latitudine,patch.longitudine);patch.latitudine=gps.valid?gps.latitude:patch.latitudine;patch.longitudine=gps.valid?gps.longitude:patch.longitudine;Object.assign(patch,coordinateMeta(gps));if(patch.quantita!=null&&patch.quantita<0)return feedback(tr,`Impianto n. ${old.numeroProgressivoRiga}: quantità non valida.`);const pr=price(patch.codiceVocePrezzo);if(patch.codiceVocePrezzo&&!pr)return feedback(tr,`Impianto n. ${old.numeroProgressivoRiga}: voce prezzo ${patch.codiceVocePrezzo} non riconosciuta.`);if(pr&&!old.priceOverride){patch.unitaMisura=pr.unitaMisura||"";patch.prezzoBase=num(pr.prezzoBase);patch.percentualeRibasso=discount(pr);patch.prezzoRibassato=discounted(pr)}patch.totale=total(patch);state.saving=old.id;render();try{const ppatch={};plantFields.forEach(f=>ppatch[f]=patch[f]);Object.assign(ppatch,coordinateMeta(gps));if(old.legacy){await commRef().collection("impianti").doc(old.id).set({distretto:patch.distretto,idSap:patch.idSap,denominazione:patch.denominazione,comune:patch.comune,indirizzo:patch.indirizzo,gpsY:gps.valid?gps.latitude:null,gpsX:gps.valid?gps.longitude:null,...coordinateMeta(gps),codicePrezzo:patch.codiceVocePrezzo,quantita:patch.quantita,frequenzaAnnua:patch.frequenzaAnnua,tipologiaIntervento:patch.tipologiaLavorazione,unitaMisura:patch.unitaMisura,prezzoBase:patch.prezzoBase,percentualeRibasso:patch.percentualeRibasso,prezzoRibassato:patch.prezzoRibassato,totale:patch.totale,stato:patch.stato,done:patch.stato==="FATTO",dataEsecuzione:patch.dataEsecuzione,oraEsecuzione:patch.oraEsecuzione,operatore:patch.operatoreNome,note:patch.note,...actor()},{merge:true});}else{await Promise.all([commRef().collection("impiantiFisici").doc(plant.id).set({...ppatch,...actor()},{merge:true}),commRef().collection("lavorazioni").doc(old.id).set({...patch,...actor()},{merge:true})]);}state.editing="";await load();}catch(e){feedback(tr,e.message||"Salvataggio non riuscito. Riprova.");}finally{state.saving="";}}
   const feedback=(tr,msg)=>{const e=tr?.querySelector(".row-feedback");if(e)e.textContent=msg;};
   async function add(){const name=prompt("Denominazione impianto:");if(!name)return;const maxP=Math.max(0,...state.plants.map(p=>num(p.numeroProgressivoImpianto)||0)),maxW=Math.max(0,...state.work.map(w=>num(w.numeroProgressivoRiga)||0));const p=commRef().collection("impiantiFisici").doc(),w=commRef().collection("lavorazioni").doc();await Promise.all([p.set({commessaId:state.commessa.id,numeroProgressivoImpianto:maxP+1,denominazione:name.trim(),distretto:"",idSap:"",comune:"",indirizzo:"",latitudine:null,longitudine:null,createdAt:server(),createdBy:currentUser?.uid||"",...actor()}),w.set({commessaId:state.commessa.id,impiantoId:p.id,numeroProgressivoRiga:maxW+1,codiceVocePrezzo:"",quantita:null,frequenzaAnnua:null,tipologiaLavorazione:"",unitaMisura:"",prezzoBase:null,prezzoRibassato:null,totale:null,stato:"DA FARE",priceOverride:false,createdAt:server(),createdBy:currentUser?.uid||"",...actor()})]);await load();state.editing=w.id;render();}
+  const mobileCalculatedFields=new Set(["numeroProgressivoRiga","unitaMisura","prezzoBase","prezzoRibassato","totale"]);
+  const mobileGroups=[
+    ["Dati impianto",["numeroProgressivoRiga","distretto","idSap","denominazione","comune","indirizzo","latitudine","longitudine"]],
+    ["Lavorazione",["codiceVocePrezzo","quantita","frequenzaAnnua","tipologiaLavorazione","unitaMisura","prezzoBase","prezzoRibassato","totale"]],
+    ["Esecuzione",["dataEsecuzione","oraEsecuzione","operatoreNome","note","stato"]]
+  ];
+  let mobileReturnTo="home";
+  function mobileScreen(name){
+    const home=document.querySelector("#commessa-mobile-management-home"),list=document.querySelector("#commessa-mobile-plant-list"),editor=document.querySelector("#commessa-mobile-plant-editor");
+    [[home,"home"],[list,"list"],[editor,"editor"]].forEach(([element,key])=>{element?.classList.toggle("hidden",key!==name);element?.setAttribute("aria-hidden",String(key!==name));});
+  }
+  function mobileSummary(){
+    const done=state.work.filter(w=>w.stato==="FATTO").length,todo=state.work.filter(w=>w.stato==="DA FARE").length;
+    document.querySelector("#commessa-mobile-management-title").textContent=state.commessa?.nome||"Gestione commessa";
+    document.querySelector("#commessa-mobile-management-meta").textContent=`Cod. ${state.commessa?.codice||"—"}`;
+    document.querySelector("#commessa-mobile-management-stats").innerHTML=`<span><b>${state.plants.length}</b> impianti</span><span><b>${state.work.length}</b> lavorazioni</span><span class="is-done"><b>${done}</b> fatte</span><span><b>${todo}</b> da fare</span>`;
+  }
+  function showMobileHub(){
+    const managementTitle=document.querySelector("#management-title");if(managementTitle)managementTitle.textContent="Gestione commessa";
+    document.querySelector("#commesse-manage-list")?.classList.add("hidden");
+    document.querySelector(".commesse-management-head")?.classList.add("hidden");
+    document.querySelector(".commesse-management-search")?.classList.add("hidden");
+    document.querySelector("#impianti-management-screen")?.classList.add("hidden");
+    document.querySelector("#prezziario-management-screen")?.classList.add("hidden");
+    const mobile=document.querySelector("#commessa-mobile-management");
+    mobile?.classList.remove("hidden");mobile?.setAttribute("aria-hidden","false");
+    mobileSummary();mobileScreen("home");mobileReturnTo="home";
+  }
+  function showAdvanced(){
+    document.querySelector("#commessa-mobile-management")?.classList.add("hidden");
+    document.querySelector("#impianti-management-screen")?.classList.remove("hidden");
+    render();
+  }
+  function renderMobileList(){
+    const q=norm(document.querySelector("#commessa-mobile-plant-search")?.value);
+    const rows=state.work.map(joined).filter(r=>!q||rank(r,q)<99).sort((a,b)=>String(a.denominazione||"").localeCompare(String(b.denominazione||""),"it",{numeric:true}));
+    const results=document.querySelector("#commessa-mobile-plant-results");if(!results)return;
+    results.innerHTML=rows.map(r=>`<article class="commessa-mobile-plant-card"><div><span class="plant-status status-${String(r.stato||"").toLowerCase().replace(/\s+/g,"-")}">${esc(r.stato||"DA FARE")}</span><h4>${esc(r.denominazione||"Impianto senza nome")}</h4><p>${esc([r.comune,r.indirizzo].filter(Boolean).join(" · ")||"Ubicazione non indicata")}</p><small>${r.idSap?`ID SAP ${esc(r.idSap)} · `:""}${r.codiceVocePrezzo?`Voce ${esc(r.codiceVocePrezzo)}`:"Voce prezzo non indicata"}</small></div><button class="btn btn-primary" type="button" data-mobile-work-id="${esc(r.id)}">Modifica</button></article>`).join("")||'<p class="commessa-mobile-empty">Nessun impianto trovato.</p>';
+  }
+  function showMobileList(){mobileScreen("list");mobileReturnTo="list";renderMobileList();setTimeout(()=>document.querySelector("#commessa-mobile-plant-search")?.focus(),0);}
+  function mobileInput(field,label,value,isNew){
+    const calculated=mobileCalculatedFields.has(field),readonly=calculated?' readonly aria-readonly="true"':"";
+    if(field==="stato")return `<label><span>${esc(label)}</span><select data-v2-field="${field}">${statuses.map(s=>`<option ${s===(value||"DA FARE")?"selected":""}>${s}</option>`).join("")}</select></label>`;
+    const type=field==="numeroProgressivoRiga"?"text":["quantita","frequenzaAnnua","prezzoBase","prezzoRibassato","totale"].includes(field)?"number":field==="dataEsecuzione"?"date":field==="oraEsecuzione"?"time":"text";
+    const list=field==="codiceVocePrezzo"?' list="commessa-mobile-price-codes"':"",required=field==="denominazione"?" required":"",decimal=["latitudine","longitudine","quantita"].includes(field)?' inputmode="decimal"':"";
+    const shown=isNew&&field==="numeroProgressivoRiga"?"Automatico":value??"";
+    const dataAttribute=calculated?`data-mobile-display-field="${field}"`:`data-v2-field="${field}"`;
+    return `<label class="${calculated?"is-calculated":""}"><span>${esc(label)}${field==="denominazione"?' <b aria-hidden="true">*</b>':""}</span><input ${dataAttribute} type="${type}" value="${esc(shown)}"${readonly}${list}${required}${decimal}></label>`;
+  }
+  function showMobileEditor(workId=""){
+    const row=workId?joined(state.work.find(w=>w.id===workId)||{}):{stato:"DA FARE"},isNew=!workId;
+    mobileReturnTo=isNew?"home":"list";mobileScreen("editor");
+    const form=document.querySelector("#commessa-mobile-plant-form");form.dataset.v2Work=workId;form.dataset.mobileMode=isNew?"add":"edit";
+    document.querySelector("#commessa-mobile-editor-eyebrow").textContent=isNew?"NUOVO IMPIANTO":"MODIFICA IMPIANTO";
+    document.querySelector("#commessa-mobile-editor-title").textContent=isNew?"Aggiungi impianto":row.denominazione||"Modifica impianto";
+    document.querySelector("#commessa-mobile-plant-feedback").textContent="";
+    const labels=new Map(columns);
+    document.querySelector("#commessa-mobile-plant-fields").innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNew)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;
+    setTimeout(()=>document.querySelector('[data-v2-field="denominazione"]')?.focus(),0);
+  }
+  async function createMobilePlant(form){
+    const patch={};form.querySelectorAll("[data-v2-field]:not([readonly])").forEach(input=>patch[input.dataset.v2Field]=input.value.trim());
+    if(!patch.denominazione)return feedback(form,"La denominazione dell’impianto è obbligatoria.");
+    for(const field of ["quantita","frequenzaAnnua"])patch[field]=num(patch[field]);
+    if(patch.quantita!=null&&patch.quantita<0)return feedback(form,"La quantità non può essere negativa.");
+    const gps=coordinateTools.diagnose(patch.latitudine,patch.longitudine);patch.latitudine=gps.valid?gps.latitude:patch.latitudine;patch.longitudine=gps.valid?gps.longitude:patch.longitudine;Object.assign(patch,coordinateMeta(gps));
+    const pr=price(patch.codiceVocePrezzo);if(patch.codiceVocePrezzo&&!pr)return feedback(form,`La voce prezzo ${patch.codiceVocePrezzo} non è presente nel prezziario.`);
+    const economic=pr?{unitaMisura:pr.unitaMisura||"",prezzoBase:num(pr.prezzoBase),percentualeRibasso:discount(pr),prezzoRibassato:discounted(pr),priceListLinkStatus:"LINKED"}:{unitaMisura:"",prezzoBase:null,percentualeRibasso:null,prezzoRibassato:null,priceListLinkStatus:"EMPTY"};
+    Object.assign(patch,economic,{totale:total({...patch,...economic})});
+    const maxP=Math.max(0,...state.plants.map(p=>num(p.numeroProgressivoImpianto)||0)),maxW=Math.max(0,...state.work.map(w=>num(w.numeroProgressivoRiga)||0));
+    const p=commRef().collection("impiantiFisici").doc(),w=commRef().collection("lavorazioni").doc(),plant={};plantFields.forEach(field=>plant[field]=patch[field]??"");
+    const button=document.querySelector("#commessa-mobile-plant-save");button.disabled=true;button.textContent="Salvataggio…";
+    try{
+      await Promise.all([p.set({...plant,...coordinateMeta(gps),commessaId:state.commessa.id,numeroProgressivoImpianto:maxP+1,createdAt:server(),createdBy:currentUser?.uid||"",...actor()}),w.set({...patch,commessaId:state.commessa.id,impiantoId:p.id,numeroProgressivoRiga:maxW+1,priceOverride:false,createdAt:server(),createdBy:currentUser?.uid||"",...actor()})]);
+      await load();showMobileHub();
+    }catch(error){feedback(form,error?.message||"Salvataggio non riuscito. Riprova.");}
+    finally{button.disabled=false;button.textContent="Salva impianto";}
+  }
+  async function saveMobilePlant(form){
+    if(form.dataset.mobileMode==="add")return createMobilePlant(form);
+    state.editing=form.dataset.v2Work;const button=document.querySelector("#commessa-mobile-plant-save");button.disabled=true;button.textContent="Salvataggio…";
+    await saveRow(form);button.disabled=false;button.textContent="Salva modifiche";
+    if(!state.editing){mobileSummary();showMobileList();}
+  }
   function openPrices(){document.querySelector("#impianti-management-screen").classList.add("hidden");document.querySelector("#prezziario-management-screen").classList.remove("hidden");document.querySelector("#prezziario-meta").textContent=`${state.commessa.nome} • ${state.prices.length} voci`;document.querySelector("#general-discount").value=((num(state.commessa.percentualeRibassoGenerale)??0.01)*100).toFixed(2);renderPrices();}
   function renderPrices(){const q=norm(document.querySelector("#price-search")?.value);const rows=state.prices.filter(p=>!q||norm(`${p.codiceVoce} ${p.descrizione}`).includes(q)).sort((a,b)=>(num(a.numeroProgressivo)||0)-(num(b.numeroProgressivo)||0));document.querySelector("#price-list-tbody").innerHTML=rows.map(p=>{const edit=state.priceEditing===p.id;return `<tr data-price-id="${esc(p.id)}">${["numeroProgressivo","descrizione","codiceVoce","unitaMisura","prezzoBase","prezzoRibassato","percentualeRibasso","note"].map(f=>edit&&!(["numeroProgressivo","prezzoRibassato"].includes(f))?`<td><input data-price-field="${f}" type="${["prezzoBase","percentualeRibasso"].includes(f)?"number":"text"}" step="0.01" value="${esc(f==="percentualeRibasso"&&num(p[f])!=null?num(p[f])*100:p[f]??"")}"></td>`:`<td class="${f==="prezzoRibassato"?"calculated-cell":""}">${["prezzoBase","prezzoRibassato"].includes(f)&&num(p[f])!=null?money.format(num(p[f])):f==="percentualeRibasso"&&num(p[f])!=null?`${num(p[f])*100}%`:esc(p[f]??"")}</td>`).join("")}<td class="sheet-actions">${edit?`<button class="btn btn-primary" data-price-action="save">Salva</button><button class="btn" data-price-action="cancel">Annulla</button>`:`<button class="btn" data-price-action="edit">Modifica</button><button class="btn" data-price-action="duplicate">Duplica</button><button class="btn btn-danger" data-price-action="delete">Elimina</button>`}</td></tr>`}).join("")||`<tr><td colspan="9">Nessuna voce nel prezziario.</td></tr>`;}
   async function savePrice(tr){const old=state.prices.find(p=>p.id===tr.dataset.priceId),patch={};tr.querySelectorAll("[data-price-field]").forEach(i=>patch[i.dataset.priceField]=i.value.trim());patch.codiceVoce=patch.codiceVoce.toUpperCase();patch.prezzoBase=num(patch.prezzoBase);patch.percentualeRibasso=patch.percentualeRibasso===""?null:num(patch.percentualeRibasso)/100;if(!patch.codiceVoce)return alert("Il codice voce è obbligatorio.");if(state.prices.some(p=>p.id!==old.id&&norm(p.codiceVoce)===norm(patch.codiceVoce)))return alert(`Voce prezziario ${patch.codiceVoce}: codice già presente.`);patch.prezzoRibassato=discounted(patch);const linked=state.work.filter(w=>norm(w.codiceVocePrezzo)===norm(old.codiceVoce)&&!w.priceOverride);if(linked.length&&!confirm(`La modifica della voce ${old.codiceVoce} aggiornerà tutte le righe collegate. Continuare?`))return;const batch=db.batch();batch.set(commRef().collection("prezziario").doc(old.id),{...patch,...actor()},{merge:true});linked.forEach(w=>batch.set(commRef().collection("lavorazioni").doc(w.id),{codiceVocePrezzo:patch.codiceVoce,unitaMisura:patch.unitaMisura,prezzoBase:patch.prezzoBase,percentualeRibasso:patch.percentualeRibasso??num(state.commessa.percentualeRibassoGenerale)??0.01,prezzoRibassato:patch.prezzoRibassato,totale:total({...w,...patch,codiceVocePrezzo:patch.codiceVoce}),...actor()},{merge:true}));await batch.commit();state.priceEditing="";await load();renderPrices();}
@@ -187,8 +271,28 @@
     if(state.commessa)await load();
     return report;
   }
+  async function openMobileHub(commessa){
+    const opened=await api.open(commessa);if(!opened)return false;showMobileHub();return true;
+  }
   const api={repairImportedMatrixPlants,synchronizeOperationalModel,migrateInreteCommesseToWorkItemsV2:migrateInrete,calculations:{normalizePriceCode:core.normalizePriceCode,resolvePriceItem:core.resolvePriceItem,calculateDiscountedPrice:core.calculateDiscountedPrice,calculateWorkItemTotal:core.calculateWorkItemTotal,calculateCompletedSubtotal:core.calculateCompletedSubtotal},async open(commessa){const requestedCommessaId=String(commessa?.id||"").trim();if(!requestedCommessaId)return false;const requestId=++state.openRequestId;state.commessa=commessa;managementCommessaId=requestedCommessaId;document.querySelector("#commesse-manage-list")?.classList.add("hidden");document.querySelector(".commesse-management-head")?.classList.add("hidden");document.querySelector(".commesse-management-search")?.classList.add("hidden");document.querySelector("#prezziario-management-screen")?.classList.add("hidden");const screen=document.querySelector("#impianti-management-screen");screen.classList.remove("hidden");if(core.isInreteCommessa(commessa)&&Number(commessa.inreteMigrationVersion)<2&&typeof canManageData==="function"&&canManageData()){try{await migrateInrete();}catch(error){console.error("Adeguamento automatico commessa INRETE non riuscito:",error);}}if(requestId!==state.openRequestId||String(state.commessa?.id||"")!==requestedCommessaId)return false;return load({commessa,commessaId:requestedCommessaId,requestId});},openPrices,openClear,exportWorkbook};window.AccountingV2=api;
   document.addEventListener("click",async e=>{const button=e.target.closest("button");if(!button)return;const intercept=["download-excel-template-btn","export-all-impianti-btn","add-management-impianto-btn","open-prezziario-btn","close-prezziario-btn","add-price-item-btn","download-price-template-btn","export-price-list-btn","save-general-discount-btn","clear-dialog-close","clear-cancel","clear-continue","clear-confirm","import-btn","repair-imported-plants-btn"].includes(button.id)||button.dataset.v2Action||button.dataset.priceAction||button.dataset.v2Page||button.dataset.v2Sort;if(!intercept)return;e.preventDefault();e.stopImmediatePropagation();if(button.id==="repair-imported-plants-btn")return repairImportedMatrixPlants();if(button.id==="import-btn")return state.pendingFile&&importFile(state.pendingFile,false);if(button.id==="download-excel-template-btn")return exportWorkbook(false,true);if(button.id==="export-all-impianti-btn")return exportWorkbook();if(button.id==="add-management-impianto-btn")return add();if(button.id==="open-prezziario-btn")return openPrices();if(button.id==="close-prezziario-btn"){document.querySelector("#prezziario-management-screen").classList.add("hidden");document.querySelector("#impianti-management-screen").classList.remove("hidden");return;}if(button.id==="add-price-item-btn")return addPrice();if(button.id==="download-price-template-btn")return exportWorkbook(true,true);if(button.id==="export-price-list-btn")return exportWorkbook(true);if(button.id==="save-general-discount-btn"){const d=num(document.querySelector("#general-discount").value);if(d==null||d<0||d>100)return alert("Percentuale ribasso non valida.");await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;return alert("Ribasso generale salvato.");}if(button.id==="clear-dialog-close"||button.id==="clear-cancel")return closeClear();if(button.id==="clear-continue")return clearContinue();if(button.id==="clear-confirm")return clearConfirm();if(button.dataset.v2Page){state.page=Number(button.dataset.v2Page);return render();}if(button.dataset.v2Sort){state.direction=state.sort===button.dataset.v2Sort?-state.direction:1;state.sort=button.dataset.v2Sort;return render();}const tr=button.closest("tr");if(button.dataset.v2Action==="edit"){state.editing=tr.dataset.v2Work;return render();}if(button.dataset.v2Action==="cancel"){state.editing="";return render();}if(button.dataset.v2Action==="save")return saveRow(tr);if(button.dataset.v2Action==="delete"){if(confirm("Eliminare questa lavorazione?")){const w=state.work.find(x=>x.id===tr.dataset.v2Work);await (w.legacy?commRef().collection("impianti"):commRef().collection("lavorazioni")).doc(w.id).delete();await load();}return;}if(button.dataset.v2Action==="duplicate"){const w=state.work.find(x=>x.id===tr.dataset.v2Work),ref=commRef().collection("lavorazioni").doc();await ref.set({...w,id:undefined,legacy:undefined,numeroProgressivoRiga:Math.max(0,...state.work.map(x=>num(x.numeroProgressivoRiga)||0))+1,createdAt:server(),createdBy:currentUser?.uid||"",...actor()});await load();return;}if(button.dataset.priceAction==="edit"){state.priceEditing=tr.dataset.priceId;return renderPrices();}if(button.dataset.priceAction==="cancel"){state.priceEditing="";return renderPrices();}if(button.dataset.priceAction==="save")return savePrice(tr);const p=state.prices.find(x=>x.id===tr.dataset.priceId);if(button.dataset.priceAction==="duplicate")return addPrice(p);if(button.dataset.priceAction==="delete"&&confirm(`Eliminare la voce ${p.codiceVoce}? Le lavorazioni manterranno gli importi storici.`)){await commRef().collection("prezziario").doc(p.id).delete();const linked=state.work.filter(w=>norm(w.codiceVocePrezzo)===norm(p.codiceVoce));for(const w of linked)await commRef().collection("lavorazioni").doc(w.id).set({priceListLinkStatus:"MISSING",economicVerificationStatus:"DA VERIFICARE",...actor()},{merge:true});await load();renderPrices();}},true);
   document.addEventListener("change",e=>{if(e.target.matches('[name="clear-type"]'))document.querySelector("#clear-continue").disabled=false;if(e.target.id==="price-file"){e.stopImmediatePropagation();void importFile(e.target.files[0],true);}if(e.target.id==="excel-file"){e.stopImmediatePropagation();state.pendingFile=e.target.files[0];document.querySelector("#import-btn").disabled=!state.pendingFile;}},true);
-  document.addEventListener("input",e=>{if(e.target.id==="price-search")renderPrices();if(e.target.id==="impianti-management-search"){clearTimeout(state.timer);state.timer=setTimeout(()=>{state.page=1;render()},250);}},true);
+  document.addEventListener("input",e=>{if(e.target.id==="price-search")renderPrices();if(e.target.id==="impianti-management-search"){clearTimeout(state.timer);state.timer=setTimeout(()=>{state.page=1;render()},250);}if(e.target.id==="commessa-mobile-plant-search")renderMobileList();},true);
+  api.openMobileHub=openMobileHub;
+  api.showMobileHub=showMobileHub;
+  document.addEventListener("click",event=>{
+    const button=event.target.closest("button");if(!button)return;
+    if(button.id==="commessa-mobile-management-back"){event.preventDefault();closeManagementPanel();return;}
+    if(button.id==="commessa-mobile-editor-back"||button.id==="commessa-mobile-plant-cancel"){event.preventDefault();mobileReturnTo==="list"?showMobileList():showMobileHub();return;}
+    if(button.dataset.mobileWorkId){event.preventDefault();showMobileEditor(button.dataset.mobileWorkId);return;}
+    const action=button.dataset.commessaMobileAction;if(!action)return;event.preventDefault();
+    if(action==="home")return showMobileHub();
+    if(action==="add")return showMobileEditor();
+    if(action==="edit")return showMobileList();
+    if(action==="advanced")return showAdvanced();
+    if(action==="import"){showAdvanced();const card=document.querySelector("#impianti-import-card");card?.classList.remove("hidden");card?.scrollIntoView({behavior:"smooth",block:"start"});return;}
+    if(action==="export")return void exportWorkbook();
+    if(action==="prices"){document.querySelector("#commessa-mobile-management")?.classList.add("hidden");return openPrices();}
+  });
+  document.addEventListener("submit",event=>{if(event.target.id!=="commessa-mobile-plant-form")return;event.preventDefault();void saveMobilePlant(event.target);});
 })();

@@ -1,8 +1,8 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.2.0') return;
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.2.1') return;
 
-  const VERSION = '2.2.0';
+  const VERSION = '2.2.1';
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
   const USAGE_COLLECTION = 'appConfig';
@@ -293,7 +293,7 @@
     url.searchParams.set('api', '1');
     url.searchParams.set('origin', `${from.lat},${from.lng}`);
     url.searchParams.set('destination', `${to.lat},${to.lng}`);
-    url.searchParams.set('travelmode', 'walking');
+    url.searchParams.set('travelmode', 'driving');
     window.open(url.toString(), '_blank', 'noopener');
   }
 
@@ -370,8 +370,8 @@
 
     let result = null;
     try {
-      result = await requestDirections(maps, from, to, maps.TravelMode.WALKING);
-      if (!result) result = await requestDirections(maps, from, to, maps.TravelMode.DRIVING);
+      result = await requestDirections(maps, from, to, maps.TravelMode.DRIVING);
+      if (!result) result = await requestDirections(maps, from, to, maps.TravelMode.WALKING);
     } catch (_) {
       result = null;
     }
@@ -407,7 +407,7 @@
     const note = panel?.querySelector('.hera-sv-route-note');
 
     if (summary) summary.textContent = `📷 Panorama → 📍 Impianto · ${formatDistance(routeDistance)}`;
-    if (note) note.textContent = routeLabel === 'percorso stradale' ? 'Animazione sul percorso reale' : 'Percorso stradale non disponibile: indicazione diretta';
+    if (note) note.textContent = routeLabel === 'percorso stradale' ? 'Animazione sul percorso carrabile reale' : 'Percorso stradale non disponibile: indicazione diretta';
     replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
     navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to));
 

@@ -182,15 +182,18 @@
     const dataAttribute=calculated?`data-mobile-display-field="${field}"`:`data-v2-field="${field}"`;
     return `<label class="${calculated?"is-calculated":""}"><span>${esc(label)}${field==="denominazione"?' <b aria-hidden="true">*</b>':""}</span><input ${dataAttribute} type="${type}" value="${esc(shown)}"${readonly}${list}${required}${decimal}></label>`;
   }
-  function showMobileEditor(workId=""){
-    const row=workId?joined(state.work.find(w=>w.id===workId)||{}):{stato:"DA FARE"},isNew=!workId;
-    mobileReturnTo=isNew?"home":"list";mobileScreen("editor");
-    const form=document.querySelector("#commessa-mobile-plant-form");form.dataset.v2Work=workId;form.dataset.mobileMode=isNew?"add":"edit";
-    document.querySelector("#commessa-mobile-editor-eyebrow").textContent=isNew?"NUOVO IMPIANTO":"MODIFICA IMPIANTO";
-    document.querySelector("#commessa-mobile-editor-title").textContent=isNew?"Aggiungi impianto":row.denominazione||"Modifica impianto";
+  function showMobileEditor(workId="",requestedMode=""){
+    const source=workId?joined(state.work.find(w=>w.id===workId)||{}):{stato:"DA FARE"},mode=requestedMode||(workId?"edit":"add"),isNewPlant=mode==="add",isNewWork=mode==="add-work";
+    const row=isNewWork?{...source,numeroProgressivoRiga:"",codiceVocePrezzo:"",unitaMisura:"",prezzoBase:null,prezzoRibassato:null,totale:null,dataEsecuzione:"",oraEsecuzione:"",operatoreNome:"",stato:"DA FARE"}:source;
+    mobileReturnTo=isNewPlant?"home":"list";mobileScreen("editor");
+    const form=document.querySelector("#commessa-mobile-plant-form");form.dataset.v2Work=workId;form.dataset.mobileMode=mode;form.dataset.sourceWorkId=isNewWork?workId:"";
+    document.querySelector("#commessa-mobile-editor-eyebrow").textContent=isNewPlant?"NUOVO IMPIANTO":isNewWork?"NUOVA LAVORAZIONE":"MODIFICA IMPIANTO";
+    document.querySelector("#commessa-mobile-editor-title").textContent=isNewPlant?"Aggiungi impianto":isNewWork?`Nuova lavorazione · ${row.denominazione||"Impianto"}`:row.denominazione||"Modifica impianto";
     document.querySelector("#commessa-mobile-plant-feedback").textContent="";
+    const addWorkButton=document.querySelector("#commessa-mobile-add-work");addWorkButton?.classList.toggle("hidden",mode!=="edit");
+    const saveButton=document.querySelector("#commessa-mobile-plant-save");if(saveButton)saveButton.textContent=isNewWork?"Salva nuova lavorazione":isNewPlant?"Salva impianto":"Salva modifiche";
     const labels=new Map(columns);
-    document.querySelector("#commessa-mobile-plant-fields").innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNew)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;
+    document.querySelector("#commessa-mobile-plant-fields").innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNewPlant||isNewWork)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;
     setTimeout(()=>document.querySelector('[data-v2-field="denominazione"]')?.focus(),0);
   }
   async function createMobilePlant(form){
@@ -211,8 +214,26 @@
     }catch(error){feedback(form,error?.message||"Salvataggio non riuscito. Riprova.");}
     finally{button.disabled=false;button.textContent="Salva impianto";}
   }
+  async function createMobileWork(form){
+    const source=state.work.find(work=>work.id===form.dataset.sourceWorkId);if(!source)return feedback(form,"La lavorazione originale non è più disponibile. Riapri l’impianto e riprova.");
+    const patch={};form.querySelectorAll("[data-v2-field]:not([readonly])").forEach(input=>patch[input.dataset.v2Field]=input.value.trim());
+    if(!patch.denominazione)return feedback(form,"La denominazione dell’impianto è obbligatoria.");
+    if(!patch.codiceVocePrezzo)return feedback(form,"Seleziona la nuova voce dell’elenco prezzi.");
+    for(const field of ["quantita","frequenzaAnnua"])patch[field]=num(patch[field]);
+    if(patch.quantita!=null&&patch.quantita<0)return feedback(form,"La quantità non può essere negativa.");
+    const gps=coordinateTools.diagnose(patch.latitudine,patch.longitudine);patch.latitudine=gps.valid?gps.latitude:patch.latitudine;patch.longitudine=gps.valid?gps.longitude:patch.longitudine;Object.assign(patch,coordinateMeta(gps));
+    const pr=price(patch.codiceVocePrezzo);if(!pr)return feedback(form,`La voce prezzo ${patch.codiceVocePrezzo} non è presente nel prezziario.`);
+    const economic={unitaMisura:pr.unitaMisura||"",prezzoBase:num(pr.prezzoBase),percentualeRibasso:discount(pr),prezzoRibassato:discounted(pr),priceListLinkStatus:"LINKED"};Object.assign(patch,economic,{totale:total({...patch,...economic})});
+    const maxW=Math.max(0,...state.work.map(work=>num(work.numeroProgressivoRiga)||0)),ref=commRef().collection("lavorazioni").doc(),button=document.querySelector("#commessa-mobile-plant-save");button.disabled=true;button.textContent="Salvataggio…";
+    try{
+      await ref.set({...patch,commessaId:state.commessa.id,impiantoId:source.impiantoId,numeroProgressivoRiga:maxW+1,priceOverride:false,createdAt:server(),createdBy:currentUser?.uid||"",...actor()});
+      await load();mobileSummary();showMobileList();
+    }catch(error){feedback(form,error?.message||"Salvataggio della nuova lavorazione non riuscito. Riprova.");}
+    finally{button.disabled=false;button.textContent="Salva nuova lavorazione";}
+  }
   async function saveMobilePlant(form){
     if(form.dataset.mobileMode==="add")return createMobilePlant(form);
+    if(form.dataset.mobileMode==="add-work")return createMobileWork(form);
     state.editing=form.dataset.v2Work;const button=document.querySelector("#commessa-mobile-plant-save");button.disabled=true;button.textContent="Salvataggio…";
     await saveRow(form);button.disabled=false;button.textContent="Salva modifiche";
     if(!state.editing){mobileSummary();showMobileList();}
@@ -284,6 +305,7 @@
     const button=event.target.closest("button");if(!button)return;
     if(button.id==="commessa-mobile-management-back"){event.preventDefault();closeManagementPanel();return;}
     if(button.id==="commessa-mobile-editor-back"||button.id==="commessa-mobile-plant-cancel"){event.preventDefault();mobileReturnTo==="list"?showMobileList():showMobileHub();return;}
+    if(button.id==="commessa-mobile-add-work"){event.preventDefault();const form=document.querySelector("#commessa-mobile-plant-form");showMobileEditor(form?.dataset.v2Work||"","add-work");return;}
     if(button.dataset.mobileWorkId){event.preventDefault();showMobileEditor(button.dataset.mobileWorkId);return;}
     const action=button.dataset.commessaMobileAction;if(!action)return;event.preventDefault();
     if(action==="home")return showMobileHub();

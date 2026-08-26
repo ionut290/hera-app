@@ -75,6 +75,7 @@ jobs:
           npm run check:app-update
           npm run check:notifications
           npm run check:auth-login
+          npm run check:auth-stability
           npm run check:first-login-password
           npm run check:login-retry
           npm run check:fatto-critical

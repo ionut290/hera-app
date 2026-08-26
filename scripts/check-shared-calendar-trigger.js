@@ -21,7 +21,12 @@ assert.match(source, /afterMonth/, "Deve gestire creazione, modifica ed eliminaz
 assert.match(source, /activities: Array\.isArray\(existingPayload\?\.activities\)/, "Le ore devono conservare le attività già aggregate");
 assert.match(source, /reports: Array\.isArray\(existingPayload\?\.reports\)/, "Le attività devono conservare le ore già aggregate");
 assert.match(source, /compactActivity/, "Le attività devono essere ridotte ai soli campi amministrativi");
-assert.doesNotMatch(source, /collectionGroup\s*\(/, "Il trigger non deve eseguire scansioni collectionGroup");
+assert.match(source, /getAdministrativeCalendarMonth/, "Manca il recupero mensile controllato");
+assert.match(source, /collectionGroup\(sourceCollection\)/, "Il recupero deve usare query mensili collectionGroup");
+assert.match(source, /where\("dataEsecuzione", ">=", fromDate\)/, "Il recupero deve essere limitato all'inizio del mese");
+assert.match(source, /where\("dataEsecuzione", "<", toDate\)/, "Il recupero deve essere limitato alla fine del mese");
+assert.match(source, /if \(!request\.auth\)/, "Il recupero deve richiedere autenticazione");
+assert.match(source, /MAX_RECOVERED_ACTIVITIES/, "Manca il limite del recupero mensile");
 assert.match(main, /shared-calendar-view/, "Le funzioni non sono esportate da main.js");
 
 const moduleStub = { exports: {} };
@@ -30,6 +35,10 @@ vm.runInNewContext(source, {
     if (id === "crypto") return require("node:crypto");
     if (id === "firebase-admin") return {};
     if (id === "firebase-functions/v2/firestore") return { onDocumentWritten: (_options, handler) => handler };
+    if (id === "firebase-functions/v2/https") return {
+      onCall: (_options, handler) => handler,
+      HttpsError: class HttpsError extends Error {}
+    };
     throw new Error(`Modulo inatteso: ${id}`);
   },
   module: moduleStub,
@@ -39,6 +48,8 @@ vm.runInNewContext(source, {
   Set,
   Number,
   String,
+  Object,
+  Intl,
   console
 }, { filename: "shared-calendar-view.js" });
 
@@ -55,6 +66,8 @@ const activity = helpers.compactActivity("lavorazioni", "c1", "w1", {
 assert.equal(activity.date, "2026-08-26");
 assert.equal(activity.amount, 1234.5);
 assert.equal(activity.kind, "lavorazione");
+assert.equal(helpers.activityDateKeyFromData({ doneAt: { toDate: () => new Date("2026-08-25T22:30:00Z") } }), "2026-08-26");
+assert.equal(helpers.nextMonthKey("2026-12"), "2027-01");
 assert.equal(helpers.compactActivity("lavorazioni", "c1", "w2", { stato: "DA FARE" }), null);
 
 const hoursUpdate = helpers.buildNextPayload({ activities: [activity] }, "2026-08", "oreReports", "r1", { date: "2026-08-26" });
@@ -66,4 +79,4 @@ assert.equal(activityUpdate.reports.length, 1);
 assert.equal(activityUpdate.activities.length, 1);
 
 console.log("✅ Trigger automatico collegato a ore, impianti e lavorazioni FATTO.");
-console.log("✅ Aggiornamento mensile transazionale, senza scansioni e con conservazione delle sezioni.");
+console.log("✅ Recupero storico limitato al mese richiesto, autenticato e salvato nel riepilogo condiviso.");

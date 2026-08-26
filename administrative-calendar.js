@@ -7,6 +7,7 @@
   const CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
   const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
   const monthlyViews = new Map();
+  const recoveryByMonth = new Map();
   let activeMonth = "";
   let unsubscribeMonth = null;
 
@@ -369,6 +370,44 @@
     activeMonth = "";
   }
 
+  function recoverMonthActivities(month) {
+    const current = monthlyViews.get(month);
+    if (Array.isArray(current?.activities) && current.activities.length) return Promise.resolve(current);
+    if (recoveryByMonth.has(month)) return recoveryByMonth.get(month);
+
+    const request = (async () => {
+      const callable = global.firebase?.app?.().functions?.("europe-west1")?.httpsCallable?.("getAdministrativeCalendarMonth");
+      if (!callable) return null;
+      monthlyViews.set(month, { ...current, reports: current?.reports || [], activities: [], recovering: true });
+      try {
+        const response = await callable({ month });
+        const data = response?.data || {};
+        const latest = monthlyViews.get(month) || {};
+        const recovered = {
+          ...latest,
+          reports: Array.isArray(latest.reports) ? latest.reports : [],
+          activities: Array.isArray(data.activities) ? data.activities : [],
+          source: "recupero-mensile-controllato",
+          recovering: false,
+          recoveryError: ""
+        };
+        monthlyViews.set(month, recovered);
+        return recovered;
+      } catch (error) {
+        console.warn("Recupero mensile controllato non disponibile:", error);
+        const latest = monthlyViews.get(month) || {};
+        monthlyViews.set(month, { ...latest, recovering: false, recoveryError: text(error?.message || error) });
+        return null;
+      } finally {
+        if (typeof calendarMode !== "undefined" && calendarMode === "administrative" && visibleMonthKey() === month) {
+          renderCalendarGrid();
+        }
+      }
+    })();
+    recoveryByMonth.set(month, request);
+    return request;
+  }
+
   function ensureMonthView(month) {
     if (!/^\d{4}-\d{2}$/.test(month) || activeMonth === month) return;
     deactivate();
@@ -390,10 +429,12 @@
         activities: Array.isArray(view.payload.activities) ? view.payload.activities : [],
         source: metadata.source || "firestore"
       });
+      if (!view.payload.activities?.length) recoverMonthActivities(month);
       if (typeof calendarMode !== "undefined" && calendarMode === "administrative" && visibleMonthKey() === month) {
         renderCalendarGrid();
       }
     });
+    Promise.resolve().then(() => recoverMonthActivities(month));
   }
 
   function renderCalendarGrid() {
@@ -429,7 +470,9 @@
       const commesseCount = typeof commesseById !== "undefined" && commesseById instanceof Map ? commesseById.size : 0;
       const shared = monthlyViews.get(monthKey);
       const activities = Array.isArray(shared?.activities) ? shared.activities.length : 0;
-      ui.calendarFeedback.innerHTML = `<span class="administrative-data-source">✓ Un solo riepilogo Firestore mensile condiviso · nessuna lettura per giorno, commessa o impianto</span><span>${activities} attività mensili aggregate · ${cachedCount}/${commesseCount || cachedCount} commesse disponibili anche in cache</span>`;
+      ui.calendarFeedback.innerHTML = `<span class="administrative-data-source">✓ Riepilogo Firestore mensile · recupero mirato solo quando incompleto</span><span>Nessuna lettura per singolo giorno, commessa o impianto · ${activities} attività aggregate · ${cachedCount}/${commesseCount || cachedCount} commesse anche in cache</span>`;
+      if (shared?.recovering) ui.calendarFeedback.innerHTML += `<span>Recupero mirato delle attività del mese in corso…</span>`;
+      else if (shared?.recoveryError) ui.calendarFeedback.innerHTML += `<span>⚠️ Recupero mensile non disponibile; restano visibili i dati in cache.</span>`;
     }
     renderSelectedDay(cachedByCommessa);
   }
@@ -498,6 +541,7 @@
     collectPlantsForDate,
     groupDayData,
     ensureMonthView,
+    recoverMonthActivities,
     deactivate,
     installInteractions
   });

@@ -5,12 +5,13 @@
 
   const state = {
     installed: true,
-    version: "2.1.0",
+    version: "2.1.1",
     wrapped: false,
     blockedAutomaticStarts: 0,
     blockedFallbackStarts: 0,
     allowedTrustedStarts: 0,
-    assignmentsIntercepted: 0
+    assignmentsIntercepted: 0,
+    staticCalendarHoursReconciled: 0
   };
 
   function wrapApi(api) {
@@ -56,6 +57,37 @@
     return api;
   }
 
+  function reconcileStaticCalendarHoursState() {
+    try {
+      const startupState = window.HeraLightStartup?.getState?.();
+      if (!startupState?.calendarSharedViewActive || startupState.hoursSourceEnabled) return false;
+      if (typeof hoursReportsLoaded === "undefined" || hoursReportsLoaded !== true) return false;
+      if (typeof allHoursApprovalRequests === "undefined" || !Array.isArray(allHoursApprovalRequests)) return false;
+
+      if (typeof hoursApprovalsLoaded !== "undefined" && hoursApprovalsLoaded !== true) {
+        hoursApprovalsLoaded = true;
+        if (typeof hoursApprovalRequests !== "undefined") {
+          hoursApprovalRequests = allHoursApprovalRequests;
+        }
+        state.staticCalendarHoursReconciled += 1;
+        console.debug("[HOURS SOURCE GUARD] stato richieste ore allineato dalla vista calendario condivisa");
+        if (typeof renderHoursApprovalRequests === "function") renderHoursApprovalRequests();
+        if (typeof renderSquadre === "function") renderSquadre();
+      }
+      return typeof hoursApprovalsLoaded !== "undefined" && hoursApprovalsLoaded === true;
+    } catch (error) {
+      console.debug("[HOURS SOURCE GUARD] allineamento calendario ore rinviato", error);
+      return false;
+    }
+  }
+
+  function startStaticCalendarHoursReconciliation(attempt = 0) {
+    if (reconcileStaticCalendarHoursState()) return;
+    if (attempt < 240) {
+      window.setTimeout(() => startStaticCalendarHoursReconciliation(attempt + 1), 250);
+    }
+  }
+
   let storedApi = window.HeraLightStartup;
   const existingDescriptor = Object.getOwnPropertyDescriptor(window, "HeraLightStartup");
 
@@ -69,6 +101,7 @@
       set(value) {
         state.assignmentsIntercepted += 1;
         storedApi = wrapApi(value);
+        startStaticCalendarHoursReconciliation();
       }
     });
     if (storedApi) storedApi = wrapApi(storedApi);
@@ -80,6 +113,7 @@
     const api = window.HeraLightStartup;
     if (api && typeof api.enableHoursSource === "function") {
       wrapApi(api);
+      startStaticCalendarHoursReconciliation();
       return;
     }
     if (attempt < 200) window.setTimeout(() => install(attempt + 1), 25);

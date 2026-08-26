@@ -45,9 +45,11 @@ function sameKeys(left, right) {
 async function main() {
   if (!/^\d{4}-\d{2}$/.test(MONTH)) throw new Error(`Mese non valido: ${MONTH}`);
 
-  const [reports, approvalsRaw] = await Promise.all([
+  const ref = db.collection(SHARED_COLLECTION).doc(`calendario__${MONTH}`);
+  const [reports, approvalsRaw, existing] = await Promise.all([
     readMonth("oreReports"),
-    readMonth("oreApprovalRequests")
+    readMonth("oreApprovalRequests"),
+    ref.get()
   ]);
   const approvals = approvalsRaw.filter((row) => !EXCLUDED.has(normalizedStatus(row)));
   const rows = [...reports, ...approvals];
@@ -55,14 +57,14 @@ async function main() {
     month: MONTH,
     schemaVersion: 2,
     completeRecords: true,
-    reports: rows
+    reports: rows,
+    activities: Array.isArray(existing.data()?.payload?.activities) ? existing.data().payload.activities : []
   };
   const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
   if (bytes > MAX_PAYLOAD_BYTES) {
     throw new Error(`Vista calendario troppo grande: ${bytes} byte`);
   }
 
-  const ref = db.collection(SHARED_COLLECTION).doc(`calendario__${MONTH}`);
   await ref.set({
     type: "calendario",
     key: MONTH,

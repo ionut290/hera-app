@@ -28,12 +28,15 @@ assert.match(feature, /knownEarnings/);
 assert.match(feature, /Ore non ancora inserite/);
 assert.match(feature, /importo da valorizzare/);
 assert.match(feature, /setCalendarMode\("administrative"\)/);
+assert.match(feature, /api\.subscribe\("calendario", month/);
+assert.match(feature, /Un solo riepilogo Firestore mensile condiviso/);
+assert.match(feature, /deactivate/);
 
 assert.doesNotMatch(feature, /\bdb\s*\./);
 assert.doesNotMatch(feature, /\.onSnapshot\s*\(/);
-assert.doesNotMatch(feature, /HeraSharedStaticViews\s*\.\s*subscribe/);
 assert.doesNotMatch(feature, /firebase\s*\.\s*firestore/i);
 assert.doesNotMatch(feature, /canManageData\s*\(/);
+assert.doesNotMatch(feature, /\.collection\s*\(/);
 
 assert.match(css, /\.administrative-day-kpis/);
 assert.match(css, /\.administrative-commessa-card/);
@@ -42,6 +45,7 @@ assert.match(sharedClient, /calendarMode === "hours" \|\| calendarMode === "admi
 assert.match(serviceWorker, /administrative-calendar\.js\?v=/);
 assert.match(androidBundle, /"administrative-calendar\.js"/);
 
+let monthlySubscriptions = 0;
 const context = {
   console,
   Intl,
@@ -65,6 +69,31 @@ const context = {
     date: "2026-08-26",
     entries: [{ commessaId: "c1", commessaName: "HERA DEPURAZIONE", rows: [{ operatore: "Mario Rossi", ore: 8 }] }]
   }],
+  calendarVisibleMonth: new Date(2026, 7, 1, 12),
+  calendarSelectedDate: "2026-08-26",
+  calendarMode: "administrative",
+  ui: {},
+  HeraSharedStaticViews: {
+    getCached: () => null,
+    subscribe: (_type, month, callback) => {
+      monthlySubscriptions += 1;
+      callback({ payload: {
+        reports: context.allHoursReports,
+        activities: [
+          {
+            date: "2026-08-26", sourceKey: "impianti/c1/i1", kind: "impianto",
+            commessaId: "c1", itemId: "i1", impiantoId: "i1", amount: 150
+          },
+          {
+            date: "2026-08-26", sourceKey: "lavorazioni/c1/w1", kind: "lavorazione",
+            commessaId: "c1", itemId: "w1", impiantoId: "i1", work: "Sfalcio",
+            operator: "Mario Rossi", amount: 175, quantity: 2, unit: "AC"
+          }
+        ]
+      } }, { source: "firestore" });
+      return () => {};
+    }
+  },
   normalizeHoursReportDateKey: (value) => String(value || "").slice(0, 10),
   firestoreDateToMillis: (value) => Date.parse(value) || 0,
   formatCalendarDateKey: (value) => new Date(value).toISOString().slice(0, 10),
@@ -74,13 +103,18 @@ const context = {
 };
 context.window = context;
 vm.runInNewContext(feature, context, { filename: "administrative-calendar.js" });
+context.HeraAdministrativeCalendar.ensureMonthView("2026-08");
+context.HeraAdministrativeCalendar.ensureMonthView("2026-08");
 const grouped = context.HeraAdministrativeCalendar.groupDayData("2026-08-26", context.impiantiByCommessaId);
+assert.equal(monthlySubscriptions, 1);
 assert.equal(grouped.length, 1);
 assert.equal(grouped[0].commessaName, "HERA DEPURAZIONE");
 assert.equal(grouped[0].plants.length, 1);
+assert.equal(grouped[0].completedUnits, 1);
+assert.equal(grouped[0].plants[0].kind, "lavorazione");
 assert.equal(grouped[0].totalHours, 8);
-assert.equal(grouped[0].knownEarnings, 150);
+assert.equal(grouped[0].knownEarnings, 175);
 assert.equal(grouped[0].operators[0].name, "Mario Rossi");
 
-console.log("✓ Calendario amministrativo visibile a tutti e calcolato soltanto da dati già caricati/cache locale.");
-console.log("✓ Nessuna lettura, query o listener Firestore aggiunto dal calendario amministrativo.");
+console.log("✓ Calendario amministrativo visibile a tutti con riepilogo mensile, ore, attività e guadagni.");
+console.log("✓ Un solo abbonamento per mese; nessuna query diretta per giorno, commessa o impianto.");

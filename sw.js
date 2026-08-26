@@ -1,5 +1,5 @@
 const CACHE_NAME = "varga-cantieri-shell-v155";
-const CACHE_RESET_VERSION = "20260826-administrative-calendar1";
+const CACHE_RESET_VERSION = "20260826-administrative-calendar2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -15,7 +15,7 @@ const APP_SHELL = [
   "./app-atex.js?v=20260815-mod1",
   "./app-documents.js?v=20260815-mod1",
   "./app-calendar.js?v=20260815-mod1",
-  "./administrative-calendar.js?v=20260826-admin1",
+  "./administrative-calendar.js?v=20260826-admin2",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260824-commessa-isolation1",

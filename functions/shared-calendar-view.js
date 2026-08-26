@@ -9,6 +9,8 @@ const SHARED_COLLECTION = "sharedStaticViews";
 const MAX_PAYLOAD_BYTES = 700000;
 const CALENDAR_SCHEMA_VERSION = 2;
 const SOURCE_COLLECTIONS = new Set(["oreReports", "oreApprovalRequests"]);
+const ACTIVITY_COLLECTIONS = new Set(["impianti", "lavorazioni"]);
+const COMPLETED_STATUSES = new Set(["fatto", "done", "completed", "completato"]);
 
 function text(value) {
   return String(value ?? "").trim();
@@ -62,6 +64,12 @@ function monthKeyFromData(data = {}) {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey.slice(0, 7) : "";
 }
 
+function activityDateKeyFromData(data = {}) {
+  return dateKeyFromData({
+    date: data.dataEsecuzione || data.dataFatto || data.doneAt || data.completedAt || data.executionDate
+  });
+}
+
 function normalizeStatus(value) {
   return text(value).toLowerCase();
 }
@@ -94,6 +102,61 @@ function compactRecord(sourceCollection, sourceId, data = {}) {
   };
 }
 
+function numberOrNull(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const raw = text(value).replace(/\s/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function completedAmount(data = {}) {
+  for (const value of [data.totale, data.importo, data.totaleRiga, data.importoPrestazione, data.valoreProdotto, data.earnedAmount]) {
+    const parsed = numberOrNull(value);
+    if (parsed != null && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+function isCompletedActivity(sourceCollection, data = {}) {
+  if (!ACTIVITY_COLLECTIONS.has(sourceCollection)) return false;
+  const status = normalizeStatus(data.stato || data.status).replace(/_/g, " ");
+  if (sourceCollection === "lavorazioni") return COMPLETED_STATUSES.has(status);
+  return Boolean(data.done || data.fatto || data.completed || COMPLETED_STATUSES.has(status));
+}
+
+function compactActivity(sourceCollection, commessaId, itemId, data = {}) {
+  if (!isCompletedActivity(sourceCollection, data)) return null;
+  const date = activityDateKeyFromData(data);
+  if (!date) return null;
+  const sourceKey = `${sourceCollection}/${commessaId}/${itemId}`;
+  const impiantoId = text(data.impiantoId || data.physicalPlantId || (sourceCollection === "impianti" ? itemId : ""));
+  return {
+    sourceCollection,
+    sourceKey,
+    kind: sourceCollection === "lavorazioni" ? "lavorazione" : "impianto",
+    commessaId: text(commessaId || data.commessaId),
+    commessaName: text(data.commessaName || data.commessaNome),
+    itemId: text(itemId),
+    impiantoId,
+    idSap: text(data.idSap || data.idSAP || data.sapId),
+    name: text(data.denominazione || data.nome || data.impiantoNome || (sourceCollection === "lavorazioni" ? "Lavorazione" : "Impianto")),
+    comune: text(data.comune),
+    address: text(data.indirizzo || data.descrizioneVia || data.via),
+    work: text(data.tipologiaLavorazione || data.tipologiaIntervento || data.lavorazioniRichieste || data.codiceVocePrezzo || data.codicePrezzo),
+    workCode: text(data.codiceVocePrezzo || data.codicePrezzo || data.voceRiferimento),
+    operator: text(data.operatoreNome || data.operatore || data.doneBy || data.completedBy),
+    operatorId: text(data.operatoreUid || data.doneByUid || data.userId),
+    date,
+    time: text(data.oraEsecuzione || data.oraFatto),
+    amount: completedAmount(data),
+    note: text(data.noteImpianto || data.note || data.nota),
+    quantity: numberOrNull(data.quantita),
+    unit: text(data.unitaMisura),
+    economicStatus: text(data.economicStatus)
+  };
+}
+
 function stableHash(payload) {
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
@@ -109,11 +172,29 @@ function buildNextPayload(existingPayload, month, sourceCollection, sourceId, ne
     month,
     schemaVersion: CALENDAR_SCHEMA_VERSION,
     completeRecords: true,
-    reports
+    reports,
+    activities: Array.isArray(existingPayload?.activities) ? existingPayload.activities : []
   };
 }
 
-async function updateMonthView({ month, sourceCollection, sourceId, nextData }) {
+function buildNextActivityPayload(existingPayload, month, sourceCollection, commessaId, itemId, nextData) {
+  const sourceKey = `${sourceCollection}/${commessaId}/${itemId}`;
+  const current = Array.isArray(existingPayload?.activities) ? existingPayload.activities : [];
+  const activities = current.filter((item) => text(item?.sourceKey) !== sourceKey);
+  const nextActivity = nextData ? compactActivity(sourceCollection, commessaId, itemId, nextData) : null;
+  if (nextActivity && nextActivity.date.startsWith(month)) activities.push(nextActivity);
+  activities.sort((a, b) => `${a.date}|${a.commessaId}|${a.impiantoId}|${a.sourceKey}`
+    .localeCompare(`${b.date}|${b.commessaId}|${b.impiantoId}|${b.sourceKey}`, "it"));
+  return {
+    month,
+    schemaVersion: CALENDAR_SCHEMA_VERSION,
+    completeRecords: true,
+    reports: Array.isArray(existingPayload?.reports) ? existingPayload.reports : [],
+    activities
+  };
+}
+
+async function updateMonthView({ month, sourceCollection, sourceId, commessaId = "", nextData, activity = false }) {
   if (!/^\d{4}-\d{2}$/.test(month)) return { skipped: "invalid-month" };
   const db = admin.firestore();
   const ref = db.collection(SHARED_COLLECTION).doc(`calendario__${month}`);
@@ -121,7 +202,9 @@ async function updateMonthView({ month, sourceCollection, sourceId, nextData }) 
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const previous = snapshot.exists ? snapshot.data() || {} : {};
-    const payload = buildNextPayload(previous.payload, month, sourceCollection, sourceId, nextData);
+    const payload = activity
+      ? buildNextActivityPayload(previous.payload, month, sourceCollection, commessaId, sourceId, nextData)
+      : buildNextPayload(previous.payload, month, sourceCollection, sourceId, nextData);
     const contentHash = stableHash(payload);
     if (previous.contentHash === contentHash) return { skipped: "unchanged" };
 
@@ -139,14 +222,40 @@ async function updateMonthView({ month, sourceCollection, sourceId, nextData }) 
       completeRecords: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAtClient: new Date().toISOString(),
-      updatedBy: "cloud-function:hours-write",
-      authorName: "Aggiornamento automatico ore",
+      updatedBy: activity ? "cloud-function:activity-write" : "cloud-function:hours-write",
+      authorName: activity ? "Aggiornamento automatico attività" : "Aggiornamento automatico ore",
       contentHash,
       payloadBytes: bytes,
       payload
     }, { merge: false });
-    return { updated: true, month, reports: payload.reports.length, bytes };
+    return { updated: true, month, reports: payload.reports.length, activities: payload.activities.length, bytes };
   });
+}
+
+async function handleActivityWrite(event, sourceCollection) {
+  const beforeData = event.data?.before?.exists ? event.data.before.data() : null;
+  const afterData = event.data?.after?.exists ? event.data.after.data() : null;
+  const sourceId = event.params.itemId;
+  const commessaId = event.params.commessaId;
+  const beforeMonth = beforeData && isCompletedActivity(sourceCollection, beforeData)
+    ? activityDateKeyFromData(beforeData).slice(0, 7)
+    : "";
+  const afterMonth = afterData && isCompletedActivity(sourceCollection, afterData)
+    ? activityDateKeyFromData(afterData).slice(0, 7)
+    : "";
+  const months = [...new Set([beforeMonth, afterMonth].filter((month) => /^\d{4}-\d{2}$/.test(month)))];
+
+  for (const month of months) {
+    await updateMonthView({
+      month,
+      sourceCollection,
+      sourceId,
+      commessaId,
+      nextData: afterMonth === month ? afterData : null,
+      activity: true
+    });
+  }
+  return null;
 }
 
 async function handleHoursWrite(event, sourceCollection) {
@@ -178,11 +287,24 @@ exports.syncSharedCalendarFromOreApprovalRequests = onDocumentWritten(
   (event) => handleHoursWrite(event, "oreApprovalRequests")
 );
 
+exports.syncSharedCalendarFromImpianti = onDocumentWritten(
+  { document: "commesse/{commessaId}/impianti/{itemId}", region: REGION },
+  (event) => handleActivityWrite(event, "impianti")
+);
+
+exports.syncSharedCalendarFromLavorazioni = onDocumentWritten(
+  { document: "commesse/{commessaId}/lavorazioni/{itemId}", region: REGION },
+  (event) => handleActivityWrite(event, "lavorazioni")
+);
+
 exports.__test = {
   CALENDAR_SCHEMA_VERSION,
   dateKeyFromData,
   monthKeyFromData,
+  activityDateKeyFromData,
   compactRecord,
+  compactActivity,
   buildNextPayload,
+  buildNextActivityPayload,
   stableHash
 };

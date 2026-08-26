@@ -38,6 +38,7 @@
   api.openCalendarPage = openCalendarPage;
   function closeCalendarPage() {
     closeCalendarEventForm();
+    window.HeraAdministrativeCalendar?.deactivate?.();
     calendarMode = "choice";
     window.location.hash = "";
     applyRoute();
@@ -45,6 +46,7 @@
   api.closeCalendarPage = closeCalendarPage;
   function setCalendarMode(mode) {
     if (mode !== "hours" && mode !== "shared" && mode !== "administrative") return;
+    if (mode !== "administrative") window.HeraAdministrativeCalendar?.deactivate?.();
     calendarMode = mode;
     renderCalendarMode();
     renderCalendar();

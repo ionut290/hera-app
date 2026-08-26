@@ -140,6 +140,9 @@
     ["Esecuzione",["dataEsecuzione","oraEsecuzione","operatoreNome","note","stato"]]
   ];
   let mobileReturnTo="home";
+  let mobileGeocodeTimer=null;
+  let mobileGeocodeRequestId=0;
+  const mobileGeocodeCache=new Map();
   function mobileScreen(name){
     const home=document.querySelector("#commessa-mobile-management-home"),list=document.querySelector("#commessa-mobile-plant-list"),editor=document.querySelector("#commessa-mobile-plant-editor");
     [[home,"home"],[list,"list"],[editor,"editor"]].forEach(([element,key])=>{element?.classList.toggle("hidden",key!==name);element?.setAttribute("aria-hidden",String(key!==name));});
@@ -182,6 +185,68 @@
     const dataAttribute=calculated?`data-mobile-display-field="${field}"`:`data-v2-field="${field}"`;
     return `<label class="${calculated?"is-calculated":""}"><span>${esc(label)}${field==="denominazione"?' <b aria-hidden="true">*</b>':""}</span><input ${dataAttribute} type="${type}" value="${esc(shown)}"${readonly}${list}${required}${decimal}></label>`;
   }
+  function mobileAddressFromGeocode(data){
+    const address=data?.address||{};
+    const comune=clean(address.city||address.town||address.village||address.municipality||address.city_district||address.county||"");
+    const road=clean(address.road||address.residential||address.pedestrian||address.living_street||address.square||address.track||address.path||address.cycleway||address.footway||address.locality||address.hamlet||"");
+    const civic=clean(address.house_number||"");
+    return {comune,indirizzo:clean([road,civic].filter(Boolean).join(" "))};
+  }
+  async function reverseGeocodeMobileCoordinates(latitude,longitude){
+    const key=`${Number(latitude).toFixed(6)},${Number(longitude).toFixed(6)}`;
+    if(mobileGeocodeCache.has(key))return mobileGeocodeCache.get(key);
+    const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&zoom=18&addressdetails=1&accept-language=it`;
+    const response=await fetch(url,{headers:{Accept:"application/json"}});
+    if(!response.ok)throw new Error(`Geocodifica non disponibile (${response.status})`);
+    const result=mobileAddressFromGeocode(await response.json());
+    mobileGeocodeCache.set(key,result);
+    return result;
+  }
+  function mobileGeocodeStatus(form,message){
+    const status=form?.querySelector("#commessa-mobile-geocode-status");
+    if(status)status.textContent=message;
+  }
+  function canAutofillMobileAddress(input){
+    if(!input||input.dataset.mobileManualValue==="true")return false;
+    const current=clean(input.value),generated=clean(input.dataset.mobileGeocodeValue);
+    return !current||Boolean(generated&&current===generated);
+  }
+  function setMobileGeocodeValue(input,value){
+    if(!input||!value||!canAutofillMobileAddress(input))return false;
+    input.value=value;
+    input.dataset.mobileGeocodeValue=value;
+    input.dataset.mobileManualValue="false";
+    return true;
+  }
+  async function autofillMobileAddress(form){
+    if(!form||form.id!=="commessa-mobile-plant-form")return;
+    const latitude=form.querySelector('[data-v2-field="latitudine"]')?.value;
+    const longitude=form.querySelector('[data-v2-field="longitudine"]')?.value;
+    const gps=coordinateTools.diagnose(latitude,longitude);
+    if(!gps.valid){form.dataset.mobileGeocodeKey="";mobileGeocodeStatus(form,"Inserisci latitudine e longitudine valide per compilare automaticamente Comune e Via.");return;}
+    const comuneInput=form.querySelector('[data-v2-field="comune"]'),indirizzoInput=form.querySelector('[data-v2-field="indirizzo"]');
+    if(!canAutofillMobileAddress(comuneInput)&&!canAutofillMobileAddress(indirizzoInput)){mobileGeocodeStatus(form,"Comune e Via sono già compilati e restano modificabili.");return;}
+    const key=`${gps.latitude},${gps.longitude}`;
+    if(form.dataset.mobileGeocodeKey===key)return;
+    form.dataset.mobileGeocodeKey=key;
+    const requestId=++mobileGeocodeRequestId;
+    mobileGeocodeStatus(form,"Ricerca automatica di Comune e Via…");
+    try{
+      const result=await reverseGeocodeMobileCoordinates(gps.latitude,gps.longitude);
+      if(requestId!==mobileGeocodeRequestId||form.dataset.mobileGeocodeKey!==key)return;
+      const comuneAdded=setMobileGeocodeValue(comuneInput,result.comune),indirizzoAdded=setMobileGeocodeValue(indirizzoInput,result.indirizzo);
+      mobileGeocodeStatus(form,comuneAdded||indirizzoAdded?"Comune e Via compilati automaticamente. Puoi modificarli prima di salvare.":"Indirizzo non trovato: inserisci Comune e Via manualmente.");
+    }catch(error){
+      if(requestId!==mobileGeocodeRequestId)return;
+      console.warn("Compilazione automatica indirizzo non riuscita:",error);
+      form.dataset.mobileGeocodeKey="";
+      mobileGeocodeStatus(form,"Compilazione automatica non disponibile: puoi inserire Comune e Via manualmente.");
+    }
+  }
+  function scheduleMobileAddressAutofill(form){
+    clearTimeout(mobileGeocodeTimer);
+    mobileGeocodeTimer=setTimeout(()=>void autofillMobileAddress(form),900);
+  }
   function ensureMobileAddWorkButton(form){
     let button=document.querySelector("#commessa-mobile-add-work");
     if(button||!form)return button;
@@ -193,14 +258,16 @@
     const source=workId?joined(state.work.find(w=>w.id===workId)||{}):{stato:"DA FARE"},mode=requestedMode||(workId?"edit":"add"),isNewPlant=mode==="add",isNewWork=mode==="add-work";
     const row=isNewWork?{...source,numeroProgressivoRiga:"",codiceVocePrezzo:"",unitaMisura:"",prezzoBase:null,prezzoRibassato:null,totale:null,dataEsecuzione:"",oraEsecuzione:"",operatoreNome:"",stato:"DA FARE"}:source;
     mobileReturnTo=isNewPlant?"home":"list";mobileScreen("editor");
-    const form=document.querySelector("#commessa-mobile-plant-form");form.dataset.v2Work=workId;form.dataset.mobileMode=mode;form.dataset.sourceWorkId=isNewWork?workId:"";
+    const form=document.querySelector("#commessa-mobile-plant-form");clearTimeout(mobileGeocodeTimer);mobileGeocodeRequestId++;form.dataset.mobileGeocodeKey="";form.dataset.v2Work=workId;form.dataset.mobileMode=mode;form.dataset.sourceWorkId=isNewWork?workId:"";
     document.querySelector("#commessa-mobile-editor-eyebrow").textContent=isNewPlant?"NUOVO IMPIANTO":isNewWork?"NUOVA LAVORAZIONE":"MODIFICA IMPIANTO";
     document.querySelector("#commessa-mobile-editor-title").textContent=isNewPlant?"Aggiungi impianto":isNewWork?`Nuova lavorazione · ${row.denominazione||"Impianto"}`:row.denominazione||"Modifica impianto";
     document.querySelector("#commessa-mobile-plant-feedback").textContent="";
     const addWorkButton=ensureMobileAddWorkButton(form);addWorkButton?.classList.toggle("hidden",mode!=="edit");
     const saveButton=document.querySelector("#commessa-mobile-plant-save");if(saveButton)saveButton.textContent=isNewWork?"Salva nuova lavorazione":isNewPlant?"Salva impianto":"Salva modifiche";
     const labels=new Map(columns);
-    document.querySelector("#commessa-mobile-plant-fields").innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNewPlant||isNewWork)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;
+    const fieldsHost=document.querySelector("#commessa-mobile-plant-fields");
+    fieldsHost.innerHTML=mobileGroups.map(([heading,fields])=>`<fieldset><legend>${heading}</legend>${fields.map(field=>mobileInput(field,labels.get(field),row[field],isNewPlant||isNewWork)).join("")}</fieldset>`).join("")+`<datalist id="commessa-mobile-price-codes">${state.prices.map(p=>`<option value="${esc(p.codiceVoce)}">${esc(p.descrizione||"")}</option>`).join("")}</datalist>`;
+    fieldsHost.querySelector("fieldset")?.insertAdjacentHTML("beforeend",'<p id="commessa-mobile-geocode-status" class="muted" aria-live="polite">Inserisci le coordinate GPS per compilare automaticamente Comune e Via. I campi resteranno modificabili.</p>');
     setTimeout(()=>document.querySelector('[data-v2-field="denominazione"]')?.focus(),0);
   }
   async function createMobilePlant(form){
@@ -305,7 +372,7 @@
   const api={repairImportedMatrixPlants,synchronizeOperationalModel,migrateInreteCommesseToWorkItemsV2:migrateInrete,calculations:{normalizePriceCode:core.normalizePriceCode,resolvePriceItem:core.resolvePriceItem,calculateDiscountedPrice:core.calculateDiscountedPrice,calculateWorkItemTotal:core.calculateWorkItemTotal,calculateCompletedSubtotal:core.calculateCompletedSubtotal},async open(commessa){const requestedCommessaId=String(commessa?.id||"").trim();if(!requestedCommessaId)return false;const requestId=++state.openRequestId;state.commessa=commessa;managementCommessaId=requestedCommessaId;document.querySelector("#commesse-manage-list")?.classList.add("hidden");document.querySelector(".commesse-management-head")?.classList.add("hidden");document.querySelector(".commesse-management-search")?.classList.add("hidden");document.querySelector("#prezziario-management-screen")?.classList.add("hidden");const screen=document.querySelector("#impianti-management-screen");screen.classList.remove("hidden");if(core.isInreteCommessa(commessa)&&Number(commessa.inreteMigrationVersion)<2&&typeof canManageData==="function"&&canManageData()){try{await migrateInrete();}catch(error){console.error("Adeguamento automatico commessa INRETE non riuscito:",error);}}if(requestId!==state.openRequestId||String(state.commessa?.id||"")!==requestedCommessaId)return false;return load({commessa,commessaId:requestedCommessaId,requestId});},openPrices,openClear,exportWorkbook};window.AccountingV2=api;
   document.addEventListener("click",async e=>{const button=e.target.closest("button");if(!button)return;const intercept=["download-excel-template-btn","export-all-impianti-btn","add-management-impianto-btn","open-prezziario-btn","close-prezziario-btn","add-price-item-btn","download-price-template-btn","export-price-list-btn","save-general-discount-btn","clear-dialog-close","clear-cancel","clear-continue","clear-confirm","import-btn","repair-imported-plants-btn"].includes(button.id)||button.dataset.v2Action||button.dataset.priceAction||button.dataset.v2Page||button.dataset.v2Sort;if(!intercept)return;e.preventDefault();e.stopImmediatePropagation();if(button.id==="repair-imported-plants-btn")return repairImportedMatrixPlants();if(button.id==="import-btn")return state.pendingFile&&importFile(state.pendingFile,false);if(button.id==="download-excel-template-btn")return exportWorkbook(false,true);if(button.id==="export-all-impianti-btn")return exportWorkbook();if(button.id==="add-management-impianto-btn")return add();if(button.id==="open-prezziario-btn")return openPrices();if(button.id==="close-prezziario-btn"){document.querySelector("#prezziario-management-screen").classList.add("hidden");document.querySelector("#impianti-management-screen").classList.remove("hidden");return;}if(button.id==="add-price-item-btn")return addPrice();if(button.id==="download-price-template-btn")return exportWorkbook(true,true);if(button.id==="export-price-list-btn")return exportWorkbook(true);if(button.id==="save-general-discount-btn"){const d=num(document.querySelector("#general-discount").value);if(d==null||d<0||d>100)return alert("Percentuale ribasso non valida.");await commRef().set({percentualeRibassoGenerale:d/100,...actor()},{merge:true});state.commessa.percentualeRibassoGenerale=d/100;return alert("Ribasso generale salvato.");}if(button.id==="clear-dialog-close"||button.id==="clear-cancel")return closeClear();if(button.id==="clear-continue")return clearContinue();if(button.id==="clear-confirm")return clearConfirm();if(button.dataset.v2Page){state.page=Number(button.dataset.v2Page);return render();}if(button.dataset.v2Sort){state.direction=state.sort===button.dataset.v2Sort?-state.direction:1;state.sort=button.dataset.v2Sort;return render();}const tr=button.closest("tr");if(button.dataset.v2Action==="edit"){state.editing=tr.dataset.v2Work;return render();}if(button.dataset.v2Action==="cancel"){state.editing="";return render();}if(button.dataset.v2Action==="save")return saveRow(tr);if(button.dataset.v2Action==="delete"){if(confirm("Eliminare questa lavorazione?")){const w=state.work.find(x=>x.id===tr.dataset.v2Work);await (w.legacy?commRef().collection("impianti"):commRef().collection("lavorazioni")).doc(w.id).delete();await load();}return;}if(button.dataset.v2Action==="duplicate"){const w=state.work.find(x=>x.id===tr.dataset.v2Work),ref=commRef().collection("lavorazioni").doc();await ref.set({...w,id:undefined,legacy:undefined,numeroProgressivoRiga:Math.max(0,...state.work.map(x=>num(x.numeroProgressivoRiga)||0))+1,createdAt:server(),createdBy:currentUser?.uid||"",...actor()});await load();return;}if(button.dataset.priceAction==="edit"){state.priceEditing=tr.dataset.priceId;return renderPrices();}if(button.dataset.priceAction==="cancel"){state.priceEditing="";return renderPrices();}if(button.dataset.priceAction==="save")return savePrice(tr);const p=state.prices.find(x=>x.id===tr.dataset.priceId);if(button.dataset.priceAction==="duplicate")return addPrice(p);if(button.dataset.priceAction==="delete"&&confirm(`Eliminare la voce ${p.codiceVoce}? Le lavorazioni manterranno gli importi storici.`)){await commRef().collection("prezziario").doc(p.id).delete();const linked=state.work.filter(w=>norm(w.codiceVocePrezzo)===norm(p.codiceVoce));for(const w of linked)await commRef().collection("lavorazioni").doc(w.id).set({priceListLinkStatus:"MISSING",economicVerificationStatus:"DA VERIFICARE",...actor()},{merge:true});await load();renderPrices();}},true);
   document.addEventListener("change",e=>{if(e.target.matches('[name="clear-type"]'))document.querySelector("#clear-continue").disabled=false;if(e.target.id==="price-file"){e.stopImmediatePropagation();void importFile(e.target.files[0],true);}if(e.target.id==="excel-file"){e.stopImmediatePropagation();state.pendingFile=e.target.files[0];document.querySelector("#import-btn").disabled=!state.pendingFile;}},true);
-  document.addEventListener("input",e=>{if(e.target.id==="price-search")renderPrices();if(e.target.id==="impianti-management-search"){clearTimeout(state.timer);state.timer=setTimeout(()=>{state.page=1;render()},250);}if(e.target.id==="commessa-mobile-plant-search")renderMobileList();},true);
+  document.addEventListener("input",e=>{if(e.target.id==="price-search")renderPrices();if(e.target.id==="impianti-management-search"){clearTimeout(state.timer);state.timer=setTimeout(()=>{state.page=1;render()},250);}if(e.target.id==="commessa-mobile-plant-search")renderMobileList();const form=e.target.closest?.("#commessa-mobile-plant-form");if(!form)return;if(e.target.matches('[data-v2-field="comune"],[data-v2-field="indirizzo"]')){e.target.dataset.mobileManualValue="true";delete e.target.dataset.mobileGeocodeValue;}if(e.target.matches('[data-v2-field="latitudine"],[data-v2-field="longitudine"]')){form.dataset.mobileGeocodeKey="";scheduleMobileAddressAutofill(form);}},true);
   api.openMobileHub=openMobileHub;
   api.showMobileHub=showMobileHub;
   document.addEventListener("click",event=>{

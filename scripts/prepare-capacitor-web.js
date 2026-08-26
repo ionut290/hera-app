@@ -47,6 +47,7 @@ const requiredFiles = [
   "notification-session-enhancements.js",
   "squadre-restyle.css",
   "calendar-feature.css",
+  "administrative-calendar.js",
   "today-summary-interactions.js",
   "update-app-feature.js",
   "sw.js",

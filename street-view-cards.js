@@ -1,14 +1,18 @@
 (() => {
   'use strict';
-  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.1.1') return;
+  if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === '2.2.0') return;
 
-  const VERSION = '2.1.1';
+  const VERSION = '2.2.0';
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
   const USAGE_COLLECTION = 'appConfig';
   let observer = null;
   let mapsLoaderPromise = null;
   let activePanorama = null;
+  let activeRouteMap = null;
+  let activeRouteRenderer = null;
+  let activeRouteMarker = null;
+  let activeRouteAnimationFrame = null;
 
   const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
@@ -132,17 +136,41 @@
       .hera-street-view-mini[data-state="loading"]{opacity:.6;pointer-events:none}
       .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:12px}
       .hera-sv-modal.hidden{display:none}
-      .hera-sv-dialog{width:min(920px,100%);height:min(82vh,760px);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column}
+      .hera-sv-dialog{width:min(920px,100%);height:min(92vh,900px);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column}
       .hera-sv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:800;flex:0 0 auto}
       .hera-sv-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:40px;height:40px;min-width:40px;font-size:22px}
       .hera-sv-body{position:relative;flex:1 1 auto;min-height:0;background:#e5e7eb}
+      .hera-sv-layout{height:100%;display:grid;grid-template-rows:minmax(260px,1.7fr) minmax(215px,1fr);background:#fff}
+      .hera-sv-panorama-wrap{position:relative;min-height:0;background:#e5e7eb}
       .hera-sv-panorama{position:absolute;inset:0;width:100%;height:100%}
       .hera-sv-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#475569;font-weight:700;background:#fff;z-index:2}
       .hera-sv-badge{position:absolute;left:12px;bottom:12px;z-index:3;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800;pointer-events:none}
-      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-modal{padding:6px}.hera-sv-dialog{height:78vh;border-radius:14px}}
+      .hera-sv-route-panel{display:grid;grid-template-rows:auto 1fr auto;min-height:0;border-top:1px solid #dbe2ea;background:#fff}
+      .hera-sv-route-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;font-weight:800}
+      .hera-sv-route-summary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hera-sv-route-map{min-height:145px;width:100%;background:#eef2f7}
+      .hera-sv-route-actions{display:flex;gap:8px;align-items:center;padding:8px 10px;overflow-x:auto}
+      .hera-sv-route-btn{border:0;border-radius:10px;padding:8px 11px;font-weight:800;font-size:12px;white-space:nowrap;background:#eef2f7;color:#111827}
+      .hera-sv-route-btn.primary{background:#111827;color:#fff}
+      .hera-sv-route-note{font-size:11px;color:#64748b;font-weight:700;white-space:nowrap}
+      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-modal{padding:4px}.hera-sv-dialog{height:94vh;border-radius:12px}.hera-sv-layout{grid-template-rows:minmax(245px,1.35fr) minmax(250px,1fr)}.hera-sv-route-head{padding:7px 9px}.hera-sv-route-actions{padding:7px 8px}.hera-sv-route-map{min-height:165px}}
     `;
     document.head.appendChild(style);
+  }
+
+  function stopRouteAnimation() {
+    if (activeRouteAnimationFrame) cancelAnimationFrame(activeRouteAnimationFrame);
+    activeRouteAnimationFrame = null;
+  }
+
+  function clearRouteRuntime() {
+    stopRouteAnimation();
+    try { activeRouteRenderer?.setMap(null); } catch (_) {}
+    try { activeRouteMarker?.setMap(null); } catch (_) {}
+    activeRouteRenderer = null;
+    activeRouteMarker = null;
+    activeRouteMap = null;
   }
 
   function ensureModal() {
@@ -157,6 +185,7 @@
       modal.classList.add('hidden');
       try { activePanorama?.setVisible(false); } catch (_) {}
       activePanorama = null;
+      clearRouteRuntime();
     };
     modal.querySelector('.hera-sv-close')?.addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
@@ -165,6 +194,7 @@
 
   function showStatus(message) {
     const modal = ensureModal();
+    clearRouteRuntime();
     modal.querySelector('.hera-sv-body').innerHTML = `<div class="hera-sv-status">${message}</div>`;
     modal.classList.remove('hidden');
   }
@@ -242,6 +272,150 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
+  function distanceMeters(a, b) {
+    const r = 6371000;
+    const p1 = a.lat * Math.PI / 180;
+    const p2 = b.lat * Math.PI / 180;
+    const dp = (b.lat - a.lat) * Math.PI / 180;
+    const dl = (b.lng - a.lng) * Math.PI / 180;
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * r * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  function formatDistance(meters) {
+    const value = Math.max(0, Number(meters || 0));
+    if (value < 1000) return `${Math.round(value)} m`;
+    return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)} km`;
+  }
+
+  function openGoogleMapsRoute(from, to) {
+    const url = new URL('https://www.google.com/maps/dir/');
+    url.searchParams.set('api', '1');
+    url.searchParams.set('origin', `${from.lat},${from.lng}`);
+    url.searchParams.set('destination', `${to.lat},${to.lng}`);
+    url.searchParams.set('travelmode', 'walking');
+    window.open(url.toString(), '_blank', 'noopener');
+  }
+
+  function requestDirections(maps, from, to, travelMode) {
+    return new Promise((resolve) => {
+      if (typeof maps.DirectionsService !== 'function') return resolve(null);
+      const service = new maps.DirectionsService();
+      service.route({
+        origin: from,
+        destination: to,
+        travelMode,
+        provideRouteAlternatives: false
+      }, (result, status) => {
+        resolve(status === maps.DirectionsStatus.OK ? result : null);
+      });
+    });
+  }
+
+  function animateRouteMarker(maps, path, replayButton) {
+    stopRouteAnimation();
+    if (!activeRouteMap || !Array.isArray(path) || path.length < 2) return;
+
+    try { activeRouteMarker?.setMap(null); } catch (_) {}
+    activeRouteMarker = new maps.Marker({
+      map: activeRouteMap,
+      position: path[0],
+      title: 'Percorso verso impianto',
+      label: { text: '➜', fontSize: '18px', fontWeight: '900' },
+      zIndex: 999
+    });
+
+    if (replayButton) replayButton.disabled = true;
+    const duration = Math.min(8500, Math.max(3200, path.length * 95));
+    const startedAt = performance.now();
+
+    const frame = (now) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const scaled = progress * (path.length - 1);
+      const index = Math.min(path.length - 2, Math.floor(scaled));
+      const fraction = scaled - index;
+      const a = path[index];
+      const b = path[index + 1];
+      const aLat = typeof a.lat === 'function' ? a.lat() : Number(a.lat);
+      const aLng = typeof a.lng === 'function' ? a.lng() : Number(a.lng);
+      const bLat = typeof b.lat === 'function' ? b.lat() : Number(b.lat);
+      const bLng = typeof b.lng === 'function' ? b.lng() : Number(b.lng);
+      activeRouteMarker?.setPosition({
+        lat: aLat + (bLat - aLat) * fraction,
+        lng: aLng + (bLng - aLng) * fraction
+      });
+      if (progress < 1) {
+        activeRouteAnimationFrame = requestAnimationFrame(frame);
+      } else {
+        activeRouteAnimationFrame = null;
+        if (replayButton) replayButton.disabled = false;
+      }
+    };
+    activeRouteAnimationFrame = requestAnimationFrame(frame);
+  }
+
+  async function renderAnimatedRoute(maps, container, from, to) {
+    clearRouteRuntime();
+    activeRouteMap = new maps.Map(container, {
+      center: { lat: (from.lat + to.lat) / 2, lng: (from.lng + to.lng) / 2 },
+      zoom: 18,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      gestureHandling: 'greedy'
+    });
+
+    const panoramaMarker = new maps.Marker({ map: activeRouteMap, position: from, title: 'Punto panoramico', label: '📷' });
+    const plantMarker = new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
+
+    let result = null;
+    try {
+      result = await requestDirections(maps, from, to, maps.TravelMode.WALKING);
+      if (!result) result = await requestDirections(maps, from, to, maps.TravelMode.DRIVING);
+    } catch (_) {
+      result = null;
+    }
+
+    let path = [];
+    let routeDistance = distanceMeters(from, to);
+    let routeLabel = 'linea diretta';
+
+    if (result?.routes?.[0]) {
+      activeRouteRenderer = new maps.DirectionsRenderer({
+        map: activeRouteMap,
+        directions: result,
+        suppressMarkers: true,
+        preserveViewport: false,
+        polylineOptions: { strokeWeight: 6, strokeOpacity: 0.82 }
+      });
+      path = result.routes[0].overview_path || [];
+      routeDistance = Number(result.routes[0].legs?.[0]?.distance?.value || routeDistance);
+      routeLabel = 'percorso stradale';
+    } else {
+      path = [from, to];
+      new maps.Polyline({ map: activeRouteMap, path, strokeWeight: 5, strokeOpacity: 0.78, geodesic: true });
+      const bounds = new maps.LatLngBounds();
+      bounds.extend(from);
+      bounds.extend(to);
+      activeRouteMap.fitBounds(bounds, 42);
+    }
+
+    const panel = container.closest('.hera-sv-route-panel');
+    const summary = panel?.querySelector('.hera-sv-route-summary');
+    const replay = panel?.querySelector('[data-sv-route-replay]');
+    const navigate = panel?.querySelector('[data-sv-route-navigate]');
+    const note = panel?.querySelector('.hera-sv-route-note');
+
+    if (summary) summary.textContent = `📷 Panorama → 📍 Impianto · ${formatDistance(routeDistance)}`;
+    if (note) note.textContent = routeLabel === 'percorso stradale' ? 'Animazione sul percorso reale' : 'Percorso stradale non disponibile: indicazione diretta';
+    replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
+    navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to));
+
+    panoramaMarker.setMap(activeRouteMap);
+    plantMarker.setMap(activeRouteMap);
+    window.setTimeout(() => animateRouteMarker(maps, path, replay), 350);
+  }
+
   async function openStreetView(row, mini) {
     const apiKey = resolveApiKey();
     if (!apiKey) return showStatus('⚠️ Chiave Google API non disponibile.');
@@ -271,9 +445,10 @@
       const panoLocation = found.data.location.latLng;
       const panoCoords = { lat: panoLocation.lat(), lng: panoLocation.lng() };
       const heading = computeHeading(panoCoords, coords);
+      const directDistance = distanceMeters(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama entro ${found.radius} m</div>`;
+      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-head"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Preparazione mappa…</span></div><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
       modal.classList.remove('hidden');
 
       activePanorama = new maps.StreetViewPanorama(body.querySelector('.hera-sv-panorama'), {
@@ -292,6 +467,8 @@
         scrollwheel: true,
         disableDefaultUI: false
       });
+
+      await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), panoCoords, coords);
       mini.textContent = '🌐';
     } catch (error) {
       console.warn('[STREET VIEW 360]', error);

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.3.3';
+  const VERSION = '2.3.4';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -396,23 +396,42 @@
 
   function animateRouteMarker(maps, path, replayButton) {
     stopRouteAnimation();
-    if (!activeRouteMap || !Array.isArray(path) || path.length < 2) return;
+    const validPath = Array.isArray(path) ? path.map((point) => {
+      if (!point) return null;
+      const lat = typeof point.lat === 'function' ? Number(point.lat()) : Number(point.lat);
+      const lng = typeof point.lng === 'function' ? Number(point.lng()) : Number(point.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    }).filter(Boolean) : [];
+    if (!activeRouteMap || validPath.length < 2) {
+      if (replayButton) replayButton.disabled = true;
+      return;
+    }
     try { activeRouteMarker?.setMap(null); } catch (_) {}
-    activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: path[0], title: 'Percorso verso impianto', label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
+    activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: validPath[0], title: 'Percorso verso impianto', label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
     if (replayButton) replayButton.disabled = true;
-    const duration = Math.min(9000, Math.max(3200, path.length * 60));
+    const duration = Math.min(9000, Math.max(3200, validPath.length * 60));
     const startedAt = performance.now();
     const frame = (now) => {
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const scaled = progress * (path.length - 1);
-      const index = Math.min(path.length - 2, Math.floor(scaled));
+      if (!activeRouteMap || !activeRouteMarker) {
+        activeRouteAnimationFrame = null;
+        if (replayButton) replayButton.disabled = false;
+        return;
+      }
+      const progress = Math.min(1, Math.max(0, (now - startedAt) / duration));
+      const scaled = progress * (validPath.length - 1);
+      const index = Math.min(validPath.length - 2, Math.floor(scaled));
       const fraction = scaled - index;
-      const a = path[index], b = path[index + 1];
-      const aLat = typeof a.lat === 'function' ? a.lat() : Number(a.lat);
-      const aLng = typeof a.lng === 'function' ? a.lng() : Number(a.lng);
-      const bLat = typeof b.lat === 'function' ? b.lat() : Number(b.lat);
-      const bLng = typeof b.lng === 'function' ? b.lng() : Number(b.lng);
-      activeRouteMarker?.setPosition({ lat: aLat + (bLat - aLat) * fraction, lng: aLng + (bLng - aLng) * fraction });
+      const a = validPath[index];
+      const b = validPath[index + 1];
+      if (!a || !b) {
+        activeRouteAnimationFrame = null;
+        if (replayButton) replayButton.disabled = false;
+        return;
+      }
+      activeRouteMarker.setPosition({
+        lat: a.lat + (b.lat - a.lat) * fraction,
+        lng: a.lng + (b.lng - a.lng) * fraction
+      });
       if (progress < 1) activeRouteAnimationFrame = requestAnimationFrame(frame);
       else { activeRouteAnimationFrame = null; if (replayButton) replayButton.disabled = false; }
     };

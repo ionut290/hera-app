@@ -33,6 +33,8 @@ assert.match(feature, /Riepilogo Firestore mensile/);
 assert.match(feature, /getAdministrativeCalendarMonth/);
 assert.match(feature, /recoveryByMonth\.has\(month\)/);
 assert.match(feature, /recupero mirato solo quando incompleto/);
+assert.match(feature, /prezzoRibassato/);
+assert.match(feature, /schemaVersion/);
 assert.ok(feature.includes('<b>${money.format(summary.earnings)}${summary.missingAmounts ? "+" : ""}</b>'));
 assert.doesNotMatch(feature, /summary\.earnings > 0 \|\| summary\.missingAmounts/);
 assert.match(feature, /deactivate/);

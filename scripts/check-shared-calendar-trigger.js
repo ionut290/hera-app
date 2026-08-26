@@ -66,6 +66,14 @@ const activity = helpers.compactActivity("lavorazioni", "c1", "w1", {
 assert.equal(activity.date, "2026-08-26");
 assert.equal(activity.amount, 1234.5);
 assert.equal(activity.kind, "lavorazione");
+assert.equal(helpers.compactActivity("lavorazioni", "c1", "w-price", {
+  stato: "FATTO", dataEsecuzione: "2026-08-26", codiceVocePrezzo: "A1",
+  quantita: "2,5", unitaMisura: "M2", prezzoRibassato: "79,20"
+}).amount, 198);
+assert.equal(helpers.compactActivity("lavorazioni", "c1", "w-ac", {
+  stato: "FATTO", dataEsecuzione: "2026-08-26", codiceVocePrezzo: "A2",
+  unitaMisura: "AC", prezzoBase: 100, percentualeRibasso: 0.01
+}).amount, 99);
 assert.equal(helpers.activityDateKeyFromData({ doneAt: { toDate: () => new Date("2026-08-25T22:30:00Z") } }), "2026-08-26");
 assert.equal(helpers.nextMonthKey("2026-12"), "2027-01");
 assert.equal(helpers.compactActivity("lavorazioni", "c1", "w2", { stato: "DA FARE" }), null);

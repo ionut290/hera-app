@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.3.1';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -14,6 +14,7 @@
   let activeRouteRenderer = null;
   let activeRouteMarker = null;
   let activeRouteAnimationFrame = null;
+  let activeRoutePolyline = null;
 
   const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
   const upper = (value) => text(value).toLocaleUpperCase('it-IT');
@@ -50,9 +51,7 @@
       if (user) return { uid: user.uid || null, email: user.email || null };
     } catch (_) {}
     try {
-      if (typeof currentUser !== 'undefined' && currentUser) {
-        return { uid: currentUser.uid || null, email: currentUser.email || null };
-      }
+      if (typeof currentUser !== 'undefined' && currentUser) return { uid: currentUser.uid || null, email: currentUser.email || null };
     } catch (_) {}
     return { uid: null, email: null };
   }
@@ -73,12 +72,9 @@
       const currentCount = Math.max(0, Number(data.count || 0));
       if (currentCount >= MONTHLY_LIMIT) return { allowed: false, count: currentCount, limit: MONTHLY_LIMIT, monthKey };
       const nextCount = currentCount + 1;
-      const serverNow = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
-      const payload = {
-        type: 'streetView360', month: monthKey, count: nextCount, limit: MONTHLY_LIMIT,
-        updatedAt: serverNow, lastUserUid: user.uid || null, lastUserEmail: user.email || null
-      };
-      if (!snap.exists) payload.createdAt = serverNow;
+      const now = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date().toISOString();
+      const payload = { type: 'streetView360', month: monthKey, count: nextCount, limit: MONTHLY_LIMIT, updatedAt: now, lastUserUid: user.uid || null, lastUserEmail: user.email || null };
+      if (!snap.exists) payload.createdAt = now;
       transaction.set(ref, payload, { merge: true });
       return { allowed: true, count: nextCount, limit: MONTHLY_LIMIT, monthKey };
     });
@@ -128,23 +124,23 @@
       .hera-sv-modal{position:fixed;inset:0;z-index:2147483000;background:#fff;display:block;padding:0}
       .hera-sv-modal.hidden{display:none}
       .hera-sv-dialog{position:absolute;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;background:#fff;border-radius:0;overflow:hidden;display:flex;flex-direction:column}
-      .hera-sv-head{height:52px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 14px;font-weight:800;border-bottom:1px solid #dbe2ea;background:#fff;flex:0 0 52px;z-index:5}
+      .hera-sv-head{height:50px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 12px;font-weight:800;border-bottom:1px solid #dbe2ea;background:#fff;flex:0 0 50px;z-index:5}
       .hera-sv-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .hera-sv-close{border:0;background:#eef2f7;border-radius:999px;width:38px;height:38px;min-width:38px;font-size:21px}
       .hera-sv-body{position:relative;flex:1 1 auto;min-height:0;background:#e5e7eb}
       .hera-sv-layout{position:absolute;inset:0;display:grid;grid-template-rows:50% 50%;background:#fff}
-      .hera-sv-panorama-wrap{position:relative;min-height:0;background:#e5e7eb;border-bottom:1px solid #fff}
+      .hera-sv-panorama-wrap{position:relative;min-height:0;background:#e5e7eb;border-bottom:2px solid #fff}
       .hera-sv-panorama{position:absolute;inset:0;width:100%;height:100%}
       .hera-sv-badge{position:absolute;left:10px;bottom:10px;z-index:3;background:rgba(15,23,42,.82);color:#fff;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;pointer-events:none}
       .hera-sv-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#475569;font-weight:700;background:#fff;z-index:2}
       .hera-sv-route-panel{position:relative;min-height:0;background:#111827;overflow:hidden}
       .hera-sv-route-map{position:absolute;inset:0;width:100%;height:100%;background:#111827}
       .hera-sv-route-overlay{position:absolute;left:10px;right:10px;top:10px;z-index:4;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
-      .hera-sv-route-summary,.hera-sv-route-note{background:rgba(15,23,42,.82);color:#fff;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:800;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hera-sv-route-summary,.hera-sv-route-note{background:rgba(15,23,42,.86);color:#fff;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:800;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .hera-sv-route-actions{position:absolute;left:10px;right:10px;bottom:10px;z-index:4;display:flex;gap:8px;align-items:center;pointer-events:none}
-      .hera-sv-route-btn{pointer-events:auto;border:0;border-radius:10px;padding:8px 11px;font-weight:800;font-size:12px;white-space:nowrap;background:#fff;color:#111827;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+      .hera-sv-route-btn{pointer-events:auto;border:0;border-radius:10px;padding:8px 11px;font-weight:800;font-size:12px;white-space:nowrap;background:#fff;color:#111827;box-shadow:0 2px 10px rgba(0,0,0,.2)}
       .hera-sv-route-btn.primary{background:#111827;color:#fff}
-      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-head{height:48px;flex-basis:48px;padding:6px 10px}.hera-sv-route-summary,.hera-sv-route-note{font-size:10px}.hera-sv-route-btn{padding:7px 9px;font-size:11px}}
+      @media(max-width:480px){.hera-street-view-mini{left:7px;width:42px;height:28px;min-width:42px;min-height:28px;font-size:16px}.hera-sv-head{height:46px;flex-basis:46px;padding:5px 9px}.hera-sv-route-summary,.hera-sv-route-note{font-size:10px}.hera-sv-route-btn{padding:7px 9px;font-size:11px}}
     `;
   }
 
@@ -156,8 +152,10 @@
   function clearRouteRuntime() {
     stopRouteAnimation();
     try { activeRouteRenderer?.setMap(null); } catch (_) {}
+    try { activeRoutePolyline?.setMap(null); } catch (_) {}
     try { activeRouteMarker?.setMap(null); } catch (_) {}
     activeRouteRenderer = null;
+    activeRoutePolyline = null;
     activeRouteMarker = null;
     activeRouteMap = null;
   }
@@ -227,8 +225,7 @@
 
   function getPanoramaAtRadius(service, coords, radius) {
     return new Promise((resolve) => {
-      service.getPanorama({ location: coords, radius, source: window.google.maps.StreetViewSource.OUTDOOR, preference: window.google.maps.StreetViewPreference.NEAREST },
-        (data, status) => resolve({ data, status, radius }));
+      service.getPanorama({ location: coords, radius, source: window.google.maps.StreetViewSource.OUTDOOR, preference: window.google.maps.StreetViewPreference.NEAREST }, (data, status) => resolve({ data, status, radius }));
     });
   }
 
@@ -280,8 +277,7 @@
         const service = new maps.DirectionsService();
         service.route({ origin: from, destination: to, travelMode, provideRouteAlternatives: true }, (result, status) => {
           const ok = String(status) === 'OK' || status === maps.DirectionsStatus?.OK;
-          const hasRoute = Array.isArray(result?.routes) && result.routes.length > 0;
-          resolve({ result: ok && hasRoute ? result : null, status: String(status || 'UNKNOWN') });
+          resolve({ result: ok && result?.routes?.length ? result : null, status: String(status || 'UNKNOWN') });
         });
       } catch (error) {
         resolve({ result: null, status: text(error?.message) || 'ERROR' });
@@ -294,9 +290,38 @@
     if (!routes.length) return null;
     return routes.reduce((best, route) => {
       const d = Number(route?.legs?.[0]?.distance?.value || Number.MAX_SAFE_INTEGER);
-      if (!best) return { route, distance: d };
-      return d < best.distance ? { route, distance: d } : best;
+      return !best || d < best.distance ? { route, distance: d } : best;
     }, null);
+  }
+
+  async function requestOsrmRoute(from, to) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${encodeURIComponent(from.lng)},${encodeURIComponent(from.lat)};${encodeURIComponent(to.lng)},${encodeURIComponent(to.lat)}?overview=full&geometries=geojson&steps=false`;
+    try {
+      const response = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store' });
+      if (!response.ok) return null;
+      const json = await response.json();
+      const route = json?.routes?.[0];
+      const coords = route?.geometry?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) return null;
+      return {
+        path: coords.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) })).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)),
+        distance: Number(route.distance || 0),
+        snappedStart: json?.waypoints?.[0]?.location ? { lng: Number(json.waypoints[0].location[0]), lat: Number(json.waypoints[0].location[1]) } : null,
+        snappedEnd: json?.waypoints?.[1]?.location ? { lng: Number(json.waypoints[1].location[0]), lat: Number(json.waypoints[1].location[1]) } : null
+      };
+    } catch (error) {
+      console.warn('[STREET VIEW ROUTE] OSRM non disponibile', error);
+      return null;
+    }
+  }
+
+  function fitRouteBounds(maps, path, from, to) {
+    if (!activeRouteMap) return;
+    const bounds = new maps.LatLngBounds();
+    bounds.extend(from);
+    bounds.extend(to);
+    (path || []).forEach((p) => bounds.extend(p));
+    activeRouteMap.fitBounds(bounds, 36);
   }
 
   function animateRouteMarker(maps, path, replayButton) {
@@ -305,7 +330,7 @@
     try { activeRouteMarker?.setMap(null); } catch (_) {}
     activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: path[0], title: 'Percorso verso impianto', label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
     if (replayButton) replayButton.disabled = true;
-    const duration = Math.min(9000, Math.max(3200, path.length * 95));
+    const duration = Math.min(9000, Math.max(3200, path.length * 60));
     const startedAt = performance.now();
     const frame = (now) => {
       const progress = Math.min(1, (now - startedAt) / duration);
@@ -336,50 +361,61 @@
       gestureHandling: 'greedy'
     });
 
-    const panoramaMarker = new maps.Marker({ map: activeRouteMap, position: from, title: 'Punto panoramico', label: '📷' });
-    const plantMarker = new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
-
-    let chosen = null;
-    let modeUsed = 'driving';
-    const drive = await requestDirections(maps, from, to, maps.TravelMode?.DRIVING || 'DRIVING');
-    if (drive.result) chosen = chooseBestRoute(drive.result);
-
-    if (!chosen) {
-      const walk = await requestDirections(maps, from, to, maps.TravelMode?.WALKING || 'WALKING');
-      if (walk.result) { chosen = chooseBestRoute(walk.result); modeUsed = 'walking'; }
-      else console.warn('[STREET VIEW ROUTE] Directions non disponibile', { driving: drive.status, walking: walk.status, from, to });
-    }
-
-    let path = [];
-    let routeDistance = distanceMeters(from, to);
-    let routeLabel = 'indicazione diretta';
-
-    if (chosen?.route) {
-      const oneRouteResult = { ...((modeUsed === 'driving' ? drive.result : null) || {}), routes: [chosen.route] };
-      activeRouteRenderer = new maps.DirectionsRenderer({ map: activeRouteMap, directions: oneRouteResult, suppressMarkers: true, preserveViewport: false, polylineOptions: { strokeWeight: 6, strokeOpacity: 0.9 } });
-      path = chosen.route.overview_path || [];
-      routeDistance = Number(chosen.route.legs?.[0]?.distance?.value || routeDistance);
-      routeLabel = modeUsed === 'driving' ? 'percorso carrabile reale' : 'percorso pedonale reale';
-    } else {
-      path = [from, to];
-      new maps.Polyline({ map: activeRouteMap, path, strokeWeight: 5, strokeOpacity: 0.86, geodesic: true });
-      const bounds = new maps.LatLngBounds();
-      bounds.extend(from); bounds.extend(to);
-      activeRouteMap.fitBounds(bounds, 42);
-    }
+    new maps.Marker({ map: activeRouteMap, position: from, title: 'Punto panoramico', label: '📷' });
+    new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
 
     const panel = container.closest('.hera-sv-route-panel');
     const summary = panel?.querySelector('.hera-sv-route-summary');
     const replay = panel?.querySelector('[data-sv-route-replay]');
     const navigate = panel?.querySelector('[data-sv-route-navigate]');
     const note = panel?.querySelector('.hera-sv-route-note');
+
+    let path = [];
+    let routeDistance = distanceMeters(from, to);
+    let modeUsed = 'driving';
+    let routeLabel = '';
+
+    const drive = await requestDirections(maps, from, to, maps.TravelMode?.DRIVING || 'DRIVING');
+    const chosen = drive.result ? chooseBestRoute(drive.result) : null;
+
+    if (chosen?.route) {
+      const oneRouteResult = { ...drive.result, routes: [chosen.route] };
+      activeRouteRenderer = new maps.DirectionsRenderer({ map: activeRouteMap, directions: oneRouteResult, suppressMarkers: true, preserveViewport: false, polylineOptions: { strokeWeight: 6, strokeOpacity: 0.92 } });
+      path = chosen.route.overview_path || [];
+      routeDistance = Number(chosen.route.legs?.[0]?.distance?.value || routeDistance);
+      routeLabel = 'Percorso carrabile Google';
+    } else {
+      const osrm = await requestOsrmRoute(from, to);
+      if (osrm?.path?.length > 1) {
+        path = osrm.path;
+        routeDistance = osrm.distance || routeDistance;
+        activeRoutePolyline = new maps.Polyline({ map: activeRouteMap, path, strokeWeight: 6, strokeOpacity: 0.95, geodesic: false });
+        if (osrm.snappedStart && distanceMeters(from, osrm.snappedStart) > 4) {
+          new maps.Polyline({ map: activeRouteMap, path: [from, osrm.snappedStart], strokeWeight: 3, strokeOpacity: 0.65, geodesic: true });
+        }
+        if (osrm.snappedEnd && distanceMeters(osrm.snappedEnd, to) > 4) {
+          new maps.Polyline({ map: activeRouteMap, path: [osrm.snappedEnd, to], strokeWeight: 3, strokeOpacity: 0.65, geodesic: true });
+        }
+        fitRouteBounds(maps, path, from, to);
+        routeLabel = 'Percorso carrabile stradale';
+      }
+    }
+
+    if (!path.length) {
+      fitRouteBounds(maps, [], from, to);
+      routeLabel = 'Percorso stradale non disponibile';
+    }
+
     if (summary) summary.textContent = `📷 Panorama → 📍 Impianto · ${formatDistance(routeDistance)}`;
-    if (note) note.textContent = chosen ? routeLabel : 'Percorso Google non disponibile: linea diretta';
-    replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
+    if (note) note.textContent = routeLabel;
     navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to, modeUsed));
-    panoramaMarker.setMap(activeRouteMap);
-    plantMarker.setMap(activeRouteMap);
-    window.setTimeout(() => animateRouteMarker(maps, path, replay), 350);
+    if (path.length > 1) {
+      replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
+      window.setTimeout(() => animateRouteMarker(maps, path, replay), 350);
+    } else if (replay) {
+      replay.disabled = true;
+      replay.textContent = 'PERCORSO NON DISPONIBILE';
+    }
   }
 
   async function openStreetView(row, mini) {
@@ -408,7 +444,7 @@
       const directDistance = distanceMeters(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo Google Maps…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
+      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo percorso stradale…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
       modal.classList.remove('hidden');
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';

@@ -26,6 +26,13 @@ assert.match(accounting, /async function createMobilePlant/);
 assert.match(accounting, /async function createMobileWork/);
 assert.match(accounting, /async function saveMobilePlant/);
 assert.match(accounting, /function ensureMobileAddWorkButton/);
+assert.match(accounting, /async function autofillMobileAddress/);
+assert.match(accounting, /reverseGeocodeMobileCoordinates/);
+assert.match(accounting, /mobileAddressFromGeocode/);
+assert.match(accounting, /id="commessa-mobile-geocode-status"/);
+assert.match(accounting, /Comune e Via compilati automaticamente/);
+assert.match(accounting, /mobileManualValue/);
+assert.match(accounting, /accept-language=it/);
 assert.match(accounting, /document\.createElement\("button"\)/);
 assert.match(feature, /id="commessa-mobile-add-work"/);
 assert.match(accounting, /impiantoId:source\.impiantoId/);
@@ -39,7 +46,7 @@ assert.match(css, /\.commessa-dashboard-head \.commessa-plants-menu-wrap\s*{[^}]
 assert.match(css, /\.commessa-mobile-plant-form/);
 assert.doesNotMatch(feature, /\bdb\.|\bfirebase\.|\.collection\(|\.onSnapshot\(/);
 assert.match(serviceWorker, /commessa-impianti-menu\.js\?v=20260826c/);
-assert.match(serviceWorker, /accounting-v2\.js\?v=20260826-commessa-mobile3/);
+assert.match(serviceWorker, /accounting-v2\.js\?v=20260826-address-autofill1/);
 assert.match(serviceWorker, /style\.css\?v=20260826-commessa-mobile2/);
 
 const accountingIndex = html.indexOf("accounting-v2.js");

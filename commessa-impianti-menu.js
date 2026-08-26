@@ -35,7 +35,7 @@
         </section>
         <section id="commessa-mobile-plant-editor" class="hidden" aria-hidden="true">
           <div class="commessa-mobile-section-head"><button id="commessa-mobile-editor-back" type="button" class="btn">← Indietro</button><div><p class="management-eyebrow" id="commessa-mobile-editor-eyebrow">NUOVO IMPIANTO</p><h3 id="commessa-mobile-editor-title">Aggiungi impianto</h3><p class="muted">I campi economici vengono calcolati dal prezziario.</p></div></div>
-          <form id="commessa-mobile-plant-form" class="commessa-mobile-plant-form"><div id="commessa-mobile-plant-fields"></div><p id="commessa-mobile-plant-feedback" class="row-feedback" role="alert"></p><div class="commessa-mobile-form-actions"><button id="commessa-mobile-plant-cancel" class="btn" type="button">Annulla</button><button id="commessa-mobile-plant-save" class="btn btn-primary" type="submit">Salva impianto</button></div></form>
+          <form id="commessa-mobile-plant-form" class="commessa-mobile-plant-form"><div id="commessa-mobile-plant-fields"></div><button id="commessa-mobile-add-work" class="btn commessa-mobile-add-work hidden" type="button">＋ Nuova lavorazione sullo stesso impianto</button><p id="commessa-mobile-plant-feedback" class="row-feedback" role="alert"></p><div class="commessa-mobile-form-actions"><button id="commessa-mobile-plant-cancel" class="btn" type="button">Annulla</button><button id="commessa-mobile-plant-save" class="btn btn-primary" type="submit">Salva impianto</button></div></form>
         </section>
       </section>`);
   }

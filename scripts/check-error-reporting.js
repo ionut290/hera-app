@@ -64,10 +64,10 @@ assert.doesNotMatch(adminCenter, /onSnapshot\s*\(/);
 assert.doesNotMatch(adminCenter, /setInterval\s*\(/);
 assert.doesNotMatch(adminCenter, /\.collection\s*\(/);
 
-// Backend: aggregazione, notifiche amministrative, push e autorizzazione.
+// Backend: aggregazione e autorizzazione. Il Centro Errori deve restare silenzioso:
+// registra e mostra gli errori nell'app, senza creare notifiche o push amministrativi.
 assert.match(centerBackend, /appErrorGroups/);
 assert.match(centerBackend, /systemCounters/);
-assert.match(centerBackend, /notifications/);
 assert.match(centerBackend, /runTransaction/);
 assert.match(centerBackend, /recordClientErrorGroup/);
 assert.match(centerBackend, /getErrorCenterSummary/);
@@ -83,9 +83,10 @@ assert.match(centerBackend, /updateErrorCenterStatus/);
 assert.match(centerBackend, /countSource:\s*"firestore-aggregate"/);
 assert.match(centerBackend, /countsVerified:\s*true/);
 assert.match(centerBackend, /context\.auth/);
-assert.match(centerBackend, /sendEachForMulticast/);
-assert.match(centerBackend, /scopeType:\s*"ADMIN"/);
-assert.match(centerBackend, /actionType:\s*"ERROR_CENTER"/);
+assert.doesNotMatch(centerBackend, /collection\(["']notifications["']\)/);
+assert.doesNotMatch(centerBackend, /sendEachForMulticast/);
+assert.doesNotMatch(centerBackend, /scopeType:\s*["']ADMIN["']/);
+assert.doesNotMatch(centerBackend, /actionType:\s*["']ERROR_CENTER["']/);
 assert.doesNotMatch(centerBackend, /onSnapshot\s*\(/);
 assert.doesNotMatch(centerBackend, /setInterval\s*\(/);
 
@@ -121,7 +122,7 @@ assert.match(loader, /client-error-reporter\.js\?v=20260816a/);
 assert.match(loader, /app-error-monitor\.js\?v=\$\{version\}/);
 assert.match(loader, /admin-error-center\.js\?v=\$\{version\}/);
 assert.match(loader, /admin-error-center\.css\?v=\$\{version\}/);
-assert.match(serviceWorker, /varga-cantieri-shell-v151/);
+assert.match(serviceWorker, /varga-cantieri-shell-v152/);
 for (const path of ["/loading-humor.js", "/client-error-reporter.js", "/app-error-monitor.js", "/admin-error-center.js", "/admin-error-center.css"]) {
   assert.ok(serviceWorker.includes(`"${path}"`), `${path} deve essere network-first`);
 }
@@ -143,4 +144,4 @@ for (const name of protectedNames) {
   }
 }
 
-console.log("Centro errori: controlli statici, privacy e isolamento superati.");
+console.log("Centro errori: controlli statici, privacy, modalità silenziosa e isolamento superati.");

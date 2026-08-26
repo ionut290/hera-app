@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v155";
+const CACHE_NAME = "varga-cantieri-shell-v154";
 const CACHE_RESET_VERSION = "20260826-login-stability1";
 const APP_SHELL = [
   "./",

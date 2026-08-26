@@ -42,11 +42,18 @@ const createWorkBody = accounting.slice(accounting.indexOf("async function creat
 assert.match(createWorkBody, /collection\("lavorazioni"\)\.doc\(\)/);
 assert.doesNotMatch(createWorkBody, /collection\("impiantiFisici"\)/);
 assert.doesNotMatch(createWorkBody, /\.delete\(/);
+const saveRowStart = accounting.indexOf("async function saveRow");
+const saveRowBody = accounting.slice(saveRowStart, accounting.indexOf("const feedback=", saveRowStart));
+assert.match(saveRowBody, /physicalPlantId=String\(plant\?\.id\|\|old\.impiantoId\|\|""\)\.trim\(\)/);
+assert.match(saveRowBody, /if\(!old\.legacy&&!physicalPlantId\)return feedback/);
+assert.match(saveRowBody, /collection\("impiantiFisici"\)\.doc\(physicalPlantId\)/);
+assert.match(saveRowBody, /commessaId:state\.commessa\.id/);
+assert.doesNotMatch(saveRowBody, /\.doc\(plant\.id\)/);
 assert.match(css, /\.commessa-dashboard-head \.commessa-plants-menu-wrap\s*{[^}]*position:\s*absolute/s);
 assert.match(css, /\.commessa-mobile-plant-form/);
 assert.doesNotMatch(feature, /\bdb\.|\bfirebase\.|\.collection\(|\.onSnapshot\(/);
 assert.match(serviceWorker, /commessa-impianti-menu\.js\?v=20260826c/);
-assert.match(serviceWorker, /accounting-v2\.js\?v=20260826-address-autofill1/);
+assert.match(serviceWorker, /accounting-v2\.js\?v=20260826-plant-link-guard1/);
 assert.match(serviceWorker, /style\.css\?v=20260826-commessa-mobile2/);
 
 const accountingIndex = html.indexOf("accounting-v2.js");

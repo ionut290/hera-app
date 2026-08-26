@@ -50,11 +50,35 @@ jobs:
 
       - name: Install function dependencies
         working-directory: functions
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Prepare registerTester entrypoint
+        shell: bash
+        run: |
+          # reportClientError is unrelated to registerTester. Avoid loading its
+          # separately managed RESEND_API_KEY secret during this focused deploy.
+          node <<'NODE'
+          const fs = require("node:fs");
+          const entrypointPath = "functions/main.js";
+          const source = fs.readFileSync(entrypointPath, "utf8");
+          const prepared = source
+            .replace(/^const errorReportingFunctions = require\("\.\/error-reporting"\);\r?\n/m, "")
+            .replace(/^\s*errorReportingFunctions,\r?\n/m, "");
+
+          if (prepared === source || prepared.includes("errorReportingFunctions")) {
+            throw new Error("Unable to isolate the registerTester deploy entrypoint.");
+          }
+
+          fs.writeFileSync(entrypointPath, prepared);
+          const exported = require("./functions/main.js");
+          if (typeof exported.registerTester !== "function") {
+            throw new Error("registerTester is missing from the prepared entrypoint.");
+          }
+          console.log("registerTester deploy entrypoint loaded successfully");
+          NODE
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
 
       - name: Deploy registerTester
         run: firebase deploy --only functions:registerTester --project hera-app-6cd2b --non-interactive
-

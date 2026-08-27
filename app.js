@@ -6914,10 +6914,30 @@ function getCurrentUserSquadraIdentity() {
   if (!currentUser) return { uids: new Set(), personaleIds: new Set(), emails: new Set(), names: new Set() };
   const currentProfile = platformUsers.find((user) => String(user.id || user.uid || "") === String(currentUser.uid || "")) || {};
   const currentEmail = normalizeEmail(currentUser.email || currentProfile.email || "");
-  const linkedPerson = personaleRecords.find((person) =>
-    [currentUser.personaleId, currentProfile.personaleId, currentProfile.personId].filter(Boolean).some((id) => String(person.id) === String(id))
-    || (currentEmail && normalizeEmail(person.email) === currentEmail)
-  );
+  const linkedPerson = personaleRecords.find((person) => {
+    const linkedIds = [
+      person.id,
+      person.linkedUserId,
+      person.userId,
+      person.uid
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    const currentIds = [
+      currentUser.uid,
+      currentUser.personaleId,
+      currentProfile.uid,
+      currentProfile.id,
+      currentProfile.personaleId,
+      currentProfile.personId
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    if (currentIds.some((id) => linkedIds.includes(id))) return true;
+    const personEmails = [
+      person.email,
+      person.emailAccessoApp,
+      person.linkedUserEmail,
+      person.mail
+    ].map(normalizeEmail).filter(Boolean);
+    return Boolean(currentEmail && personEmails.includes(currentEmail));
+  });
   const values = (...items) => new Set(items.map((item) => String(item || "").trim()).filter(Boolean));
   const names = new Set();
   [
@@ -6930,9 +6950,16 @@ function getCurrentUserSquadraIdentity() {
     currentProfile.nome && currentProfile.cognome ? `${currentProfile.nome} ${currentProfile.cognome}` : ""
   ].forEach((name) => getSquadraNameVariants(name).forEach((variant) => names.add(variant)));
   return {
-    uids: values(currentUser.uid, currentProfile.uid),
+    uids: values(currentUser.uid, currentProfile.uid, currentProfile.id, linkedPerson?.linkedUserId, linkedPerson?.userId, linkedPerson?.uid),
     personaleIds: values(currentUser.personaleId, currentProfile.personaleId, currentProfile.personId, linkedPerson?.id),
-    emails: new Set([currentEmail, normalizeEmail(linkedPerson?.email)].filter(Boolean)),
+    emails: new Set([
+      currentEmail,
+      normalizeEmail(currentProfile.email),
+      normalizeEmail(linkedPerson?.email),
+      normalizeEmail(linkedPerson?.emailAccessoApp),
+      normalizeEmail(linkedPerson?.linkedUserEmail),
+      normalizeEmail(linkedPerson?.mail)
+    ].filter(Boolean)),
     names
   };
 }
@@ -7227,8 +7254,9 @@ function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   if (!dateKey || !hasAssignedSquadra) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
   // +ORE appartiene esclusivamente all'utente autenticato e alla sua squadra
-  // per la data del lavoro visualizzato.
-  if (!assignment) return null;
+  // per la data del lavoro visualizzato. L'amministratore, invece, deve poter
+  // completare le ore mancanti di qualunque squadra.
+  if (!assignment && !canManageData()) return null;
   if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
   const squadraIndex = assignment?.squadraIndex || "";
   return { dateKey, assignment, squadData, squadRows, squadraIndex };

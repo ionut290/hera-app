@@ -7217,13 +7217,19 @@ function areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateValue) {
 
 function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey();
-  if (!hoursReportsLoaded || !hoursApprovalsLoaded) return null;
+  // I report salvati sono la fonte autorevole per stabilire se le ore mancano.
+  // Le richieste di approvazione sono solo dati legacy: un errore/ritardo nella
+  // loro lettura non deve nascondere per sempre il pulsante +ORE.
+  if (!hoursReportsLoaded) return null;
   const squadData = getSquadraDataForCommessaDate(commessaId, dateKey);
   const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
   const hasAssignedSquadra = squadRows.some(isSquadraRowFilled);
   if (!dateKey || !hasAssignedSquadra) return null;
-  if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
   const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
+  // +ORE appartiene esclusivamente all'utente autenticato e alla sua squadra
+  // per la data del lavoro visualizzato.
+  if (!assignment) return null;
+  if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
   const squadraIndex = assignment?.squadraIndex || "";
   return { dateKey, assignment, squadData, squadRows, squadraIndex };
 }
@@ -10078,7 +10084,17 @@ function subscribeHoursStats() {
       hoursApprovalRequests = allHoursApprovalRequests;
       renderHoursApprovalRequests();
       renderSquadre();
-    }, (error) => console.error("Errore richieste ore commesse:", error));
+    }, (error) => {
+      // Il flusso attuale salva le ore direttamente senza approvazione admin.
+      // Manteniamo compatibilita con i dati storici, ma non blocchiamo +ORE se
+      // questa raccolta legacy non e leggibile per l'operatore.
+      console.error("Errore richieste ore commesse:", error);
+      allHoursApprovalRequests = [];
+      hoursApprovalRequests = [];
+      hoursApprovalsLoaded = true;
+      renderHoursApprovalRequests();
+      renderSquadre();
+    });
   }
 }
 

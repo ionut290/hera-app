@@ -1,11 +1,12 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.3.4';
+  const VERSION = '2.4.0';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
   const MONTHLY_LIMIT = 4800;
+  const GEOLOCATION_OPTIONS = { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 };
   const USAGE_COLLECTION = 'appConfig';
   let observer = null;
   let mapsLoaderPromise = null;
@@ -293,6 +294,41 @@
     return mapsLoaderPromise;
   }
 
+  function normalizePosition(position) {
+    const lat = Number(position?.coords?.latitude);
+    const lng = Number(position?.coords?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  }
+
+  async function getOperatorPosition() {
+    const nativeGeolocation = window.Capacitor?.Plugins?.Geolocation;
+    const isNative = Boolean(window.Capacitor?.isNativePlatform?.());
+    if (isNative && typeof nativeGeolocation?.getCurrentPosition === 'function') {
+      try {
+        if (typeof nativeGeolocation.checkPermissions === 'function' && typeof nativeGeolocation.requestPermissions === 'function') {
+          let permission = await nativeGeolocation.checkPermissions();
+          if (permission?.location !== 'granted' && permission?.coarseLocation !== 'granted') {
+            permission = await nativeGeolocation.requestPermissions({ permissions: ['location'] });
+          }
+          if (permission?.location !== 'granted' && permission?.coarseLocation !== 'granted') return null;
+        }
+        const position = await nativeGeolocation.getCurrentPosition(GEOLOCATION_OPTIONS);
+        return normalizePosition(position);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (typeof navigator?.geolocation?.getCurrentPosition !== 'function') return null;
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve(normalizePosition(position)),
+        () => resolve(null),
+        GEOLOCATION_OPTIONS
+      );
+    });
+  }
+
   function getPanoramaAtRadius(service, coords, radius) {
     return new Promise((resolve) => {
       service.getPanorama({ location: coords, radius, source: window.google.maps.StreetViewSource.OUTDOOR, preference: window.google.maps.StreetViewPreference.NEAREST }, (data, status) => resolve({ data, status, radius }));
@@ -438,8 +474,11 @@
     activeRouteAnimationFrame = requestAnimationFrame(frame);
   }
 
-  async function renderAnimatedRoute(maps, container, from, to) {
+  async function renderAnimatedRoute(maps, container, from, to, startKind = 'panorama') {
     clearRouteRuntime();
+    const startsFromOperator = startKind === 'operator';
+    const startLabel = startsFromOperator ? 'Operatore' : 'Panorama';
+    const startIcon = startsFromOperator ? '🦺' : '📷';
     activeRouteMap = new maps.Map(container, {
       center: { lat: (from.lat + to.lat) / 2, lng: (from.lng + to.lng) / 2 },
       zoom: 18,
@@ -450,7 +489,7 @@
       gestureHandling: 'greedy'
     });
 
-    new maps.Marker({ map: activeRouteMap, position: from, title: 'Punto panoramico', label: '📷' });
+    new maps.Marker({ map: activeRouteMap, position: from, title: startsFromOperator ? 'Posizione operatore' : 'Punto panoramico', label: startIcon });
     new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
 
     const panel = container.closest('.hera-sv-route-panel');
@@ -495,8 +534,8 @@
       routeLabel = 'Percorso stradale non disponibile';
     }
 
-    if (summary) summary.textContent = `📷 Panorama → 📍 Impianto · ${formatDistance(routeDistance)}`;
-    if (note) note.textContent = routeLabel;
+    if (summary) summary.textContent = `${startIcon} ${startLabel} → 📍 Impianto · ${formatDistance(routeDistance)}`;
+    if (note) note.textContent = startsFromOperator ? routeLabel : `${routeLabel} · GPS non disponibile`;
     navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to, modeUsed));
     if (path.length > 1) {
       replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
@@ -517,6 +556,7 @@
     mini.dataset.state = 'loading';
     mini.textContent = '…';
     showStatus('Caricamento Street View 360°…');
+    const operatorPositionPromise = getOperatorPosition();
 
     try {
       const maps = await loadGoogleMaps(apiKey);
@@ -532,11 +572,17 @@
 
       const panoLocation = found.data.location.latLng;
       const panoCoords = { lat: panoLocation.lat(), lng: panoLocation.lng() };
+      const operatorCoords = await operatorPositionPromise;
+      if (requestId !== openRequestId) return;
+      const routeStart = operatorCoords || panoCoords;
+      const routeStartKind = operatorCoords ? 'operator' : 'panorama';
+      const routeStartIcon = operatorCoords ? '🦺' : '📷';
+      const routeStartLabel = operatorCoords ? 'Operatore' : 'Panorama';
       const heading = computeHeading(panoCoords, coords);
       const directDistance = distanceMeters(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla panoramica all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">📷 Panorama → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo percorso stradale…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
+      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla posizione di partenza all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">${routeStartIcon} ${routeStartLabel} → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo percorso stradale…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
       modal.classList.remove('hidden');
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
@@ -549,7 +595,7 @@
         clickToGo: true, scrollwheel: true, disableDefaultUI: false
       });
 
-      await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), panoCoords, coords);
+      await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), routeStart, coords, routeStartKind);
       if (requestId !== openRequestId) return;
       mini.textContent = '🌐';
     } catch (error) {

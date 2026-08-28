@@ -314,7 +314,7 @@
   }
 
   async function approve(uid, button) {
-    const admin = auth.currentUser;
+    const admin = firebase.auth().currentUser;
     if (!admin) throw new Error("Sessione amministratore non disponibile. Esci e accedi di nuovo.");
     const target = pendingUsersById.get(String(uid)) || { uid, id: uid, email: "" };
     const administratorName = firstValue(profile, ["nomeCompleto", "displayName"])
@@ -385,7 +385,8 @@
       return;
     }
     const reason = decision === "rifiutato" ? (window.prompt("Motivazione facoltativa:", "") || "") : "";
-    const admin = auth.currentUser;
+    const admin = firebase.auth().currentUser;
+    if (!admin) throw new Error("Sessione amministratore non disponibile. Esci e accedi di nuovo.");
     const ref = db.collection("platformUsers").doc(uid);
     const audit = db.collection("userAccessAudit").doc();
     const patch = decision === "attivo"

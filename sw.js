@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v158";
+const CACHE_NAME = "varga-cantieri-shell-v159";
 const CACHE_RESET_VERSION = "20260826-login-stability1";
 const APP_SHELL = [
   "./",
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260824-commessa-isolation1",
+  "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./critical-write-safety-bridge.js?v=20260824-oneclick1",
@@ -89,6 +90,7 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/android-play-store-install.js",
   "/administrative-calendar.js",
   "/fatto-button-immediate.js",
   "/shared-static-views-client.js",

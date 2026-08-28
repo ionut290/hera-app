@@ -123,6 +123,7 @@
         </label>
         <p class="muted">Se lasci il numero vuoto, WhatsApp si apre e puoi scegliere il contatto.</p>
         <div class="access-approval-result-actions">
+          <button id="access-approval-result-email" class="btn btn-primary" type="button">INVIA EMAIL</button>
           <button id="access-approval-result-whatsapp" class="btn access-whatsapp" type="button">INVIA LO STESSO MESSAGGIO SU WHATSAPP</button>
           <button id="access-approval-result-copy" class="btn" type="button">COPIA MESSAGGIO</button>
           <button id="access-approval-result-close" class="btn" type="button">CHIUDI</button>
@@ -130,6 +131,12 @@
       </div>`;
     document.body.appendChild(dialog);
     el("access-approval-result-close")?.addEventListener("click", () => dialog.classList.add("hidden"));
+    el("access-approval-result-email")?.addEventListener("click", () => {
+      const message = String(dialog.dataset.message || "");
+      const email = String(dialog.dataset.email || "").trim();
+      if (!message || !email) return alert("Email o messaggio di approvazione non disponibile.");
+      window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("✅ Accesso a Varga Cantieri approvato")}&body=${encodeURIComponent(message)}`;
+    });
     el("access-approval-result-whatsapp")?.addEventListener("click", () => {
       const message = String(dialog.dataset.message || "");
       if (!message) return alert("Messaggio di approvazione non disponibile.");
@@ -151,10 +158,11 @@
   function showApprovalResult(result) {
     const dialog = ensureApprovalResultDialog();
     dialog.dataset.message = String(result.message || "");
+    dialog.dataset.email = String(result.userEmail || "");
     el("access-approval-result-title").textContent = `${result.userName || "Utente"} è stato sbloccato`;
     el("access-approval-result-email-status").textContent = result.emailSent
       ? `Email di conferma inviata automaticamente a ${result.userEmail}.`
-      : `Utente sbloccato, ma l’email non è stata inviata. ${result.emailError || "Usa WhatsApp per avvisarlo."}`;
+      : `Utente sbloccato. ${result.emailError || "Premi INVIA EMAIL oppure usa WhatsApp per avvisarlo."}`;
     el("access-approval-result-email-status").classList.toggle("is-warning", !result.emailSent);
     el("access-approval-result-phone").value = String(result.phone || "");
     dialog.classList.remove("hidden");

@@ -18,6 +18,8 @@ assert.match(client, /access-approval-result-email/, "Dopo lo sblocco è disponi
 assert.match(client, /mailto:/, "L’email manuale contiene il messaggio completo senza servizi esterni obbligatori");
 assert.match(client, /COPIA MESSAGGIO/, "Il messaggio può essere copiato come recupero manuale");
 assert.match(client, /firebase\.app\(\)\.functions\(REGION\)/, "Il client usa la regione Firebase corretta");
+assert.doesNotMatch(client, /const admin = auth\.currentUser/, "La gestione admin non dipende da auth non inizializzato");
+assert.match(client, /const admin = firebase\.auth\(\)\.currentUser/, "La gestione admin legge la sessione Firebase corrente");
 assert.match(client, /batch\.update\(ref, patch\)/, "Il fallback conserva lo sblocco Firestore compatibile");
 assert.match(client, /approval_\$\{uid\}_\$\{requestId\}/, "Il fallback usa un audit idempotente");
 assert.match(client, /Google Play/, "Il messaggio spiega l’installazione Android");
@@ -36,7 +38,7 @@ assert.doesNotMatch(backend, /\.delete\(|batch\.delete\(/, "Il flusso non cancel
 assert.match(entrypoint, /user-access-approval/, "Il callable è incluso nell’entrypoint Firebase");
 assert.match(workflow, /functions:approveUserAccess/, "Il workflow distribuisce il callable");
 assert.match(workflow, /"approveUserAccess"/, "Il workflow verifica il trasporto pubblico del callable");
-assert.match(index, /approval-access\.js\?v=20260828-email2/, "La pagina carica la nuova versione client");
-assert.match(serviceWorker, /approval-access\.js\?v=20260828-email2/, "La PWA precarica la nuova versione client");
+assert.match(index, /approval-access\.js\?v=20260828-authfix/, "La pagina carica la correzione Auth più recente");
+assert.match(serviceWorker, /approval-access\.js\?v=20260828-authfix/, "La PWA precarica la correzione Auth più recente");
 
 console.log("OK: sblocco utente, email automatica e messaggio WhatsApp verificati.");

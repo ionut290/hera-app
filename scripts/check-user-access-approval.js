@@ -14,6 +14,8 @@ const index = fs.readFileSync("index.html", "utf8");
 assert.match(client, /httpsCallable\("approveUserAccess"\)/, "Sblocca utente usa il callable amministrativo");
 assert.match(client, /SBLOCCO E INVIO EMAIL/, "Il pulsante mostra lo stato di avanzamento");
 assert.match(client, /access-approval-result-whatsapp/, "Dopo lo sblocco è disponibile l’invio WhatsApp");
+assert.match(client, /access-approval-result-email/, "Dopo lo sblocco è disponibile l’invio email manuale");
+assert.match(client, /mailto:/, "L’email manuale contiene il messaggio completo senza servizi esterni obbligatori");
 assert.match(client, /COPIA MESSAGGIO/, "Il messaggio può essere copiato come recupero manuale");
 assert.match(client, /firebase\.app\(\)\.functions\(REGION\)/, "Il client usa la regione Firebase corretta");
 assert.match(client, /batch\.update\(ref, patch\)/, "Il fallback conserva lo sblocco Firestore compatibile");
@@ -26,13 +28,15 @@ assert.match(backend, /exports\.approveUserAccess/, "Il backend esporta approveU
 assert.match(backend, /getAdminEmails/, "Il backend verifica l’amministratore");
 assert.match(backend, /batch\.update\(userRef, approvalPatch\)/, "Il backend autorizza il profilo senza sostituirlo");
 assert.match(backend, /RESEND_ENDPOINT/, "Il backend invia l’email tramite il servizio configurato");
+assert.match(backend, /optionalEmailConfiguration/, "Il backend distribuisce anche senza segreti email mancanti");
+assert.doesNotMatch(backend, /defineSecret|runWith\(\{ secrets:/, "Il deploy non richiede segreti interattivi assenti");
 assert.match(backend, /Idempotency-Key/, "L’email non viene duplicata durante i tentativi");
 assert.match(backend, /emailError = "Invio email non riuscito/, "Un errore email non annulla lo sblocco");
 assert.doesNotMatch(backend, /\.delete\(|batch\.delete\(/, "Il flusso non cancella utenti o collegamenti");
 assert.match(entrypoint, /user-access-approval/, "Il callable è incluso nell’entrypoint Firebase");
 assert.match(workflow, /functions:approveUserAccess/, "Il workflow distribuisce il callable");
 assert.match(workflow, /"approveUserAccess"/, "Il workflow verifica il trasporto pubblico del callable");
-assert.match(index, /approval-access\.js\?v=20260828-email1/, "La pagina carica la nuova versione client");
-assert.match(serviceWorker, /approval-access\.js\?v=20260828-email1/, "La PWA precarica la nuova versione client");
+assert.match(index, /approval-access\.js\?v=20260828-email2/, "La pagina carica la nuova versione client");
+assert.match(serviceWorker, /approval-access\.js\?v=20260828-email2/, "La PWA precarica la nuova versione client");
 
 console.log("OK: sblocco utente, email automatica e messaggio WhatsApp verificati.");

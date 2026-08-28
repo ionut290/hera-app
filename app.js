@@ -7244,6 +7244,7 @@ function areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateValue) {
 
 function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey();
+  if (!dateKey || dateKey < getTodayDateKey()) return null;
   // I report salvati sono la fonte autorevole per stabilire se le ore mancano.
   // Le richieste di approvazione sono solo dati legacy: un errore/ritardo nella
   // loro lettura non deve nascondere per sempre il pulsante +ORE.
@@ -7283,6 +7284,13 @@ function getTodayDateKey() {
   }).formatToParts(new Date());
   const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+function getTomorrowDateKey(todayDateKey = getTodayDateKey()) {
+  const date = new Date(`${todayDateKey}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function buildSquadraDateCorrectionWhatsappUrl({ commessaName, squadraDate, todayDate, operatorName }) {
@@ -19429,7 +19437,8 @@ function subscribeSquadre() {
   stopSquadreSubscription();
   const selectedDateKey = getActiveSquadreDateKey();
   const todayDateKey = getTodayDateKey();
-  const subscribedDateKeys = [...new Set([selectedDateKey, todayDateKey].filter(Boolean))];
+  const tomorrowDateKey = getTomorrowDateKey(todayDateKey);
+  const subscribedDateKeys = [...new Set([selectedDateKey, todayDateKey, tomorrowDateKey].filter(Boolean))];
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
@@ -19468,7 +19477,7 @@ function subscribeSquadre() {
   const squadreQuery = subscribedDateKeys.length === 1
     ? db.collection(getSquadreHistoryCollectionName()).where("dateKey", "==", subscribedDateKeys[0])
     : db.collection(getSquadreHistoryCollectionName()).where("dateKey", "in", subscribedDateKeys);
-  console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico per data selezionata e data odierna. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
+  console.log("LOAD SQUADRE INDEX CHECK", "Query: squadreStorico per data selezionata, oggi e domani. Se aggiungi orderBy su altri campi, crea l'indice composito suggerito da Firestore.");
   const squadreDataPromise = new Promise((resolve) => {
     let initialSnapshotReceived = false;
     unsubscribeSquadreHistory = squadreQuery.onSnapshot((snapshot) => {
@@ -20617,7 +20626,13 @@ function renderSquadre() {
   }
   const selectedDateKey = getActiveSquadreDateKey();
   if (!selectedDateKey) return;
-  const squadrePerCommessa = getSquadrePerCommessaForDate(selectedDateKey);
+  const todayDateKey = getTodayDateKey();
+  const visibleDateKeys = canManageData() && selectedDateKey === todayDateKey
+    ? [selectedDateKey, getTomorrowDateKey(todayDateKey)]
+    : [selectedDateKey];
+  const squadrePerCommessa = visibleDateKeys.flatMap((dateKey) => (
+    getSquadrePerCommessaForDate(dateKey).map((item) => ({ ...item, dateKey }))
+  ));
   if (!squadrePerCommessa.length) {
     ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra trovata</p>";
     updateTodaySummary();
@@ -20627,12 +20642,13 @@ function renderSquadre() {
   ui.squadreLista.innerHTML = renderSquadraConflictSummaryMarkup(conflictReport, selectedDateKey);
   ui.squadreLista.querySelector("[data-open-squadre-conflicts]")?.addEventListener("click", () => openSquadreConflictsModal(conflictReport, selectedDateKey));
 
-  squadrePerCommessa.forEach(({ commessa, squadData: squad, squadRows }) => {
+  const conflictReportsByDate = new Map(visibleDateKeys.map((dateKey) => [dateKey, buildSquadraConflictReport(dateKey)]));
+  squadrePerCommessa.forEach(({ commessa, squadData: squad, squadRows, dateKey }) => {
     const item = document.createElement("article");
     item.className = "squadra-item";
     const riferimento = squad.riferimentoData
       ? new Date(`${squad.riferimentoData}T00:00:00`).toLocaleDateString("it-IT")
-      : "-";
+      : new Date(`${dateKey}T00:00:00`).toLocaleDateString("it-IT");
     const rowsHtml = squadRows.map((row, idx) => {
       const orarioLabel = formatSquadraOrario(row);
       const details = [
@@ -20642,12 +20658,13 @@ function renderSquadre() {
         row.note ? `<br><b>📝 Note:</b> ${escapeHTML(row.note)}` : "",
         row.avvisoAutomaticoAssenze ? `<br><span class="squadra-saved-alert squadra-automatic-absence-warning"><b>⛔ Assenza calendario:</b> ${escapeHTML(row.avvisoAutomaticoAssenze)}</span>` : ""
       ].join("");
+      const cardConflictReport = conflictReportsByDate.get(dateKey) || { operatori: [], mezzi: [] };
       const rowConflictReport = {
-        operatori: conflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
-        mezzi: conflictReport.mezzi.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx)
+        operatori: cardConflictReport.operatori.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx),
+        mezzi: cardConflictReport.mezzi.filter((item) => item.commessaId === commessa.id && item.squadraIndex === idx)
       };
       const rowClass = "squadra-saved-row";
-      return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(selectedDateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
+      return `<div class="${rowClass}" data-squadra-index="${idx}"><p><button type="button" class="squadra-edit-link" data-commessa-id="${escapeHTML(commessa.id)}" data-date-key="${escapeHTML(dateKey)}" data-squadra-index="${idx}" aria-label="Modifica Squadra ${idx + 1} di ${escapeHTML(commessa.nome || "commessa")}">👥 Squadra ${idx + 1}:</button> ${renderConflictValueList(row.personale, rowConflictReport, "operatori")}${details}<br><b>🚚 Mezzi ${idx + 1}:</b> ${renderConflictValueList(row.mezzi, rowConflictReport, "mezzi")}</p></div>`;
     }).join("");
     const warningIssues = buildSquadraWarningDetails(commessa, squadRows);
     const warningMarkup = warningIssues.length
@@ -20666,8 +20683,8 @@ function renderSquadre() {
       ${rowsHtml}
     `;
     const head = item.querySelector(".squadra-item-head");
-    appendSquadreHeaderRiskActions(head, commessa, selectedDateKey);
-    appendAddHoursButtonIfAllowed(head, commessa, selectedDateKey);
+    appendSquadreHeaderRiskActions(head, commessa, dateKey);
+    appendAddHoursButtonIfAllowed(head, commessa, dateKey);
     head?.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;
       openCommessaFromSquadre(commessa);
@@ -20682,7 +20699,7 @@ function renderSquadre() {
       btn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        openSquadraCompositionEditor(btn.dataset.commessaId || commessa.id, btn.dataset.dateKey || selectedDateKey, Number(btn.dataset.squadraIndex) || 0);
+        openSquadraCompositionEditor(btn.dataset.commessaId || commessa.id, btn.dataset.dateKey || dateKey, Number(btn.dataset.squadraIndex) || 0);
       });
     });
     item.querySelectorAll(".mezzo-chip-btn").forEach((btn) => {
@@ -20702,12 +20719,12 @@ function renderSquadre() {
     item.querySelector("[data-worklimate-commessa]")?.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openSquadraWorklimateSafety(commessa, selectedDateKey);
+      openSquadraWorklimateSafety(commessa, dateKey);
     });
     item.querySelector("[data-worklimate-temperature-commessa]")?.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openSquadraWorklimateSafety(commessa, selectedDateKey, { preferMajorityLocation: true, preferAverageTemperature: true });
+      openSquadraWorklimateSafety(commessa, dateKey, { preferMajorityLocation: true, preferAverageTemperature: true });
     });
     const warningToggle = item.querySelector(".squadra-warning-toggle");
     warningToggle?.addEventListener("click", (event) => {

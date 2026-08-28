@@ -2,7 +2,7 @@
   "use strict";
 
   const GLOBAL = "HeraFirestoreStartupCostOptimizer";
-  const VERSION = "1.0.1";
+  const VERSION = "1.0.2";
   if (window[GLOBAL]?.installed) return;
 
   const PROFILE_WRITE_TTL_MS = 5 * 60 * 1000;
@@ -229,6 +229,11 @@
 
     const deliver = () => {
       if (closed || fallbackStarted || !views.has(primaryDate)) return;
+      const primaryRows = views.get(primaryDate)?.payload?.squadre;
+      if (!Array.isArray(primaryRows) || primaryRows.length === 0) {
+        startFallback("vista-principale-vuota");
+        return;
+      }
       const snapshot = buildStaticSquadreSnapshot(query, views);
       const signature = `${[...views.keys()].sort().join("|")}:${snapshot.size}`;
       if (signature === lastDeliveredSignature) return;

@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v163";
+const CACHE_NAME = "varga-cantieri-shell-v164";
 const CACHE_RESET_VERSION = "20260826-login-stability1";
 const APP_SHELL = [
   "./",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260826-admin5",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260828-add-hours-fix1",
+  "./app.js?v=20260828-add-hours-rewrite1",
   "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",

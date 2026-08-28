@@ -7117,150 +7117,192 @@ function canCurrentUserInsertHoursForCommessa(commessaId, dateValue = "") {
   return Boolean(currentUser && String(commessaId || "").trim());
 }
 
-function getHoursParticipantId(row = {}, entry = {}, options = {}) {
-  const allowSquadraFallback = options.allowSquadraFallback !== false;
-  const savedParticipantId = String(row.participantId || "").trim();
-  if (savedParticipantId) return savedParticipantId;
-  const directId = String(
-    row.utenteId
-    || row.userId
-    || row.uid
-    || row.operatoreId
-    || row.personaleId
-    || ""
-  ).trim();
-  if (directId) return `utente:${directId}`;
-  const normalizedOperator = normalizeHoursOperatorName(row.operatore || row.nome || row.name || "");
-  if (normalizedOperator) return `utente:${normalizedOperator}`;
-  const squadraId = String(
-    row.squadraId
-    || entry.squadraId
-    || row.squadraIndex
-    || entry.squadraIndex
-    || ""
-  ).trim();
-  if (allowSquadraFallback && squadraId) return `squadra:${squadraId}`;
-  return "";
+// +ORE V2: un solo motore decide visibilita, partecipanti e ore mancanti.
+// Non usa le approvazioni legacy e non esegue letture Firestore durante il render.
+function getQuickHoursOperatorEntries(value) {
+  if (Array.isArray(value)) return value.flatMap(getQuickHoursOperatorEntries);
+  if (value && typeof value === "object") {
+    const operatore = String(
+      value.displayName
+      || value.nomeCompleto
+      || value.fullName
+      || value.name
+      || (value.nome && value.cognome ? `${value.nome} ${value.cognome}` : "")
+      || value.email
+      || ""
+    ).trim();
+    if (!operatore) return [];
+    return [{
+      operatore,
+      operatoreId: String(value.operatoreId || value.personaleId || value.personId || value.id || "").trim(),
+      participantId: String(value.participantId || value.utenteId || value.userId || value.uid || "").trim(),
+      email: String(value.email || value.mail || "").trim()
+    }];
+  }
+  return parseMultiEntryValue(value || "").map((operatore) => ({ operatore }));
 }
 
-function buildHoursFullKey(commessaId, dateValue, participantId) {
-  const id = String(commessaId || "").trim();
-  const dateKey = String(dateValue || "").trim();
-  const participant = String(participantId || "").trim();
-  if (!id || !dateKey || !participant) return "";
-  return `${id}__${dateKey}__${participant}`;
+function getQuickHoursRowOperators(row = {}) {
+  const candidates = [row.personale, row.operatori, row.caposquadra]
+    .flatMap(getQuickHoursOperatorEntries)
+    .filter((item) => String(item.operatore || "").trim());
+  const unique = new Map();
+  candidates.forEach((item) => {
+    const nameKey = normalizeHoursOperatorName(item.operatore);
+    const idKey = String(item.operatoreId || item.participantId || "").trim().toLocaleLowerCase("it-IT");
+    const key = idKey || nameKey;
+    if (key && !unique.has(key)) unique.set(key, item);
+  });
+  return Array.from(unique.values());
+}
+
+function addQuickHoursIdentityAlias(aliases, type, value) {
+  const raw = String(value || "").trim();
+  if (!raw) return;
+  if (type === "email") {
+    const email = normalizeEmail(raw);
+    if (email) aliases.add(`email:${email}`);
+    return;
+  }
+  if (type === "name") {
+    const name = normalizeHoursOperatorName(raw);
+    if (name) aliases.add(`name:${name}`);
+    return;
+  }
+  const normalizedId = raw.toLocaleLowerCase("it-IT");
+  aliases.add(`id:${normalizedId}`);
+  if (normalizedId.startsWith("utente:")) aliases.add(`id:${normalizedId.slice(7)}`);
+}
+
+function getQuickHoursParticipantAliases(data = {}) {
+  const aliases = new Set();
+  addQuickHoursIdentityAlias(aliases, "id", data.participantId);
+  addQuickHoursIdentityAlias(aliases, "id", data.operatoreId);
+  addQuickHoursIdentityAlias(aliases, "id", data.personaleId);
+  addQuickHoursIdentityAlias(aliases, "id", data.personId);
+  addQuickHoursIdentityAlias(aliases, "id", data.utenteId);
+  addQuickHoursIdentityAlias(aliases, "id", data.userId);
+  addQuickHoursIdentityAlias(aliases, "id", data.uid);
+  addQuickHoursIdentityAlias(aliases, "email", data.operatoreEmail || data.email);
+  addQuickHoursIdentityAlias(aliases, "name", data.operatore || data.nome || data.name);
+  return aliases;
+}
+
+function quickHoursAliasesOverlap(left, right) {
+  if (!(left instanceof Set) || !(right instanceof Set)) return false;
+  for (const alias of left) if (right.has(alias)) return true;
+  return false;
+}
+
+function getQuickHoursViewerRows(commessaId, dateValue) {
+  const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
+  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const rowsWithOperators = squadRows
+    .map((row, index) => ({ row, index, operators: getQuickHoursRowOperators(row) }))
+    .filter((item) => item.operators.length > 0);
+  if (canManageData()) return { squadData, squadRows, rows: rowsWithOperators, assignment: null };
+  if (!currentUser) return { squadData, squadRows, rows: [], assignment: null };
+  const identity = getCurrentUserSquadraIdentity();
+  const rows = rowsWithOperators.filter(({ row }) => getSquadraRowMembers(row)
+    .some((member) => doesSquadraMemberMatchCurrentUser(member, identity)));
+  const first = rows[0];
+  return {
+    squadData,
+    squadRows,
+    rows,
+    assignment: first ? {
+      squadraIndex: first.index + 1,
+      squadraLabel: `Squadra ${first.index + 1}`,
+      row: first.row,
+      squadData
+    } : null
+  };
 }
 
 function getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue) {
-  const squadData = getSquadraDataForCommessaDate(commessaId, dateValue);
-  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
+  const dateKey = String(dateValue || "").trim();
+  const scope = getQuickHoursViewerRows(commessaId, dateKey);
   const participants = new Map();
-  squadRows.forEach((row, index) => {
-    if (!isSquadraRowFilled(row)) return;
+  scope.rows.forEach(({ index, operators }) => {
     const squadraIndex = index + 1;
     const squadraLabel = `Squadra ${squadraIndex}`;
-    const names = parseMultiEntryValue(row?.personale || "");
-    if (names.length) {
-      names.forEach((name) => {
-        const operatoreId = resolveHoursOperatorId(name);
-        const participantId = getHoursParticipantId(
-          {
-            operatore: name,
-            operatoreId,
-            squadraIndex,
-            squadraLabel
-          },
-          { squadraIndex, squadraLabel },
-          { allowSquadraFallback: false }
-        );
-        const key = buildHoursFullKey(commessaId, dateValue, participantId);
-        if (!key) return;
-        participants.set(key, {
-          key,
-          participantId,
-          operatoreId,
-          operatore: name,
-          squadraIndex,
-          squadraLabel
-        });
+    operators.forEach((source) => {
+      const operatore = String(source.operatore || "").trim();
+      const operatoreId = String(source.operatoreId || resolveHoursOperatorId(operatore) || "").trim();
+      const participantId = String(source.participantId || (operatoreId ? `utente:${operatoreId}` : "")).trim();
+      const aliases = getQuickHoursParticipantAliases({ ...source, operatore, operatoreId, participantId });
+      if (!aliases.size) return;
+      const existing = Array.from(participants.values()).find((participant) => quickHoursAliasesOverlap(participant.aliases, aliases));
+      if (existing) {
+        aliases.forEach((alias) => existing.aliases.add(alias));
+        return;
+      }
+      const identityKey = Array.from(aliases).sort()[0];
+      const key = `${String(commessaId || "").trim()}__${dateKey}__${identityKey}`;
+      participants.set(key, {
+        key,
+        aliases,
+        participantId,
+        operatoreId,
+        operatore,
+        squadraIndex,
+        squadraLabel
       });
-      return;
-    }
-    const participantId = getHoursParticipantId(
-      { squadraIndex, squadraLabel },
-      { squadraIndex, squadraLabel },
-      { allowSquadraFallback: true }
-    );
-    const key = buildHoursFullKey(commessaId, dateValue, participantId);
-    if (!key) return;
-    participants.set(key, {
-      key,
-      participantId,
-      operatore: squadraLabel,
-      squadraIndex,
-      squadraLabel
     });
   });
   return participants;
 }
 
-function getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue) {
+function getSavedQuickHoursRows(commessaId, dateValue) {
   const id = String(commessaId || "").trim();
   const dateKey = String(dateValue || "").trim();
-  const completed = new Map();
-  if (!id || !dateKey) return completed;
-  const sources = [
-    ...allHoursReports,
-    ...allHoursApprovalRequests.filter((request) => String(request.status || "").trim() !== "rejected")
-  ];
-  sources.forEach((record) => {
+  const rows = [];
+  if (!id || !dateKey) return rows;
+  allHoursReports.forEach((record) => {
     if (String(record?.date || "").trim() !== dateKey) return;
     (Array.isArray(record?.entries) ? record.entries : []).forEach((entry) => {
       if (String(entry?.commessaId || "").trim() !== id) return;
       (Array.isArray(entry?.rows) ? entry.rows : []).forEach((row) => {
         if (Number(row?.ore || 0) <= 0) return;
-        const participantId = getHoursParticipantId(row, entry, { allowSquadraFallback: true });
-        const key = buildHoursFullKey(id, dateKey, participantId);
-        if (!key) return;
-        completed.set(key, {
-          key,
-          participantId,
-          operatore: row?.operatore || "",
-          squadraIndex: row?.squadraIndex || entry?.squadraIndex || "",
-          squadraLabel: row?.squadraLabel || entry?.squadraLabel || ""
-        });
+        rows.push({ ...row, aliases: getQuickHoursParticipantAliases(row) });
       });
     });
+  });
+  return rows;
+}
+
+function getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue, required = null) {
+  const requiredParticipants = required instanceof Map
+    ? required
+    : getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
+  const savedRows = getSavedQuickHoursRows(commessaId, dateValue);
+  const completed = new Map();
+  requiredParticipants.forEach((participant, key) => {
+    const saved = savedRows.find((row) => quickHoursAliasesOverlap(participant.aliases, row.aliases));
+    if (saved) completed.set(key, { ...participant, savedRow: saved });
   });
   return completed;
 }
 
-function areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateValue) {
-  const required = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
-  if (!required.size) return false;
-  const completed = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
-  return Array.from(required.keys()).every((key) => completed.has(key));
+function getQuickTeamHoursState(commessaId, dateValue) {
+  const requiredMap = getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue);
+  const completedParticipants = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue, requiredMap);
+  const requiredParticipants = Array.from(requiredMap.values());
+  const missingParticipants = requiredParticipants.filter((participant) => !completedParticipants.has(participant.key));
+  return { requiredParticipants, completedParticipants, missingParticipants };
 }
 
 function getQuickHoursContextForCommessa(commessaId, dateValue = "") {
   const dateKey = String(dateValue || "").trim() || getActiveSquadreDateKey();
-  if (!dateKey || dateKey < getTodayDateKey()) return null;
-  // I report salvati sono la fonte autorevole per stabilire se le ore mancano.
-  // Le richieste di approvazione sono solo dati legacy: un errore/ritardo nella
-  // loro lettura non deve nascondere per sempre il pulsante +ORE.
-  if (!hoursReportsLoaded) return null;
-  const squadData = getSquadraDataForCommessaDate(commessaId, dateKey);
-  const squadRows = Array.isArray(squadData?.squadre) ? squadData.squadre : getLegacySquadreRows(squadData || {});
-  const hasAssignedSquadra = squadRows.some(isSquadraRowFilled);
-  if (!dateKey || !hasAssignedSquadra) return null;
-  const assignment = getCurrentUserSquadraAssignment(commessaId, dateKey);
-  // +ORE appartiene esclusivamente all'utente autenticato e alla sua squadra
-  // per la data del lavoro visualizzato. L'amministratore, invece, deve poter
-  // completare le ore mancanti di qualunque squadra.
-  if (!assignment && !canManageData()) return null;
-  if (areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)) return null;
-  const squadraIndex = assignment?.squadraIndex || "";
-  return { dateKey, assignment, squadData, squadRows, squadraIndex };
+  if (!currentUser || !dateKey || dateKey < getTodayDateKey()) return null;
+  const scope = getQuickHoursViewerRows(commessaId, dateKey);
+  if (!scope.rows.length) return null;
+  const state = getQuickTeamHoursState(commessaId, dateKey);
+  if (!state.requiredParticipants.length) return null;
+  // Se la vista condivisa non e ancora arrivata mostriamo comunque +ORE:
+  // un ritardo di caricamento non deve trasformarsi in un falso pulsante assente.
+  if (hoursReportsLoaded && !state.missingParticipants.length) return null;
+  return { dateKey, ...scope, ...state };
 }
 
 function createAddHoursButton(commessa, dateValue = "") {
@@ -7269,11 +7311,22 @@ function createAddHoursButton(commessa, dateValue = "") {
   button.className = "btn add-hours-quick-btn";
   button.textContent = "+ ORE";
   button.dataset.addHoursCommessaId = commessa.id || "";
+  button.dataset.addHoursDate = String(dateValue || "").trim();
   button.setAttribute("aria-label", `Inserisci ore per ${commessa.nome || "commessa"}`);
-  button.addEventListener("click", (event) => {
+  button.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
-    handleQuickAddHoursClick(commessa, dateValue);
+    if (button.disabled) return;
+    button.disabled = true;
+    button.textContent = "ORE…";
+    try {
+      await handleQuickAddHoursClick(commessa, dateValue);
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = "+ ORE";
+      }
+    }
   });
   return button;
 }
@@ -7343,9 +7396,50 @@ function openSquadraDifferentDayInfoPopup({ commessa, squadraDate, todayDate, on
   overlay.querySelector("[data-hours-day-continue]")?.focus();
 }
 
-function handleQuickAddHoursClick(commessa, dateValue = "") {
+const quickHoursReportReads = new Map();
+
+async function refreshQuickHoursReportsForDate(dateValue) {
+  const dateKey = String(dateValue || "").trim();
+  if (!dateKey || !db || typeof db.collection !== "function") return false;
+  const cached = quickHoursReportReads.get(dateKey);
+  if (cached?.promise) return cached.promise;
+  if (cached?.loadedAt && Date.now() - cached.loadedAt < 60 * 1000) return true;
+  const promise = db.collection(getOreReportsCollectionName())
+    .where("date", "==", dateKey)
+    .get()
+    .then((snapshot) => {
+      const remoteReports = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const pendingOffline = allHoursReports.filter((report) => (
+        String(report?.date || "").trim() === dateKey && report?.offlinePending
+      ));
+      const reportsById = new Map([...remoteReports, ...pendingOffline].map((report) => [String(report.id || ""), report]));
+      allHoursReports = [
+        ...allHoursReports.filter((report) => String(report?.date || "").trim() !== dateKey),
+        ...reportsById.values()
+      ];
+      hoursReportsLoaded = true;
+      quickHoursReportReads.set(dateKey, { loadedAt: Date.now(), promise: null });
+      return true;
+    })
+    .catch((error) => {
+      quickHoursReportReads.delete(dateKey);
+      console.warn("Verifica mirata ore +ORE non riuscita: uso i dati gia disponibili.", error);
+      return false;
+    });
+  quickHoursReportReads.set(dateKey, { loadedAt: 0, promise });
+  return promise;
+}
+
+async function handleQuickAddHoursClick(commessa, dateValue = "") {
   const squadraDate = String(dateValue || "").trim() || getActiveSquadreDateKey() || getTodayDateKey();
   const todayDate = getTodayDateKey();
+  await refreshQuickHoursReportsForDate(squadraDate);
+  const freshContext = getQuickHoursContextForCommessa(commessa?.id, squadraDate);
+  if (!freshContext) {
+    alert("✅ Le ore della squadra risultano gia completate oppure la squadra non e piu disponibile.");
+    renderSquadre();
+    return;
+  }
   if (!isSnowServiceContext() && squadraDate && squadraDate !== todayDate) {
     openSquadraDifferentDayInfoPopup({
       commessa,
@@ -7409,13 +7503,6 @@ function openCommessaFromSquadre(commessa = {}) {
 
 function getHoursParticipantDisplayName(participant = {}) {
   return String(participant.operatore || participant.squadraLabel || "Operatore").trim() || "Operatore";
-}
-
-function getQuickTeamHoursState(commessaId, dateValue) {
-  const requiredParticipants = Array.from(getRequiredHoursParticipantsForCommessaDate(commessaId, dateValue).values());
-  const completedParticipants = getCompletedHoursParticipantsForCommessaDate(commessaId, dateValue);
-  const missingParticipants = requiredParticipants.filter((participant) => !completedParticipants.has(participant.key));
-  return { requiredParticipants, completedParticipants, missingParticipants };
 }
 
 function updateQuickTeamHoursCard(card) {
@@ -8661,6 +8748,7 @@ async function finalizeHoursReport(event) {
       setHoursFinalizeLocked(true);
       renderHoursSummary();
       renderTodaySummary();
+      renderSquadre();
       if (calendarMode === "hours") renderCalendar();
       return;
     }
@@ -8690,6 +8778,7 @@ async function finalizeHoursReport(event) {
     setHoursFinalizeLocked(true);
     renderHoursSummary();
     renderTodaySummary();
+    renderSquadre();
     loadSavedHoursReports();
   } catch (error) {
     console.error("Salvataggio gestione ore non riuscito:", error);

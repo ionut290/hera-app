@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v4-registry1";
+  const CORE_URL = "./shared-static-views-client-core.js?v=20260806-explicit-hours-v4-add-hours-rewrite1";
   const HOURS_GUARD_URL = "./hours-source-explicit-guard.js?v=20260806c";
   const api = window.HeraSharedStaticViews;
   const prematureHoursState = {

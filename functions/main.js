@@ -13,6 +13,7 @@ const errorCenterResetFunctions = require("./error-center-reset");
 const errorEmailUsageFunctions = require("./error-email-usage");
 const cleanupWhazzupPdfFunctions = require("./cleanup-whazzup-pdfs");
 const whazzupPdfDriveFunctions = require("./whazzup-pdf-drive");
+const userAccessApprovalFunctions = require("./user-access-approval");
 
 Object.assign(
   exports,
@@ -28,5 +29,6 @@ Object.assign(
   errorCenterResetFunctions,
   errorEmailUsageFunctions,
   cleanupWhazzupPdfFunctions,
-  whazzupPdfDriveFunctions
+  whazzupPdfDriveFunctions,
+  userAccessApprovalFunctions
 );

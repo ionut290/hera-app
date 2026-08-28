@@ -332,6 +332,7 @@
     hoursReportsLoaded = true;
 
     runSafely(() => renderTodaySummary(), "render riepilogo ore statiche");
+    runSafely(() => renderSquadre(), "render pulsante +ORE da ore statiche");
     if (!ui.calendarPage?.classList.contains("hidden") && (calendarMode === "hours" || calendarMode === "administrative")) {
       runSafely(() => renderCalendar(), "render calendario statico");
     }

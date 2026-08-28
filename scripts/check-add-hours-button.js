@@ -1,48 +1,113 @@
-const fs = require("fs");
-const path = require("path");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
-const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
-const start = app.indexOf("function getQuickHoursContextForCommessa");
+const root = path.join(__dirname, "..");
+const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const sharedClient = fs.readFileSync(path.join(root, "shared-static-views-client-core.js"), "utf8");
+
+const start = app.indexOf("function getQuickHoursOperatorEntries");
 const end = app.indexOf("function createAddHoursButton", start);
-if (start < 0 || end < 0) throw new Error("Logica +ORE non trovata");
-const block = app.slice(start, end);
+assert.ok(start >= 0 && end > start, "Nuovo motore +ORE non trovato");
+const engine = app.slice(start, end);
 
-const checks = [
-  [block.includes("if (!hoursReportsLoaded) return null;"), "+ORE attende i report ore"],
-  [block.includes("dateKey < getTodayDateKey()"), "+ORE non compare per date passate"],
-  [!block.includes("!hoursReportsLoaded || !hoursApprovalsLoaded"), "+ORE non dipende dalla raccolta approvazioni legacy"],
-  [block.includes("getCurrentUserSquadraAssignment(commessaId, dateKey)"), "+ORE verifica l'assegnazione dell'utente"],
-  [block.includes("if (!assignment && !canManageData()) return null;"), "+ORE resta nascosto agli operatori non assegnati ma visibile agli admin"],
-  [block.includes("areAllHoursParticipantsCompleteForCommessaDate(commessaId, dateKey)"), "+ORE scompare quando le ore squadra sono complete"]
+const normalizeName = (value) => String(value || "").toLocaleLowerCase("it-IT").replace(/\s+/g, " ").trim();
+const parse = (value) => String(value || "").split(/[;,\n|]+/).map((part) => part.trim()).filter(Boolean);
+const operatorIds = new Map([
+  ["varga ionel", "p1"],
+  ["benito pietro", "p2"],
+  ["mario rossi", "p3"]
+]);
+
+function runScenario({ admin = false, user = "VARGA IONEL", rows = [], reports = [], loaded = true, date = "2026-08-28" } = {}) {
+  const context = {
+    Set,
+    Map,
+    Array,
+    String,
+    Number,
+    currentUser: { uid: "u1", displayName: user, email: "ionel@example.test" },
+    allHoursReports: reports,
+    hoursReportsLoaded: loaded,
+    canManageData: () => admin,
+    getTodayDateKey: () => "2026-08-28",
+    getActiveSquadreDateKey: () => date,
+    getSquadraDataForCommessaDate: () => ({ squadre: rows }),
+    getLegacySquadreRows: () => [],
+    parseMultiEntryValue: parse,
+    normalizeHoursOperatorName: normalizeName,
+    normalizeEmail: (value) => String(value || "").trim().toLowerCase(),
+    resolveHoursOperatorId: (value) => operatorIds.get(normalizeName(value)) || normalizeName(value),
+    getCurrentUserSquadraIdentity: () => ({ user: normalizeName(user) }),
+    getSquadraRowMembers: (row) => [row.personale, row.operatori, row.caposquadra].flatMap(parse),
+    doesSquadraMemberMatchCurrentUser: (member, identity) => normalizeName(member) === identity.user
+  };
+  vm.runInNewContext(`${engine}\nresult = { visible: getQuickHoursContextForCommessa("c1", ${JSON.stringify(date)}), state: getQuickTeamHoursState("c1", ${JSON.stringify(date)}) };`, context);
+  return context.result;
+}
+
+const twoTeams = [
+  { personale: "VARGA IONEL, BENITO PIETRO", mezzi: "MEZZO 1" },
+  { personale: "MARIO ROSSI", mezzi: "MEZZO 2" }
 ];
+
+{
+  const result = runScenario({ rows: twoTeams });
+  assert.ok(result.visible, "L'operatore assegnato deve vedere +ORE");
+  assert.deepEqual(Array.from(result.state.requiredParticipants, (item) => item.operatore), ["VARGA IONEL", "BENITO PIETRO"], "L'operatore deve compilare solo la propria squadra");
+}
+
+assert.equal(runScenario({ user: "UTENTE NON ASSEGNATO", rows: twoTeams }).visible, null, "Un operatore non assegnato non deve vedere +ORE");
+
+{
+  const result = runScenario({ admin: true, rows: twoTeams });
+  assert.ok(result.visible, "L'admin deve vedere +ORE sulle squadre con ore mancanti");
+  assert.deepEqual(Array.from(result.state.requiredParticipants, (item) => item.operatore), ["VARGA IONEL", "BENITO PIETRO", "MARIO ROSSI"], "L'admin deve poter completare tutte le squadre");
+}
+
+assert.ok(runScenario({ rows: twoTeams, loaded: false }).visible, "+ORE non deve sparire mentre i report ore stanno caricando");
+assert.equal(runScenario({ rows: [{ mezzi: "MEZZO 1", note: "Nessun operatore" }] }).visible, null, "+ORE non deve comparire su una riga senza operatori");
+assert.equal(runScenario({ rows: twoTeams, date: "2026-08-27" }).visible, null, "+ORE non deve comparire sulle date passate");
+
+const teamOneCompleteByName = [{
+  date: "2026-08-28",
+  entries: [{
+    commessaId: "c1",
+    rows: [
+      { operatore: "VARGA IONEL", ore: 8 },
+      { operatore: "BENITO PIETRO", ore: 8 }
+    ]
+  }]
+}];
+assert.equal(runScenario({ rows: twoTeams, reports: teamOneCompleteByName }).visible, null, "+ORE deve sparire quando la squadra dell'operatore e completa");
+
+{
+  const result = runScenario({ rows: twoTeams, reports: [{
+    date: "2026-08-28",
+    entries: [{ commessaId: "c1", rows: [{ participantId: "utente:p1", operatore: "Nome storico", ore: 8 }] }]
+  }] });
+  assert.ok(result.visible, "+ORE deve restare visibile se manca un componente della squadra");
+  assert.deepEqual(Array.from(result.state.missingParticipants, (item) => item.operatore), ["BENITO PIETRO"], "Il participantId storico deve riconoscere l'operatore gia compilato");
+}
+
+{
+  const result = runScenario({ admin: true, rows: twoTeams, reports: teamOneCompleteByName });
+  assert.ok(result.visible, "L'admin deve continuare a vedere +ORE se un'altra squadra e incompleta");
+  assert.deepEqual(Array.from(result.state.missingParticipants, (item) => item.operatore), ["MARIO ROSSI"]);
+}
+
+assert.doesNotMatch(engine, /allHoursApprovalRequests|hoursApprovalsLoaded/, "Il nuovo +ORE non deve dipendere dalle approvazioni legacy");
+assert.doesNotMatch(engine, /\.collection\(/, "Il render di +ORE non deve eseguire letture Firestore");
+assert.match(app, /refreshQuickHoursReportsForDate[\s\S]*?\.where\("date", "==", dateKey\)/, "Al clic deve essere eseguita una sola verifica mirata per data");
+assert.match(app, /appendAddHoursButtonIfAllowed\(head, commessa, dateKey\)/, "+ORE deve usare la data reale della scheda squadra");
+assert.match(sharedClient, /render pulsante \+ORE da ore statiche/, "+ORE deve aggiornarsi quando arriva la vista ore condivisa");
 
 const identityStart = app.indexOf("function getCurrentUserSquadraIdentity");
 const identityEnd = app.indexOf("function getSquadraMemberIdentifiers", identityStart);
-if (identityStart < 0 || identityEnd < 0) throw new Error("Identità squadra non trovata");
 const identityBlock = app.slice(identityStart, identityEnd);
-checks.push(
-  [identityBlock.includes("person.linkedUserId"), "+ORE riconosce il collegamento account-operatore"],
-  [identityBlock.includes("person.emailAccessoApp"), "+ORE riconosce l'email di accesso app"],
-  [identityBlock.includes("person.linkedUserEmail"), "+ORE riconosce l'email dell'utente collegato"]
-);
+assert.match(identityBlock, /person\.linkedUserId/, "+ORE deve riconoscere il collegamento account-operatore");
+assert.match(identityBlock, /person\.emailAccessoApp/, "+ORE deve riconoscere l'email di accesso app");
+assert.match(identityBlock, /person\.linkedUserEmail/, "+ORE deve riconoscere l'email dell'utente collegato");
 
-const subscriptionStart = app.indexOf("function subscribeSquadre");
-const subscriptionEnd = app.indexOf("function stopPersonaleSubscription", subscriptionStart);
-const subscriptionBlock = app.slice(subscriptionStart, subscriptionEnd);
-checks.push(
-  [subscriptionBlock.includes("selectedDateKey, todayDateKey, tomorrowDateKey"), "Il listener squadre carica anche i cantieri di domani"]
-);
-
-const renderStart = app.indexOf("function renderSquadre()");
-const renderEnd = app.indexOf("function renderSquadraImpiantiButtons", renderStart);
-const renderBlock = app.slice(renderStart, renderEnd);
-checks.push(
-  [renderBlock.includes("canManageData() && selectedDateKey === todayDateKey"), "L'admin vede domani restando sulla data odierna"],
-  [renderBlock.includes("appendAddHoursButtonIfAllowed(head, commessa, dateKey)"), "+ORE usa la data reale della squadra visualizzata"]
-);
-
-for (const [ok, message] of checks) {
-  if (!ok) throw new Error(message);
-}
-
-console.log("✅ Logica pulsante +ORE verificata");
+console.log("✅ Nuovo motore +ORE verificato con 10 scenari operatore/admin");

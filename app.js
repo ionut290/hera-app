@@ -20694,6 +20694,19 @@ function updateTodaySummary() {
   renderTodaySummary();
 }
 
+function renderSquadreEmptyStateMarkup(selectedDateKey) {
+  const isToday = selectedDateKey === getTodayDateKey();
+  const title = isToday ? "OGGI NON SI LAVORA" : "NESSUNA SQUADRA PROGRAMMATA";
+  const description = isToday
+    ? "Non risultano squadre assegnate per oggi. Buona giornata!"
+    : `Non risultano squadre assegnate per il ${formatDateKeyForDisplay(selectedDateKey)}.`;
+  return `<section class="squadre-empty-state" aria-live="polite">
+    <img class="squadre-empty-state-image" src="assets/trattore-oggi-non-si-lavora.webp" alt="Trattore sorridente in una giornata di riposo">
+    <h3>${escapeHTML(title)}</h3>
+    <p>${escapeHTML(description)}</p>
+  </section>`;
+}
+
 function renderSquadre() {
   if (!ui.squadreLista) return;
   ui.squadreLista.innerHTML = "";
@@ -20720,7 +20733,7 @@ function renderSquadre() {
     getSquadrePerCommessaForDate(dateKey).map((item) => ({ ...item, dateKey }))
   ));
   if (!squadrePerCommessa.length) {
-    ui.squadreLista.innerHTML = "<p class='muted'>Nessuna squadra trovata</p>";
+    ui.squadreLista.innerHTML = renderSquadreEmptyStateMarkup(selectedDateKey);
     updateTodaySummary();
     return;
   }

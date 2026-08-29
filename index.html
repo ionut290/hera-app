@@ -66,6 +66,7 @@
   <link rel="stylesheet" href="approval-access.css?v=20260828-email1">
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
+  <link rel="stylesheet" href="tree-search.css?v=20260829a">
 </head>
 <body class="auth-pending">
 
@@ -124,6 +125,7 @@
         <button id="open-panel-global" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌐</span>Global</button>
         <button id="open-hours-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🕒</span>Gestione ore</button>
         <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">⚠️</span>Segnalazioni</button>
+        <button id="open-tree-search-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌳</span>Alberi e verde</button>
       </section>
       <section class="menu-section" aria-labelledby="menu-personale-title">
         <h3 id="menu-personale-title" class="menu-section-title">Personale e accessi</h3>
@@ -158,6 +160,38 @@
   </aside>
 
   <div id="menu-overlay" class="menu-overlay hidden"></div>
+
+  <section id="tree-search-page" class="tree-search-page hidden" aria-hidden="true" aria-labelledby="tree-search-title">
+    <header class="tree-search-header">
+      <button id="tree-search-back-btn" class="btn" type="button">← Home</button>
+      <div><span>Catasto arboreo</span><h1 id="tree-search-title">Cerca un albero</h1></div>
+    </header>
+    <div class="tree-search-content">
+      <form id="tree-search-form" class="tree-search-card">
+        <label for="tree-municipality">Comune</label>
+        <select id="tree-municipality" required>
+          <option value="Bologna">Bologna</option>
+          <option value="Ferrara" disabled>Ferrara — collegamento in preparazione</option>
+        </select>
+        <label for="tree-number">Numero dell’albero</label>
+        <input id="tree-number" type="text" inputmode="text" autocomplete="off" placeholder="Es. 6518 oppure 349VT" required>
+        <div class="tree-search-actions">
+          <button class="btn btn-primary" type="submit">CERCA ALBERO</button>
+          <button id="tree-qr-open-btn" class="btn tree-qr-btn" type="button">▣ SCANSIONA QR CODE</button>
+        </div>
+        <p id="tree-search-status" class="tree-search-status" role="status" aria-live="polite"></p>
+      </form>
+      <section id="tree-result" class="tree-search-card hidden" aria-live="polite"></section>
+      <div id="tree-map" class="tree-map hidden" aria-label="Posizione dell’albero sulla mappa"></div>
+    </div>
+  </section>
+
+  <dialog id="tree-qr-dialog" class="tree-qr-dialog">
+    <form method="dialog" class="tree-qr-head"><h2>Scansiona QR Code</h2><button id="tree-qr-close-btn" class="btn" value="cancel" aria-label="Chiudi">✕</button></form>
+    <div class="tree-qr-camera"><video id="tree-qr-video" playsinline muted></video><div class="tree-qr-frame" aria-hidden="true"></div></div>
+    <p id="tree-qr-status" role="status" aria-live="polite">Inquadra il QR applicato all’albero.</p>
+    <label class="btn tree-qr-file-label">LEGGI QR DA IMMAGINE<input id="tree-qr-file" type="file" accept="image/*" capture="environment"></label>
+  </dialog>
 
   <section id="auth-gate" class="auth-gate hidden" aria-live="polite">
     <div class="auth-gate-card">
@@ -496,6 +530,7 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
+  <script src="tree-search.js?v=20260829a"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

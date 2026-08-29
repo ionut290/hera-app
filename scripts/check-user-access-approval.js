@@ -40,9 +40,9 @@ assert.match(backend, /APRI VARGA CANTIERI/, "L’email contiene il pulsante pri
 assert.match(backend, /Apri Google Play/, "L’email contiene l’installazione Android ordinata");
 assert.match(backend, /Aggiungi alla schermata Home/, "L’email contiene l’installazione iPhone ordinata");
 assert.match(backend, /buildApprovalHtml\(message, \{/, "Il modello HTML riceve i dati personalizzati dell’utente");
-assert.match(backend, /defineSecret\("RESEND_API_KEY"\)/, "L’email usa il segreto Resend moderno");
-assert.match(backend, /defineSecret\("ERROR_REPORT_FROM"\)/, "Il mittente email usa Secret Manager");
-assert.match(backend, /secrets:\s*\[RESEND_API_KEY, ERROR_REPORT_FROM\]/, "I segreti email sono associati al callable");
+assert.match(backend, /defineJsonSecret\("RUNTIME_CONFIG"\)/, "L’email usa la configurazione migrata in Secret Manager");
+assert.match(backend, /runtimeConfig\.resend/, "L’email legge Resend dal segreto JSON migrato");
+assert.match(backend, /secrets:\s*\[RUNTIME_CONFIG\]/, "Il segreto JSON è associato al callable");
 assert.match(backend, /Idempotency-Key/, "L’email non viene duplicata durante i tentativi");
 assert.match(backend, /emailError = "Invio email non riuscito/, "Un errore email non annulla lo sblocco");
 assert.doesNotMatch(backend, /\.delete\(|batch\.delete\(/, "Il flusso non cancella utenti o collegamenti");

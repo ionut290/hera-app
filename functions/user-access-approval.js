@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
-const { defineSecret } = require("firebase-functions/params");
+const { defineJsonSecret } = require("firebase-functions/params");
 
 const REGION = "europe-west1";
 const BUILT_IN_ADMIN_EMAIL = "ionut29019@gmail.com";
@@ -12,13 +12,14 @@ const APP_URL = "https://creative-syrniki-dddbae.netlify.app";
 const APP_LOGO_URL = `${APP_URL}/icons/varga-cantieri-192.png`;
 const ANDROID_URL = "https://play.google.com/store/apps/details?id=it.vargacantieri.hera";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
-const ERROR_REPORT_FROM = defineSecret("ERROR_REPORT_FROM");
+const RUNTIME_CONFIG = defineJsonSecret("RUNTIME_CONFIG");
 
 function optionalEmailConfiguration() {
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const resendConfig = runtimeConfig.resend || {};
   return {
-    apiKey: String(RESEND_API_KEY.value() || "").trim(),
-    from: String(ERROR_REPORT_FROM.value() || "").trim()
+    apiKey: String(resendConfig.api_key || "").trim(),
+    from: String(resendConfig.from || "").trim()
   };
 }
 
@@ -272,7 +273,7 @@ async function sendApprovalEmail({ apiKey, from, to, message, requestId, userNam
 
 exports.approveUserAccess = functions
   .region(REGION)
-  .runWith({ secrets: [RESEND_API_KEY, ERROR_REPORT_FROM] })
+  .runWith({ secrets: [RUNTIME_CONFIG] })
   .https.onCall(async (data, context) => {
     const db = admin.firestore();
     const administrator = await resolveAdministrator(context, db, data?.administratorName);

@@ -103,9 +103,7 @@ jobs:
             --data-file "$config_file" \
             --project hera-app-6cd2b
           rm -f "$config_file"
-          firebase functions:secrets:get RESEND_API_KEY --project hera-app-6cd2b > /dev/null
-          firebase functions:secrets:get ERROR_REPORT_FROM --project hera-app-6cd2b > /dev/null
-          echo "Required Firebase secrets verified."
+          echo "Runtime configuration migrated and verified."
 
       - name: Deploy Firestore rules and controlled-query indexes
         env:

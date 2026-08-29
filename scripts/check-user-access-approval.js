@@ -6,6 +6,8 @@ const fs = require("node:fs");
 
 const client = fs.readFileSync("approval-access.js", "utf8");
 const backend = fs.readFileSync("functions/user-access-approval.js", "utf8");
+const functionsIndex = fs.readFileSync("functions/index.js", "utf8");
+const whazzupDriveBackend = fs.readFileSync("functions/whazzup-pdf-drive.js", "utf8");
 const entrypoint = fs.readFileSync("functions/main.js", "utf8");
 const workflow = fs.readFileSync(".github/workflows/deploy-firebase-functions.yml", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
@@ -37,7 +39,9 @@ assert.match(backend, /APRI VARGA CANTIERI/, "L’email contiene il pulsante pri
 assert.match(backend, /Apri Google Play/, "L’email contiene l’installazione Android ordinata");
 assert.match(backend, /Aggiungi alla schermata Home/, "L’email contiene l’installazione iPhone ordinata");
 assert.match(backend, /buildApprovalHtml\(message, \{/, "Il modello HTML riceve i dati personalizzati dell’utente");
-assert.doesNotMatch(backend, /defineSecret|runWith\(\{ secrets:/, "Il deploy non richiede segreti interattivi assenti");
+assert.match(backend, /defineSecret\("RESEND_API_KEY"\)/, "L’email usa il segreto Resend moderno");
+assert.match(backend, /defineSecret\("ERROR_REPORT_FROM"\)/, "Il mittente email usa Secret Manager");
+assert.match(backend, /secrets:\s*\[RESEND_API_KEY, ERROR_REPORT_FROM\]/, "I segreti email sono associati al callable");
 assert.match(backend, /Idempotency-Key/, "L’email non viene duplicata durante i tentativi");
 assert.match(backend, /emailError = "Invio email non riuscito/, "Un errore email non annulla lo sblocco");
 assert.doesNotMatch(backend, /\.delete\(|batch\.delete\(/, "Il flusso non cancella utenti o collegamenti");
@@ -46,5 +50,18 @@ assert.match(workflow, /functions:approveUserAccess/, "Il workflow distribuisce 
 assert.match(workflow, /"approveUserAccess"/, "Il workflow verifica il trasporto pubblico del callable");
 assert.match(index, /approval-access\.js\?v=20260828-authfix/, "La pagina carica la correzione Auth più recente");
 assert.match(serviceWorker, /approval-access\.js\?v=20260828-authfix/, "La PWA precarica la correzione Auth più recente");
+
+for (const [label, source] of [
+  ["approvazione utente", backend],
+  ["funzioni principali", functionsIndex],
+  ["PDF Whazzup Drive", whazzupDriveBackend]
+]) {
+  assert.doesNotMatch(source, /functions\.config\s*\(/, `${label} non usa più functions.config()`);
+}
+assert.match(functionsIndex, /defineJsonSecret\("RUNTIME_CONFIG"\)/, "La configurazione precedente usa un segreto JSON moderno");
+assert.match(functionsIndex, /runtimeConfig\.google\?\.client_id/, "Drive legge il client ID dal segreto JSON");
+assert.match(functionsIndex, /runtimeConfig\.weather/, "Il meteo legge la configurazione dal segreto JSON");
+assert.match(functionsIndex, /runtimeConfig\.worklimate\?\.endpoint/, "Worklimate legge la configurazione dal segreto JSON");
+assert.match(whazzupDriveBackend, /secrets:\s*\[RUNTIME_CONFIG\]/, "Il PDF Whazzup associa il segreto JSON migrato");
 
 console.log("OK: sblocco utente, email automatica e messaggio WhatsApp verificati.");

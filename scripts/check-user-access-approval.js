@@ -58,11 +58,10 @@ for (const [label, source] of [
 ]) {
   assert.doesNotMatch(source, /functions\.config\s*\(/, `${label} non usa più functions.config()`);
 }
-assert.match(functionsIndex, /defineSecret\("GOOGLE_CLIENT_ID"\)/, "Drive usa GOOGLE_CLIENT_ID da Secret Manager");
-assert.match(functionsIndex, /defineSecret\("GOOGLE_CLIENT_SECRET"\)/, "Drive usa GOOGLE_CLIENT_SECRET da Secret Manager");
-assert.match(functionsIndex, /defineString\("WEATHER_WORKLIMATE_URL"/, "Il meteo usa un parametro moderno");
-assert.match(functionsIndex, /defineString\("WEATHER_CIVIL_PROTECTION_URL"/, "La Protezione Civile usa un parametro moderno");
-assert.match(functionsIndex, /defineString\("WORKLIMATE_ENDPOINT"/, "Worklimate usa un parametro moderno");
-assert.match(whazzupDriveBackend, /secrets:\s*\[GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\]/, "Il PDF Whazzup associa i segreti Drive");
+assert.match(functionsIndex, /defineJsonSecret\("RUNTIME_CONFIG"\)/, "La configurazione precedente usa un segreto JSON moderno");
+assert.match(functionsIndex, /runtimeConfig\.google\?\.client_id/, "Drive legge il client ID dal segreto JSON");
+assert.match(functionsIndex, /runtimeConfig\.weather/, "Il meteo legge la configurazione dal segreto JSON");
+assert.match(functionsIndex, /runtimeConfig\.worklimate\?\.endpoint/, "Worklimate legge la configurazione dal segreto JSON");
+assert.match(whazzupDriveBackend, /secrets:\s*\[RUNTIME_CONFIG\]/, "Il PDF Whazzup associa il segreto JSON migrato");
 
 console.log("OK: sblocco utente, email automatica e messaggio WhatsApp verificati.");

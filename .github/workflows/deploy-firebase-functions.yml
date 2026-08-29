@@ -78,6 +78,38 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
+      - name: Migrate legacy Functions config to Secret Manager
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          set -euo pipefail
+          umask 077
+          config_file="$RUNNER_TEMP/runtime-config.json"
+          firebase functions:config:get \
+            --project hera-app-6cd2b \
+            > "$config_file"
+          node - "$config_file" <<'NODE'
+          const fs = require("node:fs");
+          const file = process.argv[2];
+          const config = JSON.parse(fs.readFileSync(file, "utf8"));
+          if (!config || typeof config !== "object" || Array.isArray(config)) {
+            throw new Error("Legacy Functions config is not a JSON object.");
+          }
+          if (!config.google?.client_id || !config.google?.client_secret) {
+            throw new Error("Legacy Google Drive credentials are missing; deployment stopped safely.");
+          }
+          fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
+          console.log("Legacy Functions config validated without exposing values.");
+          NODE
+          firebase functions:secrets:set RUNTIME_CONFIG \
+            --data-file "$config_file" \
+            --project hera-app-6cd2b
+          rm -f "$config_file"
+          firebase functions:secrets:get RESEND_API_KEY --project hera-app-6cd2b > /dev/null
+          firebase functions:secrets:get ERROR_REPORT_FROM --project hera-app-6cd2b > /dev/null
+          echo "Required Firebase secrets verified."
+
       - name: Deploy Firestore rules and controlled-query indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json

@@ -1,7 +1,7 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { defineSecret, defineString } = require("firebase-functions/params");
+const { defineJsonSecret } = require("firebase-functions/params");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
@@ -14,11 +14,7 @@ const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const FCM_BATCH_SIZE = 500;
-const GOOGLE_CLIENT_ID = defineSecret("GOOGLE_CLIENT_ID");
-const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
-const WEATHER_WORKLIMATE_URL = defineString("WEATHER_WORKLIMATE_URL", { default: "" });
-const WEATHER_CIVIL_PROTECTION_URL = defineString("WEATHER_CIVIL_PROTECTION_URL", { default: "" });
-const WORKLIMATE_ENDPOINT = defineString("WORKLIMATE_ENDPOINT", { default: "" });
+const RUNTIME_CONFIG = defineJsonSecret("RUNTIME_CONFIG");
 const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
@@ -314,8 +310,9 @@ async function buildDriveClient(db) {
     throw new functions.https.HttpsError("failed-precondition", "Cloud amministratore non configurato");
   }
 
-  const clientId = String(GOOGLE_CLIENT_ID.value() || "").trim();
-  const clientSecret = String(GOOGLE_CLIENT_SECRET.value() || "").trim();
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const clientId = String(runtimeConfig.google?.client_id || "").trim();
+  const clientSecret = String(runtimeConfig.google?.client_secret || "").trim();
   if (!clientId || !clientSecret) {
     throw new functions.https.HttpsError("failed-precondition", "Credenziali Google Drive mancanti nel backend.");
   }
@@ -402,7 +399,7 @@ async function getOrCreateFolder(db, drive, name, parentId = "") {
 }
 
 exports.uploadCentralDriveFile = functions
-  .runWith({ secrets: [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET] })
+  .runWith({ secrets: [RUNTIME_CONFIG] })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Login richiesto.");
@@ -557,9 +554,11 @@ async function collectComuniByCommessa(db) {
 }
 
 async function fetchAlertsForComune(comune) {
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const weatherConfig = runtimeConfig.weather || {};
   const encoded = encodeURIComponent(comune);
-  const worklimateTemplate = String(WEATHER_WORKLIMATE_URL.value() || "").trim();
-  const civilTemplate = String(WEATHER_CIVIL_PROTECTION_URL.value() || "").trim();
+  const worklimateTemplate = String(weatherConfig.worklimate_url || "").trim();
+  const civilTemplate = String(weatherConfig.civil_protection_url || "").trim();
   const worklimateUrl = worklimateTemplate ? worklimateTemplate.replace("{comune}", encoded) : "";
   const civilUrl = civilTemplate ? civilTemplate.replace("{comune}", encoded) : "";
   const [worklimate, civil] = await Promise.allSettled([
@@ -589,7 +588,12 @@ async function commitWeatherAlertWrites(db, writes) {
   }
 }
 
-exports.updateWeatherAlerts = functions.pubsub.schedule("every 2 hours").timeZone("Europe/Rome").onRun(async () => {
+exports.updateWeatherAlerts = functions
+  .runWith({ secrets: [RUNTIME_CONFIG] })
+  .pubsub
+  .schedule("every 2 hours")
+  .timeZone("Europe/Rome")
+  .onRun(async () => {
   const db = admin.firestore();
   const comuniByCommessa = await collectComuniByCommessa(db);
   const comuni = Array.from(new Set(Array.from(comuniByCommessa.values()).flatMap((set) => Array.from(set))));
@@ -614,7 +618,7 @@ exports.updateWeatherAlerts = functions.pubsub.schedule("every 2 hours").timeZon
   expired.forEach((doc) => writes.push({ ref: doc.ref, data: { active: false, updatedAt: now } }));
   await commitWeatherAlertWrites(db, writes);
   return { comuni: comuni.length, alerts: allAlerts.length, expired: expired.size };
-});
+  });
 
 const WORKLIMATE_OPERATIONAL_ADVICE = [
   "Evitare le ore più calde.",
@@ -643,7 +647,8 @@ function buildWorklimateFallbackRisk(impianto) {
 }
 
 async function fetchWorklimateRiskForImpianto(impianto) {
-  const endpoint = String(WORKLIMATE_ENDPOINT.value() || "").trim();
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const endpoint = String(runtimeConfig.worklimate?.endpoint || "").trim();
   if (!endpoint) return buildWorklimateFallbackRisk(impianto);
   const url = new URL(endpoint);
   url.searchParams.set("lat", String(impianto.gpsY));
@@ -662,7 +667,12 @@ async function fetchWorklimateRiskForImpianto(impianto) {
   };
 }
 
-exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").timeZone("Europe/Rome").onRun(async () => {
+exports.updateWorklimateRisk = functions
+  .runWith({ secrets: [RUNTIME_CONFIG] })
+  .pubsub
+  .schedule("0 6,12,18 * * *")
+  .timeZone("Europe/Rome")
+  .onRun(async () => {
   const db = admin.firestore();
   const snapshot = await db.collectionGroup("impianti").get();
   let batch = db.batch();
@@ -698,7 +708,7 @@ exports.updateWorklimateRisk = functions.pubsub.schedule("0 6,12,18 * * *").time
   if (count % 450 !== 0) await batch.commit();
   await db.collection("appConfig").doc("worklimateUpdate").set({ lastRunAt: admin.firestore.FieldValue.serverTimestamp(), count }, { merge: true });
   return null;
-});
+  });
 
 
 const FUEL_CACHE_OBJECT = "public-cache/fuel-stations-italy.json";

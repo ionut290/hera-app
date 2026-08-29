@@ -2,14 +2,13 @@
 
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
-const { defineSecret } = require("firebase-functions/params");
+const { defineJsonSecret } = require("firebase-functions/params");
 const { google } = require("googleapis");
 const { Readable } = require("stream");
 
 const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
-const GOOGLE_CLIENT_ID = defineSecret("GOOGLE_CLIENT_ID");
-const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
+const RUNTIME_CONFIG = defineJsonSecret("RUNTIME_CONFIG");
 
 function safeName(value, fallback = "Generale") {
   return String(value || fallback)
@@ -30,8 +29,9 @@ async function getDrive() {
   if (!secret || (!secret.accessToken && !secret.refreshToken)) {
     throw new functions.https.HttpsError("failed-precondition", "Drive centrale non configurato.");
   }
-  const clientId = String(GOOGLE_CLIENT_ID.value() || "").trim();
-  const clientSecret = String(GOOGLE_CLIENT_SECRET.value() || "").trim();
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const clientId = String(runtimeConfig.google?.client_id || "").trim();
+  const clientSecret = String(runtimeConfig.google?.client_secret || "").trim();
   if (!clientId || !clientSecret) {
     throw new functions.https.HttpsError("failed-precondition", "Credenziali Google Drive mancanti nel backend.");
   }
@@ -71,7 +71,7 @@ exports.uploadWhazzupPdfToDrive = functions
   .runWith({
     timeoutSeconds: 120,
     memory: "512MB",
-    secrets: [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]
+    secrets: [RUNTIME_CONFIG]
   })
   .https.onCall(async (data, context) => {
     if (!context.auth) {

@@ -3,6 +3,7 @@
 
   if (window.__heraUpdateCenterInstalled) return;
   window.__heraUpdateCenterInstalled = true;
+  const REPORT_CACHE_KEY = 'heraUpdateCenterLastCompleteReportV1';
 
   const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -127,6 +128,36 @@
     }
   }
 
+  function readCachedReport() {
+    try {
+      const value = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || 'null');
+      return Array.isArray(value?.items) ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function preserveSuccessfulChecks(report) {
+    const cached = readCachedReport();
+    const items = Array.isArray(report?.items) ? report.items : [];
+    if (!cached) return report;
+    const previous = new Map(cached.items.map((item) => [`${item.category || ''}|${item.name || ''}`, item]));
+    let preserved = 0;
+    const merged = items.map((item) => {
+      if (item.status !== 'warning') return item;
+      const stable = previous.get(`${item.category || ''}|${item.name || ''}`);
+      if (!stable || stable.status === 'warning') return item;
+      preserved += 1;
+      return stable;
+    });
+    return { ...report, items: merged, preservedChecks: preserved };
+  }
+
+  function cacheReport(report) {
+    if (!Array.isArray(report?.items) || report.items.some((item) => item.status === 'warning')) return;
+    try { localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(report)); } catch (_) {}
+  }
+
   async function checkUpdates() {
     if (!isAdmin()) return;
     const summary = document.getElementById('update-center-summary');
@@ -136,7 +167,12 @@
     try {
       const response = await fetch('/.netlify/functions/dependency-updates', { cache: 'no-store', headers: { Accept: 'application/json' } });
       if (!response.ok) throw new Error(`Servizio non disponibile (${response.status})`);
-      renderReport(await response.json());
+      const report = preserveSuccessfulChecks(await response.json());
+      cacheReport(report);
+      renderReport(report);
+      if (report.preservedChecks && summary) {
+        summary.innerHTML += `<br><small>${escapeHtml(report.preservedChecks)} controlli temporaneamente non disponibili: mantenuto l’ultimo risultato valido.</small>`;
+      }
     } catch (error) {
       if (summary) summary.innerHTML = `<strong>Controllo online non riuscito</strong><br>${escapeHtml(error?.message || 'Riprova più tardi')}`;
     } finally {

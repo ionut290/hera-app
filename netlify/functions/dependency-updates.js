@@ -56,10 +56,12 @@ function effectiveVersion(group, name) {
 }
 
 async function fetchJson(url, options = {}) {
+  const timeoutMs = Number(options.timeoutMs) || 15000;
+  const { timeoutMs: _ignoredTimeout, ...fetchOptions } = options;
   const response = await fetch(url, {
-    ...options,
-    headers: { Accept: "application/json", ...(options.headers || {}) },
-    signal: AbortSignal.timeout(8000)
+    ...fetchOptions,
+    headers: { Accept: "application/json", ...(fetchOptions.headers || {}) },
+    signal: AbortSignal.timeout(timeoutMs)
   });
   if (!response.ok) throw new Error(`Servizio non disponibile (${response.status})`);
   return response.json();
@@ -69,7 +71,7 @@ async function latestVersion(packageName) {
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`);
+      const payload = await fetchJson(`https://registry.npmjs.org/-/package/${encodeURIComponent(packageName)}/dist-tags`);
       return String(payload.version || "");
     } catch (error) {
       lastError = error;

@@ -4,9 +4,16 @@ const ROOT_PACKAGE = require("../../package.json");
 const ROOT_LOCK = require("../../package-lock.json");
 const FUNCTIONS_PACKAGE = require("../../functions/package.json");
 const FUNCTIONS_LOCK = require("../../functions/package-lock.json");
+const FIREBASE_WEB_RUNTIME_VERSION = "12.18.0";
+const WEB_RUNTIME_MANIFEST = Object.freeze({ dependencies: { firebase: FIREBASE_WEB_RUNTIME_VERSION } });
 
 const PACKAGE_GROUPS = Object.freeze([
-  { title: "Web/PWA", manifest: ROOT_PACKAGE, names: ["firebase"] },
+  {
+    title: "Web/PWA",
+    manifest: WEB_RUNTIME_MANIFEST,
+    names: ["firebase"],
+    displayNames: { firebase: "Firebase Web SDK (runtime)" }
+  },
   {
     title: "Android/Capacitor",
     manifest: ROOT_PACKAGE,
@@ -45,8 +52,16 @@ async function fetchJson(url, options = {}) {
 }
 
 async function latestVersion(packageName) {
-  const payload = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`);
-  return String(payload.version || "");
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const payload = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`);
+      return String(payload.version || "");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error(`Versione non disponibile per ${packageName}`);
 }
 
 function installedVersions(lock) {
@@ -110,14 +125,14 @@ async function dependencyItems() {
     const current = cleanVersion(configuredVersion(group.manifest, name));
     const available = latest[name];
     if (failed.has(name)) return {
-      category: group.title, name, current, latest: "Controllo non disponibile",
+      category: group.title, name: group.displayNames?.[name] || name, current, latest: "Controllo non disponibile",
       status: "warning", deadline: "Ricontrollare",
       message: "Il registro npm non ha risposto; la dipendenza non viene considerata aggiornata automaticamente."
     };
     const changed = available && available !== current;
     const breaking = changed && major(available) > major(current);
     return {
-      category: group.title, name, current, latest: available,
+      category: group.title, name: group.displayNames?.[name] || name, current, latest: available,
       status: changed ? "planned" : "ok", deadline: "Nessuna",
       message: breaking
         ? "Nuova versione principale: pianificare migrazione, build Android e test completi prima della pubblicazione."
@@ -150,6 +165,12 @@ function platformItems() {
       category: "Android/Capacitor", name: "Configurazione Android nativa",
       current: "Capacitor 7 · Java 17", latest: "Coerenza con Capacitor", status: "ok", deadline: "Nessuna",
       message: "Quando Capacitor passa a una nuova versione principale devono essere verificati insieme Gradle, SDK Android, Java e tutti i plugin nativi."
+    },
+    {
+      category: "Android/Capacitor", name: "Firebase npm per autenticazione Capacitor",
+      current: cleanVersion(configuredVersion(ROOT_PACKAGE, "firebase")), latest: "11.x compatibile",
+      status: "ok", deadline: "Nessuna",
+      message: "Firebase npm 11 è mantenuto per la compatibilità dichiarata da @capacitor-firebase/authentication 7; il runtime Web è controllato separatamente."
     }
   ];
 }

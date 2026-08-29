@@ -8,6 +8,8 @@ android {
 
 dependencies {
     implementation "com.google.android.gms:play-services-location:21.3.0"
+    // Controllo ufficiale Google Play per avvisare quando e disponibile un aggiornamento Android.
+    implementation "com.google.android.play:app-update:2.1.0"
     // API nativa usata dal plugin Capacitor HeraBiometric (compatibile con Capacitor 7).
     implementation "androidx.biometric:biometric:1.1.0"
 

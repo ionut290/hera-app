@@ -7,6 +7,12 @@
   const DATA_SAFETY_SRC = "data-safety-layer.js?v=20260819a";
   const CRITICAL_WRITE_SAFETY_SRC = "critical-write-safety-bridge.js?v=20260824-oneclick1";
   const SYNC_BADGE_PENDING_FIX_SRC = "sync-badge-pending-fix.js?v=20260821a";
+  const UPDATE_NOTICE_DISMISSED_KEY = "heraUpdateNoticeDismissed";
+  const NATIVE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+  const watchedPwaRegistrations = new WeakSet();
+  const hadPwaControllerAtStartup = Boolean(navigator.serviceWorker?.controller);
+  let lastNativeCheckAt = 0;
+  let pendingPwaRegistration = null;
 
   function ensureDataDurabilityRuntime() {
     if (window.HeraDataDurability) return;
@@ -96,6 +102,146 @@
     return APP_CACHE_PREFIXES.some((prefix) => String(name || "").startsWith(prefix));
   }
 
+  function nativeUpdatePlugin() {
+    if (!isNativeAndroid()) return null;
+    return window.Capacitor?.Plugins?.HeraAppUpdate
+      || window.Capacitor?.registerPlugin?.("HeraAppUpdate")
+      || null;
+  }
+
+  function dismissedNoticeId() {
+    try { return sessionStorage.getItem(UPDATE_NOTICE_DISMISSED_KEY) || ""; }
+    catch (_) { return ""; }
+  }
+
+  function hideUpdateNotice(noticeId = "") {
+    const notice = document.getElementById("hera-update-notice");
+    notice?.classList.add("hidden");
+    if (!noticeId) return;
+    try { sessionStorage.setItem(UPDATE_NOTICE_DISMISSED_KEY, noticeId); }
+    catch (_) {}
+  }
+
+  function ensureUpdateNotice() {
+    let notice = document.getElementById("hera-update-notice");
+    if (notice) return notice;
+    notice = document.createElement("aside");
+    notice.id = "hera-update-notice";
+    notice.className = "hera-update-notice hidden";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    notice.innerHTML = `
+      <div class="hera-update-notice-copy">
+        <strong id="hera-update-notice-title">Nuova versione disponibile</strong>
+        <span id="hera-update-notice-detail">Aggiorna per usare le ultime novita.</span>
+      </div>
+      <div class="hera-update-notice-actions">
+        <button id="hera-update-notice-action" type="button">AGGIORNA ORA</button>
+        <button id="hera-update-notice-dismiss" type="button" aria-label="Ricordamelo piu tardi">PIU TARDI</button>
+      </div>`;
+    document.body.appendChild(notice);
+    document.getElementById("hera-update-notice-dismiss")?.addEventListener("click", () => {
+      hideUpdateNotice(notice.dataset.noticeId || "");
+    });
+    document.getElementById("hera-update-notice-action")?.addEventListener("click", () => {
+      if (notice.dataset.updateKind === "android") void startNativeUpdate();
+      else void applyPendingPwaUpdate();
+    });
+    return notice;
+  }
+
+  function showUpdateNotice(kind, noticeId, detail) {
+    if (!noticeId || dismissedNoticeId() === noticeId) return;
+    const notice = ensureUpdateNotice();
+    notice.dataset.updateKind = kind;
+    notice.dataset.noticeId = noticeId;
+    const title = document.getElementById("hera-update-notice-title");
+    const description = document.getElementById("hera-update-notice-detail");
+    if (title) title.textContent = kind === "android"
+      ? "Nuova versione Android disponibile"
+      : "Nuova versione dell'app disponibile";
+    if (description) description.textContent = detail;
+    notice.classList.remove("hidden");
+  }
+
+  function openPlayStore() {
+    const storeWindow = window.open(PLAY_STORE_URL, "_system", "noopener,noreferrer");
+    if (!storeWindow) window.location.href = PLAY_STORE_URL;
+  }
+
+  async function startNativeUpdate() {
+    const action = document.getElementById("hera-update-notice-action");
+    action?.setAttribute("disabled", "");
+    try {
+      const plugin = nativeUpdatePlugin();
+      const result = plugin?.startUpdate ? await plugin.startUpdate() : null;
+      if (!result?.started) openPlayStore();
+    } catch (error) {
+      console.warn("Aggiornamento Android integrato non disponibile; apro Google Play.", error);
+      openPlayStore();
+    } finally {
+      action?.removeAttribute("disabled");
+    }
+  }
+
+  async function checkNativeUpdate() {
+    if (!isNativeAndroid() || !navigator.onLine) return;
+    const now = Date.now();
+    if (now - lastNativeCheckAt < NATIVE_CHECK_INTERVAL_MS) return;
+    lastNativeCheckAt = now;
+    try {
+      const details = await nativeUpdatePlugin()?.checkForUpdate?.();
+      if (!details?.available) return;
+      const version = Number(details.availableVersionCode || 0);
+      showUpdateNotice(
+        "android",
+        `android:${version || "available"}`,
+        "Tocca Aggiorna ora per installarla in modo sicuro da Google Play."
+      );
+    } catch (error) {
+      console.warn("Controllo aggiornamento Android non disponibile.", error);
+    }
+  }
+
+  async function applyPendingPwaUpdate() {
+    const action = document.getElementById("hera-update-notice-action");
+    action?.setAttribute("disabled", "");
+    try {
+      await protectDataBeforeReload("pwa-update-notice");
+      const registration = pendingPwaRegistration || await navigator.serviceWorker?.getRegistration?.();
+      registration?.waiting?.postMessage({ type: "SKIP_WAITING" });
+      await clearWebAppCaches();
+      reloadWithoutCache();
+    } catch (error) {
+      console.warn("Applicazione aggiornamento PWA non riuscita.", error);
+      action?.removeAttribute("disabled");
+    }
+  }
+
+  function notifyPwaUpdate(registration, versionHint = "") {
+    pendingPwaRegistration = registration || pendingPwaRegistration;
+    const workerUrl = registration?.waiting?.scriptURL || versionHint || "ready";
+    showUpdateNotice(
+      "pwa",
+      `pwa:${workerUrl}`,
+      "Tocca Aggiorna ora: accesso e dati salvati resteranno invariati."
+    );
+  }
+
+  function watchPwaRegistration(registration) {
+    if (!registration || watchedPwaRegistrations.has(registration)) return;
+    watchedPwaRegistrations.add(registration);
+    if (registration.waiting) notifyPwaUpdate(registration);
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      worker?.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          notifyPwaUpdate(registration, worker.scriptURL);
+        }
+      });
+    });
+  }
+
   async function protectDataBeforeReload(reason) {
     try {
       if (window.HeraDataDurability?.prepareForUpdate) {
@@ -172,15 +318,39 @@
   }
 
   function installAutomaticPwaUpdate() {
-    if (isNativeAndroid() || !("serviceWorker" in navigator)) return;
+    if (isNativeAndroid()) {
+      const checkNative = () => void checkNativeUpdate();
+      window.addEventListener("online", checkNative);
+      window.addEventListener("pageshow", checkNative);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkNative();
+      });
+      window.setTimeout(checkNative, 1800);
+      return;
+    }
+    if (!("serviceWorker" in navigator)) return;
 
     // Gli aggiornamenti automatici vengono solo scaricati. Non ricarichiamo più
     // la pagina da soli: evitiamo di interrompere moduli o dati in compilazione.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       window.dispatchEvent(new CustomEvent("hera:update-controller-changed"));
     });
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (hadPwaControllerAtStartup && event.data?.type === "HERA_SW_UPDATE_READY") {
+        notifyPwaUpdate(null, String(event.data.version || "ready"));
+      }
+    });
+    navigator.serviceWorker.ready.then((registration) => {
+      watchPwaRegistration(registration);
+      if (registration.waiting) notifyPwaUpdate(registration);
+    }).catch(() => null);
 
-    const check = () => void requestPwaUpdate();
+    const check = async () => {
+      const registration = await navigator.serviceWorker.getRegistration().catch(() => null);
+      watchPwaRegistration(registration);
+      await requestPwaUpdate();
+      if (registration?.waiting) notifyPwaUpdate(registration);
+    };
     window.addEventListener("online", check);
     window.addEventListener("pageshow", check);
     document.addEventListener("visibilitychange", () => {
@@ -251,11 +421,48 @@
         outline: 3px solid rgba(37, 99, 235, 0.24);
         outline-offset: 2px;
       }
+      .hera-update-notice {
+        position: fixed;
+        left: max(12px, env(safe-area-inset-left));
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 30000;
+        width: min(720px, calc(100% - 24px));
+        margin: 0 auto;
+        padding: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border: 1px solid #86efac;
+        border-radius: 16px;
+        background: #f0fdf4;
+        color: #14532d;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.24);
+      }
+      .hera-update-notice.hidden { display: none; }
+      .hera-update-notice-copy { display: grid; gap: 3px; }
+      .hera-update-notice-copy span { font-size: 0.86rem; }
+      .hera-update-notice-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+      .hera-update-notice-actions button {
+        min-height: 38px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 10px;
+        background: #166534;
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      #hera-update-notice-dismiss { background: #dcfce7; color: #14532d; }
       @media (max-width: 420px) {
         #auth-update-pwa-btn {
           padding: 0 7px;
           font-size: 0.72rem;
         }
+        .hera-update-notice { align-items: stretch; flex-direction: column; }
+        .hera-update-notice-actions { width: 100%; }
+        .hera-update-notice-actions button { flex: 1; }
       }
     `;
     document.head.appendChild(style);
@@ -266,8 +473,9 @@
     button.dataset.pwaUpdateBound = "1";
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      event.stopPropagation();
-      void updateApplication(button);
+      event.stopImmediatePropagation();
+      if (isNativeAndroid()) void startNativeUpdate();
+      else void updateApplication(button);
     });
   }
 

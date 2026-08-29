@@ -11504,6 +11504,8 @@ function renderGlobalMap() {
   ui.globalMapFeedback.textContent = `Mappa impianti Global: ${withGps.length} con coordinate GPS.`;
   const bounds = [];
   withGps.forEach((impianto) => {
+    const coordinates = [Number(impianto.gpsY), Number(impianto.gpsX)];
+    if (!isValidLatLon(coordinates[0], coordinates[1])) return;
     const impiantoKey = buildImpiantoKey(impianto);
     const isSelected = impiantoKey === selectedGlobalImpiantoKey;
     const ditta = getGlobalDittaLabel(impianto);
@@ -11533,7 +11535,7 @@ function renderGlobalMap() {
         btn.addEventListener("click", () => openGlobalImpiantoDetails(impianto, { updateSearch: true }));
       });
     });
-    bounds.push([impianto.gpsY, impianto.gpsX]);
+    bounds.push(coordinates);
   });
   if (!globalMapViewState.hasUserMoved) {
     globalMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });

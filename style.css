@@ -1101,23 +1101,37 @@ textarea:focus-visible {
 
 .squadre-filter-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
   margin-top: 8px;
 }
 
-.squadre-filter-controls input[type="date"] {
+.squadre-date-half {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 6px;
   min-width: 0;
-  min-height: 34px;
+}
+
+.squadre-date-half input[type="date"],
+#snow-squadre-filter-controls input[type="date"] {
+  min-width: 0;
+  min-height: 52px;
   padding: 5px 10px;
-  border-radius: 10px;
+  border-radius: 13px;
   font-size: 0.9rem;
   line-height: 1.1;
 }
 
-.squadre-auto-btn {
+#snow-squadre-filter-controls input[type="date"],
+#snow-squadre-filter-controls .squadre-auto-btn {
   min-height: 34px;
+}
+
+.squadre-auto-btn {
+  min-height: 52px;
   padding: 6px 10px;
   border-radius: 10px;
   font-size: 0.8rem;
@@ -1126,7 +1140,6 @@ textarea:focus-visible {
 }
 
 .squadre-next-workday-btn {
-  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1137,6 +1150,18 @@ textarea:focus-visible {
   color: #14532d;
   box-shadow: 0 7px 16px rgba(21, 128, 61, 0.14);
   overflow: hidden;
+}
+
+@media (max-width: 560px) {
+  .squadre-filter-controls { gap: 5px; }
+  .squadre-date-half { gap: 4px; }
+  .squadre-next-workday-btn { gap: 5px; padding: 6px; }
+  .squadre-next-workday-btn b { font-size: 0.72rem; }
+  .squadre-next-workday-btn small { font-size: 0.6rem; }
+  .squadre-next-workday-tractor { font-size: 1.25rem; }
+  .squadre-date-half input[type="date"],
+  #snow-squadre-filter-controls input[type="date"] { padding: 4px 6px; font-size: 0.75rem; }
+  .squadre-auto-btn { padding: 5px 7px; font-size: 0.7rem; }
 }
 
 .squadre-next-workday-btn:hover {

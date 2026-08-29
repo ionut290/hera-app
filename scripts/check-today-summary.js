@@ -34,10 +34,10 @@ assert.match(subscribePersonaleSource, /\.catch\(\(error\) => \{[\s\S]*?personal
 assert.match(subscribeMezziSource, /const applySnapshot[\s\S]*?mezziLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
 assert.match(subscribeMezziSource, /query\.onSnapshot\(applySnapshot, \(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 assert.match(subscribeMezziSource, /\.catch\(\(error\) => \{[\s\S]*?mezziLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
-assert.match(subscribeSquadreSource, /const applySquadreSnapshot[\s\S]*?squadreHistoryByDate\.set[\s\S]*?squadreLoadState = \{ status: "loaded"[^\n]*\n\s*renderTodaySummary\(\);/);
+assert.match(subscribeSquadreSource, /const applySquadreSnapshot[\s\S]*?squadreHistoryByDate\.set[\s\S]*?squadreLoadState = \{ status: "loaded"[^\n]*\n\s*applyFridayAutomaticSquadreFallback\(\);\s*renderTodaySummary\(\);/);
 assert.match(subscribeSquadreSource, /squadreQuery\.onSnapshot[\s\S]*?\(error\) => \{[\s\S]*?squadreLoadState = \{ status: "error"[\s\S]*?renderTodaySummary\(\);/);
 
-assert.match(app, /const subscribedDateKeys = \[\.\.\.new Set\(\[selectedDateKey, todayDateKey, tomorrowDateKey\]/);
+assert.match(app, /const subscribedDateKeys = \[\.\.\.new Set\(\[\s*selectedDateKey,\s*todayDateKey,\s*tomorrowDateKey,/);
 assert.match(app, /where\("dateKey", "in", subscribedDateKeys\)/);
 assert.doesNotMatch(app, /squadra-avviso-input|createSquadraAlertsForChangedRows|source: "squadra-avviso"|row(?:\?\.|\.)avviso\b|alertsCreated/);
 assert.doesNotMatch(interactions, /assignedAlerts|row(?:\?\.|\.)avviso\b/);

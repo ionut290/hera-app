@@ -7,6 +7,8 @@ const app = fs.readFileSync("app.js", "utf8");
 const androidInstall = fs.readFileSync("android-play-store-install.js", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
 const nativeMainActivity = fs.readFileSync("android/app/src/main/java/it/vargacantieri/hera/MainActivity.java", "utf8");
+const nativeUpdatePlugin = fs.readFileSync("android/app/src/main/java/it/vargacantieri/hera/update/HeraAppUpdatePlugin.java", "utf8");
+const nativeGradle = fs.readFileSync("android/app/capacitor.build.gradle", "utf8");
 const capacitor = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
 
 assert.match(html, /id="update-app-btn"[^>]*>[\s\S]*?Aggiorna app[\s\S]*?<\/button>/);
@@ -52,9 +54,23 @@ const cacheVersionMatch = serviceWorker.match(/CACHE_NAME\s*=\s*"varga-cantieri-
 assert.ok(cacheVersionMatch, "Versione cache PWA non trovata");
 assert.ok(Number(cacheVersionMatch[1]) >= 115, "La cache PWA deve essere almeno v115");
 assert.match(nativeMainActivity, /clearWebViewCacheAfterAppUpdate\(\)/);
+assert.match(nativeMainActivity, /registerPlugin\(HeraAppUpdatePlugin\.class\)/);
 assert.match(nativeMainActivity, /getLongVersionCode\(\)/);
 assert.match(nativeMainActivity, /webView\.clearCache\(true\)/);
 assert.match(nativeMainActivity, /preferences\.getLong\(CACHE_VERSION_CODE_KEY, -1L\)/);
 assert.doesNotMatch(nativeMainActivity, /deleteAllData|removeAllCookies|clearHistory|clearFormData/);
+assert.match(nativeGradle, /com\.google\.android\.play:app-update:2\.1\.0/);
+assert.match(nativeUpdatePlugin, /@CapacitorPlugin\(name = "HeraAppUpdate"\)/);
+assert.match(nativeUpdatePlugin, /UpdateAvailability\.UPDATE_AVAILABLE/);
+assert.match(nativeUpdatePlugin, /AppUpdateType\.IMMEDIATE/);
+assert.match(nativeUpdatePlugin, /startUpdateFlowForResult/);
+assert.match(html, /sw\.js\?v=20260829-update-notice1/);
+const updateFeature = fs.readFileSync("update-app-feature.js", "utf8");
+assert.match(updateFeature, /id = "hera-update-notice"/);
+assert.match(updateFeature, /Nuova versione Android disponibile/);
+assert.match(updateFeature, /HERA_SW_UPDATE_READY/);
+assert.match(updateFeature, /registration\.waiting/);
+assert.match(updateFeature, /HeraAppUpdate/);
+assert.doesNotMatch(updateFeature, /firebase\.firestore|\.collection\(/);
 
 console.log("App update button checks passed.");

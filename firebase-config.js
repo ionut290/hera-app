@@ -73,7 +73,7 @@ if (document.readyState === "loading") {
   document.write(`<script src="${HERA_ADMIN_USER_ACCESS_TOOLS_SRC}"><\/script>`);
   document.write(`<script src="${HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC}"><\/script>`);
   document.write('<script src="notification-session-enhancements.js?v=20260727b"><\/script>');
-  document.write('<script src="update-app-feature.js?v=20260824-oneclick1"><\/script>');
+  document.write('<script src="update-app-feature.js?v=20260829-update-notice1"><\/script>');
   document.write('<script src="google-sheet-two-way-sync.js?v=20260729b"><\/script>');
   document.write('<script src="personnel-training-manager.js?v=20260803a"><\/script>');
   document.write(`<script src="${HERA_OCCASIONAL_WORKFLOW_V2_SRC}" data-occasional-workflow-v2="1"><\/script>`);
@@ -121,7 +121,7 @@ if (document.readyState === "loading") {
   loadOnce(HERA_ADMIN_USER_ACCESS_TOOLS_SRC, "hera-admin-user-access-tools", () => window.HeraAdminUserAccessTools?.version === "1.0.0");
   loadOnce(HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC, "hera-admin-user-access-share-fix", () => window.HeraAdminUserAccessShareFix?.installed);
   loadOnce("notification-session-enhancements.js?v=20260727b", "hera-notification-session", () => false);
-  loadOnce("update-app-feature.js?v=20260824-oneclick1", "hera-app-update", () => false);
+  loadOnce("update-app-feature.js?v=20260829-update-notice1", "hera-app-update", () => false);
   loadOnce("google-sheet-two-way-sync.js?v=20260729b", "hera-google-sheet-sync", () => false);
   loadOnce("personnel-training-manager.js?v=20260803a", "personnel-training-manager", () => false);
   loadOnce(HERA_OCCASIONAL_WORKFLOW_V2_SRC, "occasional-workflow-v2", () => Boolean(window.HeraOccasionalWorkflowV2?.installed));

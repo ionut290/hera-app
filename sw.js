@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v171";
-const CACHE_RESET_VERSION = "20260829-firestore-quota-dedup1";
+const CACHE_NAME = "varga-cantieri-shell-v172";
+const CACHE_RESET_VERSION = "20260829-update-notice1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -23,7 +23,7 @@ const APP_SHELL = [
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
   "./critical-write-safety-bridge.js?v=20260824-oneclick1",
-  "./update-app-feature.js?v=20260824-oneclick1",
+  "./update-app-feature.js?v=20260829-update-notice1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
   "./loading-humor.js?v=20260829-firestore-quota-dedup1",

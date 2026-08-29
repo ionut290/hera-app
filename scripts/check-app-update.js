@@ -64,7 +64,7 @@ assert.match(nativeUpdatePlugin, /@CapacitorPlugin\(name = "HeraAppUpdate"\)/);
 assert.match(nativeUpdatePlugin, /UpdateAvailability\.UPDATE_AVAILABLE/);
 assert.match(nativeUpdatePlugin, /AppUpdateType\.IMMEDIATE/);
 assert.match(nativeUpdatePlugin, /startUpdateFlowForResult/);
-assert.match(html, /sw\.js\?v=20260829-credential-vault1/);
+assert.match(html, /sw\.js\?v=20260829-tree-location1/);
 const updateFeature = fs.readFileSync("update-app-feature.js", "utf8");
 assert.match(updateFeature, /id = "hera-update-notice"/);
 assert.match(updateFeature, /Nuova versione Android disponibile/);

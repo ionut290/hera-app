@@ -1,4 +1,4 @@
-const CACHE_NAME = "varga-cantieri-shell-v173";
+const CACHE_NAME = "varga-cantieri-shell-v174";
 const CACHE_RESET_VERSION = "20260829-credential-vault1";
 const APP_SHELL = [
   "./",
@@ -19,6 +19,8 @@ const APP_SHELL = [
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260829-noise-filter1",
+  "./green-assistant.css?v=20260829a",
+  "./green-assistant.js?v=20260829a",
   "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
@@ -90,6 +92,8 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/green-assistant.js",
+  "/green-assistant.css",
   "/android-play-store-install.js",
   "/administrative-calendar.js",
   "/fatto-button-immediate.js",

@@ -24,6 +24,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/green-assistant"
+  to = "/.netlify/functions/green-assistant"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

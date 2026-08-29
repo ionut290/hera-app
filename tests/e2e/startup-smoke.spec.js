@@ -39,6 +39,9 @@ test.describe('Varga Cantieri startup smoke', () => {
     await expect(page.locator('#open-panel-commesse')).toHaveCount(1);
     await expect(page.locator('#open-panel-squadre')).toHaveCount(1);
     await expect(page.locator('#open-hours-btn')).toHaveCount(1);
+    await expect(page.locator('#open-gardening-assistant-btn')).toHaveCount(1);
+    await expect(page.locator('#open-equipment-assistant-btn')).toHaveCount(1);
+    await expect(page.locator('#green-assistant-overlay')).toHaveCount(1);
     await expect(page.locator('#auth-gate-message')).not.toHaveText('');
 
     expect(critical404s).toEqual([]);
@@ -53,6 +56,7 @@ test.describe('Varga Cantieri startup smoke', () => {
     await expect(page.locator('#app-startup-loading')).toHaveCount(1);
     expect(await countExactScript(page, '/app-pure-utils.js')).toBe(1);
     expect(await countExactScript(page, '/app.js')).toBe(1);
+    expect(await countExactScript(page, '/green-assistant.js')).toBe(1);
     expect(critical404s).toEqual([]);
   });
 });

@@ -462,7 +462,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260828-add-hours-rewrite1"></script>
+  <script src="app.js?v=20260829-global-map1"></script>
   <script src="android-play-store-install.js?v=20260828a"></script>
   <script src="maintenance-price-code-display-guard.js?v=20260824-a1ordinary3"></script>
   <script src="commessa-stats-cache-optimizer.js?v=20260815a"></script>
@@ -496,7 +496,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260829-firestore-quota1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260829-global-map1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

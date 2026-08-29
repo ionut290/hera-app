@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v167";
-const CACHE_RESET_VERSION = "20260829-firestore-quota1";
+const CACHE_NAME = "varga-cantieri-shell-v168";
+const CACHE_RESET_VERSION = "20260829-global-map1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260828-add-hours-rewrite1",
+  "./app.js?v=20260829-global-map1",
   "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",

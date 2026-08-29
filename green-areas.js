@@ -148,7 +148,7 @@
     const cached = readCache(query);
     if (cached) return cached;
     const town = escapeOverpassString(municipality);
-    const overpassQuery = `[out:json][timeout:25];area["ISO3166-2"="IT-45"]["boundary"="administrative"]->.region;area(area.region)["boundary"="administrative"]["admin_level"="8"]["name"~"^${town}$","i"]->.municipality;(nwr["leisure"~"^(park|garden|recreation_ground|playground)$"](area.municipality);nwr["landuse"~"^(grass|recreation_ground|forest)$"](area.municipality);nwr["natural"="wood"](area.municipality););out center tags bb;`;
+    const overpassQuery = `[out:json][timeout:25];area["ISO3166-2"="IT-45"]["boundary"="administrative"]->.region;area(area.region)["boundary"="administrative"]["admin_level"="8"]["name"~"^${town}$","i"]->.municipality;(nwr["leisure"~"^(park|garden|recreation_ground|playground|dog_park)$"](area.municipality);nwr["landuse"~"^(grass|village_green|recreation_ground|forest|allotments)$"](area.municipality);nwr["natural"="wood"](area.municipality);nwr["boundary"="protected_area"](area.municipality););out center tags bb;`;
     const response = await fetch(OVERPASS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" },
@@ -210,6 +210,31 @@
     resizeMap();
   }
 
+  function showAllAreas(items, municipality) {
+    initializeMap();
+    searchLayer.clearLayers();
+    const combinedBounds = L.latLngBounds([]);
+    items.forEach((item) => {
+      const lat = Number(item.lat);
+      const lon = Number(item.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const title = item.name || item.display_name.split(",")[0];
+      const bounds = boundsFromResult(item);
+      if (bounds?.isValid()) {
+        L.rectangle(bounds, { color: "#08783f", weight: 1.5, fillColor: "#31b96b", fillOpacity: 0.13 }).addTo(searchLayer)
+          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" rel="noopener">NAVIGA</a>`);
+        combinedBounds.extend(bounds);
+      } else {
+        L.circleMarker([lat, lon], { radius: 6, color: "#08783f", weight: 2, fillColor: "#31b96b", fillOpacity: 0.72 }).addTo(searchLayer)
+          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" rel="noopener">NAVIGA</a>`);
+        combinedBounds.extend([lat, lon]);
+      }
+    });
+    if (combinedBounds.isValid()) map.fitBounds(combinedBounds.pad(0.08), { animate: false, maxZoom: 15 });
+    mapStatus.textContent = `${items.length} aree verdi di ${municipality} evidenziate insieme sulla mappa.`;
+    resizeMap();
+  }
+
   function renderResults(items) {
     resultsNode.innerHTML = items.map((item, index) => {
       const title = item.name || item.display_name.split(",")[0];
@@ -234,7 +259,8 @@
       const items = municipality ? await searchMunicipalGreenAreas(name, municipality) : await searchGreenAreas(name, municipality);
       if (!items.length) throw new Error(name ? "Nessuna area verde con questo nome. Prova con un nome più breve o lascia vuoto il nome per vedere tutto il Comune." : "Nessuna area verde cartografata per questo Comune.");
       renderResults(items);
-      showArea(items[0]);
+      if (municipality && !name) showAllAreas(items, municipality);
+      else showArea(items[0]);
       setStatus(`${items.length} ${items.length === 1 ? "area verde trovata" : "aree verdi trovate"}.`, "success");
     } catch (error) {
       setStatus(error.message || "Ricerca non riuscita.", "error");

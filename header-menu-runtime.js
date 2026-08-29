@@ -408,3 +408,45 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();
+
+(() => {
+  'use strict';
+
+  function installGardenerAssistanceMenuGroup() {
+    const menuBody = document.querySelector('#side-menu .side-menu-body');
+    if (!menuBody) return;
+
+    let section = document.querySelector('#menu-assistenza-giardiniere-title')?.closest('.menu-section');
+    if (!section) {
+      section = document.createElement('section');
+      section.className = 'menu-section';
+      section.setAttribute('aria-labelledby', 'menu-assistenza-giardiniere-title');
+
+      const title = document.createElement('h3');
+      title.id = 'menu-assistenza-giardiniere-title';
+      title.className = 'menu-section-title';
+      title.textContent = 'Assistenza per il giardiniere';
+      section.appendChild(title);
+
+      const toolsTitle = document.querySelector('#menu-strumenti-title');
+      const toolsSection = toolsTitle?.closest('.menu-section') || null;
+      menuBody.insertBefore(section, toolsSection || null);
+    }
+
+    [
+      '#open-gardening-assistant-btn',
+      '#open-tree-search-btn',
+      '#open-green-areas-btn',
+      '#open-equipment-assistant-btn'
+    ].forEach((selector) => {
+      const button = document.querySelector(selector);
+      if (button && button.parentElement !== section) section.appendChild(button);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installGardenerAssistanceMenuGroup, { once: true });
+  } else {
+    installGardenerAssistanceMenuGroup();
+  }
+})();

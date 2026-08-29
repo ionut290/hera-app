@@ -67,6 +67,7 @@
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
   <link rel="stylesheet" href="tree-search.css?v=20260829-green-areas1">
+  <link rel="stylesheet" href="green-areas.css?v=20260829a">
 </head>
 <body class="auth-pending">
 
@@ -125,7 +126,8 @@
         <button id="open-panel-global" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌐</span>Global</button>
         <button id="open-hours-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🕒</span>Gestione ore</button>
         <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">⚠️</span>Segnalazioni</button>
-        <button id="open-tree-search-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌳</span>Alberi e verde</button>
+        <button id="open-tree-search-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌳</span>Catasto alberi</button>
+        <button id="open-green-areas-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌿</span>Aree verdi</button>
       </section>
       <section class="menu-section" aria-labelledby="menu-personale-title">
         <h3 id="menu-personale-title" class="menu-section-title">Personale e accessi</h3>
@@ -192,13 +194,41 @@
             <option value="satellite">Satellite</option>
             <option value="hybrid">Ibrida</option>
           </select>
-          <label class="tree-map-overlay-toggle" for="tree-green-areas-toggle">
-            <input id="tree-green-areas-toggle" type="checkbox" checked>
-            Aree verdi Emilia-Romagna
-          </label>
         </div>
         <p id="tree-map-status" class="tree-map-status" role="status" aria-live="polite">Aumenta lo zoom per visualizzare i numeri degli alberi.</p>
         <div id="tree-map" class="tree-map" aria-label="Posizione degli alberi sulla mappa"></div>
+      </section>
+    </div>
+  </section>
+
+  <section id="green-areas-page" class="green-areas-page hidden" aria-hidden="true" aria-labelledby="green-areas-title">
+    <header class="green-areas-header">
+      <button id="green-areas-back-btn" class="btn" type="button">← Home</button>
+      <div><span>Verde pubblico regionale</span><h1 id="green-areas-title">Aree verdi</h1></div>
+    </header>
+    <div class="green-areas-content">
+      <form id="green-areas-form" class="green-areas-card">
+        <label for="green-areas-name">Nome dell’area verde</label>
+        <input id="green-areas-name" type="search" autocomplete="off" placeholder="Es. Parco della Chiusa" required minlength="2">
+        <label for="green-areas-municipality">Comune <span class="muted">(facoltativo)</span></label>
+        <input id="green-areas-municipality" type="search" autocomplete="address-level2" placeholder="Es. Casalecchio di Reno">
+        <button class="btn btn-primary" type="submit">CERCA AREA VERDE</button>
+        <p id="green-areas-status" class="green-areas-status" role="status" aria-live="polite">Cerca parchi, giardini e altre aree verdi dell’Emilia-Romagna.</p>
+      </form>
+      <section id="green-areas-results" class="green-areas-results hidden" aria-label="Risultati ricerca"></section>
+      <section id="green-areas-map-card" class="green-areas-map-card" aria-label="Mappa delle aree verdi">
+        <div class="green-areas-toolbar">
+          <strong>Aree verdi Emilia-Romagna</strong>
+          <button id="green-areas-fullscreen-btn" class="btn" type="button" aria-pressed="false">⛶ SCHERMO INTERO</button>
+          <label for="green-areas-map-style">Vista</label>
+          <select id="green-areas-map-style">
+            <option value="classic">Classica</option>
+            <option value="satellite">Satellite</option>
+            <option value="hybrid">Ibrida</option>
+          </select>
+        </div>
+        <p id="green-areas-map-status" class="green-areas-map-status" role="status" aria-live="polite">Le superfici verdi ufficiali regionali sono evidenziate sulla mappa.</p>
+        <div id="green-areas-map" class="green-areas-map" aria-label="Mappa delle aree verdi comunali"></div>
       </section>
     </div>
   </section>
@@ -547,7 +577,8 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
-  <script src="tree-search.js?v=20260829-green-areas1"></script>
+  <script src="tree-search.js?v=20260829-tree-only1"></script>
+  <script src="green-areas.js?v=20260829a"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

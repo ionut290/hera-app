@@ -19843,10 +19843,7 @@ function formatSquadraHours(hours) {
 
 function calculateSquadraPausaPranzoMinutes(startMinutes, endMinutes, senzaPausaPranzo) {
   if (senzaPausaPranzo) return 0;
-  const pausaStart = 12 * 60 + 30;
-  const pausaEnd = 13 * 60;
-  const overlap = Math.min(endMinutes, pausaEnd) - Math.max(startMinutes, pausaStart);
-  return Math.max(0, overlap);
+  return 60;
 }
 
 function getSquadraOrarioParts(row) {

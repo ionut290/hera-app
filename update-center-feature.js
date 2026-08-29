@@ -31,10 +31,12 @@
       .update-center-kicker{margin:0;color:#1d4ed8;font-weight:900;letter-spacing:.05em}
       .update-center-summary{padding:16px;border:1px solid #bfdbfe;border-radius:16px;background:#eff6ff;color:#0f172a}
       .update-center-summary.is-urgent{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+      .update-center-summary.is-warning{border-color:#fde68a;background:#fffbeb;color:#92400e}
+      .update-center-category{grid-column:1/-1;margin:10px 2px -4px;color:#334155;font-size:1.05rem}
       .update-center-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
       .update-center-card{overflow:hidden;border-radius:18px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.08)}
       .update-center-card h2{display:flex;align-items:center;gap:9px;margin:0;padding:16px;border-bottom:1px solid #e2e8f0;font-size:1rem}
-      .update-center-dot{width:12px;height:12px;border-radius:50%;background:#94a3b8}.update-center-dot.ok{background:#22c55e}.update-center-dot.planned{background:#facc15}.update-center-dot.urgent{background:#ef4444}
+      .update-center-dot{width:12px;height:12px;border-radius:50%;background:#94a3b8}.update-center-dot.ok{background:#22c55e}.update-center-dot.planned{background:#facc15}.update-center-dot.urgent{background:#ef4444}.update-center-dot.warning{background:#f97316}
       .update-center-row{display:grid;grid-template-columns:1fr 1.15fr;gap:10px;padding:10px 16px;border-bottom:1px solid #e2e8f0}.update-center-row span{color:#64748b}.update-center-row strong{text-align:right;overflow-wrap:anywhere}
       @media(max-width:720px){.update-center-head{grid-template-columns:1fr}.update-center-row{grid-template-columns:1fr}.update-center-row strong{text-align:left}}
     `;
@@ -95,21 +97,28 @@
     const items = Array.isArray(report?.items) ? report.items : [];
     const attention = items.filter((item) => item.status !== 'ok').length;
     const urgent = items.filter((item) => item.status === 'urgent').length;
-    const labels = { ok: 'Aggiornato', planned: 'Da pianificare', urgent: 'Urgente' };
+    const labels = { ok: 'Aggiornato', planned: 'Da pianificare', urgent: 'Urgente', warning: 'Da ricontrollare' };
     const grid = document.getElementById('update-center-grid');
     const summary = document.getElementById('update-center-summary');
-    if (grid) grid.innerHTML = items.map((item) => `
+    let lastCategory = '';
+    if (grid) grid.innerHTML = items.map((item) => {
+      const category = String(item.category || 'Altri controlli');
+      const categoryHeader = category !== lastCategory ? `<h2 class="update-center-category">${escapeHtml(category)}</h2>` : '';
+      lastCategory = category;
+      return `${categoryHeader}
       <article class="update-center-card">
         <h2><span class="update-center-dot ${escapeHtml(item.status)}"></span>${escapeHtml(labels[item.status] || 'Informazione')} · ${escapeHtml(item.name)}</h2>
         <div class="update-center-row"><span>Versione installata</span><strong>${escapeHtml(item.current || 'Non applicabile')}</strong></div>
         <div class="update-center-row"><span>Versione disponibile</span><strong>${escapeHtml(item.latest || 'Non applicabile')}</strong></div>
         <div class="update-center-row"><span>Scadenza</span><strong>${escapeHtml(item.deadline || 'Nessuna')}</strong></div>
         <div class="update-center-row"><span>Indicazione</span><strong>${escapeHtml(item.message || 'Nessun intervento necessario')}</strong></div>
-      </article>`).join('');
+      </article>`;
+    }).join('');
     if (summary) {
       const checkedAt = report?.checkedAt ? new Date(report.checkedAt).toLocaleString('it-IT') : 'adesso';
       summary.innerHTML = `<strong>${urgent ? 'Aggiornamenti urgenti presenti' : attention ? 'Aggiornamenti da pianificare' : 'Tutto aggiornato'}</strong><br>Ultimo controllo: ${escapeHtml(checkedAt)}`;
       summary.classList.toggle('is-urgent', urgent > 0);
+      summary.classList.toggle('is-warning', urgent === 0 && attention > 0);
     }
     const badge = document.getElementById('update-center-menu-badge');
     if (badge) {

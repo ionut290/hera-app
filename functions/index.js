@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions/v1");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { defineSecret, defineString } = require("firebase-functions/params");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
@@ -13,6 +14,11 @@ const CENTRAL_DRIVE_ROOT_FOLDER_ID = "1s6qmv2SsiTUbCjqFX4yIk4VoPQayFrU0";
 const CENTRAL_DRIVE_ROOT_FOLDER_NAME = "Varga Cantieri";
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const FCM_BATCH_SIZE = 500;
+const GOOGLE_CLIENT_ID = defineSecret("GOOGLE_CLIENT_ID");
+const GOOGLE_CLIENT_SECRET = defineSecret("GOOGLE_CLIENT_SECRET");
+const WEATHER_WORKLIMATE_URL = defineString("WEATHER_WORKLIMATE_URL", { default: "" });
+const WEATHER_CIVIL_PROTECTION_URL = defineString("WEATHER_CIVIL_PROTECTION_URL", { default: "" });
+const WORKLIMATE_ENDPOINT = defineString("WORKLIMATE_ENDPOINT", { default: "" });
 const INVALID_FCM_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered"
@@ -308,10 +314,12 @@ async function buildDriveClient(db) {
     throw new functions.https.HttpsError("failed-precondition", "Cloud amministratore non configurato");
   }
 
-  const oauth2 = new google.auth.OAuth2(
-    functions.config().google?.client_id,
-    functions.config().google?.client_secret
-  );
+  const clientId = String(GOOGLE_CLIENT_ID.value() || "").trim();
+  const clientSecret = String(GOOGLE_CLIENT_SECRET.value() || "").trim();
+  if (!clientId || !clientSecret) {
+    throw new functions.https.HttpsError("failed-precondition", "Credenziali Google Drive mancanti nel backend.");
+  }
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({
     access_token: secret.accessToken || undefined,
     refresh_token: secret.refreshToken || undefined
@@ -393,7 +401,9 @@ async function getOrCreateFolder(db, drive, name, parentId = "") {
   return folderId;
 }
 
-exports.uploadCentralDriveFile = functions.https.onCall(async (data, context) => {
+exports.uploadCentralDriveFile = functions
+  .runWith({ secrets: [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Login richiesto.");
   }
@@ -444,7 +454,7 @@ exports.uploadCentralDriveFile = functions.https.onCall(async (data, context) =>
     fileId: uploaded.data.id || "",
     webViewLink: uploaded.data.webViewLink || ""
   };
-});
+  });
 
 exports.configureCentralDrive = functions.https.onCall(async (data, context) => {
   const db = admin.firestore();
@@ -547,10 +557,11 @@ async function collectComuniByCommessa(db) {
 }
 
 async function fetchAlertsForComune(comune) {
-  const cfg = functions.config().weather || {};
   const encoded = encodeURIComponent(comune);
-  const worklimateUrl = cfg.worklimate_url ? String(cfg.worklimate_url).replace("{comune}", encoded) : "";
-  const civilUrl = cfg.civil_protection_url ? String(cfg.civil_protection_url).replace("{comune}", encoded) : "";
+  const worklimateTemplate = String(WEATHER_WORKLIMATE_URL.value() || "").trim();
+  const civilTemplate = String(WEATHER_CIVIL_PROTECTION_URL.value() || "").trim();
+  const worklimateUrl = worklimateTemplate ? worklimateTemplate.replace("{comune}", encoded) : "";
+  const civilUrl = civilTemplate ? civilTemplate.replace("{comune}", encoded) : "";
   const [worklimate, civil] = await Promise.allSettled([
     fetchJsonIfConfigured(worklimateUrl, "Worklimate"),
     fetchJsonIfConfigured(civilUrl, "Protezione Civile")
@@ -632,7 +643,7 @@ function buildWorklimateFallbackRisk(impianto) {
 }
 
 async function fetchWorklimateRiskForImpianto(impianto) {
-  const endpoint = functions.config().worklimate?.endpoint || process.env.WORKLIMATE_ENDPOINT || "";
+  const endpoint = String(WORKLIMATE_ENDPOINT.value() || "").trim();
   if (!endpoint) return buildWorklimateFallbackRisk(impianto);
   const url = new URL(endpoint);
   url.searchParams.set("lat", String(impianto.gpsY));

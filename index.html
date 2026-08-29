@@ -205,21 +205,28 @@
   <section id="green-areas-page" class="green-areas-page hidden" aria-hidden="true" aria-labelledby="green-areas-title">
     <header class="green-areas-header">
       <button id="green-areas-back-btn" class="btn" type="button">← Home</button>
-      <div><span>Verde pubblico regionale</span><h1 id="green-areas-title">Aree verdi</h1></div>
+      <div><span>Cinque Comuni selezionati</span><h1 id="green-areas-title">Aree verdi</h1></div>
     </header>
     <div class="green-areas-content">
       <form id="green-areas-form" class="green-areas-card">
         <label for="green-areas-name">Nome dell’area verde <span class="muted">(facoltativo)</span></label>
         <input id="green-areas-name" type="search" autocomplete="off" placeholder="Es. Parco della Chiusa">
         <label for="green-areas-municipality">Comune</label>
-        <input id="green-areas-municipality" type="search" autocomplete="address-level2" placeholder="Es. Casalecchio di Reno">
+        <select id="green-areas-municipality" required>
+          <option value="">Seleziona Comune</option>
+          <option value="Castel Maggiore">Castel Maggiore</option>
+          <option value="Bologna">Bologna</option>
+          <option value="Argelato">Argelato</option>
+          <option value="Minerbio">Minerbio</option>
+          <option value="Zola Predosa">Zola Predosa</option>
+        </select>
         <button class="btn btn-primary" type="submit">CERCA AREE VERDI</button>
-        <p id="green-areas-status" class="green-areas-status" role="status" aria-live="polite">Indica il Comune per vedere anche le aree verdi senza nome; aggiungi il nome per filtrare.</p>
+        <p id="green-areas-status" class="green-areas-status" role="status" aria-live="polite">Seleziona uno dei cinque Comuni; aggiungi il nome soltanto se vuoi filtrare.</p>
       </form>
       <section id="green-areas-results" class="green-areas-results hidden" aria-label="Risultati ricerca"></section>
       <section id="green-areas-map-card" class="green-areas-map-card" aria-label="Mappa delle aree verdi">
         <div class="green-areas-toolbar">
-          <strong>Aree verdi Emilia-Romagna</strong>
+          <strong>Aree verdi dei Comuni selezionati</strong>
           <button id="green-areas-fullscreen-btn" class="btn" type="button" aria-pressed="false">⛶ SCHERMO INTERO</button>
           <label for="green-areas-map-style">Vista</label>
           <select id="green-areas-map-style">
@@ -588,7 +595,7 @@
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
   <script src="tree-search.js?v=20260829-tree-only1"></script>
-  <script src="green-areas.js?v=20260829d"></script>
+  <script src="green-areas.js?v=20260829e"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

@@ -1,20 +1,21 @@
 "use strict";
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const legacyFunctions = require("firebase-functions/v1");
+const { defineJsonSecret } = require("firebase-functions/params");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { google } = require("googleapis");
 
 const SOURCE = "whazzup-pdf-drive-v2";
+const RUNTIME_CONFIG = defineJsonSecret("RUNTIME_CONFIG");
 
 async function getDrive(db) {
   const snapshot = await db.collection("appConfig").doc("driveAdminSecret").get();
   const secret = snapshot.exists ? snapshot.data() : null;
   if (!secret || (!secret.accessToken && !secret.refreshToken)) throw new Error("Drive centrale non configurato");
-  const clientId = legacyFunctions.config().google?.client_id;
-  const clientSecret = legacyFunctions.config().google?.client_secret;
-  if (!clientId || !clientSecret) throw new Error("Credenziali Google Drive mancanti");
-  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+  const runtimeConfig = RUNTIME_CONFIG.value() || {};
+  const clientId = String(runtimeConfig.google?.client_id || "").trim();
+  const clientSecret = String(runtimeConfig.google?.client_secret || "").trim();
+  const oauth2 = new google.auth.OAuth2(clientId || undefined, clientSecret || undefined);
   oauth2.setCredentials({
     access_token: secret.accessToken || undefined,
     refresh_token: secret.refreshToken || undefined
@@ -27,7 +28,8 @@ exports.cleanupExpiredWhazzupPdfs = onSchedule(
     schedule: "every day 03:20",
     timeZone: "Europe/Rome",
     region: "europe-west1",
-    retryCount: 1
+    retryCount: 1,
+    secrets: [RUNTIME_CONFIG]
   },
   async () => {
     const db = getFirestore();

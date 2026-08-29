@@ -32,10 +32,7 @@ async function getDrive() {
   const runtimeConfig = RUNTIME_CONFIG.value() || {};
   const clientId = String(runtimeConfig.google?.client_id || "").trim();
   const clientSecret = String(runtimeConfig.google?.client_secret || "").trim();
-  if (!clientId || !clientSecret) {
-    throw new functions.https.HttpsError("failed-precondition", "Credenziali Google Drive mancanti nel backend.");
-  }
-  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+  const oauth2 = new google.auth.OAuth2(clientId || undefined, clientSecret || undefined);
   oauth2.setCredentials({
     access_token: secret.accessToken || undefined,
     refresh_token: secret.refreshToken || undefined

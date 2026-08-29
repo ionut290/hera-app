@@ -481,7 +481,7 @@
           const firstError = args.find((item) => item instanceof Error);
           if (!firstError) return;
           const message = redactText(firstError.message || "", 1600);
-          if (!message || /Push Centro errori non inviata/i.test(message)) return;
+          if (!message || /Push Centro errori non inviata|Failed to set zombie client id/i.test(message)) return;
           if (/AbortError|operazione annullata|operation (?:was )?aborted|ResizeObserver loop/i.test(`${firstError.name || ""} ${message}`)) return;
           if (navigator.onLine === false && /network|fetch|offline|unavailable/i.test(message)) return;
           void capture(firstError, {

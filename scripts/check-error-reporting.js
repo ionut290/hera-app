@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
+const app = fs.readFileSync("app.js", "utf8");
 const client = fs.readFileSync("client-error-reporter.js", "utf8");
 const monitor = fs.readFileSync("app-error-monitor.js", "utf8");
 const adminCenter = fs.readFileSync("admin-error-center.js", "utf8");
@@ -119,9 +120,12 @@ assert.match(main, /require\("\.\/error-reporting"\)/);
 assert.match(main, /require\("\.\/error-center"\)/);
 assert.match(main, /errorCenterFunctions/);
 assert.match(loader, /client-error-reporter\.js\?v=20260816a/);
-assert.match(loader, /app-error-monitor\.js\?v=20260824b/);
+assert.match(loader, /app-error-monitor\.js\?v=20260829-noise-filter1/);
 assert.match(loader, /admin-error-center\.js\?v=20260829-chatgpt-category1/);
 assert.match(loader, /admin-error-center\.css\?v=20260824b/);
+assert.match(monitor, /Failed to set zombie client id/);
+assert.match(app, /console\.warn\("Meteo impianto non disponibile dalla fonte principale; uso lo stato temporaneo:"/);
+assert.doesNotMatch(app, /console\.error\("Meteo impianto non disponibile dalla fonte principale:/);
 assert.match(serviceWorker, /varga-cantieri-shell-v\d+/);
 for (const path of ["/loading-humor.js", "/client-error-reporter.js", "/app-error-monitor.js", "/admin-error-center.js", "/admin-error-center.css"]) {
   assert.ok(serviceWorker.includes(`"${path}"`), `${path} deve essere network-first`);

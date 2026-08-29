@@ -18009,7 +18009,7 @@ async function getPlantWeather(plant) {
   try {
     return await getWeatherForPlantFromMainSource(plant);
   } catch (error) {
-    console.error("Meteo impianto non disponibile dalla fonte principale:", error);
+    console.warn("Meteo impianto non disponibile dalla fonte principale; uso lo stato temporaneo:", error);
     throw error;
   }
 }

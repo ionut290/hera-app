@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v169";
-const CACHE_RESET_VERSION = "20260829-chatgpt-category1";
+const CACHE_NAME = "varga-cantieri-shell-v170";
+const CACHE_RESET_VERSION = "20260829-noise-filter1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260829-global-map1",
+  "./app.js?v=20260829-noise-filter1",
   "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
@@ -26,9 +26,9 @@ const APP_SHELL = [
   "./update-app-feature.js?v=20260824-oneclick1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
-  "./loading-humor.js?v=20260829-chatgpt-category1",
+  "./loading-humor.js?v=20260829-noise-filter1",
   "./client-error-reporter.js?v=20260816a",
-  "./app-error-monitor.js?v=20260824b",
+  "./app-error-monitor.js?v=20260829-noise-filter1",
   "./admin-error-center.js?v=20260829-chatgpt-category1",
   "./admin-error-center.css?v=20260824b",
   "./management-core.js?v=20260731",

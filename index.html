@@ -68,6 +68,7 @@
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
   <link rel="stylesheet" href="tree-search.css?v=20260829-green-areas1">
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
+  <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
 </head>
 <body class="auth-pending">
 
@@ -231,6 +232,15 @@
         <div id="green-areas-map" class="green-areas-map" aria-label="Mappa delle aree verdi comunali"></div>
       </section>
     </div>
+    <section id="green-area-sheet" class="green-area-sheet hidden" aria-hidden="true" aria-labelledby="green-area-sheet-title">
+      <div class="green-area-sheet-dialog">
+        <button id="green-area-sheet-close" class="btn green-area-sheet-close" type="button" aria-label="Chiudi scheda">✕</button>
+        <small id="green-area-sheet-source">Fonte cartografica</small>
+        <h2 id="green-area-sheet-title">Scheda area verde</h2>
+        <div id="green-area-sheet-body"></div>
+        <a id="green-area-sheet-navigate" class="btn btn-primary" href="#" target="_blank" rel="noopener">NAVIGA</a>
+      </div>
+    </section>
   </section>
 
   <dialog id="tree-qr-dialog" class="tree-qr-dialog">
@@ -578,7 +588,7 @@
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
   <script src="tree-search.js?v=20260829-tree-only1"></script>
-  <script src="green-areas.js?v=20260829b"></script>
+  <script src="green-areas.js?v=20260829d"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

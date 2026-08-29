@@ -2,7 +2,7 @@
   "name": "hera-app-functions",
   "private": true,
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "main.js",
   "dependencies": {

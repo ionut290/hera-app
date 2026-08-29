@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "description": "Hera App web + Android wrapper via Capacitor",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "serve": "python3 -m http.server 8080",
     "android:add": "npx cap add android",

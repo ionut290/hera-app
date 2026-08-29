@@ -11,6 +11,7 @@
   const mapNode = $("tree-map");
   const mapStatus = $("tree-map-status");
   const mapStyle = $("tree-map-style");
+  const mapLocationButton = $("tree-map-location-btn");
   const mapFullscreenButton = $("tree-map-fullscreen-btn");
   const dialog = $("tree-qr-dialog");
   const video = $("tree-qr-video");
@@ -20,6 +21,8 @@
   let treesLayer = null;
   let baseLayer = null;
   let hybridLabels = null;
+  let userLocationMarker = null;
+  let userAccuracyCircle = null;
   let viewportTimer = 0;
   let viewportRequest = 0;
   let viewportAbort = null;
@@ -259,6 +262,92 @@
     map.on("moveend zoomend", scheduleVisibleTrees);
   }
 
+  function geolocationErrorMessage(error) {
+    if (error?.code === 1) return "Permesso posizione negato. Abilita la posizione nelle impostazioni del dispositivo e riprova.";
+    if (error?.code === 2) return "Posizione non disponibile. Controlla che il GPS sia attivo e riprova.";
+    if (error?.code === 3) return "Ricerca della posizione scaduta. Riprova in un punto con migliore segnale GPS.";
+    return error?.message || "Impossibile trovare la tua posizione.";
+  }
+
+  function showUserLocation(position) {
+    initializeMap();
+    if (!map) throw new Error("Mappa non disponibile.");
+    const lat = Number(position?.coords?.latitude);
+    const lng = Number(position?.coords?.longitude);
+    const accuracy = Number(position?.coords?.accuracy);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Coordinate della posizione non valide.");
+    const point = L.latLng(lat, lng);
+    if (!userLocationMarker) {
+      userLocationMarker = L.circleMarker(point, {
+        radius: 9,
+        color: "#ffffff",
+        weight: 3,
+        fillColor: "#1268e8",
+        fillOpacity: 1,
+        pane: "markerPane"
+      }).addTo(map).bindPopup("<strong>La mia posizione</strong>");
+    } else {
+      userLocationMarker.setLatLng(point).addTo(map);
+    }
+    if (Number.isFinite(accuracy) && accuracy > 0) {
+      if (!userAccuracyCircle) {
+        userAccuracyCircle = L.circle(point, {
+          radius: accuracy,
+          color: "#1268e8",
+          weight: 1,
+          opacity: 0.65,
+          fillColor: "#4a9bff",
+          fillOpacity: 0.14,
+          interactive: false
+        }).addTo(map);
+      } else {
+        userAccuracyCircle.setLatLng(point).setRadius(accuracy).addTo(map);
+      }
+      userLocationMarker.setPopupContent(`<strong>La mia posizione</strong><br>Precisione circa ${Math.round(accuracy)} m`);
+    } else {
+      userAccuracyCircle?.remove();
+      userAccuracyCircle = null;
+      userLocationMarker.setPopupContent("<strong>La mia posizione</strong>");
+    }
+    userLocationMarker.bringToFront().openPopup();
+    map.setView(point, Math.max(map.getZoom(), 18), { animate: false });
+    resizeMap();
+    mapStatus.textContent = Number.isFinite(accuracy) && accuracy > 0
+      ? `Posizione trovata (precisione circa ${Math.round(accuracy)} m).`
+      : "Posizione trovata e mostrata sulla mappa.";
+  }
+
+  function centerOnUserLocation() {
+    if (!navigator.geolocation) {
+      mapStatus.textContent = "La posizione GPS non è supportata da questo dispositivo.";
+      return;
+    }
+    mapLocationButton.disabled = true;
+    mapLocationButton.setAttribute("aria-busy", "true");
+    mapLocationButton.textContent = "⌖ RICERCA…";
+    mapStatus.textContent = "Ricerca della tua posizione…";
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        try {
+          showUserLocation(position);
+        } catch (error) {
+          mapStatus.textContent = geolocationErrorMessage(error);
+        } finally {
+          mapLocationButton.disabled = false;
+          mapLocationButton.removeAttribute("aria-busy");
+          mapLocationButton.textContent = "⌖ LA MIA POSIZIONE";
+        }
+      },
+      (error) => {
+        mapStatus.textContent = geolocationErrorMessage(error);
+        mapLocationButton.disabled = false;
+        mapLocationButton.removeAttribute("aria-busy");
+        mapLocationButton.textContent = "⌖ LA MIA POSIZIONE";
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+    );
+  }
+
   function scheduleVisibleTrees() {
     clearTimeout(viewportTimer);
     viewportTimer = setTimeout(loadVisibleTrees, 350);
@@ -405,6 +494,7 @@
   $("open-tree-search-btn")?.addEventListener("click", openPage);
   $("tree-search-back-btn")?.addEventListener("click", closePage);
   $("tree-qr-open-btn")?.addEventListener("click", startScanner);
+  mapLocationButton?.addEventListener("click", centerOnUserLocation);
   mapFullscreenButton?.addEventListener("click", () => setMapFullscreen(!mapFullscreen));
   mapStyle?.addEventListener("change", () => applyMapStyle(mapStyle.value));
   $("tree-qr-close-btn")?.addEventListener("click", stopScanner);

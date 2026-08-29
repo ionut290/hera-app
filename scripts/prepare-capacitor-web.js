@@ -29,6 +29,8 @@ for (const directory of excludedDirectories) {
 const requiredFiles = [
   "index.html",
   "app.js",
+  "green-assistant.js",
+  "green-assistant.css",
   "android-whazzup-photo-order.js",
   "style.css",
   "firebase-config.js",

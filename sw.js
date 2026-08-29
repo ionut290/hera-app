@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v166";
-const CACHE_RESET_VERSION = "20260826-login-stability1";
+const CACHE_NAME = "varga-cantieri-shell-v167";
+const CACHE_RESET_VERSION = "20260829-firestore-quota1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -77,7 +77,7 @@ const APP_SHELL = [
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260823-stability3",
-  "./firebase-config.js?v=20260824-no-partial1",
+  "./firebase-config.js?v=20260829-firestore-quota1",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
   "./icons/varga-cantieri-180.png",

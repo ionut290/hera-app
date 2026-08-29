@@ -36,7 +36,7 @@ function recoverAbandonedFirestoreDiagnosticListeners() {
 }
 recoverAbandonedFirestoreDiagnosticListeners();
 
-const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260812a";
+const HERA_STORAGE_QUOTA_GUARD_SRC = "storage-quota-guard.js?v=20260829-firestore-quota1";
 const HERA_APP_NOTIFICATIONS_READ_GUARD_SRC = "app-notifications-read-guard.js?v=20260815a";
 const HERA_FIRESTORE_OPERATION_DIAGNOSTICS_SRC = "firestore-operation-diagnostics.js?v=20260806a";
 const HERA_FIRESTORE_DIAGNOSTICS_V4_SRC = "firestore-diagnostics-dashboard-v4.js?v=20260805b";

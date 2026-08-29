@@ -11,6 +11,7 @@
   const mapNode = $("tree-map");
   const mapStatus = $("tree-map-status");
   const mapStyle = $("tree-map-style");
+  const greenAreasToggle = $("tree-green-areas-toggle");
   const mapFullscreenButton = $("tree-map-fullscreen-btn");
   const dialog = $("tree-qr-dialog");
   const video = $("tree-qr-video");
@@ -20,6 +21,7 @@
   let treesLayer = null;
   let baseLayer = null;
   let hybridLabels = null;
+  let greenAreasLayer = null;
   let viewportTimer = 0;
   let viewportRequest = 0;
   let viewportAbort = null;
@@ -175,11 +177,32 @@
     if (style === "hybrid") hybridLabels = L.tileLayer(TILE_LAYERS.labels.url, TILE_LAYERS.labels.options).addTo(map);
   }
 
+  function applyGreenAreasLayer(enabled) {
+    if (!map) return;
+    greenAreasLayer?.remove();
+    greenAreasLayer = null;
+    if (!enabled) return;
+    greenAreasLayer = L.tileLayer.wms("https://servizigis.regione.emilia-romagna.it/wms/dbtr", {
+      layers: "PSR_Area_verde",
+      format: "image/png",
+      transparent: true,
+      version: "1.3.0",
+      opacity: 0.55,
+      maxZoom: 20,
+      attribution: "Aree verdi: DBTR Regione Emilia-Romagna (CC BY 4.0)"
+    });
+    greenAreasLayer.on("tileerror", () => {
+      mapStatus.textContent = "Il servizio regionale delle aree verdi non risponde. La mappa e gli alberi restano disponibili.";
+    });
+    greenAreasLayer.addTo(map);
+  }
+
   function initializeMap() {
     if (map || !window.L) return;
     map = L.map(mapNode, { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 13);
     treesLayer = L.layerGroup().addTo(map);
     applyMapStyle(mapStyle?.value || "classic");
+    applyGreenAreasLayer(greenAreasToggle?.checked !== false);
     map.on("moveend zoomend", scheduleVisibleTrees);
   }
 
@@ -330,6 +353,7 @@
   $("tree-qr-open-btn")?.addEventListener("click", startScanner);
   mapFullscreenButton?.addEventListener("click", () => setMapFullscreen(!mapFullscreen));
   mapStyle?.addEventListener("change", () => applyMapStyle(mapStyle.value));
+  greenAreasToggle?.addEventListener("change", () => applyGreenAreasLayer(greenAreasToggle.checked));
   $("tree-qr-close-btn")?.addEventListener("click", stopScanner);
   dialog?.addEventListener("close", stopScanner);
   $("tree-qr-file")?.addEventListener("change", (event) => event.target.files?.[0] && scanFile(event.target.files[0]));

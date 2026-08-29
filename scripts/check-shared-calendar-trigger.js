@@ -25,6 +25,9 @@ assert.match(source, /getAdministrativeCalendarMonth/, "Manca il recupero mensil
 assert.match(source, /collectionGroup\(sourceCollection\)/, "Il recupero deve usare query mensili collectionGroup");
 assert.match(source, /where\("dataEsecuzione", ">=", fromDate\)/, "Il recupero deve essere limitato all'inizio del mese");
 assert.match(source, /where\("dataEsecuzione", "<", toDate\)/, "Il recupero deve essere limitato alla fine del mese");
+assert.match(source, /collection\("oreReports"\)[\s\S]*?where\("date", ">=", fromDate\)[\s\S]*?where\("date", "<", toDate\)/, "Il recupero mensile deve includere le ore già inserite");
+assert.match(source, /collection\("oreApprovalRequests"\)[\s\S]*?where\("date", ">=", fromDate\)[\s\S]*?where\("date", "<", toDate\)/, "Il recupero mensile deve includere le ore in approvazione");
+assert.match(source, /reports,\s*activities,\s*recoveredReports:/, "Il recupero deve restituire ore e attività al calendario");
 assert.match(source, /if \(!request\.auth\)/, "Il recupero deve richiedere autenticazione");
 assert.match(source, /MAX_RECOVERED_ACTIVITIES/, "Manca il limite del recupero mensile");
 assert.match(main, /shared-calendar-view/, "Le funzioni non sono esportate da main.js");
@@ -87,4 +90,4 @@ assert.equal(activityUpdate.reports.length, 1);
 assert.equal(activityUpdate.activities.length, 1);
 
 console.log("✅ Trigger automatico collegato a ore, impianti e lavorazioni FATTO.");
-console.log("✅ Recupero storico limitato al mese richiesto, autenticato e salvato nel riepilogo condiviso.");
+console.log("✅ Recupero storico di ore e attività limitato al mese richiesto, autenticato e salvato nel riepilogo condiviso.");

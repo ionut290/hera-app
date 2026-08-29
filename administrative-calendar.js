@@ -389,9 +389,9 @@
     activeMonth = "";
   }
 
-  function recoverMonthActivities(month) {
+  function recoverCalendarMonth(month) {
     const current = monthlyViews.get(month);
-    if (Number(current?.schemaVersion || 0) >= 3 && Array.isArray(current?.activities) && current.activities.length) return Promise.resolve(current);
+    if (Number(current?.schemaVersion || 0) >= 4 && Array.isArray(current?.reports) && Array.isArray(current?.activities)) return Promise.resolve(current);
     if (recoveryByMonth.has(month)) return recoveryByMonth.get(month);
 
     const request = (async () => {
@@ -409,8 +409,8 @@
         const latest = monthlyViews.get(month) || {};
         const recovered = {
           ...latest,
-          schemaVersion: Number(data.schemaVersion || 3),
-          reports: Array.isArray(latest.reports) ? latest.reports : [],
+          schemaVersion: Number(data.schemaVersion || 4),
+          reports: Array.isArray(data.reports) ? data.reports : (Array.isArray(latest.reports) ? latest.reports : []),
           activities: Array.isArray(data.activities) ? data.activities : [],
           source: "recupero-mensile-controllato",
           recovering: false,
@@ -456,12 +456,12 @@
         activities: Array.isArray(view.payload.activities) ? view.payload.activities : [],
         source: metadata.source || "firestore"
       });
-      if (!view.payload.activities?.length) recoverMonthActivities(month);
+      if (Number(view.payload.schemaVersion || 0) < 4) recoverCalendarMonth(month);
       if (typeof calendarMode !== "undefined" && calendarMode === "administrative" && visibleMonthKey() === month) {
         renderCalendarGrid();
       }
     });
-    Promise.resolve().then(() => recoverMonthActivities(month));
+    Promise.resolve().then(() => recoverCalendarMonth(month));
   }
 
   function renderCalendarGrid() {
@@ -568,7 +568,7 @@
     collectPlantsForDate,
     groupDayData,
     ensureMonthView,
-    recoverMonthActivities,
+    recoverCalendarMonth,
     deactivate,
     installInteractions
   });

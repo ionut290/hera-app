@@ -33,6 +33,8 @@ for (const secret of ["PLANTNET_API_KEY", "TREFLE_API_TOKEN", "GEMINI_API_KEY"])
 }
 assert(backend.includes("authenticateEvent(event)"), "La funzione deve richiedere autenticazione Firebase.");
 assert(backend.includes('"Cache-Control": "no-store"'), "Le risposte API non devono essere memorizzate in cache.");
+assert(backend.includes('"gemini-3.5-flash-lite"'), "Il modello Gemini gratuito corrente deve essere configurato.");
+assert(!backend.includes('"gemini-2.5-flash-lite"'), "Il modello Gemini non disponibile ai nuovi utenti non deve essere usato.");
 assert(client.includes('const CACHE_KEY = "heraGreenAssistantArchiveV1"'), "Archivio locale assistente assente.");
 assert(client.includes('window.openManagementPanel("mezzi")'), "Copia controllata nel form mezzi assente.");
 

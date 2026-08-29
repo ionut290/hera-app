@@ -18,13 +18,10 @@
   const sheetTitle = $("green-area-sheet-title");
   const sheetBody = $("green-area-sheet-body");
   const sheetNavigate = $("green-area-sheet-navigate");
-  const REGION_VIEWBOX = "9.1729,45.1360,12.7556,43.7310";
-  const BOLOGNA_CENTER = [44.4949, 11.3426];
-  const MAX_DISTANCE_KM = 50;
   const CACHE_PREFIX = "varga-green-area-search:";
   const CACHE_TTL_MS = 10 * 60 * 1000;
   const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
-  const GREEN_TYPES = new Set(["park", "garden", "nature_reserve", "recreation_ground", "grass", "village_green", "forest", "wood", "playground"]);
+  const ALLOWED_MUNICIPALITIES = new Set(["Castel Maggiore", "Bologna", "Argelato", "Minerbio", "Zola Predosa"]);
   let map = null;
   let baseLayer = null;
   let hybridLabels = null;
@@ -120,35 +117,8 @@
     try { sessionStorage.setItem(cacheKey(query), JSON.stringify({ savedAt: Date.now(), results })); } catch (_) {}
   }
 
-  function isGreenArea(item) {
-    const type = String(item.type || item.addresstype || "").toLowerCase();
-    return GREEN_TYPES.has(type) || /parco|giardino|area verde|bosco|riserva/i.test(`${item.name || ""} ${item.display_name || ""}`);
-  }
-
   function escapeOverpassString(value) {
     return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/"/g, '\\"');
-  }
-
-  function distanceKm(lat1, lon1, lat2, lon2) {
-    const radians = (degrees) => degrees * Math.PI / 180;
-    const dLat = radians(lat2 - lat1);
-    const dLon = radians(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
-  async function verifyMunicipalityRadius(municipality) {
-    const query = `municipality:${municipality}`;
-    const cached = readCache(query);
-    if (cached) return cached;
-    const params = new URLSearchParams({ format: "jsonv2", q: `${municipality}, Emilia-Romagna, Italia`, limit: "1", countrycodes: "it", addressdetails: "1" });
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("Impossibile verificare il Comune.");
-    const item = (await response.json())[0];
-    if (!item) throw new Error("Comune non trovato.");
-    const result = { distance: distanceKm(BOLOGNA_CENTER[0], BOLOGNA_CENTER[1], Number(item.lat), Number(item.lon)) };
-    writeCache(query, result);
-    return result;
   }
 
   function normalizeOverpassItem(element) {
@@ -198,28 +168,6 @@
     return items;
   }
 
-  async function searchGreenAreas(name, municipality) {
-    const query = [name, municipality, "Emilia-Romagna", "Italia"].filter(Boolean).join(", ");
-    const cached = readCache(query);
-    if (cached) return cached;
-    const params = new URLSearchParams({
-      format: "jsonv2",
-      q: query,
-      limit: "20",
-      countrycodes: "it",
-      viewbox: REGION_VIEWBOX,
-      bounded: "1",
-      addressdetails: "1",
-      "accept-language": "it"
-    });
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`Servizio di ricerca non disponibile (${response.status}).`);
-    const payload = await response.json();
-    const filtered = payload.filter(isGreenArea);
-    writeCache(query, filtered);
-    return filtered;
-  }
-
   function boundsFromResult(item) {
     const box = item.boundingbox?.map(Number);
     return box?.length === 4 && box.every(Number.isFinite) ? L.latLngBounds([box[0], box[2]], [box[1], box[3]]) : null;
@@ -248,7 +196,7 @@
     const title = item.name || item.display_name.split(",")[0];
     const municipality = item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || municipalityInput.value.trim() || "Comune non indicato";
     const category = item.tags?.leisure || item.tags?.landuse || item.tags?.natural || item.tags?.boundary || "area verde";
-    sheetSource.textContent = item.source === "DBTR Regione Emilia-Romagna" ? "Fonte prioritaria: DBTR ufficiale regionale" : "Fonte integrativa: OpenStreetMap; geometria ufficiale DBTR visibile sulla mappa";
+    sheetSource.textContent = municipality === "Bologna" ? "Comune di Bologna + DBTR ufficiale regionale" : "DBTR ufficiale Regione Emilia-Romagna; nome cartografico integrativo OSM";
     sheetTitle.textContent = title;
     sheetBody.innerHTML = `<dl><dt>Comune</dt><dd>${esc(municipality)}</dd><dt>Categoria</dt><dd>${esc(category)}</dd><dt>Descrizione</dt><dd>${esc(item.display_name)}</dd><dt>Coordinate</dt><dd>${lat.toFixed(6)}, ${lon.toFixed(6)}</dd></dl>`;
     sheetNavigate.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
@@ -303,16 +251,12 @@
     event.preventDefault();
     const name = nameInput.value.trim();
     const municipality = municipalityInput.value.trim();
-    if (!municipality && name.length < 2) return setStatus("Indica il Comune oppure inserisci almeno 2 caratteri del nome.", "error");
+    if (!ALLOWED_MUNICIPALITIES.has(municipality)) return setStatus("Seleziona uno dei cinque Comuni disponibili.", "error");
     if (name && name.length < 2) return setStatus("Inserisci almeno 2 caratteri del nome oppure lascia il campo vuoto.", "error");
     setStatus("Ricerca nelle aree verdi dell’Emilia-Romagna…");
     resultsNode.classList.add("hidden");
     try {
-      if (municipality) {
-        const municipalityInfo = await verifyMunicipalityRadius(municipality);
-        if (municipalityInfo.distance > MAX_DISTANCE_KM) throw new Error(`Il Comune è a ${Math.round(municipalityInfo.distance)} km da Bologna. La ricerca è limitata a 50 km.`);
-      }
-      const items = municipality ? await searchMunicipalGreenAreas(name, municipality) : await searchGreenAreas(name, municipality);
+      const items = await searchMunicipalGreenAreas(name, municipality);
       if (!items.length) throw new Error(name ? "Nessuna area verde con questo nome. Prova con un nome più breve o lascia vuoto il nome per vedere tutto il Comune." : "Nessuna area verde cartografata per questo Comune.");
       renderResults(items);
       if (municipality && !name) showAllAreas(items, municipality);

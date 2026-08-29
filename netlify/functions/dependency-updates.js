@@ -17,13 +17,19 @@ const PACKAGE_GROUPS = Object.freeze([
   {
     title: "Android/Capacitor",
     manifest: ROOT_PACKAGE,
+    lock: ROOT_LOCK,
     names: [
       "@capacitor/core", "@capacitor/android", "@capacitor/cli",
       "@capacitor-firebase/authentication", "@capacitor/filesystem",
       "@capacitor/geolocation", "@capacitor/push-notifications", "@capacitor/share"
     ]
   },
-  { title: "Backend/Functions", manifest: FUNCTIONS_PACKAGE, names: ["firebase-admin", "firebase-functions", "googleapis"] }
+  {
+    title: "Backend/Functions",
+    manifest: FUNCTIONS_PACKAGE,
+    lock: FUNCTIONS_LOCK,
+    names: ["firebase-admin", "firebase-functions", "googleapis"]
+  }
 ]);
 
 const severityRank = Object.freeze({ info: 0, low: 1, moderate: 2, high: 3, critical: 4 });
@@ -39,6 +45,14 @@ function major(version) {
 
 function configuredVersion(manifest, name) {
   return manifest.dependencies?.[name] || manifest.devDependencies?.[name] || "";
+}
+
+function lockedVersion(lock, name) {
+  return lock?.packages?.[`node_modules/${name}`]?.version || "";
+}
+
+function effectiveVersion(group, name) {
+  return lockedVersion(group.lock, name) || configuredVersion(group.manifest, name);
 }
 
 async function fetchJson(url, options = {}) {
@@ -87,6 +101,7 @@ async function auditLock(lock, label) {
       if (!unique.has(key)) unique.set(key, advisory);
     });
     const totals = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
+    const affectedPackages = Object.values(advisories || {}).filter((items) => Array.isArray(items) && items.length).length;
     unique.forEach((advisory) => {
       const severity = String(advisory.severity || "moderate").toLowerCase();
       totals[severity] = (totals[severity] || 0) + 1;
@@ -97,11 +112,15 @@ async function auditLock(lock, label) {
     return {
       category: "Sicurezza",
       name: `npm audit · ${label}`,
-      current: total ? `${total} ${total === 1 ? "avviso" : "avvisi"}` : "0 avvisi",
+      current: total
+        ? `${total} ${total === 1 ? "avviso raggruppato" : "avvisi raggruppati"} · ${affectedPackages} ${affectedPackages === 1 ? "dipendenza sorgente" : "dipendenze sorgente"}`
+        : "0 avvisi",
       latest: total ? `Critiche ${totals.critical} · Alte ${totals.high} · Moderate ${totals.moderate} · Basse ${totals.low}` : "Nessuna vulnerabilità nota",
       status: totals.critical || totals.high ? "urgent" : total ? "planned" : "ok",
       deadline: totals.critical || totals.high ? "Appena possibile" : "Nessuna",
-      message: total ? `Priorità massima: ${highest}. Verificare npm audit e applicare soltanto correzioni compatibili dopo i test.` : "Nessun avviso di sicurezza noto nel registro npm."
+      message: total
+        ? `Priorità massima: ${highest}. Una dipendenza sorgente può coinvolgere altri pacchetti in modo transitivo; verificare npm audit e applicare soltanto correzioni compatibili dopo i test.`
+        : "Nessun avviso di sicurezza noto nel registro npm."
     };
   } catch (error) {
     return {
@@ -122,7 +141,7 @@ async function dependencyItems() {
   const failed = new Set(latestEntries.filter((entry) => entry[2]).map(([name]) => name));
 
   return PACKAGE_GROUPS.flatMap((group) => group.names.map((name) => {
-    const current = cleanVersion(configuredVersion(group.manifest, name));
+    const current = cleanVersion(effectiveVersion(group, name));
     const available = latest[name];
     if (failed.has(name)) return {
       category: group.title, name: group.displayNames?.[name] || name, current, latest: "Controllo non disponibile",
@@ -168,7 +187,7 @@ function platformItems() {
     },
     {
       category: "Android/Capacitor", name: "Firebase npm per autenticazione Capacitor",
-      current: cleanVersion(configuredVersion(ROOT_PACKAGE, "firebase")), latest: "11.x compatibile",
+      current: cleanVersion(lockedVersion(ROOT_LOCK, "firebase") || configuredVersion(ROOT_PACKAGE, "firebase")), latest: "11.x compatibile",
       status: "ok", deadline: "Nessuna",
       message: "Firebase npm 11 è mantenuto per la compatibilità dichiarata da @capacitor-firebase/authentication 7; il runtime Web è controllato separatamente."
     }

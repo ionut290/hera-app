@@ -16,6 +16,7 @@
   const REGION_VIEWBOX = "9.1729,45.1360,12.7556,43.7310";
   const CACHE_PREFIX = "varga-green-area-search:";
   const CACHE_TTL_MS = 10 * 60 * 1000;
+  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   const GREEN_TYPES = new Set(["park", "garden", "nature_reserve", "recreation_ground", "grass", "village_green", "forest", "wood", "playground"]);
   let map = null;
   let baseLayer = null;
@@ -116,6 +117,57 @@
     return GREEN_TYPES.has(type) || /parco|giardino|area verde|bosco|riserva/i.test(`${item.name || ""} ${item.display_name || ""}`);
   }
 
+  function escapeOverpassString(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/"/g, '\\"');
+  }
+
+  function normalizeOverpassItem(element) {
+    const tags = element.tags || {};
+    const lat = Number(element.lat ?? element.center?.lat);
+    const lon = Number(element.lon ?? element.center?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const box = element.bounds;
+    const street = tags["addr:street"] || tags.loc_name || "";
+    const title = tags.name || tags["name:it"] || (street ? `Area verde – ${street}` : "Area verde senza nome");
+    return {
+      osm_type: element.type,
+      osm_id: element.id,
+      name: title,
+      lat: String(lat),
+      lon: String(lon),
+      boundingbox: box ? [box.minlat, box.maxlat, box.minlon, box.maxlon].map(String) : null,
+      display_name: [title, street, tags["addr:city"]].filter((value, index, values) => value && values.indexOf(value) === index).join(", "),
+      address: { city: tags["addr:city"] || "" },
+      tags,
+      source: "OpenStreetMap"
+    };
+  }
+
+  async function searchMunicipalGreenAreas(name, municipality) {
+    const query = `overpass:${municipality}:${name}`;
+    const cached = readCache(query);
+    if (cached) return cached;
+    const town = escapeOverpassString(municipality);
+    const overpassQuery = `[out:json][timeout:25];area["ISO3166-2"="IT-45"]["boundary"="administrative"]->.region;area(area.region)["boundary"="administrative"]["admin_level"="8"]["name"~"^${town}$","i"]->.municipality;(nwr["leisure"~"^(park|garden|recreation_ground|playground)$"](area.municipality);nwr["landuse"~"^(grass|recreation_ground|forest)$"](area.municipality);nwr["natural"="wood"](area.municipality););out center tags bb;`;
+    const response = await fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" },
+      body: new URLSearchParams({ data: overpassQuery })
+    });
+    if (!response.ok) throw new Error(`Catasto cartografico non disponibile (${response.status}).`);
+    const payload = await response.json();
+    const needle = name.toLocaleLowerCase("it-IT");
+    const seen = new Set();
+    const items = (payload.elements || []).map(normalizeOverpassItem).filter(Boolean).filter((item) => {
+      const key = `${item.osm_type}:${item.osm_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return !needle || `${item.name} ${item.display_name}`.toLocaleLowerCase("it-IT").includes(needle);
+    });
+    writeCache(query, items);
+    return items;
+  }
+
   async function searchGreenAreas(name, municipality) {
     const query = [name, municipality, "Emilia-Romagna", "Italia"].filter(Boolean).join(", ");
     const cached = readCache(query);
@@ -161,7 +213,7 @@
   function renderResults(items) {
     resultsNode.innerHTML = items.map((item, index) => {
       const title = item.name || item.display_name.split(",")[0];
-      const municipality = item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || "Comune non indicato";
+      const municipality = item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || municipalityInput.value.trim() || "Comune non indicato";
       return `<article class="green-area-result"><div><small>${esc(municipality)}</small><h2>${esc(title)}</h2><p>${esc(item.display_name)}</p></div><button class="btn btn-primary" type="button" data-green-area-index="${index}">MOSTRA SULLA MAPPA</button></article>`;
     }).join("");
     resultsNode.classList.remove("hidden");
@@ -174,12 +226,13 @@
     event.preventDefault();
     const name = nameInput.value.trim();
     const municipality = municipalityInput.value.trim();
-    if (name.length < 2) return setStatus("Inserisci almeno 2 caratteri del nome.", "error");
+    if (!municipality && name.length < 2) return setStatus("Indica il Comune oppure inserisci almeno 2 caratteri del nome.", "error");
+    if (name && name.length < 2) return setStatus("Inserisci almeno 2 caratteri del nome oppure lascia il campo vuoto.", "error");
     setStatus("Ricerca nelle aree verdi dell’Emilia-Romagna…");
     resultsNode.classList.add("hidden");
     try {
-      const items = await searchGreenAreas(name, municipality);
-      if (!items.length) throw new Error("Nessuna area verde trovata. Prova con un nome più breve o senza indicare il Comune.");
+      const items = municipality ? await searchMunicipalGreenAreas(name, municipality) : await searchGreenAreas(name, municipality);
+      if (!items.length) throw new Error(name ? "Nessuna area verde con questo nome. Prova con un nome più breve o lascia vuoto il nome per vedere tutto il Comune." : "Nessuna area verde cartografata per questo Comune.");
       renderResults(items);
       showArea(items[0]);
       setStatus(`${items.length} ${items.length === 1 ? "area verde trovata" : "aree verdi trovate"}.`, "success");

@@ -20,8 +20,23 @@ assert.match(
 );
 assert.match(
   optimizer,
-  /if \(!Array\.isArray\(primaryRows\) \|\| primaryRows\.length === 0\) \{\s*startFallback\("vista-principale-vuota"\)/,
-  "Una vista squadre vuota deve attivare il fallback Firestore."
+  /if \(!Array\.isArray\(primaryRows\)\) return;/,
+  "Una vista squadre vuota deve essere considerata un risultato valido."
+);
+assert.doesNotMatch(
+  optimizer,
+  /vista-principale-vuota/,
+  "Una giornata senza squadre non deve causare una lunga ricerca Firestore."
+);
+assert.match(
+  optimizer,
+  /selected, today, tomorrow, \.\.\.nextWorkdayCandidates/,
+  "La cache squadre deve preparare oggi, domani e il prossimo giorno lavorativo."
+);
+assert.match(
+  optimizer,
+  /const SQUADRE_FALLBACK_MS = 1200/,
+  "Se la vista manca davvero, il recupero Firestore deve partire rapidamente."
 );
 assert.match(
   optimizer,
@@ -30,7 +45,7 @@ assert.match(
 );
 assert.match(
   firebaseConfig,
-  /firestore-startup-cost-optimizer\.js\?v=20260828-device-cache-fallback1/,
+  /firestore-startup-cost-optimizer\.js\?v=20260829-fast-squad-cache1/,
   "Il browser deve ricevere la nuova versione del fallback dati essenziali."
 );
 

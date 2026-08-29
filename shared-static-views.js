@@ -314,9 +314,18 @@
   window[GLOBAL] = api;
 
   function start() {
-    const date = normalizeDateKey(typeof window.getActiveSquadreDateKey === "function" ? window.getActiveSquadreDateKey() : todayKey());
-    subscribe("squadre", date);
-    subscribe("calendario", monthKey(date));
+    const today = todayKey();
+    const tomorrowDate = new Date(`${today}T12:00:00`);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrow = normalizeDateKey(tomorrowDate.toISOString());
+    const selected = normalizeDateKey(typeof window.getActiveSquadreDateKey === "function" ? window.getActiveSquadreDateKey() : today);
+    let nextWorkday = "";
+    try {
+      nextWorkday = window.getNextWorkdayCandidateDateKeys?.(today)?.[0] || "";
+    } catch (_) {}
+    [...new Set([selected, today, tomorrow, nextWorkday].filter(Boolean))]
+      .forEach((date) => subscribe("squadre", date));
+    subscribe("calendario", monthKey(selected));
   }
 
   window.addEventListener("hera-squadre-saved", (event) => {

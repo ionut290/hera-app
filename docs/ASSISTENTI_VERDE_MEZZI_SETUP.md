@@ -9,7 +9,7 @@ Le integrazioni sono inattive finché le chiavi non vengono aggiunte come variab
 | `PLANTNET_API_KEY` | Pl@ntNet | Identificazione piante e patologie coperte |
 | `TREFLE_API_TOKEN` | Trefle | Ricerca e schede botaniche |
 | `GEMINI_API_KEY` | Gemini Developer API | Schede prudenti di mezzi e utensili |
-| `GEMINI_MODEL` | Gemini Developer API | Facoltativa; predefinito `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Gemini Developer API | Facoltativa; predefinito `gemini-3.5-flash-lite` |
 
 Procedura:
 

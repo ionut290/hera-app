@@ -4,7 +4,7 @@ const { authenticateEvent } = require("./_firebase-token");
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_LENGTH = 24000;
-const DEFAULT_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 function json(statusCode, payload) {
   return {

@@ -1067,6 +1067,38 @@ textarea:focus-visible {
   margin-top: 8px;
 }
 
+.squadre-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: clamp(18px, 4vw, 34px) 16px 24px;
+  text-align: center;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.75), rgba(255, 255, 255, 0.96));
+}
+
+.squadre-empty-state-image {
+  display: block;
+  width: min(100%, 520px);
+  max-height: 310px;
+  object-fit: contain;
+}
+
+.squadre-empty-state h3 {
+  margin: 2px 0 0;
+  color: #166534;
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.squadre-empty-state p {
+  margin: 0;
+  color: #456257;
+  font-weight: 650;
+}
+
 .squadre-filter-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

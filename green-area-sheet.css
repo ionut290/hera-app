@@ -1,0 +1,10 @@
+.green-area-sheet{position:fixed;inset:0;z-index:12100;display:flex;align-items:flex-end;justify-content:center;padding:14px;background:#102c2780;backdrop-filter:blur(3px)}
+.green-area-sheet.hidden{display:none}
+.green-area-sheet-dialog{position:relative;width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:22px;background:#fff;padding:24px;box-shadow:0 24px 70px #0b241e40}
+.green-area-sheet-dialog h2{margin:5px 44px 16px 0;color:#173522}
+.green-area-sheet-dialog small{color:#08713c;font-weight:850}
+.green-area-sheet-close{position:absolute;top:14px;right:14px}
+.green-area-sheet-dialog dl{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;margin:0 0 20px}
+.green-area-sheet-dialog dt{font-weight:850;color:#355e42}
+.green-area-sheet-dialog dd{margin:0;overflow-wrap:anywhere}
+.green-area-sheet-dialog>a{display:block;text-align:center;text-decoration:none}

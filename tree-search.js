@@ -33,6 +33,82 @@
   const hideHome = (hidden) => $("home-page")?.classList.toggle("hidden", hidden);
   const normalizeTreeIdentifier = (value) => String(value ?? "").trim().replace(/\s+/g, "").toUpperCase();
 
+  const TREE_FIELD_LABELS = {
+    num_pt: "Numero punto",
+    cod_alb: "Codice albero",
+    classe: "Specie / classe",
+    nome_scientifico: "Nome scientifico",
+    nome_comune: "Nome comune",
+    cl_h: "Classe di altezza",
+    classe_circonferenza_diametro: "Classe circonferenza / diametro",
+    circonferenza: "Circonferenza",
+    diametro: "Diametro",
+    altezza: "Altezza",
+    quartiere: "Quartiere",
+    via: "Via",
+    indirizzo: "Indirizzo",
+    localizzazione: "Localizzazione",
+    dimora: "Dimora",
+    pregio: "Albero di pregio",
+    irrigazione: "Irrigazione",
+    distanza_fabbricati: "Distanza dai fabbricati",
+    data_impianto: "Data impianto",
+    data_inventario: "Data inventario",
+    data_aggiornamento: "Data aggiornamento",
+    stato: "Stato",
+    note: "Note",
+    geo_point_2d: "Coordinate"
+  };
+
+  const TREE_FIELD_PRIORITY = [
+    "num_pt", "cod_alb", "classe", "nome_scientifico", "nome_comune",
+    "cl_h", "classe_circonferenza_diametro", "circonferenza", "diametro", "altezza",
+    "quartiere", "via", "indirizzo", "localizzazione", "dimora", "pregio", "irrigazione",
+    "distanza_fabbricati", "data_impianto", "data_inventario", "data_aggiornamento", "stato", "note", "geo_point_2d"
+  ];
+
+  function hasTreeValue(value) {
+    if (value === null || value === undefined || value === "") return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return true;
+  }
+
+  function treeFieldLabel(key) {
+    if (TREE_FIELD_LABELS[key]) return TREE_FIELD_LABELS[key];
+    return String(key || "")
+      .replace(/^geo_/, "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  function formatTreeValue(key, value) {
+    if (key === "pregio") {
+      const normalized = String(value).trim().toUpperCase();
+      if (["S", "SI", "SÌ", "YES", "TRUE", "1"].includes(normalized)) return "Sì";
+      if (["N", "NO", "FALSE", "0"].includes(normalized)) return "No";
+    }
+    if (key === "geo_point_2d" && value && typeof value === "object") {
+      const lat = Number(value.lat);
+      const lon = Number(value.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+    if (Array.isArray(value)) return value.map((item) => typeof item === "object" ? JSON.stringify(item) : String(item)).join(", ");
+    if (typeof value === "object") {
+      try { return JSON.stringify(value); } catch (_) { return String(value); }
+    }
+    return String(value);
+  }
+
+  function buildTreeDetails(tree) {
+    const keys = Object.keys(tree || {}).filter((key) => hasTreeValue(tree[key]));
+    const ordered = [
+      ...TREE_FIELD_PRIORITY.filter((key) => keys.includes(key)),
+      ...keys.filter((key) => !TREE_FIELD_PRIORITY.includes(key)).sort((a, b) => treeFieldLabel(a).localeCompare(treeFieldLabel(b), "it"))
+    ];
+    return ordered.map((key) => `<div><span>${esc(treeFieldLabel(key))}</span><strong>${esc(formatTreeValue(key, tree[key]))}</strong></div>`).join("");
+  }
+
   function resizeMap() {
     requestAnimationFrame(() => map?.invalidateSize({ pan: false, animate: false }));
     setTimeout(() => map?.invalidateSize({ pan: false, animate: false }), 180);
@@ -270,7 +346,8 @@
   function showTree(tree) {
     const point = tree.geo_point_2d;
     if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) throw new Error("Albero trovato, ma senza coordinate utilizzabili.");
-    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna</small><h2>${esc(tree.classe || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid"><div><span>Numero punto</span><strong>${esc(tree.num_pt)}</strong></div><div><span>Codice albero</span><strong>${esc(tree.cod_alb)}</strong></div><div><span>Altezza</span><strong>${esc(tree.cl_h)}</strong></div><div><span>Circonferenza</span><strong>${esc(tree.classe_circonferenza_diametro)}</strong></div><div><span>Quartiere</span><strong>${esc(tree.quartiere)}</strong></div><div><span>Albero di pregio</span><strong>${tree.pregio === "S" ? "Sì" : "No"}</strong></div></div><a class="btn btn-primary tree-navigate" href="https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lon}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a>`;
+    const details = buildTreeDetails(tree);
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div><p class="tree-data-source-note">Sono mostrati tutti i campi valorizzati restituiti in questo momento dal dataset ufficiale del Comune di Bologna. I campi vuoti non vengono visualizzati.</p><a class="btn btn-primary tree-navigate" href="https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lon}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a>`;
     result.classList.remove("hidden");
     initializeMap();
     if (marker) marker.remove();

@@ -13,7 +13,14 @@
   const mapStatus = $("green-areas-map-status");
   const mapStyle = $("green-areas-map-style");
   const fullscreenButton = $("green-areas-fullscreen-btn");
+  const sheet = $("green-area-sheet");
+  const sheetSource = $("green-area-sheet-source");
+  const sheetTitle = $("green-area-sheet-title");
+  const sheetBody = $("green-area-sheet-body");
+  const sheetNavigate = $("green-area-sheet-navigate");
   const REGION_VIEWBOX = "9.1729,45.1360,12.7556,43.7310";
+  const BOLOGNA_CENTER = [44.4949, 11.3426];
+  const MAX_DISTANCE_KM = 50;
   const CACHE_PREFIX = "varga-green-area-search:";
   const CACHE_TTL_MS = 10 * 60 * 1000;
   const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
@@ -24,6 +31,7 @@
   let officialGreenLayer = null;
   let searchLayer = null;
   let fullscreen = false;
+  let currentItems = [];
 
   const esc = (value) => String(value ?? "—").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
   const setStatus = (message, type = "") => {
@@ -121,6 +129,28 @@
     return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/"/g, '\\"');
   }
 
+  function distanceKm(lat1, lon1, lat2, lon2) {
+    const radians = (degrees) => degrees * Math.PI / 180;
+    const dLat = radians(lat2 - lat1);
+    const dLon = radians(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  async function verifyMunicipalityRadius(municipality) {
+    const query = `municipality:${municipality}`;
+    const cached = readCache(query);
+    if (cached) return cached;
+    const params = new URLSearchParams({ format: "jsonv2", q: `${municipality}, Emilia-Romagna, Italia`, limit: "1", countrycodes: "it", addressdetails: "1" });
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("Impossibile verificare il Comune.");
+    const item = (await response.json())[0];
+    if (!item) throw new Error("Comune non trovato.");
+    const result = { distance: distanceKm(BOLOGNA_CENTER[0], BOLOGNA_CENTER[1], Number(item.lat), Number(item.lon)) };
+    writeCache(query, result);
+    return result;
+  }
+
   function normalizeOverpassItem(element) {
     const tags = element.tags || {};
     const lat = Number(element.lat ?? element.center?.lat);
@@ -203,18 +233,40 @@
     searchLayer.clearLayers();
     const bounds = boundsFromResult(item);
     if (bounds) L.rectangle(bounds, { color: "#08783f", weight: 3, fillColor: "#31b96b", fillOpacity: 0.16 }).addTo(searchLayer);
-    L.marker([lat, lon]).addTo(searchLayer).bindPopup(`<strong>${esc(item.name || item.display_name.split(",")[0])}</strong><br>${esc(item.display_name)}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" rel="noopener">NAVIGA</a>`).openPopup();
+    currentItems = [item];
+    L.marker([lat, lon]).addTo(searchLayer).bindPopup(`<strong>${esc(item.name || item.display_name.split(",")[0])}</strong><br>${esc(item.display_name)}<br><button class="btn btn-primary" type="button" data-open-green-sheet="0">APRI SCHEDA</button>`).openPopup();
     if (bounds?.isValid()) map.fitBounds(bounds.pad(0.12), { animate: false, maxZoom: 17 });
     else map.setView([lat, lon], 17, { animate: false });
     mapStatus.textContent = `${item.name || item.display_name.split(",")[0]} evidenziata sulla mappa.`;
     resizeMap();
   }
 
+  function openAreaSheet(item) {
+    if (!item) return;
+    const lat = Number(item.lat);
+    const lon = Number(item.lon);
+    const title = item.name || item.display_name.split(",")[0];
+    const municipality = item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || municipalityInput.value.trim() || "Comune non indicato";
+    const category = item.tags?.leisure || item.tags?.landuse || item.tags?.natural || item.tags?.boundary || "area verde";
+    sheetSource.textContent = item.source === "DBTR Regione Emilia-Romagna" ? "Fonte prioritaria: DBTR ufficiale regionale" : "Fonte integrativa: OpenStreetMap; geometria ufficiale DBTR visibile sulla mappa";
+    sheetTitle.textContent = title;
+    sheetBody.innerHTML = `<dl><dt>Comune</dt><dd>${esc(municipality)}</dd><dt>Categoria</dt><dd>${esc(category)}</dd><dt>Descrizione</dt><dd>${esc(item.display_name)}</dd><dt>Coordinate</dt><dd>${lat.toFixed(6)}, ${lon.toFixed(6)}</dd></dl>`;
+    sheetNavigate.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+    sheet.classList.remove("hidden");
+    sheet.setAttribute("aria-hidden", "false");
+  }
+
+  function closeAreaSheet() {
+    sheet.classList.add("hidden");
+    sheet.setAttribute("aria-hidden", "true");
+  }
+
   function showAllAreas(items, municipality) {
     initializeMap();
     searchLayer.clearLayers();
     const combinedBounds = L.latLngBounds([]);
-    items.forEach((item) => {
+    currentItems = items;
+    items.forEach((item, index) => {
       const lat = Number(item.lat);
       const lon = Number(item.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
@@ -222,11 +274,11 @@
       const bounds = boundsFromResult(item);
       if (bounds?.isValid()) {
         L.rectangle(bounds, { color: "#08783f", weight: 1.5, fillColor: "#31b96b", fillOpacity: 0.13 }).addTo(searchLayer)
-          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" rel="noopener">NAVIGA</a>`);
+          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><button class="btn btn-primary" type="button" data-open-green-sheet="${index}">APRI SCHEDA</button>`);
         combinedBounds.extend(bounds);
       } else {
         L.circleMarker([lat, lon], { radius: 6, color: "#08783f", weight: 2, fillColor: "#31b96b", fillOpacity: 0.72 }).addTo(searchLayer)
-          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" rel="noopener">NAVIGA</a>`);
+          .bindPopup(`<strong>${esc(title)}</strong><br>${esc(item.display_name)}<br><button class="btn btn-primary" type="button" data-open-green-sheet="${index}">APRI SCHEDA</button>`);
         combinedBounds.extend([lat, lon]);
       }
     });
@@ -256,6 +308,10 @@
     setStatus("Ricerca nelle aree verdi dell’Emilia-Romagna…");
     resultsNode.classList.add("hidden");
     try {
+      if (municipality) {
+        const municipalityInfo = await verifyMunicipalityRadius(municipality);
+        if (municipalityInfo.distance > MAX_DISTANCE_KM) throw new Error(`Il Comune è a ${Math.round(municipalityInfo.distance)} km da Bologna. La ricerca è limitata a 50 km.`);
+      }
       const items = municipality ? await searchMunicipalGreenAreas(name, municipality) : await searchGreenAreas(name, municipality);
       if (!items.length) throw new Error(name ? "Nessuna area verde con questo nome. Prova con un nome più breve o lascia vuoto il nome per vedere tutto il Comune." : "Nessuna area verde cartografata per questo Comune.");
       renderResults(items);
@@ -271,6 +327,12 @@
   $("green-areas-back-btn")?.addEventListener("click", closePage);
   mapStyle?.addEventListener("change", () => applyMapStyle(mapStyle.value));
   fullscreenButton?.addEventListener("click", () => setFullscreen(!fullscreen));
+  mapNode?.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-open-green-sheet]");
+    if (button) openAreaSheet(currentItems[Number(button.dataset.openGreenSheet)]);
+  });
+  $("green-area-sheet-close")?.addEventListener("click", closeAreaSheet);
+  sheet?.addEventListener("click", (event) => { if (event.target === sheet) closeAreaSheet(); });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && fullscreen) setFullscreen(false);
   });

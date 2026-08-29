@@ -120,4 +120,56 @@ if (!adminSource.includes("data-error-chatgpt-category")) throw new Error("Pulsa
 if (!adminSource.includes("function chatGptCategoryText()")) throw new Error("Blocco categoria ChatGPT non generato");
 if (!adminSource.includes('window.open("https://chatgpt.com/"')) throw new Error("Apertura ChatGPT non configurata");
 
-console.log("Smoke runtime Centro errori superato.");
+(async () => {
+  const reports = [];
+  const quotaSandbox = makeSandbox();
+  quotaSandbox.firebase = {
+    apps: [{}],
+    functions() {},
+    auth() {
+      return {
+        currentUser: { uid: "quota-test-user" },
+        onAuthStateChanged() {}
+      };
+    },
+    app() {
+      return {
+        functions() {
+          return {
+            httpsCallable() {
+              return async (report) => {
+                reports.push(report);
+                return { data: { recorded: true } };
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+  vm.runInNewContext(fs.readFileSync("app-error-monitor.js", "utf8"), quotaSandbox, { filename: "app-error-monitor.js" });
+
+  const firstMessage = "Failed to execute 'setItem' on 'Storage': Setting the value of 'firestore_clients_firestore/[DEFAULT]/hera-app/client-a' exceeded the quota.";
+  const secondMessage = "FIRESTORE INTERNAL ASSERTION FAILED: QuotaExceededError for firestore_targets_firestore/[DEFAULT]/hera-app/_8 exceeded the quota.";
+  const firstResult = await quotaSandbox.HeraAppErrorMonitor.capture(new Error(firstMessage), {
+    kind: "unhandled-rejection",
+    feature: "home-page"
+  });
+  const duplicate = await quotaSandbox.HeraAppErrorMonitor.capture(new Error(secondMessage), {
+    kind: "handled-console-error",
+    feature: "accesso",
+    source: "console.error"
+  });
+
+  if (reports.length !== 1) {
+    throw new Error(`Gli errori quota Firestore equivalenti devono produrre un solo invio; ricevuti ${reports.length}: ${reports.map((item) => item.fingerprint).join(", ")}; primo=${JSON.stringify(firstResult)}; salute=${JSON.stringify(quotaSandbox.HeraAppErrorMonitor.getHealth())}`);
+  }
+  if (reports[0].fingerprint !== "firestore-local-storage-quota") throw new Error("Fingerprint quota Firestore non normalizzato.");
+  if (!duplicate.duplicate) throw new Error("La seconda variante quota Firestore deve essere deduplicata.");
+
+  console.log("Smoke runtime Centro errori superato.");
+  console.log("Deduplica quota Firestore verificata tra messaggi, viste e tipi diversi.");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

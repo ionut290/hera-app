@@ -388,7 +388,7 @@
     addStyle("./squadre-commessa-themes-visible-fix.css?v=20260817d", "squadre-commessa-themes-visible-fix");
     addScript("./fatto-scroll-guard.js?v=20260817a", "fatto-scroll-guard");
     addScript("./client-error-reporter.js?v=20260816a", "client-error-reporter");
-    addScript("./app-error-monitor.js?v=20260829-noise-filter1", "app-error-monitor");
+    addScript("./app-error-monitor.js?v=20260829-firestore-quota-dedup1", "app-error-monitor");
     addScript("./admin-error-center.js?v=20260829-chatgpt-category1", "admin-error-center");
     addStyle("./admin-error-center.css?v=20260824b", "admin-error-center-style");
     addScript("./squadre-commessa-themes.js?v=20260817b", "squadre-commessa-themes-script");

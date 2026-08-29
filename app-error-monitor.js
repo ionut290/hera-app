@@ -3,7 +3,7 @@
 
   if (window.HeraAppErrorMonitor?.installed) return;
 
-  const VERSION = "1.2.0";
+  const VERSION = "1.2.1";
   const REGION = "europe-west1";
   const FUNCTION_NAME = "recordClientErrorGroup";
   const QUEUE_KEY = "hera_error_center_queue_v1";
@@ -98,6 +98,14 @@
       result = Math.imul(result, 16777619);
     }
     return (result >>> 0).toString(36);
+  }
+
+  const FIRESTORE_STORAGE_QUOTA_FINGERPRINT = "firestore-local-storage-quota";
+
+  function isFirestoreStorageQuotaError(message, stack = "") {
+    const text = `${message || ""}\n${stack || ""}`;
+    return /(?:QuotaExceededError|exceeded the quota)/i.test(text)
+      && /firestore_(?:clients|targets|mutations)_firestore/i.test(text);
   }
 
   function newId() {
@@ -223,10 +231,12 @@
     const feature = inferFeature(context);
     const source = redactText(context.source || "", 700);
     const selected = selectedContext();
-    const fingerprint = redactText(
-      context.fingerprint || hash(`${kind}|${feature}|${message}|${stack.split("\n").slice(0, 2).join("|")}|${source}`),
-      120
-    );
+    const fingerprint = !context.manual && isFirestoreStorageQuotaError(message, stack)
+      ? FIRESTORE_STORAGE_QUOTA_FINGERPRINT
+      : redactText(
+        context.fingerprint || hash(`${kind}|${feature}|${message}|${stack.split("\n").slice(0, 2).join("|")}|${source}`),
+        120
+      );
     return {
       reportId: newId(),
       fingerprint,

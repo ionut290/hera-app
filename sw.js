@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v179";
-const CACHE_RESET_VERSION = "20260829-credential-vault1";
+const CACHE_NAME = "varga-cantieri-shell-v180";
+const CACHE_RESET_VERSION = "20260829-tree-location1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -75,8 +75,8 @@ const APP_SHELL = [
   "./app-notifications-read-guard.js?v=20260815a",
   "./recommended-plants.css?v=20260823-stability3",
   "./recommended-plants.js?v=20260823-stability3",
-  "./tree-search.css?v=20260829-green-areas1",
-  "./tree-search.js?v=20260829-tree-only1",
+  "./tree-search.css?v=20260829-location1",
+  "./tree-search.js?v=20260829-location1",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",
   "./green-areas.js?v=20260829e",

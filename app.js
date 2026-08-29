@@ -677,6 +677,7 @@ const ui = {
   squadreFilterControls: document.getElementById("squadre-filter-controls"),
   squadreFilterDate: document.getElementById("squadre-filter-date"),
   squadreFilterClearBtn: document.getElementById("squadre-filter-clear-btn"),
+  squadreNextWorkdayBtn: document.getElementById("squadre-next-workday-btn"),
   snowSquadreFilterControls: document.getElementById("snow-squadre-filter-controls"),
   snowSquadreFilterDate: document.getElementById("snow-squadre-filter-date"),
   snowSquadreFilterClearBtn: document.getElementById("snow-squadre-filter-clear-btn"),
@@ -1239,6 +1240,7 @@ let selectedWeatherAlertContext = null;
 let manualSquadreFilterDateKey = "";
 let sharedSquadreDateKey = "";
 let automaticSquadreDateKey = "";
+let automaticSquadreDateTimer = null;
 let startupAssignedCommessaAutoOpenDone = false;
 let sharedSquadreViewConfigLoaded = false;
 let highlightedImpiantoKey = "";
@@ -2013,6 +2015,7 @@ ui.squadreFilterDate?.addEventListener("change", onSquadreFilterDateChange);
 ui.weatherAlertSafetyBackBtn?.addEventListener("click", () => setCommessaHash());
 ui.weatherAlertSafetyConfirmBtn?.addEventListener("click", confirmWeatherAlertRead);
 ui.squadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate());
+ui.squadreNextWorkdayBtn?.addEventListener("click", showNextUserWorkday);
 ui.snowSquadreFilterDate?.addEventListener("change", onSnowSquadreFilterDateChange);
 ui.snowSquadreFilterClearBtn?.addEventListener("click", () => clearManualSquadreFilterDate({ snow: true }));
 
@@ -3660,10 +3663,11 @@ function updateAdminControls() {
   }
   ui.squadraCommessa.disabled = !canManage;
   syncCommesseHomeToggle();
-  ui.squadreFilterControls?.classList.toggle("hidden", !canManage);
+  ui.squadreFilterControls?.classList.toggle("hidden", !auth.currentUser);
   ui.snowSquadreFilterControls?.classList.toggle("hidden", !canManage);
-  if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !canManage;
-  if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !canManage;
+  if (ui.squadreFilterDate) ui.squadreFilterDate.disabled = !auth.currentUser;
+  if (ui.squadreFilterClearBtn) ui.squadreFilterClearBtn.disabled = !auth.currentUser;
+  if (ui.squadreNextWorkdayBtn) ui.squadreNextWorkdayBtn.disabled = !auth.currentUser;
   if (ui.snowSquadreFilterDate) ui.snowSquadreFilterDate.disabled = !canManage;
   if (ui.snowSquadreFilterClearBtn) ui.snowSquadreFilterClearBtn.disabled = !canManage;
   ui.exportCurrentCommessaBtn?.classList.toggle("hidden", !canManage);
@@ -19527,7 +19531,13 @@ function subscribeSquadre() {
   const selectedDateKey = getActiveSquadreDateKey();
   const todayDateKey = getTodayDateKey();
   const tomorrowDateKey = getTomorrowDateKey(todayDateKey);
-  const subscribedDateKeys = [...new Set([selectedDateKey, todayDateKey, tomorrowDateKey].filter(Boolean))];
+  const subscribedDateKeys = [...new Set([
+    selectedDateKey,
+    todayDateKey,
+    tomorrowDateKey,
+    ...getNextWorkdayCandidateDateKeys(selectedDateKey),
+    ...getNextWorkdayCandidateDateKeys(todayDateKey)
+  ].filter(Boolean))];
   squadreLoadState = { status: "loading", message: "Caricamento squadre..." };
   renderSquadre();
   startSquadreLoadTimeout();
@@ -19550,6 +19560,7 @@ function subscribeSquadre() {
       squadreHistoryByDate.set(dateKey, historyForDate);
     });
     squadreLoadState = { status: "loaded", message: "" };
+    applyFridayAutomaticSquadreFallback();
     renderTodaySummary();
     console.log("LOAD SQUADRE OK numero:", snapshot.size, "date:", subscribedDateKeys);
     renderSquadre();
@@ -20456,16 +20467,81 @@ function setDefaultSquadraCompositionDate({ force = false } = {}) {
   }
 }
 
-function getAutomaticSquadreDateKey(now = new Date()) {
+function addDaysToDateKey(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+}
+
+function getDateKeyWeekday(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  return Number.isNaN(date.getTime()) ? -1 : date.getUTCDay();
+}
+
+function getNextMondayDateKey(dateKey) {
+  const weekday = getDateKeyWeekday(dateKey);
+  if (weekday < 0) return "";
+  const daysUntilMonday = (8 - weekday) % 7 || 7;
+  return addDaysToDateKey(dateKey, daysUntilMonday);
+}
+
+function getNextWorkdayCandidateDateKeys(dateKey) {
+  const weekday = getDateKeyWeekday(dateKey);
+  if (weekday === 5) return [addDaysToDateKey(dateKey, 1), addDaysToDateKey(dateKey, 3)];
+  if (weekday === 6) return [addDaysToDateKey(dateKey, 2)];
+  if (weekday === 0) return [addDaysToDateKey(dateKey, 1)];
+  return [addDaysToDateKey(dateKey, 1)];
+}
+
+function getRomeClockParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat("it-IT", {
-    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit"
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   }).formatToParts(now);
   const value = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
-  return `${value.year}-${value.month}-${value.day}`;
+  return {
+    dateKey: `${value.year}-${value.month}-${value.day}`,
+    minutes: Number(value.hour || 0) * 60 + Number(value.minute || 0)
+  };
+}
+
+function getAutomaticSquadreDateKey(now = new Date()) {
+  const { dateKey, minutes } = getRomeClockParts(now);
+  const weekday = getDateKeyWeekday(dateKey);
+  if (weekday === 0) return addDaysToDateKey(dateKey, 1);
+  if (minutes < 19 * 60 + 30) return dateKey;
+  if (weekday === 6) return addDaysToDateKey(dateKey, 2);
+  return addDaysToDateKey(dateKey, 1);
+}
+
+function ensureAutomaticSquadreDateTimer() {
+  if (automaticSquadreDateTimer) return;
+  automaticSquadreDateTimer = setInterval(() => {
+    if (manualSquadreFilterDateKey || sharedSquadreDateKey) return;
+    const nextAutomaticDateKey = getAutomaticSquadreDateKey();
+    if (!nextAutomaticDateKey || nextAutomaticDateKey === automaticSquadreDateKey) return;
+    automaticSquadreDateKey = nextAutomaticDateKey;
+    syncSquadreDateInputs();
+    renderSquadre();
+    if (currentUser) subscribeSquadre();
+  }, 30 * 1000);
+}
+
+function applyFridayAutomaticSquadreFallback(now = new Date()) {
+  if (manualSquadreFilterDateKey || sharedSquadreDateKey) return false;
+  const { dateKey, minutes } = getRomeClockParts(now);
+  if (getDateKeyWeekday(dateKey) !== 5 || minutes < 19 * 60 + 30) return false;
+  const saturdayDateKey = addDaysToDateKey(dateKey, 1);
+  if (automaticSquadreDateKey !== saturdayDateKey || hasVisibleSquadraForDate(saturdayDateKey)) return false;
+  automaticSquadreDateKey = addDaysToDateKey(dateKey, 3);
+  syncSquadreDateInputs();
+  return true;
 }
 
 function initializeAutomaticSquadreDate() {
   automaticSquadreDateKey = getAutomaticSquadreDateKey();
+  ensureAutomaticSquadreDateTimer();
   syncSquadreDateInputs();
   renderSquadre();
 }
@@ -20519,6 +20595,34 @@ function setSquadreDateOverride(dateKey, { snow = false } = {}) {
 
 function onSquadreFilterDateChange() {
   setSquadreDateOverride(ui.squadreFilterDate?.value || "");
+}
+
+function hasVisibleSquadraForDate(dateKey) {
+  if (!dateKey) return false;
+  return canManageData()
+    ? getSquadrePerCommessaForDate(dateKey).length > 0
+    : findCurrentUserSquadreForDate(dateKey).length > 0;
+}
+
+function showNextUserWorkday() {
+  const activeDateKey = getActiveSquadreDateKey() || getTodayDateKey();
+  const candidates = getNextWorkdayCandidateDateKeys(activeDateKey).filter(Boolean);
+  const nextDateKey = candidates.find(hasVisibleSquadraForDate);
+  if (!nextDateKey) {
+    alert("🚜 Il trattorino ha controllato, ma non trova ancora una squadra per il prossimo giorno lavorativo.");
+    return;
+  }
+  const activeWeekday = getDateKeyWeekday(activeDateKey);
+  const saturdayDateKey = activeWeekday === 5 ? candidates[0] : "";
+  const mondayDateKey = activeWeekday === 5 ? candidates[1] : "";
+  setSquadreDateOverride(nextDateKey);
+  if (nextDateKey === saturdayDateKey && hasVisibleSquadraForDate(mondayDateKey)) {
+    setTimeout(() => {
+      if (confirm("🚜 Sabato il trattorino lavora! Vuoi sbirciare anche la squadra di lunedì?")) {
+        setSquadreDateOverride(mondayDateKey);
+      }
+    }, 120);
+  }
 }
 
 

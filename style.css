@@ -1125,6 +1125,56 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.squadre-next-workday-btn {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border-color: #86c56d;
+  background: linear-gradient(135deg, #fef9c3, #dcfce7);
+  color: #14532d;
+  box-shadow: 0 7px 16px rgba(21, 128, 61, 0.14);
+  overflow: hidden;
+}
+
+.squadre-next-workday-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px rgba(21, 128, 61, 0.2);
+}
+
+.squadre-next-workday-btn > span:last-child {
+  display: grid;
+  text-align: left;
+  line-height: 1.05;
+}
+
+.squadre-next-workday-btn small {
+  margin-top: 4px;
+  color: #3f6650;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.squadre-next-workday-tractor {
+  display: inline-block;
+  font-size: 1.65rem;
+  transform-origin: 50% 100%;
+  animation: squadre-tractor-ready 1.7s ease-in-out infinite;
+}
+
+@keyframes squadre-tractor-ready {
+  0%, 100% { transform: translateX(-3px) rotate(-2deg); }
+  40% { transform: translateX(5px) rotate(2deg); }
+  55% { transform: translateX(7px) translateY(-2px) rotate(1deg); }
+  70% { transform: translateX(5px) translateY(0) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .squadre-next-workday-tractor { animation: none; }
+}
+
 .commesse-lista {
   display: flex;
   flex-wrap: wrap;

@@ -31,6 +31,12 @@ assert.match(backend, /getAdminEmails/, "Il backend verifica l’amministratore"
 assert.match(backend, /batch\.update\(userRef, approvalPatch\)/, "Il backend autorizza il profilo senza sostituirlo");
 assert.match(backend, /RESEND_ENDPOINT/, "Il backend invia l’email tramite il servizio configurato");
 assert.match(backend, /optionalEmailConfiguration/, "Il backend distribuisce anche senza segreti email mancanti");
+assert.match(backend, /APP_LOGO_URL/, "L’email di benvenuto usa il logo ufficiale dell’app");
+assert.match(backend, /Ti diamo il benvenuto!/, "L’email contiene una vera intestazione di benvenuto");
+assert.match(backend, /APRI VARGA CANTIERI/, "L’email contiene il pulsante principale di accesso");
+assert.match(backend, /Apri Google Play/, "L’email contiene l’installazione Android ordinata");
+assert.match(backend, /Aggiungi alla schermata Home/, "L’email contiene l’installazione iPhone ordinata");
+assert.match(backend, /buildApprovalHtml\(message, \{/, "Il modello HTML riceve i dati personalizzati dell’utente");
 assert.doesNotMatch(backend, /defineSecret|runWith\(\{ secrets:/, "Il deploy non richiede segreti interattivi assenti");
 assert.match(backend, /Idempotency-Key/, "L’email non viene duplicata durante i tentativi");
 assert.match(backend, /emailError = "Invio email non riuscito/, "Un errore email non annulla lo sblocco");

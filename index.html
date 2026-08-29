@@ -66,7 +66,7 @@
   <link rel="stylesheet" href="approval-access.css?v=20260828-email1">
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
-  <link rel="stylesheet" href="tree-search.css?v=20260829a">
+  <link rel="stylesheet" href="tree-search.css?v=20260829b">
 </head>
 <body class="auth-pending">
 
@@ -182,7 +182,19 @@
         <p id="tree-search-status" class="tree-search-status" role="status" aria-live="polite"></p>
       </form>
       <section id="tree-result" class="tree-search-card hidden" aria-live="polite"></section>
-      <div id="tree-map" class="tree-map hidden" aria-label="Posizione dell’albero sulla mappa"></div>
+      <section class="tree-map-card" aria-label="Mappa degli alberi">
+        <div class="tree-map-toolbar">
+          <strong>Alberi nella zona</strong>
+          <label for="tree-map-style">Vista mappa</label>
+          <select id="tree-map-style">
+            <option value="classic">Classica</option>
+            <option value="satellite">Satellite</option>
+            <option value="hybrid">Ibrida</option>
+          </select>
+        </div>
+        <p id="tree-map-status" class="tree-map-status" role="status" aria-live="polite">Aumenta lo zoom per visualizzare i numeri degli alberi.</p>
+        <div id="tree-map" class="tree-map" aria-label="Posizione degli alberi sulla mappa"></div>
+      </section>
     </div>
   </section>
 
@@ -530,7 +542,7 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
-  <script src="tree-search.js?v=20260829a"></script>
+  <script src="tree-search.js?v=20260829b"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

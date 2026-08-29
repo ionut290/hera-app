@@ -7,9 +7,11 @@
   const number = $("tree-number");
   const status = $("tree-search-status");
   const result = $("tree-result");
+  const mapCard = $("tree-map-card");
   const mapNode = $("tree-map");
   const mapStatus = $("tree-map-status");
   const mapStyle = $("tree-map-style");
+  const mapFullscreenButton = $("tree-map-fullscreen-btn");
   const dialog = $("tree-qr-dialog");
   const video = $("tree-qr-video");
   const qrStatus = $("tree-qr-status");
@@ -24,10 +26,27 @@
   let lastViewportKey = "";
   let stream = null;
   let scanFrame = 0;
+  let mapFullscreen = false;
 
   const esc = (value) => String(value ?? "—").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
   const setStatus = (message, type = "") => { status.textContent = message; status.className = `tree-search-status ${type}`.trim(); };
   const hideHome = (hidden) => $("home-page")?.classList.toggle("hidden", hidden);
+  const normalizeTreeIdentifier = (value) => String(value ?? "").trim().replace(/\s+/g, "").toUpperCase();
+
+  function resizeMap() {
+    requestAnimationFrame(() => map?.invalidateSize({ pan: false, animate: false }));
+    setTimeout(() => map?.invalidateSize({ pan: false, animate: false }), 180);
+  }
+
+  function setMapFullscreen(active) {
+    if (!mapCard || !mapFullscreenButton) return;
+    mapFullscreen = Boolean(active);
+    mapCard.classList.toggle("tree-map-card--fullscreen", mapFullscreen);
+    document.body.classList.toggle("tree-map-fullscreen-open", mapFullscreen);
+    mapFullscreenButton.setAttribute("aria-pressed", String(mapFullscreen));
+    mapFullscreenButton.textContent = mapFullscreen ? "✕ CHIUDI MAPPA" : "⛶ SCHERMO INTERO";
+    resizeMap();
+  }
 
   function openPage() {
     document.getElementById("menu-close-btn")?.click();
@@ -40,6 +59,7 @@
   }
   function closePage() {
     stopScanner();
+    setMapFullscreen(false);
     page.classList.add("hidden");
     page.setAttribute("aria-hidden", "true");
     hideHome(false);
@@ -121,15 +141,23 @@
     } catch (error) { qrStatus.textContent = error.message || "Immagine non leggibile."; }
   }
 
-  async function findBolognaTree(treeNumber) {
-    const id = String(treeNumber).trim().replace(/'/g, "''");
+  async function findBolognaTrees(treeNumber) {
+    const id = normalizeTreeIdentifier(treeNumber).replace(/'/g, "''");
     const where = encodeURIComponent(`num_pt='${id}' OR cod_alb='${id}'`);
-    const url = `https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/alberi-manutenzioni/records?where=${where}&limit=10`;
+    const url = `https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/alberi-manutenzioni/records?where=${where}&limit=100`;
     const response = await fetch(url, { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`Servizio comunale non disponibile (${response.status}).`);
     const payload = await response.json();
-    if (!payload.results?.length) return null;
-    return payload.results.find((item) => String(item.num_pt) === String(treeNumber) || String(item.cod_alb).toLowerCase() === String(treeNumber).toLowerCase()) || payload.results[0];
+    if (!payload.results?.length) return [];
+    const records = [...payload.results];
+    const maximumMatches = Math.min(Number(payload.total_count) || records.length, 1000);
+    for (let offset = 100; offset < maximumMatches; offset += 100) {
+      const nextResponse = await fetch(`${url}&offset=${offset}`, { headers: { Accept: "application/json" } });
+      if (!nextResponse.ok) throw new Error(`Servizio comunale non disponibile (${nextResponse.status}).`);
+      const nextPayload = await nextResponse.json();
+      records.push(...(nextPayload.results || []));
+    }
+    return records.filter((item) => normalizeTreeIdentifier(item.num_pt) === id || normalizeTreeIdentifier(item.cod_alb) === id);
   }
 
   const TILE_LAYERS = {
@@ -251,22 +279,61 @@
     setTimeout(() => { map.invalidateSize(); loadVisibleTrees(); }, 50);
   }
 
+  function showTreeMatches(trees, identifier) {
+    initializeMap();
+    if (marker) marker.remove();
+    marker = null;
+    const nextLayer = L.layerGroup();
+    const points = [];
+    trees.forEach((tree) => {
+      const point = tree.geo_point_2d;
+      if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
+      points.push([point.lat, point.lon]);
+      addVisibleTree(tree, nextLayer);
+    });
+    if (!points.length) throw new Error("Alberi trovati, ma senza coordinate utilizzabili.");
+    treesLayer?.remove();
+    treesLayer = nextLayer.addTo(map);
+    lastViewportKey = "";
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna</small><h2>Codice albero ${esc(identifier)}</h2></div><strong>${trees.length}</strong></div><p>Questo codice è associato a più alberi. Sono tutti indicati sulla mappa: tocca il numero della pianta per aprire la scheda corretta.</p>`;
+    result.classList.remove("hidden");
+    map.fitBounds(L.latLngBounds(points).pad(0.08), { animate: false, maxZoom: 18 });
+    mapStatus.textContent = `${points.length} alberi con codice ${identifier}. Tocca un numero per aprire la scheda.`;
+    resizeMap();
+  }
+
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     setStatus("Ricerca nel censimento ufficiale…");
     result.classList.add("hidden");
     try {
       if (municipality.value !== "Bologna") throw new Error("Il censimento di questo Comune non è ancora collegato.");
-      const tree = await findBolognaTree(number.value);
-      if (!tree) throw new Error("Albero non trovato. Controlla Comune e numero riportati sul cartellino.");
-      showTree(tree); setStatus("Albero trovato nel censimento del Comune di Bologna.", "success");
+      const identifier = normalizeTreeIdentifier(number.value);
+      number.value = identifier;
+      const trees = await findBolognaTrees(identifier);
+      if (!trees.length) throw new Error("Albero non trovato. Controlla il numero punto o il codice albero riportato sul cartellino.");
+      const pointMatch = trees.find((tree) => normalizeTreeIdentifier(tree.num_pt) === identifier);
+      if (pointMatch) {
+        showTree(pointMatch);
+        setStatus("Albero trovato tramite numero punto nel censimento del Comune di Bologna.", "success");
+      } else if (trees.length === 1) {
+        showTree(trees[0]);
+        setStatus("Albero trovato tramite codice albero nel censimento del Comune di Bologna.", "success");
+      } else {
+        showTreeMatches(trees, identifier);
+        setStatus(`${trees.length} alberi trovati con il codice ${identifier}. Seleziona il numero corretto sulla mappa.`, "success");
+      }
     } catch (error) { setStatus(error.message || "Ricerca non riuscita.", "error"); }
   });
   $("open-tree-search-btn")?.addEventListener("click", openPage);
   $("tree-search-back-btn")?.addEventListener("click", closePage);
   $("tree-qr-open-btn")?.addEventListener("click", startScanner);
+  mapFullscreenButton?.addEventListener("click", () => setMapFullscreen(!mapFullscreen));
   mapStyle?.addEventListener("change", () => applyMapStyle(mapStyle.value));
   $("tree-qr-close-btn")?.addEventListener("click", stopScanner);
   dialog?.addEventListener("close", stopScanner);
   $("tree-qr-file")?.addEventListener("change", (event) => event.target.files?.[0] && scanFile(event.target.files[0]));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && mapFullscreen && !dialog?.open) setMapFullscreen(false);
+  });
 })();

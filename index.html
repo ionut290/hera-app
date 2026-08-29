@@ -66,7 +66,7 @@
   <link rel="stylesheet" href="approval-access.css?v=20260828-email1">
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
-  <link rel="stylesheet" href="tree-search.css?v=20260829c">
+  <link rel="stylesheet" href="tree-search.css?v=20260829d">
 </head>
 <body class="auth-pending">
 
@@ -173,8 +173,8 @@
           <option value="Bologna">Bologna</option>
           <option value="Ferrara" disabled>Ferrara — collegamento in preparazione</option>
         </select>
-        <label for="tree-number">Numero dell’albero</label>
-        <input id="tree-number" type="text" inputmode="text" autocomplete="off" placeholder="Es. 6518 oppure 349VT" required>
+        <label for="tree-number">Numero punto o codice albero</label>
+        <input id="tree-number" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="Es. 64228 oppure 103VT" required>
         <div class="tree-search-actions">
           <button class="btn btn-primary" type="submit">CERCA ALBERO</button>
           <button id="tree-qr-open-btn" class="btn tree-qr-btn" type="button">▣ SCANSIONA QR CODE</button>
@@ -182,9 +182,10 @@
         <p id="tree-search-status" class="tree-search-status" role="status" aria-live="polite"></p>
       </form>
       <section id="tree-result" class="tree-search-card hidden" aria-live="polite"></section>
-      <section class="tree-map-card" aria-label="Mappa degli alberi">
+      <section id="tree-map-card" class="tree-map-card" aria-label="Mappa degli alberi">
         <div class="tree-map-toolbar">
           <strong>Alberi nella zona</strong>
+          <button id="tree-map-fullscreen-btn" class="btn tree-map-fullscreen-btn" type="button" aria-controls="tree-map" aria-pressed="false">⛶ SCHERMO INTERO</button>
           <label for="tree-map-style">Vista mappa</label>
           <select id="tree-map-style">
             <option value="classic">Classica</option>
@@ -542,7 +543,7 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
-  <script src="tree-search.js?v=20260829c"></script>
+  <script src="tree-search.js?v=20260829d"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {

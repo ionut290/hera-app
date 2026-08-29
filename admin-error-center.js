@@ -3,7 +3,7 @@
 
   if (window.HeraAdminErrorCenter?.installed) return;
 
-  const VERSION = "1.4.0";
+  const VERSION = "1.5.0";
   const REGION = "europe-west1";
   const ADMIN_EMAIL = "ionut29019@gmail.com";
   const FUNCTIONS = Object.freeze({
@@ -254,6 +254,44 @@
 
   function impactItems() {
     return state.impactFilter === "all" ? state.items : state.items.filter((item) => impactCategory(item).id === state.impactFilter);
+  }
+
+  function chatGptCategoryItems() {
+    const selected = selectedItem();
+    const impactId = state.impactFilter !== "all" ? state.impactFilter : impactCategory(selected).id;
+    return state.items.filter((item) => impactCategory(item).id === impactId);
+  }
+
+  function uniqueRecentEvents(events = []) {
+    const seen = new Set();
+    return events.filter((event) => {
+      const key = [event?.message, event?.source, event?.line, event?.platform, event?.userEmailMasked].map((value) => String(value || "")).join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function chatGptCategoryText() {
+    const items = chatGptCategoryItems();
+    const category = items[0] ? impactCategory(items[0]) : IMPACT_CATEGORIES.find((item) => item.id === state.impactFilter) || IMPACT_CATEGORIES[7];
+    const payload = items.map((item) => ({
+      ...item,
+      recentEvents: uniqueRecentEvents(item.recentEvents || [])
+    }));
+    const totalOccurrences = items.reduce((sum, item) => sum + Math.max(1, Number(item.occurrences || 0)), 0);
+    return [
+      "Analizza questo blocco completo del Centro errori della mia app Varga Cantieri.",
+      "Categoria di impatto: " + category.icon + " " + category.label + ".",
+      "Gruppi inclusi: " + items.length + ". Occorrenze complessive dichiarate: " + totalOccurrences + ".",
+      "Distingui gli errori realmente diversi dai duplicati, confronta firstSeenAt/lastSeenAt con le versioni dei file, indica quali sono storici o già risolti e quali richiedono ancora una correzione.",
+      "Per ogni problema ancora attivo proponi la modifica minima e sicura. Non modificare FATTO, WhatsApp/WHAZZUP, dati di commesse, impianti, personale, utenti, squadre, calendario o ore se non sono direttamente coinvolti.",
+      "Non considerare automaticamente feature o lastActiveView come causa: verifica sempre message, stack e source.",
+      "Rispondi in italiano con: causa, stato (storico/duplicato/attivo), priorità e azione consigliata.",
+      "",
+      "DATI DELLA CATEGORIA:",
+      JSON.stringify(payload, null, 2)
+    ].join("\n");
   }
 
   function repairAdvice(item) {
@@ -557,7 +595,7 @@
       <section class="hera-error-admin">
         <label>Stato<select data-error-detail-status>${["open", "in_verification", "resolved", "ignored"].map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${esc(statusLabel(status))}</option>`).join("")}</select></label>
         <label>Nota amministratore<textarea class="hera-error-note" data-error-note rows="4" maxlength="3000" placeholder="Annota verifica, causa o correzione applicata.">${esc(item.adminNote || "")}</textarea></label>
-        <div class="hera-error-repair-actions"><button class="btn hera-error-repair-btn" type="button" data-error-find-solution>🧠 TROVA SOLUZIONE</button><button class="btn hera-error-repair-btn ${repairAdvice(item).safeAutoRepair ? "is-safe" : ""}" type="button" data-error-repair>🛠️ RIPARA ERRORE</button><button class="btn hera-error-repair-btn" type="button" data-error-github-repair>🚀 RIPARA SU GITHUB</button></div>
+        <div class="hera-error-repair-actions"><button class="btn hera-error-repair-btn" type="button" data-error-find-solution>🧠 TROVA SOLUZIONE</button><button class="btn hera-error-repair-btn ${repairAdvice(item).safeAutoRepair ? "is-safe" : ""}" type="button" data-error-repair>🛠️ RIPARA ERRORE</button><button class="btn hera-error-repair-btn" type="button" data-error-github-repair>🚀 RIPARA SU GITHUB</button><button class="btn hera-error-repair-btn hera-error-chatgpt-btn" type="button" data-error-chatgpt-category>🤖 INVIA CATEGORIA A CHATGPT</button></div>
         <div class="hera-error-repair-result" data-error-repair-result></div>
         <p class="hera-error-status" data-error-feedback></p>
         <div class="hera-error-admin-actions"><button class="btn btn-primary" type="button" data-error-save>SALVA STATO</button><button class="btn" type="button" data-error-copy>COPIA DIAGNOSTICA</button></div>
@@ -733,6 +771,36 @@
     }
   }
 
+  async function sendCategoryToChatGpt() {
+    const feedback = document.querySelector("[data-error-feedback]");
+    const items = chatGptCategoryItems();
+    if (!items.length) {
+      if (feedback) feedback.textContent = "⚠️ Nessun errore disponibile nella categoria selezionata.";
+      return;
+    }
+    const chatWindow = window.open("https://chatgpt.com/", "_blank");
+    try { if (chatWindow) chatWindow.opener = null; } catch (_) {}
+    const text = chatGptCategoryText();
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        if (!document.execCommand("copy")) throw new Error("Copia non supportata");
+        textarea.remove();
+      }
+      if (feedback) feedback.textContent = `✅ ${items.length} gruppi della categoria copiati. In ChatGPT premi Incolla e Invia.`;
+      if (!chatWindow) window.alert("Blocco completo copiato. Apri ChatGPT e premi Incolla.");
+    } catch (error) {
+      if (chatWindow) chatWindow.close?.();
+      if (feedback) feedback.textContent = `⚠️ Copia non riuscita: ${error?.message || "errore sconosciuto"}. Usa COPIA DIAGNOSTICA per il singolo errore.`;
+    }
+  }
+
   function showSelectedSolution() {
     const item = selectedItem();
     const root = document.querySelector("[data-error-repair-result]");
@@ -798,6 +866,7 @@
     if (event.target.closest?.("[data-error-find-solution]")) return showSelectedSolution();
     if (event.target.closest?.("[data-error-repair]")) return void repairSelectedError();
     if (event.target.closest?.("[data-error-github-repair]")) return startGithubRepair();
+    if (event.target.closest?.("[data-error-chatgpt-category]")) return void sendCategoryToChatGpt();
     if (event.target.closest?.("[data-error-save]")) return void saveSelectedStatus();
     if (event.target.closest?.("[data-error-copy]")) return void copySelectedDiagnostic();
   }

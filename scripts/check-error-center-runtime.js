@@ -112,8 +112,12 @@ if (monitorSandbox.HeraAppErrorMonitor.getHealth().queuedReports !== 0) throw ne
 
 const adminSandbox = makeSandbox();
 adminSandbox.canManageData = () => false;
-vm.runInNewContext(fs.readFileSync("admin-error-center.js", "utf8"), adminSandbox, { filename: "admin-error-center.js" });
+const adminSource = fs.readFileSync("admin-error-center.js", "utf8");
+vm.runInNewContext(adminSource, adminSandbox, { filename: "admin-error-center.js" });
 if (!adminSandbox.HeraAdminErrorCenter?.installed) throw new Error("Centro amministratore non esportato");
 if (typeof adminSandbox.HeraAdminErrorCenter.openBugReport !== "function") throw new Error("Modulo segnalazione bug non esportato");
+if (!adminSource.includes("data-error-chatgpt-category")) throw new Error("Pulsante invio categoria a ChatGPT non disponibile");
+if (!adminSource.includes("function chatGptCategoryText()")) throw new Error("Blocco categoria ChatGPT non generato");
+if (!adminSource.includes('window.open("https://chatgpt.com/"')) throw new Error("Apertura ChatGPT non configurata");
 
 console.log("Smoke runtime Centro errori superato.");

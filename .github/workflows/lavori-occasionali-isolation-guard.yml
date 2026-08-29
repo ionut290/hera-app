@@ -20,6 +20,6 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Verifica che i Lavori occasionali non tocchino le cache globali
         run: node scripts/check-lavori-occasionali-isolation.js

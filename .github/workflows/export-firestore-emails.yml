@@ -16,7 +16,7 @@ jobs:
       - name: Configura Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Installa Firebase Admin
         run: npm install --no-save firebase-admin

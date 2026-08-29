@@ -4,14 +4,8 @@ const INSTALLED = Object.freeze({
   googleapis: "176.0.0"
 });
 
-const NODE_20_DEADLINE = "2026-10-30";
-
 function major(version) {
   return Number.parseInt(String(version || "0").replace(/^[^0-9]*/, "").split(".")[0], 10) || 0;
-}
-
-function daysUntil(dateText) {
-  return Math.ceil((new Date(`${dateText}T23:59:59Z`).getTime() - Date.now()) / 86400000);
 }
 
 async function latestVersion(packageName) {
@@ -37,9 +31,8 @@ exports.handler = async () => {
         message: breaking ? "Nuova versione principale: aggiornare soltanto con migrazione e test completi." : changed ? "Aggiornamento disponibile: verificare compatibilità e test prima della pubblicazione." : "Versione allineata al registro npm."
       };
     });
-    const nodeDays = daysUntil(NODE_20_DEADLINE);
     const items = [
-      { name: "Node.js runtime", current: "20", latest: "22 consigliato", status: nodeDays <= 30 ? "urgent" : "planned", deadline: "30 ottobre 2026", message: nodeDays >= 0 ? `Migrazione a Node.js 22 da completare entro ${nodeDays} giorni.` : "Scadenza superata: migrare immediatamente a Node.js 22." },
+      { name: "Node.js runtime", current: "22", latest: "22 LTS", status: "ok", deadline: "Nessuna", message: "Runtime Node.js 22 configurato per build, funzioni e controlli automatici." },
       ...dependencyItems,
       { name: "Firebase functions.config()", current: "Ancora utilizzato", latest: "Secrets e parametri", status: "planned", deadline: "Marzo 2027", message: "Sostituire functions.config() con Firebase Secrets e parametri in una migrazione separata." }
     ];

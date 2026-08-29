@@ -34,7 +34,7 @@ exports.handler = async () => {
     const items = [
       { name: "Node.js runtime", current: "22", latest: "22 LTS", status: "ok", deadline: "Nessuna", message: "Runtime Node.js 22 configurato per build, funzioni e controlli automatici." },
       ...dependencyItems,
-      { name: "Firebase functions.config()", current: "Ancora utilizzato", latest: "Secrets e parametri", status: "planned", deadline: "Marzo 2027", message: "Sostituire functions.config() con Firebase Secrets e parametri in una migrazione separata." }
+      { name: "Firebase functions.config()", current: "Migrato", latest: "Secret RUNTIME_CONFIG", status: "ok", deadline: "Nessuna", message: "Migrazione completata: le Cloud Functions usano Firebase Secret Manager tramite RUNTIME_CONFIG." }
     ];
     return { statusCode: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=900" }, body: JSON.stringify({ checkedAt: new Date().toISOString(), items }) };
   } catch (error) {

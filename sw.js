@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v172";
-const CACHE_RESET_VERSION = "20260829-update-notice1";
+const CACHE_NAME = "varga-cantieri-shell-v173";
+const CACHE_RESET_VERSION = "20260829-credential-vault1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -35,7 +35,7 @@ const APP_SHELL = [
   "./management-v2.js?v=20260731",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./auth-login-fix.js?v=20260731-legacy1",
-  "./login-retry-fix.js?v=20260826-stability1",
+  "./login-retry-fix.js?v=20260829-credential-vault1",
   "./first-login-password.js?v=20260726b",
   "./approval-access.js?v=20260828-authfix",
   "./coordinate-repair.js?v=20260728a",
@@ -77,7 +77,7 @@ const APP_SHELL = [
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260823-stability3",
-  "./firebase-config.js?v=20260829-firestore-quota1",
+  "./firebase-config.js?v=20260829-credential-vault1",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
   "./icons/varga-cantieri-180.png",

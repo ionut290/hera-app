@@ -111,14 +111,22 @@
     return !checkbox || checkbox.checked;
   }
 
-  function capturePendingCredential() {
+  function capturePendingCredential(options = {}) {
     if (!rememberEnabled()) {
       pendingCredential = null;
-      return;
+      return false;
     }
-    const email = normalizeEmail(document.getElementById("auth-email-input")?.value || "");
-    const password = String(document.getElementById("auth-password-input")?.value || "");
+    const hasProvidedCredential = options
+      && typeof options === "object"
+      && Object.prototype.hasOwnProperty.call(options, "email");
+    const email = normalizeEmail(hasProvidedCredential
+      ? options.email
+      : document.getElementById("auth-email-input")?.value || "");
+    const password = String(hasProvidedCredential
+      ? options.password || ""
+      : document.getElementById("auth-password-input")?.value || "");
     pendingCredential = email && password ? { email, password, capturedAt: Date.now() } : null;
+    return Boolean(pendingCredential);
   }
 
   async function savePendingAfterSuccessfulLogin(user) {
@@ -282,6 +290,7 @@
   window.HeraLoginCredentialVault = {
     installed: true,
     storeAccount,
+    capturePendingCredential,
     migrateLegacyAndroidAccounts
   };
 

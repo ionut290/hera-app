@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v168";
-const CACHE_RESET_VERSION = "20260829-global-map1";
+const CACHE_NAME = "varga-cantieri-shell-v169";
+const CACHE_RESET_VERSION = "20260829-chatgpt-category1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -26,10 +26,10 @@ const APP_SHELL = [
   "./update-app-feature.js?v=20260824-oneclick1",
   "./heavy-libs-lazy-loader.js?v=20260815a",
   "./identity-feature-lazy-loader.js?v=20260815a",
-  "./loading-humor.js?v=20260814a",
+  "./loading-humor.js?v=20260829-chatgpt-category1",
   "./client-error-reporter.js?v=20260816a",
   "./app-error-monitor.js?v=20260824b",
-  "./admin-error-center.js?v=20260824b",
+  "./admin-error-center.js?v=20260829-chatgpt-category1",
   "./admin-error-center.css?v=20260824b",
   "./management-core.js?v=20260731",
   "./management-v2.js?v=20260731",

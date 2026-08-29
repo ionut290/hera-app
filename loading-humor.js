@@ -389,7 +389,7 @@
     addScript("./fatto-scroll-guard.js?v=20260817a", "fatto-scroll-guard");
     addScript("./client-error-reporter.js?v=20260816a", "client-error-reporter");
     addScript("./app-error-monitor.js?v=20260824b", "app-error-monitor");
-    addScript("./admin-error-center.js?v=20260824b", "admin-error-center");
+    addScript("./admin-error-center.js?v=20260829-chatgpt-category1", "admin-error-center");
     addStyle("./admin-error-center.css?v=20260824b", "admin-error-center-style");
     addScript("./squadre-commessa-themes.js?v=20260817b", "squadre-commessa-themes-script");
     addScript("./shared-pdf-attachments.js?v=20260821v2", "shared-whazzup-pdf");

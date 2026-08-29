@@ -49,7 +49,7 @@ const HERA_ACTIVE_COMMESSE_FIRST_BOOT_GUARD_SRC = "active-commesse-first-boot-gu
 const HERA_FIRESTORE_STARTUP_COST_OPTIMIZER_SRC = "firestore-startup-cost-optimizer.js?v=20260829-fast-squad-cache1";
 const HERA_SHARED_STATIC_VIEWS_UI_SRC = "shared-static-views-ui.js?v=20260815-squadre-board1";
 const HERA_ADMIN_USER_ACCESS_TOOLS_SRC = "admin-user-access-tools.js?v=20260810a";
-const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260811a";
+const HERA_ADMIN_USER_ACCESS_SHARE_FIX_SRC = "admin-user-access-share-fix.js?v=20260829-credential-vault1";
 const HERA_OCCASIONAL_WORKFLOW_V2_SRC = "lavori-occasionali-workflow-v2.js?v=20260824a";
 const HERA_OCCASIONAL_SQUAD_FIRST_SRC = "lavori-occasionali-squad-first.js?v=20260824a";
 const HERA_OCCASIONAL_GOOGLE_PLACES_SRC = "lavori-occasionali-google-places.js?v=20260823-map2";

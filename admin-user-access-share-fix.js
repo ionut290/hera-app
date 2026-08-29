@@ -339,7 +339,7 @@
   if (window.__heraLoginPasswordVaultLoaderInstalled) return;
   window.__heraLoginPasswordVaultLoaderInstalled = true;
   const script = document.createElement("script");
-  script.src = "login-password-vault.js?v=20260825a";
+  script.src = "login-password-vault.js?v=20260829-logout1";
   script.defer = true;
   script.onerror = () => console.warn("Password vault non caricato.");
   document.head.appendChild(script);

@@ -290,6 +290,11 @@
       if (feedback) feedback.textContent = "Inserisci email e password.";
       return;
     }
+    try {
+      window.HeraLoginCredentialVault?.capturePendingCredential?.({ email, password });
+    } catch (error) {
+      console.warn("Preparazione salvataggio credenziale non riuscita:", error);
+    }
     if (loginButton) {
       loginButton.disabled = true;
       loginButton.textContent = "Accesso...";

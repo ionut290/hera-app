@@ -20,6 +20,8 @@
   let hybridLabels = null;
   let viewportTimer = 0;
   let viewportRequest = 0;
+  let viewportAbort = null;
+  let lastViewportKey = "";
   let stream = null;
   let scanFrame = 0;
 
@@ -131,9 +133,9 @@
   }
 
   const TILE_LAYERS = {
-    classic: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", options: { maxZoom: 20, attribution: "&copy; OpenStreetMap" } },
-    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", options: { maxZoom: 20, attribution: "Tiles &copy; Esri" } },
-    labels: { url: "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", options: { maxZoom: 20, attribution: "Labels &copy; Esri", pane: "overlayPane" } }
+    classic: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", options: { maxZoom: 20, maxNativeZoom: 19, keepBuffer: 5, updateWhenZooming: false, updateWhenIdle: true, attribution: "&copy; OpenStreetMap" } },
+    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", options: { maxZoom: 20, maxNativeZoom: 19, keepBuffer: 5, updateWhenZooming: false, updateWhenIdle: true, attribution: "Tiles &copy; Esri" } },
+    labels: { url: "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", options: { maxZoom: 20, maxNativeZoom: 19, keepBuffer: 5, updateWhenZooming: false, updateWhenIdle: true, attribution: "Labels &copy; Esri", pane: "overlayPane" } }
   };
 
   function applyMapStyle(style) {
@@ -147,7 +149,7 @@
 
   function initializeMap() {
     if (map || !window.L) return;
-    map = L.map(mapNode, { zoomControl: true }).setView([44.4949, 11.3426], 13);
+    map = L.map(mapNode, { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 13);
     treesLayer = L.layerGroup().addTo(map);
     applyMapStyle(mapStyle?.value || "classic");
     map.on("moveend zoomend", scheduleVisibleTrees);
@@ -177,7 +179,7 @@
     });
   }
 
-  function addVisibleTree(tree) {
+  function addVisibleTree(tree, targetLayer = treesLayer) {
     const point = tree.geo_point_2d;
     if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return;
     const treeMarker = L.marker([point.lat, point.lon], { icon: numberedTreeIcon(tree), title: `Albero ${tree.num_pt || tree.cod_alb || ""}` });
@@ -185,25 +187,29 @@
     treeMarker.on("popupopen", (event) => {
       event.popup.getElement()?.querySelector(".tree-popup-open")?.addEventListener("click", () => showTree(tree), { once: true });
     });
-    treeMarker.addTo(treesLayer);
+    treeMarker.addTo(targetLayer);
   }
 
   async function loadVisibleTrees() {
     if (!map || page.classList.contains("hidden")) return;
     const zoom = map.getZoom();
-    treesLayer?.clearLayers();
     if (zoom < 16) {
-      mapStatus.textContent = "Aumenta lo zoom almeno al livello 16 per visualizzare i numeri degli alberi.";
+      mapStatus.textContent = "Aumenta lo zoom almeno al livello 16. Gli alberi già caricati restano visibili.";
       return;
     }
-    const requestId = ++viewportRequest;
     const center = map.getCenter();
+    const viewportKey = `${zoom}:${center.lat.toFixed(4)}:${center.lng.toFixed(4)}`;
+    if (viewportKey === lastViewportKey) return;
+    const requestId = ++viewportRequest;
+    viewportAbort?.abort();
+    const controller = new AbortController();
+    viewportAbort = controller;
     const radius = Math.min(1600, Math.max(80, distanceMeters(center, map.getBounds().getNorthEast()) + 40));
-    mapStatus.textContent = "Caricamento degli alberi nella zona visibile…";
+    mapStatus.textContent = "Aggiornamento della zona… Gli alberi attuali rimangono visibili.";
     try {
       const where = encodeURIComponent(`within_distance(geo_point_2d, geom'POINT(${center.lng} ${center.lat})', ${radius}m)`);
       const firstUrl = `https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/alberi-manutenzioni/records?where=${where}&limit=100`;
-      const firstResponse = await fetch(firstUrl, { headers: { Accept: "application/json" } });
+      const firstResponse = await fetch(firstUrl, { headers: { Accept: "application/json" }, signal: controller.signal });
       if (!firstResponse.ok) throw new Error(`Servizio comunale non disponibile (${firstResponse.status}).`);
       const first = await firstResponse.json();
       if (requestId !== viewportRequest) return;
@@ -213,17 +219,23 @@
       }
       const records = [...(first.results || [])];
       for (let offset = 100; offset < first.total_count; offset += 100) {
-        const response = await fetch(`${firstUrl}&offset=${offset}`, { headers: { Accept: "application/json" } });
+        const response = await fetch(`${firstUrl}&offset=${offset}`, { headers: { Accept: "application/json" }, signal: controller.signal });
         if (!response.ok) throw new Error(`Servizio comunale non disponibile (${response.status}).`);
         const payload = await response.json();
         if (requestId !== viewportRequest) return;
         records.push(...(payload.results || []));
       }
       const bounds = map.getBounds().pad(0.05);
-      records.filter((tree) => tree.geo_point_2d && bounds.contains([tree.geo_point_2d.lat, tree.geo_point_2d.lon])).forEach(addVisibleTree);
+      const nextLayer = L.layerGroup();
+      records.filter((tree) => tree.geo_point_2d && bounds.contains([tree.geo_point_2d.lat, tree.geo_point_2d.lon])).forEach((tree) => addVisibleTree(tree, nextLayer));
+      if (requestId !== viewportRequest) return;
+      treesLayer?.remove();
+      treesLayer = nextLayer.addTo(map);
+      lastViewportKey = viewportKey;
       mapStatus.textContent = `${treesLayer.getLayers().length} alberi visualizzati. Tocca un numero per aprire la scheda.`;
     } catch (error) {
-      if (requestId === viewportRequest) mapStatus.textContent = error.message || "Impossibile caricare gli alberi della zona.";
+      if (error?.name === "AbortError") return;
+      if (requestId === viewportRequest) mapStatus.textContent = `${error.message || "Impossibile aggiornare la zona."} Gli alberi precedenti restano disponibili.`;
     }
   }
 

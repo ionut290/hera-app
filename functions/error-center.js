@@ -72,6 +72,14 @@ function safeFingerprint(value, fallbackSeed) {
   return crypto.createHash("sha256").update(String(fallbackSeed || crypto.randomUUID())).digest("hex").slice(0, 40);
 }
 
+const FIRESTORE_STORAGE_QUOTA_FINGERPRINT = "firestore-local-storage-quota";
+
+function isFirestoreStorageQuotaError(message, stack = "") {
+  const text = `${message || ""}\n${stack || ""}`;
+  return /(?:QuotaExceededError|exceeded the quota)/i.test(text)
+    && /firestore_(?:clients|targets|mutations)_firestore/i.test(text);
+}
+
 function normalizeSeverity(value) {
   const severity = String(value || "").trim().toLowerCase();
   return VALID_SEVERITIES.has(severity) ? severity : "medium";
@@ -89,7 +97,11 @@ function diagnose(report) {
   let category = "Errore applicativo";
   let action = "Analizzare il dettaglio tecnico e le ultime azioni registrate.";
 
-  if (/ui-freeze|blocc|non risponde|freeze/.test(text) || Number(report.durationMs) >= 5000) {
+  if (isFirestoreStorageQuotaError(report.message, report.stack)) {
+    category = "Archivio locale / Firestore";
+    severity = maxSeverity(severity, "high");
+    action = "Verificare il recupero automatico dello spazio locale e che la scrittura Firestore sia stata ritentata.";
+  } else if (/ui-freeze|blocc|non risponde|freeze/.test(text) || Number(report.durationMs) >= 5000) {
     category = "Interfaccia bloccata";
     severity = "critical";
     action = "Controllare operazioni sincrone, observer e rendering avviati nella schermata indicata.";
@@ -162,10 +174,12 @@ function normalizeReport(data, context) {
     metadata: sanitizeValue(raw.metadata || {}),
     breadcrumbs: Array.isArray(raw.breadcrumbs) ? raw.breadcrumbs.slice(-15).map((item) => sanitizeValue(item)) : []
   };
-  report.fingerprint = safeFingerprint(
-    raw.fingerprint,
-    `${report.kind}|${report.feature}|${report.message}|${report.stack.split("\n").slice(0, 2).join("|")}|${report.source}`
-  );
+  report.fingerprint = !report.manual && isFirestoreStorageQuotaError(report.message, report.stack)
+    ? FIRESTORE_STORAGE_QUOTA_FINGERPRINT
+    : safeFingerprint(
+      raw.fingerprint,
+      `${report.kind}|${report.feature}|${report.message}|${report.stack.split("\n").slice(0, 2).join("|")}|${report.source}`
+    );
   report.user = {
     uid: context.auth.uid,
     key: userKey(context.auth.uid),

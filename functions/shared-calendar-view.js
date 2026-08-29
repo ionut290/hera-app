@@ -8,7 +8,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const REGION = "europe-west1";
 const SHARED_COLLECTION = "sharedStaticViews";
 const MAX_PAYLOAD_BYTES = 700000;
-const CALENDAR_SCHEMA_VERSION = 3;
+const CALENDAR_SCHEMA_VERSION = 4;
 const SOURCE_COLLECTIONS = new Set(["oreReports", "oreApprovalRequests"]);
 const ACTIVITY_COLLECTIONS = new Set(["impianti", "lavorazioni"]);
 const COMPLETED_STATUSES = new Set(["fatto", "done", "completed", "completato"]);
@@ -204,7 +204,7 @@ function activityCoordinatesFromSnapshot(snapshot, sourceCollection) {
   return { commessaId: segments[1], itemId: segments[3] };
 }
 
-async function recoverMonthActivities(month) {
+async function recoverCalendarMonth(month) {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "Mese non valido.");
   const db = admin.firestore();
   const fromDate = `${month}-01`;
@@ -226,7 +226,11 @@ async function recoverMonthActivities(month) {
     });
   }
 
-  const snapshots = await Promise.all(queries.map((query) => query.promise));
+  const [snapshots, hoursSnapshot, approvalsSnapshot] = await Promise.all([
+    Promise.all(queries.map((query) => query.promise)),
+    db.collection("oreReports").where("date", ">=", fromDate).where("date", "<", toDate).get(),
+    db.collection("oreApprovalRequests").where("date", ">=", fromDate).where("date", "<", toDate).get()
+  ]);
   const uniqueDocuments = new Map();
   snapshots.forEach((snapshot, index) => {
     const sourceCollection = queries[index].sourceCollection;
@@ -246,6 +250,12 @@ async function recoverMonthActivities(month) {
   activities.sort((a, b) => `${a.date}|${a.commessaId}|${a.impiantoId}|${a.sourceKey}`
     .localeCompare(`${b.date}|${b.commessaId}|${b.impiantoId}|${b.sourceKey}`, "it"));
 
+  const reports = [
+    ...hoursSnapshot.docs.map((document) => compactRecord("oreReports", document.id, document.data() || {})),
+    ...approvalsSnapshot.docs.map((document) => compactRecord("oreApprovalRequests", document.id, document.data() || {}))
+  ].filter(Boolean);
+  reports.sort((a, b) => `${a.date}|${a.sourceKey}`.localeCompare(`${b.date}|${b.sourceKey}`, "it"));
+
   const ref = db.collection(SHARED_COLLECTION).doc(`calendario__${month}`);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -254,7 +264,7 @@ async function recoverMonthActivities(month) {
       month,
       schemaVersion: CALENDAR_SCHEMA_VERSION,
       completeRecords: true,
-      reports: Array.isArray(previous.payload?.reports) ? previous.payload.reports : [],
+      reports,
       activities
     };
     const contentHash = stableHash(payload);
@@ -277,7 +287,15 @@ async function recoverMonthActivities(month) {
     }, { merge: false });
   });
 
-  return { month, schemaVersion: CALENDAR_SCHEMA_VERSION, activities, recovered: activities.length, complete: true };
+  return {
+    month,
+    schemaVersion: CALENDAR_SCHEMA_VERSION,
+    reports,
+    activities,
+    recoveredReports: reports.length,
+    recoveredActivities: activities.length,
+    complete: true
+  };
 }
 
 function buildNextPayload(existingPayload, month, sourceCollection, sourceId, nextData) {
@@ -420,7 +438,7 @@ exports.getAdministrativeCalendarMonth = onCall(
   { region: REGION, timeoutSeconds: 60, memory: "256MiB", invoker: "public" },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Login richiesto.");
-    return recoverMonthActivities(text(request.data?.month));
+    return recoverCalendarMonth(text(request.data?.month));
   }
 );
 
@@ -438,4 +456,4 @@ exports.__test = {
   stableHash
 };
 
-exports.__server = { recoverMonthActivities };
+exports.__server = { recoverCalendarMonth };

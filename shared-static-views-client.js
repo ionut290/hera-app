@@ -195,10 +195,10 @@
   function isCompleteCalendarView(view) {
     return Boolean(
       view &&
-      view.schemaVersion === 2 &&
+      Number(view.schemaVersion || 0) >= 2 &&
       view.completeRecords === true &&
       view.payload &&
-      view.payload.schemaVersion === 2 &&
+      Number(view.payload.schemaVersion || 0) >= 2 &&
       view.payload.completeRecords === true &&
       Array.isArray(view.payload.reports)
     );

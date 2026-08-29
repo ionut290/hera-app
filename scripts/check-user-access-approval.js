@@ -8,6 +8,7 @@ const client = fs.readFileSync("approval-access.js", "utf8");
 const backend = fs.readFileSync("functions/user-access-approval.js", "utf8");
 const functionsIndex = fs.readFileSync("functions/index.js", "utf8");
 const whazzupDriveBackend = fs.readFileSync("functions/whazzup-pdf-drive.js", "utf8");
+const whazzupCleanupBackend = fs.readFileSync("functions/cleanup-whazzup-pdfs.js", "utf8");
 const entrypoint = fs.readFileSync("functions/main.js", "utf8");
 const workflow = fs.readFileSync(".github/workflows/deploy-firebase-functions.yml", "utf8");
 const serviceWorker = fs.readFileSync("sw.js", "utf8");
@@ -54,14 +55,16 @@ assert.match(serviceWorker, /approval-access\.js\?v=20260828-authfix/, "La PWA p
 for (const [label, source] of [
   ["approvazione utente", backend],
   ["funzioni principali", functionsIndex],
-  ["PDF Whazzup Drive", whazzupDriveBackend]
+  ["PDF Whazzup Drive", whazzupDriveBackend],
+  ["pulizia PDF Whazzup", whazzupCleanupBackend]
 ]) {
-  assert.doesNotMatch(source, /functions\.config\s*\(/, `${label} non usa più functions.config()`);
+  assert.doesNotMatch(source, /\.config\s*\(/, `${label} non usa più functions.config()`);
 }
 assert.match(functionsIndex, /defineJsonSecret\("RUNTIME_CONFIG"\)/, "La configurazione precedente usa un segreto JSON moderno");
 assert.match(functionsIndex, /runtimeConfig\.google\?\.client_id/, "Drive legge il client ID dal segreto JSON");
 assert.match(functionsIndex, /runtimeConfig\.weather/, "Il meteo legge la configurazione dal segreto JSON");
 assert.match(functionsIndex, /runtimeConfig\.worklimate\?\.endpoint/, "Worklimate legge la configurazione dal segreto JSON");
 assert.match(whazzupDriveBackend, /secrets:\s*\[RUNTIME_CONFIG\]/, "Il PDF Whazzup associa il segreto JSON migrato");
+assert.match(whazzupCleanupBackend, /secrets:\s*\[RUNTIME_CONFIG\]/, "La pulizia PDF associa il segreto JSON migrato");
 
 console.log("OK: sblocco utente, email automatica e messaggio WhatsApp verificati.");

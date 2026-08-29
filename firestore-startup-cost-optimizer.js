@@ -2,13 +2,13 @@
   "use strict";
 
   const GLOBAL = "HeraFirestoreStartupCostOptimizer";
-  const VERSION = "1.0.2";
+  const VERSION = "1.1.0";
   if (window[GLOBAL]?.installed) return;
 
   const PROFILE_WRITE_TTL_MS = 5 * 60 * 1000;
   const STARTUP_LOG_TTL_MS = 5 * 60 * 1000;
   const ACTION_LOG_TTL_MS = 2500;
-  const SQUADRE_FALLBACK_MS = 6500;
+  const SQUADRE_FALLBACK_MS = 1200;
   const PROFILE_STORAGE_PREFIX = "hera_profile_write_guard_v1:";
   const ACTIVITY_STORAGE_PREFIX = "hera_activity_log_guard_v1:";
 
@@ -130,13 +130,23 @@
 
   function activeSquadreDateKeys() {
     const today = todayKey();
+    const tomorrowDate = new Date(`${today}T12:00:00`);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
     let selected = today;
     try {
       if (typeof window.getActiveSquadreDateKey === "function") {
         selected = String(window.getActiveSquadreDateKey() || today).slice(0, 10);
       }
     } catch (_) {}
-    return [...new Set([selected, today].filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)))];
+    let nextWorkdayCandidates = [];
+    try {
+      if (typeof window.getNextWorkdayCandidateDateKeys === "function") {
+        nextWorkdayCandidates = window.getNextWorkdayCandidateDateKeys(today);
+      }
+    } catch (_) {}
+    return [...new Set([selected, today, tomorrow, ...nextWorkdayCandidates]
+      .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)))];
   }
 
   function groupStaticSquadreRows(views) {
@@ -230,12 +240,12 @@
     const deliver = () => {
       if (closed || fallbackStarted || !views.has(primaryDate)) return;
       const primaryRows = views.get(primaryDate)?.payload?.squadre;
-      if (!Array.isArray(primaryRows) || primaryRows.length === 0) {
-        startFallback("vista-principale-vuota");
-        return;
-      }
+      if (!Array.isArray(primaryRows)) return;
       const snapshot = buildStaticSquadreSnapshot(query, views);
-      const signature = `${[...views.keys()].sort().join("|")}:${snapshot.size}`;
+      const signature = [...views.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, view]) => `${date}:${view?.version || view?.updatedAtClient || "cache"}:${view?.payload?.squadre?.length || 0}`)
+        .join("|");
       if (signature === lastDeliveredSignature) return;
       lastDeliveredSignature = signature;
       if (fallbackTimer) {

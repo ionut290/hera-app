@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v190";
-const CACHE_RESET_VERSION = "20260830-brave-manuals3";
+const CACHE_NAME = "varga-cantieri-shell-v191";
+const CACHE_RESET_VERSION = "20260830-wastewater-plants1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -82,6 +82,8 @@ const APP_SHELL = [
   "./green-areas.js?v=20260829e",
   "./urban-furniture.css?v=20260830-completesheet1",
   "./urban-furniture.js?v=20260830-completesheet1",
+  "./wastewater-plants.css?v=20260830a",
+  "./wastewater-plants.js?v=20260830a",
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
@@ -132,6 +134,8 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/street-view-cards.js",
   "/urban-furniture.js",
   "/urban-furniture.css",
+  "/wastewater-plants.js",
+  "/wastewater-plants.css",
   "/squad-context-bridge.js"
 ]);
 

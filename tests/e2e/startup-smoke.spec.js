@@ -41,6 +41,7 @@ test.describe('Varga Cantieri startup smoke', () => {
     await expect(page.locator('#open-hours-btn')).toHaveCount(1);
     await expect(page.locator('#open-gardening-assistant-btn')).toHaveCount(1);
     await expect(page.locator('#open-equipment-assistant-btn')).toHaveCount(1);
+    await expect(page.locator('#open-urban-furniture-btn')).toHaveCount(1);
     await expect(page.locator('#green-assistant-overlay')).toHaveCount(1);
     await expect(page.locator('#auth-gate-message')).not.toHaveText('');
 
@@ -58,6 +59,59 @@ test.describe('Varga Cantieri startup smoke', () => {
     expect(await countExactScript(page, '/app.js')).toBe(1);
     expect(await countExactScript(page, '/green-assistant.js')).toBe(1);
     expect(critical404s).toEqual([]);
+  });
+});
+
+test.describe('Arredo urbano', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('searches Overpass and opens map, sheet, 360 route and native Whazzup', async ({ page }) => {
+    await page.route('https://overpass-api.de/api/interpreter', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ elements: [{ type: 'node', id: 991, lat: 44.4949, lon: 11.3426, tags: { amenity: 'bench', name: 'Panchina Piazza' } }] })
+    }));
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      const bounds = { valid: false, extend() { this.valid = true; return this; }, isValid() { return this.valid; }, pad() { return this; } };
+      const map = { setView() { return this; }, fitBounds() { return this; }, invalidateSize() { return this; } };
+      window.L = {
+        map: () => map,
+        tileLayer: () => ({ addTo() { return this; }, remove() {}, bringToBack() {} }),
+        layerGroup: () => ({ addTo() { return this; }, clearLayers() {} }),
+        marker: () => ({ addTo() { return this; }, bindPopup() { return this; } }),
+        circleMarker: () => ({ addTo() { return this; }, bindPopup() { return this; }, remove() {} }),
+        divIcon: (options) => options,
+        latLngBounds: () => bounds
+      };
+      window.__urbanWhazzupUrl = '';
+      window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: { HeraWhatsApp: { open({ url }) { window.__urbanWhazzupUrl = url; return Promise.resolve({ opened: true }); } } } };
+    });
+
+    await page.evaluate(() => document.getElementById('open-urban-furniture-btn').click());
+    await page.locator('#urban-furniture-category').selectOption('bench');
+    await page.locator('#urban-furniture-form').evaluate((form) => form.requestSubmit());
+    await expect(page.locator('#urban-furniture-status')).toContainText('1 elemento trovato');
+    await expect(page.locator('.urban-furniture-result')).toContainText('Panchina Piazza');
+    await page.locator('[data-urban-result-index="0"]').click();
+    await expect(page.locator('#urban-furniture-sheet')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#urban-furniture-sheet-title')).toContainText('Panchina Piazza');
+
+    await page.evaluate(() => {
+      window.__urbanStreetView = null;
+      window.HeraStreetViewCards = { openForCoordinates(coords, trigger, options) { window.__urbanStreetView = { coords, label: trigger.textContent, options }; return Promise.resolve(true); } };
+    });
+    await page.locator('#urban-furniture-street-view').click();
+    await page.waitForFunction(() => Boolean(window.__urbanStreetView));
+    const streetView = await page.evaluate(() => window.__urbanStreetView);
+    expect(streetView.coords).toEqual({ lat: 44.4949, lng: 11.3426 });
+    expect(streetView.options.targetLabel).toBe('Panchina');
+
+    await page.locator('#urban-furniture-whazzup').click();
+    const message = await page.evaluate(() => new URL(window.__urbanWhazzupUrl).searchParams.get('text'));
+    expect(message).toContain('🪑 *ARREDO URBANO*');
+    expect(message).toContain('*Elemento:* Panchina Piazza');
+    expect(message).toContain('destination=44.4949,11.3426');
   });
 });
 

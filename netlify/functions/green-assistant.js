@@ -39,7 +39,8 @@ function configured() {
   return {
     plantnet: Boolean(String(process.env.PLANTNET_API_KEY || "").trim()),
     trefle: Boolean(String(process.env.TREFLE_API_TOKEN || "").trim()),
-    gemini: Boolean(String(process.env.GEMINI_API_KEY || "").trim())
+    gemini: Boolean(String(process.env.GEMINI_API_KEY || "").trim()),
+    brave: Boolean(String(process.env.BRAVE_SEARCH_API_KEY || "").trim())
   };
 }
 
@@ -191,6 +192,73 @@ async function trefleDetails(body) {
   };
 }
 
+const MANUFACTURER_DOMAINS = Object.freeze({
+  stihl: ["stihl.it", "stihl.com"],
+  husqvarna: ["husqvarna.com"],
+  johndeere: ["deere.com", "johndeere.com"],
+  deere: ["deere.com", "johndeere.com"],
+  claas: ["claas.com"],
+  kubota: ["kubota-eu.com", "kubota.com"],
+  newholland: ["newholland.com"],
+  caseih: ["caseih.com"],
+  honda: ["honda.it", "honda.com"],
+  echo: ["echo-italia.it", "echo-usa.com"],
+  jcb: ["jcb.com"]
+});
+
+function compactKey(value) {
+  return cleanText(value, 120).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return ["http:", "https:"].includes(url.protocol) ? url : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function equipmentResultKind(title, url) {
+  const text = `${title} ${url}`.toLowerCase();
+  if (/manual|operator|istruzion|uso e manutenzione/.test(text)) return "manuale";
+  if (/ricamb|parts|spare/.test(text)) return "ricambi";
+  if (/manutenz|maintenance|service/.test(text)) return "manutenzione";
+  return "scheda_tecnica";
+}
+
+async function equipmentManuals(body) {
+  const apiKey = requireSecret("BRAVE_SEARCH_API_KEY", "Brave Search");
+  const brand = cleanText(body.brand, 120);
+  const model = cleanText(body.model, 160);
+  const year = cleanText(body.year, 20);
+  const type = cleanText(body.type, 120);
+  if (!brand || !model) throw new Error("Inserisci marca e modello per cercare i manuali.");
+  const query = `"${brand} ${model}" ${year} ${type} manuale uso manutenzione scheda tecnica ricambi PDF`;
+  const params = new URLSearchParams({ q: cleanText(query, 400), count: "10", country: "IT", search_lang: "it", safesearch: "strict", extra_snippets: "true" });
+  const data = await fetchJson(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    headers: { Accept: "application/json", "X-Subscription-Token": apiKey }
+  }, 20000);
+  const brandKey = compactKey(brand);
+  const knownDomains = MANUFACTURER_DOMAINS[brandKey] || [];
+  const results = (Array.isArray(data?.web?.results) ? data.web.results : []).map((item) => {
+    const url = safeHttpUrl(item?.url);
+    if (!url) return null;
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    const likelyOfficial = knownDomains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+    return {
+      title: cleanText(item?.title, 300),
+      url: url.href,
+      domain: hostname,
+      description: cleanText(item?.description || item?.extra_snippets?.[0], 500),
+      kind: equipmentResultKind(item?.title, url.href),
+      likelyOfficial,
+      pdf: /\.pdf(?:$|[?#])/i.test(url.href)
+    };
+  }).filter(Boolean).sort((a, b) => Number(b.likelyOfficial) - Number(a.likelyOfficial) || Number(b.pdf) - Number(a.pdf)).slice(0, 8);
+  return { source: "Brave Search", query: cleanText(query, 400), results };
+}
+
 function geminiModels() {
   const configuredModel = cleanText(process.env.GEMINI_MODEL, 120);
   return [...new Set([configuredModel, ...DEFAULT_GEMINI_MODELS].filter(Boolean))];
@@ -330,9 +398,9 @@ exports.handler = async (event) => {
       return json(200, {
         ok: true,
         configured: configured(),
-        freeOnly: true,
+        freeOnly: false,
         authenticatedUid: user.sub,
-        notice: "Le API sono configurate per usare esclusivamente le rispettive quote gratuite."
+        notice: "Brave usa il piano associato alla chiave. La cache locale evita ricerche ripetute, ma il limite di spesa va configurato nell'account Brave."
       });
     }
     let result;
@@ -341,6 +409,7 @@ exports.handler = async (event) => {
     else if (action === "searchPlant") result = await searchTrefle(body);
     else if (action === "plantDetails") result = await trefleDetails(body);
     else if (action === "equipmentInfo") result = await equipmentInfo(body);
+    else if (action === "equipmentManuals") result = await equipmentManuals(body);
     else return json(400, { ok: false, error: "Azione assistente non riconosciuta." });
     return json(200, { ok: true, result });
   } catch (error) {

@@ -18,15 +18,15 @@ const serviceWorker = read("sw.js");
 
 assert(html.includes('id="open-gardening-assistant-btn"'), "Voce menu giardinaggio assente.");
 assert(html.includes('id="open-equipment-assistant-btn"'), "Voce menu mezzi assente.");
-assert(html.includes('green-assistant.css?v=20260829a'), "CSS assistente non caricato.");
-assert(html.includes('green-assistant.js?v=20260829a'), "Client assistente non caricato.");
+assert(html.includes('green-assistant.css?v=20260830-brave-manuals2'), "CSS assistente non caricato.");
+assert(html.includes('green-assistant.js?v=20260830-brave-manuals2'), "Client assistente non caricato.");
 assert(netlify.includes('from = "/api/green-assistant"'), "Redirect Netlify assistente assente.");
 assert(netlify.includes('to = "/.netlify/functions/green-assistant"'), "Funzione Netlify assistente non collegata.");
 
-for (const action of ["status", "identifyPlant", "identifyDisease", "searchPlant", "plantDetails", "equipmentInfo"]) {
+for (const action of ["status", "identifyPlant", "identifyDisease", "searchPlant", "plantDetails", "equipmentInfo", "equipmentManuals"]) {
   assert(backend.includes(`action === "${action}"`), `Azione backend mancante: ${action}`);
 }
-for (const secret of ["PLANTNET_API_KEY", "TREFLE_API_TOKEN", "GEMINI_API_KEY"]) {
+for (const secret of ["PLANTNET_API_KEY", "TREFLE_API_TOKEN", "GEMINI_API_KEY", "BRAVE_SEARCH_API_KEY"]) {
   assert(backend.includes(`process.env.${secret}`) || backend.includes(`requireSecret("${secret}"`), `Segreto protetto mancante: ${secret}`);
   assert(!client.includes(secret), `Il segreto ${secret} non deve essere nel client.`);
   assert(!html.includes(secret), `Il segreto ${secret} non deve essere nell'HTML.`);
@@ -37,6 +37,14 @@ assert(backend.includes('"gemini-3.5-flash-lite"'), "Il modello Gemini gratuito 
 assert(!backend.includes('"gemini-2.5-flash-lite"'), "Il modello Gemini non disponibile ai nuovi utenti non deve essere usato.");
 assert(client.includes('const CACHE_KEY = "heraGreenAssistantArchiveV1"'), "Archivio locale assistente assente.");
 assert(client.includes('window.openManagementPanel("mezzi")'), "Copia controllata nel form mezzi assente.");
+assert(client.includes('typeof mezziRecords !== "undefined"'), "Riutilizzo locale del registro mezzi assente.");
+assert(client.includes("openEquipment"), "Collegamento Mezzi → Assistente assente.");
+assert(client.includes("[payload.brand, payload.model, payload.year, payload.type]"), "La cache manuali deve distinguere il tipo di mezzo.");
+assert(client.includes("API PROTETTE"), "L'interfaccia non deve presentare Brave come servizio gratuito.");
+assert(client.includes("data.notice"), "L'avviso sul piano Brave deve essere mostrato all'utente.");
+assert(!backend.includes("hostnameKey.includes(brandKey)"), "Un dominio non deve essere considerato ufficiale solo perché contiene il marchio.");
+assert(html.includes("management-v2.js?v=20260830-brave-manuals2"), "Versione gestione mezzi non aggiornata.");
+assert(read("management-v2.js").includes("data-equipment-assistance"), "Pulsante assistenza nelle schede mezzo assente.");
 
 for (const forbidden of [".collection(", ".doc(", ".onSnapshot(", "firebase.firestore(", "getFirestore(", "setDoc(", "addDoc("]) {
   assert(!client.includes(forbidden), `Operazione Firestore vietata nel client assistente: ${forbidden}`);
@@ -48,7 +56,7 @@ for (const protectedToken of ["fatto-button", "whazzup", "whatsapp", "done-butto
 }
 
 assert(css.includes(".green-assistant-overlay"), "Stile overlay assistente assente.");
-assert(serviceWorker.includes('"./green-assistant.js?v=20260829a"'), "Client assistente assente dalla shell PWA.");
-assert(serviceWorker.includes('"./green-assistant.css?v=20260829a"'), "CSS assistente assente dalla shell PWA.");
+assert(serviceWorker.includes('"./green-assistant.js?v=20260830-brave-manuals2"'), "Client assistente assente dalla shell PWA.");
+assert(serviceWorker.includes('"./green-assistant.css?v=20260830-brave-manuals2"'), "CSS assistente assente dalla shell PWA.");
 
 console.log("Assistenti giardinaggio e mezzi: controlli statici superati.");

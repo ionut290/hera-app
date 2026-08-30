@@ -29,6 +29,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/urban-furniture"
+  to = "/.netlify/functions/urban-furniture"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

@@ -98,9 +98,8 @@ const sameNameDifferentSap = api.testing.summarizeData([
 ], [], []);
 assert.equal(sameNameDifferentSap.uniquePlants, 2, "ID SAP diversi non devono essere accorpati anche se il nome coincide");
 
-// Regressione: il riepilogo INRETE viene riapplicato ogni 1,5 secondi e può
-// restare in cache per 30 secondi. Non deve mai sovrascrivere un FATTO/RESET
-// appena applicato dal listener operativo o dallo stato locale.
+// Regressione: un riepilogo INRETE in cache non deve mai sovrascrivere un
+// FATTO/RESET appena applicato dal listener operativo o dallo stato locale.
 sandbox.selectedCommessaId = "canonical-modena";
 sandbox.currentImpianti = [{ id: "plant-1", idSap: "3430707", done: true, stato: "FATTO" }];
 sandbox.impiantiByCommessaId.set("canonical-modena", sandbox.currentImpianti.map((item) => ({ ...item })));
@@ -127,6 +126,9 @@ assert.match(source, /<b>\$\{summary\.uniquePlants\}<\/b> impianti/);
 assert.match(source, /<b>\$\{summary\.workRows\}<\/b> lavorazioni/);
 assert.doesNotMatch(source, /currentImpianti\s*=\s*summary\.items/, "Il riepilogo periodico non deve sostituire la lista operativa");
 assert.doesNotMatch(source, /impiantiByCommessaId\.set\(canonical\.id,\s*summary\.items/, "Il riepilogo periodico non deve sostituire la cache operativa");
+assert.doesNotMatch(source, /setInterval\s*\(/, "Il riepilogo INRETE non deve effettuare polling Firestore continuo");
+assert.match(source, /duplicateArchiveChecked/, "La verifica del duplicato tecnico deve essere eseguita una sola volta per sessione");
+assert.match(source, /MutationObserver/, "L'apertura della gestione deve essere rilevata tramite evento, non polling");
 
 const statsCacheSource = fs.readFileSync("commessa-stats-cache-optimizer.js", "utf8");
 assert.match(statsCacheSource, /function activeCollectionName\(\)/, "La cache statistiche deve usare la raccolta attiva");

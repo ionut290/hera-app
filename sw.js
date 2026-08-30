@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v194";
-const CACHE_RESET_VERSION = "20260830-tree-maintenance1";
+const CACHE_NAME = "varga-cantieri-shell-v195";
+const CACHE_RESET_VERSION = "20260830-firestore-read-fix1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -45,10 +45,10 @@ const APP_SHELL = [
   "./accounting-v2.js?v=20260829-management-projection1",
   "./commessa-impianti-menu.js?v=20260826c",
   "./accounting-view-guard.js?v=20260728a",
-  "./operational-import-repair.js?v=20260824-state-race1",
+  "./operational-import-repair.js?v=20260830-firestore-read-fix1",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
-  "./notification-center.js?v=20260731-header1",
+  "./notification-center.js?v=20260830-firestore-read-fix1",
   "./today-summary-interactions.js?v=20260731-repair1",
   "./mezzi-alimentazione-fix.js?v=20260723",
   "./today-live-hours-vehicles.js?v=20260731-codes1",

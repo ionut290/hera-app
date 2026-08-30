@@ -70,6 +70,7 @@
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
   <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
   <link rel="stylesheet" href="urban-furniture.css?v=20260830-completesheet1">
+  <link rel="stylesheet" href="wastewater-plants.css?v=20260830a">
 </head>
 <body class="auth-pending">
 
@@ -128,6 +129,7 @@
         <button id="open-panel-global" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌐</span>Global</button>
         <button id="open-hours-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🕒</span>Gestione ore</button>
         <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">⚠️</span>Segnalazioni</button>
+        <button id="open-wastewater-plants-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🏭</span>Censimento depuratori</button>
         <button id="open-tree-search-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌳</span>Catasto alberi</button>
         <button id="open-green-areas-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌿</span>Aree verdi</button>
         <button id="open-urban-furniture-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🪑</span>Arredo urbano</button>
@@ -165,6 +167,72 @@
   </aside>
 
   <div id="menu-overlay" class="menu-overlay hidden"></div>
+
+  <section id="wastewater-plants-page" class="wastewater-plants-page hidden" aria-hidden="true" aria-labelledby="wastewater-plants-title">
+    <header class="wastewater-plants-header">
+      <button id="wastewater-plants-back-btn" class="btn" type="button">← Home</button>
+      <div><span>ARPAE Emilia-Romagna · dati ufficiali</span><h1 id="wastewater-plants-title">Censimento depuratori</h1></div>
+    </header>
+    <div class="wastewater-plants-content">
+      <form id="wastewater-plants-form" class="wastewater-plants-card">
+        <label for="wastewater-plants-query">Cerca impianto</label>
+        <input id="wastewater-plants-query" type="search" autocomplete="off" placeholder="Nome, codice, Comune, gestore o agglomerato">
+        <label for="wastewater-plants-province">Provincia</label>
+        <select id="wastewater-plants-province">
+          <option value="">Tutta l’Emilia-Romagna</option>
+          <option value="BOLOGNA" selected>Bologna</option>
+          <option value="FERRARA">Ferrara</option>
+          <option value="FORLI'-CESENA">Forlì-Cesena</option>
+          <option value="MODENA">Modena</option>
+          <option value="PARMA">Parma</option>
+          <option value="PIACENZA">Piacenza</option>
+          <option value="RAVENNA">Ravenna</option>
+          <option value="REGGIO NELL'EMILIA">Reggio Emilia</option>
+          <option value="RIMINI">Rimini</option>
+        </select>
+        <div class="wastewater-plants-form-actions">
+          <button class="btn btn-primary" type="submit">CERCA DEPURATORI</button>
+          <button id="wastewater-plants-clear-btn" class="btn" type="button">AZZERA FILTRI</button>
+        </div>
+        <p id="wastewater-plants-status" class="wastewater-plants-status" role="status" aria-live="polite">Caricamento del censimento ufficiale ARPAE…</p>
+      </form>
+      <section id="wastewater-plants-results" class="wastewater-plants-results hidden" aria-label="Risultati depuratori"></section>
+      <section id="wastewater-plants-map-card" class="wastewater-plants-map-card" aria-label="Mappa dei depuratori">
+        <div class="wastewater-plants-toolbar">
+          <strong>Depuratori sulla mappa</strong>
+          <button id="wastewater-plants-location-btn" class="btn" type="button">⌖ LA MIA POSIZIONE</button>
+          <button id="wastewater-plants-fullscreen-btn" class="btn" type="button" aria-pressed="false">⛶ SCHERMO INTERO</button>
+          <label for="wastewater-plants-map-style">Vista</label>
+          <select id="wastewater-plants-map-style">
+            <option value="classic">Classica</option>
+            <option value="satellite">Satellite</option>
+            <option value="hybrid">Ibrida</option>
+          </select>
+        </div>
+        <div class="wastewater-plants-legend" aria-label="Legenda capacità depuratori">
+          <span><i class="capacity-small"></i>&lt; 200 A.E.</span>
+          <span><i class="capacity-medium"></i>200–1.999 A.E.</span>
+          <span><i class="capacity-large"></i>2.000–9.999 A.E.</span>
+          <span><i class="capacity-major"></i>≥ 10.000 A.E.</span>
+        </div>
+        <p id="wastewater-plants-map-status" class="wastewater-plants-map-status" role="status" aria-live="polite">La mappa è pronta.</p>
+        <div id="wastewater-plants-map" class="wastewater-plants-map" aria-label="Localizzazione degli impianti di depurazione"></div>
+      </section>
+    </div>
+    <section id="wastewater-plant-sheet" class="wastewater-plant-sheet hidden" aria-hidden="true" aria-labelledby="wastewater-plant-sheet-title">
+      <div class="wastewater-plant-sheet-dialog">
+        <button id="wastewater-plant-sheet-close" class="btn wastewater-plant-sheet-close" type="button" aria-label="Chiudi scheda">✕</button>
+        <small>Fonte: ARPAE Emilia-Romagna · edizione 2023</small>
+        <h2 id="wastewater-plant-sheet-title">Scheda depuratore</h2>
+        <div id="wastewater-plant-sheet-body"></div>
+        <div class="wastewater-plant-sheet-actions">
+          <a id="wastewater-plant-navigate" class="btn btn-primary" href="#" target="_blank" rel="noopener">📍 NAVIGA</a>
+          <button id="wastewater-plant-street-view" class="btn" type="button">🌐 VISTA 360° E PERCORSO</button>
+          <button id="wastewater-plant-whazzup" class="btn" type="button">INVIA TRAMITE WHAZZUP</button>
+        </div>
+      </div>
+    </section>
+  </section>
 
   <section id="tree-search-page" class="tree-search-page hidden" aria-hidden="true" aria-labelledby="tree-search-title">
     <header class="tree-search-header">
@@ -692,11 +760,12 @@
   <script src="tree-search.js?v=20260830-new-plantings1"></script>
   <script src="green-areas.js?v=20260829e"></script>
   <script src="urban-furniture.js?v=20260830-completesheet1"></script>
+  <script src="wastewater-plants.js?v=20260830a"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-brave-manuals3", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-wastewater-plants1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

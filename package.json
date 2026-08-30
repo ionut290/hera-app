@@ -19,6 +19,7 @@
     "check:green-assistant": "node scripts/check-green-assistant.js",
     "check:green-areas": "node scripts/check-green-areas.js",
     "check:urban-furniture": "node scripts/check-urban-furniture.js",
+    "check:wastewater-plants": "node scripts/check-wastewater-plants.js",
     "check:tree-search-location": "node scripts/check-tree-search-location.js",
     "check:global-map": "node scripts/check-global-map-coordinates.js",
     "check:data-safety": "node scripts/check-data-safety-layer.js",

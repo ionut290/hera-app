@@ -32,12 +32,13 @@ const checks = [
   ["API Street View riutilizzabile", streetView.includes("function openForCoordinates") && streetView.includes("openForCoordinates };")],
   ["panorama sopra e percorso sotto", streetView.includes("grid-template-rows:50% 50%") && streetView.indexOf("hera-sv-panorama-wrap") < streetView.indexOf("hera-sv-route-panel")],
   ["percorso dalla posizione operatore", streetView.includes("const operatorPositionPromise = getOperatorPosition()") && streetView.includes("routeStartKind = operatorCoords ? 'operator' : 'panorama'")],
+  ["Google Directions disattivato per impostazione predefinita", streetView.includes("window.HERA_GOOGLE_DIRECTIONS_ENABLED === true") && streetView.includes("{ result: null, status: 'DISABLED' }")],
   ["filtro nuovi impianti presente", html.includes('id="tree-map-planting-filter"') && html.includes('value="1"') && html.includes('value="3"') && html.includes('value="5"')],
   ["campo ufficiale Data Impianto", source.includes("data_impnt >= date'") && source.includes("data_impnt <= date'")],
   ["filtro collegato alla mappa", source.includes('mapPlantingFilter?.addEventListener("change"') && source.includes("loadVisibleTrees()")],
-  ["asset Street View aggiornato", serviceWorker.includes("street-view-cards.js?v=20260830-tree-route1")],
-  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-new-plantings1") && serviceWorker.includes("tree-search.css?v=20260830-new-plantings1")],
-  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-new-plantings1") && serviceWorker.includes("tree-search.js?v=20260830-new-plantings1")],
+  ["asset Street View aggiornato", serviceWorker.includes("street-view-cards.js?v=20260830-map-gps-fix1")],
+  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-maintenance1") && serviceWorker.includes("tree-search.css?v=20260830-maintenance1")],
+  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-maintenance1") && serviceWorker.includes("tree-search.js?v=20260830-maintenance1")],
   ["nessuna operazione Firestore", !/firestore|\.collection\(|\.doc\(/i.test(source)]
 ];
 

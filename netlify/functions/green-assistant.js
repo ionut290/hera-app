@@ -259,6 +259,110 @@ async function equipmentManuals(body) {
   return { source: "Brave Search", query: cleanText(query, 400), results };
 }
 
+const treeMaintenanceSchema = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    maintenance: { type: "array", items: { type: "object", properties: {
+      intervention: { type: "string" }, period: { type: "string" }, frequency: { type: "string" }, notes: { type: "string" }
+    }, required: ["intervention", "period", "frequency", "notes"] } },
+    watering: { type: "array", items: { type: "string" } },
+    pruning: { type: "array", items: { type: "string" } },
+    inspections: { type: "array", items: { type: "string" } },
+    commonDiseases: { type: "array", items: { type: "object", properties: {
+      name: { type: "string" }, symptoms: { type: "string" }, action: { type: "string" }
+    }, required: ["name", "symptoms", "action"] } },
+    safety: { type: "array", items: { type: "string" } },
+    warning: { type: "string" }
+  },
+  required: ["summary", "maintenance", "watering", "pruning", "inspections", "commonDiseases", "safety", "warning"]
+};
+
+function treeMaintenancePrompt(body) {
+  const tree = {
+    scientificName: cleanText(body.scientificName, 180),
+    commonName: cleanText(body.commonName, 180),
+    heightClass: cleanText(body.heightClass, 100),
+    diameter: cleanText(body.diameter, 100),
+    plantingYear: cleanText(body.plantingYear, 40),
+    location: cleanText(body.location, 240),
+    irrigation: cleanText(body.irrigation, 120),
+    censusNotes: cleanText(body.censusNotes, 800)
+  };
+  if (!tree.scientificName && !tree.commonName) throw new Error("La specie dell’albero non è disponibile nel censimento.");
+  return `Sei un assistente per la manutenzione prudente di alberi urbani in Italia. Prepara una scheda orientativa per questo albero censito:\n${JSON.stringify(tree, null, 2)}\n
+Regole obbligatorie:\n
+- Non inventare dati specifici sul singolo esemplare che non sono presenti nel censimento.\n
+- Distingui la manutenzione generale della specie dalla valutazione reale dell’albero.\n
+- Non prescrivere fitofarmaci, dosaggi, abbattimenti o potature drastiche.\n
+- Indica periodi orientativi italiani e controlli visivi utili agli operatori.\n
+- Per difetti strutturali, rami pericolosi, cavità, inclinazioni o sintomi gravi richiedi un arboricoltore qualificato.\n
+- Le malattie devono essere indicate come possibili e mai come diagnosi certa senza fotografia o sopralluogo.\n
+- Rispondi esclusivamente nel JSON richiesto.`;
+}
+
+async function treeMaintenanceInfo(body) {
+  const apiKey = requireSecret("GEMINI_API_KEY", "Gemini");
+  const species = cleanText(body.scientificName || body.commonName, 180);
+  const braveKey = String(process.env.BRAVE_SEARCH_API_KEY || "").trim();
+  const sourcePromise = braveKey ? (async () => {
+    const query = `\"${species}\" manutenzione potatura malattie albero scheda tecnica università arboricoltura`;
+    const params = new URLSearchParams({ q: cleanText(query, 400), count: "6", country: "IT", search_lang: "it", safesearch: "strict" });
+    const data = await fetchJson(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+      headers: { Accept: "application/json", "X-Subscription-Token": braveKey }
+    }, 20000);
+    return (Array.isArray(data?.web?.results) ? data.web.results : []).slice(0, 6).map((item) => {
+      const url = safeHttpUrl(item?.url);
+      return url ? { title: cleanText(item?.title, 240), url: url.href, domain: url.hostname.replace(/^www\./, ""), description: cleanText(item?.description, 400) } : null;
+    }).filter(Boolean);
+  })() : Promise.resolve([]);
+  const photoPromise = fetchJson(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(species)}&rank=species&per_page=3`, {
+    headers: { Accept: "application/json", "User-Agent": "VargaCantieri/1.0" }
+  }, 15000).then((data) => (Array.isArray(data?.results) ? data.results : []).slice(0, 3).map((taxon) => {
+    const photo = taxon?.default_photo;
+    const imageUrl = safeHttpUrl(photo?.medium_url || photo?.square_url);
+    const taxonUrl = safeHttpUrl(`https://www.inaturalist.org/taxa/${taxon?.id}`);
+    return imageUrl && taxonUrl ? {
+      name: cleanText(taxon?.preferred_common_name || taxon?.name, 180), image: imageUrl.href, url: taxonUrl.href,
+      attribution: cleanText(photo?.attribution || "iNaturalist", 300), license: cleanText(photo?.license_code || "", 40)
+    } : null;
+  }).filter(Boolean)).catch(() => []);
+  let maintenance;
+  let modelUsed = "";
+  let lastError;
+  for (const model of geminiModels()) {
+    try {
+      const data = await fetchJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: treeMaintenancePrompt(body) }] }], generationConfig: {
+          temperature: 0.1, maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema: treeMaintenanceSchema
+        } })
+      }, 45000);
+      maintenance = JSON.parse(data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "");
+      modelUsed = model;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (![400, 404, 429, 502].includes(Number(error?.statusCode || 0))) throw error;
+    }
+  }
+  if (!maintenance) throw lastError || new Error("Gemini non disponibile.");
+  const [sources, photos] = await Promise.all([sourcePromise.catch(() => []), photoPromise]);
+  const strings = (value, limit = 20) => (Array.isArray(value) ? value : []).slice(0, limit).map((item) => cleanText(item, 600)).filter(Boolean);
+  return {
+    source: "Gemini", model: modelUsed, species, summary: cleanText(maintenance.summary, 1600),
+    maintenance: (Array.isArray(maintenance.maintenance) ? maintenance.maintenance : []).slice(0, 20).map((item) => ({
+      intervention: cleanText(item?.intervention, 180), period: cleanText(item?.period, 180), frequency: cleanText(item?.frequency, 180), notes: cleanText(item?.notes, 700)
+    })).filter((item) => item.intervention),
+    watering: strings(maintenance.watering), pruning: strings(maintenance.pruning), inspections: strings(maintenance.inspections),
+    commonDiseases: (Array.isArray(maintenance.commonDiseases) ? maintenance.commonDiseases : []).slice(0, 15).map((item) => ({
+      name: cleanText(item?.name, 180), symptoms: cleanText(item?.symptoms, 600), action: cleanText(item?.action, 600)
+    })).filter((item) => item.name),
+    safety: strings(maintenance.safety), warning: cleanText(maintenance.warning, 1000), sources, photos,
+    notice: "Scheda orientativa generata da dati di specie. Non sostituisce la valutazione visiva dell’albero o il sopralluogo di un arboricoltore."
+  };
+}
+
 function geminiModels() {
   const configuredModel = cleanText(process.env.GEMINI_MODEL, 120);
   return [...new Set([configuredModel, ...DEFAULT_GEMINI_MODELS].filter(Boolean))];
@@ -410,6 +514,7 @@ exports.handler = async (event) => {
     else if (action === "plantDetails") result = await trefleDetails(body);
     else if (action === "equipmentInfo") result = await equipmentInfo(body);
     else if (action === "equipmentManuals") result = await equipmentManuals(body);
+    else if (action === "treeMaintenance") result = await treeMaintenanceInfo(body);
     else return json(400, { ok: false, error: "Azione assistente non riconosciuta." });
     return json(200, { ok: true, result });
   } catch (error) {

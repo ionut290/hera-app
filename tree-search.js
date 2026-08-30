@@ -209,6 +209,136 @@
     );
   }
 
+  function safeExternalUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+    } catch (_) { return ""; }
+  }
+
+  async function treeAssistantApi(action, payload = {}) {
+    if (navigator.onLine === false) throw new Error("Questa funzione richiede una connessione Internet.");
+    const user = window.firebase?.auth?.().currentUser;
+    if (!user) throw new Error("Accedi all’app per consultare la manutenzione.");
+    const token = await user.getIdToken();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 55000);
+    try {
+      const response = await fetch("/api/green-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, ...payload }),
+        signal: controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || "Servizio di manutenzione temporaneamente non disponibile.");
+      return data.result ?? data;
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("Il servizio sta impiegando troppo tempo. Riprova.");
+      throw error;
+    } finally { window.clearTimeout(timeout); }
+  }
+
+  function treeMaintenancePayload(tree) {
+    return {
+      scientificName: tree.nome_scientifico || tree.classe || "",
+      commonName: tree.nome_comune || tree.classe || "",
+      heightClass: tree.cl_h || tree.altezza || "",
+      diameter: tree.diametro || tree.circonferenza || tree.classe_circonferenza_diametro || "",
+      plantingYear: tree.data_impianto || tree.data_impnt || tree.anni_impnt || "",
+      location: [tree.via, tree.indirizzo, tree.quartiere, tree.localizzazione].filter(Boolean).join(" · "),
+      irrigation: tree.irrigazione || tree.irriga || "",
+      censusNotes: tree.note || tree.stato || ""
+    };
+  }
+
+  function treeMaintenanceCacheKey(tree) {
+    const payload = treeMaintenancePayload(tree);
+    return `heraTreeMaintenanceV1:${String(payload.scientificName || payload.commonName).trim().toLowerCase()}`;
+  }
+
+  function readTreeMaintenanceCache(tree) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(treeMaintenanceCacheKey(tree)) || "null");
+      return cached && Date.now() - Number(cached.savedAt || 0) < 30 * 86400000 ? cached.value : null;
+    } catch (_) { return null; }
+  }
+
+  function saveTreeMaintenanceCache(tree, value) {
+    try { localStorage.setItem(treeMaintenanceCacheKey(tree), JSON.stringify({ savedAt: Date.now(), value })); } catch (_) {}
+  }
+
+  function maintenanceList(title, items) {
+    const values = Array.isArray(items) ? items : [];
+    return values.length ? `<section class="tree-maintenance-section"><h3>${esc(title)}</h3><ul>${values.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></section>` : "";
+  }
+
+  function renderTreeMaintenance(tree, data, cached = false) {
+    const panel = result.querySelector(".tree-maintenance-panel");
+    if (!panel) return;
+    const maintenance = Array.isArray(data?.maintenance) ? data.maintenance : [];
+    const diseases = Array.isArray(data?.commonDiseases) ? data.commonDiseases : [];
+    const photos = Array.isArray(data?.photos) ? data.photos : [];
+    const sources = Array.isArray(data?.sources) ? data.sources : [];
+    panel.innerHTML = `<div class="tree-maintenance-head"><div><small>${cached ? "Scheda salvata sul dispositivo" : "Gemini · fonti Brave · fotografie iNaturalist"}</small><h2>🪚 Manutenzione di ${esc(data?.species || tree.classe || "questo albero")}</h2></div><button class="btn tree-maintenance-close" type="button">CHIUDI</button></div>
+      <p class="tree-maintenance-warning">⚠️ ${esc(data?.notice || data?.warning || "Informazioni orientative da verificare sul posto.")}</p>
+      ${data?.summary ? `<p>${esc(data.summary)}</p>` : ""}
+      ${maintenance.length ? `<section class="tree-maintenance-section"><h3>Calendario degli interventi</h3><div class="tree-maintenance-table">${maintenance.map((item) => `<article><strong>${esc(item.intervention)}</strong><span><b>Periodo:</b> ${esc(item.period || "Da valutare")}</span><span><b>Frequenza:</b> ${esc(item.frequency || "Secondo necessità")}</span><p>${esc(item.notes || "")}</p></article>`).join("")}</div></section>` : ""}
+      ${maintenanceList("Irrigazione", data?.watering)}
+      ${maintenanceList("Potatura", data?.pruning)}
+      ${maintenanceList("Controlli periodici", data?.inspections)}
+      ${diseases.length ? `<section class="tree-maintenance-section"><h3>Malattie e problemi frequenti della specie</h3><div class="tree-disease-grid">${diseases.map((item) => `<article><strong>${esc(item.name)}</strong><p><b>Segnali:</b> ${esc(item.symptoms)}</p><p><b>Azione prudente:</b> ${esc(item.action)}</p></article>`).join("")}</div></section>` : ""}
+      ${maintenanceList("Sicurezza", data?.safety)}
+      ${photos.length ? `<section class="tree-maintenance-section"><h3>Fotografie di riferimento</h3><div class="tree-reference-photos">${photos.map((item) => { const image = safeExternalUrl(item.image); const url = safeExternalUrl(item.url); return image && url ? `<a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(image)}" alt="${esc(item.name || data.species)}" loading="lazy"><small>${esc(item.attribution || "iNaturalist")}${item.license ? ` · ${esc(item.license)}` : ""}</small></a>` : ""; }).join("")}</div></section>` : ""}
+      ${sources.length ? `<section class="tree-maintenance-section"><h3>Fonti da consultare</h3><div class="tree-maintenance-sources">${sources.map((item) => { const url = safeExternalUrl(item.url); return url ? `<a href="${esc(url)}" target="_blank" rel="noopener"><strong>${esc(item.title || item.domain)}</strong><small>${esc(item.domain)}</small><span>${esc(item.description || "")}</span></a>` : ""; }).join("")}</div></section>` : ""}
+      <section class="tree-maintenance-section tree-photo-diagnosis"><h3>📷 Controlla una possibile malattia</h3><p>Fotografa la parte danneggiata. Pl@ntNet confronterà i sintomi visibili; il risultato non è una diagnosi definitiva.</p><label class="btn tree-disease-photo-label">SCEGLI FOTO<input class="tree-disease-photo" type="file" accept="image/jpeg,image/png" capture="environment"></label><div class="tree-disease-photo-result" role="status" aria-live="polite"></div></section>
+      <p class="tree-maintenance-warning">${esc(data?.warning || "Per rischi strutturali, sintomi gravi o interventi importanti richiedere un arboricoltore qualificato.")}</p>`;
+    panel.classList.remove("hidden");
+    panel.querySelector(".tree-maintenance-close")?.addEventListener("click", () => panel.classList.add("hidden"));
+    panel.querySelector(".tree-disease-photo")?.addEventListener("change", (event) => analyzeTreeDiseasePhoto(event.currentTarget));
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function compressTreePhoto(file) {
+    if (!file || !/^image\/(jpeg|png)$/i.test(file.type)) throw new Error("Seleziona una fotografia JPG o PNG.");
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error("Impossibile leggere la fotografia.")); img.src = objectUrl; });
+      const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d", { alpha: false }).drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.82);
+    } finally { URL.revokeObjectURL(objectUrl); }
+  }
+
+  async function analyzeTreeDiseasePhoto(input) {
+    const target = result.querySelector(".tree-disease-photo-result");
+    if (!target || !input.files?.[0]) return;
+    target.textContent = "Analizzo la fotografia con Pl@ntNet…";
+    input.disabled = true;
+    try {
+      const data = await treeAssistantApi("identifyDisease", { image: await compressTreePhoto(input.files[0]), organ: "auto" });
+      const matches = Array.isArray(data?.results) ? data.results : [];
+      target.innerHTML = matches.length ? `<div class="tree-disease-photo-matches">${matches.map((item) => `<article><strong>${esc(item.name || item.code || "Possibile problema")}</strong><span>Compatibilità visiva: ${Math.round(Number(item.score || 0) * 100)}%</span>${safeExternalUrl(item.image) ? `<img src="${esc(safeExternalUrl(item.image))}" alt="Immagine di confronto" loading="lazy">` : ""}</article>`).join("")}</div><p>Confronto fotografico orientativo: verifica sintomi, specie e condizioni sul posto.</p>` : "Nessuna corrispondenza affidabile trovata.";
+    } catch (error) { target.textContent = error.message; }
+    finally { input.disabled = false; input.value = ""; }
+  }
+
+  async function openTreeMaintenance(tree, button) {
+    const cached = readTreeMaintenanceCache(tree);
+    if (cached) return renderTreeMaintenance(tree, cached, true);
+    const panel = result.querySelector(".tree-maintenance-panel");
+    if (panel) { panel.classList.remove("hidden"); panel.innerHTML = "<p>Preparo manutenzione, controlli, malattie, fotografie e fonti…</p>"; }
+    button.disabled = true;
+    try {
+      const data = await treeAssistantApi("treeMaintenance", treeMaintenancePayload(tree));
+      saveTreeMaintenanceCache(tree, data);
+      renderTreeMaintenance(tree, data);
+    } catch (error) { if (panel) panel.innerHTML = `<p class="tree-maintenance-error">${esc(error.message)}</p>`; }
+    finally { button.disabled = false; }
+  }
+
   function resizeMap() {
     requestAnimationFrame(() => map?.invalidateSize({ pan: false, animate: false }));
     setTimeout(() => map?.invalidateSize({ pan: false, animate: false }), 180);
@@ -569,7 +699,7 @@
     const detailsNote = detailEntries.length > 6
       ? "Sono visibili i primi 6 dettagli. Premi il pulsante per consultare tutti i campi valorizzati del censimento ufficiale."
       : "Sono mostrati tutti i campi valorizzati disponibili nel censimento ufficiale.";
-    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button><button class="btn tree-street-view" type="button">🌐 VISTA 360° E PERCORSO</button></div>`;
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button><button class="btn tree-street-view" type="button">🌐 VISTA 360° E PERCORSO</button><button class="btn tree-maintenance-open" type="button">🪚 MANUTENZIONE</button></div><section class="tree-maintenance-panel hidden" aria-live="polite"></section>`;
     const detailsToggle = result.querySelector(".tree-details-toggle");
     detailsToggle?.addEventListener("click", () => {
       const expanded = detailsToggle.getAttribute("aria-expanded") !== "true";
@@ -586,6 +716,8 @@
     streetViewButton?.addEventListener("click", () => {
       openTreeStreetView(tree, point, streetViewButton);
     });
+    const maintenanceButton = result.querySelector(".tree-maintenance-open");
+    maintenanceButton?.addEventListener("click", () => openTreeMaintenance(tree, maintenanceButton));
     result.classList.remove("hidden");
     initializeMap();
     if (marker) marker.remove();

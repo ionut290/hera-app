@@ -23,7 +23,7 @@ assert(html.includes('green-assistant.js?v=20260830-brave-manuals3'), "Client as
 assert(netlify.includes('from = "/api/green-assistant"'), "Redirect Netlify assistente assente.");
 assert(netlify.includes('to = "/.netlify/functions/green-assistant"'), "Funzione Netlify assistente non collegata.");
 
-for (const action of ["status", "identifyPlant", "identifyDisease", "searchPlant", "plantDetails", "equipmentInfo", "equipmentManuals"]) {
+for (const action of ["status", "identifyPlant", "identifyDisease", "searchPlant", "plantDetails", "equipmentInfo", "equipmentManuals", "treeMaintenance"]) {
   assert(backend.includes(`action === "${action}"`), `Azione backend mancante: ${action}`);
 }
 for (const secret of ["PLANTNET_API_KEY", "TREFLE_API_TOKEN", "GEMINI_API_KEY", "BRAVE_SEARCH_API_KEY"]) {
@@ -47,6 +47,12 @@ assert(client.includes("data.notice"), "L'avviso sul piano Brave deve essere mos
 assert(!backend.includes("hostnameKey.includes(brandKey)"), "Un dominio non deve essere considerato ufficiale solo perché contiene il marchio.");
 assert(html.includes("management-v2.js?v=20260830-brave-manuals3"), "Versione gestione mezzi non aggiornata.");
 assert(read("management-v2.js").includes("data-equipment-assistance"), "Pulsante assistenza nelle schede mezzo assente.");
+const treeSearch = read("tree-search.js");
+assert(treeSearch.includes("🪚 MANUTENZIONE"), "Pulsante manutenzione nella scheda albero assente.");
+assert(treeSearch.includes('treeAssistantApi("treeMaintenance"'), "Scheda manutenzione albero non collegata al backend.");
+assert(treeSearch.includes('treeAssistantApi("identifyDisease"'), "Diagnosi fotografica albero non collegata a Pl@ntNet.");
+assert(treeSearch.includes("heraTreeMaintenanceV1"), "Cache locale manutenzione albero assente.");
+assert(!treeSearch.includes("firebase.firestore"), "Il Catasto arboreo non deve aggiungere operazioni Firestore.");
 
 for (const forbidden of [".collection(", ".doc(", ".onSnapshot(", "firebase.firestore(", "getFirestore(", "setDoc(", "addDoc("]) {
   assert(!client.includes(forbidden), `Operazione Firestore vietata nel client assistente: ${forbidden}`);

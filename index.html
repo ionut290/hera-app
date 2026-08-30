@@ -69,7 +69,7 @@
   <link rel="stylesheet" href="tree-search.css?v=20260830-new-plantings1">
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
   <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
-  <link rel="stylesheet" href="urban-furniture.css?v=20260830-fetchfix1">
+  <link rel="stylesheet" href="urban-furniture.css?v=20260830-allcategories1">
 </head>
 <body class="auth-pending">
 
@@ -233,6 +233,36 @@
           <option value="toilets">Bagni pubblici</option>
           <option value="shelter">Pensiline e ripari</option>
           <option value="street_lamp">Lampioni</option>
+          <option value="playground">Aree giochi</option>
+          <option value="dog_park">Aree cani</option>
+          <option value="fitness_station">Aree fitness</option>
+          <option value="outdoor_seating">Sedute all’aperto</option>
+          <option value="bbq">Barbecue pubblici</option>
+          <option value="dog_toilet">Aree igieniche cani</option>
+          <option value="recycling">Raccolta differenziata</option>
+          <option value="waste_disposal">Conferimento rifiuti</option>
+          <option value="post_box">Cassette postali</option>
+          <option value="parcel_locker">Armadietti pacchi</option>
+          <option value="telephone">Telefoni pubblici</option>
+          <option value="public_bookcase">Librerie pubbliche</option>
+          <option value="bicycle_repair_station">Riparazione biciclette</option>
+          <option value="charging_station">Ricarica elettrica</option>
+          <option value="motorcycle_parking">Parcheggi moto</option>
+          <option value="taxi">Aree taxi</option>
+          <option value="compressed_air">Aria compressa</option>
+          <option value="shower">Docce pubbliche</option>
+          <option value="water_point">Punti acqua</option>
+          <option value="clock">Orologi pubblici</option>
+          <option value="grit_bin">Contenitori sale</option>
+          <option value="lounger">Sdraio pubbliche</option>
+          <option value="give_box">Box del riuso</option>
+          <option value="fire_hydrant">Idranti</option>
+          <option value="defibrillator">Defibrillatori</option>
+          <option value="bollard">Dissuasori</option>
+          <option value="cycle_barrier">Barriere ciclabili</option>
+          <option value="bus_stop">Fermate autobus</option>
+          <option value="artwork">Opere d’arte urbana</option>
+          <option value="information">Punti informativi</option>
         </select>
         <div class="urban-furniture-search-actions">
           <button class="btn btn-primary" type="submit">CERCA NEL COMUNE</button>
@@ -661,12 +691,12 @@
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
   <script src="tree-search.js?v=20260830-new-plantings1"></script>
   <script src="green-areas.js?v=20260829e"></script>
-  <script src="urban-furniture.js?v=20260830-fetchfix1"></script>
+  <script src="urban-furniture.js?v=20260830-allcategories1"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-urban-fetchfix1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-urban-allcategories1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

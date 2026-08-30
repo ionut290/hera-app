@@ -363,7 +363,7 @@
   function loadStreetViewCards() {
     loadScriptOnce({
       selector: 'script[data-street-view-cards]',
-      src: './street-view-cards.js?v=20260830-tree-route1',
+      src: './street-view-cards.js?v=20260830-map-gps-fix1',
       datasetKey: 'streetViewCards',
       errorMessage: 'Street View card impianti non caricato.',
       defer: false

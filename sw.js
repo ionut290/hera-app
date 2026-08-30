@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v192";
-const CACHE_RESET_VERSION = "20260830-wastewater-layout1";
+const CACHE_NAME = "varga-cantieri-shell-v193";
+const CACHE_RESET_VERSION = "20260830-wastewater-infrastructure1";
 const APP_SHELL = [
   "./",
   "./index.html",

@@ -5,6 +5,7 @@
   const page = $("wastewater-plants-page");
   const form = $("wastewater-plants-form");
   const queryInput = $("wastewater-plants-query");
+  const kindInput = $("wastewater-plants-kind");
   const provinceInput = $("wastewater-plants-province");
   const statusNode = $("wastewater-plants-status");
   const resultsNode = $("wastewater-plants-results");
@@ -15,10 +16,15 @@
   const fullscreenButton = $("wastewater-plants-fullscreen-btn");
   const sheet = $("wastewater-plant-sheet");
   const sheetTitle = $("wastewater-plant-sheet-title");
+  const sheetSource = $("wastewater-plant-sheet-source");
   const sheetBody = $("wastewater-plant-sheet-body");
   const navigateButton = $("wastewater-plant-navigate");
   const API_URL = "https://servizi-gis.arpae.it/server/rest/services/Geoportal/ACQUEPressioni/MapServer/1/query";
   const SOURCE_URL = "https://dati.arpae.it/dataset/arpa_acq_reflue_urbane_depurate_depurat_tutti_22_e23";
+  const OSM_SOURCE_URL = "https://www.openstreetmap.org/copyright";
+  const LIFT_API_URL = window.Capacitor?.isNativePlatform?.()
+    ? "https://creative-syrniki-dddbae.netlify.app/api/wastewater-lift-stations"
+    : "/api/wastewater-lift-stations";
   const CACHE_KEY = "varga-arpae-wastewater-plants:v1";
   const CACHE_TTL_MS = 30 * 60 * 1000;
   const PAGE_SIZE = 1000;
@@ -38,6 +44,7 @@
   let operatorMarker = null;
   let fullscreen = false;
   let allPlants = [];
+  const liftStationsByArea = new Map();
   let currentItems = [];
   let selectedItem = null;
   let loadingPromise = null;
@@ -121,9 +128,74 @@
       waterBody: clean(properties.N__CIS_WFD),
       waterBodyCode: clean(properties.COD_CIS),
       waterBodyDetail: clean(properties.N_CIS),
+      kind: "depuratore",
+      source: "ARPAE",
       lat,
       lon
     };
+  }
+
+  const OSM_AREA_NAMES = Object.freeze({
+    "": "Emilia-Romagna",
+    BOLOGNA: "Bologna",
+    FERRARA: "Ferrara",
+    "FORLI'-CESENA": "Forlì-Cesena",
+    MODENA: "Modena",
+    PARMA: "Parma",
+    PIACENZA: "Piacenza",
+    RAVENNA: "Ravenna",
+    "REGGIO NELL'EMILIA": "Reggio Emilia",
+    RIMINI: "Rimini"
+  });
+
+  function normalizeLiftStation(element, area) {
+    const tags = element?.tags || {};
+    const lat = Number(element?.lat ?? element?.center?.lat);
+    const lon = Number(element?.lon ?? element?.center?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const osmId = `${element.type || "node"}/${element.id}`;
+    const declaredType = upper(`${tags.pumping_station || ""} ${tags.substance || ""} ${tags.name || ""}`);
+    const confirmedSewage = /(SEWAGE|WASTEWATER|FOGN|REFLU|SOLLEV)/.test(declaredType);
+    return {
+      id: `osm-${osmId}`,
+      code: clean(tags.ref || tags.operator_ref || `OSM ${element.id}`),
+      name: clean(tags.name || tags.local_ref) || (confirmedSewage ? "Sollevamento fognario" : "Stazione di pompaggio"),
+      municipality: clean(tags["addr:city"] || tags["addr:place"]),
+      province: area === "Emilia-Romagna" ? "" : upper(area === "Reggio Emilia" ? "Reggio nell'Emilia" : area),
+      provinceAbbreviation: "OSM",
+      manager: clean(tags.operator || tags.owner),
+      typeDescription: confirmedSewage ? "Impianto di sollevamento fognario" : "Stazione di pompaggio · tipo non specificato su OSM",
+      confirmedSewage,
+      pumpingStation: clean(tags.pumping_station),
+      substance: clean(tags.substance),
+      address: clean([tags["addr:street"], tags["addr:housenumber"]].filter(Boolean).join(" ")),
+      access: clean(tags.access),
+      website: clean(tags.website),
+      osmType: element.type || "node",
+      osmNumericId: element.id,
+      osmUrl: `https://www.openstreetmap.org/${osmId}`,
+      kind: "sollevamento",
+      source: "OpenStreetMap",
+      lat,
+      lon
+    };
+  }
+
+  async function loadLiftStations() {
+    const area = OSM_AREA_NAMES[provinceInput?.value || ""] || "Emilia-Romagna";
+    if (liftStationsByArea.has(area)) return liftStationsByArea.get(area);
+    setStatus(`Caricamento sollevamenti fognari OpenStreetMap · ${area}…`);
+    const response = await fetch(`${LIFT_API_URL}?area=${encodeURIComponent(area)}`, { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok || !Array.isArray(payload.elements)) throw new Error(payload.error || `OpenStreetMap non disponibile (${response.status}).`);
+    const seen = new Set();
+    const items = payload.elements.map((element) => normalizeLiftStation(element, area)).filter(Boolean).filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+    liftStationsByArea.set(area, items);
+    return items;
   }
 
   async function fetchPage(offset) {
@@ -177,8 +249,12 @@
   function filterPlants() {
     const needle = upper(queryInput?.value);
     const province = upper(provinceInput?.value);
-    return allPlants.filter((item) => {
-      if (province && upper(item.province) !== province) return false;
+    const kind = kindInput?.value || "all";
+    const area = OSM_AREA_NAMES[provinceInput?.value || ""] || "Emilia-Romagna";
+    const liftStations = liftStationsByArea.get(area) || [];
+    return [...allPlants, ...liftStations].filter((item) => {
+      if (kind !== "all" && item.kind !== kind) return false;
+      if (item.kind === "depuratore" && province && upper(item.province) !== province) return false;
       if (!needle) return true;
       const haystack = upper([
         item.code,
@@ -188,13 +264,17 @@
         item.agglomerationCode,
         item.agglomerationName,
         item.typeDescription,
-        item.waterBody
+        item.waterBody,
+        item.address,
+        item.access,
+        item.source
       ].join(" "));
       return haystack.includes(needle);
     });
   }
 
   function markerColor(item) {
+    if (item.kind === "sollevamento") return "#7a3db8";
     const capacity = Number(item.designPopulation) || 0;
     if (capacity >= 10000) return "#b42318";
     if (capacity >= 2000) return "#f79009";
@@ -209,28 +289,30 @@
     const bounds = L.latLngBounds([]);
     items.forEach((item, index) => {
       L.circleMarker([item.lat, item.lon], {
-        radius: Number(item.designPopulation) >= 10000 ? 8 : 6,
+        radius: item.kind === "sollevamento" || Number(item.designPopulation) >= 10000 ? 8 : 6,
         color: "#fff",
         weight: 1.5,
         fillColor: markerColor(item),
         fillOpacity: 0.9
-      }).addTo(markersLayer).bindPopup(`<strong>${esc(item.name)}</strong><br>${esc(item.code || "Codice non disponibile")} · ${esc(item.municipality || "Comune non disponibile")}<br>${esc(formatNumber(item.designPopulation))} A.E.<br><button class="btn btn-primary" type="button" data-wastewater-plant-index="${index}">APRI SCHEDA</button>`);
+      }).addTo(markersLayer).bindPopup(`<strong>${esc(item.name)}</strong><br>${esc(item.kind === "sollevamento" ? `${item.typeDescription} · OpenStreetMap` : `${item.code || "Codice non disponibile"} · ${item.municipality || "Comune non disponibile"}`)}${item.kind === "depuratore" ? `<br>${esc(formatNumber(item.designPopulation))} A.E.` : ""}<br><button class="btn btn-primary" type="button" data-wastewater-plant-index="${index}">APRI SCHEDA</button>`);
       bounds.extend([item.lat, item.lon]);
     });
     if (bounds.isValid()) map.fitBounds(bounds.pad(0.08), { animate: false, maxZoom: 16 });
     else map.setView([44.55, 11.1], 8, { animate: false });
-    mapStatus.textContent = `${items.length} ${items.length === 1 ? "depuratore visualizzato" : "depuratori visualizzati"}.`;
+    const lifts = items.filter((item) => item.kind === "sollevamento").length;
+    const plants = items.length - lifts;
+    mapStatus.textContent = `${items.length} impianti visualizzati · ${plants} depuratori · ${lifts} stazioni OSM.`;
     resizeMap();
   }
 
   function renderResults(items) {
     const shown = items.slice(0, RESULT_LIST_LIMIT);
     resultsNode.innerHTML = shown.map((item, index) => `<article class="wastewater-plant-result">
-      <div><small>${esc(item.code || "Senza codice")} · ${esc(item.provinceAbbreviation || item.province)}</small><h2>${esc(item.name)}</h2><p>${esc(item.municipality || "Comune non disponibile")} · ${esc(item.manager || "Gestore non disponibile")} · ${esc(formatNumber(item.designPopulation))} A.E.</p></div>
+      <div>${item.kind === "sollevamento" ? `<span class="wastewater-plant-source-badge">${item.confirmedSewage ? "SOLLEVAMENTO FOGNARIO" : "POMPA · TIPO NON SPECIFICATO"} · OSM</span>` : ""}<small>${esc(item.code || "Senza codice")} · ${esc(item.provinceAbbreviation || item.province)}</small><h2>${esc(item.name)}</h2><p>${item.kind === "sollevamento" ? `${esc(item.municipality || item.address || "Località non indicata")} · ${esc(item.manager || "Gestore non indicato")}` : `${esc(item.municipality || "Comune non disponibile")} · ${esc(item.manager || "Gestore non disponibile")} · ${esc(formatNumber(item.designPopulation))} A.E.`}</p></div>
       <button class="btn" type="button" data-wastewater-result-index="${index}">MOSTRA E APRI SCHEDA</button>
     </article>`).join("");
     if (items.length > RESULT_LIST_LIMIT) {
-      resultsNode.insertAdjacentHTML("beforeend", `<p class="wastewater-plant-result wastewater-plants-list-note">Nell’elenco sono mostrati i primi ${RESULT_LIST_LIMIT} risultati; tutti i ${items.length} depuratori sono presenti sulla mappa. Usa nome, codice, Comune o gestore per restringere la ricerca.</p>`);
+      resultsNode.insertAdjacentHTML("beforeend", `<p class="wastewater-plant-result wastewater-plants-list-note">Nell’elenco sono mostrati i primi ${RESULT_LIST_LIMIT} risultati; tutti i ${items.length} impianti sono presenti sulla mappa. Usa nome, codice, Comune o gestore per restringere la ricerca.</p>`);
     }
     resultsNode.classList.toggle("hidden", !items.length);
   }
@@ -244,7 +326,22 @@
     if (!item) return;
     selectedItem = item;
     sheetTitle.textContent = item.name;
-    sheetBody.innerHTML = `<section class="wastewater-plant-detail-section"><h3>Identificazione</h3><dl>
+    if (sheetSource) sheetSource.textContent = item.kind === "sollevamento" ? "Fonte: OpenStreetMap · dato collaborativo" : "Fonte: ARPAE Emilia-Romagna · edizione 2023";
+    if (item.kind === "sollevamento") {
+      sheetBody.innerHTML = `<section class="wastewater-plant-detail-section"><h3>Identificazione</h3><dl>
+        ${detailRow("Tipo", item.typeDescription)}
+        ${detailRow("Codice / riferimento", item.code)}
+        ${detailRow("Comune o località", item.municipality)}
+        ${detailRow("Indirizzo", item.address)}
+        ${detailRow("Gestore", item.manager)}
+        ${detailRow("Accesso", item.access)}
+        ${detailRow("Fluido indicato", item.substance || item.pumpingStation)}
+        ${detailRow("Coordinate", `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`)}
+      </dl></section>
+      <p class="wastewater-plants-list-note">Dato collaborativo OpenStreetMap: quando il tipo non è specificato, non è possibile confermare che la stazione appartenga alla rete fognaria.</p>
+      <a class="wastewater-plant-source-link" href="${esc(item.osmUrl || OSM_SOURCE_URL)}" target="_blank" rel="noopener">Apri l’elemento su OpenStreetMap</a>`;
+    } else {
+      sheetBody.innerHTML = `<section class="wastewater-plant-detail-section"><h3>Identificazione</h3><dl>
       ${detailRow("Codice depuratore", item.code)}
       ${detailRow("Comune", item.municipality)}
       ${detailRow("Provincia", `${item.province}${item.provinceAbbreviation ? ` (${item.provinceAbbreviation})` : ""}`)}
@@ -266,7 +363,8 @@
       ${detailRow("Codice corpo idrico", item.waterBodyCode)}
       ${detailRow("Coordinate", `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`)}
     </dl></section>
-    <a class="wastewater-plant-source-link" href="${SOURCE_URL}" target="_blank" rel="noopener">Apri il dataset ufficiale ARPAE</a>`;
+      <a class="wastewater-plant-source-link" href="${SOURCE_URL}" target="_blank" rel="noopener">Apri il dataset ufficiale ARPAE</a>`;
+    }
     navigateButton.href = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}`;
     sheet.classList.remove("hidden");
     sheet.setAttribute("aria-hidden", "false");
@@ -291,17 +389,18 @@
   async function shareSelectedItem() {
     if (!selectedItem) return;
     const navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${selectedItem.lat},${selectedItem.lon}`;
+    const isLift = selectedItem.kind === "sollevamento";
     const message = [
-      "🏭 *SCHEDA DEPURATORE*",
+      isLift ? (selectedItem.confirmedSewage ? "🟣 *SOLLEVAMENTO FOGNARIO*" : "🟣 *STAZIONE DI POMPAGGIO OSM*") : "🏭 *SCHEDA DEPURATORE*",
       "",
       `• *Impianto:* ${selectedItem.name}`,
       `• *Codice:* ${selectedItem.code || "Non disponibile"}`,
       `• *Comune:* ${selectedItem.municipality || "Non disponibile"}`,
       `• *Gestore:* ${selectedItem.manager || "Non disponibile"}`,
       `• *Tipo:* ${selectedItem.typeDescription || selectedItem.typeCode || "Non disponibile"}`,
-      `• *Capacità:* ${formatNumber(selectedItem.designPopulation)} A.E.`,
+      ...(isLift ? [`• *Fonte:* OpenStreetMap (dato collaborativo)`] : [`• *Capacità:* ${formatNumber(selectedItem.designPopulation)} A.E.`]),
       "",
-      "📍 *NAVIGA VERSO IL DEPURATORE*",
+      isLift ? "📍 *NAVIGA VERSO IL SOLLEVAMENTO*" : "📍 *NAVIGA VERSO IL DEPURATORE*",
       navigationUrl
     ].join("\n");
     const appUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
@@ -316,12 +415,25 @@
     window.setTimeout(() => { if (document.visibilityState === "visible") window.alert("WhatsApp non è installato o non può essere aperto."); }, 1800);
   }
 
-  function runSearch() {
+  function runSearch(loadWarning = "") {
     const items = filterPlants();
     renderResults(items);
     showItems(items);
-    if (!items.length) return setStatus("Nessun depuratore corrisponde ai filtri. Prova un nome più breve o seleziona tutta la Regione.", "error");
-    setStatus(`${items.length} ${items.length === 1 ? "depuratore trovato" : "depuratori trovati"} su ${allPlants.length} impianti ARPAE.`, "success");
+    if (!items.length) return setStatus(loadWarning || "Nessun impianto corrisponde ai filtri. Prova un nome più breve o cambia provincia.", "error");
+    const lifts = items.filter((item) => item.kind === "sollevamento").length;
+    const plants = items.length - lifts;
+    setStatus(`${items.length} impianti trovati · ${plants} depuratori ARPAE · ${lifts} stazioni OSM.${loadWarning ? ` ${loadWarning}` : ""}`, loadWarning ? "" : "success");
+  }
+
+  async function refreshSearch() {
+    let warning = "";
+    try {
+      await loadAllPlants();
+      if ((kindInput?.value || "all") !== "depuratore") await loadLiftStations();
+    } catch (error) {
+      warning = `${error.message || "Fonte supplementare non disponibile"} I depuratori ARPAE restano consultabili.`;
+    }
+    runSearch(warning);
   }
 
   async function openPage() {
@@ -332,8 +444,7 @@
     initializeMap();
     resizeMap();
     try {
-      await loadAllPlants();
-      runSearch();
+      await refreshSearch();
       queryInput?.focus();
     } catch (error) {
       setStatus(`${error.message || "Caricamento non riuscito."} Controlla la connessione e riprova.`, "error");
@@ -361,12 +472,14 @@
     }, (error) => setStatus(error.code === 1 ? "Permesso posizione negato. Abilitalo nelle impostazioni." : "Non riesco a rilevare la posizione.", "error"), { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
-  form?.addEventListener("submit", (event) => { event.preventDefault(); if (allPlants.length) runSearch(); else openPage(); });
-  provinceInput?.addEventListener("change", () => { if (allPlants.length) runSearch(); });
+  form?.addEventListener("submit", (event) => { event.preventDefault(); refreshSearch(); });
+  provinceInput?.addEventListener("change", refreshSearch);
+  kindInput?.addEventListener("change", refreshSearch);
   $("wastewater-plants-clear-btn")?.addEventListener("click", () => {
     queryInput.value = "";
     provinceInput.value = "";
-    if (allPlants.length) runSearch();
+    kindInput.value = "all";
+    refreshSearch();
   });
   $("open-wastewater-plants-btn")?.addEventListener("click", openPage);
   $("wastewater-plants-back-btn")?.addEventListener("click", closePage);

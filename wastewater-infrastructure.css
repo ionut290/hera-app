@@ -1,0 +1,16 @@
+.wastewater-plants-legend .lift-station {
+  background: #7a3db8;
+  border-radius: 2px;
+}
+
+.wastewater-plant-source-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f0e8fa;
+  color: #663399;
+  font-size: .72rem;
+  font-weight: 900;
+}

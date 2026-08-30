@@ -34,6 +34,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/wastewater-lift-stations"
+  to = "/.netlify/functions/wastewater-lift-stations"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

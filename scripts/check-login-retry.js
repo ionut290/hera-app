@@ -17,6 +17,7 @@ if (script.includes('/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/')) {
 
 for (const expected of [
   "Email o password non corretta.",
+  "Se l’account è già registrato, usa PASSWORD DIMENTICATA?.",
   "Email non ancora verificata.",
   "event.stopImmediatePropagation()",
   "loginButton.disabled = false",
@@ -32,6 +33,22 @@ for (const expected of [
   "Creazione account non riuscita. Riprova tra poco."
 ]) {
   if (!script.includes(expected)) throw new Error(`Retry login incompleto: ${expected}`);
+}
+
+const handleLoginStart = script.indexOf("  async function handleLogin(event)");
+const handleLoginEnd = script.indexOf("  function initialize()", handleLoginStart);
+if (handleLoginStart < 0 || handleLoginEnd < 0) {
+  throw new Error("Gestore login email/password non trovato.");
+}
+const handleLoginSource = script.slice(handleLoginStart, handleLoginEnd);
+if (handleLoginSource.includes("openRegistrationDialog")) {
+  throw new Error("Un errore di accesso apre ancora automaticamente la registrazione.");
+}
+if (handleLoginSource.includes("Account non trovato")) {
+  throw new Error("Il login distingue ancora in modo inaffidabile un account inesistente da una password errata.");
+}
+if (!handleLoginSource.includes("await auth.signInWithEmailAndPassword(email, password)")) {
+  throw new Error("Accesso Firebase email/password mancante.");
 }
 
 for (const expected of [
@@ -69,7 +86,7 @@ for (const expected of [
   'id="registration-password-confirm"',
   'minlength="10" autocomplete="new-password"',
   "ti invieremo un’email per verificare il nuovo account",
-  "login-retry-fix.js?v=20260829-credential-vault1"
+  "login-retry-fix.js?v=20260830-existing-account1"
 ]) {
   if (!html.includes(expected)) throw new Error(`Registrazione HTML incompleta: ${expected}`);
 }

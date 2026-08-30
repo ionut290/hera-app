@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.5.0';
+  const VERSION = '2.5.1';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -510,7 +510,10 @@
     let modeUsed = 'driving';
     let routeLabel = '';
 
-    const drive = await requestDirections(maps, from, to, maps.TravelMode?.DRIVING || 'DRIVING');
+    const googleDirectionsEnabled = window.HERA_GOOGLE_DIRECTIONS_ENABLED === true;
+    const drive = googleDirectionsEnabled
+      ? await requestDirections(maps, from, to, maps.TravelMode?.DRIVING || 'DRIVING')
+      : { result: null, status: 'DISABLED' };
     const chosen = drive.result ? chooseBestRoute(drive.result) : null;
 
     if (chosen?.route) {

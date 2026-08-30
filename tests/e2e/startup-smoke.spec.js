@@ -133,4 +133,96 @@ test.describe('Catasto arboreo', () => {
     await expect(page.locator('#tree-result h2')).toHaveText('Codice albero 103VT');
     await expect(page.locator('#tree-map-status')).toContainText('2 alberi con codice 103VT');
   });
+
+  test('shows six tree details, expands the rest and prepares a concise Whazzup message', async ({ page }) => {
+    const tree = {
+      num_pt: '118907',
+      cod_alb: '183VT',
+      classe: 'Fraxinus excelsior',
+      cl_h: 'Cl2: 6mt - 12mt',
+      classe_circonferenza_diametro: 'Cl5: 60 - 90 (19-28 cm)',
+      quartiere: 'Santo Stefano',
+      dimora: 'Prato',
+      anni_impnt: -1,
+      area_statistica: 'IRNERIO-2',
+      data_agg: '2021-02-08',
+      geo_point_2d: { lat: 44.503598, lon: 11.352738 }
+    };
+
+    await page.route('**/alberi-manutenzioni/records?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total_count: 1, results: [tree] })
+      });
+    });
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      const map = {
+        setView() { return this; },
+        on() { return this; },
+        invalidateSize() { return this; },
+        getZoom() { return 19; },
+        getCenter() { return { lat: 44.503598, lng: 11.352738 }; },
+        getBounds() {
+          return {
+            getNorthEast: () => ({ lat: 44.504, lng: 11.353 }),
+            pad() { return this; },
+            contains() { return true; }
+          };
+        }
+      };
+      window.L = {
+        map: () => map,
+        tileLayer: () => ({ addTo() { return this; }, remove() {} }),
+        layerGroup: () => ({
+          layers: [],
+          addTo() { return this; },
+          remove() {},
+          getLayers() { return this.layers; }
+        }),
+        marker: () => ({
+          bindPopup() { return this; },
+          openPopup() { return this; },
+          on() { return this; },
+          addTo(layer) { layer.layers?.push(this); return this; },
+          remove() {}
+        }),
+        divIcon: (options) => options
+      };
+    });
+    await page.evaluate(() => document.getElementById('open-tree-search-btn').click());
+    await page.locator('#tree-number').fill('118907');
+    await page.locator('#tree-search-form').evaluate((form) => form.requestSubmit());
+
+    await expect(page.locator('.tree-result-grid > div:visible')).toHaveCount(6);
+    await expect(page.locator('.tree-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await page.locator('.tree-details-toggle').click();
+    await expect(page.locator('.tree-result-grid > div:visible')).toHaveCount(Object.keys(tree).length);
+    await expect(page.locator('.tree-details-toggle')).toHaveText('MOSTRA SOLO I PRIMI 6 DETTAGLI');
+
+    await page.evaluate(() => {
+      window.__treeWhazzupUrl = '';
+      window.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'android',
+        Plugins: {
+          HeraWhatsApp: {
+            open({ url }) {
+              window.__treeWhazzupUrl = url;
+              return Promise.resolve({ opened: true });
+            }
+          }
+        }
+      };
+    });
+    await page.locator('.tree-whazzup-share').click();
+    const message = await page.evaluate(() => new URL(window.__treeWhazzupUrl).searchParams.get('text'));
+    expect(message).toContain('🌳 *SCHEDA ALBERO*');
+    expect(message.match(/^• /gm)).toHaveLength(6);
+    expect(message).toContain('*Quartiere:* Santo Stefano');
+    expect(message).not.toContain('*Dimora:*');
+    expect(message).toContain('📍 *NAVIGA VERSO L’ALBERO*');
+    expect(message).toContain('destination=44.503598,11.352738');
+  });
 });

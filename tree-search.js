@@ -103,13 +103,64 @@
     return String(value);
   }
 
-  function buildTreeDetails(tree) {
+  function buildTreeDetailEntries(tree) {
     const keys = Object.keys(tree || {}).filter((key) => hasTreeValue(tree[key]));
     const ordered = [
       ...TREE_FIELD_PRIORITY.filter((key) => keys.includes(key)),
       ...keys.filter((key) => !TREE_FIELD_PRIORITY.includes(key)).sort((a, b) => treeFieldLabel(a).localeCompare(treeFieldLabel(b), "it"))
     ];
-    return ordered.map((key) => `<div><span>${esc(treeFieldLabel(key))}</span><strong>${esc(formatTreeValue(key, tree[key]))}</strong></div>`).join("");
+    return ordered.map((key) => ({
+      key,
+      label: treeFieldLabel(key),
+      value: formatTreeValue(key, tree[key])
+    }));
+  }
+
+  function buildTreeDetails(entries) {
+    return entries.map((entry, index) => `<div class="${index >= 6 ? "tree-detail-extra" : ""}"${index >= 6 ? " hidden" : ""}><span>${esc(entry.label)}</span><strong>${esc(entry.value)}</strong></div>`).join("");
+  }
+
+  function buildTreeWhazzupMessage(entries, navigationUrl) {
+    const details = entries.slice(0, 6).map((entry) => `• *${entry.label}:* ${entry.value}`);
+    return [
+      "🌳 *SCHEDA ALBERO*",
+      "",
+      ...details,
+      "",
+      "📍 *NAVIGA VERSO L’ALBERO*",
+      navigationUrl
+    ].join("\n");
+  }
+
+  async function openTreeShareInWhazzup(message) {
+    const appUrl = `whatsapp://send?text=${encodeURIComponent(String(message || ""))}`;
+    const nativeAndroid = Boolean(
+      window.Capacitor?.isNativePlatform?.()
+      && window.Capacitor?.getPlatform?.() === "android"
+    );
+    if (nativeAndroid) {
+      const plugin = window.Capacitor?.Plugins?.HeraWhatsApp
+        || window.Capacitor?.registerPlugin?.("HeraWhatsApp")
+        || null;
+      if (!plugin?.open) {
+        window.alert("WhatsApp non è disponibile su questo dispositivo.");
+        return false;
+      }
+      try {
+        const response = await plugin.open({ url: appUrl });
+        return response?.opened !== false;
+      } catch (error) {
+        window.alert(error?.message || "WhatsApp non è installato o non può essere aperto su questo dispositivo.");
+        return false;
+      }
+    }
+    window.location.assign(appUrl);
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") {
+        window.alert("WhatsApp non è installato o non può essere aperto su questo dispositivo.");
+      }
+    }, 1800);
+    return true;
   }
 
   function resizeMap() {
@@ -435,8 +486,28 @@
   function showTree(tree) {
     const point = tree.geo_point_2d;
     if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) throw new Error("Albero trovato, ma senza coordinate utilizzabili.");
-    const details = buildTreeDetails(tree);
-    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div><p class="tree-data-source-note">Sono mostrati tutti i campi valorizzati restituiti in questo momento dal dataset ufficiale del Comune di Bologna. I campi vuoti non vengono visualizzati.</p><a class="btn btn-primary tree-navigate" href="https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lon}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a>`;
+    const detailEntries = buildTreeDetailEntries(tree);
+    const details = buildTreeDetails(detailEntries);
+    const navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lon}`;
+    const expandButton = detailEntries.length > 6
+      ? `<button class="btn tree-details-toggle" type="button" aria-expanded="false">MOSTRA TUTTI I DETTAGLI (${detailEntries.length})</button>`
+      : "";
+    const detailsNote = detailEntries.length > 6
+      ? "Sono visibili i primi 6 dettagli. Premi il pulsante per consultare tutti i campi valorizzati del censimento ufficiale."
+      : "Sono mostrati tutti i campi valorizzati disponibili nel censimento ufficiale.";
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button></div>`;
+    const detailsToggle = result.querySelector(".tree-details-toggle");
+    detailsToggle?.addEventListener("click", () => {
+      const expanded = detailsToggle.getAttribute("aria-expanded") !== "true";
+      result.querySelectorAll(".tree-detail-extra").forEach((item) => { item.hidden = !expanded; });
+      detailsToggle.setAttribute("aria-expanded", String(expanded));
+      detailsToggle.textContent = expanded
+        ? "MOSTRA SOLO I PRIMI 6 DETTAGLI"
+        : `MOSTRA TUTTI I DETTAGLI (${detailEntries.length})`;
+    });
+    result.querySelector(".tree-whazzup-share")?.addEventListener("click", () => {
+      openTreeShareInWhazzup(buildTreeWhazzupMessage(detailEntries, navigationUrl));
+    });
     result.classList.remove("hidden");
     initializeMap();
     if (marker) marker.remove();

@@ -52,7 +52,7 @@
       ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(code)
       || /INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/i.test(message)
     ) {
-      return "Email o password non corretta. Controlla i dati e riprova.";
+      return "Email o password non corretta. Se l’account è già registrato, usa PASSWORD DIMENTICATA?.";
     }
     if (code === "auth/too-many-requests") return "Troppi tentativi. Attendi qualche minuto e riprova.";
     if (code === "auth/network-request-failed") return "Connessione non disponibile. Controlla internet e riprova.";
@@ -304,17 +304,7 @@
     try {
       const auth = firebase.auth();
       await ensureLocalPersistenceWithoutBlocking(auth);
-      try {
-        await auth.signInWithEmailAndPassword(email, password);
-      } catch (loginError) {
-        const code = String(loginError?.code || "").toLowerCase();
-        if (!["auth/invalid-credential", "auth/user-not-found"].includes(code)) throw loginError;
-        if (feedback) feedback.textContent = "Account non trovato. Completa la creazione del nuovo account.";
-        const registration = await openRegistrationDialog(email, password);
-        if (passwordInput) passwordInput.value = "";
-        if (registration.verificationRequired && feedback) feedback.textContent = "Account creato. Controlla la tua email, conferma l’indirizzo e poi accedi.";
-        return;
-      }
+      await auth.signInWithEmailAndPassword(email, password);
       completeSuccessfulLoginUi();
       if (passwordInput) passwordInput.value = "";
       if (feedback) feedback.textContent = "Login completato.";

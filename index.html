@@ -69,6 +69,7 @@
   <link rel="stylesheet" href="tree-search.css?v=20260830-new-plantings1">
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
   <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
+  <link rel="stylesheet" href="urban-furniture.css?v=20260830a">
 </head>
 <body class="auth-pending">
 
@@ -129,6 +130,7 @@
         <button id="open-segnalazioni-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">⚠️</span>Segnalazioni</button>
         <button id="open-tree-search-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌳</span>Catasto alberi</button>
         <button id="open-green-areas-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🌿</span>Aree verdi</button>
+        <button id="open-urban-furniture-btn" class="btn menu-title-btn" type="button"><span class="menu-item-icon" aria-hidden="true">🪑</span>Arredo urbano</button>
       </section>
       <section class="menu-section" aria-labelledby="menu-personale-title">
         <h3 id="menu-personale-title" class="menu-section-title">Personale e accessi</h3>
@@ -208,6 +210,61 @@
         <div id="tree-map" class="tree-map" aria-label="Posizione degli alberi sulla mappa"></div>
       </section>
     </div>
+  </section>
+
+  <section id="urban-furniture-page" class="urban-furniture-page hidden" aria-hidden="true" aria-labelledby="urban-furniture-title">
+    <header class="urban-furniture-header">
+      <button id="urban-furniture-back-btn" class="btn" type="button">← Home</button>
+      <div><span>OpenStreetMap · Overpass</span><h1 id="urban-furniture-title">Arredo urbano</h1></div>
+    </header>
+    <div class="urban-furniture-content">
+      <form id="urban-furniture-form" class="urban-furniture-card">
+        <label for="urban-furniture-municipality">Comune</label>
+        <input id="urban-furniture-municipality" type="search" autocomplete="address-level2" value="Bologna" placeholder="Es. Bologna" required>
+        <label for="urban-furniture-category">Tipo di elemento</label>
+        <select id="urban-furniture-category">
+          <option value="all">Tutto l’arredo urbano</option>
+          <option value="bench">Panchine</option>
+          <option value="waste_basket">Cestini</option>
+          <option value="drinking_water">Acqua potabile</option>
+          <option value="fountain">Fontane</option>
+          <option value="picnic_table">Tavoli da picnic</option>
+          <option value="bicycle_parking">Rastrelliere</option>
+          <option value="toilets">Bagni pubblici</option>
+          <option value="shelter">Pensiline e ripari</option>
+          <option value="street_lamp">Lampioni</option>
+        </select>
+        <div class="urban-furniture-search-actions">
+          <button class="btn btn-primary" type="submit">CERCA NEL COMUNE</button>
+          <button id="urban-furniture-nearby-btn" class="btn" type="button">⌖ VICINO A ME</button>
+        </div>
+        <p id="urban-furniture-status" class="urban-furniture-status" role="status" aria-live="polite">Cerca per Comune oppure usa la posizione dell’operatore.</p>
+      </form>
+      <section id="urban-furniture-results" class="urban-furniture-results hidden" aria-label="Risultati arredo urbano"></section>
+      <section id="urban-furniture-map-card" class="urban-furniture-map-card" aria-label="Mappa arredo urbano">
+        <div class="urban-furniture-toolbar">
+          <strong>Elementi sulla mappa</strong>
+          <button id="urban-furniture-fullscreen-btn" class="btn" type="button" aria-pressed="false">⛶ SCHERMO INTERO</button>
+          <label for="urban-furniture-map-style">Vista</label>
+          <select id="urban-furniture-map-style"><option value="classic">Classica</option><option value="satellite">Satellite</option><option value="hybrid">Ibrida</option></select>
+        </div>
+        <p id="urban-furniture-map-status" class="urban-furniture-map-status" role="status" aria-live="polite">La mappa è pronta.</p>
+        <div id="urban-furniture-map" class="urban-furniture-map" aria-label="Posizione degli elementi di arredo urbano"></div>
+      </section>
+    </div>
+    <section id="urban-furniture-sheet" class="urban-furniture-sheet hidden" aria-hidden="true" aria-labelledby="urban-furniture-sheet-title">
+      <div class="urban-furniture-sheet-dialog">
+        <button id="urban-furniture-sheet-close" class="btn urban-furniture-sheet-close" type="button" aria-label="Chiudi scheda">✕</button>
+        <small>Fonte: OpenStreetMap contributors</small>
+        <h2 id="urban-furniture-sheet-title">Scheda elemento</h2>
+        <div id="urban-furniture-sheet-body"></div>
+        <div class="urban-furniture-sheet-actions">
+          <a id="urban-furniture-navigate" class="btn btn-primary" href="#" target="_blank" rel="noopener">📍 NAVIGA</a>
+          <button id="urban-furniture-street-view" class="btn" type="button">🌐 VISTA 360° E PERCORSO</button>
+          <button id="urban-furniture-whazzup" class="btn" type="button">INVIA TRAMITE WHAZZUP</button>
+        </div>
+      </div>
+    </section>
   </section>
 
   <section id="green-areas-page" class="green-areas-page hidden" aria-hidden="true" aria-labelledby="green-areas-title">
@@ -604,11 +661,12 @@
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
   <script src="tree-search.js?v=20260830-new-plantings1"></script>
   <script src="green-areas.js?v=20260829e"></script>
+  <script src="urban-furniture.js?v=20260830a"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-new-plantings1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-urban-furniture1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

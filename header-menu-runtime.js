@@ -438,6 +438,7 @@
       '#open-tree-search-btn',
       '#open-green-areas-btn',
       '#open-urban-furniture-btn',
+      '#open-wastewater-plants-btn',
       '#open-equipment-assistant-btn'
     ].forEach((selector) => {
       const button = document.querySelector(selector);

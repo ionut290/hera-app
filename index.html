@@ -196,7 +196,6 @@
         </div>
         <p id="wastewater-plants-status" class="wastewater-plants-status" role="status" aria-live="polite">Caricamento del censimento ufficiale ARPAE…</p>
       </form>
-      <section id="wastewater-plants-results" class="wastewater-plants-results hidden" aria-label="Risultati depuratori"></section>
       <section id="wastewater-plants-map-card" class="wastewater-plants-map-card" aria-label="Mappa dei depuratori">
         <div class="wastewater-plants-toolbar">
           <strong>Depuratori sulla mappa</strong>
@@ -218,6 +217,7 @@
         <p id="wastewater-plants-map-status" class="wastewater-plants-map-status" role="status" aria-live="polite">La mappa è pronta.</p>
         <div id="wastewater-plants-map" class="wastewater-plants-map" aria-label="Localizzazione degli impianti di depurazione"></div>
       </section>
+      <section id="wastewater-plants-results" class="wastewater-plants-results hidden" aria-label="Risultati depuratori"></section>
     </div>
     <section id="wastewater-plant-sheet" class="wastewater-plant-sheet hidden" aria-hidden="true" aria-labelledby="wastewater-plant-sheet-title">
       <div class="wastewater-plant-sheet-dialog">
@@ -756,7 +756,7 @@
   <script src="administrative-calendar.js?v=20260829-admin-hours1"></script>
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
-  <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
+  <script src="header-menu-runtime.js?v=20260830-wastewater-menu1"></script>
   <script src="tree-search.js?v=20260830-new-plantings1"></script>
   <script src="green-areas.js?v=20260829e"></script>
   <script src="urban-furniture.js?v=20260830-completesheet1"></script>
@@ -765,7 +765,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-wastewater-plants1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-wastewater-layout1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

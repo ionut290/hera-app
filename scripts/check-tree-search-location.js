@@ -6,6 +6,7 @@ const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const source = fs.readFileSync(path.join(root, "tree-search.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "tree-search.css"), "utf8");
+const streetView = fs.readFileSync(path.join(root, "street-view-cards.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 
 const checks = [
@@ -26,8 +27,14 @@ const checks = [
   ["navigazione inclusa nel messaggio", source.includes("📍 *NAVIGA VERSO L’ALBERO*") && source.includes("navigationUrl")],
   ["solo app WhatsApp installata", source.includes("whatsapp://send?text=") && !/wa\.me|web\.whatsapp\.com|api\.whatsapp\.com/.test(source)],
   ["plugin Android esistente riutilizzato", source.includes("Plugins?.HeraWhatsApp") && source.includes('plugin.open({ url: appUrl })')],
-  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-details-share1") && serviceWorker.includes("tree-search.css?v=20260830-details-share1")],
-  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-details-share1") && serviceWorker.includes("tree-search.js?v=20260830-details-share1")],
+  ["pulsante vista 360 e percorso", source.includes('class="btn tree-street-view"') && source.includes("openTreeStreetView")],
+  ["coordinate albero passate alla vista 360", source.includes("openForCoordinates") && source.includes("lng: Number(point.lon)")],
+  ["API Street View riutilizzabile", streetView.includes("function openForCoordinates") && streetView.includes("openForCoordinates };")],
+  ["panorama sopra e percorso sotto", streetView.includes("grid-template-rows:50% 50%") && streetView.indexOf("hera-sv-panorama-wrap") < streetView.indexOf("hera-sv-route-panel")],
+  ["percorso dalla posizione operatore", streetView.includes("const operatorPositionPromise = getOperatorPosition()") && streetView.includes("routeStartKind = operatorCoords ? 'operator' : 'panorama'")],
+  ["asset Street View aggiornato", serviceWorker.includes("street-view-cards.js?v=20260830-tree-route1")],
+  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-tree-route1") && serviceWorker.includes("tree-search.css?v=20260830-tree-route1")],
+  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-tree-route1") && serviceWorker.includes("tree-search.js?v=20260830-tree-route1")],
   ["nessuna operazione Firestore", !/firestore|\.collection\(|\.doc\(/i.test(source)]
 ];
 

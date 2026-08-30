@@ -224,5 +224,27 @@ test.describe('Catasto arboreo', () => {
     expect(message).not.toContain('*Dimora:*');
     expect(message).toContain('📍 *NAVIGA VERSO L’ALBERO*');
     expect(message).toContain('destination=44.503598,11.352738');
+
+    await page.evaluate(() => {
+      window.__treeStreetViewRequest = null;
+      window.HeraStreetViewCards = {
+        installed: true,
+        openForCoordinates(coords, trigger, options) {
+          window.__treeStreetViewRequest = {
+            coords,
+            label: trigger.textContent,
+            options
+          };
+          return Promise.resolve(true);
+        }
+      };
+    });
+    await expect(page.locator('.tree-street-view')).toHaveText('🌐 VISTA 360° E PERCORSO');
+    await page.locator('.tree-street-view').click();
+    await page.waitForFunction(() => Boolean(window.__treeStreetViewRequest));
+    const streetViewRequest = await page.evaluate(() => window.__treeStreetViewRequest);
+    expect(streetViewRequest.coords).toEqual({ lat: 44.503598, lng: 11.352738 });
+    expect(streetViewRequest.options.targetLabel).toBe('Albero');
+    expect(streetViewRequest.options.modalTitle).toContain('#118907');
   });
 });

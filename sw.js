@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v195";
-const CACHE_RESET_VERSION = "20260830-firestore-read-fix1";
+const CACHE_NAME = "varga-cantieri-shell-v196";
+const CACHE_RESET_VERSION = "20260830-firestore-read-fix2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260829-noise-filter1",
+  "./app.js?v=20260830-firestore-read-fix2",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
@@ -45,7 +45,7 @@ const APP_SHELL = [
   "./accounting-v2.js?v=20260829-management-projection1",
   "./commessa-impianti-menu.js?v=20260826c",
   "./accounting-view-guard.js?v=20260728a",
-  "./operational-import-repair.js?v=20260830-firestore-read-fix1",
+  "./operational-import-repair.js?v=20260830-firestore-read-fix2",
   "./google-sheet-two-way-sync.js?v=20260729b",
   "./native-android-runtime.js?v=20260803-whatsapp-early2",
   "./notification-center.js?v=20260830-firestore-read-fix1",
@@ -89,7 +89,7 @@ const APP_SHELL = [
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
   "./street-view-cards.js?v=20260830-tree-route1",
-  "./firebase-config.js?v=20260829-credential-vault1",
+  "./firebase-config.js?v=20260830-firestore-read-fix2",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",
   "./icons/varga-cantieri-180.png",

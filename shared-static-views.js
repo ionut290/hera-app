@@ -239,18 +239,19 @@
     }
   }
 
-  function subscribe(type, key, callback) {
+  function subscribe(type, key, callback, options = {}) {
     const firestore = db();
     if (!firestore) return () => {};
     const subscriptionKey = `${type}:${key}`;
     const existing = subscriptions.get(subscriptionKey);
     if (existing) {
+      if (options.keepAlive === true) existing.keepAlive = true;
       if (typeof callback === "function") existing.callbacks.add(callback);
       const cachedExisting = readLocal(type, key);
       if (cachedExisting) callback?.(cachedExisting, { source: "memory" });
       return () => {
         existing.callbacks.delete(callback);
-        if (existing.callbacks.size) return;
+        if (existing.callbacks.size || existing.keepAlive) return;
         existing.unsubscribeFirestore?.();
         subscriptions.delete(subscriptionKey);
       };
@@ -285,11 +286,11 @@
 
     const unsubscribe = () => {
       callbacks.delete(callback);
-      if (callbacks.size) return;
+      if (callbacks.size || options.keepAlive === true) return;
       unsubscribeFirestore?.();
       subscriptions.delete(subscriptionKey);
     };
-    subscriptions.set(subscriptionKey, { unsubscribe, unsubscribeFirestore, callbacks });
+    subscriptions.set(subscriptionKey, { unsubscribe, unsubscribeFirestore, callbacks, keepAlive: options.keepAlive === true });
     return unsubscribe;
   }
 
@@ -324,8 +325,8 @@
       nextWorkday = window.getNextWorkdayCandidateDateKeys?.(today)?.[0] || "";
     } catch (_) {}
     [...new Set([selected, today, tomorrow, nextWorkday].filter(Boolean))]
-      .forEach((date) => subscribe("squadre", date));
-    subscribe("calendario", monthKey(selected));
+      .forEach((date) => subscribe("squadre", date, null, { keepAlive: true }));
+    subscribe("calendario", monthKey(selected), null, { keepAlive: true });
   }
 
   window.addEventListener("hera-squadre-saved", (event) => {

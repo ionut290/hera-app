@@ -127,6 +127,8 @@ assert.match(source, /<b>\$\{summary\.workRows\}<\/b> lavorazioni/);
 assert.doesNotMatch(source, /currentImpianti\s*=\s*summary\.items/, "Il riepilogo periodico non deve sostituire la lista operativa");
 assert.doesNotMatch(source, /impiantiByCommessaId\.set\(canonical\.id,\s*summary\.items/, "Il riepilogo periodico non deve sostituire la cache operativa");
 assert.doesNotMatch(source, /setInterval\s*\(/, "Il riepilogo INRETE non deve effettuare polling Firestore continuo");
+assert.match(source, /if \(options\.refresh === true/, "L'avvio deve usare i contatori già caricati senza rileggere tre collezioni");
+assert.match(source, /syntheticDuplicateLoaded/, "Il documento tecnico deve essere verificato solo se presente nello stato locale");
 assert.match(source, /duplicateArchiveChecked/, "La verifica del duplicato tecnico deve essere eseguita una sola volta per sessione");
 assert.match(source, /MutationObserver/, "L'apertura della gestione deve essere rilevata tramite evento, non polling");
 

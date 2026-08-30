@@ -14,6 +14,7 @@ const checks = [
   [code.includes('Totale giornata Lavori occasionali'), "manca il totale ore giornaliero"],
   [code.includes('Ore Lavori occasionali'), "manca il riepilogo ore nel calendario personale"],
   [code.includes('hoursFor(p.id,day,true)') && code.includes('operatoreUid'), "il calendario deve filtrare le ore dell'utente corrente"],
+  [code.includes('let plantsPromise = null') && code.includes('if (plantsPromise) return plantsPromise'), "le richieste simultanee del catalogo devono condividere una sola lettura"],
   [loader.includes('HERA_OCCASIONAL_WORKFLOW_V2_SRC'), "firebase-config non carica il nuovo workflow"],
   [!/(?:safeOpenWhatsAppMessage|openWhatsApp|markImpiantoDone|forceMoveImpiantoToFatti|handleImpiantoWhatsAppClick)/.test(code), "il workflow non deve modificare FATTO o Whazzup"],
   [!/(?:currentImpianti\s*=|impiantiByCommessaId\.(?:set|delete|clear)\s*\()/.test(code), "il workflow non deve contaminare le cache globali"],

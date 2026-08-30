@@ -724,7 +724,7 @@
   <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="heavy-libs-lazy-loader.js?v=20260815a"></script>
-  <script src="firebase-config.js?v=20260829-credential-vault1"></script>
+  <script src="firebase-config.js?v=20260830-firestore-read-fix2"></script>
   <script src="native-android-runtime.js?v=20260726-fatto1"></script>
   <script src="notification-center.js?v=20260830-firestore-read-fix1"></script>
   <script src="auth-login-fix.js?v=20260731-legacy1"></script>
@@ -734,7 +734,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260829-noise-filter1"></script>
+  <script src="app.js?v=20260830-firestore-read-fix2"></script>
   <script src="green-assistant.js?v=20260830-brave-manuals3"></script>
   <script src="android-play-store-install.js?v=20260828a"></script>
   <script src="maintenance-price-code-display-guard.js?v=20260824-a1ordinary3"></script>
@@ -755,7 +755,7 @@
   <script src="commessa-impianti-menu.js?v=20260826c"></script>
   <script src="commessa-produced-widget.js?v=20260824-oneclick2"></script>
   <script src="accounting-view-guard.js?v=20260728a"></script>
-  <script src="operational-import-repair.js?v=20260830-firestore-read-fix1"></script>
+  <script src="operational-import-repair.js?v=20260830-firestore-read-fix2"></script>
   <script src="today-summary-interactions.js?v=20260731-repair1"></script>
   <script src="today-live-hours-vehicles.js?v=20260731-codes1"></script>
   <script src="identity-feature-lazy-loader.js?v=20260815a"></script>
@@ -773,7 +773,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-firestore-read-fix1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-firestore-read-fix2", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

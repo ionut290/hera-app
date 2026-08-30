@@ -1243,6 +1243,8 @@ let automaticSquadreDateKey = "";
 let automaticSquadreDateTimer = null;
 let startupAssignedCommessaAutoOpenDone = false;
 let sharedSquadreViewConfigLoaded = false;
+let sharedSquadreViewConfigLoadPromise = null;
+let sharedSquadreViewConfigLoadedDocId = "";
 let highlightedImpiantoKey = "";
 let expandedImpiantoKey = "";
 const expandedImpiantoManagementKeys = new Set();
@@ -3409,6 +3411,8 @@ if (!auth || firebaseInitError) {
   sharedSquadreDateKey = "";
   startupAssignedCommessaAutoOpenDone = false;
   sharedSquadreViewConfigLoaded = false;
+  sharedSquadreViewConfigLoadPromise = null;
+  sharedSquadreViewConfigLoadedDocId = "";
   squadreByCommessa = new Map();
   squadreHistoryByDate = new Map();
   commesseById = new Map();
@@ -19515,6 +19519,52 @@ function startSquadreLoadTimeout() {
   }, 10000);
 }
 
+function ensureSquadreViewConfigLoaded() {
+  const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
+  if (sharedSquadreViewConfigLoaded && sharedSquadreViewConfigLoadedDocId === squadreViewDocId) {
+    return Promise.resolve(true);
+  }
+  if (sharedSquadreViewConfigLoadPromise) return sharedSquadreViewConfigLoadPromise;
+
+  sharedSquadreViewConfigLoadPromise = runFirestoreGetWithRetry(
+    db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId),
+    {
+      label: isSnowServiceContext() ? "LOAD SQUADRE NEVE VIEW CONFIG" : "LOAD SQUADRE VIEW CONFIG",
+      timeoutMs: 9000,
+      retries: 1
+    }
+  )
+    .then((snapshot) => {
+      const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
+      const data = doc.exists ? doc.data() || {} : {};
+      const sharedDate = String(data.selectedDateKey || "").trim();
+      sharedSquadreViewConfigLoaded = true;
+      sharedSquadreViewConfigLoadedDocId = squadreViewDocId;
+      if (isSnowServiceContext()) {
+        if (sharedDate && sharedDate !== snowSharedSquadreDateKey && !snowManualSquadreFilterDateKey) {
+          snowSharedSquadreDateKey = sharedDate;
+          syncSquadreDateInputs();
+          subscribeSquadre();
+        }
+      } else if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
+        sharedSquadreDateKey = sharedDate;
+        syncSquadreDateInputs();
+        subscribeSquadre();
+      }
+      return true;
+    })
+    .catch((error) => {
+      logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
+      sharedSquadreViewConfigLoaded = true;
+      sharedSquadreViewConfigLoadedDocId = squadreViewDocId;
+      return false;
+    })
+    .finally(() => {
+      sharedSquadreViewConfigLoadPromise = null;
+    });
+  return sharedSquadreViewConfigLoadPromise;
+}
+
 function subscribeSquadre() {
   if (!currentUser) {
     console.log("Query squadre non avviata: utente non loggato");
@@ -19603,33 +19653,7 @@ function subscribeSquadre() {
     });
   });
 
-  const squadreViewDocId = isSnowServiceContext() ? "neveSquadreView" : "squadreView";
-  const squadreViewConfigPromise = runFirestoreGetWithRetry(db.collection("appConfig").where(firebase.firestore.FieldPath.documentId(), "==", squadreViewDocId), {
-    label: isSnowServiceContext() ? "LOAD SQUADRE NEVE VIEW CONFIG" : "LOAD SQUADRE VIEW CONFIG",
-    timeoutMs: 9000,
-    retries: 1
-  })
-    .then((snapshot) => {
-      const doc = snapshot.docs[0] || { exists: false, data: () => ({}) };
-      const data = doc.exists ? doc.data() || {} : {};
-      const sharedDate = String(data.selectedDateKey || "").trim();
-      sharedSquadreViewConfigLoaded = true;
-      if (isSnowServiceContext()) {
-        if (sharedDate && sharedDate !== snowSharedSquadreDateKey && !snowManualSquadreFilterDateKey) {
-          snowSharedSquadreDateKey = sharedDate;
-          syncSquadreDateInputs();
-          subscribeSquadre();
-        }
-      } else if (sharedDate && sharedDate !== sharedSquadreDateKey && !manualSquadreFilterDateKey) {
-        sharedSquadreDateKey = sharedDate;
-        syncSquadreDateInputs();
-        subscribeSquadre();
-      }
-    })
-    .catch((error) => {
-      logFirestoreError("LOAD SQUADRE VIEW CONFIG", error);
-      sharedSquadreViewConfigLoaded = true;
-    });
+  const squadreViewConfigPromise = ensureSquadreViewConfigLoaded();
 
   return Promise.all([squadreDataPromise, squadreViewConfigPromise]);
 }

@@ -204,6 +204,14 @@
     return changed;
   }
 
+  function isSyntheticDuplicateLoaded() {
+    try {
+      return typeof commesseById !== "undefined" && commesseById?.has?.(SYNTHETIC_COMMESSA_ID) === true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function archiveSyntheticDuplicate(canonical = findCanonicalModenaCommessa()) {
     if (!canonical?.id || activeCollectionName() !== "commesse") return false;
     removeSyntheticCommessaFromLocalState(canonical);
@@ -495,10 +503,13 @@
   function ensureCanonicalState(options = {}) {
     const canonical = findCanonicalModenaCommessa();
     if (!canonical?.id) return false;
+    const syntheticDuplicateLoaded = isSyntheticDuplicateLoaded();
     removeSyntheticCommessaFromLocalState(canonical);
     applyMetadataFallback(canonical);
-    archiveSyntheticDuplicate(canonical).catch(() => {});
-    if (options.refresh !== false && (typeof document === "undefined" || !document.hidden)) {
+    if (options.archive === true || syntheticDuplicateLoaded) {
+      archiveSyntheticDuplicate(canonical).catch(() => {});
+    }
+    if (options.refresh === true && (typeof document === "undefined" || !document.hidden)) {
       refreshCanonicalSummary({ force: options.force === true }).catch(() => {});
     }
     return true;
@@ -558,7 +569,7 @@
   }
 
   window.createInreteModenaAugust2026 = async () => {
-    ensureCanonicalState({ force: true });
+    ensureCanonicalState({ archive: true, refresh: true, force: true });
     return Boolean(findCanonicalModenaCommessa());
   };
   window.refreshInreteModenaMixedWork = () => refreshCanonicalSummary({ force: true });

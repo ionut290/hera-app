@@ -5,7 +5,7 @@
 
   const PREFIX_V3 = 'varga_fs_diag_v3_';
   const PREFIX_V2 = 'varga_fs_diag_v2_';
-  const SCRIPT_VERSION = '3.1.0';
+  const SCRIPT_VERSION = '3.1.1';
   const DETAIL_LIMIT = 2000;
   const batchOps = new WeakMap();
   const liveListeners = new Map();
@@ -108,6 +108,28 @@
     clearTimeout(renderTimer);
     renderTimer = setTimeout(render, 150);
   }
+
+  function recoverAbandonedListenerInstances() {
+    const value = load();
+    let recovered = 0;
+    const closedAt = nowIso();
+    Object.values(value.listenerInstances || {}).forEach((listener) => {
+      if (!listener?.active) return;
+      listener.active = false;
+      listener.abandoned = true;
+      listener.closeReason = 'page-session-ended-without-unsubscribe';
+      listener.closedAt = closedAt;
+      listener.durationMs = listener.openedAt
+        ? Math.max(0, Date.now() - new Date(listener.openedAt).getTime())
+        : null;
+      recovered += 1;
+    });
+    if (!recovered) return;
+    value.abandonedListenersRecovered = numeric(value.abandonedListenersRecovered) + recovered;
+    safePersist(value);
+  }
+
+  recoverAbandonedListenerInstances();
 
   function increment(object, key, amount) {
     object[key] = numeric(object[key]) + numeric(amount);

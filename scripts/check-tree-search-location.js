@@ -19,8 +19,15 @@ const checks = [
   ["gestione permesso negato", source.includes("Permesso posizione negato")],
   ["listener pulsante presente", source.includes('mapLocationButton?.addEventListener("click", centerOnUserLocation)')],
   ["controllo adatto allo schermo intero", css.includes(".tree-map-card--fullscreen .tree-map-location-btn")],
-  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260829-location1") && serviceWorker.includes("tree-search.css?v=20260829-location1")],
-  ["asset JS aggiornato", html.includes("tree-search.js?v=20260829-location1") && serviceWorker.includes("tree-search.js?v=20260829-location1")],
+  ["solo 6 dettagli iniziali", source.includes('index >= 6 ? "tree-detail-extra"') && source.includes('index >= 6 ? " hidden"')],
+  ["pulsante espansione dettagli", source.includes('class="btn tree-details-toggle"') && source.includes("MOSTRA SOLO I PRIMI 6 DETTAGLI")],
+  ["pulsante invio Whazzup", source.includes('class="btn tree-whazzup-share"') && source.includes("buildTreeWhazzupMessage")],
+  ["messaggio limitato ai primi 6 dettagli", source.includes("entries.slice(0, 6)")],
+  ["navigazione inclusa nel messaggio", source.includes("📍 *NAVIGA VERSO L’ALBERO*") && source.includes("navigationUrl")],
+  ["solo app WhatsApp installata", source.includes("whatsapp://send?text=") && !/wa\.me|web\.whatsapp\.com|api\.whatsapp\.com/.test(source)],
+  ["plugin Android esistente riutilizzato", source.includes("Plugins?.HeraWhatsApp") && source.includes('plugin.open({ url: appUrl })')],
+  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-details-share1") && serviceWorker.includes("tree-search.css?v=20260830-details-share1")],
+  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-details-share1") && serviceWorker.includes("tree-search.js?v=20260830-details-share1")],
   ["nessuna operazione Firestore", !/firestore|\.collection\(|\.doc\(/i.test(source)]
 ];
 

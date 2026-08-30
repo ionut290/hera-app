@@ -8,6 +8,7 @@
   const ASSIGN_ID = "lavori-occasionali-v2-assignments";
   const CALENDAR_BOX_ID = "lavori-occasionali-v2-calendar-hours";
   const state = { plants: [], selected: new Map(), loadedDay: "", catalogOpen: false, previousCommessa: "", lastCalendarDate: "", assignmentSignature: "", lastError: null };
+  let plantsPromise = null;
 
   const text = (v) => String(v ?? "").trim();
   const norm = (v) => text(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").toLocaleUpperCase("it-IT");
@@ -62,10 +63,21 @@
 
   async function loadPlants(force = false) {
     if (!force && state.plants.length) return state.plants;
+    if (plantsPromise) return plantsPromise;
     if (typeof db === "undefined" || !db?.collection) return [];
-    try { const snap = await root().collection("impianti").get(); state.plants = snap.docs.map((d) => ({id:d.id,...d.data()})).filter((p) => p.lavoroOccasionale === true || norm(p.tipologiaImpianto) === "LAVORO OCCASIONALE").sort((a,b) => norm(a.denominazione||a.nome).localeCompare(norm(b.denominazione||b.nome),"it")); }
-    catch (e) { state.lastError = e; state.plants = []; }
-    return state.plants;
+    plantsPromise = (async () => {
+      try {
+        const snap = await root().collection("impianti").get();
+        state.plants = snap.docs.map((d) => ({id:d.id,...d.data()})).filter((p) => p.lavoroOccasionale === true || norm(p.tipologiaImpianto) === "LAVORO OCCASIONALE").sort((a,b) => norm(a.denominazione||a.nome).localeCompare(norm(b.denominazione||b.nome),"it"));
+      } catch (e) {
+        state.lastError = e;
+        state.plants = [];
+      } finally {
+        plantsPromise = null;
+      }
+      return state.plants;
+    })();
+    return plantsPromise;
   }
 
   function clearFields() { ["lavoro-occasionale-nome","lavoro-occasionale-descrizione","lavoro-occasionale-coordinate","lavoro-occasionale-comune","lavoro-occasionale-indirizzo","lavoro-occasionale-codice-prezzo","lavoro-occasionale-numero-preventivo"].forEach((id)=>{const el=document.getElementById(id);if(el){if("value" in el&&!el.isContentEditable)el.value="";else el.textContent="";}}); const pdf=document.getElementById("lavoro-occasionale-preventivo");if(pdf)pdf.value=""; }
@@ -104,6 +116,6 @@
   function refresh(){installMenu();page();bindSquadSave();bindObservers();if(state.catalogOpen)moveField(true);else moveField(false);void renderAssignments();setTimeout(decorateCards,80);}
   function start(){style();refresh();bindCalendar();document.getElementById("squadra-commessa")?.addEventListener("change",()=>{state.loadedDay="";state.assignmentSignature="";void renderAssignments(true);});document.getElementById("squadra-riferimento")?.addEventListener("change",()=>{state.loadedDay="";state.assignmentSignature="";void renderAssignments(true);});document.getElementById("add-squadra-row-btn")?.addEventListener("click",()=>setTimeout(()=>{state.assignmentSignature="";void renderAssignments(true);},0));[500,1500,3500].forEach((d)=>setTimeout(refresh,d));}
 
-  window.HeraOccasionalWorkflowV2={installed:true,version:"2.1.0",commessaId:COMMESSA_ID,openCatalog,closeCatalog,refresh,openHoursForPlant:openHours,getState:()=>({plants:state.plants.length,catalogOpen:state.catalogOpen,lastError:state.lastError?text(state.lastError?.message||state.lastError):null})};
+  window.HeraOccasionalWorkflowV2={installed:true,version:"2.1.1",commessaId:COMMESSA_ID,openCatalog,closeCatalog,refresh,openHoursForPlant:openHours,getState:()=>({plants:state.plants.length,catalogOpen:state.catalogOpen,lastError:state.lastError?text(state.lastError?.message||state.lastError):null})};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});else start();
 })();

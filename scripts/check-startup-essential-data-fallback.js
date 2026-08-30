@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const app = fs.readFileSync("app.js", "utf8");
 const optimizer = fs.readFileSync("firestore-startup-cost-optimizer.js", "utf8");
 const firebaseConfig = fs.readFileSync("firebase-config.js", "utf8");
+const diagnostics = fs.readFileSync("firestore-operation-diagnostics.js", "utf8");
 
 assert.match(
   app,
@@ -47,6 +48,26 @@ assert.match(
   firebaseConfig,
   /firestore-startup-cost-optimizer\.js\?v=20260829-fast-squad-cache1/,
   "Il browser deve ricevere la nuova versione del fallback dati essenziali."
+);
+assert.match(
+  app,
+  /function ensureSquadreViewConfigLoaded\(\)[\s\S]*?if \(sharedSquadreViewConfigLoadPromise\) return sharedSquadreViewConfigLoadPromise/,
+  "La configurazione condivisa delle squadre deve riusare la richiesta già in corso."
+);
+assert.match(
+  app,
+  /const squadreViewConfigPromise = ensureSquadreViewConfigLoaded\(\)/,
+  "I riabbonamenti alle squadre non devono rileggere appConfig."
+);
+assert.match(
+  diagnostics,
+  /function recoverAbandonedListenerInstances\(\)/,
+  "Il diagnostico deve chiudere logicamente i listener appartenenti alla pagina precedente."
+);
+assert.match(
+  diagnostics,
+  /closeReason = 'page-session-ended-without-unsubscribe'/,
+  "I listener recuperati devono essere riconoscibili nel report."
 );
 
 console.log("Dati essenziali post-login: fallback Firestore per commesse, squadre e impianti verificato.");

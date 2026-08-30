@@ -23,7 +23,7 @@ const checks=[
  ['riparazione ricarica dati salvati',js.includes('await load({autoRepair:false});const report=await synchronizeOperationalModel')],
  ['payload impianto fisico senza undefined',!js.includes('const physical={...plant,id:undefined')&&js.includes('delete physical.id')],
  ['autoriparazione importazioni incomplete',js.includes('needsOperationalRepair')&&js.includes('autoRepairing')&&js.includes('load({autoRepair:false})')],
- ['riallineamento commessa al caricamento app',repair.includes('ensureCanonicalState')&&repair.includes('window.addEventListener("load"')&&repair.includes('refreshCanonicalSummary')],
+ ['riallineamento commessa al caricamento senza scansione',repair.includes('ensureCanonicalState')&&repair.includes('window.addEventListener("load"')&&repair.includes('options.refresh === true')],
  ['vista contabile stabile',guard.includes('ensureAccountingView')&&guard.includes('window.AccountingV2.open')&&!guard.includes('renderImpiantiManagementTable')],
  ['motore INRETE disponibile offline',sw.includes('./inrete-work-items-v2.js?v=20260728b')&&sw.includes('./accounting-view-guard.js?v=20260728a')],
  ['riparazione idempotente',js.includes('repairImportedMatrixPlants')&&js.includes('migrationSourceId')&&js.includes('stableId')],

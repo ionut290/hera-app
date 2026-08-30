@@ -25,7 +25,7 @@ assert.match(wrapper, /fallback completo bloccato/);
 assert.match(wrapper, /hoursApprovalsLoaded = true/);
 assert.doesNotMatch(wrapper, /enableHoursSource\(\{[\s\S]*forceSharedCalendarFallback/);
 
-assert.match(explicitGuard, /version: "2\.1\.0"/);
+assert.match(explicitGuard, /version: "2\.1\.1"/);
 assert.match(explicitGuard, /trigger\.isTrusted === true/);
 assert.match(explicitGuard, /blockedFallbackStarts/);
 assert.match(explicitGuard, /if \(!trustedUserAction\)/);
@@ -42,6 +42,8 @@ assert.match(sharedViews, /sourceCollection,/);
 assert.match(sharedViews, /schemaVersion: CALENDAR_SCHEMA_VERSION/);
 assert.match(sharedViews, /completeRecords: true/);
 assert.match(sharedViews, /aggiornamento calendario affidato alla Cloud Function/);
+assert.match(sharedViews, /options\.keepAlive === true/);
+assert.match(sharedViews, /subscribe\("squadre", date, null, \{ keepAlive: true \}\)/);
 assert.doesNotMatch(sharedViews, /window\.allHoursReports/);
 assert.doesNotMatch(sharedViews, /window\.allHoursApprovalRequests/);
 assert.doesNotMatch(sharedViews, /hera-hours-saved[\s\S]{0,180}publishCalendar/);
@@ -152,6 +154,8 @@ if (core) {
   const storage = new Map();
   const listeners = new Map();
   let firestoreWrites = 0;
+  let firestoreListeners = 0;
+  let firestoreUnsubscribes = 0;
   let lastWrite = null;
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null; },
@@ -163,7 +167,10 @@ if (core) {
       return {
         doc(id) {
           return {
-            onSnapshot() { return () => {}; },
+            onSnapshot() {
+              firestoreListeners += 1;
+              return () => { firestoreUnsubscribes += 1; };
+            },
             async set(value) {
               firestoreWrites += 1;
               lastWrite = { id, value };
@@ -216,6 +223,11 @@ if (core) {
   vm.runInContext(sharedViews, context, { filename: "shared-static-views.js" });
 
   const api = window.HeraSharedStaticViews;
+  assert.equal(firestoreListeners, 3, "L'avvio deve aprire una sola volta oggi, domani e calendario");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Rome" });
+  const releaseToday = api.subscribe("squadre", today, () => {});
+  releaseToday();
+  assert.equal(firestoreUnsubscribes, 0, "Il passaggio iniziale non deve chiudere e riaprire il listener di oggi");
   const payload = api.collectCalendar("2026-08");
   assert.equal(payload.schemaVersion, 2);
   assert.equal(payload.completeRecords, true);

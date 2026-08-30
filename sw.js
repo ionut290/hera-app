@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v191";
-const CACHE_RESET_VERSION = "20260830-wastewater-plants1";
+const CACHE_NAME = "varga-cantieri-shell-v192";
+const CACHE_RESET_VERSION = "20260830-wastewater-layout1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -56,7 +56,7 @@ const APP_SHELL = [
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
   "./fatto-button-immediate.js?v=20260824-fatto-oneclick1",
-  "./header-menu-runtime.js?v=20260804-diagnostics-reset1",
+  "./header-menu-runtime.js?v=20260830-wastewater-menu1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
   "./global-archive-sync.js?v=20260802-cost2",

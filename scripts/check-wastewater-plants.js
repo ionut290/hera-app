@@ -8,6 +8,7 @@ const html = fs.readFileSync("index.html", "utf8");
 const source = fs.readFileSync("wastewater-plants.js", "utf8");
 const css = fs.readFileSync("wastewater-plants.css", "utf8");
 const sw = fs.readFileSync("sw.js", "utf8");
+const menuRuntime = fs.readFileSync("header-menu-runtime.js", "utf8");
 
 assert.match(html, /id="open-wastewater-plants-btn"/);
 assert.match(html, /id="wastewater-plants-page"/);
@@ -16,6 +17,8 @@ assert.match(html, /Nome, codice, Comune, gestore o agglomerato/);
 assert.match(html, /LA MIA POSIZIONE/);
 assert.match(html, /VISTA 360° E PERCORSO/);
 assert.match(html, /INVIA TRAMITE WHAZZUP/);
+assert.ok(html.indexOf('id="wastewater-plants-map-card"') < html.indexOf('id="wastewater-plants-results"'), "La mappa deve comparire prima dell’elenco.");
+assert.match(menuRuntime, /#open-wastewater-plants-btn/);
 assert.match(source, /servizi-gis\.arpae\.it\/server\/rest\/services\/Geoportal\/ACQUEPressioni\/MapServer\/1\/query/);
 assert.match(source, /resultOffset/);
 assert.match(source, /exceededTransferLimit/);

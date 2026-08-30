@@ -84,8 +84,6 @@ test.describe('Arredo urbano', () => {
         divIcon: (options) => options,
         latLngBounds: () => bounds
       };
-      window.__urbanStreetView = null;
-      window.HeraStreetViewCards = { openForCoordinates(coords, trigger, options) { window.__urbanStreetView = { coords, label: trigger.textContent, options }; return Promise.resolve(true); } };
       window.__urbanWhazzupUrl = '';
       window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: { HeraWhatsApp: { open({ url }) { window.__urbanWhazzupUrl = url; return Promise.resolve({ opened: true }); } } } };
     });
@@ -99,6 +97,10 @@ test.describe('Arredo urbano', () => {
     await expect(page.locator('#urban-furniture-sheet')).not.toHaveClass(/hidden/);
     await expect(page.locator('#urban-furniture-sheet-title')).toContainText('Panchina Piazza');
 
+    await page.evaluate(() => {
+      window.__urbanStreetView = null;
+      window.HeraStreetViewCards = { openForCoordinates(coords, trigger, options) { window.__urbanStreetView = { coords, label: trigger.textContent, options }; return Promise.resolve(true); } };
+    });
     await page.locator('#urban-furniture-street-view').click();
     await page.waitForFunction(() => Boolean(window.__urbanStreetView));
     const streetView = await page.evaluate(() => window.__urbanStreetView);

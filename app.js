@@ -18479,6 +18479,29 @@ function confirmImpiantoNavigationAlerts(impianto) {
   });
 }
 
+async function setImpiantoNavigated(commessaId, impiantoIds, navigateAt, operatorName) {
+  const normalizedCommessaId = String(commessaId || "").trim();
+  const uniqueImpiantoIds = [...new Set(
+    (Array.isArray(impiantoIds) ? impiantoIds : [])
+      .map((impiantoId) => String(impiantoId || "").trim())
+      .filter(Boolean)
+  )];
+  if (!normalizedCommessaId || !uniqueImpiantoIds.length) return;
+
+  const ref = db.collection(getCommesseCollectionName()).doc(normalizedCommessaId).collection("impianti");
+  const navigateTimestamp = navigateAt instanceof Date
+    ? firebase.firestore.Timestamp.fromDate(navigateAt)
+    : firebase.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  uniqueImpiantoIds.forEach((impiantoId) => {
+    batch.set(ref.doc(impiantoId), {
+      navigateAt: navigateTimestamp,
+      navigatedBy: String(operatorName || "").trim() || "Operatore"
+    }, { merge: true });
+  });
+  await batch.commit();
+}
+
 async function navigateToImpianto(impianto) {
   if (!selectedCommessaId || !impianto.id) return;
 

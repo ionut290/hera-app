@@ -66,7 +66,7 @@ test.describe('Arredo urbano', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('searches Overpass and opens map, sheet, 360 route and native Whazzup', async ({ page }) => {
-    await page.route('https://overpass-api.de/api/interpreter', (route) => route.fulfill({
+    await page.route('**/api/urban-furniture?**', (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ elements: [{ type: 'node', id: 991, lat: 44.4949, lon: 11.3426, tags: { amenity: 'bench', name: 'Panchina Piazza' } }] })

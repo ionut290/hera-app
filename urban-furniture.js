@@ -19,7 +19,7 @@
   const navigateButton = $("urban-furniture-navigate");
   const CACHE_PREFIX = "varga-urban-furniture:";
   const CACHE_TTL_MS = 10 * 60 * 1000;
-  const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+  const OVERPASS_URL = "/api/urban-furniture";
   const MAX_RESULTS = 500;
 
   const CATEGORIES = Object.freeze({
@@ -104,20 +104,11 @@
     $("home-page")?.classList.remove("hidden");
   }
 
-  function escapeOverpassRegex(value) {
-    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/"/g, '\\"');
-  }
-
   function categoryFor(tags = {}) {
     return Object.entries(CATEGORIES).find(([, data]) => {
       const match = data.clause.match(/\["([^"]+)"="([^"]+)"\]/);
       return match && tags[match[1]] === match[2];
     })?.[0] || "bench";
-  }
-
-  function buildClauses(scope, category) {
-    const categories = category === "all" ? Object.values(CATEGORIES) : [CATEGORIES[category]].filter(Boolean);
-    return categories.map((item) => `nwr${item.clause}(${scope});`).join("");
   }
 
   function normalizeElement(element) {
@@ -153,16 +144,12 @@
     try { sessionStorage.setItem(cacheKey(query), JSON.stringify({ savedAt: Date.now(), items })); } catch (_) {}
   }
 
-  async function requestOverpass(query, cacheId) {
+  async function requestOverpass(params, cacheId) {
     const cached = readCache(cacheId);
     if (cached) return cached;
-    const response = await fetch(OVERPASS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" },
-      body: new URLSearchParams({ data: query })
-    });
-    if (!response.ok) throw new Error(`Servizio cartografico momentaneamente non disponibile (${response.status}).`);
-    const payload = await response.json();
+    const response = await fetch(`${OVERPASS_URL}?${new URLSearchParams(params).toString()}`, { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Servizio cartografico momentaneamente non disponibile (${response.status}).`);
     const seen = new Set();
     const items = (payload.elements || []).map(normalizeElement).filter(Boolean).filter((item) => {
       if (seen.has(item.id)) return false;
@@ -174,16 +161,11 @@
   }
 
   async function searchMunicipality(municipality, category) {
-    const town = escapeOverpassRegex(municipality);
-    const scope = "area.municipality";
-    const query = `[out:json][timeout:30];area["boundary"="administrative"]["admin_level"="8"]["name"~"^${town}$","i"]->.municipality;(${buildClauses(scope, category)})out center tags ${MAX_RESULTS};`;
-    return requestOverpass(query, `municipality:${municipality.toLocaleLowerCase("it-IT")}:${category}`);
+    return requestOverpass({ mode: "municipality", municipality, category }, `municipality:${municipality.toLocaleLowerCase("it-IT")}:${category}`);
   }
 
   async function searchNearby(lat, lon, category) {
-    const scope = `around:3000,${lat.toFixed(6)},${lon.toFixed(6)}`;
-    const query = `[out:json][timeout:25];(${buildClauses(scope, category)})out center tags ${MAX_RESULTS};`;
-    return requestOverpass(query, `nearby:${lat.toFixed(3)}:${lon.toFixed(3)}:${category}`);
+    return requestOverpass({ mode: "nearby", lat: lat.toFixed(6), lon: lon.toFixed(6), category }, `nearby:${lat.toFixed(3)}:${lon.toFixed(3)}:${category}`);
   }
 
   function markerIcon(item) {

@@ -66,7 +66,7 @@
   <link rel="stylesheet" href="approval-access.css?v=20260828-email1">
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
-  <link rel="stylesheet" href="tree-search.css?v=20260830-tree-route1">
+  <link rel="stylesheet" href="tree-search.css?v=20260830-new-plantings1">
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
   <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
 </head>
@@ -190,6 +190,13 @@
           <strong>Alberi nella zona</strong>
           <button id="tree-map-location-btn" class="btn tree-map-location-btn" type="button" aria-controls="tree-map">⌖ LA MIA POSIZIONE</button>
           <button id="tree-map-fullscreen-btn" class="btn tree-map-fullscreen-btn" type="button" aria-controls="tree-map" aria-pressed="false">⛶ SCHERMO INTERO</button>
+          <label for="tree-map-planting-filter">Piantumazioni</label>
+          <select id="tree-map-planting-filter">
+            <option value="all">Tutti gli alberi</option>
+            <option value="1">🌱 Ultimo anno</option>
+            <option value="3">🌱 Ultimi 3 anni</option>
+            <option value="5">🌱 Ultimi 5 anni</option>
+          </select>
           <label for="tree-map-style">Vista mappa</label>
           <select id="tree-map-style">
             <option value="classic">Classica</option>
@@ -595,13 +602,13 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
-  <script src="tree-search.js?v=20260830-tree-route1"></script>
+  <script src="tree-search.js?v=20260830-new-plantings1"></script>
   <script src="green-areas.js?v=20260829e"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-tree-route1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-new-plantings1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

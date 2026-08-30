@@ -112,6 +112,8 @@ body.green-assistant-open { overflow: hidden; }
 .green-assistant-equipment-hero { background: linear-gradient(145deg, #fff, #f7f1df); }
 
 .green-assistant-form { display: grid; gap: 12px; }
+.green-assistant-registered-search { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.green-assistant-registered-search .btn { min-height: 44px; }
 .green-assistant-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
 .green-assistant-form label { display: grid; gap: 5px; color: #344c40; font-size: .82rem; font-weight: 700; }
 .green-assistant-form input,
@@ -223,6 +225,13 @@ body.green-assistant-open { overflow: hidden; }
 .green-assistant-section-head { justify-content: space-between; }
 .green-assistant-section-head button { border: 0; color: #8b3029; background: transparent; cursor: pointer; }
 .green-assistant-empty-state { padding: 22px; text-align: center; color: #697a70; }
+.green-assistant-manual-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e3e9e4; color: #173126; text-decoration: none; }
+.green-assistant-manual-row:last-of-type { border-bottom: 0; }
+.green-assistant-manual-row > span:first-child { min-width: 0; }
+.green-assistant-manual-row strong,
+.green-assistant-manual-row small { display: block; }
+.green-assistant-manual-row small { margin-top: 4px; color: #687970; line-height: 1.35; }
+.registry-assistance-btn { width: 100%; margin-top: 10px; }
 
 .green-assistant-overlay button:focus-visible,
 .green-assistant-overlay input:focus-visible,
@@ -236,6 +245,7 @@ body.green-assistant-open { overflow: hidden; }
   .green-assistant-result-card { padding: 12px; }
   .green-assistant-technical-row { grid-template-columns: 1fr; gap: 4px; }
   .green-assistant-search-form { flex-direction: column; }
+  .green-assistant-registered-search { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

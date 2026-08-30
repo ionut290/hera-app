@@ -10,7 +10,7 @@
     mounted: false,
     mode: "gardening",
     statusLoaded: false,
-    configured: { plantnet: false, trefle: false, gemini: false },
+    configured: { plantnet: false, trefle: false, gemini: false, brave: false },
     plantImage: "",
     diseaseImage: "",
     equipmentImage: "",
@@ -42,12 +42,12 @@
             <p class="green-assistant-kicker">VARGA CANTIERI</p>
             <h1 id="green-assistant-title">Assistente Giardiniere</h1>
           </div>
-          <span class="green-assistant-free-badge">GRATIS</span>
+          <span class="green-assistant-free-badge" title="Le chiavi API restano protette sul server">API PROTETTE</span>
         </header>
 
         <div class="green-assistant-scroll">
           <div id="green-assistant-provider-status" class="green-assistant-provider-status" role="status" aria-live="polite">
-            Verifico i servizi gratuiti disponibili…
+            Verifico i servizi disponibili…
           </div>
 
           <section id="gardening-assistant-view" class="green-assistant-view">
@@ -138,6 +138,14 @@
               <div><h2>Trova i dati del mezzo</h2><p>Inserisci marca e modello. I dati non confermati dal manuale saranno sempre indicati come da verificare.</p></div>
             </div>
             <form id="green-equipment-form" class="green-assistant-form green-equipment-form">
+              <div class="green-assistant-registered-search">
+                <label>Codice mezzo registrato
+                  <input id="green-equipment-code" type="search" list="green-equipment-options" maxlength="120" placeholder="Esempio: R50" autocomplete="off">
+                  <datalist id="green-equipment-options"></datalist>
+                </label>
+                <button id="green-equipment-load" class="btn" type="button">CARICA DATI</button>
+              </div>
+              <p id="green-equipment-record-status" class="green-assistant-note">Puoi cercare un mezzo già presente nell'app senza nuove letture Firestore.</p>
               <div class="green-assistant-form-grid">
                 <label>Tipo mezzo o utensile
                   <input id="green-equipment-type" type="text" maxlength="120" placeholder="Motosega, trattore, decespugliatore…">
@@ -167,6 +175,7 @@
               <button class="btn btn-primary green-assistant-submit" type="submit">TROVA DATI DEL MEZZO</button>
             </form>
             <div id="green-equipment-result" class="green-assistant-result" aria-live="polite"></div>
+            <div id="green-equipment-manual-results" class="green-assistant-result" aria-live="polite"></div>
 
             <div class="green-assistant-card green-assistant-archive-card">
               <div class="green-assistant-section-head"><h2>📋 Schede recenti</h2><button id="green-equipment-archive-clear" class="btn" type="button">Svuota</button></div>
@@ -187,7 +196,7 @@
 
   function overlay() { return document.getElementById("green-assistant-overlay"); }
 
-  function open(mode) {
+  function open(mode, equipment = null) {
     mount();
     state.mode = mode === "equipment" ? "equipment" : "gardening";
     document.getElementById("gardening-assistant-view")?.classList.toggle("hidden", state.mode !== "gardening");
@@ -200,7 +209,11 @@
     document.body.classList.add("green-assistant-open");
     document.getElementById("menu-close-btn")?.click();
     if (!state.statusLoaded) void loadStatus();
-    if (state.mode === "equipment") renderEquipmentArchive(); else renderPlantArchive();
+    if (state.mode === "equipment") {
+      refreshEquipmentOptions();
+      renderEquipmentArchive();
+      if (equipment) fillEquipmentForm(equipment);
+    } else renderPlantArchive();
     setTimeout(() => document.getElementById("green-assistant-close")?.focus(), 0);
   }
 
@@ -248,9 +261,10 @@
       const rows = [
         ["Pl@ntNet", state.configured.plantnet],
         ["Trefle", state.configured.trefle],
-        ["Gemini", state.configured.gemini]
+        ["Gemini", state.configured.gemini],
+        ["Brave manuali", state.configured.brave]
       ];
-      element.innerHTML = rows.map(([name, ready]) => `<span class="${ready ? "is-ready" : "is-missing"}">${ready ? "✓" : "!"} ${escapeHTML(name)}</span>`).join("");
+      element.innerHTML = `${rows.map(([name, ready]) => `<span class="${ready ? "is-ready" : "is-missing"}">${ready ? "✓" : "!"} ${escapeHTML(name)}</span>`).join("")}${data.notice ? `<small>${escapeHTML(data.notice)}</small>` : ""}`;
     } catch (error) {
       element.textContent = error.message;
       element.classList.add("has-error");
@@ -436,6 +450,99 @@
     return ["🟡", "Da verificare", "is-check"];
   }
 
+  function equipmentRecords() {
+    return typeof mezziRecords !== "undefined" && Array.isArray(mezziRecords) ? mezziRecords : [];
+  }
+
+  function equipmentCode(record) {
+    return String(record?.codiceMezzo || record?.nId || record?.nome || record?.id || "").trim();
+  }
+
+  function findEquipmentRecord(value) {
+    const key = String(value || "").trim().toLocaleUpperCase("it");
+    if (!key) return null;
+    return equipmentRecords().find((record) => [record.id, record.codiceMezzo, record.nId, record.nome, record.targa]
+      .some((candidate) => String(candidate || "").trim().toLocaleUpperCase("it") === key)) || null;
+  }
+
+  function refreshEquipmentOptions() {
+    const datalist = document.getElementById("green-equipment-options");
+    if (!datalist) return;
+    datalist.innerHTML = equipmentRecords().map((record) => {
+      const code = equipmentCode(record);
+      const description = [record.marca, record.modello, record.targa].filter(Boolean).join(" · ");
+      return code ? `<option value="${escapeHTML(code)}">${escapeHTML(description)}</option>` : "";
+    }).join("");
+  }
+
+  function fillEquipmentForm(input) {
+    const record = typeof input === "string" ? findEquipmentRecord(input) : input;
+    const status = document.getElementById("green-equipment-record-status");
+    if (!record || typeof record !== "object") {
+      if (status) status.textContent = "Mezzo non trovato. Controlla il codice oppure selezionalo dall'elenco.";
+      return false;
+    }
+    const values = {
+      "green-equipment-code": equipmentCode(record),
+      "green-equipment-type": record.categoria || record.tipo || "",
+      "green-equipment-brand": record.marca || record.brand || "",
+      "green-equipment-model": record.modello || record.model || "",
+      "green-equipment-year": record.anno || record.annoImmatricolazione || record.annoAcquisto || "",
+      "green-equipment-serial": record.matricola || record.seriale || record.numeroTelaio || ""
+    };
+    Object.entries(values).forEach(([id, value]) => {
+      const field = document.getElementById(id);
+      if (field) field.value = String(value || "");
+    });
+    if (status) {
+      const missing = [values["green-equipment-brand"] ? "" : "marca", values["green-equipment-model"] ? "" : "modello"].filter(Boolean);
+      status.textContent = missing.length
+        ? `${equipmentCode(record)} caricato. Completa ${missing.join(" e ")} per cercare i manuali.`
+        : `${equipmentCode(record)} caricato dai Mezzi già disponibili sul dispositivo.`;
+    }
+    return true;
+  }
+
+  function manualCacheKey(payload) {
+    return [payload.brand, payload.model, payload.year, payload.type].map((value) => String(value || "").trim().toLowerCase()).join("|");
+  }
+
+  function cachedManualSearch(payload) {
+    const key = manualCacheKey(payload);
+    return (readArchive().manualSearchCache || []).find((item) => item.key === key)?.value || null;
+  }
+
+  function renderManualSearch(data, cached = false) {
+    const target = document.getElementById("green-equipment-manual-results");
+    if (!target) return;
+    const results = Array.isArray(data?.results) ? data.results : [];
+    target.innerHTML = `<article class="green-assistant-card green-assistant-manual-card">
+      <div class="green-assistant-section-head"><h2>📚 Manuali e schede tecniche</h2><span class="green-assistant-verified">${cached ? "SALVATI" : "BRAVE"}</span></div>
+      ${results.length ? results.map((item) => {
+        const url = safeUrl(item.url);
+        if (!url) return "";
+        return `<a class="green-assistant-manual-row" href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">
+          <span><strong>${escapeHTML(item.title || "Documento tecnico")}</strong><small>${escapeHTML(item.domain || "Fonte web")}${item.description ? ` · ${escapeHTML(item.description)}` : ""}</small></span>
+          <span class="green-assistant-data-status ${item.likelyOfficial ? "is-confirmed" : "is-check"}">${item.likelyOfficial ? "Produttore" : "Da verificare"}</span>
+        </a>`;
+      }).join("") : `<p class="green-assistant-empty-state">Nessun manuale trovato per marca e modello indicati.</p>`}
+      <p class="green-assistant-attribution">I risultati del produttore vengono mostrati per primi. Verifica sempre che modello, variante e matricola coincidano prima di usare i dati tecnici.</p>
+    </article>`;
+  }
+
+  async function searchEquipmentManuals(payload) {
+    const cached = cachedManualSearch(payload);
+    if (cached) return renderManualSearch(cached, true);
+    showMessage("green-equipment-manual-results", "Cerco manuali e schede tecniche con Brave…");
+    try {
+      const data = await api("equipmentManuals", payload);
+      saveArchive("manualSearchCache", data, manualCacheKey(payload));
+      renderManualSearch(data);
+    } catch (error) {
+      showMessage("green-equipment-manual-results", error.message, "error");
+    }
+  }
+
   function renderEquipment(data, { save = true } = {}) {
     state.lastEquipment = data;
     const target = document.getElementById("green-equipment-result");
@@ -564,6 +671,12 @@
     document.getElementById("green-identify-image")?.addEventListener("change", (event) => void handleImageInput(event.currentTarget, "plantImage", "green-identify-preview"));
     document.getElementById("green-disease-image")?.addEventListener("change", (event) => void handleImageInput(event.currentTarget, "diseaseImage", "green-disease-preview"));
     document.getElementById("green-equipment-image")?.addEventListener("change", (event) => void handleImageInput(event.currentTarget, "equipmentImage", "green-equipment-preview"));
+    document.getElementById("green-equipment-load")?.addEventListener("click", () => {
+      fillEquipmentForm(document.getElementById("green-equipment-code")?.value);
+    });
+    document.getElementById("green-equipment-code")?.addEventListener("change", (event) => {
+      if (findEquipmentRecord(event.currentTarget.value)) fillEquipmentForm(event.currentTarget.value);
+    });
 
     document.getElementById("green-identify-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -611,9 +724,10 @@
       };
       setBusy(event.currentTarget, true, "PREPARO LA SCHEDA…");
       showMessage("green-equipment-result", "Gemini sta preparando una scheda prudente…");
+      const manualSearch = searchEquipmentManuals(payload);
       try { renderEquipment(await api("equipmentInfo", payload)); }
       catch (error) { showMessage("green-equipment-result", error.message, "error"); }
-      finally { setBusy(event.currentTarget, false); }
+      finally { await manualSearch; setBusy(event.currentTarget, false); }
     });
 
     document.getElementById("green-equipment-archive-clear")?.addEventListener("click", () => {
@@ -654,5 +768,6 @@
     if (event.key === "Escape" && !overlay()?.classList.contains("hidden")) close();
   });
 
-  window.HeraGreenAssistant = Object.freeze({ installed: true, version: "1.0.0", open, close });
+  const openEquipment = (equipment) => open("equipment", equipment);
+  window.HeraGreenAssistant = Object.freeze({ installed: true, version: "1.1.0", open, openEquipment, close });
 })();

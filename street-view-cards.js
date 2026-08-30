@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.4.0';
+  const VERSION = '2.5.0';
   if (window.HeraStreetViewCards?.installed && window.HeraStreetViewCards.version === VERSION) return;
 
   const SEARCH_RADII = [50, 100, 250, 500, 1000];
@@ -251,6 +251,12 @@
     return modal;
   }
 
+  function setModalTitle(title) {
+    const modal = ensureModal();
+    const heading = modal.querySelector('.hera-sv-title');
+    if (heading) heading.textContent = text(title) || '🌐 Street View 360° impianto';
+  }
+
   function showStatus(message) {
     const modal = ensureModal();
     clearRouteRuntime();
@@ -430,7 +436,7 @@
     activeRouteMap.fitBounds(bounds, 36);
   }
 
-  function animateRouteMarker(maps, path, replayButton) {
+  function animateRouteMarker(maps, path, replayButton, targetLabel = 'Impianto') {
     stopRouteAnimation();
     const validPath = Array.isArray(path) ? path.map((point) => {
       if (!point) return null;
@@ -443,7 +449,7 @@
       return;
     }
     try { activeRouteMarker?.setMap(null); } catch (_) {}
-    activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: validPath[0], title: 'Percorso verso impianto', label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
+    activeRouteMarker = new maps.Marker({ map: activeRouteMap, position: validPath[0], title: `Percorso verso ${text(targetLabel).toLocaleLowerCase('it-IT') || 'impianto'}`, label: { text: '➜', fontSize: '18px', fontWeight: '900' }, zIndex: 999 });
     if (replayButton) replayButton.disabled = true;
     const duration = Math.min(9000, Math.max(3200, validPath.length * 60));
     const startedAt = performance.now();
@@ -474,7 +480,7 @@
     activeRouteAnimationFrame = requestAnimationFrame(frame);
   }
 
-  async function renderAnimatedRoute(maps, container, from, to, startKind = 'panorama') {
+  async function renderAnimatedRoute(maps, container, from, to, startKind = 'panorama', targetLabel = 'Impianto') {
     clearRouteRuntime();
     const startsFromOperator = startKind === 'operator';
     const startLabel = startsFromOperator ? 'Operatore' : 'Panorama';
@@ -490,7 +496,8 @@
     });
 
     new maps.Marker({ map: activeRouteMap, position: from, title: startsFromOperator ? 'Posizione operatore' : 'Punto panoramico', label: startIcon });
-    new maps.Marker({ map: activeRouteMap, position: to, title: 'Impianto / cancello', label: '📍' });
+    const destinationTitle = targetLabel === 'Impianto' ? 'Impianto / cancello' : targetLabel;
+    new maps.Marker({ map: activeRouteMap, position: to, title: destinationTitle, label: '📍' });
 
     const panel = container.closest('.hera-sv-route-panel');
     const summary = panel?.querySelector('.hera-sv-route-summary');
@@ -534,27 +541,33 @@
       routeLabel = 'Percorso stradale non disponibile';
     }
 
-    if (summary) summary.textContent = `${startIcon} ${startLabel} → 📍 Impianto · ${formatDistance(routeDistance)}`;
+    if (summary) summary.textContent = `${startIcon} ${startLabel} → 📍 ${targetLabel} · ${formatDistance(routeDistance)}`;
     if (note) note.textContent = startsFromOperator ? routeLabel : `${routeLabel} · GPS non disponibile`;
     navigate?.addEventListener('click', () => openGoogleMapsRoute(from, to, modeUsed));
     if (path.length > 1) {
-      replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay));
-      window.setTimeout(() => animateRouteMarker(maps, path, replay), 350);
+      replay?.addEventListener('click', () => animateRouteMarker(maps, path, replay, targetLabel));
+      window.setTimeout(() => animateRouteMarker(maps, path, replay, targetLabel), 350);
     } else if (replay) {
       replay.disabled = true;
       replay.textContent = 'PERCORSO NON DISPONIBILE';
     }
   }
 
-  async function openStreetView(row, mini, nav) {
+  async function openStreetView(row, mini, nav, options = {}) {
     const requestId = ++openRequestId;
+    const targetLabel = text(options.targetLabel) || 'Impianto';
+    const targetNoun = targetLabel.toLocaleLowerCase('it-IT');
+    const coords = options.coords || resolveRowCoords(row, nav);
+    setModalTitle(options.modalTitle || `🌐 Street View 360° ${targetNoun}`);
     const apiKey = resolveApiKey();
     if (!apiKey) return showStatus('⚠️ Chiave Google API non disponibile.');
-    const coords = resolveRowCoords(row, nav);
-    if (!coords) return showStatus('⚠️ Coordinate impianto non disponibili per la scheda selezionata.');
+    if (!coords) return showStatus(`⚠️ Coordinate ${targetNoun} non disponibili per la scheda selezionata.`);
+    const preserveTriggerLabel = Boolean(options.preserveTriggerLabel);
+    const triggerLabel = mini.textContent;
+    const setTriggerContent = (value) => { mini.textContent = preserveTriggerLabel ? triggerLabel : value; };
 
     mini.dataset.state = 'loading';
-    mini.textContent = '…';
+    mini.textContent = preserveTriggerLabel ? 'CARICAMENTO 360°…' : '…';
     showStatus('Caricamento Street View 360°…');
     const operatorPositionPromise = getOperatorPosition();
 
@@ -564,11 +577,11 @@
       const service = new maps.StreetViewService();
       const found = await findNearbyPanorama(service, coords);
       if (requestId !== openRequestId) return;
-      if (!found) { mini.textContent = '📷'; return showStatus('Street View 360° non disponibile entro 1 km da questo impianto.'); }
+      if (!found) { setTriggerContent('📷'); return showStatus(`Street View 360° non disponibile entro 1 km da questo ${targetNoun}.`); }
 
       const usage = await reserveSharedMonthlySlot();
       if (requestId !== openRequestId) return;
-      if (!usage.allowed) { mini.textContent = '⛔'; return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}).`); }
+      if (!usage.allowed) { setTriggerContent('⛔'); return showStatus(`⛔ Limite Street View mensile raggiunto (${usage.count}/${usage.limit}).`); }
 
       const panoLocation = found.data.location.latLng;
       const panoCoords = { lat: panoLocation.lat(), lng: panoLocation.lng() };
@@ -582,7 +595,7 @@
       const directDistance = distanceMeters(panoCoords, coords);
       const modal = ensureModal();
       const body = modal.querySelector('.hera-sv-body');
-      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla posizione di partenza all'impianto"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">${routeStartIcon} ${routeStartLabel} → 📍 Impianto · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo percorso stradale…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
+      body.innerHTML = `<div class="hera-sv-layout"><div class="hera-sv-panorama-wrap"><div class="hera-sv-panorama" aria-label="Street View 360 gradi"></div><div class="hera-sv-badge">360° · ${usage.count}/${usage.limit} questo mese · panorama a circa ${formatDistance(directDistance)}</div></div><div class="hera-sv-route-panel"><div class="hera-sv-route-map" aria-label="Percorso animato dalla posizione dell'operatore al ${targetNoun}"></div><div class="hera-sv-route-overlay"><span class="hera-sv-route-summary">${routeStartIcon} ${routeStartLabel} → 📍 ${targetLabel} · calcolo percorso…</span><span class="hera-sv-route-note">Calcolo percorso stradale…</span></div><div class="hera-sv-route-actions"><button type="button" class="hera-sv-route-btn primary" data-sv-route-replay>↻ RIPETI PERCORSO</button><button type="button" class="hera-sv-route-btn" data-sv-route-navigate>🧭 APRI IN MAPS</button></div></div></div>`;
       modal.classList.remove('hidden');
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
@@ -595,19 +608,34 @@
         clickToGo: true, scrollwheel: true, disableDefaultUI: false
       });
 
-      await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), routeStart, coords, routeStartKind);
+      await renderAnimatedRoute(maps, body.querySelector('.hera-sv-route-map'), routeStart, coords, routeStartKind, targetLabel);
       if (requestId !== openRequestId) return;
-      mini.textContent = '🌐';
+      setTriggerContent('🌐');
     } catch (error) {
       if (requestId !== openRequestId) return;
       console.warn('[STREET VIEW 360]', error);
-      mini.textContent = '📷';
+      setTriggerContent('📷');
       const message = text(error?.message);
       if (/contatore condiviso|permission|permesso|firestore/i.test(message)) showStatus('⚠️ Street View bloccato: non riesco a verificare il contatore condiviso.');
       else showStatus(`⚠️ Street View 360° non disponibile in questo momento. ${message}`);
     } finally {
       if (requestId === openRequestId) delete mini.dataset.state;
     }
+  }
+
+  function openForCoordinates(coords, trigger, options = {}) {
+    const lat = Number(coords?.lat);
+    const lng = Number(coords?.lng ?? coords?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      showStatus('⚠️ Coordinate non disponibili per la vista Street View 360°.');
+      return Promise.resolve(false);
+    }
+    const button = trigger instanceof HTMLElement ? trigger : document.createElement('button');
+    return openStreetView(null, button, null, {
+      ...options,
+      coords: { lat, lng },
+      preserveTriggerLabel: true
+    });
   }
 
   function enhanceRow(row) {
@@ -654,5 +682,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
 
-  window.HeraStreetViewCards = { installed: true, version: VERSION, monthlyLimit: MONTHLY_LIMIT, refresh: scan };
+  window.HeraStreetViewCards = { installed: true, version: VERSION, monthlyLimit: MONTHLY_LIMIT, refresh: scan, openForCoordinates };
 })();

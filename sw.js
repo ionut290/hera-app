@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v181";
-const CACHE_RESET_VERSION = "20260830-tree-details-share1";
+const CACHE_NAME = "varga-cantieri-shell-v182";
+const CACHE_RESET_VERSION = "20260830-tree-route1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -75,15 +75,15 @@ const APP_SHELL = [
   "./app-notifications-read-guard.js?v=20260815a",
   "./recommended-plants.css?v=20260823-stability3",
   "./recommended-plants.js?v=20260823-stability3",
-  "./tree-search.css?v=20260830-details-share1",
-  "./tree-search.js?v=20260830-details-share1",
+  "./tree-search.css?v=20260830-tree-route1",
+  "./tree-search.js?v=20260830-tree-route1",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",
   "./green-areas.js?v=20260829e",
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
-  "./street-view-cards.js?v=20260823-stability3",
+  "./street-view-cards.js?v=20260830-tree-route1",
   "./firebase-config.js?v=20260829-credential-vault1",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",

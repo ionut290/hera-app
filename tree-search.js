@@ -163,6 +163,39 @@
     return true;
   }
 
+  function waitForTreeStreetViewCards(timeoutMs = 3000) {
+    if (typeof window.HeraStreetViewCards?.openForCoordinates === "function") {
+      return Promise.resolve(window.HeraStreetViewCards);
+    }
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        const api = window.HeraStreetViewCards;
+        if (typeof api?.openForCoordinates === "function" || Date.now() - startedAt >= timeoutMs) {
+          window.clearInterval(timer);
+          resolve(typeof api?.openForCoordinates === "function" ? api : null);
+        }
+      }, 100);
+    });
+  }
+
+  async function openTreeStreetView(tree, point, button) {
+    const api = await waitForTreeStreetViewCards();
+    if (!api) {
+      window.alert("Vista panoramica 360° non disponibile in questo momento. Riprova tra qualche secondo.");
+      return false;
+    }
+    const treeNumber = tree.num_pt || tree.cod_alb || "";
+    return api.openForCoordinates(
+      { lat: Number(point.lat), lng: Number(point.lon) },
+      button,
+      {
+        targetLabel: "Albero",
+        modalTitle: `🌐 Vista 360° albero${treeNumber ? ` #${treeNumber}` : ""}`
+      }
+    );
+  }
+
   function resizeMap() {
     requestAnimationFrame(() => map?.invalidateSize({ pan: false, animate: false }));
     setTimeout(() => map?.invalidateSize({ pan: false, animate: false }), 180);
@@ -495,7 +528,7 @@
     const detailsNote = detailEntries.length > 6
       ? "Sono visibili i primi 6 dettagli. Premi il pulsante per consultare tutti i campi valorizzati del censimento ufficiale."
       : "Sono mostrati tutti i campi valorizzati disponibili nel censimento ufficiale.";
-    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button></div>`;
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button><button class="btn tree-street-view" type="button">🌐 VISTA 360° E PERCORSO</button></div>`;
     const detailsToggle = result.querySelector(".tree-details-toggle");
     detailsToggle?.addEventListener("click", () => {
       const expanded = detailsToggle.getAttribute("aria-expanded") !== "true";
@@ -507,6 +540,10 @@
     });
     result.querySelector(".tree-whazzup-share")?.addEventListener("click", () => {
       openTreeShareInWhazzup(buildTreeWhazzupMessage(detailEntries, navigationUrl));
+    });
+    const streetViewButton = result.querySelector(".tree-street-view");
+    streetViewButton?.addEventListener("click", () => {
+      openTreeStreetView(tree, point, streetViewButton);
     });
     result.classList.remove("hidden");
     initializeMap();

@@ -66,7 +66,7 @@
   <link rel="stylesheet" href="approval-access.css?v=20260828-email1">
   <link rel="stylesheet" href="documentazione-cantiere.css?v=20260823a">
   <link rel="stylesheet" href="green-assistant.css?v=20260829a">
-  <link rel="stylesheet" href="tree-search.css?v=20260830-details-share1">
+  <link rel="stylesheet" href="tree-search.css?v=20260830-tree-route1">
   <link rel="stylesheet" href="green-areas.css?v=20260829a">
   <link rel="stylesheet" href="green-area-sheet.css?v=20260829a">
 </head>
@@ -595,13 +595,13 @@
   <script src="mezzi-alimentazione-fix.js?v=20260804-shared1"></script>
   <script src="hours-export-range.js?v=20260619"></script>
   <script src="header-menu-runtime.js?v=20260804-diagnostics-reset1"></script>
-  <script src="tree-search.js?v=20260830-details-share1"></script>
+  <script src="tree-search.js?v=20260830-tree-route1"></script>
   <script src="green-areas.js?v=20260829e"></script>
   <script src="commessa-navigation-repair.js?v=20260812a"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260830-tree-details-share1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260830-tree-route1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v189";
-const CACHE_RESET_VERSION = "20260830-brave-manuals2";
+const CACHE_NAME = "varga-cantieri-shell-v190";
+const CACHE_RESET_VERSION = "20260830-brave-manuals3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -19,8 +19,8 @@ const APP_SHELL = [
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
   "./app.js?v=20260829-noise-filter1",
-  "./green-assistant.css?v=20260830-brave-manuals2",
-  "./green-assistant.js?v=20260830-brave-manuals2",
+  "./green-assistant.css?v=20260830-brave-manuals3",
+  "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
   "./data-durability-runtime.js?v=20260818a",
   "./data-safety-layer.js?v=20260819a",
@@ -34,7 +34,7 @@ const APP_SHELL = [
   "./admin-error-center.js?v=20260829-chatgpt-category1",
   "./admin-error-center.css?v=20260824b",
   "./management-core.js?v=20260731",
-  "./management-v2.js?v=20260830-brave-manuals2",
+  "./management-v2.js?v=20260830-brave-manuals3",
   "./registry-google-sheet-sync.js?v=20260802-cost2",
   "./auth-login-fix.js?v=20260731-legacy1",
   "./login-retry-fix.js?v=20260829-credential-vault1",

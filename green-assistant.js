@@ -140,8 +140,7 @@
             <form id="green-equipment-form" class="green-assistant-form green-equipment-form">
               <div class="green-assistant-registered-search">
                 <label>Codice mezzo registrato
-                  <input id="green-equipment-code" type="search" list="green-equipment-options" maxlength="120" placeholder="Esempio: R50" autocomplete="off">
-                  <datalist id="green-equipment-options"></datalist>
+                  <input id="green-equipment-code" type="text" maxlength="120" placeholder="Esempio: R50" autocomplete="off" autocapitalize="characters" spellcheck="false">
                 </label>
                 <button id="green-equipment-load" class="btn" type="button">CARICA DATI</button>
               </div>
@@ -210,7 +209,6 @@
     document.getElementById("menu-close-btn")?.click();
     if (!state.statusLoaded) void loadStatus();
     if (state.mode === "equipment") {
-      refreshEquipmentOptions();
       renderEquipmentArchive();
       if (equipment) fillEquipmentForm(equipment);
     } else renderPlantArchive();
@@ -463,16 +461,6 @@
     if (!key) return null;
     return equipmentRecords().find((record) => [record.id, record.codiceMezzo, record.nId, record.nome, record.targa]
       .some((candidate) => String(candidate || "").trim().toLocaleUpperCase("it") === key)) || null;
-  }
-
-  function refreshEquipmentOptions() {
-    const datalist = document.getElementById("green-equipment-options");
-    if (!datalist) return;
-    datalist.innerHTML = equipmentRecords().map((record) => {
-      const code = equipmentCode(record);
-      const description = [record.marca, record.modello, record.targa].filter(Boolean).join(" · ");
-      return code ? `<option value="${escapeHTML(code)}">${escapeHTML(description)}</option>` : "";
-    }).join("");
   }
 
   function fillEquipmentForm(input) {

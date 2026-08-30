@@ -18,8 +18,8 @@ const serviceWorker = read("sw.js");
 
 assert(html.includes('id="open-gardening-assistant-btn"'), "Voce menu giardinaggio assente.");
 assert(html.includes('id="open-equipment-assistant-btn"'), "Voce menu mezzi assente.");
-assert(html.includes('green-assistant.css?v=20260830-brave-manuals2'), "CSS assistente non caricato.");
-assert(html.includes('green-assistant.js?v=20260830-brave-manuals2'), "Client assistente non caricato.");
+assert(html.includes('green-assistant.css?v=20260830-brave-manuals3'), "CSS assistente non caricato.");
+assert(html.includes('green-assistant.js?v=20260830-brave-manuals3'), "Client assistente non caricato.");
 assert(netlify.includes('from = "/api/green-assistant"'), "Redirect Netlify assistente assente.");
 assert(netlify.includes('to = "/.netlify/functions/green-assistant"'), "Funzione Netlify assistente non collegata.");
 
@@ -39,11 +39,13 @@ assert(client.includes('const CACHE_KEY = "heraGreenAssistantArchiveV1"'), "Arch
 assert(client.includes('window.openManagementPanel("mezzi")'), "Copia controllata nel form mezzi assente.");
 assert(client.includes('typeof mezziRecords !== "undefined"'), "Riutilizzo locale del registro mezzi assente.");
 assert(client.includes("openEquipment"), "Collegamento Mezzi → Assistente assente.");
+assert(client.includes('id="green-equipment-code" type="text"'), "Il codice mezzo deve essere digitabile anche sui browser mobili.");
+assert(!client.includes('id="green-equipment-code" type="search"'), "Il codice mezzo non deve usare il campo search incompatibile con alcuni datalist mobili.");
 assert(client.includes("[payload.brand, payload.model, payload.year, payload.type]"), "La cache manuali deve distinguere il tipo di mezzo.");
 assert(client.includes("API PROTETTE"), "L'interfaccia non deve presentare Brave come servizio gratuito.");
 assert(client.includes("data.notice"), "L'avviso sul piano Brave deve essere mostrato all'utente.");
 assert(!backend.includes("hostnameKey.includes(brandKey)"), "Un dominio non deve essere considerato ufficiale solo perché contiene il marchio.");
-assert(html.includes("management-v2.js?v=20260830-brave-manuals2"), "Versione gestione mezzi non aggiornata.");
+assert(html.includes("management-v2.js?v=20260830-brave-manuals3"), "Versione gestione mezzi non aggiornata.");
 assert(read("management-v2.js").includes("data-equipment-assistance"), "Pulsante assistenza nelle schede mezzo assente.");
 
 for (const forbidden of [".collection(", ".doc(", ".onSnapshot(", "firebase.firestore(", "getFirestore(", "setDoc(", "addDoc("]) {
@@ -56,7 +58,7 @@ for (const protectedToken of ["fatto-button", "whazzup", "whatsapp", "done-butto
 }
 
 assert(css.includes(".green-assistant-overlay"), "Stile overlay assistente assente.");
-assert(serviceWorker.includes('"./green-assistant.js?v=20260830-brave-manuals2"'), "Client assistente assente dalla shell PWA.");
-assert(serviceWorker.includes('"./green-assistant.css?v=20260830-brave-manuals2"'), "CSS assistente assente dalla shell PWA.");
+assert(serviceWorker.includes('"./green-assistant.js?v=20260830-brave-manuals3"'), "Client assistente assente dalla shell PWA.");
+assert(serviceWorker.includes('"./green-assistant.css?v=20260830-brave-manuals3"'), "CSS assistente assente dalla shell PWA.");
 
 console.log("Assistenti giardinaggio e mezzi: controlli statici superati.");

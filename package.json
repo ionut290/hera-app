@@ -43,6 +43,7 @@
     "check:android-done-push": "node scripts/check-android-done-push.js",
     "check:android-photo-share": "node scripts/check-android-whazzup-photo-share.js",
     "check:android-camera-capture": "node scripts/check-android-camera-capture.js",
+    "check:android-platform": "node scripts/check-android-platform-compatibility.js",
     "check:photo-notes": "node scripts/check-whazzup-photo-notes.js",
     "check:whatsapp-protection": "node scripts/check-whatsapp-protection.js",
     "check:inrete-partial-fatto": "node scripts/check-inrete-partial-fatto.js",

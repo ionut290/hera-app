@@ -13,6 +13,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
@@ -21,6 +22,11 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -48,9 +54,8 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
-        getWindow().setStatusBarColor(Color.BLACK);
-        getWindow().setNavigationBarColor(Color.BLACK);
 
         maxPhotos = Math.max(1, Math.min(getIntent().getIntExtra(EXTRA_MAX_PHOTOS, DEFAULT_MAX_PHOTOS), DEFAULT_MAX_PHOTOS));
         sessionFolder = new File(getCacheDir(), "hera-continuous-camera/" + UUID.randomUUID());
@@ -103,10 +108,45 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
         root.addView(hint, hintParams);
 
         setContentView(root);
+        applySystemBarInsets(root, counterParams, doneParams, shutterParams, hintParams, hint);
         updateCounter();
         doneButton.setOnClickListener(view -> finishWithPhotos());
         shutterButton.setOnClickListener(view -> takePhoto());
         startCamera(previewView);
+    }
+
+    private void applySystemBarInsets(
+        FrameLayout root,
+        FrameLayout.LayoutParams counterParams,
+        FrameLayout.LayoutParams doneParams,
+        FrameLayout.LayoutParams shutterParams,
+        FrameLayout.LayoutParams hintParams,
+        TextView hint
+    ) {
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), root);
+        controller.setAppearanceLightStatusBars(false);
+        controller.setAppearanceLightNavigationBars(false);
+
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
+            Insets insets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+            );
+            counterParams.setMargins(dp(18) + insets.left, dp(22) + insets.top, 0, 0);
+            doneParams.setMargins(0, dp(22) + insets.top, dp(18) + insets.right, 0);
+            shutterParams.setMargins(0, 0, 0, dp(34) + insets.bottom);
+            hintParams.setMargins(
+                dp(16) + insets.left,
+                0,
+                dp(16) + insets.right,
+                dp(126) + insets.bottom
+            );
+            counterView.setLayoutParams(counterParams);
+            doneButton.setLayoutParams(doneParams);
+            shutterButton.setLayoutParams(shutterParams);
+            hint.setLayoutParams(hintParams);
+            return windowInsets;
+        });
+        ViewCompat.requestApplyInsets(root);
     }
 
     @Override

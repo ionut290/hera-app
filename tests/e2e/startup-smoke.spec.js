@@ -70,6 +70,13 @@ test.describe('Catasto arboreo', () => {
     await expect(page.locator('label[for="tree-number"]')).toHaveText('Numero punto o codice albero');
     await expect(page.locator('#tree-number')).toHaveAttribute('placeholder', 'Es. 64228 oppure 103VT');
     await expect(page.locator('#tree-map-fullscreen-btn')).toHaveText(/SCHERMO INTERO/);
+    await expect(page.locator('#tree-map-planting-filter')).toHaveValue('all');
+    await expect(page.locator('#tree-map-planting-filter option')).toHaveText([
+      'Tutti gli alberi',
+      '🌱 Ultimo anno',
+      '🌱 Ultimi 3 anni',
+      '🌱 Ultimi 5 anni'
+    ]);
 
     await page.evaluate(() => document.getElementById('tree-map-fullscreen-btn').click());
     await expect(page.locator('#tree-map-card')).toHaveClass(/tree-map-card--fullscreen/);
@@ -79,6 +86,67 @@ test.describe('Catasto arboreo', () => {
     await page.evaluate(() => document.getElementById('tree-map-fullscreen-btn').click());
     await expect(page.locator('#tree-map-card')).not.toHaveClass(/tree-map-card--fullscreen/);
     await expect(page.locator('body')).not.toHaveClass(/tree-map-fullscreen-open/);
+  });
+
+  test('filters the visible map by the official planting date', async ({ page }) => {
+    let filteredRequestUrl = '';
+    await page.route('**/alberi-manutenzioni/records?**', async (route) => {
+      const decodedUrl = decodeURIComponent(route.request().url());
+      if (decodedUrl.includes('data_impnt')) filteredRequestUrl = decodedUrl;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total_count: 1,
+          results: [{
+            num_pt: '130403',
+            cod_alb: '016S',
+            classe: 'Acer freemanii',
+            data_impnt: '2026-06-07',
+            geo_point_2d: { lat: 44.451009, lon: 11.359420 }
+          }]
+        })
+      });
+    });
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      const bounds = {
+        getNorthEast: () => ({ lat: 44.452, lng: 11.361 }),
+        pad() { return this; },
+        contains() { return true; }
+      };
+      const map = {
+        setView() { return this; },
+        on() { return this; },
+        invalidateSize() { return this; },
+        getZoom() { return 17; },
+        getCenter() { return { lat: 44.451, lng: 11.359 }; },
+        getBounds() { return bounds; }
+      };
+      window.L = {
+        map: () => map,
+        tileLayer: () => ({ addTo() { return this; }, remove() {} }),
+        layerGroup: () => ({
+          layers: [],
+          addTo() { return this; },
+          remove() {},
+          getLayers() { return this.layers; }
+        }),
+        marker: () => ({
+          bindPopup() { return this; },
+          on() { return this; },
+          addTo(layer) { layer.layers.push(this); return this; },
+          remove() {}
+        }),
+        divIcon: (options) => options
+      };
+    });
+    await page.evaluate(() => document.getElementById('open-tree-search-btn').click());
+    await page.locator('#tree-map-planting-filter').selectOption('3');
+    await expect.poll(() => filteredRequestUrl).toContain('data_impnt');
+    expect(filteredRequestUrl).toContain("data_impnt >= date'");
+    expect(filteredRequestUrl).toContain("data_impnt <= date'");
+    await expect(page.locator('#tree-map-status')).toContainText('nuovi impianti negli ultimi 3 anni visualizzati');
   });
 
   test('normalizes a tree code and presents every matching tree on the map', async ({ page }) => {

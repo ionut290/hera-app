@@ -11,6 +11,7 @@
   const mapNode = $("tree-map");
   const mapStatus = $("tree-map-status");
   const mapStyle = $("tree-map-style");
+  const mapPlantingFilter = $("tree-map-planting-filter");
   const mapLocationButton = $("tree-map-location-btn");
   const mapFullscreenButton = $("tree-map-fullscreen-btn");
   const dialog = $("tree-qr-dialog");
@@ -54,10 +55,16 @@
     dimora: "Dimora",
     pregio: "Albero di pregio",
     irrigazione: "Irrigazione",
+    irriga: "Irrigazione",
     distanza_fabbricati: "Distanza dai fabbricati",
+    d_edif: "Distanza dai fabbricati",
     data_impianto: "Data impianto",
+    data_impnt: "Data impianto",
     data_inventario: "Data inventario",
+    data_inv: "Data inserimento inventario",
     data_aggiornamento: "Data aggiornamento",
+    data_agg: "Data ultimo aggiornamento",
+    anni_impnt: "Anni dall’impianto",
     stato: "Stato",
     note: "Note",
     geo_point_2d: "Coordinate"
@@ -67,7 +74,8 @@
     "num_pt", "cod_alb", "classe", "nome_scientifico", "nome_comune",
     "cl_h", "classe_circonferenza_diametro", "circonferenza", "diametro", "altezza",
     "quartiere", "via", "indirizzo", "localizzazione", "dimora", "pregio", "irrigazione",
-    "distanza_fabbricati", "data_impianto", "data_inventario", "data_aggiornamento", "stato", "note", "geo_point_2d"
+    "irriga", "distanza_fabbricati", "d_edif", "data_impianto", "data_impnt", "data_inventario", "data_inv",
+    "data_aggiornamento", "data_agg", "anni_impnt", "stato", "note", "geo_point_2d"
   ];
 
   function hasTreeValue(value) {
@@ -95,6 +103,11 @@
       const lat = Number(value.lat);
       const lon = Number(value.lon);
       if (Number.isFinite(lat) && Number.isFinite(lon)) return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+    if (["data_impianto", "data_impnt", "data_inventario", "data_inv", "data_aggiornamento", "data_agg"].includes(key)) {
+      const normalized = String(value || "").slice(0, 10);
+      const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (match) return `${match[3]}/${match[2]}/${match[1]}`;
     }
     if (Array.isArray(value)) return value.map((item) => typeof item === "object" ? JSON.stringify(item) : String(item)).join(", ");
     if (typeof value === "object") {
@@ -437,6 +450,31 @@
     viewportTimer = setTimeout(loadVisibleTrees, 350);
   }
 
+  function plantingFilterYears() {
+    const years = Number(mapPlantingFilter?.value);
+    return [1, 3, 5].includes(years) ? years : 0;
+  }
+
+  function formatApiDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function plantingDateClause(years) {
+    if (!years) return "";
+    const end = new Date();
+    const start = new Date(end.getFullYear() - years, end.getMonth(), end.getDate());
+    return `data_impnt >= date'${formatApiDate(start)}' AND data_impnt <= date'${formatApiDate(end)}'`;
+  }
+
+  function plantingFilterDescription(years) {
+    if (years === 1) return "nuovi impianti nell’ultimo anno";
+    if (years) return `nuovi impianti negli ultimi ${years} anni`;
+    return "alberi";
+  }
+
   function distanceMeters(a, b) {
     const toRad = (value) => value * Math.PI / 180;
     const dLat = toRad(b.lat - a.lat);
@@ -470,12 +508,14 @@
   async function loadVisibleTrees() {
     if (!map || page.classList.contains("hidden")) return;
     const zoom = map.getZoom();
+    const filterYears = plantingFilterYears();
+    const filterDescription = plantingFilterDescription(filterYears);
     if (zoom < 16) {
-      mapStatus.textContent = "Aumenta lo zoom almeno al livello 16. Gli alberi già caricati restano visibili.";
+      mapStatus.textContent = `Aumenta lo zoom almeno al livello 16 per visualizzare ${filterDescription}. Gli alberi già caricati restano visibili.`;
       return;
     }
     const center = map.getCenter();
-    const viewportKey = `${zoom}:${center.lat.toFixed(4)}:${center.lng.toFixed(4)}`;
+    const viewportKey = `${filterYears}:${zoom}:${center.lat.toFixed(4)}:${center.lng.toFixed(4)}`;
     if (viewportKey === lastViewportKey) return;
     const requestId = ++viewportRequest;
     viewportAbort?.abort();
@@ -484,14 +524,15 @@
     const radius = Math.min(1600, Math.max(80, distanceMeters(center, map.getBounds().getNorthEast()) + 40));
     mapStatus.textContent = "Aggiornamento della zona… Gli alberi attuali rimangono visibili.";
     try {
-      const where = encodeURIComponent(`within_distance(geo_point_2d, geom'POINT(${center.lng} ${center.lat})', ${radius}m)`);
+      const geographicClause = `within_distance(geo_point_2d, geom'POINT(${center.lng} ${center.lat})', ${radius}m)`;
+      const where = encodeURIComponent([geographicClause, plantingDateClause(filterYears)].filter(Boolean).join(" AND "));
       const firstUrl = `https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/alberi-manutenzioni/records?where=${where}&limit=100`;
       const firstResponse = await fetch(firstUrl, { headers: { Accept: "application/json" }, signal: controller.signal });
       if (!firstResponse.ok) throw new Error(`Servizio comunale non disponibile (${firstResponse.status}).`);
       const first = await firstResponse.json();
       if (requestId !== viewportRequest) return;
       if (first.total_count > 500) {
-        mapStatus.textContent = `${first.total_count} alberi in questa zona: aumenta ancora lo zoom per visualizzare tutti i numeri.`;
+        mapStatus.textContent = `${first.total_count} ${filterDescription} in questa zona: aumenta ancora lo zoom per visualizzare tutti i numeri.`;
         return;
       }
       const records = [...(first.results || [])];
@@ -509,7 +550,7 @@
       treesLayer?.remove();
       treesLayer = nextLayer.addTo(map);
       lastViewportKey = viewportKey;
-      mapStatus.textContent = `${treesLayer.getLayers().length} alberi visualizzati. Tocca un numero per aprire la scheda.`;
+      mapStatus.textContent = `${treesLayer.getLayers().length} ${filterDescription} visualizzati. Tocca un numero per aprire la scheda.`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       if (requestId === viewportRequest) mapStatus.textContent = `${error.message || "Impossibile aggiornare la zona."} Gli alberi precedenti restano disponibili.`;
@@ -604,6 +645,10 @@
   $("tree-qr-open-btn")?.addEventListener("click", startScanner);
   mapLocationButton?.addEventListener("click", centerOnUserLocation);
   mapFullscreenButton?.addEventListener("click", () => setMapFullscreen(!mapFullscreen));
+  mapPlantingFilter?.addEventListener("change", () => {
+    lastViewportKey = "";
+    loadVisibleTrees();
+  });
   mapStyle?.addEventListener("change", () => applyMapStyle(mapStyle.value));
   $("tree-qr-close-btn")?.addEventListener("click", stopScanner);
   dialog?.addEventListener("close", stopScanner);

@@ -25,6 +25,9 @@ assert.match(proxy, /around:3000/);
 assert.match(proxy, /amenity"="bench/);
 assert.match(proxy, /amenity"="waste_basket/);
 assert.match(proxy, /highway"="street_lamp/);
+assert.match(proxy, /leisure"="playground/);
+assert.match(proxy, /emergency"="fire_hydrant/);
+assert.match(proxy, /tourism"="artwork/);
 assert.match(source, /HeraStreetViewCards/);
 assert.match(source, /Plugins\?\.HeraWhatsApp/);
 assert.match(source, /whatsapp:\/\/send\?text=/);
@@ -32,9 +35,16 @@ assert.doesNotMatch(source, /wa\.me|web\.whatsapp\.com|api\.whatsapp\.com/);
 assert.doesNotMatch(source, /firebase|firestore|collection\s*\(|onSnapshot|addDoc|setDoc|updateDoc/);
 assert.doesNotMatch(proxy, /firebase|firestore|collection\s*\(|onSnapshot|addDoc|setDoc|updateDoc/);
 assert.match(css, /\.urban-furniture-map-card--fullscreen/);
-assert.match(sw, /urban-furniture\.js\?v=20260830-fetchfix1/);
-assert.match(sw, /urban-furniture\.css\?v=20260830-fetchfix1/);
+assert.match(sw, /urban-furniture\.js\?v=20260830-allcategories1/);
+assert.match(sw, /urban-furniture\.css\?v=20260830-allcategories1/);
 assert.equal(typeof proxyModule.handler, "function");
+const categories = Object.keys(proxyModule._test.CATEGORIES);
+assert.equal(categories.length, 39);
+for (const category of categories) {
+  assert.match(html, new RegExp(`<option value=["']${category}["']`));
+  assert.match(source, new RegExp(`\\b${category}:`));
+  assert.doesNotThrow(() => proxyModule._test.buildQuery({ mode: "municipality", municipality: "Bologna", category }));
+}
 assert.match(proxyModule._test.buildQuery({ mode: "municipality", municipality: "Bologna", category: "bench" }), /area\.municipality/);
 assert.match(proxyModule._test.buildQuery({ mode: "nearby", lat: "44.49", lon: "11.34", category: "all" }), /around:3000/);
 

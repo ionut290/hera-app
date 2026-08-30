@@ -89,6 +89,8 @@ test.describe('Arredo urbano', () => {
     });
 
     await page.evaluate(() => document.getElementById('open-urban-furniture-btn').click());
+    await expect(page.locator('#urban-furniture-category option')).toHaveCount(40);
+    await expect(page.locator('#urban-furniture-category option[value="playground"]')).toHaveText('Aree giochi');
     await page.locator('#urban-furniture-category').selectOption('bench');
     await page.locator('#urban-furniture-form').evaluate((form) => form.requestSubmit());
     await expect(page.locator('#urban-furniture-status')).toContainText('1 elemento trovato');

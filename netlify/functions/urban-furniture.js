@@ -15,7 +15,37 @@ const CATEGORIES = Object.freeze({
   bicycle_parking: '["amenity"="bicycle_parking"]',
   toilets: '["amenity"="toilets"]',
   shelter: '["amenity"="shelter"]',
-  street_lamp: '["highway"="street_lamp"]'
+  street_lamp: '["highway"="street_lamp"]',
+  playground: '["leisure"="playground"]',
+  dog_park: '["leisure"="dog_park"]',
+  fitness_station: '["leisure"="fitness_station"]',
+  outdoor_seating: '["leisure"="outdoor_seating"]',
+  bbq: '["amenity"="bbq"]',
+  dog_toilet: '["amenity"="dog_toilet"]',
+  recycling: '["amenity"="recycling"]',
+  waste_disposal: '["amenity"="waste_disposal"]',
+  post_box: '["amenity"="post_box"]',
+  parcel_locker: '["amenity"="parcel_locker"]',
+  telephone: '["amenity"="telephone"]',
+  public_bookcase: '["amenity"="public_bookcase"]',
+  bicycle_repair_station: '["amenity"="bicycle_repair_station"]',
+  charging_station: '["amenity"="charging_station"]',
+  motorcycle_parking: '["amenity"="motorcycle_parking"]',
+  taxi: '["amenity"="taxi"]',
+  compressed_air: '["amenity"="compressed_air"]',
+  shower: '["amenity"="shower"]',
+  water_point: '["amenity"="water_point"]',
+  clock: '["amenity"="clock"]',
+  grit_bin: '["amenity"="grit_bin"]',
+  lounger: '["amenity"="lounger"]',
+  give_box: '["amenity"="give_box"]',
+  fire_hydrant: '["emergency"="fire_hydrant"]',
+  defibrillator: '["emergency"="defibrillator"]',
+  bollard: '["barrier"="bollard"]',
+  cycle_barrier: '["barrier"="cycle_barrier"]',
+  bus_stop: '["highway"="bus_stop"]',
+  artwork: '["tourism"="artwork"]',
+  information: '["tourism"="information"]'
 });
 
 function response(statusCode, body, cache = false) {
@@ -102,4 +132,4 @@ exports.handler = async (event) => {
   }
 };
 
-exports._test = { buildQuery };
+exports._test = { buildQuery, CATEGORIES };

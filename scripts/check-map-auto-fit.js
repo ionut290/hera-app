@@ -48,11 +48,15 @@ for (const [name, input, expected] of tests) {
 const renderMap = extractFunction("renderMap");
 const markerFactory = extractFunction("addImpiantoMarkerToMapLayer");
 const guard = fs.readFileSync(path.join(__dirname, "..", "accounting-view-guard.js"), "utf8");
+const navigationSave = extractFunction("setImpiantoNavigated");
+const navigationFlow = extractFunction("navigateToImpianto");
 const structuralChecks = [
   ["fitBounds usa coordinate validate", renderMap.includes("if (coordinates) impiantiBounds.push(coordinates)")],
   ["firma zoom usa impianti e coordinate", renderMap.includes("coordinates?.[0]")],
   ["marker rifiuta coordinate non valide", markerFactory.includes("if (!coordinates) return null")],
-  ["guard esterno mappa rimosso", !guard.includes("installMapAutoFitGuard")]
+  ["guard esterno mappa rimosso", !guard.includes("installMapAutoFitGuard")],
+  ["salvataggio navigazione definito", navigationSave.includes('collection("impianti")') && navigationSave.includes("batch.set") && navigationSave.includes("{ merge: true }")],
+  ["flusso navigazione usa il salvataggio protetto", navigationFlow.includes("setImpiantoNavigated") && navigationFlow.includes(".catch((error)")]
 ];
 
 for (const [name, passed] of structuralChecks) {

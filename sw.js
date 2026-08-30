@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v196";
-const CACHE_RESET_VERSION = "20260830-firestore-read-fix2";
+const CACHE_NAME = "varga-cantieri-shell-v197";
+const CACHE_RESET_VERSION = "20260830-map-gps-fix1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260830-firestore-read-fix2",
+  "./app.js?v=20260830-map-gps-fix1",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
@@ -56,7 +56,7 @@ const APP_SHELL = [
   "./operator-profile-feature.js?v=20260802-cost1",
   "./personnel-training-manager.js?v=20260803a",
   "./fatto-button-immediate.js?v=20260824-fatto-oneclick1",
-  "./header-menu-runtime.js?v=20260830-wastewater-menu1",
+  "./header-menu-runtime.js?v=20260830-map-gps-fix1",
   "./firestore-presence-cost-guard.js?v=20260802a",
   "./preventivi-lazy-loader.js?v=20260801a",
   "./global-archive-sync.js?v=20260802-cost2",
@@ -88,7 +88,7 @@ const APP_SHELL = [
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",
-  "./street-view-cards.js?v=20260830-tree-route1",
+  "./street-view-cards.js?v=20260830-map-gps-fix1",
   "./firebase-config.js?v=20260830-firestore-read-fix2",
   "./manifest.webmanifest",
   "./icons/varga-cantieri-32.png",

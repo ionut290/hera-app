@@ -50,7 +50,6 @@
             android:name=".camera.HeraContinuousCameraActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false"
-            android:screenOrientation="portrait"
             android:theme="@style/AppTheme.NoActionBar" />
 
         <provider

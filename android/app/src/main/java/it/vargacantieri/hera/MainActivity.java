@@ -9,6 +9,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
 
+import androidx.activity.EdgeToEdge;
+
 import com.getcapacitor.BridgeActivity;
 
 import it.vargacantieri.hera.camera.HeraContinuousCameraPlugin;
@@ -33,6 +35,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HeraWhazzupPhotosPlugin.class);
         registerPlugin(HeraWhatsAppPlugin.class);
         registerPlugin(HeraContinuousCameraPlugin.class);
+        EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
         clearWebViewCacheAfterAppUpdate();
         applyTemporaryLoginDeepLink(getIntent());

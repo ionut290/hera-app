@@ -78,6 +78,7 @@ jobs:
           npm run check:auth-stability
           npm run check:first-login-password
           npm run check:login-retry
+          npm run check:android-platform
           npm run check:fatto-critical
           npm run check:fuel-stations
           npm run check:startup-splash
@@ -261,6 +262,24 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon
+
+      - name: Verify 16 KB native library alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="android/app/build/outputs/bundle/release/app-release.aab"
+          CHECK_DIR="$(mktemp -d)"
+          trap 'rm -rf "$CHECK_DIR"' EXIT
+          unzip -q "$AAB" -d "$CHECK_DIR"
+          while IFS= read -r native_library; do
+            while IFS= read -r alignment_hex; do
+              alignment=$((alignment_hex))
+              if (( alignment < 16384 )); then
+                echo "Libreria non compatibile con pagine da 16 kB: $native_library ($alignment_hex)"
+                exit 1
+              fi
+            done < <(readelf -lW "$native_library" | awk '$1 == "LOAD" { print $NF }')
+          done < <(find "$CHECK_DIR" -type f -name '*.so' -print)
 
       - name: Verify official Android App Bundle
         shell: bash

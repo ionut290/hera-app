@@ -69,7 +69,7 @@ test.describe('Arredo urbano', () => {
     await page.route('**/api/urban-furniture?**', (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ elements: [{ type: 'node', id: 991, lat: 44.4949, lon: 11.3426, tags: { amenity: 'bench', name: 'Panchina Piazza' } }] })
+      body: JSON.stringify({ elements: [{ type: 'node', id: 991, lat: 44.4949, lon: 11.3426, tags: { amenity: 'bench', name: 'Panchina Piazza', material: 'wood', wheelchair: 'yes', operator: 'Comune di Bologna' } }] })
     }));
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => {
@@ -98,6 +98,10 @@ test.describe('Arredo urbano', () => {
     await page.locator('[data-urban-result-index="0"]').click();
     await expect(page.locator('#urban-furniture-sheet')).not.toHaveClass(/hidden/);
     await expect(page.locator('#urban-furniture-sheet-title')).toContainText('Panchina Piazza');
+    await expect(page.locator('#urban-furniture-sheet-body')).toContainText('Caratteristiche e servizi');
+    await expect(page.locator('#urban-furniture-sheet-body')).toContainText('Comune di Bologna');
+    await expect(page.locator('#urban-furniture-sheet-body')).toContainText('Accessibile in sedia a rotelle');
+    await expect(page.locator('#urban-furniture-sheet-body')).toContainText('Apri la fonte originale');
 
     await page.evaluate(() => {
       window.__urbanStreetView = null;

@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v186";
-const CACHE_RESET_VERSION = "20260830-urban-allcategories1";
+const CACHE_NAME = "varga-cantieri-shell-v187";
+const CACHE_RESET_VERSION = "20260830-urban-completesheet1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -80,8 +80,8 @@ const APP_SHELL = [
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",
   "./green-areas.js?v=20260829e",
-  "./urban-furniture.css?v=20260830-allcategories1",
-  "./urban-furniture.js?v=20260830-allcategories1",
+  "./urban-furniture.css?v=20260830-completesheet1",
+  "./urban-furniture.js?v=20260830-completesheet1",
   "./fatto-scroll-guard.js?v=20260824-oneclick2",
   "./squad-context-bridge.js?v=20260823-stability3",
   "./recommended-traffic-weather.js?v=20260823-stability3",

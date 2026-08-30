@@ -64,6 +64,28 @@
     information: { label: "Punto informativo", icon: "ℹ️", clause: '["tourism"="information"]' }
   });
 
+  const TAG_LABELS = Object.freeze({
+    name: "Nome", "name:it": "Nome italiano", description: "Descrizione", operator: "Gestore", owner: "Proprietario",
+    material: "Materiale", colour: "Colore", color: "Colore", condition: "Condizione", status: "Stato",
+    access: "Accesso", fee: "A pagamento", wheelchair: "Accessibile in sedia a rotelle", covered: "Coperto",
+    lit: "Illuminato", supervised: "Sorvegliato", opening_hours: "Orari di apertura", start_date: "Data di installazione",
+    capacity: "Capienza", seats: "Posti a sedere", backrest: "Schienale", direction: "Orientamento",
+    surface: "Superficie", level: "Piano", indoor: "Al coperto", drinking_water: "Acqua potabile",
+    bottle: "Riempimento bottiglie", phone: "Telefono", email: "Email", website: "Sito web",
+    ref: "Codice di riferimento", note: "Nota", fixme: "Dato da verificare", source: "Fonte dati",
+    "addr:housenumber": "Numero civico", "addr:street": "Via", "addr:place": "Località", "addr:postcode": "CAP",
+    "addr:city": "Comune", "addr:suburb": "Quartiere", "addr:province": "Provincia", "addr:country": "Paese",
+    playground: "Tipo di gioco", recycling_type: "Tipo di raccolta", artwork_type: "Tipo di opera",
+    artist_name: "Artista", inscription: "Iscrizione", tourism: "Categoria turistica", amenity: "Servizio",
+    leisure: "Tempo libero", highway: "Elemento stradale", emergency: "Emergenza", barrier: "Barriera",
+    shelter_type: "Tipo di riparo", bicycle_parking: "Tipo rastrelliera", socket: "Presa",
+    "socket:type2": "Prese Tipo 2", "socket:chademo": "Prese CHAdeMO", "socket:ccs": "Prese CCS",
+    payment: "Pagamento", "payment:cash": "Pagamento in contanti", "payment:contactless": "Pagamento contactless",
+    surveillance: "Videosorveglianza", camera: "Tipo di telecamera", "fire_hydrant:type": "Tipo di idrante"
+  });
+
+  const YES_NO_VALUES = Object.freeze({ yes: "Sì", no: "No", limited: "Limitato", permissive: "Consentito", private: "Privato", customers: "Solo clienti" });
+
   const TILE_LAYERS = {
     classic: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", options: { maxZoom: 20, maxNativeZoom: 19, keepBuffer: 5, updateWhenZooming: false, updateWhenIdle: true, attribution: "&copy; OpenStreetMap contributors" } },
     satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", options: { maxZoom: 20, maxNativeZoom: 19, keepBuffer: 5, updateWhenZooming: false, updateWhenIdle: true, attribution: "Tiles &copy; Esri" } },
@@ -228,11 +250,42 @@
     resultsNode.classList.remove("hidden");
   }
 
+  function humanizeTag(key) {
+    return TAG_LABELS[key] || key.replaceAll(":", " · ").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toLocaleUpperCase("it-IT"));
+  }
+
+  function humanizeValue(value) {
+    const text = String(value ?? "").trim();
+    return text.split(";").map((part) => YES_NO_VALUES[part.trim().toLocaleLowerCase("en-US")] || part.trim().replaceAll("_", " ")).filter(Boolean).join(", ") || "—";
+  }
+
+  function detailRow(label, value, options = {}) {
+    if (value === undefined || value === null || String(value).trim() === "") return "";
+    const content = options.raw ? String(value) : esc(value);
+    return `<div class="urban-furniture-detail-row"><dt>${esc(label)}</dt><dd>${content}</dd></div>`;
+  }
+
+  function renderTagDetails(item) {
+    const tags = item.tags || {};
+    const address = [tags["addr:street"], tags["addr:housenumber"], tags["addr:postcode"], tags["addr:city"]].filter(Boolean).join(" ");
+    const featuredKeys = ["description", "operator", "owner", "material", "colour", "color", "condition", "status", "access", "fee", "wheelchair", "opening_hours", "capacity", "seats", "backrest", "covered", "lit", "supervised", "surface", "start_date", "phone", "email", "website", "ref", "note"];
+    const hiddenKeys = new Set(["name", "name:it", "addr:street", "addr:housenumber", "addr:postcode", "addr:city", ...featuredKeys]);
+    const featured = featuredKeys.map((key) => tags[key] === undefined ? "" : detailRow(humanizeTag(key), humanizeValue(tags[key]))).join("");
+    const remaining = Object.entries(tags).filter(([key, value]) => !hiddenKeys.has(key) && value !== "").sort(([a], [b]) => humanizeTag(a).localeCompare(humanizeTag(b), "it")).map(([key, value]) => detailRow(humanizeTag(key), humanizeValue(value))).join("");
+    const osmUrl = `https://www.openstreetmap.org/${encodeURIComponent(item.osmType)}/${encodeURIComponent(item.osmId)}`;
+    return [
+      `<section class="urban-furniture-detail-section"><h3>Informazioni principali</h3><dl>${detailRow("Tipo", item.label)}${detailRow("Nome", item.name)}${detailRow("Comune cercato", municipalityInput.value.trim() || "Ricerca vicino a me")}${detailRow("Indirizzo", address || item.street)}${detailRow("Coordinate", `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`)}</dl></section>`,
+      featured ? `<section class="urban-furniture-detail-section"><h3>Caratteristiche e servizi</h3><dl>${featured}</dl></section>` : "",
+      remaining ? `<section class="urban-furniture-detail-section"><h3>Tutti i dati disponibili</h3><dl>${remaining}</dl></section>` : "",
+      `<section class="urban-furniture-detail-section"><h3>Dati cartografici</h3><dl>${detailRow("Riferimento OSM", item.id)}${detailRow("Tipo geometria", humanizeValue(item.osmType))}${detailRow("Scheda OpenStreetMap", `<a href="${osmUrl}" target="_blank" rel="noopener">Apri la fonte originale</a>`, { raw: true })}</dl></section>`
+    ].join("");
+  }
+
   function openSheet(item) {
     if (!item) return;
     selectedItem = item;
     sheetTitle.textContent = `${item.icon} ${item.name}`;
-    sheetBody.innerHTML = `<dl><dt>Tipo</dt><dd>${esc(item.label)}</dd><dt>Comune cercato</dt><dd>${esc(municipalityInput.value.trim() || "Ricerca vicino a me")}</dd><dt>Posizione</dt><dd>${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}</dd><dt>Riferimento OSM</dt><dd>${esc(item.id)}</dd>${item.street ? `<dt>Dettaglio</dt><dd>${esc(item.street)}</dd>` : ""}</dl>`;
+    sheetBody.innerHTML = renderTagDetails(item);
     navigateButton.href = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}`;
     sheet.classList.remove("hidden");
     sheet.setAttribute("aria-hidden", "false");

@@ -6,14 +6,14 @@
   const CANONICAL_COMMESSA_CODE = "28015";
   const CANONICAL_COMMESSA_NAME = "INRETE MODENA";
   const SUMMARY_REFRESH_MS = 30000;
-  const LOCAL_GUARD_MS = 1500;
-  const MANAGEMENT_REFRESH_MS = 800;
   const MANAGEMENT_DATA_REFRESH_MS = 60000;
 
   let summaryPromise = null;
   let lastSummaryAt = 0;
   let lastSummary = null;
   let duplicateArchivePromise = null;
+  let duplicateArchiveChecked = false;
+  let managementSummaryObserver = null;
   const managementSummaryById = new Map();
   const managementSummaryAtById = new Map();
   const managementSummaryPromiseById = new Map();
@@ -208,15 +208,22 @@
     if (!canonical?.id || activeCollectionName() !== "commesse") return false;
     removeSyntheticCommessaFromLocalState(canonical);
     if (!canWriteParentCommessa() || typeof db === "undefined" || !db || typeof auth === "undefined" || !auth.currentUser) return false;
+    if (duplicateArchiveChecked) return true;
     if (duplicateArchivePromise) return duplicateArchivePromise;
 
     duplicateArchivePromise = (async () => {
       try {
         const ref = db.collection("commesse").doc(SYNTHETIC_COMMESSA_ID);
         const snapshot = await ref.get();
-        if (!snapshot.exists) return true;
+        if (!snapshot.exists) {
+          duplicateArchiveChecked = true;
+          return true;
+        }
         const current = snapshot.data() || {};
-        if (current.attiva === false && current.hiddenFromHome === true && text(current.mergedIntoCommessaId) === text(canonical.id)) return true;
+        if (current.attiva === false && current.hiddenFromHome === true && text(current.mergedIntoCommessaId) === text(canonical.id)) {
+          duplicateArchiveChecked = true;
+          return true;
+        }
         const now = firebase.firestore.FieldValue.serverTimestamp();
         await ref.set({
           attiva: false,
@@ -229,6 +236,7 @@
           updatedAt: now,
           updatedBy: auth.currentUser.uid
         }, { merge: true });
+        duplicateArchiveChecked = true;
         console.info("[INRETE Modena] duplicato tecnico archiviato", { canonicalId: canonical.id });
         return true;
       } catch (error) {
@@ -496,6 +504,23 @@
     return true;
   }
 
+  function installManagementSummaryObserver() {
+    if (managementSummaryObserver || typeof MutationObserver !== "function") return Boolean(managementSummaryObserver);
+    const screen = document.querySelector?.("#impianti-management-screen");
+    const meta = document.querySelector?.("#impianti-management-meta");
+    if (!screen) return false;
+
+    const update = () => {
+      applyManagementStats();
+      if (isManagementScreenVisible()) ensureCurrentManagementSummary();
+    };
+    managementSummaryObserver = new MutationObserver(update);
+    managementSummaryObserver.observe(screen, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
+    if (meta) managementSummaryObserver.observe(meta, { childList: true, characterData: true, subtree: true });
+    update();
+    return true;
+  }
+
   function installHistoricalCommesseResubscribe() {
     const GLOBAL = "HeraHistoricalCommesseResubscribe";
     if (window[GLOBAL]?.installed) return window[GLOBAL];
@@ -569,32 +594,28 @@
   };
 
   installHistoricalCommesseResubscribe();
-  setInterval(() => ensureCanonicalState(), LOCAL_GUARD_MS);
-  setInterval(() => {
-    applyManagementStats();
-    ensureCurrentManagementSummary();
-  }, MANAGEMENT_REFRESH_MS);
+  installManagementSummaryObserver();
 
   try {
     if (typeof auth !== "undefined" && auth?.onAuthStateChanged) {
       auth.onAuthStateChanged((user) => {
         if (user) {
-          setTimeout(() => ensureCanonicalState({ force: true }), 300);
-          setTimeout(() => ensureCurrentManagementSummary({ force: true }), 500);
+          setTimeout(() => ensureCanonicalState(), 300);
+          setTimeout(() => ensureCurrentManagementSummary(), 500);
         }
       });
     }
   } catch (_) {}
 
   window.addEventListener("load", () => {
-    setTimeout(() => ensureCanonicalState({ force: true }), 300);
-    setTimeout(() => ensureCanonicalState({ force: true }), 1800);
-    setTimeout(() => ensureCurrentManagementSummary({ force: true }), 1200);
+    setTimeout(() => ensureCanonicalState(), 300);
+    setTimeout(() => ensureCanonicalState(), 1800);
+    setTimeout(() => ensureCurrentManagementSummary(), 1200);
   });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
-      ensureCanonicalState({ force: true });
-      ensureCurrentManagementSummary({ force: true });
+      ensureCanonicalState();
+      ensureCurrentManagementSummary();
     }
   });
   setTimeout(() => ensureCanonicalState(), 100);

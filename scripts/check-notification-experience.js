@@ -29,6 +29,11 @@ assert.match(center, /C="notifications"/);
 assert.match(center, /data-central-notification-bell/);
 assert.match(center, /userAlertAcknowledgements/);
 assert.match(center, /OK, HO CAPITO/);
+assert.match(center, /MAX_LIVE_ITEMS=50/);
+assert.match(center, /orderBy\("createdAt","desc"\)\.limit\(MAX_LIVE_ITEMS\)/);
+assert.match(center, /__heraNotificationCenterInstalled/);
+assert.doesNotMatch(center, /limit\(500\)/, "Il Centro notifiche non deve leggere 500 documenti per listener");
+assert.doesNotMatch(center, /setInterval\s*\(/, "Il fallback del Centro notifiche non deve introdurre polling");
 
 // Verifica che il service worker usi una cache versionata senza bloccare gli aggiornamenti futuri.
 assert.match(serviceWorker, /const CACHE_NAME = "[a-z0-9-]+-shell-v\d+";/i);

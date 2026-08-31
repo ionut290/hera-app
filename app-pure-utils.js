@@ -98,12 +98,12 @@
   document.head.appendChild(script);
 })();
 
-// Parchi Bologna mobile: ricerca live CODVIA/NOMEVIA, quartieri, distanza e scheda completa.
-(function loadVerdeBolognaParchiMobile() {
-  if (document.querySelector("script[data-hera-verde-bologna-parchi-mobile]")) return;
+// Parchi Bologna mobile v3: codice operativo reale, ricerca live, quartieri, distanza e mappa indipendente.
+(function loadVerdeBolognaParchiV3() {
+  if (document.querySelector("script[data-hera-verde-bologna-parchi-v3]")) return;
   const script = document.createElement("script");
-  script.src = "./verde-bologna-parchi-mobile.js?v=20260831-parchi1";
+  script.src = "./verde-bologna-parchi-v3.js?v=20260831-parchi-v3";
   script.async = false;
-  script.setAttribute("data-hera-verde-bologna-parchi-mobile", "1");
+  script.setAttribute("data-hera-verde-bologna-parchi-v3", "1");
   document.head.appendChild(script);
 })();

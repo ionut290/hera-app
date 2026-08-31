@@ -97,3 +97,13 @@
   script.setAttribute("data-hera-verde-bologna-operativo", "1");
   document.head.appendChild(script);
 })();
+
+// Parchi Bologna mobile: ricerca live CODVIA/NOMEVIA, quartieri, distanza e scheda completa.
+(function loadVerdeBolognaParchiMobile() {
+  if (document.querySelector("script[data-hera-verde-bologna-parchi-mobile]")) return;
+  const script = document.createElement("script");
+  script.src = "./verde-bologna-parchi-mobile.js?v=20260831-parchi1";
+  script.async = false;
+  script.setAttribute("data-hera-verde-bologna-parchi-mobile", "1");
+  document.head.appendChild(script);
+})();

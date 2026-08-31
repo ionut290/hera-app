@@ -87,3 +87,13 @@
   script.setAttribute("data-hera-verde-bologna", "1");
   document.head.appendChild(script);
 })();
+
+// Verde Bologna operativo: rende il modulo più rapido e leggibile da telefono.
+(function loadVerdeBolognaOperativo() {
+  if (document.querySelector("script[data-hera-verde-bologna-operativo]")) return;
+  const script = document.createElement("script");
+  script.src = "./verde-bologna-operativo.js?v=20260831-mobile1";
+  script.async = false;
+  script.setAttribute("data-hera-verde-bologna-operativo", "1");
+  document.head.appendChild(script);
+})();

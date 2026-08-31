@@ -37,8 +37,8 @@ const checks = [
   ["campo ufficiale Data Impianto", source.includes("data_impnt >= date'") && source.includes("data_impnt <= date'")],
   ["filtro collegato alla mappa", source.includes('mapPlantingFilter?.addEventListener("change"') && source.includes("loadVisibleTrees()")],
   ["asset Street View aggiornato", serviceWorker.includes("street-view-cards.js?v=20260830-map-gps-fix1")],
-  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260830-maintenance1") && serviceWorker.includes("tree-search.css?v=20260830-maintenance1")],
-  ["asset JS aggiornato", html.includes("tree-search.js?v=20260830-maintenance1") && serviceWorker.includes("tree-search.js?v=20260830-maintenance1")],
+  ["asset CSS aggiornato", html.includes("tree-search.css?v=20260831-potature1") && serviceWorker.includes("tree-search.css?v=20260831-potature1")],
+  ["asset JS aggiornato", html.includes("tree-search.js?v=20260831-potature1") && serviceWorker.includes("tree-search.js?v=20260831-potature1")],
   ["nessuna operazione Firestore", !/firestore|\.collection\(|\.doc\(/i.test(source)]
 ];
 

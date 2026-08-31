@@ -699,7 +699,7 @@
     const detailsNote = detailEntries.length > 6
       ? "Sono visibili i primi 6 dettagli. Premi il pulsante per consultare tutti i campi valorizzati del censimento ufficiale."
       : "Sono mostrati tutti i campi valorizzati disponibili nel censimento ufficiale.";
-    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button><button class="btn tree-street-view" type="button">🌐 VISTA 360° E PERCORSO</button><button class="btn tree-maintenance-open" type="button">🪚 MANUTENZIONE</button></div><section class="tree-maintenance-panel hidden" aria-live="polite"></section>`;
+    result.innerHTML = `<div class="tree-result-title"><div><small>Comune di Bologna · censimento ufficiale</small><h2>${esc(tree.classe || tree.nome_comune || "Specie non disponibile")}</h2></div><strong>#${esc(tree.num_pt || tree.cod_alb)}</strong></div><div class="tree-result-grid">${details}</div>${expandButton}<p class="tree-data-source-note">${detailsNote}</p><div class="tree-result-actions"><a class="btn btn-primary tree-navigate" href="${navigationUrl}" target="_blank" rel="noopener">NAVIGA VERSO L’ALBERO</a><button class="btn tree-whazzup-share" type="button">INVIA TRAMITE WHAZZUP</button><button class="btn tree-street-view" type="button">🌐 VISTA 360° E PERCORSO</button><button class="btn tree-maintenance-open" type="button">🪚 MANUTENZIONE</button><button class="btn tree-work-order-open" type="button">✂️ CREA CANTIERE POTATURA / ABBATTIMENTO</button></div><section class="tree-maintenance-panel hidden" aria-live="polite"></section>`;
     const detailsToggle = result.querySelector(".tree-details-toggle");
     detailsToggle?.addEventListener("click", () => {
       const expanded = detailsToggle.getAttribute("aria-expanded") !== "true";
@@ -718,6 +718,21 @@
     });
     const maintenanceButton = result.querySelector(".tree-maintenance-open");
     maintenanceButton?.addEventListener("click", () => openTreeMaintenance(tree, maintenanceButton));
+    const workOrderButton = result.querySelector(".tree-work-order-open");
+    workOrderButton?.addEventListener("click", () => {
+      const workOrders = window.HeraTreeWorkOrders;
+      if (!workOrders?.open) {
+        setStatus("La scheda Potature Abbattimenti non è ancora pronta. Ricarica l’app e riprova.", "error");
+        return;
+      }
+      workOrders.open({
+        tree,
+        details: detailEntries,
+        municipality: municipality.value,
+        point,
+        navigationUrl
+      });
+    });
     result.classList.remove("hidden");
     initializeMap();
     if (marker) marker.remove();

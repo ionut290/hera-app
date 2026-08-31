@@ -640,6 +640,8 @@ const ui = {
   impiantoSearch: document.getElementById("impianto-search"),
   viewDoneBtn: document.getElementById("view-done-btn"),
   viewTodoBtn: document.getElementById("view-todo-btn"),
+  viewRaccoltaBtn: document.getElementById("view-raccolta-btn"),
+  viewCeppiBtn: document.getElementById("view-ceppi-btn"),
   viewAlertsBtn: document.getElementById("view-alerts-btn"),
   personaleForm: document.getElementById("personale-form"),
   personaleNome: document.getElementById("personale-nome"),
@@ -1985,6 +1987,8 @@ ui.toggleCommesseHomeBtn?.addEventListener("click", toggleCommesseHomeCard);
 ui.impiantoSearch?.addEventListener("input", onImpiantoSearchInput);
 ui.viewDoneBtn?.addEventListener("click", () => setImpiantiViewMode("done"));
 ui.viewTodoBtn?.addEventListener("click", () => setImpiantiViewMode("todo"));
+ui.viewRaccoltaBtn?.addEventListener("click", () => setImpiantiViewMode("raccolta"));
+ui.viewCeppiBtn?.addEventListener("click", () => setImpiantiViewMode("ceppi"));
 ui.viewAlertsBtn?.addEventListener("click", () => setImpiantiViewMode("alerts"));
 document.querySelectorAll(".commessa-stat-item[data-stat-action]").forEach((item) => {
   item.addEventListener("click", () => handleCommessaStatAction(item.dataset.statAction || ""));
@@ -14413,11 +14417,55 @@ function onImpiantoSearchInput(event) {
 }
 
 function setImpiantiViewMode(mode) {
-  impiantiViewMode = ["todo", "alerts"].includes(mode) ? mode : "done";
+  const potatureFollowup = window.HeraPotatureFollowup;
+  const isPotatureCommessa = selectedCommessaId === potatureFollowup?.commessaId;
+  const allowedModes = isPotatureCommessa
+    ? ["todo", "done", "alerts", "raccolta", "ceppi"]
+    : ["todo", "done", "alerts"];
+  impiantiViewMode = allowedModes.includes(mode) ? mode : "todo";
   ui.viewDoneBtn.classList.toggle("btn-primary", impiantiViewMode === "done");
   ui.viewTodoBtn.classList.toggle("btn-primary", impiantiViewMode === "todo");
+  ui.viewRaccoltaBtn?.classList.toggle("hidden", !isPotatureCommessa);
+  ui.viewRaccoltaBtn?.classList.toggle("btn-primary", impiantiViewMode === "raccolta");
+  ui.viewCeppiBtn?.classList.toggle("hidden", !isPotatureCommessa);
+  ui.viewCeppiBtn?.classList.toggle("btn-primary", impiantiViewMode === "ceppi");
   ui.viewAlertsBtn?.classList.toggle("btn-primary", impiantiViewMode === "alerts");
   renderImpianti();
+}
+
+function getPotatureFollowupPhase(impianto) {
+  return window.HeraPotatureFollowup?.phaseFor(impianto) || "";
+}
+
+function isOriginalPotatureWorkOrder(impianto) {
+  return selectedCommessaId === window.HeraPotatureFollowup?.commessaId
+    && window.HeraPotatureFollowup?.isOriginal(impianto) === true;
+}
+
+function openPotatureFollowupForm(impianto, triggerButton) {
+  const workflow = window.HeraPotatureFollowup;
+  if (!workflow || !isOriginalPotatureWorkOrder(impianto)) return;
+  const operator = auth?.currentUser || currentUser || {};
+  workflow.open({
+    source: impianto,
+    existingItems: currentImpianti,
+    commessaId: selectedCommessaId,
+    collectionName: getCommesseCollectionName(),
+    store: db,
+    operatorUid: operator.uid || "",
+    operatorName: getOperatorDisplayName(),
+    timestampFactory: () => firebase.firestore.FieldValue.serverTimestamp(),
+    onComplete: () => {
+      expandedImpiantoKey = buildImpiantoKey(impianto);
+      window.setTimeout(() => {
+        const impiantoKey = buildImpiantoKey(impianto);
+        const card = Array.from(ui.impiantiLista?.querySelectorAll("[data-impianto-key]") || [])
+          .find((item) => item.dataset.impiantoKey === impiantoKey);
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+        triggerButton?.focus();
+      }, 80);
+    }
+  });
 }
 
 function getFirstParsedAreaValue(values = []) {
@@ -14522,7 +14570,7 @@ function getImpiantoSearchValues(impianto = {}) {
   return [impianto.denominazione, impianto.nome, impianto.comune, impianto.indirizzo,
     impianto.descrizioneVia, impianto.idSap, impianto.codiceHera, impianto.codicePrezzo,
     impianto.voceRiferimento, impianto.tipologiaImpianto, impianto.tipologiaIntervento,
-    impianto.area, impianto.competenza, ...extraValues];
+    impianto.area, impianto.competenza, impianto.potatureFaseLabel, impianto.potatureMetodoLabel, ...extraValues];
 }
 
 // Unica logica di ricerca usata sia nella commessa sia nella composizione squadre.
@@ -14577,9 +14625,16 @@ function renderImpianti() {
 
   const filtered = currentImpianti.filter((impianto) => {
     const linkedNotes = getCommessaNoteLinkedNotes(impianto);
-    const viewMatch = impiantiViewMode === "done"
-      ? Boolean(impianto.done)
-      : !impianto.done && (impiantiViewMode === "alerts" ? linkedNotes.length > 0 : true);
+    const followupPhase = getPotatureFollowupPhase(impianto);
+    let viewMatch = false;
+    if (impiantiViewMode === "done") viewMatch = Boolean(impianto.done);
+    else if (impiantiViewMode === "raccolta" || impiantiViewMode === "ceppi") {
+      viewMatch = !impianto.done && followupPhase === impiantiViewMode;
+    } else if (impiantiViewMode === "alerts") {
+      viewMatch = !impianto.done && linkedNotes.length > 0;
+    } else {
+      viewMatch = !impianto.done && !followupPhase;
+    }
     return viewMatch && matchesImpiantoSearch(impianto);
   });
   const sorted = [...filtered].sort((a, b) => {
@@ -14590,7 +14645,11 @@ function renderImpianti() {
   if (!sorted.length) {
     const emptyMessage = impiantiViewMode === "alerts"
       ? "Nessun impianto da fare con segnalazione collegata."
-      : "Nessun impianto trovato con i filtri correnti.";
+      : impiantiViewMode === "raccolta"
+        ? "Nessun impianto da fare nella vista Raccolta."
+        : impiantiViewMode === "ceppi"
+          ? "Nessun impianto da fare nella vista Ceppi."
+          : "Nessun impianto trovato con i filtri correnti.";
     if (hasBiogasSpecialCard || hasTombiniSpecialCard) {
       const message = document.createElement("p");
       message.className = "muted";
@@ -14628,6 +14687,10 @@ function renderImpianti() {
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const visibleNoteText = getImpiantoVisibleNote(impianto);
     const treeWorkOrderDetailsMarkup = buildTreeWorkOrderCardDetailsMarkup(impianto);
+    const potatureFollowupPhase = getPotatureFollowupPhase(impianto);
+    const potatureFollowupBadge = potatureFollowupPhase
+      ? `<span class="badge badge-potature-followup">${potatureFollowupPhase === "raccolta" ? "🕷️ Raccolta" : "🪵 Ceppi"} · ${escapeHTML(impianto.potatureMetodoLabel || "")}</span>`
+      : "";
     const hasNoteFlag = Boolean(visibleNoteText);
     const hasExtraWorkFlag = Boolean(impianto.hasExtraWork);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
@@ -14660,6 +14723,7 @@ function renderImpianti() {
       </span>
       <small class="impianto-summary-meta">
         ${impianto.done ? `<span class="badge badge-done-list">✅ Nei FATTI</span>` : ""}
+        ${potatureFollowupBadge}
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
         ${hasNoteFlag ? `<span class="badge badge-impianto-note">📝 Nota</span>` : ""}
         ${hasExtraWorkFlag ? `<span class="badge badge-extra-work">🛠️ Lavori straordinari</span>` : ""}
@@ -14685,6 +14749,7 @@ function renderImpianti() {
     const doneDateTimeLabel = doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`;
     details.innerHTML = `
       ${treeWorkOrderDetailsMarkup}
+      ${potatureFollowupPhase ? `<p><b>Vista:</b> ${escapeHTML(impianto.potatureFaseLabel || (potatureFollowupPhase === "raccolta" ? "Raccolta" : "Ceppi"))}</p><p><b>Metodo scelto:</b> ${escapeHTML(impianto.potatureMetodoLabel || "-")}</p>` : ""}
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
@@ -14779,6 +14844,19 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    if (!impianto.done && isOriginalPotatureWorkOrder(impianto)) {
+      const prepareFineBtn = document.createElement("button");
+      prepareFineBtn.type = "button";
+      prepareFineBtn.className = "btn potature-prepare-fine-btn";
+      prepareFineBtn.textContent = "🧾 PREPARA FINE";
+      prepareFineBtn.setAttribute("aria-label", "Prepara Raccolta e Ceppi prima di FATTO");
+      prepareFineBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPotatureFollowupForm(impianto, prepareFineBtn);
+      });
+      secondaryActionsRow.appendChild(prepareFineBtn);
+    }
     if (!impianto.done) {
       const forceDoneBtn = document.createElement("button");
       forceDoneBtn.type = "button";
@@ -23038,8 +23116,9 @@ function renderMap() {
 
   const bounds = [];
   const impiantiBounds = [];
-  mapMarkerSequenceByKey = buildMapMarkerSequence(currentImpianti);
-  const mapDataSignature = `${selectedCommessaId}::${currentImpianti
+  const mappedImpianti = currentImpianti.filter((impianto) => !getPotatureFollowupPhase(impianto));
+  mapMarkerSequenceByKey = buildMapMarkerSequence(mappedImpianti);
+  const mapDataSignature = `${selectedCommessaId}::${mappedImpianti
     .map((impianto) => {
       const coordinates = getImpiantoMapCoordinates(impianto);
       return `${buildImpiantoKey(impianto)}|${coordinates?.[0] ?? ""}|${coordinates?.[1] ?? ""}`;
@@ -23048,7 +23127,7 @@ function renderMap() {
     .join(";")}`;
   let markerForActiveFullscreenPopup = null;
 
-  currentImpianti.forEach((impianto) => {
+  mappedImpianti.forEach((impianto) => {
     const impiantoKey = buildImpiantoKey(impianto);
     const coordinates = getImpiantoMapCoordinates(impianto);
     if (coordinates) impiantiBounds.push(coordinates);

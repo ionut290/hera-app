@@ -229,9 +229,14 @@ test.describe('Catasto arboreo', () => {
         on() { return this; },
         invalidateSize() { return this; },
         fitBounds() { return this; },
-        getZoom() { return 13; },
+        getZoom() { return 16; },
         getCenter() { return { lat: 44.49, lng: 11.34 }; },
-        getBounds() { return { getNorthEast: () => ({ lat: 44.50, lng: 11.35 }) }; }
+        getBounds() {
+          return {
+            getNorthEast: () => ({ lat: 44.50, lng: 11.35 }),
+            pad() { return this; }
+          };
+        }
       };
       window.L = {
         map: () => map,
@@ -253,6 +258,7 @@ test.describe('Catasto arboreo', () => {
       };
     });
     await page.evaluate(() => document.getElementById('open-tree-search-btn').click());
+    await expect(page.locator('#tree-map-status')).toContainText('0 alberi visualizzati');
     await page.locator('#tree-number').fill(' 103vt ');
     await page.locator('#tree-search-form').evaluate((form) => form.requestSubmit());
 
@@ -328,6 +334,42 @@ test.describe('Catasto arboreo', () => {
     await page.locator('.tree-details-toggle').click();
     await expect(page.locator('.tree-result-grid > div:visible')).toHaveCount(Object.keys(tree).length);
     await expect(page.locator('.tree-details-toggle')).toHaveText('MOSTRA SOLO I PRIMI 6 DETTAGLI');
+
+    await expect(page.locator('.tree-work-order-open')).toHaveText(/CREA CANTIERE POTATURA \/ ABBATTIMENTO/);
+    await page.locator('.tree-work-order-open').click();
+    await expect(page.locator('.tree-work-order-panel')).toBeVisible();
+    await expect(page.locator('.tree-work-order-prefill input[readonly]')).toHaveCount(6);
+    await expect(page.locator('#tree-work-order-intervention')).toBeVisible();
+    await expect(page.locator('.tree-work-order-message-preview')).toContainText('Messaggio Whazzup dedicato');
+
+    const workOrderMessage = await page.evaluate((treeData) => {
+      const details = [
+        ['num_pt', 'Numero punto', treeData.num_pt],
+        ['cod_alb', 'Codice albero', treeData.cod_alb],
+        ['classe', 'Specie', treeData.classe],
+        ['cl_h', 'Classe altezza', treeData.cl_h],
+        ['classe_circonferenza_diametro', 'Classe circonferenza / diametro', treeData.classe_circonferenza_diametro],
+        ['quartiere', 'Quartiere', treeData.quartiere]
+      ].map(([key, label, value]) => ({ key, label, value }));
+      const payload = window.HeraTreeWorkOrders.buildPlantPayload({
+        tree: treeData,
+        details,
+        municipality: 'Bologna',
+        point: treeData.geo_point_2d,
+        navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=44.503598,11.352738'
+      }, {
+        intervention: 'POTATURA',
+        requestedWork: 'Rimonda del secco e contenimento chioma',
+        operatorNote: 'Verificare accesso automezzi'
+      });
+      return payload.noteImpianto;
+    }, tree);
+    expect(workOrderMessage).toContain('🌳 SCHEDA POTATURE / ABBATTIMENTI');
+    expect(workOrderMessage.match(/^• /gm)).toHaveLength(6);
+    expect(workOrderMessage).toContain('🪚 Intervento richiesto: POTATURA');
+    expect(workOrderMessage).toContain('📋 Lavorazione: Rimonda del secco e contenimento chioma');
+    expect(workOrderMessage).toContain('📝 Nota operatore: Verificare accesso automezzi');
+    expect(workOrderMessage).toContain('destination=44.503598,11.352738');
 
     await page.evaluate(() => {
       window.__treeWhazzupUrl = '';

@@ -21,6 +21,7 @@
     "check:urban-furniture": "node scripts/check-urban-furniture.js",
     "check:wastewater-plants": "node scripts/check-wastewater-plants.js",
     "check:tree-search-location": "node scripts/check-tree-search-location.js",
+    "check:tree-work-orders": "node scripts/check-tree-work-orders.js",
     "check:global-map": "node scripts/check-global-map-coordinates.js",
     "check:data-safety": "node scripts/check-data-safety-layer.js",
     "check:safe-listeners": "node scripts/check-firestore-safe-optimizer.js",

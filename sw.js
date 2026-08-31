@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v200";
-const CACHE_RESET_VERSION = "20260831-potature-followup1";
+const CACHE_NAME = "varga-cantieri-shell-v201";
+const CACHE_RESET_VERSION = "20260831-data-licenses1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
   "./app-pure-utils.js?v=20260815-mod1",
+  "./data-license-view.js?v=20260831-license1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",
   "./app-documents.js?v=20260815-mod1",
@@ -104,6 +105,8 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/app-pure-utils.js",
+  "/data-license-view.js",
   "/potature-followup.js",
   "/green-assistant.js",
   "/green-assistant.css",

@@ -67,3 +67,13 @@
   Object.assign(global, api);
   global.VargaPureUtils = Object.freeze({ ...(global.VargaPureUtils || {}), ...api });
 })(window);
+
+// Runtime trasparenza dati: carica la vista comune Licenze e fonti dati.
+(function loadDataLicenseView() {
+  if (document.querySelector("script[data-hera-data-license-view]")) return;
+  const script = document.createElement("script");
+  script.src = "./data-license-view.js?v=20260831-license1";
+  script.async = false;
+  script.setAttribute("data-hera-data-license-view", "1");
+  document.head.appendChild(script);
+})();

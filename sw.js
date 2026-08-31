@@ -1,9 +1,9 @@
-const CACHE_NAME = "varga-cantieri-shell-v198";
-const CACHE_RESET_VERSION = "20260831-potature1";
+const CACHE_NAME = "varga-cantieri-shell-v199";
+const CACHE_RESET_VERSION = "20260831-tree-card1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20260826-new-work-sync1",
+  "./style.css?v=20260831-tree-card1",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260828-email1",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260830-map-gps-fix1",
+  "./app.js?v=20260831-tree-card1",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",

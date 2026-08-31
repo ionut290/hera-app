@@ -98,12 +98,12 @@
   document.head.appendChild(script);
 })();
 
-// Parchi Bologna mobile corretto: codice reale, ricerca live, quartieri, distanza e mappa indipendente.
-(function loadVerdeBolognaParchiFix() {
-  if (document.querySelector("script[data-hera-verde-bologna-parchi-fix]")) return;
+// Parchi Bologna mobile v3: codice operativo reale, ricerca live, quartieri, distanza e mappa indipendente.
+(function loadVerdeBolognaParchiV3() {
+  if (document.querySelector("script[data-hera-verde-bologna-parchi-v3]")) return;
   const script = document.createElement("script");
-  script.src = "./verde-bologna-parchi-fix.js?v=20260831-parchi-fix1";
+  script.src = "./verde-bologna-parchi-v3.js?v=20260831-parchi-v3";
   script.async = false;
-  script.setAttribute("data-hera-verde-bologna-parchi-fix", "1");
+  script.setAttribute("data-hera-verde-bologna-parchi-v3", "1");
   document.head.appendChild(script);
 })();

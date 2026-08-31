@@ -1,9 +1,9 @@
-const CACHE_NAME = "varga-cantieri-shell-v199";
-const CACHE_RESET_VERSION = "20260831-tree-card1";
+const CACHE_NAME = "varga-cantieri-shell-v200";
+const CACHE_RESET_VERSION = "20260831-potature-followup1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20260831-tree-card1",
+  "./style.css?v=20260831-potature-followup1",
   "./management-v2.css?v=20260731",
   "./notification-center.css?v=20260729a",
   "./approval-access.css?v=20260828-email1",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260831-tree-card1",
+  "./app.js?v=20260831-potature-followup1",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
@@ -77,6 +77,7 @@ const APP_SHELL = [
   "./recommended-plants.js?v=20260823-stability3",
   "./tree-search.css?v=20260831-potature1",
   "./tree-work-orders.js?v=20260831-potature1",
+  "./potature-followup.js?v=20260831-potature-followup1",
   "./tree-search.js?v=20260831-potature1",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",
@@ -103,6 +104,7 @@ const CACHEABLE_DESTINATIONS = new Set(["script", "style", "document", "image", 
 const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
+  "/potature-followup.js",
   "/green-assistant.js",
   "/green-assistant.css",
   "/android-play-store-install.js",

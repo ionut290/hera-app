@@ -77,3 +77,13 @@
   script.setAttribute("data-hera-data-license-view", "1");
   document.head.appendChild(script);
 })();
+
+// Verde Bologna: modulo ufficiale Comune di Bologna, nessuna lettura Firestore.
+(function loadVerdeBologna() {
+  if (document.querySelector("script[data-hera-verde-bologna]")) return;
+  const script = document.createElement("script");
+  script.src = "./verde-bologna.js?v=20260831-verde-bologna1";
+  script.async = false;
+  script.setAttribute("data-hera-verde-bologna", "1");
+  document.head.appendChild(script);
+})();

@@ -14626,7 +14626,9 @@ function renderImpianti() {
     const travelMeta = estimateTravelMeta(distanceKm);
     const tipo = impianto.tipoManutenzione || classifyTipoManutenzione(impianto.codicePrezzo);
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
-    const hasNoteFlag = Boolean(impianto.hasNote);
+    const visibleNoteText = getImpiantoVisibleNote(impianto);
+    const treeWorkOrderDetailsMarkup = buildTreeWorkOrderCardDetailsMarkup(impianto);
+    const hasNoteFlag = Boolean(visibleNoteText);
     const hasExtraWorkFlag = Boolean(impianto.hasExtraWork);
     const badgeTipo = hasStraordinariaFlag ? (tipo || "Straordinaria") : "Ordinaria";
     const mainColumn = document.createElement("div");
@@ -14682,11 +14684,12 @@ function renderImpianti() {
     const doneInfo = formatDoneDateTime(impianto.doneAt);
     const doneDateTimeLabel = doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`;
     details.innerHTML = `
+      ${treeWorkOrderDetailsMarkup}
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
       <p><b>Codice prezzo:</b> ${escapeHTML(impianto.codicePrezzo || impianto.voceRiferimento || "-")}</p>
       <p><b>Lavorazioni richieste:</b> ${escapeHTML(impianto.lavorazioniRichieste || impianto.tipologiaIntervento || "-")}</p>
-      ${hasNoteFlag ? `<p><b>Nota impianto:</b> ${escapeHTML(impianto.noteImpianto || "-")}</p>` : ""}
+      ${hasNoteFlag ? `<p><b>Nota operatore:</b> ${escapeHTML(visibleNoteText)}</p>` : ""}
       ${hasExtraWorkFlag ? `<p><b>Lavori straordinari aperti:</b> ${escapeHTML(getImpiantoExtraWorkText(impianto) || "-")}</p>` : ""}
       <p><b>Stato:</b> ${impianto.done ? "Fatto" : "Da fare"}</p>
       ${impianto.done ? `<p><b>Data e ora fatto:</b> ${escapeHTML(doneDateTimeLabel)}</p>` : ""}
@@ -18434,10 +18437,46 @@ function getImpiantoExtraWorkText(impianto) {
   return String(impianto?.extraWorkText || impianto?.lavorazioniRichieste || impianto?.tipologiaIntervento || "").trim();
 }
 
+function isTreeWorkOrderImpianto(impianto) {
+  return impianto?.potatureAbbattimenti === true
+    || String(impianto?.messaggioWhazzupTipo || "").trim() === "POTATURE_ABBATTIMENTI";
+}
+
+function getImpiantoVisibleNote(impianto) {
+  if (isTreeWorkOrderImpianto(impianto)) {
+    return String(impianto?.noteOperatore || "").trim();
+  }
+  return String(impianto?.noteImpianto || impianto?.note || "").trim();
+}
+
+function getTreeWorkOrderCardDetails(impianto) {
+  if (!isTreeWorkOrderImpianto(impianto) || !Array.isArray(impianto?.dettagliCatastoPrimiSei)) return [];
+  return impianto.dettagliCatastoPrimiSei
+    .map((entry) => ({
+      label: String(entry?.etichetta || entry?.campo || "").trim(),
+      value: String(entry?.valore || "").trim()
+    }))
+    .filter((entry) => entry.label && entry.value)
+    .slice(0, 6);
+}
+
+function buildTreeWorkOrderCardDetailsMarkup(impianto) {
+  const details = getTreeWorkOrderCardDetails(impianto);
+  if (!details.length) return "";
+  return `
+    <section class="tree-work-order-card-details" aria-label="Dati dell’albero">
+      <h4>🌳 Dati dell’albero</h4>
+      <dl>
+        ${details.map((entry) => `<div><dt>${escapeHTML(entry.label)}</dt><dd>${escapeHTML(entry.value)}</dd></div>`).join("")}
+      </dl>
+    </section>
+  `;
+}
+
 function getImpiantoNavigationAlerts(impianto) {
   const alerts = [];
-  const noteText = String(impianto?.noteImpianto || "").trim();
-  if (impianto?.hasNote && noteText) alerts.push({ type: "note", title: "Attenzione", text: noteText });
+  const noteText = getImpiantoVisibleNote(impianto);
+  if (noteText) alerts.push({ type: "note", title: "Attenzione", text: noteText });
   const extraText = getImpiantoExtraWorkText(impianto);
   if (impianto?.hasExtraWork && extraText) alerts.push({ type: "extra", title: "Attenzione lavori straordinari", text: extraText });
   return alerts;
@@ -23511,6 +23550,7 @@ function bindPersistentImpiantoDetailActions() {
 }
 
 function getImpiantoPopupNotes(impianto) {
+  if (isTreeWorkOrderImpianto(impianto)) return getImpiantoVisibleNote(impianto);
   return [
     impianto.noteImpianto,
     impianto.note,

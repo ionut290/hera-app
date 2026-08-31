@@ -2574,6 +2574,54 @@ body.squadre-impianto-detail-open { overflow: hidden; }
 .impianto-details { display: none; }
 .impianto-item.is-expanded .impianto-details { display: block; }
 
+.tree-work-order-card-details {
+  margin: 8px 0 10px;
+  padding: 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: #f0fdf4;
+}
+
+.tree-work-order-card-details h4 {
+  margin: 0 0 8px;
+  color: #166534;
+  font-size: 0.92rem;
+}
+
+.tree-work-order-card-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.tree-work-order-card-details dl > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.tree-work-order-card-details dt {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.tree-work-order-card-details dd {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 430px) {
+  .tree-work-order-card-details dl { grid-template-columns: minmax(0, 1fr); }
+}
+
 .impianto-item.done {
   border-color: #d9e2ec;
   background: #f6f8fb;

@@ -121,6 +121,29 @@ test.describe('Arredo urbano', () => {
   });
 });
 
+test.describe('Sfalcio COBO desktop', () => {
+  test('opens the park work-order form without changing FATTO', async ({ page }) => {
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => Boolean(window.HeraCoboMowing));
+    await page.evaluate(() => window.HeraCoboMowing.openCreate({
+      record: { codvia: 61770, nomevia: 'PARCO DI VILLA TORCHI', tipo: 'PARCO' },
+      parkName: 'PARCO DI VILLA TORCHI',
+      parkCode: '61770',
+      quarter: 'Navile',
+      point: { lat: 44.5446635, lon: 11.3578076 },
+      boundaryAvailable: true
+    }));
+
+    await expect(page.locator('#cobo-mowing-modal')).toBeVisible();
+    await expect(page.locator('#cobo-mowing-modal')).toContainText('Nuovo cantiere parco');
+    await expect(page.locator('#cobo-mowing-modal')).toContainText('PARCO DI VILLA TORCHI');
+    await expect(page.locator('#cobo-mowing-modal [name="workType"]')).toHaveValue('SFALCIO COMPLETO');
+    await expect(page.locator('#cobo-mowing-modal .cobo-mowing-save')).toHaveText('CREA CANTIERE IN SFALCIO COBO');
+    await page.locator('#cobo-mowing-modal [data-cobo-close]').click();
+    await expect(page.locator('#cobo-mowing-modal')).toHaveCount(0);
+  });
+});
+
 test.describe('Verde Bologna su mobile', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -270,6 +293,13 @@ test.describe('Verde Bologna su mobile', () => {
         await expect(page.locator('#verde-bologna-parchi-sheet')).toContainText('Disponibili sulla mappa');
         await expect(page.locator('#verde-bologna-parchi-sheet')).not.toContainText('geo_point_2d');
         await expect(page.locator('#verde-bologna-parchi-sheet')).not.toContainText('geo_shape');
+        await expect(page.locator('[data-vb-create-cobo]')).toHaveText(/CREA CANTIERE SFALCIO COBO/);
+        await page.locator('[data-vb-create-cobo]').click();
+        await expect(page.locator('#cobo-mowing-modal')).toBeVisible();
+        await expect(page.locator('#cobo-mowing-modal')).toContainText('PARCO DI VILLA TORCHI');
+        await expect(page.locator('#cobo-mowing-modal')).toContainText('CREA CANTIERE IN SFALCIO COBO');
+        await page.locator('#cobo-mowing-modal [data-cobo-close]').click();
+        await expect(page.locator('#cobo-mowing-modal')).toHaveCount(0);
         await expect(page.locator('[data-vb-sheet-map]')).toHaveText('MOSTRA CONFINI');
         await page.locator('[data-vb-sheet-map]').click();
         await expect.poll(() => page.evaluate(() => window.__parkBoundaryGeometryType)).toBe('MultiPolygon');

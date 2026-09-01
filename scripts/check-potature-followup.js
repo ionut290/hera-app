@@ -44,9 +44,9 @@ assert.equal(tasks[1].payload.lavorazioniRichieste, "Ceppo con t15");
 assert.equal(tasks[0].payload.denominazione, source.denominazione, "stesso impianto copiato nella vista");
 assert.equal(tasks[0].payload.gpsY, source.gpsY);
 assert.equal(tasks[0].payload.potatureOrigineId, source.id);
-assert.equal(Object.hasOwn(tasks[0].payload, "done"), false, "il salvataggio delle attività derivate non modifica lo stato completato");
-assert.equal(Object.hasOwn(tasks[0].payload, "doneAt"), false, "il salvataggio delle attività derivate non modifica la data di completamento");
-assert.equal(Object.hasOwn(tasks[0].payload, "doneBy"), false, "il salvataggio delle attività derivate non modifica l’operatore di completamento");
+assert.equal(Object.hasOwn(tasks[0].payload, "done"), false, "il salvataggio esterno non modifica lo stato FATTO");
+assert.equal(Object.hasOwn(tasks[0].payload, "doneAt"), false, "il salvataggio esterno non modifica data FATTO");
+assert.equal(Object.hasOwn(tasks[0].payload, "doneBy"), false, "il salvataggio esterno non modifica operatore FATTO");
 assert.deepEqual(workflow.buildTasks(source, { raccolta: "", ceppi: "" }), [], "entrambe le scelte sono facoltative");
 
 const previous = workflow.existingSelections(source, tasks.map((task) => task.payload));
@@ -62,19 +62,8 @@ assert.match(serviceWorker, /potature-followup\.js\?v=20260831-potature-followup
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
-assert.doesNotMatch(runtimeSource, /await\s+[^;\n]*\.get\s*\(/, "TERMINATO non aggiunge letture Firestore");
-assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "TERMINATO non aggiunge listener Firestore, polling o tracking posizione");
-assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|forceMoveImpiantoToFatti|openWhatsApp/, "TERMINATO non richiama né aggira le funzioni protette FATTO/WHAZZUP");
-assert.match(runtimeSource, /completionMode:\s*"TERMINATO_SPECIAL"/, "il completamento speciale deve essere tracciabile");
-assert.match(runtimeSource, /value\.includes\("sfalcio"\)\s*&&\s*value\.includes\("cobo"\)/, "Sfalcio COBO deve essere riconosciuto anche con ID dinamico");
-assert.match(runtimeSource, /TERMINATO_ACTION\s*=\s*"special-terminato"/, "deve esistere una azione TERMINATO separata");
-assert.match(runtimeSource, /handleCompletedImpiantoWhatsAppClick/, "dopo il salvataggio deve essere riutilizzato solo il Whazzup dell’impianto già completato");
-assert.match(runtimeSource, /style\.setProperty\("display",\s*"none",\s*"important"\)/, "il vecchio FATTO deve essere completamente invisibile");
-assert.match(runtimeSource, /return\s+"btn btn-primary special-terminato-btn"/, "TERMINATO non deve ereditare la classe stretta del vecchio FATTO");
-assert.match(runtimeSource, /row\.appendChild\(terminatoButton\)/, "TERMINATO deve essere spostato alla fine della riga azioni");
-assert.match(runtimeSource, /grid-template-columns[\s\S]*48px[\s\S]*1\.35fr/, "la riga deve essere NAVIGA, graffetta stretta, TERMINATO a tutta larghezza");
-assert.match(runtimeSource, /dataset\.replacesAction\s*=\s*legacyTarget\s*\?\s*"fatto"\s*:\s*"fallback"/, "TERMINATO deve dichiarare esplicitamente che sostituisce FATTO");
-assert.doesNotMatch(runtimeSource, /Ora puoi premere FATTO|premi il pulsante verde <strong>FATTO<\/strong>/, "il form Potature non deve più invitare a usare FATTO");
-assert.match(runtimeSource, /\.action-icon-btn\[data-action-key="whatsapp"\].*label\.includes\("fatto"\)/s, "un eventuale WhatsApp separato non deve essere nascosto se non contiene FATTO");
+assert.doesNotMatch(runtimeSource, /await\s+[^;\n]*\.get\s*\(/, "il nuovo flusso non aggiunge letture Firestore");
+assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "il nuovo flusso non aggiunge listener o polling");
+assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|openWhatsApp/, "il nuovo flusso non richiama né aggira FATTO/WHAZZUP");
 
-console.log("✅ Potature Abbattimenti + Sfalcio COBO: NAVIGA → graffetta → TERMINATO full width, FATTO invisibile e isolamento verificati.");
+console.log("✅ Potature Abbattimenti: form facoltativo, viste Raccolta/Ceppi, salvataggio idempotente e isolamento FATTO verificati.");

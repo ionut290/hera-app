@@ -1,0 +1,241 @@
+body.cobo-mowing-modal-open {
+  overflow: hidden;
+}
+
+.cobo-mowing-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 14080;
+  overflow: auto;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: #eef6f0;
+}
+
+.cobo-mowing-screen {
+  width: min(760px, 100%);
+  min-height: calc(100dvh - 26px);
+  margin: 0 auto;
+  border: 1px solid #bfd7c5;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(25, 76, 45, .17);
+}
+
+.cobo-mowing-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #d5e5d9;
+  border-radius: 18px 18px 0 0;
+  background: rgba(255, 255, 255, .97);
+}
+
+.cobo-mowing-head p,
+.cobo-mowing-head h2 {
+  margin: 0;
+}
+
+.cobo-mowing-head p {
+  color: #4f765b;
+  font-size: .76rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.cobo-mowing-head h2 {
+  color: #134d2c;
+  font-size: clamp(1.25rem, 4vw, 1.8rem);
+}
+
+.cobo-mowing-content {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.cobo-mowing-park-summary {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid #b9ddc3;
+  border-radius: 13px;
+  background: #eaf8ee;
+}
+
+.cobo-mowing-park-summary strong {
+  color: #0a6a36;
+  font-size: 1.08rem;
+}
+
+.cobo-mowing-park-summary span,
+.cobo-mowing-hint {
+  color: #4f6f59;
+}
+
+.cobo-mowing-hint {
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #fff7d6;
+}
+
+.cobo-mowing-form {
+  display: grid;
+  gap: 13px;
+}
+
+.cobo-mowing-form > label,
+.cobo-mowing-prefill label {
+  display: grid;
+  gap: 6px;
+}
+
+.cobo-mowing-form label > span,
+.cobo-mowing-prefill label > span {
+  color: #315d3f;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.cobo-mowing-form input,
+.cobo-mowing-form select,
+.cobo-mowing-form textarea,
+.cobo-mowing-prefill input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 45px;
+  padding: 10px 11px;
+  border: 1px solid #aac9b2;
+  border-radius: 10px;
+  background: #fff;
+  color: #173c24;
+  font: inherit;
+}
+
+.cobo-mowing-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.cobo-mowing-prefill {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #cfe2d4;
+  border-radius: 13px;
+  background: #f7fbf8;
+}
+
+.cobo-mowing-prefill legend {
+  padding: 0 7px;
+  color: #315d3f;
+  font-weight: 900;
+}
+
+.cobo-mowing-prefill input {
+  min-height: 40px;
+  background: #eef5f0;
+  color: #3b5542;
+  font-weight: 700;
+}
+
+.cobo-mowing-feedback {
+  min-height: 22px;
+  margin: 0;
+  font-weight: 800;
+}
+
+.cobo-mowing-feedback.success,
+.cobo-mowing-feedback.error {
+  padding: 12px;
+  border-radius: 11px;
+}
+
+.cobo-mowing-feedback.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cobo-mowing-feedback.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.cobo-mowing-save,
+.cobo-mowing-open-created {
+  min-height: 50px;
+  font-weight: 900;
+}
+
+.cobo-mowing-open-created {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  border-color: #166534 !important;
+  background: #166534 !important;
+  color: #fff !important;
+}
+
+.cobo-register-sfalcio-btn {
+  border-color: #187346 !important;
+  background: #e9f8ef !important;
+  color: #145b38 !important;
+  font-weight: 900 !important;
+}
+
+.badge-cobo-sfalcio {
+  background: #dff7e8 !important;
+  color: #14613b !important;
+}
+
+.cobo-mowing-card-details {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #bfe0c9;
+  border-radius: 11px;
+  background: #effaf3;
+  color: #224d31;
+}
+
+.cobo-mowing-card-details p {
+  margin: 4px 0;
+}
+
+.verde-bologna-parks-sheet-actions [data-vb-create-cobo] {
+  grid-column: 1 / -1;
+  border-color: #187346 !important;
+  background: #187346 !important;
+  color: #fff !important;
+  font-weight: 900;
+}
+
+@media (max-width: 600px) {
+  .cobo-mowing-modal {
+    padding: 0;
+  }
+
+  .cobo-mowing-screen {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .cobo-mowing-head {
+    border-radius: 0;
+  }
+
+  .cobo-mowing-prefill {
+    grid-template-columns: 1fr;
+  }
+
+  .cobo-mowing-head .btn {
+    min-width: 82px;
+  }
+}

@@ -125,29 +125,67 @@ test.describe('Verde Bologna su mobile', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('apre tutte le categorie senza ricreare la mappa o bloccare il thread', async ({ page }) => {
-    await page.route('https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/**/records?**', (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        total_count: 2,
-        results: [
-          {
-            id: 'vb-1',
-            nome: 'Elemento verde 1',
-            geo_point_2d: { lat: 44.4949, lon: 11.3426 },
-            geo_shape: {
-              type: 'Feature',
-              geometry: {
-                type: 'Polygon',
-                coordinates: [[[11.341, 44.494], [11.344, 44.494], [11.344, 44.496], [11.341, 44.494]]]
-              },
-              properties: {}
-            }
-          },
-          { id: 'vb-2', nome: 'Elemento verde 2', geo_point_2d: { lat: 44.496, lon: 11.344 } }
-        ]
-      })
-    }));
+    await page.route('https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/**/records?**', (route) => {
+      const url = route.request().url();
+      const isParks = url.includes('/carta-tecnica-comunale-toponimi-parchi-e-giardini/records?');
+      const isManagedAreas = url.includes('/un_gest/records?');
+      const results = isParks ? [{
+        codvia: 61770,
+        nomevia: 'PARCO DI VILLA TORCHI',
+        quartiere: 'Navile',
+        geo_point_2d: { lat: 44.5446635, lon: 11.3578076 },
+        geo_shape: {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [11.3578076, 44.5446635] },
+          properties: {}
+        }
+      }] : isManagedAreas ? [
+        {
+          nome: 'GIARDINO SCUOLE ELEMENTARE VILLA TORCHI E MEDIA PANZINI',
+          geo_point_2d: { lat: 44.5453155, lon: 11.3615821 },
+          geo_shape: {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[11.361, 44.545], [11.362, 44.545], [11.362, 44.546], [11.361, 44.545]]]
+            },
+            properties: {}
+          }
+        },
+        {
+          nome: 'P.CO VILLA TORCHI',
+          geo_point_2d: { lat: 44.5446575, lon: 11.3581216 },
+          geo_shape: {
+            type: 'Feature',
+            geometry: {
+              type: 'MultiPolygon',
+              coordinates: [[[[11.357, 44.544], [11.359, 44.544], [11.359, 44.546], [11.357, 44.544]]]]
+            },
+            properties: {}
+          }
+        }
+      ] : [
+        {
+          id: 'vb-1',
+          nome: 'Elemento verde 1',
+          geo_point_2d: { lat: 44.4949, lon: 11.3426 },
+          geo_shape: {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[11.341, 44.494], [11.344, 44.494], [11.344, 44.496], [11.341, 44.494]]]
+            },
+            properties: {}
+          }
+        },
+        { id: 'vb-2', nome: 'Elemento verde 2', geo_point_2d: { lat: 44.496, lon: 11.344 } }
+      ];
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total_count: results.length, results })
+      });
+    });
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.HeraVerdeBologna));
     await page.evaluate(() => {
@@ -234,7 +272,7 @@ test.describe('Verde Bologna su mobile', () => {
         await expect(page.locator('#verde-bologna-parchi-sheet')).not.toContainText('geo_shape');
         await expect(page.locator('[data-vb-sheet-map]')).toHaveText('MOSTRA CONFINI');
         await page.locator('[data-vb-sheet-map]').click();
-        await expect.poll(() => page.evaluate(() => window.__parkBoundaryGeometryType)).toBe('Polygon');
+        await expect.poll(() => page.evaluate(() => window.__parkBoundaryGeometryType)).toBe('MultiPolygon');
       }
       await page.locator('#verde-bologna-back-btn').click();
       await expect(page.locator('#verde-bologna-page')).not.toHaveClass(/is-category-open/);

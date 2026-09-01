@@ -4,6 +4,7 @@
   const PAGE_ID = "verde-bologna-page";
   const CATEGORY_ID = "verde-bologna-operativo-category";
   const PARKS_DATASET_ID = "carta-tecnica-comunale-toponimi-parchi-e-giardini";
+  const MANAGED_AREAS_DATASET_ID = "un_gest";
   const QUARTIERI_DATASET_ID = "quartieri-di-bologna";
   const API_ROOT = "https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets";
   const MOBILE_QUERY = "(max-width: 760px)";
@@ -19,6 +20,9 @@
   const SEARCH_DEBOUNCE_MS = 180;
   const LIST_RENDER_LIMIT = 60;
   const LABEL_MARKER_LIMIT = 80;
+  const MANAGED_BOUNDARY_RADIUS_METERS = 500;
+  const managedBoundaryCache = new Map();
+  const managedBoundaryRequests = new Map();
   const OFFICIAL_QUARTIERI = [
     "Borgo Panigale - Reno",
     "Navile",
@@ -221,6 +225,155 @@
     const center = centerOf(record);
     if (!center || !state.userPosition) return Number.POSITIVE_INFINITY;
     return haversineMeters(state.userPosition, center);
+  }
+
+  function meaningfulParkWords(value) {
+    const stopWords = new Set([
+      "area", "parco", "parchi", "pco", "giardino", "giardini", "verde", "del", "della", "delle",
+      "dei", "degli", "di", "da", "il", "lo", "la", "i", "gli", "le", "e"
+    ]);
+    return normalizeText(value)
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !stopWords.has(word));
+  }
+
+  function escapeSearch(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function areaGeometryOf(record) {
+    const managed = parseGeometryValue(record?.__vbBoundaryGeometry);
+    if (managed?.type === "Polygon" || managed?.type === "MultiPolygon") return managed;
+    const native = geometryOf(record);
+    return native?.type === "Polygon" || native?.type === "MultiPolygon" ? native : null;
+  }
+
+  function managedRecordName(record) {
+    return String(fieldValue(record, ["nome", "nome_ug", "denominazione", "ubicazione"]) || "").trim();
+  }
+
+  function managedRecordCenter(record) {
+    const point = parseGeometryValue(fieldValue(record, ["geo_point_2d", "geopoint", "geo point"]));
+    if (point?.type === "Point" && Array.isArray(point.coordinates)) {
+      const [lon, lat] = point.coordinates.map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+    }
+    const geometry = parseGeometryValue(record?.geo_shape ?? record?.geometry);
+    if (!geometry) return null;
+    const points = flattenCoordinates(geometry.coordinates).filter(([lon, lat]) => Math.abs(lon) <= 180 && Math.abs(lat) <= 90);
+    if (!points.length) return null;
+    const sum = points.reduce((acc, [lon, lat]) => ({ lon: acc.lon + lon, lat: acc.lat + lat }), { lon: 0, lat: 0 });
+    return { lon: sum.lon / points.length, lat: sum.lat / points.length };
+  }
+
+  function boundaryCacheKey(record) {
+    const center = centerOf(record);
+    return `${normalizeText(parkName(record))}:${center ? `${center.lat.toFixed(5)},${center.lon.toFixed(5)}` : parkCodvia(record)}`;
+  }
+
+  function selectManagedBoundary(parkRecord, candidates) {
+    const parkCenter = centerOf(parkRecord);
+    const parkWords = meaningfulParkWords(parkName(parkRecord));
+    const unique = new Map();
+    (candidates || []).forEach((candidate) => {
+      const geometry = parseGeometryValue(candidate?.geo_shape ?? candidate?.geometry);
+      if (geometry?.type !== "Polygon" && geometry?.type !== "MultiPolygon") return;
+      const name = managedRecordName(candidate);
+      const center = managedRecordCenter(candidate);
+      const candidateWords = meaningfulParkWords(name);
+      const overlap = parkWords.filter((word) => candidateWords.includes(word)).length;
+      const coverage = parkWords.length ? overlap / parkWords.length : 0;
+      const precision = candidateWords.length ? overlap / candidateWords.length : 0;
+      const distance = haversineMeters(parkCenter, center);
+      const score = coverage * 100 + precision * 40 - Math.min(distance, 5000) / 50;
+      const key = JSON.stringify(geometry);
+      const previous = unique.get(key);
+      if (!previous || score > previous.score) unique.set(key, { geometry, coverage, distance, score });
+    });
+    const ranked = [...unique.values()].sort((a, b) => b.score - a.score);
+    const best = ranked[0];
+    if (!best) return null;
+    if ((best.coverage >= 0.5 && best.distance <= 2500) || best.distance <= 180) return best.geometry;
+    return null;
+  }
+
+  async function fetchManagedRecords(where, controller) {
+    const params = new URLSearchParams({ limit: "100", where });
+    const response = await fetch(`${API_ROOT}/${MANAGED_AREAS_DATASET_ID}/records?${params}`, {
+      headers: { Accept: "application/json" },
+      signal: controller?.signal
+    });
+    if (!response.ok) throw new Error(`Confini comunali non disponibili (${response.status}).`);
+    const payload = await response.json();
+    return Array.isArray(payload?.results) ? payload.results : [];
+  }
+
+  async function fetchManagedBoundary(record) {
+    const center = centerOf(record);
+    const words = meaningfulParkWords(parkName(record));
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    if (controller) state.abortControllers.add(controller);
+    const timer = window.setTimeout(() => controller?.abort(), FETCH_TIMEOUT_MS);
+    try {
+      let candidates = [];
+      if (words.length) {
+        const phrase = words.slice(-3).join(" ");
+        candidates = await fetchManagedRecords(`search("${escapeSearch(phrase)}")`, controller);
+        const namedBoundary = selectManagedBoundary(record, candidates);
+        if (namedBoundary) return namedBoundary;
+      }
+      if (center) {
+        const where = `within_distance(geo_point_2d, geom'POINT(${center.lon} ${center.lat})', ${MANAGED_BOUNDARY_RADIUS_METERS}m)`;
+        const nearby = await fetchManagedRecords(where, controller);
+        candidates = [...candidates, ...nearby];
+      }
+      return selectManagedBoundary(record, candidates);
+    } finally {
+      window.clearTimeout(timer);
+      if (controller) state.abortControllers.delete(controller);
+    }
+  }
+
+  async function loadManagedBoundary(record) {
+    if (!record || areaGeometryOf(record)) {
+      if (record) record.__vbBoundaryStatus = "available";
+      return;
+    }
+    const cacheKey = boundaryCacheKey(record);
+    const cached = managedBoundaryCache.get(cacheKey) ?? readSessionCache(`varga-verde-bologna:park-boundary:${cacheKey}`);
+    if (cached && typeof cached === "object" && "found" in cached) {
+      record.__vbBoundaryGeometry = cached.found ? cached.geometry : null;
+      record.__vbBoundaryStatus = cached.found ? "available" : "unavailable";
+      if (state.listOpenRecord === record) renderDetailSheet(record);
+      return;
+    }
+    if (managedBoundaryRequests.has(cacheKey)) {
+      await managedBoundaryRequests.get(cacheKey);
+      const shared = managedBoundaryCache.get(cacheKey);
+      record.__vbBoundaryGeometry = shared?.found ? shared.geometry : null;
+      record.__vbBoundaryStatus = shared?.found ? "available" : "unavailable";
+      if (state.listOpenRecord === record) renderDetailSheet(record);
+      return;
+    }
+    record.__vbBoundaryStatus = "loading";
+    if (state.listOpenRecord === record) renderDetailSheet(record);
+    const request = fetchManagedBoundary(record)
+      .then((geometry) => {
+        const result = { found: Boolean(geometry), geometry: geometry || null };
+        managedBoundaryCache.set(cacheKey, result);
+        writeSessionCache(`varga-verde-bologna:park-boundary:${cacheKey}`, result);
+        record.__vbBoundaryGeometry = geometry || null;
+        record.__vbBoundaryStatus = geometry ? "available" : "unavailable";
+      })
+      .catch((error) => {
+        if (error?.name === "AbortError") record.__vbBoundaryStatus = "unknown";
+        else record.__vbBoundaryStatus = "error";
+      })
+      .finally(() => managedBoundaryRequests.delete(cacheKey));
+    managedBoundaryRequests.set(cacheKey, request);
+    await request;
+    if (state.listOpenRecord === record) renderDetailSheet(record);
   }
 
   function prepareRecord(record) {
@@ -429,20 +582,28 @@
   }
 
   function hasAreaBoundary(record) {
-    const type = geometryOf(record)?.type;
-    return type === "Polygon" || type === "MultiPolygon";
+    return Boolean(areaGeometryOf(record));
   }
 
-  function openDetailSheet(record) {
+  function renderDetailSheet(record) {
     const sheet = $(SHEET_ID);
     if (!sheet) return;
-    state.listOpenRecord = record;
     const codvia = parkCodvia(record) || "—";
     const name = parkName(record);
     const center = centerOf(record);
     const distance = recordDistance(record);
     const quarter = record.__vbQuartiere || "Non determinato";
     const boundaryAvailable = hasAreaBoundary(record);
+    const boundaryStatus = boundaryAvailable ? "available" : (record.__vbBoundaryStatus || "unknown");
+    const boundaryText = {
+      available: "Disponibili sulla mappa",
+      loading: "Cerco nel catasto comunale…",
+      unavailable: "Non trovati nel catasto comunale",
+      error: "Temporaneamente non disponibili",
+      unknown: "Da verificare nel catasto comunale"
+    }[boundaryStatus];
+    const mapButtonText = boundaryAvailable ? "MOSTRA CONFINI" : (boundaryStatus === "loading" ? "CARICO CONFINI…" : "MOSTRA MAPPA");
+    const mapButtonDisabled = !center || boundaryStatus === "loading";
     const fields = Object.entries(record).filter(([key]) => !String(key).startsWith("__vb") && !isTechnicalGeometryField(key));
     const navHref = center ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${center.lat},${center.lon}`)}` : "";
     sheet.innerHTML = `
@@ -454,11 +615,11 @@
         <strong>CODVIA</strong><span>${esc(codvia)}</span>
         <strong>NOMEVIA</strong><span>${esc(name)}</span>
         <strong>QUARTIERE</strong><span>${esc(quarter)}</span>
-        <strong>CONFINI</strong><span>${boundaryAvailable ? "Disponibili sulla mappa" : "Non disponibili nel dataset"}</span>
+        <strong>CONFINI</strong><span>${boundaryText}</span>
         ${Number.isFinite(distance) ? `<strong>DISTANZA</strong><span>${distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(1)} km`}</span>` : ""}
       </section>
       <div class="verde-bologna-parks-sheet-actions">
-        <button class="btn" type="button" data-vb-sheet-map ${center ? "" : "disabled"}>${boundaryAvailable ? "MOSTRA CONFINI" : "MOSTRA MAPPA"}</button>
+        <button class="btn" type="button" data-vb-sheet-map ${mapButtonDisabled ? "disabled" : ""}>${mapButtonText}</button>
         ${center ? `<a class="btn btn-primary" href="${esc(navHref)}" target="_blank" rel="noopener">NAVIGA</a>` : `<button class="btn btn-primary" type="button" disabled>NAVIGA</button>`}
       </div>
       <section class="verde-bologna-parks-fields">
@@ -471,6 +632,17 @@
       closeDetailSheet();
       focusRecord(record, true);
     });
+  }
+
+  function openDetailSheet(record) {
+    const sheet = $(SHEET_ID);
+    if (!sheet) return;
+    state.listOpenRecord = record;
+    if (areaGeometryOf(record)) record.__vbBoundaryStatus = "available";
+    renderDetailSheet(record);
+    if (!record.__vbBoundaryStatus || record.__vbBoundaryStatus === "unknown" || record.__vbBoundaryStatus === "error") {
+      void loadManagedBoundary(record);
+    }
   }
 
   function closeDetailSheet() {
@@ -587,7 +759,7 @@
     if (!center || !state.map) return;
     ensureLayer();
     state.boundaryLayer?.clearLayers?.();
-    const geometry = geometryOf(record);
+    const geometry = areaGeometryOf(record);
     let boundaryBounds = null;
     if (hasAreaBoundary(record) && state.boundaryLayer && window.L) {
       const boundary = window.L.geoJSON({ type: "Feature", geometry, properties: {} }, {

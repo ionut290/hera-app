@@ -36,6 +36,13 @@ assert.match(source, /function isTechnicalGeometryField\(key\)/);
 assert.match(source, /!isTechnicalGeometryField\(key\)/);
 assert.match(source, /MOSTRA CONFINI/);
 assert.match(source, /state\.boundaryLayer/);
+assert.match(source, /const MANAGED_AREAS_DATASET_ID = "un_gest";/);
+assert.match(source, /within_distance\(geo_point_2d, geom'POINT\(/);
+assert.match(source, /function selectManagedBoundary\(parkRecord, candidates\)/);
+assert.match(source, /record\.__vbBoundaryGeometry = geometry \|\| null;/);
+assert.match(source, /Cerco nel catasto comunale…/);
+assert.match(source, /varga-verde-bologna:park-boundary:/);
+assert.doesNotMatch(source, /Non disponibili nel dataset/);
 
 const officialDatasets = [
   "un_gest", "alberi-manutenzioni", "popolazione-arborea", "siepi",
@@ -149,12 +156,13 @@ assert.doesNotMatch(pageOpening[0], /initializeMap\(|openDataset\(/);
 
 assert.match(loader, /verde-bologna\.js\?v=20260901-catasto-open2/);
 assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-catasto-open2/);
-assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-catasto-open2/);
-assert.match(html, /app-pure-utils\.js\?v=20260901-catasto-open2/);
-assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260901-catasto-open2"/);
-assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-catasto-open2"/);
-assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v213";/);
-assert.match(sw, /app-pure-utils\.js\?v=20260901-catasto-open2/);
+assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-park-boundaries1/);
+assert.match(html, /app-pure-utils\.js\?v=20260901-park-boundaries1/);
+assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260901-park-boundaries1"/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-park-boundaries1"/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v214";/);
+assert.match(sw, /app-pure-utils\.js\?v=20260901-park-boundaries1/);
+assert.match(sw, /verde-bologna-parchi-mobile\.js\?v=20260901-park-boundaries1/);
 assert.match(sw, /"\/verde-bologna\.js"/);
 assert.match(sw, /"\/verde-bologna-operativo\.js"/);
 assert.match(sw, /"\/verde-bologna-parchi-mobile\.js"/);

@@ -306,6 +306,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       .verde-bologna-parks-tools,.verde-bologna-parks-list,.verde-bologna-parks-sheet{display:none}
+      .verde-bologna-page.vb-parks-advanced .verde-bologna-marker-wrap{display:none!important}
       @media ${MOBILE_QUERY}{
         .verde-bologna-page.vb-parks-advanced .verde-bologna-code-marker-wrap{display:none!important}
         .verde-bologna-page.vb-parks-advanced #verde-bologna-results,

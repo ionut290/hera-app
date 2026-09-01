@@ -14,6 +14,7 @@
   let duplicateArchivePromise = null;
   let duplicateArchiveChecked = false;
   let managementSummaryObserver = null;
+  let managementScreenWasVisible = false;
   const managementSummaryById = new Map();
   const managementSummaryAtById = new Map();
   const managementSummaryPromiseById = new Map();
@@ -474,6 +475,11 @@
         managementSummaryById.set(commessa.id, summary);
         managementSummaryAtById.set(commessa.id, Date.now());
         renderManagementStatsForCommessa(commessa, summary);
+        const canonical = findCanonicalModenaCommessa();
+        if (canonical?.id === commessa.id) {
+          applySummary(canonical, summary);
+          await persistSummaryIfNeeded(canonical, summary);
+        }
         return summary;
       } catch (error) {
         console.warn("[Gestione commessa] riepilogo reale impianti non disponibile", { commessaId: commessa.id, error });
@@ -491,7 +497,7 @@
     const commessa = findCurrentManagementCommessa();
     if (!commessa?.id) return false;
     const cached = managementSummaryById.get(commessa.id);
-    if (cached) renderManagementStatsForCommessa(commessa, cached);
+    if (cached && options.force !== true) renderManagementStatsForCommessa(commessa, cached);
     const cachedAt = Number(managementSummaryAtById.get(commessa.id) || 0);
     if ((options.force === true || !cached || Date.now() - cachedAt >= MANAGEMENT_DATA_REFRESH_MS)
       && (typeof document === "undefined" || !document.hidden)) {
@@ -522,8 +528,11 @@
     if (!screen) return false;
 
     const update = () => {
-      applyManagementStats();
-      if (isManagementScreenVisible()) ensureCurrentManagementSummary();
+      const isVisible = isManagementScreenVisible();
+      const openedNow = isVisible && !managementScreenWasVisible;
+      managementScreenWasVisible = isVisible;
+      if (!openedNow) applyManagementStats();
+      if (isVisible) ensureCurrentManagementSummary({ force: openedNow });
     };
     managementSummaryObserver = new MutationObserver(update);
     managementSummaryObserver.observe(screen, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
@@ -625,8 +634,14 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
-      ensureCanonicalState();
-      ensureCurrentManagementSummary();
+      const canonical = findCanonicalModenaCommessa();
+      let canonicalSelected = false;
+      try {
+        canonicalSelected = Boolean(canonical?.id && typeof selectedCommessaId !== "undefined" && selectedCommessaId === canonical.id);
+      } catch (_) {}
+      const managementVisible = isManagementScreenVisible();
+      ensureCanonicalState({ refresh: canonicalSelected && !managementVisible, force: canonicalSelected && !managementVisible });
+      ensureCurrentManagementSummary({ force: managementVisible });
     }
   });
   setTimeout(() => ensureCanonicalState(), 100);

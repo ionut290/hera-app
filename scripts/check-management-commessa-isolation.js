@@ -155,6 +155,9 @@ assert.match(stats.innerHTML, />4<\/b> lavorazioni fatte/);
 assert.match(stats.innerHTML, />38<\/b> lavorazioni da fare/);
 
 assert.doesNotMatch(source, /normalizeCode\(meta\.textContent\)\.includes\(CANONICAL_COMMESSA_CODE\)/);
+assert.match(source, /if \(cached && options\.force !== true\) renderManagementStatsForCommessa/, "L'apertura della gestione non deve mostrare il riepilogo precedente prima della rilettura forzata");
+assert.match(source, /const openedNow = isVisible && !managementScreenWasVisible/, "La riapertura della gestione deve invalidare il riepilogo conservato");
+assert.match(source, /if \(canonical\?\.id === commessa\.id\)[\s\S]*applySummary\(canonical, summary\)/, "Il riepilogo aggiornato di INRETE Modena deve aggiornare anche totale e contatori della commessa");
 
 assert.doesNotMatch(
   appSource,

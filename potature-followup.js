@@ -590,26 +590,61 @@
     return buttons;
   }
 
-  function terminatoClassName(legacyTarget) {
-    const legacyClasses = text(legacyTarget?.className)
-      .split(/\s+/)
-      .filter(Boolean)
-      .filter((name) => !["special-terminato-legacy-hidden", "impianto-force-done-btn"].includes(name));
-    const classes = new Set(legacyClasses.length ? legacyClasses : ["btn", "btn-primary"]);
-    classes.add("special-terminato-btn");
-    classes.add("btn-primary");
-    return [...classes].join(" ");
+  function terminatoClassName() {
+    return "btn btn-primary special-terminato-btn";
+  }
+
+  function primaryActionRow(legacyTarget, card) {
+    return legacyTarget?.parentElement
+      || card.querySelector(".impianto-primary-actions")
+      || card.querySelector(".impianto-actions");
+  }
+
+  function visibleActionButtons(row) {
+    if (!row) return [];
+    return [...row.children].filter((element) => element.tagName === "BUTTON" && !element.hidden && element.style.display !== "none");
+  }
+
+  function arrangePrimaryActions(row, terminatoButton) {
+    if (!row || !terminatoButton) return;
+
+    // TERMiNATO deve essere l'ultimo comando visibile: NAVIGA -> graffetta -> TERMINATO.
+    row.appendChild(terminatoButton);
+    const visibleButtons = visibleActionButtons(row);
+    if (visibleButtons.length < 2) return;
+
+    row.dataset.specialTerminatoLayout = "1";
+    row.style.setProperty("display", "grid", "important");
+    row.style.setProperty("width", "100%", "important");
+    row.style.setProperty("grid-template-columns", visibleButtons.length >= 3
+      ? "minmax(0, 1fr) 48px minmax(0, 1.35fr)"
+      : "minmax(0, 1fr) minmax(0, 1.35fr)", "important");
+    row.style.setProperty("gap", "8px", "important");
+    row.style.setProperty("align-items", "stretch", "important");
+
+    const ordered = visibleActionButtons(row);
+    ordered.forEach((button, index) => {
+      const isMiddleCompact = ordered.length >= 3 && index === 1;
+      button.style.setProperty("min-width", isMiddleCompact ? "48px" : "0", "important");
+      button.style.setProperty("max-width", isMiddleCompact ? "48px" : "none", "important");
+      button.style.setProperty("width", "100%", "important");
+      button.style.setProperty("overflow", "visible", "important");
+      button.style.setProperty("text-overflow", "clip", "important");
+      button.style.setProperty("white-space", "nowrap", "important");
+      button.style.setProperty("justify-self", "stretch", "important");
+      if (isMiddleCompact) button.style.setProperty("padding-inline", "0", "important");
+    });
+
+    terminatoButton.style.setProperty("font-weight", "800", "important");
+    terminatoButton.style.setProperty("padding-inline", "12px", "important");
   }
 
   function placeAtLegacyPosition(button, legacyTarget, card) {
-    if (legacyTarget?.parentElement) {
-      legacyTarget.parentElement.insertBefore(button, legacyTarget);
-      button.dataset.replacesAction = "fatto";
-      return true;
-    }
-    const row = card.querySelector(".impianto-primary-actions") || card.querySelector(".impianto-actions");
+    const row = primaryActionRow(legacyTarget, card);
     if (!row) return false;
     row.appendChild(button);
+    button.dataset.replacesAction = legacyTarget ? "fatto" : "fallback";
+    arrangePrimaryActions(row, button);
     return true;
   }
 
@@ -621,15 +656,14 @@
     }
 
     const legacyTarget = primaryLegacyButton(card);
-    const desiredClassName = terminatoClassName(legacyTarget);
+    const row = primaryActionRow(legacyTarget, card);
+    const desiredClassName = terminatoClassName();
     hideLegacyCompletion(card, item);
 
     if (old) {
       old.className = desiredClassName;
-      if (legacyTarget?.parentElement && (old.parentElement !== legacyTarget.parentElement || old.nextElementSibling !== legacyTarget)) {
-        legacyTarget.parentElement.insertBefore(old, legacyTarget);
-      }
       old.dataset.replacesAction = legacyTarget ? "fatto" : "fallback";
+      if (row) arrangePrimaryActions(row, old);
       return;
     }
 

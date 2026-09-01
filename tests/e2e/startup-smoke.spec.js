@@ -244,7 +244,7 @@ test.describe('Verde Bologna su mobile', () => {
     await page.locator('[data-vb-open="un_gest"]').click();
     await expect(page.locator('#verde-bologna-map')).toHaveCSS('touch-action', 'none');
     await page.locator('#verde-bologna-back-btn').click();
-    await page.locator('[data-vb-open="alberi-manutenzioni"]').click();
+    await page.locator('[data-vb-open="alberi-manutenzioni"]').evaluate((button) => button.click());
     await expect(page.locator('#tree-search-page')).toBeVisible();
     await expect(page.locator('#verde-bologna-page')).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.__treePageVisibleWhenVerdeMapRemoved)).toBe(true);

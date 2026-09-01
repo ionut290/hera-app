@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v214";
-const CACHE_RESET_VERSION = "20260901-park-boundaries1";
+const CACHE_NAME = "varga-cantieri-shell-v215";
+const CACHE_RESET_VERSION = "20260901-cobo-sfalcio1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,10 +10,10 @@ const APP_SHELL = [
   "./accounting-v2.css?v=20260901-current-gps1",
   "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
-  "./app-pure-utils.js?v=20260901-park-boundaries1",
-  "./verde-bologna.js?v=20260901-catasto-open2",
+  "./app-pure-utils.js?v=20260901-cobo-sfalcio1",
+  "./verde-bologna.js?v=20260901-cobo-sfalcio1",
   "./verde-bologna-operativo.js?v=20260901-catasto-open2",
-  "./verde-bologna-parchi-mobile.js?v=20260901-park-boundaries1",
+  "./verde-bologna-parchi-mobile.js?v=20260901-cobo-sfalcio1",
   "./data-license-view.js?v=20260831-license1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",
@@ -22,7 +22,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260831-potature-followup1",
+  "./app.js?v=20260901-cobo-sfalcio1",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
@@ -80,6 +80,8 @@ const APP_SHELL = [
   "./recommended-plants.css?v=20260823-stability3",
   "./recommended-plants.js?v=20260823-stability3",
   "./tree-search.css?v=20260831-potature1",
+  "./cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1",
+  "./cobo-mowing-work-orders.js?v=20260901-cobo-sfalcio1",
   "./tree-work-orders.js?v=20260831-potature1",
   "./potature-followup.js?v=20260831-potature-followup1",
   "./tree-search.js?v=20260901-catasto-open2",
@@ -112,6 +114,8 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/verde-bologna.js",
   "/verde-bologna-operativo.js",
   "/verde-bologna-parchi-mobile.js",
+  "/cobo-mowing-work-orders.js",
+  "/cobo-mowing-work-orders.css",
   "/data-license-view.js",
   "/potature-followup.js",
   "/green-assistant.js",

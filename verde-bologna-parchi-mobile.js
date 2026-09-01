@@ -585,6 +585,24 @@
     return Boolean(areaGeometryOf(record));
   }
 
+  function openCoboWorkOrder(record, triggerButton) {
+    const workflow = window.HeraCoboMowing;
+    if (typeof workflow?.openCreate !== "function") {
+      window.alert("Sfalcio COBO non è disponibile in questo momento. Riprova tra qualche secondo.");
+      return;
+    }
+    workflow.openCreate({
+      record,
+      parkName: parkName(record),
+      parkCode: parkCodvia(record) || parkFallbackCode(record),
+      quarter: record.__vbQuartiere || "",
+      address: fieldValue(record, ["ubicazione", "indirizzo", "via", "nomevia", "nome_via"]),
+      point: centerOf(record),
+      boundaryAvailable: hasAreaBoundary(record),
+      triggerButton
+    });
+  }
+
   function renderDetailSheet(record) {
     const sheet = $(SHEET_ID);
     if (!sheet) return;
@@ -621,6 +639,7 @@
       <div class="verde-bologna-parks-sheet-actions">
         <button class="btn" type="button" data-vb-sheet-map ${mapButtonDisabled ? "disabled" : ""}>${mapButtonText}</button>
         ${center ? `<a class="btn btn-primary" href="${esc(navHref)}" target="_blank" rel="noopener">NAVIGA</a>` : `<button class="btn btn-primary" type="button" disabled>NAVIGA</button>`}
+        <button class="btn" type="button" data-vb-create-cobo>🌿 CREA CANTIERE SFALCIO COBO</button>
       </div>
       <section class="verde-bologna-parks-fields">
         ${fields.map(([key, value]) => `<article class="verde-bologna-parks-field"><span>${esc(key)}</span>${typeof value === "object" && value !== null ? `<pre>${esc(formatFieldValue(value))}</pre>` : `<strong>${esc(formatFieldValue(value))}</strong>`}</article>`).join("")}
@@ -632,6 +651,7 @@
       closeDetailSheet();
       focusRecord(record, true);
     });
+    sheet.querySelector("[data-vb-create-cobo]")?.addEventListener("click", (event) => openCoboWorkOrder(record, event.currentTarget));
   }
 
   function openDetailSheet(record) {

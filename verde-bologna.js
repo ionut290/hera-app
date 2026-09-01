@@ -21,6 +21,7 @@
   const CATEGORY_OPENED_EVENT = "hera:verde-bologna-category-opened";
   const CATEGORY_CLOSED_EVENT = "hera:verde-bologna-category-closed";
   const DELEGATED_MAP_CLEANUP_DELAY_MS = 700;
+  const PARKS_DATASET_ID = "carta-tecnica-comunale-toponimi-parchi-e-giardini";
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
@@ -428,6 +429,24 @@
     });
   }
 
+  function openCoboWorkOrder(record, index, triggerButton) {
+    const workflow = window.HeraCoboMowing;
+    if (typeof workflow?.openCreate !== "function") {
+      window.alert("Sfalcio COBO non è disponibile in questo momento. Riprova tra qualche secondo.");
+      return;
+    }
+    workflow.openCreate({
+      record,
+      parkName: recordTitle(record, index),
+      parkCode: findField(record, ["codvia", "cod_via", "codice via"]),
+      quarter: findField(record, ["quartiere", "nome_quartiere", "quart"]),
+      address: findField(record, ["ubicazione", "indirizzo", "via", "nomevia"]),
+      point: centerOfGeometry(geometryOf(record)),
+      boundaryAvailable: geometryPriority(geometryOf(record)) >= 2,
+      triggerButton
+    });
+  }
+
   function openDetailSheet(index) {
     const record = state.records[index], sheet = $("verde-bologna-detail-sheet");
     if (!record || !sheet) return;
@@ -439,6 +458,7 @@
       <p class="verde-bologna-sheet-source">Comune di Bologna · dataset ufficiale “${esc(dataset.title)}” · sono mostrati tutti i campi valorizzati disponibili.</p>
       <div class="verde-bologna-sheet-actions">
         ${navigationUrl ? `<a class="btn btn-primary" href="${esc(navigationUrl)}" target="_blank" rel="noopener">NAVIGA VERSO L’ELEMENTO</a><button class="btn" type="button" data-vb-street-view>🌐 VISTA 360° E PERCORSO</button>` : ""}
+        ${dataset.id === PARKS_DATASET_ID ? `<button class="btn" type="button" data-vb-create-cobo>🌿 CREA CANTIERE SFALCIO COBO</button>` : ""}
       </div>
       <section class="verde-bologna-sheet-fields">
         ${entries.map((entry, entryIndex) => `<article class="verde-bologna-sheet-field"${entryIndex >= 6 ? " hidden" : ""}><span>${esc(entry.label)}</span><strong>${esc(entry.value)}</strong></article>`).join("")}
@@ -450,6 +470,7 @@
     sheet.scrollTop = 0;
     sheet.querySelector("[data-vb-close-sheet]")?.addEventListener("click", closeDetailSheet);
     sheet.querySelector("[data-vb-street-view]")?.addEventListener("click", (event) => openStreetView(record, index, event.currentTarget));
+    sheet.querySelector("[data-vb-create-cobo]")?.addEventListener("click", (event) => openCoboWorkOrder(record, index, event.currentTarget));
     sheet.querySelector("[data-vb-toggle-details]")?.addEventListener("click", (event) => {
       const button = event.currentTarget, expanded = button.getAttribute("aria-expanded") !== "true";
       sheet.querySelectorAll(".verde-bologna-sheet-field").forEach((field, fieldIndex) => { field.hidden = !expanded && fieldIndex >= 6; });
@@ -465,10 +486,15 @@
     node.innerHTML = visibleRecords.map((record, index) => {
       const title = recordTitle(record, index), subtitle = recordSubtitle(record), entries = detailEntries(record).slice(0, 6), center = centerOfGeometry(geometryOf(record));
       const navHref = center ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${center.lat},${center.lon}`)}` : "";
-      return `<article class="verde-bologna-result"><div><h3>${esc(title)}</h3>${subtitle ? `<p>${esc(subtitle)}</p>` : ""}</div><div class="verde-bologna-result-actions">${center ? `<button class="btn" type="button" data-vb-map-index="${index}">MOSTRA</button>` : ""}<button class="btn" type="button" data-vb-detail-index="${index}">APRI SCHEDA</button>${center ? `<a class="btn btn-primary" href="${esc(navHref)}" target="_blank" rel="noopener">NAVIGA</a>` : ""}</div><div class="verde-bologna-details">${entries.map((entry) => `<div><span>${esc(entry.label)}</span><strong>${esc(entry.value)}</strong></div>`).join("")}</div></article>`;
+      return `<article class="verde-bologna-result"><div><h3>${esc(title)}</h3>${subtitle ? `<p>${esc(subtitle)}</p>` : ""}</div><div class="verde-bologna-result-actions">${center ? `<button class="btn" type="button" data-vb-map-index="${index}">MOSTRA</button>` : ""}<button class="btn" type="button" data-vb-detail-index="${index}">APRI SCHEDA</button>${center ? `<a class="btn btn-primary" href="${esc(navHref)}" target="_blank" rel="noopener">NAVIGA</a>` : ""}${currentDataset().id === PARKS_DATASET_ID ? `<button class="btn" type="button" data-vb-cobo-index="${index}">🌿 CREA CANTIERE</button>` : ""}</div><div class="verde-bologna-details">${entries.map((entry) => `<div><span>${esc(entry.label)}</span><strong>${esc(entry.value)}</strong></div>`).join("")}</div></article>`;
     }).join("") + (!state.query && state.records.length > visibleRecords.length ? `<p class="verde-bologna-empty">Mappa completa · elenco limitato ai primi ${VIEWPORT_LIST_LIMIT} elementi per mantenere l’app fluida. Ingrandisci la mappa o usa la ricerca per restringere la zona.</p>` : "");
     node.querySelectorAll("[data-vb-map-index]").forEach((button) => button.addEventListener("click", () => focusResult(Number(button.dataset.vbMapIndex))));
     node.querySelectorAll("[data-vb-detail-index]").forEach((button) => button.addEventListener("click", () => openDetailSheet(Number(button.dataset.vbDetailIndex))));
+    node.querySelectorAll("[data-vb-cobo-index]").forEach((button) => button.addEventListener("click", () => {
+      const index = Number(button.dataset.vbCoboIndex);
+      const record = state.records[index];
+      if (record) openCoboWorkOrder(record, index, button);
+    }));
     const more = $("verde-bologna-load-more"); more?.classList.toggle("hidden", state.records.length >= state.total || state.records.length === 0); if (more && !more.classList.contains("hidden")) more.textContent = `CARICA ALTRI 100 · ${state.records.length} / ${state.total}`;
     renderMap({ fitMap });
   }

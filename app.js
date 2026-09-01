@@ -14468,6 +14468,50 @@ function openPotatureFollowupForm(impianto, triggerButton) {
   });
 }
 
+function isCoboMowingWorkOrder(impianto) {
+  return window.HeraCoboMowing?.isWorkOrder(impianto, selectedCommessaId) === true;
+}
+
+function buildCoboMowingCardDetailsMarkup(impianto) {
+  if (!isCoboMowingWorkOrder(impianto)) return "";
+  const summary = window.HeraCoboMowing?.registrationSummary(impianto) || {};
+  if (!summary.registered) {
+    return `<section class="cobo-mowing-card-details"><p><b>🌿 Sfalcio COBO:</b> lavorazione ancora da registrare.</p></section>`;
+  }
+  const areaLabel = summary.areaMq == null ? "-" : `${formatAreaMqValue(summary.areaMq)} mq`;
+  return `<section class="cobo-mowing-card-details">
+    <p><b>🌿 Sfalcio registrato:</b> ${escapeHTML(summary.workType || "-")}</p>
+    <p><b>Superficie eseguita:</b> ${escapeHTML(areaLabel)}</p>
+    <p><b>Mezzo utilizzato:</b> ${escapeHTML(summary.equipment || "-")}</p>
+    <p><b>Registrato da:</b> ${escapeHTML(summary.operator || "-")}</p>
+  </section>`;
+}
+
+function openCoboMowingRegistrationForm(impianto, triggerButton) {
+  const workflow = window.HeraCoboMowing;
+  if (!workflow || !isCoboMowingWorkOrder(impianto)) return;
+  const operator = auth?.currentUser || currentUser || {};
+  workflow.openRegistration({
+    plant: impianto,
+    store: db,
+    commessaId: selectedCommessaId,
+    collectionName: getCommesseCollectionName(),
+    operatorUid: operator.uid || "",
+    operatorName: getOperatorDisplayName(),
+    timestampFactory: () => firebase.firestore.FieldValue.serverTimestamp(),
+    triggerButton,
+    onComplete: () => {
+      expandedImpiantoKey = buildImpiantoKey(impianto);
+      renderImpianti();
+      window.setTimeout(() => {
+        const card = Array.from(ui.impiantiLista?.querySelectorAll("[data-impianto-key]") || [])
+          .find((item) => item.dataset.impiantoKey === expandedImpiantoKey);
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+    }
+  });
+}
+
 function getFirstParsedAreaValue(values = []) {
   for (const value of values) {
     const parsed = parseAreaMqValue(value);
@@ -14687,6 +14731,13 @@ function renderImpianti() {
     const hasStraordinariaFlag = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
     const visibleNoteText = getImpiantoVisibleNote(impianto);
     const treeWorkOrderDetailsMarkup = buildTreeWorkOrderCardDetailsMarkup(impianto);
+    const coboMowingDetailsMarkup = buildCoboMowingCardDetailsMarkup(impianto);
+    const coboMowingSummary = isCoboMowingWorkOrder(impianto)
+      ? (window.HeraCoboMowing?.registrationSummary(impianto) || {})
+      : null;
+    const coboMowingBadge = coboMowingSummary
+      ? `<span class="badge badge-cobo-sfalcio">${coboMowingSummary.registered ? "✅ Sfalcio registrato" : "🌿 Sfalcio COBO"}</span>`
+      : "";
     const potatureFollowupPhase = getPotatureFollowupPhase(impianto);
     const potatureFollowupBadge = potatureFollowupPhase
       ? `<span class="badge badge-potature-followup">${potatureFollowupPhase === "raccolta" ? "🕷️ Raccolta" : "🪵 Ceppi"} · ${escapeHTML(impianto.potatureMetodoLabel || "")}</span>`
@@ -14724,6 +14775,7 @@ function renderImpianti() {
       <small class="impianto-summary-meta">
         ${impianto.done ? `<span class="badge badge-done-list">✅ Nei FATTI</span>` : ""}
         ${potatureFollowupBadge}
+        ${coboMowingBadge}
         <span class="badge ${hasStraordinariaFlag ? "badge-straordinaria" : "badge-ordinaria"}">${escapeHTML(badgeTipo)}</span>
         ${hasNoteFlag ? `<span class="badge badge-impianto-note">📝 Nota</span>` : ""}
         ${hasExtraWorkFlag ? `<span class="badge badge-extra-work">🛠️ Lavori straordinari</span>` : ""}
@@ -14749,6 +14801,7 @@ function renderImpianti() {
     const doneDateTimeLabel = doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`;
     details.innerHTML = `
       ${treeWorkOrderDetailsMarkup}
+      ${coboMowingDetailsMarkup}
       ${potatureFollowupPhase ? `<p><b>Vista:</b> ${escapeHTML(impianto.potatureFaseLabel || (potatureFollowupPhase === "raccolta" ? "Raccolta" : "Ceppi"))}</p><p><b>Metodo scelto:</b> ${escapeHTML(impianto.potatureMetodoLabel || "-")}</p>` : ""}
       <p><b>Comune:</b> ${escapeHTML(impianto.comune || "-")}</p>
       <p><b>Indirizzo:</b> ${escapeHTML(impianto.indirizzo || "-")}</p>
@@ -14844,6 +14897,19 @@ function renderImpianti() {
     };
 
     addAction("navigate", "🗺️", "Naviga", () => navigateToImpianto(impianto), false, false, primaryActionsRow);
+    if (!impianto.done && isCoboMowingWorkOrder(impianto)) {
+      const registerSfalcioBtn = document.createElement("button");
+      registerSfalcioBtn.type = "button";
+      registerSfalcioBtn.className = "btn cobo-register-sfalcio-btn";
+      registerSfalcioBtn.textContent = window.HeraCoboMowing?.registrationButtonLabel(impianto) || "🧾 REGISTRA SFALCIO";
+      registerSfalcioBtn.setAttribute("aria-label", "Registra i dati dello sfalcio prima di FATTO");
+      registerSfalcioBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openCoboMowingRegistrationForm(impianto, registerSfalcioBtn);
+      });
+      secondaryActionsRow.appendChild(registerSfalcioBtn);
+    }
     if (!impianto.done && isOriginalPotatureWorkOrder(impianto)) {
       const prepareFineBtn = document.createElement("button");
       prepareFineBtn.type = "button";

@@ -147,9 +147,9 @@ assert.match(css, /\.commessa-dashboard-head \.commessa-plants-menu-wrap\s*{[^}]
 assert.match(css, /\.commessa-mobile-plant-form/);
 assert.doesNotMatch(feature, /\bdb\.|\bfirebase\.|\.collection\(|\.onSnapshot\(/);
 assert.match(serviceWorker, /commessa-impianti-menu\.js\?v=20260826c/);
-assert.match(serviceWorker, /accounting-v2\.js\?v=20260829-management-projection1/);
+assert.match(serviceWorker, /accounting-v2\.js\?v=20260901-current-gps1/);
 assert.match(serviceWorker, /style\.css\?v=20260831-potature-followup1/);
-assert.match(html, /accounting-v2\.js\?v=20260829-management-projection1/);
+assert.match(html, /accounting-v2\.js\?v=20260901-current-gps1/);
 
 const accountingIndex = html.indexOf("accounting-v2.js");
 const featureIndex = html.indexOf("commessa-impianti-menu.js");

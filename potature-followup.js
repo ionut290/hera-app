@@ -317,3 +317,98 @@
   if (typeof window !== "undefined") window.HeraPotatureFollowup = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
+
+(() => {
+  "use strict";
+
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.HeraTerminatoLabel?.installed) return;
+
+  const STYLE_ID = "hera-special-terminato-label-style";
+  const LABEL_CLASS = "special-terminato-label";
+  const POTATURE_ID = "potature-abbattimenti";
+  const COBO_ID = "sfalcio-cobo";
+  const text = (value) => String(value ?? "").trim();
+
+  function selectedId() {
+    try {
+      if (typeof selectedCommessaId !== "undefined" && text(selectedCommessaId)) return text(selectedCommessaId);
+    } catch (_) {}
+    const match = String(window.location.hash || "").match(/(?:^|[&#])commessa=([^&]+)/);
+    if (!match?.[1]) return "";
+    try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
+  }
+
+  function isSpecialCommessa() {
+    const id = text(selectedId()).toLowerCase();
+    const potatureId = text(window.HeraPotatureFollowup?.commessaId || POTATURE_ID).toLowerCase();
+    const coboId = text(window.HeraCoboMowing?.commessaId || COBO_ID).toLowerCase();
+    return id === potatureId || id === coboId;
+  }
+
+  function ensureStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].${LABEL_CLASS}:not(.is-completed-done)::after {
+        content: "TERMINATO" !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function restoreButton(button) {
+    button.classList.remove(LABEL_CLASS);
+    if (button.dataset.terminatoOriginalAria !== undefined) {
+      const value = button.dataset.terminatoOriginalAria;
+      if (value) button.setAttribute("aria-label", value);
+      else button.removeAttribute("aria-label");
+      delete button.dataset.terminatoOriginalAria;
+    }
+    if (button.dataset.terminatoOriginalTitle !== undefined) {
+      const value = button.dataset.terminatoOriginalTitle;
+      if (value) button.title = value;
+      else button.removeAttribute("title");
+      delete button.dataset.terminatoOriginalTitle;
+    }
+  }
+
+  function apply() {
+    ensureStyle();
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (!list) return;
+    const special = isSpecialCommessa();
+    list.querySelectorAll('.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]').forEach((button) => {
+      if (!special || button.classList.contains("is-completed-done")) {
+        restoreButton(button);
+        return;
+      }
+      if (!button.classList.contains(LABEL_CLASS)) {
+        button.dataset.terminatoOriginalAria = button.getAttribute("aria-label") || "";
+        button.dataset.terminatoOriginalTitle = button.getAttribute("title") || "";
+      }
+      button.classList.add(LABEL_CLASS);
+      button.setAttribute("aria-label", "TERMINATO");
+      button.title = "TERMINATO";
+    });
+  }
+
+  function install() {
+    ensureStyle();
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (list && !list.dataset.terminatoLabelObserver) {
+      const observer = new MutationObserver(apply);
+      observer.observe(list, { childList: true, subtree: true });
+      list.dataset.terminatoLabelObserver = "1";
+    }
+    apply();
+  }
+
+  window.addEventListener("hashchange", apply);
+  window.addEventListener("hera:data-ready", install);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+  else install();
+
+  window.HeraTerminatoLabel = Object.freeze({ installed: true, apply, isSpecialCommessa });
+})();

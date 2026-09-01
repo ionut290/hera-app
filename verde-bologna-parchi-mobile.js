@@ -312,8 +312,9 @@
         .verde-bologna-page.vb-parks-advanced #verde-bologna-results,
         .verde-bologna-page.vb-parks-advanced #verde-bologna-load-more{display:none!important}
         .verde-bologna-page.vb-parks-advanced .verde-bologna-search{margin-bottom:6px!important}
-        .verde-bologna-parks-tools{display:block;margin:0 0 10px}
-        .verde-bologna-parks-tools-title{margin:0 0 6px;font-size:.72rem;font-weight:900;color:#47617d;text-transform:uppercase;letter-spacing:.04em}
+        .verde-bologna-parks-tools{display:none;margin:0;padding:0 8px 6px}
+        .verde-bologna-page.vb-parks-advanced .verde-bologna-parks-tools{display:block}
+        .verde-bologna-parks-tools-title{display:none}
         .verde-bologna-parks-chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 5px;scrollbar-width:none}
         .verde-bologna-parks-chips::-webkit-scrollbar{display:none}
         .verde-bologna-parks-chip{flex:0 0 auto;min-height:36px;padding:7px 10px;border:1px solid #c5d3e1;border-radius:999px;background:#f5f8fb;color:#244766;font-size:.72rem;font-weight:900}

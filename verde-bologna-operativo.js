@@ -68,6 +68,8 @@
         .verde-bologna-map-toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
         .verde-bologna-map-toolbar strong{grid-column:1/-1!important;margin:0!important;font-size:.92rem!important}
         .verde-bologna-map-toolbar .btn{min-height:40px!important;padding:7px 8px!important;font-size:.72rem!important;font-weight:900!important;white-space:nowrap!important}
+        .verde-bologna-map-toolbar label{align-self:center!important;font-size:.72rem!important;font-weight:900!important;color:#355777!important}
+        .verde-bologna-map-toolbar select{width:100%!important;min-height:40px!important;padding:7px 8px!important;border:1px solid #b9c9da!important;border-radius:9px!important;background:#fff!important;font-size:.78rem!important}
         .verde-bologna-map-status{margin:0!important;padding:6px 8px!important;border-radius:8px!important;background:#edf4fb!important;color:#355777!important;font-size:.72rem!important}
         .verde-bologna-map{height:52vh!important;min-height:360px!important;border-radius:12px!important;background:#e9eef4!important}
         .verde-bologna-code-marker{min-width:40px;height:29px;padding:0 7px;font-size:.72rem}
@@ -247,6 +249,8 @@
   function renderCodeMarkers() {
     if (!verdeMap || !window.L || !codeLayer) return;
     codeLayer.clearLayers();
+    if ($("verde-bologna-page")?.classList.contains("vb-parks-advanced")) return;
+    if (document.querySelector("#verde-bologna-map .verde-bologna-marker-wrap")) return;
     const cards = [...document.querySelectorAll("#verde-bologna-results .verde-bologna-result")];
     const isParks = activeDatasetId() === PARKS_DATASET_ID;
     let labels = 0;

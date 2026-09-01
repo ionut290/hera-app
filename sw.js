@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v203";
-const CACHE_RESET_VERSION = "20260901-verde-progressive2";
+const CACHE_NAME = "varga-cantieri-shell-v204";
+const CACHE_RESET_VERSION = "20260901-verde-catasto1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,7 +10,7 @@ const APP_SHELL = [
   "./accounting-v2.css?v=20260728",
   "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
-  "./app-pure-utils.js?v=20260901-verde-progressive2",
+  "./app-pure-utils.js?v=20260901-verde-catasto1",
   "./data-license-view.js?v=20260831-license1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",

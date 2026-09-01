@@ -17,6 +17,7 @@
   const dialog = $("tree-qr-dialog");
   const video = $("tree-qr-video");
   const qrStatus = $("tree-qr-status");
+  const VERDE_BOLOGNA_RETURN_KEY = "varga-verde-bologna:return-from-tree";
   let map = null;
   let marker = null;
   let treesLayer = null;
@@ -363,11 +364,34 @@
     setTimeout(() => { map?.invalidateSize(); loadVisibleTrees(); }, 80);
     number.focus();
   }
+
+  function destroyTreeMap() {
+    window.clearTimeout(viewportTimer);
+    viewportTimer = 0;
+    viewportRequest += 1;
+    viewportAbort?.abort?.();
+    viewportAbort = null;
+    try { map?.off?.(); map?.remove?.(); } catch (_) {}
+    map = null;
+    marker = null;
+    treesLayer = null;
+    baseLayer = null;
+    hybridLabels = null;
+    userLocationMarker = null;
+    userAccuracyCircle = null;
+    lastViewportKey = "";
+    if (mapNode) { mapNode.innerHTML = ""; mapNode.removeAttribute("style"); try { delete mapNode._leaflet_id; } catch (_) {} mapNode.className = "tree-map"; }
+  }
+
   function closePage() {
     stopScanner();
     setMapFullscreen(false);
+    destroyTreeMap();
     page.classList.add("hidden");
     page.setAttribute("aria-hidden", "true");
+    let returnToVerdeBologna = false;
+    try { returnToVerdeBologna = sessionStorage.getItem(VERDE_BOLOGNA_RETURN_KEY) === "1"; sessionStorage.removeItem(VERDE_BOLOGNA_RETURN_KEY); } catch (_) {}
+    if (returnToVerdeBologna && typeof window.HeraVerdeBologna?.open === "function") { window.HeraVerdeBologna.open(); return; }
     hideHome(false);
   }
 

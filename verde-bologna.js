@@ -16,6 +16,7 @@
   const STYLE_ID = "verde-bologna-style";
   const MENU_BUTTON_ID = "open-verde-bologna-btn";
   const CACHE_PREFIX = "varga-verde-bologna:";
+  const TREE_RETURN_KEY = "varga-verde-bologna:return-from-tree";
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
@@ -36,7 +37,7 @@
     baseLayer: null, hybridLabels: null, featureLayer: null, featureByIndex: new Map(), userMarker: null,
     userAccuracy: null, requestSerial: 0, fullscreen: false, requestAbort: null,
     viewportTimer: 0, viewportSerial: 0, viewportAbort: null, lastViewportKey: "", loadingViewport: false,
-    mobileRenderer: null
+    mobileRenderer: null, categoryOpen: false
   };
 
   const TILE_LAYERS = Object.freeze({
@@ -99,6 +100,7 @@
       .verde-bologna-section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:22px 0 10px}.verde-bologna-section-title h2{margin:0;color:#173f29}.verde-bologna-section-title span{color:#698072;font-size:.83rem}.verde-bologna-datasets{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
       .verde-bologna-dataset{display:grid;grid-template-rows:auto auto 1fr auto auto;gap:8px;min-height:190px;padding:15px;border:1px solid #ccdcd0;border-radius:18px;background:#fff;text-align:left;box-shadow:0 7px 18px rgba(29,80,47,.07)}.verde-bologna-dataset.is-active{border:2px solid #18854b;background:#f3fbf6}.verde-bologna-dataset.is-private{border-color:#e2c68f;background:#fffaf0}
       .verde-bologna-dataset-icon{font-size:1.65rem}.verde-bologna-dataset h3{margin:0;color:#1e4d31;font-size:1rem}.verde-bologna-dataset p{margin:0;color:#5e7464;line-height:1.42;font-size:.88rem}.verde-bologna-dataset small{color:#74877a;font-size:.72rem;overflow-wrap:anywhere}.verde-bologna-dataset .btn{margin-top:4px;width:100%;min-height:40px}
+      .verde-bologna-page.is-category-open .verde-bologna-hero,.verde-bologna-page.is-category-open .verde-bologna-section-title,.verde-bologna-page.is-category-open .verde-bologna-datasets{display:none!important}
       .verde-bologna-browser{margin-top:18px;padding:16px;border:1px solid #cdded2;border-radius:20px;background:#fff;box-shadow:0 8px 24px rgba(31,78,47,.08)}.verde-bologna-browser-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.verde-bologna-browser-head h2{margin:0;color:#164d2e}.verde-bologna-browser-head p{margin:5px 0 0;color:#667d6d}
       .verde-bologna-source-link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 12px;border:1px solid #9ec8aa;border-radius:12px;color:#155e35;background:#f1faf4;font-weight:900;text-decoration:none;white-space:nowrap}.verde-bologna-search{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin:14px 0}.verde-bologna-search input{min-height:46px;padding:10px 12px;border:1px solid #aebfb2;border-radius:11px;font:inherit}
       .verde-bologna-status{margin:0 0 12px;padding:9px 11px;border-radius:10px;background:#edf7f0;color:#315b3e;font-size:.85rem}.verde-bologna-status.error{background:#fff0ef;color:#9b281f}.verde-bologna-status.warning{background:#fff7df;color:#7b5304}.verde-bologna-map-card{display:grid;gap:8px;margin:12px 0 16px;padding:12px;border:1px solid #cdded2;border-radius:16px;background:#f9fcfa}
@@ -123,14 +125,14 @@
       <div class="verde-bologna-shell">
         <header class="verde-bologna-header">
           <button id="verde-bologna-back-btn" class="btn" type="button">← HOME</button>
-          <div><h1>🌳 Verde Bologna</h1><p>Catasto verde ufficiale del Comune di Bologna</p></div>
+          <div><h1 id="verde-bologna-page-title">🌳 Verde Bologna</h1><p id="verde-bologna-page-subtitle">Scegli una categoria: verrà caricata una sola mappa alla volta</p></div>
           <span class="verde-bologna-badge">COMUNE DI BOLOGNA OPEN DATA</span>
         </header>
         <section class="verde-bologna-hero">
           <div class="verde-bologna-hero-card"><h2>Un solo punto per il verde comunale</h2><p>Aree verdi, alberi, siepi, arredi, giochi, aree cani, parchi, ingressi, orti e verde privato vengono interrogati direttamente dai dataset pubblici del Comune di Bologna. I dati sono caricati solo quando apri una categoria.</p></div>
           <div class="verde-bologna-note"><h2>Priorità ai dati ufficiali</h2><p><strong>Per Bologna il Comune è la fonte principale.</strong> OpenStreetMap resta disponibile nelle altre sezioni dell’app come integrazione cartografica, ma qui non sostituisce il censimento comunale.</p></div>
         </section>
-        <div class="verde-bologna-section-title"><h2>Dataset disponibili</h2><span>11 categorie ufficiali</span></div>
+        <div class="verde-bologna-section-title"><h2>Scegli una categoria</h2><span>11 categorie ufficiali · una mappa alla volta</span></div>
         <section id="verde-bologna-datasets" class="verde-bologna-datasets" aria-label="Dataset del verde di Bologna"></section>
         <section id="verde-bologna-browser" class="verde-bologna-browser hidden" aria-live="polite">
           <div class="verde-bologna-browser-head">
@@ -167,6 +169,13 @@
         <p>${esc(dataset.short)}</p><small>${esc(dataset.id)}</small>
         <button class="btn${dataset.priority ? " btn-primary" : ""}" type="button" data-vb-open="${esc(dataset.id)}">${dataset.delegate ? "APRI CATASTO" : "APRI DATASET"}</button>
       </article>`).join("");
+  }
+
+  function updatePageHeader(dataset = null) {
+    const back = $("verde-bologna-back-btn"), title = $("verde-bologna-page-title"), subtitle = $("verde-bologna-page-subtitle");
+    if (back) back.textContent = dataset ? "← CATEGORIE" : "← HOME";
+    if (title) title.textContent = dataset ? `${dataset.icon} ${dataset.title}` : "🌳 Verde Bologna";
+    if (subtitle) subtitle.textContent = dataset ? "Mappa dedicata · sono caricati solo i dati di questa categoria" : "Scegli una categoria: verrà caricata una sola mappa alla volta";
   }
 
   function currentDataset() { return DATASETS.find((item) => item.id === state.datasetId) || DATASETS[0]; }
@@ -530,25 +539,89 @@
     }
   }
 
+  function stopCategoryWork() {
+    window.clearTimeout(state.viewportTimer);
+    state.viewportTimer = 0;
+    state.requestSerial += 1;
+    state.viewportSerial += 1;
+    state.requestAbort?.abort();
+    state.viewportAbort?.abort();
+    state.requestAbort = null;
+    state.viewportAbort = null;
+    state.loadingViewport = false;
+  }
+
+  function destroyCategoryMap() {
+    stopCategoryWork();
+    closeDetailSheet();
+    if (state.fullscreen) setFullscreen(false);
+    const oldMap = state.map;
+    try { oldMap?.off?.(); oldMap?.remove?.(); } catch (_) {}
+    if (oldMap) window.dispatchEvent(new CustomEvent("hera:verde-bologna-map-destroyed", { detail: { map: oldMap } }));
+    state.map = null;
+    state.baseLayer = null;
+    state.hybridLabels = null;
+    state.featureLayer = null;
+    state.userMarker = null;
+    state.userAccuracy = null;
+    state.mobileRenderer = null;
+    state.featureByIndex.clear();
+    state.records = [];
+    state.offset = 0;
+    state.total = 0;
+    state.query = "";
+    state.lastViewportKey = "";
+    const mapNode = $("verde-bologna-map");
+    if (mapNode) { mapNode.innerHTML = ""; mapNode.removeAttribute("style"); try { delete mapNode._leaflet_id; } catch (_) {} mapNode.classList.remove("leaflet-container", "leaflet-touch", "leaflet-retina", "leaflet-fade-anim", "leaflet-grab", "leaflet-touch-drag", "leaflet-touch-zoom"); }
+    const results = $("verde-bologna-results");
+    if (results) results.innerHTML = "";
+    $("verde-bologna-load-more")?.classList.add("hidden");
+  }
+
+  function showCategoryHub({ scroll = true } = {}) {
+    destroyCategoryMap();
+    state.categoryOpen = false;
+    const page = $(PAGE_ID);
+    page?.classList.remove("is-category-open");
+    $("verde-bologna-browser")?.classList.add("hidden");
+    updatePageHeader();
+    renderDatasetCards();
+    if (scroll) page?.scrollTo?.({ top: 0, behavior: "smooth" });
+  }
+
   function openDataset(datasetId) {
     const dataset = DATASETS.find((item) => item.id === datasetId); if (!dataset) return;
-    if (dataset.delegate) { closePage(); const target = $(dataset.delegate); if (target) target.click(); else window.alert("Catasto alberi non disponibile in questo momento."); return; }
-    closeDetailSheet(); state.requestAbort?.abort(); state.viewportAbort?.abort();
-    state.datasetId = dataset.id; state.query = ""; state.records = []; state.total = 0; state.lastViewportKey = ""; renderDatasetCards(); $("verde-bologna-browser")?.classList.remove("hidden");
+    if (dataset.delegate) {
+      destroyCategoryMap();
+      state.categoryOpen = false;
+      const page = $(PAGE_ID), target = $(dataset.delegate);
+      try { sessionStorage.setItem(TREE_RETURN_KEY, "1"); } catch (_) {}
+      page?.classList.add("hidden"); page?.classList.remove("is-category-open"); page?.setAttribute("aria-hidden", "true");
+      if (target) target.click();
+      else { try { sessionStorage.removeItem(TREE_RETURN_KEY); } catch (_) {} openPage(); window.alert("Catasto alberi non disponibile in questo momento."); }
+      return;
+    }
+    destroyCategoryMap();
+    state.categoryOpen = true;
+    state.datasetId = dataset.id;
+    const page = $(PAGE_ID); page?.classList.add("is-category-open");
+    $("verde-bologna-browser")?.classList.remove("hidden");
+    const categorySelect = $("verde-bologna-operativo-category"); if (categorySelect) categorySelect.value = dataset.id;
+    updatePageHeader(dataset);
     const title = $("verde-bologna-active-title"), description = $("verde-bologna-active-description"), source = $("verde-bologna-source-link"), query = $("verde-bologna-query");
     if (title) title.textContent = `${dataset.icon} ${dataset.title}`; if (description) description.textContent = dataset.short; if (source) source.href = sourcePageUrl(dataset.id); if (query) { query.value = ""; query.placeholder = `Cerca per ${dataset.searchHint || "nome, codice o via"}…`; }
     const results = $("verde-bologna-results"); if (results) results.innerHTML = `<p class="verde-bologna-empty">Sposta o ingrandisci la mappa per vedere gli elementi nella zona, oppure usa la ricerca.</p>`;
-    state.featureLayer?.clearLayers(); state.featureByIndex.clear();
     setStatus(`Categoria “${dataset.title}” selezionata. Cerca per ${dataset.searchHint || "nome, codice o via"} oppure aumenta lo zoom sulla mappa.`);
-    $("verde-bologna-browser")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    initializeMap(); resizeMap();
+    page?.scrollTo?.({ top: 0, behavior: "auto" });
     if (dataset.id === "carta-tecnica-comunale-toponimi-parchi-e-giardini") loadRecords(); else loadViewportRecords({ force: true });
   }
 
   function openPage() {
-    $("menu-close-btn")?.click(); $("home-page")?.classList.add("hidden"); const page = buildPage(); page.classList.remove("hidden"); page.setAttribute("aria-hidden", "false"); renderDatasetCards(); initializeMap(); resizeMap(); if (!state.records.length) openDataset(state.datasetId || "un_gest");
+    $("menu-close-btn")?.click(); $("home-page")?.classList.add("hidden"); const page = buildPage(); page.classList.remove("hidden"); page.setAttribute("aria-hidden", "false"); showCategoryHub({ scroll: false });
   }
 
-  function closePage() { closeDetailSheet(); setFullscreen(false); state.requestAbort?.abort(); state.viewportAbort?.abort(); const page = $(PAGE_ID); page?.classList.add("hidden"); page?.setAttribute("aria-hidden", "true"); $("home-page")?.classList.remove("hidden"); }
+  function closePage() { destroyCategoryMap(); state.categoryOpen = false; const page = $(PAGE_ID); page?.classList.add("hidden"); page?.classList.remove("is-category-open"); page?.setAttribute("aria-hidden", "true"); $("home-page")?.classList.remove("hidden"); }
 
   function setFullscreen(active) {
     state.fullscreen = Boolean(active); $("verde-bologna-map-card")?.classList.toggle("is-fullscreen", state.fullscreen); document.body.classList.toggle("verde-bologna-fullscreen-open", state.fullscreen);
@@ -575,19 +648,19 @@
   }
 
   function installEvents() {
-    $("verde-bologna-back-btn")?.addEventListener("click", closePage);
+    $("verde-bologna-back-btn")?.addEventListener("click", () => { if (state.categoryOpen) showCategoryHub(); else closePage(); });
     $("verde-bologna-datasets")?.addEventListener("click", (event) => { const button = event.target.closest("[data-vb-open]"); if (button) openDataset(button.dataset.vbOpen); });
     $("verde-bologna-search-form")?.addEventListener("submit", (event) => { event.preventDefault(); state.query = $("verde-bologna-query")?.value.trim() || ""; if (state.query) loadRecords(); else loadViewportRecords({ force: true }); });
     $("verde-bologna-clear-btn")?.addEventListener("click", () => { state.query = ""; state.lastViewportKey = ""; if ($("verde-bologna-query")) $("verde-bologna-query").value = ""; loadViewportRecords({ force: true }); });
     $("verde-bologna-load-more")?.addEventListener("click", () => loadRecords({ append: true })); $("verde-bologna-location-btn")?.addEventListener("click", showUserLocation); $("verde-bologna-fullscreen-btn")?.addEventListener("click", () => setFullscreen(!state.fullscreen));
     $("verde-bologna-map-style")?.addEventListener("change", (event) => applyMapStyle(event.currentTarget.value));
     window.addEventListener("resize", syncMapInteractionMode, { passive: true });
-    document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if ($("verde-bologna-detail-sheet")?.classList.contains("is-open")) closeDetailSheet(); else if (state.fullscreen) setFullscreen(false); else if (!$(PAGE_ID)?.classList.contains("hidden")) closePage(); });
+    document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; if ($("verde-bologna-detail-sheet")?.classList.contains("is-open")) closeDetailSheet(); else if (state.fullscreen) setFullscreen(false); else if (!$(PAGE_ID)?.classList.contains("hidden")) { if (state.categoryOpen) showCategoryHub(); else closePage(); } });
   }
 
   function install() {
     injectStyle(); buildPage(); renderDatasetCards(); addMenuButton(); installEvents();
-    window.HeraVerdeBologna = Object.freeze({ open: openPage, close: closePage, openDataset, datasets: DATASETS.map(({ id, title }) => ({ id, title })) });
+    window.HeraVerdeBologna = Object.freeze({ open: openPage, close: closePage, showCategories: showCategoryHub, openDataset, datasets: DATASETS.map(({ id, title }) => ({ id, title })) });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true }); else install();

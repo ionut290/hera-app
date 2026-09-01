@@ -67,7 +67,12 @@ assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "TERM
 assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|forceMoveImpiantoToFatti|openWhatsApp/, "TERMINATO non richiama né aggira le funzioni protette FATTO/WHAZZUP");
 assert.match(runtimeSource, /completionMode:\s*"TERMINATO_SPECIAL"/, "il completamento speciale deve essere tracciabile");
 assert.match(runtimeSource, /value\.includes\("sfalcio"\)\s*&&\s*value\.includes\("cobo"\)/, "Sfalcio COBO deve essere riconosciuto anche con ID dinamico");
-assert.match(runtimeSource, /data-action-key=\\?"special-terminato\\?"|TERMINATO_ACTION\s*=\s*"special-terminato"/, "deve esistere una azione TERMINATO separata");
+assert.match(runtimeSource, /TERMINATO_ACTION\s*=\s*"special-terminato"/, "deve esistere una azione TERMINATO separata");
 assert.match(runtimeSource, /handleCompletedImpiantoWhatsAppClick/, "dopo il salvataggio deve essere riutilizzato solo il Whazzup dell’impianto già completato");
+assert.match(runtimeSource, /style\.setProperty\("display",\s*"none",\s*"important"\)/, "il vecchio FATTO deve essere completamente invisibile");
+assert.match(runtimeSource, /insertBefore\(button,\s*legacyTarget\)/, "TERMINATO deve prendere esattamente la posizione del vecchio FATTO");
+assert.match(runtimeSource, /dataset\.replacesAction\s*=\s*"fatto"/, "TERMINATO deve dichiarare esplicitamente che sostituisce FATTO");
+assert.doesNotMatch(runtimeSource, /Ora puoi premere FATTO|premi il pulsante verde <strong>FATTO<\/strong>/, "il form Potature non deve più invitare a usare FATTO");
+assert.match(runtimeSource, /\.action-icon-btn\[data-action-key="whatsapp"\].*label\.includes\("fatto"\)/s, "un eventuale WhatsApp separato non deve essere nascosto se non contiene FATTO");
 
-console.log("✅ Potature Abbattimenti + Sfalcio COBO: TERMINATO indipendente, completamento Firestore e isolamento FATTO verificati.");
+console.log("✅ Potature Abbattimenti + Sfalcio COBO: FATTO invisibile, TERMINATO nella stessa posizione e isolamento FATTO verificati.");

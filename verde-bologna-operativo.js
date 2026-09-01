@@ -9,7 +9,7 @@
   const API_ROOT = "https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets";
   const DATASETS = [
     ["un_gest", "🌳 Aree verdi in manutenzione"],
-    ["alberi-manutenzioni", "🌲 Alberi singoli"],
+    ["alberi-manutenzioni", "🌲 Catasto alberi"],
     ["popolazione-arborea", "🌴 Popolazioni arboree"],
     ["siepi", "🌿 Siepi in manutenzione"],
     ["attrezzature_ludiche_ginniche_sportive", "🛝 Giochi e attrezzature"],

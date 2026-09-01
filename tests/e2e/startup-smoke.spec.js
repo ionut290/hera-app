@@ -131,7 +131,19 @@ test.describe('Verde Bologna su mobile', () => {
       body: JSON.stringify({
         total_count: 2,
         results: [
-          { id: 'vb-1', nome: 'Elemento verde 1', geo_point_2d: { lat: 44.4949, lon: 11.3426 } },
+          {
+            id: 'vb-1',
+            nome: 'Elemento verde 1',
+            geo_point_2d: { lat: 44.4949, lon: 11.3426 },
+            geo_shape: {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [[[11.341, 44.494], [11.344, 44.494], [11.344, 44.496], [11.341, 44.494]]]
+              },
+              properties: {}
+            }
+          },
           { id: 'vb-2', nome: 'Elemento verde 2', geo_point_2d: { lat: 44.496, lon: 11.344 } }
         ]
       })
@@ -171,7 +183,10 @@ test.describe('Verde Bologna su mobile', () => {
         tileLayer: makeLayer,
         layerGroup: makeGroup,
         latLngBounds: () => makeBounds(false),
-        geoJSON: makeLayer,
+        geoJSON(feature, options) {
+          if (options?.style?.weight === 4) window.__parkBoundaryGeometryType = feature?.geometry?.type || '';
+          return makeLayer();
+        },
         marker: makeLayer,
         circleMarker: makeLayer,
         circle: makeLayer,
@@ -183,6 +198,8 @@ test.describe('Verde Bologna su mobile', () => {
       };
     });
     await page.evaluate(() => window.HeraVerdeBologna.open());
+    await expect(page.locator('[data-vb-open="alberi-manutenzioni"]')).toContainText('Catasto alberi');
+    await expect(page.locator('#verde-bologna-page')).not.toContainText('Alberi singoli');
 
     const categories = [
       ['un_gest', 'Aree verdi in manutenzione'],
@@ -203,6 +220,18 @@ test.describe('Verde Bologna su mobile', () => {
       await expect(page.locator('#verde-bologna-page-title')).toContainText(title);
       await expect(page.locator('#verde-bologna-browser')).toBeVisible();
       await expect(page.locator('#verde-bologna-map')).toBeVisible();
+      if (datasetId === 'carta-tecnica-comunale-toponimi-parchi-e-giardini') {
+        await expect(page.locator('.verde-bologna-parks-row').first()).toBeVisible();
+        await page.locator('.verde-bologna-parks-row').first().click();
+        await expect(page.locator('#verde-bologna-parchi-sheet')).toHaveClass(/is-open/);
+        await expect(page.locator('#verde-bologna-parchi-sheet')).toContainText('CONFINI');
+        await expect(page.locator('#verde-bologna-parchi-sheet')).toContainText('Disponibili sulla mappa');
+        await expect(page.locator('#verde-bologna-parchi-sheet')).not.toContainText('geo_point_2d');
+        await expect(page.locator('#verde-bologna-parchi-sheet')).not.toContainText('geo_shape');
+        await expect(page.locator('[data-vb-sheet-map]')).toHaveText('MOSTRA CONFINI');
+        await page.locator('[data-vb-sheet-map]').click();
+        await expect.poll(() => page.evaluate(() => window.__parkBoundaryGeometryType)).toBe('Polygon');
+      }
       await page.locator('#verde-bologna-back-btn').click();
       await expect(page.locator('#verde-bologna-page')).not.toHaveClass(/is-category-open/);
     }

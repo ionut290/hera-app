@@ -30,6 +30,12 @@ assert.match(source, /renderMapMarkers\(\{ fitMap: false \}\)/);
 assert.match(source, /!fitMap && state\.map\.getZoom\(\) >= 15/);
 assert.match(source, /state\.filterTimer = window\.setTimeout\(applyLiveFilter, SEARCH_DEBOUNCE_MS\)/);
 assert.match(source, /removeLegacyQuartieriCache\(\)/);
+assert.match(source, /function geometryPriority\(geometry\)/);
+assert.match(source, /if \(geometryPriority\(geometry\) > geometryPriority\(selected\)\) selected = geometry;/);
+assert.match(source, /function isTechnicalGeometryField\(key\)/);
+assert.match(source, /!isTechnicalGeometryField\(key\)/);
+assert.match(source, /MOSTRA CONFINI/);
+assert.match(source, /state\.boundaryLayer/);
 
 const officialDatasets = [
   "un_gest", "alberi-manutenzioni", "popolazione-arborea", "siepi",
@@ -38,6 +44,11 @@ const officialDatasets = [
   "aree-ortive", "verde_privato_urbanizzato"
 ];
 officialDatasets.forEach((datasetId) => assert.match(baseSource, new RegExp(`id: "${datasetId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`)));
+assert.match(baseSource, /title: "Catasto alberi"/);
+assert.match(operationalSource, /🌲 Catasto alberi/);
+assert.doesNotMatch(baseSource, /Alberi singoli/i);
+assert.doesNotMatch(operationalSource, /Alberi singoli/i);
+assert.match(baseSource, /function geometryPriority\(geometry\)/);
 assert.match(baseSource, /const VIEWPORT_MAX_RECORDS = 500;/);
 assert.match(baseSource, /const MOBILE_VIEWPORT_MAX_RECORDS = 140;/);
 assert.match(baseSource, /const VIEWPORT_LIST_LIMIT = 60;/);
@@ -122,14 +133,14 @@ assert.ok(pageOpening, "Funzione openPage Verde Bologna non trovata");
 assert.match(pageOpening[0], /showCategoryHub\(\{ scroll: false \}\)/);
 assert.doesNotMatch(pageOpening[0], /initializeMap\(|openDataset\(/);
 
-assert.match(loader, /verde-bologna\.js\?v=20260901-verde-totalfix1/);
-assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-verde-totalfix1/);
-assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-verde-totalfix1/);
-assert.match(html, /app-pure-utils\.js\?v=20260901-verde-totalfix1/);
-assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260901-tree-mobile1"/);
-assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-tree-mobile1"/);
-assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v211";/);
-assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-totalfix1/);
+assert.match(loader, /verde-bologna\.js\?v=20260901-catasto-confini1/);
+assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-catasto-confini1/);
+assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-catasto-confini1/);
+assert.match(html, /app-pure-utils\.js\?v=20260901-catasto-confini1/);
+assert.match(html, /PWA_EMERGENCY_CACHE_RESET_VERSION = "20260901-catasto-confini1"/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-catasto-confini1"/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v212";/);
+assert.match(sw, /app-pure-utils\.js\?v=20260901-catasto-confini1/);
 assert.match(sw, /"\/verde-bologna\.js"/);
 assert.match(sw, /"\/verde-bologna-operativo\.js"/);
 assert.match(sw, /"\/verde-bologna-parchi-mobile\.js"/);

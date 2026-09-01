@@ -70,9 +70,11 @@ assert.match(runtimeSource, /value\.includes\("sfalcio"\)\s*&&\s*value\.includes
 assert.match(runtimeSource, /TERMINATO_ACTION\s*=\s*"special-terminato"/, "deve esistere una azione TERMINATO separata");
 assert.match(runtimeSource, /handleCompletedImpiantoWhatsAppClick/, "dopo il salvataggio deve essere riutilizzato solo il Whazzup dell’impianto già completato");
 assert.match(runtimeSource, /style\.setProperty\("display",\s*"none",\s*"important"\)/, "il vecchio FATTO deve essere completamente invisibile");
-assert.match(runtimeSource, /insertBefore\(button,\s*legacyTarget\)/, "TERMINATO deve prendere esattamente la posizione del vecchio FATTO");
-assert.match(runtimeSource, /dataset\.replacesAction\s*=\s*"fatto"/, "TERMINATO deve dichiarare esplicitamente che sostituisce FATTO");
+assert.match(runtimeSource, /return\s+"btn btn-primary special-terminato-btn"/, "TERMINATO non deve ereditare la classe stretta del vecchio FATTO");
+assert.match(runtimeSource, /row\.appendChild\(terminatoButton\)/, "TERMINATO deve essere spostato alla fine della riga azioni");
+assert.match(runtimeSource, /grid-template-columns[\s\S]*48px[\s\S]*1\.35fr/, "la riga deve essere NAVIGA, graffetta stretta, TERMINATO a tutta larghezza");
+assert.match(runtimeSource, /dataset\.replacesAction\s*=\s*legacyTarget\s*\?\s*"fatto"\s*:\s*"fallback"/, "TERMINATO deve dichiarare esplicitamente che sostituisce FATTO");
 assert.doesNotMatch(runtimeSource, /Ora puoi premere FATTO|premi il pulsante verde <strong>FATTO<\/strong>/, "il form Potature non deve più invitare a usare FATTO");
 assert.match(runtimeSource, /\.action-icon-btn\[data-action-key="whatsapp"\].*label\.includes\("fatto"\)/s, "un eventuale WhatsApp separato non deve essere nascosto se non contiene FATTO");
 
-console.log("✅ Potature Abbattimenti + Sfalcio COBO: FATTO invisibile, TERMINATO nella stessa posizione e isolamento FATTO verificati.");
+console.log("✅ Potature Abbattimenti + Sfalcio COBO: NAVIGA → graffetta → TERMINATO full width, FATTO invisibile e isolamento verificati.");

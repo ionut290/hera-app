@@ -27,7 +27,6 @@
   let parkBoundaryLayer = null;
   let resultsObserver = null;
   let refreshTimer = 0;
-  let mapCaptureInstalled = false;
   let boundaryAbortController = null;
   const parkBoundaryCache = new Map();
 
@@ -121,20 +120,6 @@
     });
   }
 
-  function syncFromCards(page) {
-    const select = $(SELECT_ID);
-    if (!select || !page) return;
-    page.addEventListener("click", (event) => {
-      const button = event.target?.closest?.("[data-vb-open]");
-      const id = button?.getAttribute("data-vb-open");
-      if (id && [...select.options].some((option) => option.value === id)) {
-        select.value = id;
-        parkBoundaryLayer?.clearLayers?.();
-        scheduleCodeMarkers();
-      }
-    }, true);
-  }
-
   function normalizeKey(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
   }
@@ -198,29 +183,13 @@
     return DATASETS.find(([id]) => source.includes(`/dataset/${id}/`))?.[0] || "un_gest";
   }
 
-  function captureMapFactory() {
-    if (mapCaptureInstalled || !window.L?.map) return Boolean(mapCaptureInstalled);
-    const originalMap = window.L.map;
-    if (originalMap.__verdeBolognaCapture) {
-      mapCaptureInstalled = true;
-      return true;
-    }
-    const wrappedMap = function(element, options) {
-      const map = originalMap(element, options);
-      const node = typeof element === "string" ? document.getElementById(element) : element;
-      if (node?.id === "verde-bologna-map") {
-        verdeMap = map;
-        codeLayer = window.L.layerGroup().addTo(verdeMap);
-        parkBoundaryLayer = window.L.layerGroup().addTo(verdeMap);
-        scheduleCodeMarkers();
-      }
-      return map;
-    };
-    wrappedMap.__verdeBolognaCapture = true;
-    wrappedMap.__originalMap = originalMap;
-    window.L.map = wrappedMap;
-    mapCaptureInstalled = true;
-    return true;
+  function captureCreatedMap(event) {
+    const map = event?.detail?.map;
+    if (!map || !window.L) return;
+    verdeMap = map;
+    codeLayer = window.L.layerGroup().addTo(verdeMap);
+    parkBoundaryLayer = window.L.layerGroup().addTo(verdeMap);
+    scheduleCodeMarkers();
   }
 
   function removeSimpleGreenPointMarkers() {
@@ -393,17 +362,10 @@
   function install() {
     injectStyle();
 
-    let mapAttempts = 0;
-    const mapTimer = window.setInterval(() => {
-      mapAttempts += 1;
-      if (captureMapFactory() || mapAttempts > 120) window.clearInterval(mapTimer);
-    }, 100);
-
     const attach = () => {
       const page = $(PAGE_ID);
       if (!page) return false;
       ensureOperationalCard(page);
-      syncFromCards(page);
       observePage(page);
       observeResults();
       return true;
@@ -417,6 +379,7 @@
   }
 
   window.addEventListener("hera:verde-bologna-map-destroyed", resetCapturedMap);
+  window.addEventListener("hera:verde-bologna-map-created", captureCreatedMap);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

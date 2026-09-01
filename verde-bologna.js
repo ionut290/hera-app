@@ -17,6 +17,8 @@
   const MENU_BUTTON_ID = "open-verde-bologna-btn";
   const CACHE_PREFIX = "varga-verde-bologna:";
   const TREE_RETURN_KEY = "varga-verde-bologna:return-from-tree";
+  const MAP_CREATED_EVENT = "hera:verde-bologna-map-created";
+  const CATEGORY_OPENED_EVENT = "hera:verde-bologna-category-opened";
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
@@ -169,6 +171,13 @@
         <p>${esc(dataset.short)}</p><small>${esc(dataset.id)}</small>
         <button class="btn${dataset.priority ? " btn-primary" : ""}" type="button" data-vb-open="${esc(dataset.id)}">${dataset.delegate ? "APRI CATASTO" : "APRI DATASET"}</button>
       </article>`).join("");
+    node.querySelectorAll("[data-vb-open]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openDataset(button.dataset.vbOpen);
+      });
+    });
   }
 
   function updatePageHeader(dataset = null) {
@@ -283,6 +292,7 @@
     state.featureLayer = L.layerGroup().addTo(state.map);
     state.map.on("moveend zoomend", scheduleViewportLoad);
     syncMapInteractionMode();
+    window.dispatchEvent(new CustomEvent(MAP_CREATED_EVENT, { detail: { map: state.map, datasetId: state.datasetId } }));
   }
 
   function resizeMap() { requestAnimationFrame(() => state.map?.invalidateSize({ pan: false, animate: false })); setTimeout(() => state.map?.invalidateSize({ pan: false, animate: false }), 180); }
@@ -624,6 +634,7 @@
     const results = $("verde-bologna-results"); if (results) results.innerHTML = `<p class="verde-bologna-empty">Sposta o ingrandisci la mappa per vedere gli elementi nella zona, oppure usa la ricerca.</p>`;
     setStatus(`Categoria “${dataset.title}” selezionata. Cerca per ${dataset.searchHint || "nome, codice o via"} oppure aumenta lo zoom sulla mappa.`);
     initializeMap(); resizeMap();
+    window.dispatchEvent(new CustomEvent(CATEGORY_OPENED_EVENT, { detail: { datasetId: dataset.id, map: state.map } }));
     page?.scrollTo?.({ top: 0, behavior: "auto" });
     if (dataset.id === "carta-tecnica-comunale-toponimi-parchi-e-giardini") loadRecords(); else loadViewportRecords({ force: true });
   }
@@ -660,7 +671,6 @@
 
   function installEvents() {
     $("verde-bologna-back-btn")?.addEventListener("click", () => { if (state.categoryOpen) showCategoryHub(); else closePage(); });
-    $("verde-bologna-datasets")?.addEventListener("click", (event) => { const button = event.target.closest("[data-vb-open]"); if (button) openDataset(button.dataset.vbOpen); });
     $("verde-bologna-search-form")?.addEventListener("submit", (event) => { event.preventDefault(); state.query = $("verde-bologna-query")?.value.trim() || ""; if (state.query) loadRecords(); else loadViewportRecords({ force: true }); });
     $("verde-bologna-clear-btn")?.addEventListener("click", () => { state.query = ""; state.lastViewportKey = ""; if ($("verde-bologna-query")) $("verde-bologna-query").value = ""; loadViewportRecords({ force: true }); });
     $("verde-bologna-load-more")?.addEventListener("click", () => loadRecords({ append: true })); $("verde-bologna-location-btn")?.addEventListener("click", showUserLocation); $("verde-bologna-fullscreen-btn")?.addEventListener("click", () => setFullscreen(!state.fullscreen));

@@ -210,8 +210,8 @@
           <p class="potature-followup-feedback" role="status" aria-live="polite"></p>
         </div>
         <footer class="potature-followup-actions">
-          <p>Dopo il ritorno alla scheda, premi il pulsante verde <strong>FATTO</strong>.</p>
-          <button class="btn btn-primary potature-followup-save" type="submit">SALVA E TORNA</button>
+          <p>Le domande sono facoltative. Confermando, il cantiere verrà completato con <strong>TERMINATO</strong>.</p>
+          <button class="btn btn-primary potature-followup-save" type="submit">SALVA E TERMINA</button>
         </footer>
       </form>`;
     document.body.appendChild(modal);
@@ -276,8 +276,8 @@
         await saveTasks(options, tasks);
         feedback.classList.add("success");
         feedback.textContent = tasks.length
-          ? `Salvate: ${tasks.map((task) => PHASES[task.phase].label).join(" e ")}. Ora puoi premere FATTO.`
-          : "Nessuna attività creata. Ora puoi premere FATTO.";
+          ? `Salvate: ${tasks.map((task) => PHASES[task.phase].label).join(" e ")}. Chiusura del cantiere in corso…`
+          : "Nessuna attività creata. Chiusura del cantiere in corso…";
         window.setTimeout(() => done({ tasks, skipped: false }), 650);
       } catch (error) {
         feedback.classList.add("error");
@@ -487,7 +487,7 @@
     const footerText = modal.querySelector(".potature-followup-actions p");
     const saveButton = modal.querySelector(".potature-followup-save");
     if (title) title.textContent = "Termina cantiere";
-    if (footerText) footerText.innerHTML = "Le domande sono facoltative. Premendo <strong>TERMINA CANTIERE</strong> il cantiere passa nei Fatti senza usare il vecchio FATTO.";
+    if (footerText) footerText.innerHTML = "Le domande sono facoltative. Premendo <strong>TERMINA CANTIERE</strong> il cantiere passa nei Fatti.";
     if (saveButton) saveButton.textContent = "✅ TERMINA CANTIERE";
   }
 
@@ -544,21 +544,73 @@
     }
   }
 
+  function completionLabel(button) {
+    return `${button?.textContent || ""} ${button?.title || ""} ${button?.getAttribute?.("aria-label") || ""}`
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isLegacyCompletionButton(button) {
+    if (!button || button.dataset?.actionKey === TERMINATO_ACTION) return false;
+    if (button.matches?.(".impianto-force-done-btn, [data-hidden-move-done-btn=\"1\"]")) return true;
+    const label = completionLabel(button);
+    if (label.includes("prepara fine") || label.includes("forza in fatti") || label.includes("whazzup / fatto")) return true;
+    if (label === "fatto" || label === "✅ fatto" || label === "✓ fatto") return true;
+    if (button.matches?.('.action-icon-btn[data-action-key="whatsapp"]') && label.includes("fatto")) return true;
+    return false;
+  }
+
+  function legacyCompletionButtons(card) {
+    return [...card.querySelectorAll("button")].filter(isLegacyCompletionButton);
+  }
+
+  function primaryLegacyButton(card) {
+    const buttons = legacyCompletionButtons(card);
+    if (!buttons.length) return null;
+    return buttons.find((button) => button.closest(".impianto-primary-actions"))
+      || buttons.find((button) => completionLabel(button).includes("whazzup / fatto"))
+      || buttons[0];
+  }
+
+  function makeInvisible(element) {
+    if (!element) return;
+    element.hidden = true;
+    element.setAttribute("aria-hidden", "true");
+    element.setAttribute("tabindex", "-1");
+    element.dataset.specialTerminatoReplaced = "1";
+    element.classList.add("special-terminato-legacy-hidden");
+    element.style.setProperty("display", "none", "important");
+  }
+
   function hideLegacyCompletion(card, item) {
-    if (isDone(item)) return;
-    card.querySelectorAll('.action-icon-btn[data-action-key="whatsapp"], .impianto-force-done-btn, [data-hidden-move-done-btn="1"]').forEach((element) => {
-      element.hidden = true;
-      element.setAttribute("aria-hidden", "true");
-      element.classList.add("special-terminato-legacy-hidden");
-    });
-    card.querySelectorAll("button").forEach((button) => {
-      const label = `${button.textContent || ""} ${button.title || ""} ${button.getAttribute("aria-label") || ""}`.toLowerCase();
-      if (label.includes("prepara fine") || label.includes("forza in fatti") || label.includes("whazzup / fatto")) {
-        button.hidden = true;
-        button.setAttribute("aria-hidden", "true");
-        button.classList.add("special-terminato-legacy-hidden");
-      }
-    });
+    if (isDone(item)) return [];
+    const buttons = legacyCompletionButtons(card);
+    buttons.forEach(makeInvisible);
+    return buttons;
+  }
+
+  function terminatoClassName(legacyTarget) {
+    const legacyClasses = text(legacyTarget?.className)
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((name) => !["special-terminato-legacy-hidden", "impianto-force-done-btn"].includes(name));
+    const classes = new Set(legacyClasses.length ? legacyClasses : ["btn", "btn-primary"]);
+    classes.add("special-terminato-btn");
+    classes.add("btn-primary");
+    return [...classes].join(" ");
+  }
+
+  function placeAtLegacyPosition(button, legacyTarget, card) {
+    if (legacyTarget?.parentElement) {
+      legacyTarget.parentElement.insertBefore(button, legacyTarget);
+      button.dataset.replacesAction = "fatto";
+      return true;
+    }
+    const row = card.querySelector(".impianto-primary-actions") || card.querySelector(".impianto-actions");
+    if (!row) return false;
+    row.appendChild(button);
+    return true;
   }
 
   function ensureButton(card, item) {
@@ -567,24 +619,34 @@
       old?.remove();
       return;
     }
+
+    const legacyTarget = primaryLegacyButton(card);
+    const desiredClassName = terminatoClassName(legacyTarget);
     hideLegacyCompletion(card, item);
-    if (old) return;
-    const row = card.querySelector(".impianto-primary-actions") || card.querySelector(".impianto-actions");
-    if (!row) return;
+
+    if (old) {
+      old.className = desiredClassName;
+      if (legacyTarget?.parentElement && (old.parentElement !== legacyTarget.parentElement || old.nextElementSibling !== legacyTarget)) {
+        legacyTarget.parentElement.insertBefore(old, legacyTarget);
+      }
+      old.dataset.replacesAction = legacyTarget ? "fatto" : "fallback";
+      return;
+    }
+
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "btn btn-primary special-terminato-btn";
+    button.className = desiredClassName;
     button.dataset.actionKey = TERMINATO_ACTION;
     button.textContent = "✅ TERMINATO";
     button.setAttribute("aria-label", "Termina il cantiere e spostalo nei Fatti");
-    button.title = "Termina il cantiere senza usare il vecchio FATTO";
+    button.title = "Termina il cantiere";
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
       if (normalize(selectedId()) === POTATURE_ID) startPotature(button, item);
       else void perform(button, item);
     });
-    row.appendChild(button);
+    placeAtLegacyPosition(button, legacyTarget, card);
   }
 
   function apply() {

@@ -12,6 +12,9 @@
   const LIST_ID = "verde-bologna-parchi-list";
   const SHEET_ID = "verde-bologna-parchi-sheet";
   const CACHE_TTL_MS = 10 * 60 * 1000;
+  const SEARCH_DEBOUNCE_MS = 180;
+  const LIST_RENDER_LIMIT = 60;
+  const LABEL_MARKER_LIMIT = 80;
   const OFFICIAL_QUARTIERI = [
     "Borgo Panigale - Reno",
     "Navile",
@@ -34,7 +37,12 @@
     locationRequested: false,
     listOpenRecord: null,
     mapFactoryWrapped: false,
-    installDone: false
+    installDone: false,
+    markerRenderer: null,
+    mapEventsBound: false,
+    markerRefreshTimer: 0,
+    filterTimer: 0,
+    renderSignature: ""
   };
 
   const $ = (id) => document.getElementById(id);
@@ -70,6 +78,7 @@
   }
 
   function parkCodvia(record) {
+    if (record?.__vbCodvia !== undefined) return record.__vbCodvia;
     const value = fieldValue(record, ["codvia", "cod_via", "codice via"]);
     return value === "" ? "" : String(value).trim();
   }
@@ -79,6 +88,7 @@
   }
 
   function parkName(record) {
+    if (record?.__vbName !== undefined) return record.__vbName;
     return String(fieldValue(record, [
       "nomevia", "nome_via", "nome via", "completo", "porzione", "denominazione", "nome", "name", "toponimo"
     ]) || "Parco / giardino").trim();
@@ -125,6 +135,7 @@
   }
 
   function centerOf(record) {
+    if (record?.__vbCenter !== undefined) return record.__vbCenter;
     const geometry = geometryOf(record);
     if (!geometry) return null;
     const points = flattenCoordinates(geometry.coordinates).filter(([lon, lat]) => Math.abs(lon) <= 180 && Math.abs(lat) <= 90);
@@ -169,6 +180,8 @@
   }
 
   function assignQuartiere(record) {
+    const officialValue = String(fieldValue(record, ["quartiere", "nomequartiere", "nome_quartiere"]) || "").trim();
+    if (officialValue) return officialValue;
     const center = centerOf(record);
     if (!center) return "";
     const hit = state.quartieri.find((quartiere) => pointInGeometry(center.lon, center.lat, geometryOf(quartiere)));
@@ -193,6 +206,21 @@
     return haversineMeters(state.userPosition, center);
   }
 
+  function prepareRecord(record) {
+    const codvia = parkCodvia(record);
+    const name = parkName(record);
+    const quartiere = assignQuartiere(record);
+    const center = centerOf(record);
+    return {
+      ...record,
+      __vbCodvia: codvia,
+      __vbName: name,
+      __vbQuartiere: quartiere,
+      __vbCenter: center,
+      __vbSearch: normalizeText(`${codvia} ${name}`)
+    };
+  }
+
   function readSessionCache(key) {
     try {
       const raw = sessionStorage.getItem(key);
@@ -205,6 +233,10 @@
 
   function writeSessionCache(key, data) {
     try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); } catch (_) {}
+  }
+
+  function removeLegacyQuartieriCache() {
+    try { sessionStorage.removeItem(`varga-verde-bologna:all:${QUARTIERI_DATASET_ID}`); } catch (_) {}
   }
 
   async function fetchAllRecords(datasetId) {
@@ -390,8 +422,10 @@
       node.innerHTML = `<p class="verde-bologna-parks-list-status">Nessun risultato. Continua a scrivere CODVIA o NOMEVIA oppure cambia quartiere.</p>`;
       return;
     }
-    const locationText = state.userPosition ? "Ordinati dal più vicino al più lontano." : "Attiva la posizione per ordinare dal più vicino.";
-    node.innerHTML = `<p class="verde-bologna-parks-list-status">${state.filtered.length} risultati · ${esc(locationText)}</p>` + state.filtered.map((record, index) => `
+    const visibleRows = state.filtered.slice(0, LIST_RENDER_LIMIT);
+    const locationText = state.userPosition ? "Ordinati dal più vicino al più lontano." : "Premi LA MIA POSIZIONE per ordinare dal più vicino.";
+    const limitText = state.filtered.length > visibleRows.length ? ` Mostro i primi ${visibleRows.length}: usa la ricerca o il quartiere per restringere.` : "";
+    node.innerHTML = `<p class="verde-bologna-parks-list-status">${state.filtered.length} risultati · ${esc(locationText + limitText)}</p>` + visibleRows.map((record, index) => `
       <button type="button" class="verde-bologna-parks-row" data-vb-park-index="${index}">
         <span class="verde-bologna-parks-code">${esc(parkCodvia(record) || "—")}</span>
         <span class="verde-bologna-parks-name">${esc(parkName(record))}</span>
@@ -413,34 +447,65 @@
   function ensureLayer() {
     if (!state.map || !window.L) return;
     if (!state.layer) state.layer = window.L.layerGroup().addTo(state.map);
+    if (!state.markerRenderer && window.L.canvas) state.markerRenderer = window.L.canvas({ padding: 0.5 });
+    if (!state.mapEventsBound) {
+      const scheduleViewportRefresh = () => {
+        if (!parksActive() || !state.loaded) return;
+        window.clearTimeout(state.markerRefreshTimer);
+        state.markerRefreshTimer = window.setTimeout(() => renderMapMarkers({ fitMap: false }), 120);
+      };
+      state.map.on("zoomend", scheduleViewportRefresh);
+      state.map.on("moveend", () => {
+        if (state.map?.getZoom?.() >= 15) scheduleViewportRefresh();
+      });
+      state.mapEventsBound = true;
+    }
   }
 
-  function renderMapMarkers() {
+  function renderMapMarkers({ fitMap = true } = {}) {
     if (!parksActive()) return;
     ensureLayer();
     if (!state.layer || !state.map || !window.L) return;
     state.layer.clearLayers();
     const bounds = window.L.latLngBounds([]);
-    state.filtered.forEach((record) => {
+    const viewport = !fitMap && state.map.getZoom() >= 15 ? state.map.getBounds()?.pad?.(0.15) : null;
+    const visibleRecords = viewport?.isValid?.()
+      ? state.filtered.filter((record) => {
+        const center = centerOf(record);
+        return center ? viewport.contains([center.lat, center.lon]) : false;
+      })
+      : state.filtered;
+    const showCodeLabels = visibleRecords.length <= LABEL_MARKER_LIMIT;
+    visibleRecords.forEach((record) => {
       const center = centerOf(record);
       if (!center) return;
       const code = markerCode(record);
-      const marker = window.L.marker([center.lat, center.lon], {
-        icon: window.L.divIcon({
-          className: "vb-park-live-wrap",
-          html: `<span class="vb-park-live-code${code.fallback ? " is-fallback" : ""}">${esc(code.value)}</span>`,
-          iconSize: null,
-          iconAnchor: [21, 14]
-        }),
-        keyboard: true,
-        riseOnHover: true,
-        title: `${code.value} · ${parkName(record)}`
-      }).addTo(state.layer);
+      const marker = showCodeLabels
+        ? window.L.marker([center.lat, center.lon], {
+          icon: window.L.divIcon({
+            className: "vb-park-live-wrap",
+            html: `<span class="vb-park-live-code${code.fallback ? " is-fallback" : ""}">${esc(code.value)}</span>`,
+            iconSize: null,
+            iconAnchor: [21, 14]
+          }),
+          keyboard: true,
+          riseOnHover: true,
+          title: `${code.value} · ${parkName(record)}`
+        })
+        : window.L.circleMarker([center.lat, center.lon], {
+          renderer: state.markerRenderer,
+          radius: 6,
+          color: "#08783f",
+          weight: 2,
+          fillColor: "#31b96b",
+          fillOpacity: 0.78
+        });
+      marker.addTo(state.layer);
       marker.bindPopup(`<strong>CODVIA ${esc(parkCodvia(record) || "—")}</strong><br>${esc(parkName(record))}`);
       marker.on("click", () => openDetailSheet(record));
       bounds.extend([center.lat, center.lon]);
     });
-    if (bounds.isValid()) {
+    if (fitMap && bounds.isValid()) {
       const query = String($("verde-bologna-query")?.value || "").trim();
       const maxZoom = query || state.activeQuartiere ? 17 : 14;
       state.map.fitBounds(bounds.pad(0.08), { animate: false, maxZoom });
@@ -462,13 +527,16 @@
     if (!parksActive() || !state.loaded) return;
     const query = normalizeText($("verde-bologna-query")?.value || "");
     const compactQuery = query.replace(/\s+/g, "");
+    const positionKey = state.userPosition ? `${state.userPosition.lat.toFixed(5)},${state.userPosition.lon.toFixed(5)}` : "";
+    const signature = `${query}|${state.activeQuartiere}|${positionKey}|${state.parks.length}`;
+    if (signature === state.renderSignature) return;
     let rows = state.parks.filter((record) => {
       if (state.activeQuartiere && record.__vbQuartiere !== state.activeQuartiere) return false;
       if (!query) return true;
-      const codvia = normalizeText(parkCodvia(record)).replace(/\s+/g, "");
-      const name = normalizeText(parkName(record));
+      const codvia = normalizeText(record.__vbCodvia).replace(/\s+/g, "");
+      const name = normalizeText(record.__vbName);
       const codeMatch = compactQuery && codvia.startsWith(compactQuery);
-      const nameMatch = name.includes(query);
+      const nameMatch = record.__vbSearch.includes(query) || name.includes(query);
       return codeMatch || nameMatch;
     });
     rows = rows.sort((a, b) => {
@@ -482,6 +550,7 @@
       return parkName(a).localeCompare(parkName(b), "it", { sensitivity: "base", numeric: true });
     });
     state.filtered = rows;
+    state.renderSignature = signature;
     renderList();
     renderMapMarkers();
     const status = $("verde-bologna-status");
@@ -489,16 +558,17 @@
   }
 
   async function loadParksData() {
-    if (state.loaded || state.loading) return;
+    if (state.loaded) {
+      state.renderSignature = "";
+      applyLiveFilter();
+      return;
+    }
+    if (state.loading) return;
     state.loading = true;
     renderList();
     try {
-      const [parks, quartieri] = await Promise.all([
-        fetchAllRecords(PARKS_DATASET_ID),
-        fetchAllRecords(QUARTIERI_DATASET_ID)
-      ]);
-      state.quartieri = quartieri;
-      state.parks = parks.map((record) => ({ ...record, __vbQuartiere: assignQuartiere(record) }));
+      const parks = await fetchAllRecords(PARKS_DATASET_ID);
+      state.parks = parks.map(prepareRecord);
       state.loaded = true;
       state.loading = false;
       renderQuartiereFilters();
@@ -539,11 +609,11 @@
     }
     renderQuartiereFilters();
     void loadParksData();
-    requestUserPosition();
   }
 
   function deactivateParksMode() {
     $(PAGE_ID)?.classList.remove("vb-parks-advanced");
+    window.clearTimeout(state.filterTimer);
     state.layer?.clearLayers?.();
     closeDetailSheet();
   }
@@ -579,12 +649,15 @@
     if (!input || !form || input.dataset.vbParksLive === "1") return;
     input.dataset.vbParksLive = "1";
     input.addEventListener("input", () => {
-      if (parksActive()) applyLiveFilter();
+      if (!parksActive()) return;
+      window.clearTimeout(state.filterTimer);
+      state.filterTimer = window.setTimeout(applyLiveFilter, SEARCH_DEBOUNCE_MS);
     });
     form.addEventListener("submit", (event) => {
       if (!parksActive()) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      window.clearTimeout(state.filterTimer);
       applyLiveFilter();
     }, true);
     clear?.addEventListener("click", (event) => {
@@ -593,6 +666,7 @@
       event.stopImmediatePropagation();
       input.value = "";
       state.activeQuartiere = "";
+      state.renderSignature = "";
       renderQuartiereFilters();
       applyLiveFilter();
       input.focus();
@@ -627,6 +701,7 @@
 
   function install() {
     if (state.installDone) return;
+    removeLegacyQuartieriCache();
     injectStyle();
     let attempts = 0;
     const timer = window.setInterval(() => {

@@ -77,7 +77,7 @@
         .verde-bologna-map-toolbar label{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
         .verde-bologna-map-toolbar select{width:92px!important;min-height:42px!important;padding:6px 7px!important;border:1px solid rgba(16,38,74,.18)!important;border-radius:21px!important;background:rgba(255,255,255,.96)!important;box-shadow:0 3px 12px rgba(16,38,74,.2)!important;font-size:.72rem!important;font-weight:800!important}
         .verde-bologna-map-status{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
-        .verde-bologna-map{width:100%!important;height:calc(100dvh - 126px)!important;min-height:420px!important;border-radius:0!important;background:#e9eef4!important;touch-action:none!important}
+        .verde-bologna-map{width:100%!important;height:calc(100dvh - 126px)!important;min-height:420px!important;border-radius:0!important;background:#e9eef4!important;touch-action:pan-y!important}
         .verde-bologna-code-marker{min-width:40px;height:29px;padding:0 7px;font-size:.72rem}
         .verde-bologna-results{gap:8px!important;margin:10px 8px 0!important}
         .verde-bologna-result{grid-template-columns:1fr!important;gap:8px!important;padding:11px!important;border-radius:12px!important;background:#f8fbfd!important}

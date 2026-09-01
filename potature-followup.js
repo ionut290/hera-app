@@ -317,3 +317,309 @@
   if (typeof window !== "undefined") window.HeraPotatureFollowup = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
+
+(() => {
+  "use strict";
+
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.HeraSpecialTerminato?.installed) return;
+
+  const POTATURE_ID = "potature-abbattimenti";
+  const TERMINATO_ACTION = "special-terminato";
+  const text = (value) => String(value ?? "").trim();
+  const normalize = (value) => text(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  function selectedId() {
+    const match = String(window.location.hash || "").match(/(?:^|[&#])commessa=([^&]+)/);
+    if (match?.[1]) {
+      try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
+    }
+    try {
+      if (typeof selectedCommessaId !== "undefined") return text(selectedCommessaId);
+    } catch (_) {}
+    return text(window.selectedCommessaId);
+  }
+
+  function selectedName() {
+    try {
+      if (typeof selectedCommessaName !== "undefined") return text(selectedCommessaName);
+    } catch (_) {}
+    return text(window.selectedCommessaName || document.getElementById("impianti-page-title")?.textContent);
+  }
+
+  function isSfalcioCobo(commessaId = selectedId(), commessaName = selectedName()) {
+    const value = `${normalize(commessaId)} ${normalize(commessaName)}`;
+    return value.includes("sfalcio") && value.includes("cobo");
+  }
+
+  function isSpecialCommessa(commessaId = selectedId(), commessaName = selectedName()) {
+    return normalize(commessaId) === POTATURE_ID || isSfalcioCobo(commessaId, commessaName);
+  }
+
+  function database() {
+    try {
+      if (typeof db !== "undefined" && db?.collection && db?.batch) return db;
+    } catch (_) {}
+    return window.db?.collection && window.db?.batch ? window.db : null;
+  }
+
+  function collectionName() {
+    try {
+      if (typeof getCommesseCollectionName === "function") return text(getCommesseCollectionName()) || "commesse";
+    } catch (_) {}
+    return "commesse";
+  }
+
+  function authUser() {
+    try {
+      if (typeof auth !== "undefined" && auth?.currentUser) return auth.currentUser;
+    } catch (_) {}
+    return window.auth?.currentUser || window.currentUser || null;
+  }
+
+  function operatorName() {
+    try {
+      if (typeof getOperatorDisplayName === "function") {
+        const value = text(getOperatorDisplayName());
+        if (value) return value;
+      }
+    } catch (_) {}
+    const user = authUser();
+    return text(user?.displayName || user?.email || "Operatore");
+  }
+
+  function currentItems() {
+    try {
+      if (typeof currentImpianti !== "undefined" && Array.isArray(currentImpianti)) return currentImpianti;
+    } catch (_) {}
+    return Array.isArray(window.currentImpianti) ? window.currentImpianti : [];
+  }
+
+  function itemKey(item) {
+    try {
+      if (typeof buildImpiantoKey === "function") return text(buildImpiantoKey(item));
+    } catch (_) {}
+    return text(item?.id || item?.idSap || item?.denominazione);
+  }
+
+  function findItem(card) {
+    const key = text(card?.dataset?.impiantoKey);
+    if (!key) return null;
+    return currentItems().find((item) => itemKey(item) === key) || null;
+  }
+
+  function documentIds(item = {}) {
+    const ids = [];
+    if (Array.isArray(item.sourceIds)) item.sourceIds.forEach((id) => { if (text(id)) ids.push(text(id)); });
+    if (text(item.id)) ids.push(text(item.id));
+    return [...new Set(ids)];
+  }
+
+  function isDone(item = {}) {
+    if (item.done === true || item.fatto === true || item.completed === true) return true;
+    return ["fatto", "done", "completed", "completato", "terminato"].includes(text(item.stato || item.status).toLowerCase());
+  }
+
+  function completedWhazzup(item, doneAt, doneBy) {
+    let handler = null;
+    try {
+      if (typeof handleCompletedImpiantoWhatsAppClick === "function") handler = handleCompletedImpiantoWhatsAppClick;
+    } catch (_) {}
+    if (!handler && typeof window.handleCompletedImpiantoWhatsAppClick === "function") handler = window.handleCompletedImpiantoWhatsAppClick;
+    if (!handler) {
+      console.warn("TERMINATO salvato: apertura Whazzup completato non disponibile.");
+      return false;
+    }
+    try {
+      const result = handler({ ...item, done: true, stato: "fatto", doneAt, doneBy });
+      if (result && typeof result.catch === "function") result.catch((error) => console.warn("Apertura Whazzup dopo TERMINATO non riuscita:", error));
+      return true;
+    } catch (error) {
+      console.warn("Apertura Whazzup dopo TERMINATO non riuscita:", error);
+      return false;
+    }
+  }
+
+  async function terminate(item, options = {}) {
+    const commessaId = text(options.commessaId || selectedId());
+    if (!isSpecialCommessa(commessaId, selectedName())) throw new Error("TERMINATO è disponibile solo per Potature Abbattimenti e Sfalcio COBO.");
+    const store = database();
+    if (!store) throw new Error("Database non disponibile. Controlla la connessione e riprova.");
+    const ids = documentIds(item);
+    if (!ids.length) throw new Error("Impossibile identificare il cantiere da terminare.");
+
+    const user = authUser();
+    const doneBy = operatorName();
+    const doneAt = new Date();
+    const payload = {
+      done: true,
+      stato: "fatto",
+      doneAt,
+      doneBy,
+      doneByUid: text(user?.uid),
+      doneByEmail: text(user?.email),
+      terminato: true,
+      terminatoAt: doneAt,
+      terminatoBy: doneBy,
+      terminatoByUid: text(user?.uid),
+      terminatoByEmail: text(user?.email),
+      completionMode: "TERMINATO_SPECIAL",
+      updatedAt: doneAt
+    };
+
+    const ref = store.collection(collectionName()).doc(commessaId).collection("impianti");
+    const batch = store.batch();
+    ids.forEach((id) => batch.set(ref.doc(id), payload, { merge: true }));
+    await batch.commit();
+    completedWhazzup(item, doneAt, doneBy);
+    return { doneAt, doneBy, ids, payload };
+  }
+
+  function adaptPotatureModal() {
+    const modal = document.getElementById("potature-followup-modal");
+    if (!modal) return;
+    const title = modal.querySelector("#potature-followup-title");
+    const footerText = modal.querySelector(".potature-followup-actions p");
+    const saveButton = modal.querySelector(".potature-followup-save");
+    if (title) title.textContent = "Termina cantiere";
+    if (footerText) footerText.innerHTML = "Le domande sono facoltative. Premendo <strong>TERMINA CANTIERE</strong> il cantiere passa nei Fatti senza usare il vecchio FATTO.";
+    if (saveButton) saveButton.textContent = "✅ TERMINA CANTIERE";
+  }
+
+  function potatureOptions(item, onComplete) {
+    const user = authUser();
+    return {
+      source: item,
+      existingItems: currentItems(),
+      store: database(),
+      collectionName: collectionName(),
+      commessaId: POTATURE_ID,
+      operatorUid: text(user?.uid),
+      operatorName: operatorName(),
+      onComplete
+    };
+  }
+
+  async function perform(button, item) {
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = "SALVATAGGIO…";
+    try {
+      await terminate(item);
+      button.textContent = "✅ TERMINATO";
+      button.classList.add("is-completed-done");
+    } catch (error) {
+      console.error("TERMINATO speciale non riuscito:", error);
+      button.disabled = false;
+      button.textContent = originalText;
+      window.alert(error?.message || "Impossibile terminare il cantiere.");
+    }
+  }
+
+  function startPotature(button, item) {
+    const followup = window.HeraPotatureFollowup;
+    if (!followup?.isOriginal?.(item)) {
+      void perform(button, item);
+      return;
+    }
+    button.disabled = true;
+    try {
+      followup.open(potatureOptions(item, (result) => {
+        if (result?.skipped) {
+          button.disabled = false;
+          return;
+        }
+        void perform(button, item);
+      }));
+      adaptPotatureModal();
+    } catch (error) {
+      button.disabled = false;
+      console.error("Apertura form TERMINATO Potature non riuscita:", error);
+      window.alert(error?.message || "Impossibile aprire il form di chiusura.");
+    }
+  }
+
+  function hideLegacyCompletion(card, item) {
+    if (isDone(item)) return;
+    card.querySelectorAll('.action-icon-btn[data-action-key="whatsapp"], .impianto-force-done-btn, [data-hidden-move-done-btn="1"]').forEach((element) => {
+      element.hidden = true;
+      element.setAttribute("aria-hidden", "true");
+      element.classList.add("special-terminato-legacy-hidden");
+    });
+    card.querySelectorAll("button").forEach((button) => {
+      const label = `${button.textContent || ""} ${button.title || ""} ${button.getAttribute("aria-label") || ""}`.toLowerCase();
+      if (label.includes("prepara fine") || label.includes("forza in fatti") || label.includes("whazzup / fatto")) {
+        button.hidden = true;
+        button.setAttribute("aria-hidden", "true");
+        button.classList.add("special-terminato-legacy-hidden");
+      }
+    });
+  }
+
+  function ensureButton(card, item) {
+    const old = card.querySelector(`[data-action-key="${TERMINATO_ACTION}"]`);
+    if (isDone(item)) {
+      old?.remove();
+      return;
+    }
+    hideLegacyCompletion(card, item);
+    if (old) return;
+    const row = card.querySelector(".impianto-primary-actions") || card.querySelector(".impianto-actions");
+    if (!row) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-primary special-terminato-btn";
+    button.dataset.actionKey = TERMINATO_ACTION;
+    button.textContent = "✅ TERMINATO";
+    button.setAttribute("aria-label", "Termina il cantiere e spostalo nei Fatti");
+    button.title = "Termina il cantiere senza usare il vecchio FATTO";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (normalize(selectedId()) === POTATURE_ID) startPotature(button, item);
+      else void perform(button, item);
+    });
+    row.appendChild(button);
+  }
+
+  function apply() {
+    if (!isSpecialCommessa()) return;
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (!list) return;
+    list.querySelectorAll("[data-impianto-key]").forEach((card) => {
+      const item = findItem(card);
+      if (item) ensureButton(card, item);
+    });
+  }
+
+  let scheduled = false;
+  function scheduleApply() {
+    if (scheduled) return;
+    scheduled = true;
+    window.requestAnimationFrame(() => {
+      scheduled = false;
+      apply();
+    });
+  }
+
+  const observer = new MutationObserver(scheduleApply);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("hashchange", scheduleApply);
+  window.addEventListener("hera:data-ready", scheduleApply);
+  document.addEventListener("DOMContentLoaded", scheduleApply, { once: true });
+  scheduleApply();
+
+  window.HeraSpecialTerminato = Object.freeze({
+    installed: true,
+    isSpecialCommessa,
+    isSfalcioCobo,
+    documentIds,
+    terminate,
+    apply
+  });
+})();

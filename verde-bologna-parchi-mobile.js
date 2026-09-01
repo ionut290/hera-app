@@ -12,6 +12,10 @@
   const LIST_ID = "verde-bologna-parchi-list";
   const SHEET_ID = "verde-bologna-parchi-sheet";
   const CACHE_TTL_MS = 10 * 60 * 1000;
+  const PAGE_SIZE = 100;
+  const FETCH_TIMEOUT_MS = 8000;
+  const BASE_CACHE_WAIT_MS = 1500;
+  const BASE_CACHE_POLL_MS = 150;
   const SEARCH_DEBOUNCE_MS = 180;
   const LIST_RENDER_LIMIT = 60;
   const LABEL_MARKER_LIMIT = 80;
@@ -239,26 +243,61 @@
     try { sessionStorage.removeItem(`varga-verde-bologna:all:${QUARTIERI_DATASET_ID}`); } catch (_) {}
   }
 
-  async function fetchAllRecords(datasetId) {
-    const cacheKey = `varga-verde-bologna:all:${datasetId}`;
-    const cached = readSessionCache(cacheKey);
-    if (Array.isArray(cached)) return cached;
-    const records = [];
-    let offset = 0;
-    let total = Number.POSITIVE_INFINITY;
-    while (offset < total && offset < 10000) {
-      const params = new URLSearchParams({ limit: "100", offset: String(offset) });
-      const response = await fetch(`${API_ROOT}/${encodeURIComponent(datasetId)}/records?${params}`, { headers: { Accept: "application/json" } });
+  function readBasePageCache() {
+    try {
+      const key = `varga-verde-bologna:${PARKS_DATASET_ID}:0:plain:`;
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const cached = JSON.parse(raw);
+      if (!cached || Date.now() - Number(cached.savedAt || 0) > CACHE_TTL_MS) return null;
+      const records = Array.isArray(cached.payload?.results) ? cached.payload.results : null;
+      if (!records) return null;
+      return { records, total: Number(cached.payload?.total_count ?? records.length) || records.length };
+    } catch (_) { return null; }
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function waitForBasePageCache() {
+    const deadline = Date.now() + BASE_CACHE_WAIT_MS;
+    do {
+      const cached = readBasePageCache();
+      if (cached) return cached;
+      await delay(BASE_CACHE_POLL_MS);
+    } while (Date.now() < deadline);
+    return null;
+  }
+
+  async function fetchRecordsPage(datasetId, offset) {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = window.setTimeout(() => controller?.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_ROOT}/${encodeURIComponent(datasetId)}/records?${params}`, {
+        headers: { Accept: "application/json" },
+        signal: controller?.signal
+      });
       if (!response.ok) throw new Error(`Open Data Comune di Bologna non disponibili (${response.status}).`);
       const payload = await response.json();
-      const page = Array.isArray(payload?.results) ? payload.results : [];
-      total = Number(payload?.total_count ?? page.length);
-      records.push(...page);
-      if (!page.length) break;
-      offset += page.length;
+      const records = Array.isArray(payload?.results) ? payload.results : [];
+      return { records, total: Number(payload?.total_count ?? records.length) || records.length };
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("Il dataset del Comune sta impiegando troppo tempo a rispondere.");
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
     }
-    writeSessionCache(cacheKey, records);
-    return records;
+  }
+
+  function publishParkRecords(records) {
+    state.parks = records.map(prepareRecord);
+    state.loaded = true;
+    state.loading = false;
+    state.renderSignature = "";
+    renderQuartiereFilters();
+    applyLiveFilter();
   }
 
   function injectStyle() {
@@ -415,7 +454,7 @@
     const node = $(LIST_ID);
     if (!node) return;
     if (state.loading) {
-      node.innerHTML = `<p class="verde-bologna-parks-list-status">Carico tutti i parchi e i quartieri ufficiali del Comune di Bologna…</p>`;
+      node.innerHTML = `<p class="verde-bologna-parks-list-status">Carico i primi parchi e i filtri per quartiere…</p>`;
       return;
     }
     if (!state.filtered.length) {
@@ -567,16 +606,43 @@
     state.loading = true;
     renderList();
     try {
-      const parks = await fetchAllRecords(PARKS_DATASET_ID);
-      state.parks = parks.map(prepareRecord);
-      state.loaded = true;
-      state.loading = false;
-      renderQuartiereFilters();
-      applyLiveFilter();
+      const cacheKey = `varga-verde-bologna:all:${PARKS_DATASET_ID}`;
+      const cached = readSessionCache(cacheKey);
+      if (Array.isArray(cached) && cached.length) {
+        publishParkRecords(cached);
+        return;
+      }
+
+      const firstPage = await waitForBasePageCache() || await fetchRecordsPage(PARKS_DATASET_ID, 0);
+      publishParkRecords(firstPage.records);
+
+      const remainingOffsets = [];
+      for (let offset = firstPage.records.length; offset < firstPage.total; offset += PAGE_SIZE) remainingOffsets.push(offset);
+      if (!remainingOffsets.length) {
+        writeSessionCache(cacheKey, firstPage.records);
+        return;
+      }
+
+      const status = $("verde-bologna-status");
+      if (status && parksActive()) status.textContent = `${firstPage.records.length} parchi disponibili. Completo l’elenco in background…`;
+      const settledPages = await Promise.allSettled(remainingOffsets.map((offset) => fetchRecordsPage(PARKS_DATASET_ID, offset)));
+      const complete = settledPages.every((result) => result.status === "fulfilled");
+      const records = [
+        ...firstPage.records,
+        ...settledPages.flatMap((result) => result.status === "fulfilled" ? result.value.records : [])
+      ];
+      publishParkRecords(records);
+      if (complete) {
+        writeSessionCache(cacheKey, records);
+      } else if (status && parksActive()) {
+        status.textContent = `${records.length} parchi disponibili. Alcuni dati non hanno risposto: puoi comunque usare ricerca, quartieri e mappa.`;
+      }
     } catch (error) {
       state.loading = false;
       const node = $(LIST_ID);
       if (node) node.innerHTML = `<p class="verde-bologna-parks-list-status">${esc(error?.message || "Impossibile caricare l'elenco completo dei parchi.")}</p>`;
+      const status = $("verde-bologna-status");
+      if (status) status.textContent = error?.message || "Impossibile caricare i parchi in questo momento.";
     }
   }
 

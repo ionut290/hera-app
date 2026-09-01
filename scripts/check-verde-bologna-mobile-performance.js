@@ -137,6 +137,11 @@ const activation = source.match(/function activateParksMode\(\) \{[\s\S]*?\n  \}
 assert.ok(activation, "Funzione activateParksMode non trovata");
 assert.doesNotMatch(activation[0], /requestUserPosition\(\)/);
 
+const deactivation = source.match(/function deactivateParksMode\(\) \{[\s\S]*?\n  \}\n\n  function resetCategoryState/);
+assert.ok(deactivation, "Funzione deactivateParksMode non trovata");
+assert.match(deactivation[0], /if \(!state\.active && !hasAdvancedClass\) return/);
+assert.match(deactivation[0], /if \(hasAdvancedClass\) page\.classList\.remove\("vb-parks-advanced"\)/);
+
 const pageOpening = baseSource.match(/function openPage\(\) \{[\s\S]*?\n  \}\n\n  function closePage/);
 assert.ok(pageOpening, "Funzione openPage Verde Bologna non trovata");
 assert.match(pageOpening[0], /showCategoryHub\(\{ scroll: false \}\)/);

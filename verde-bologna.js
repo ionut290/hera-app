@@ -551,12 +551,24 @@
     state.loadingViewport = false;
   }
 
+  function renewMapContainer() {
+    const mapNode = $("verde-bologna-map");
+    if (!mapNode?.parentNode) return mapNode;
+    const freshMapNode = mapNode.cloneNode(false);
+    freshMapNode.className = "verde-bologna-map";
+    freshMapNode.removeAttribute("style");
+    freshMapNode.removeAttribute("tabindex");
+    freshMapNode.removeAttribute("aria-label");
+    mapNode.replaceWith(freshMapNode);
+    return freshMapNode;
+  }
+
   function destroyCategoryMap() {
     stopCategoryWork();
     closeDetailSheet();
     if (state.fullscreen) setFullscreen(false);
     const oldMap = state.map;
-    try { oldMap?.off?.(); oldMap?.remove?.(); } catch (_) {}
+    try { oldMap?.remove?.(); } catch (_) { try { oldMap?.off?.(); } catch (_) {} }
     if (oldMap) window.dispatchEvent(new CustomEvent("hera:verde-bologna-map-destroyed", { detail: { map: oldMap } }));
     state.map = null;
     state.baseLayer = null;
@@ -571,8 +583,7 @@
     state.total = 0;
     state.query = "";
     state.lastViewportKey = "";
-    const mapNode = $("verde-bologna-map");
-    if (mapNode) { mapNode.innerHTML = ""; mapNode.removeAttribute("style"); try { delete mapNode._leaflet_id; } catch (_) {} mapNode.classList.remove("leaflet-container", "leaflet-touch", "leaflet-retina", "leaflet-fade-anim", "leaflet-grab", "leaflet-touch-drag", "leaflet-touch-zoom"); }
+    renewMapContainer();
     const results = $("verde-bologna-results");
     if (results) results.innerHTML = "";
     $("verde-bologna-load-more")?.classList.add("hidden");

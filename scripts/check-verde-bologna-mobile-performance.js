@@ -10,11 +10,16 @@ const html = fs.readFileSync("index.html", "utf8");
 const sw = fs.readFileSync("sw.js", "utf8");
 
 assert.match(source, /const SEARCH_DEBOUNCE_MS = 180;/);
+assert.match(source, /const FETCH_TIMEOUT_MS = 8000;/);
 assert.match(source, /const LIST_RENDER_LIMIT = 60;/);
 assert.match(source, /const LABEL_MARKER_LIMIT = 80;/);
 assert.match(source, /fieldValue\(record, \["quartiere", "nomequartiere", "nome_quartiere"\]\)/);
 assert.doesNotMatch(source, /fetchAllRecords\(QUARTIERI_DATASET_ID\)/);
-assert.match(source, /state\.parks = parks\.map\(prepareRecord\)/);
+assert.match(source, /varga-verde-bologna:\$\{PARKS_DATASET_ID\}:0:plain:/);
+assert.match(source, /const controller = typeof AbortController === "function"/);
+assert.match(source, /Promise\.allSettled\(remainingOffsets\.map/);
+assert.match(source, /publishParkRecords\(firstPage\.records\)/);
+assert.doesNotMatch(source, /while \(offset < total/);
 assert.match(source, /state\.filtered\.slice\(0, LIST_RENDER_LIMIT\)/);
 assert.match(source, /window\.L\.canvas\(\{ padding: 0\.5 \}\)/);
 assert.match(source, /state\.map\.on\("zoomend", scheduleViewportRefresh\)/);
@@ -27,11 +32,11 @@ const activation = source.match(/function activateParksMode\(\) \{[\s\S]*?\n  \}
 assert.ok(activation, "Funzione activateParksMode non trovata");
 assert.doesNotMatch(activation[0], /requestUserPosition\(\)/);
 
-assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-performance1/);
-assert.match(html, /app-pure-utils\.js\?v=20260901-verde-performance1/);
-assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-verde-performance1"/);
-assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v202";/);
-assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-performance1/);
+assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-progressive2/);
+assert.match(html, /app-pure-utils\.js\?v=20260901-verde-progressive2/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-verde-progressive2"/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v203";/);
+assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-progressive2/);
 
 assert.doesNotMatch(source, /firebase|firestore|onSnapshot|addDoc|setDoc|updateDoc/);
 

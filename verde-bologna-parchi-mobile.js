@@ -730,7 +730,10 @@
   }
 
   function deactivateParksMode() {
-    $(PAGE_ID)?.classList.remove("vb-parks-advanced");
+    const page = $(PAGE_ID);
+    const hasAdvancedClass = page?.classList.contains("vb-parks-advanced");
+    if (!state.active && !hasAdvancedClass) return;
+    if (hasAdvancedClass) page.classList.remove("vb-parks-advanced");
     if (!state.active) return;
     state.active = false;
     state.generation += 1;

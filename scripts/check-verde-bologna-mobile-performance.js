@@ -29,6 +29,7 @@ assert.doesNotMatch(activation[0], /requestUserPosition\(\)/);
 
 assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-performance1/);
 assert.match(html, /app-pure-utils\.js\?v=20260901-verde-performance1/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-verde-performance1"/);
 assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v202";/);
 assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-performance1/);
 

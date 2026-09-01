@@ -198,7 +198,7 @@ test.describe('Verde Bologna su mobile', () => {
       };
     });
     await page.evaluate(() => window.HeraVerdeBologna.open());
-    await expect(page.locator('[data-vb-open="alberi-manutenzioni"]')).toContainText('Catasto alberi');
+    await expect(page.locator('.verde-bologna-dataset:has([data-vb-open="alberi-manutenzioni"])')).toContainText('Catasto alberi');
     await expect(page.locator('#verde-bologna-page')).not.toContainText('Alberi singoli');
 
     const categories = [

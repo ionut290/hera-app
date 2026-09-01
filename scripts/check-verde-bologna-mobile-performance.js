@@ -38,11 +38,19 @@ const officialDatasets = [
 ];
 officialDatasets.forEach((datasetId) => assert.match(baseSource, new RegExp(`id: "${datasetId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`)));
 assert.match(baseSource, /const VIEWPORT_MAX_RECORDS = 500;/);
+assert.match(baseSource, /const MOBILE_VIEWPORT_MAX_RECORDS = 140;/);
 assert.match(baseSource, /const VIEWPORT_LIST_LIMIT = 60;/);
+assert.match(baseSource, /const MOBILE_FULL_GEOMETRY_LIMIT = 40;/);
+assert.match(baseSource, /const MOBILE_LABEL_MARKER_LIMIT = 80;/);
 assert.match(baseSource, /within_distance\(\$\{geoField\}, geom'POINT\(/);
 assert.match(baseSource, /state\.map\.on\("moveend zoomend", scheduleViewportLoad\)/);
 assert.match(baseSource, /if \(zoom < 15\)/);
+assert.match(baseSource, /const viewportLimit = mobileView\(\) \? MOBILE_VIEWPORT_MAX_RECORDS : VIEWPORT_MAX_RECORDS;/);
 assert.match(baseSource, /state\.records\.slice\(0, VIEWPORT_LIST_LIMIT\)/);
+assert.match(baseSource, /const lightweight = mobileView\(\) && state\.records\.length > MOBILE_FULL_GEOMETRY_LIMIT;/);
+assert.match(baseSource, /classList\.toggle\("is-embedded-scroll", embeddedScroll\)/);
+assert.match(baseSource, /if \(embeddedScroll\) state\.map\.dragging\?\.disable\?\.\(\);/);
+assert.match(baseSource, /\.verde-bologna-map\.is-embedded-scroll\{touch-action:pan-y!important\}/);
 assert.match(baseSource, /data-vb-detail-index/);
 assert.match(baseSource, /data-vb-toggle-details/);
 assert.match(baseSource, /entryIndex >= 6/);
@@ -60,13 +68,13 @@ const activation = source.match(/function activateParksMode\(\) \{[\s\S]*?\n  \}
 assert.ok(activation, "Funzione activateParksMode non trovata");
 assert.doesNotMatch(activation[0], /requestUserPosition\(\)/);
 
-assert.match(loader, /verde-bologna\.js\?v=20260901-verde-catasto1/);
-assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-verde-catasto1/);
-assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-verde-catasto1/);
-assert.match(html, /app-pure-utils\.js\?v=20260901-verde-catasto1/);
-assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-verde-catasto1"/);
-assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v204";/);
-assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-catasto1/);
+assert.match(loader, /verde-bologna\.js\?v=20260901-verde-touch1/);
+assert.match(loader, /verde-bologna-operativo\.js\?v=20260901-verde-touch1/);
+assert.match(loader, /verde-bologna-parchi-mobile\.js\?v=20260901-verde-touch1/);
+assert.match(html, /app-pure-utils\.js\?v=20260901-verde-touch1/);
+assert.match(html, /serviceWorker\.register\("\.\/sw\.js\?v=20260901-verde-touch1"/);
+assert.match(sw, /const CACHE_NAME = "varga-cantieri-shell-v205";/);
+assert.match(sw, /app-pure-utils\.js\?v=20260901-verde-touch1/);
 
 assert.doesNotMatch(source, /firebase|firestore|onSnapshot|addDoc|setDoc|updateDoc/);
 assert.doesNotMatch(baseSource, /firebase|firestore|onSnapshot|addDoc|setDoc|updateDoc/);

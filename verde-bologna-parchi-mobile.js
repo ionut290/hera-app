@@ -46,7 +46,9 @@
     mapEventsBound: false,
     markerRefreshTimer: 0,
     filterTimer: 0,
-    renderSignature: ""
+    renderSignature: "",
+    generation: 0,
+    abortControllers: new Set()
   };
 
   const $ = (id) => document.getElementById(id);
@@ -59,7 +61,7 @@
   }
 
   function parksActive() {
-    return mobileActive() && $(CATEGORY_ID)?.value === PARKS_DATASET_ID && !$(PAGE_ID)?.classList.contains("hidden");
+    return mobileActive() && $(CATEGORY_ID)?.value === PARKS_DATASET_ID && $(PAGE_ID)?.classList.contains("is-category-open") && !$(PAGE_ID)?.classList.contains("hidden");
   }
 
   function normalizeText(value) {
@@ -273,6 +275,7 @@
   async function fetchRecordsPage(datasetId, offset) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
     const controller = typeof AbortController === "function" ? new AbortController() : null;
+    if (controller) state.abortControllers.add(controller);
     const timer = window.setTimeout(() => controller?.abort(), FETCH_TIMEOUT_MS);
     try {
       const response = await fetch(`${API_ROOT}/${encodeURIComponent(datasetId)}/records?${params}`, {
@@ -288,6 +291,7 @@
       throw error;
     } finally {
       window.clearTimeout(timer);
+      if (controller) state.abortControllers.delete(controller);
     }
   }
 
@@ -605,17 +609,20 @@
       return;
     }
     if (state.loading) return;
+    const generation = state.generation;
     state.loading = true;
     renderList();
     try {
       const cacheKey = `varga-verde-bologna:all:${PARKS_DATASET_ID}`;
       const cached = readSessionCache(cacheKey);
       if (Array.isArray(cached) && cached.length) {
+        if (generation !== state.generation || !parksActive()) return;
         publishParkRecords(cached);
         return;
       }
 
       const firstPage = await waitForBasePageCache() || await fetchRecordsPage(PARKS_DATASET_ID, 0);
+      if (generation !== state.generation || !parksActive()) return;
       publishParkRecords(firstPage.records);
 
       const remainingOffsets = [];
@@ -628,6 +635,7 @@
       const status = $("verde-bologna-status");
       if (status && parksActive()) status.textContent = `${firstPage.records.length} parchi disponibili. Completo l’elenco in background…`;
       const settledPages = await Promise.allSettled(remainingOffsets.map((offset) => fetchRecordsPage(PARKS_DATASET_ID, offset)));
+      if (generation !== state.generation || !parksActive()) return;
       const complete = settledPages.every((result) => result.status === "fulfilled");
       const records = [
         ...firstPage.records,
@@ -641,6 +649,7 @@
       }
     } catch (error) {
       state.loading = false;
+      if (generation !== state.generation || !parksActive()) return;
       const node = $(LIST_ID);
       if (node) node.innerHTML = `<p class="verde-bologna-parks-list-status">${esc(error?.message || "Impossibile caricare l'elenco completo dei parchi.")}</p>`;
       const status = $("verde-bologna-status");
@@ -684,6 +693,30 @@
     window.clearTimeout(state.filterTimer);
     state.layer?.clearLayers?.();
     closeDetailSheet();
+  }
+
+  function resetCategoryState(event) {
+    if (event?.detail?.map && state.map && event.detail.map !== state.map) return;
+    state.generation += 1;
+    state.abortControllers.forEach((controller) => controller.abort());
+    state.abortControllers.clear();
+    window.clearTimeout(state.markerRefreshTimer);
+    window.clearTimeout(state.filterTimer);
+    state.layer?.clearLayers?.();
+    state.map = null;
+    state.layer = null;
+    state.markerRenderer = null;
+    state.mapEventsBound = false;
+    state.parks = [];
+    state.quartieri = [];
+    state.filtered = [];
+    state.loading = false;
+    state.loaded = false;
+    state.activeQuartiere = "";
+    state.userPosition = null;
+    state.locationRequested = false;
+    state.renderSignature = "";
+    deactivateParksMode();
   }
 
   function captureMapFactory() {
@@ -793,6 +826,8 @@
       closeDetailSheet();
     }
   }, true);
+
+  window.addEventListener("hera:verde-bologna-map-destroyed", resetCategoryState);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

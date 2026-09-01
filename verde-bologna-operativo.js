@@ -28,6 +28,7 @@
   let resultsObserver = null;
   let refreshTimer = 0;
   let mapCaptureInstalled = false;
+  let boundaryAbortController = null;
   const parkBoundaryCache = new Map();
 
   function injectStyle() {
@@ -48,12 +49,23 @@
         .verde-bologna-header h1{margin:0!important;font-size:1.05rem!important;color:#10264a!important}
         .verde-bologna-header p{display:none!important}
         .verde-bologna-badge{display:none!important}
-        .verde-bologna-hero,.verde-bologna-section-title,.verde-bologna-datasets{display:none!important}
-        .verde-bologna-operativo-card{display:block;margin:0;padding:6px 8px;background:#fff;box-shadow:none}
+        .verde-bologna-hero{display:none!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-section-title{display:flex!important;align-items:center!important;margin:0!important;padding:10px 10px 6px!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-section-title h2{font-size:1rem!important;color:#10264a!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-section-title span{font-size:.68rem!important;text-align:right!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-datasets{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;padding:0 8px 10px!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset{grid-template-rows:auto auto 1fr auto!important;gap:5px!important;min-height:146px!important;padding:11px!important;border-radius:14px!important;box-shadow:0 4px 14px rgba(26,55,91,.08)!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset-icon{font-size:1.35rem!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset h3{font-size:.83rem!important;line-height:1.2!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset p{display:-webkit-box!important;overflow:hidden!important;font-size:.68rem!important;line-height:1.25!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset small{display:none!important}
+        .verde-bologna-page:not(.is-category-open) .verde-bologna-dataset .btn{min-height:34px!important;padding:5px 6px!important;font-size:.66rem!important}
+        .verde-bologna-page.is-category-open .verde-bologna-section-title,.verde-bologna-page.is-category-open .verde-bologna-datasets{display:none!important}
+        .verde-bologna-operativo-card{display:none!important}
         .verde-bologna-operativo-card label,.verde-bologna-operativo-hint{display:none!important}
         .verde-bologna-operativo-card select{width:100%;min-height:42px;padding:7px 10px;border:1px solid #b9c9da;border-radius:9px;background:#fff;font:inherit;color:#10264a;font-size:.9rem;font-weight:800}
-        .verde-bologna-browser{position:relative;display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
-        .verde-bologna-browser.hidden{display:block!important}
+        .verde-bologna-browser{position:relative;display:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
+        .verde-bologna-page.is-category-open .verde-bologna-browser{display:block!important}
         .verde-bologna-browser-head{display:none!important}
         .verde-bologna-search{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;gap:6px!important;margin:0!important;padding:0 8px 6px!important}
         .verde-bologna-search input{grid-column:auto!important;min-width:0!important;width:100%!important;min-height:42px!important;padding:7px 9px!important;border:1px solid #b9c9da!important;border-radius:9px!important;font-size:.88rem!important}
@@ -65,7 +77,7 @@
         .verde-bologna-map-toolbar label{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
         .verde-bologna-map-toolbar select{width:92px!important;min-height:42px!important;padding:6px 7px!important;border:1px solid rgba(16,38,74,.18)!important;border-radius:21px!important;background:rgba(255,255,255,.96)!important;box-shadow:0 3px 12px rgba(16,38,74,.2)!important;font-size:.72rem!important;font-weight:800!important}
         .verde-bologna-map-status{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
-        .verde-bologna-map{width:100%!important;height:calc(100dvh - 181px)!important;min-height:420px!important;border-radius:0!important;background:#e9eef4!important;touch-action:none!important}
+        .verde-bologna-map{width:100%!important;height:calc(100dvh - 126px)!important;min-height:420px!important;border-radius:0!important;background:#e9eef4!important;touch-action:none!important}
         .verde-bologna-code-marker{min-width:40px;height:29px;padding:0 7px;font-size:.72rem}
         .verde-bologna-results{gap:8px!important;margin:10px 8px 0!important}
         .verde-bologna-result{grid-template-columns:1fr!important;gap:8px!important;padding:11px!important;border-radius:12px!important;background:#f8fbfd!important}
@@ -121,13 +133,6 @@
         scheduleCodeMarkers();
       }
     }, true);
-  }
-
-  function primeDefaultDataset(page) {
-    if (!page || !window.matchMedia(MOBILE_QUERY).matches) return;
-    const browser = $("verde-bologna-browser");
-    if (browser && !browser.classList.contains("hidden")) return;
-    page.querySelector('[data-vb-open="un_gest"]')?.click();
   }
 
   function normalizeKey(value) {
@@ -293,9 +298,12 @@
     if (parkBoundaryCache.has(cacheKey)) return parkBoundaryCache.get(cacheKey);
 
     const queryWords = words.slice(-3).join(" ");
+    boundaryAbortController?.abort();
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    boundaryAbortController = controller;
     const fetchByTerm = async (term) => {
       const params = new URLSearchParams({ limit: "100", where: `search(\"${escapeSearch(term)}\")` });
-      const response = await fetch(`${API_ROOT}/un_gest/records?${params}`, { headers: { Accept: "application/json" } });
+      const response = await fetch(`${API_ROOT}/un_gest/records?${params}`, { headers: { Accept: "application/json" }, signal: controller?.signal });
       if (!response.ok) return [];
       const payload = await response.json();
       return Array.isArray(payload?.results) ? payload.results : [];
@@ -309,6 +317,7 @@
       return normalizedWords.every((word) => haystack.includes(word));
     });
     parkBoundaryCache.set(cacheKey, records);
+    if (boundaryAbortController === controller) boundaryAbortController = null;
     return records;
   }
 
@@ -319,6 +328,7 @@
     if (status) status.textContent = `Cerco i confini gestionali di ${parkName}…`;
     try {
       const records = await fetchManagedParkRecords(parkName);
+      if (!verdeMap || !parkBoundaryLayer) return;
       parkBoundaryLayer.clearLayers();
       const bounds = window.L.latLngBounds([]);
       records.forEach((record) => {
@@ -332,7 +342,8 @@
         verdeMap.fitBounds(bounds.pad(0.08), { animate: false, maxZoom: 18 });
         if (status) status.textContent = `${records.length} unità gestionali comunali evidenziate per ${parkName}. Il codice resta visibile sulla mappa.`;
       } else if (status) status.textContent = `Nessun confine gestionale abbinato automaticamente a ${parkName}. Il codice e la posizione ufficiale restano disponibili.`;
-    } catch (_) {
+    } catch (error) {
+      if (error?.name === "AbortError" || !verdeMap) return;
       if (status) status.textContent = `Confini gestionali non disponibili in questo momento. Il codice e la posizione ufficiale restano disponibili.`;
     }
   }
@@ -357,14 +368,26 @@
     const observer = new MutationObserver(() => {
       if (!page.classList.contains("hidden")) {
         ensureOperationalCard(page);
-        window.setTimeout(() => primeDefaultDataset(page), 40);
-        window.setTimeout(scheduleCodeMarkers, 80);
+        if (page.classList.contains("is-category-open")) window.setTimeout(scheduleCodeMarkers, 80);
       } else {
         parkBoundaryLayer?.clearLayers?.();
         codeLayer?.clearLayers?.();
       }
     });
     observer.observe(page, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
+  }
+
+  function resetCapturedMap(event) {
+    if (event?.detail?.map && verdeMap && event.detail.map !== verdeMap) return;
+    window.clearTimeout(refreshTimer);
+    boundaryAbortController?.abort();
+    boundaryAbortController = null;
+    parkBoundaryCache.clear();
+    codeLayer?.clearLayers?.();
+    parkBoundaryLayer?.clearLayers?.();
+    verdeMap = null;
+    codeLayer = null;
+    parkBoundaryLayer = null;
   }
 
   function install() {
@@ -383,7 +406,6 @@
       syncFromCards(page);
       observePage(page);
       observeResults();
-      if (!page.classList.contains("hidden")) primeDefaultDataset(page);
       return true;
     };
     if (attach()) return;
@@ -393,6 +415,8 @@
       if (attach() || attempts > 80) window.clearInterval(timer);
     }, 100);
   }
+
+  window.addEventListener("hera:verde-bologna-map-destroyed", resetCapturedMap);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

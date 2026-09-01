@@ -21,6 +21,7 @@
   const MOBILE_QUERY = "(max-width: 760px)";
   const MOBILE_VISIBLE_TREE_LIMIT = 80;
   const DESKTOP_VISIBLE_TREE_LIMIT = 300;
+  const MOBILE_MAP_START_DELAY_MS = 250;
   let map = null;
   let marker = null;
   let treesLayer = null;
@@ -378,7 +379,7 @@
         const currentMap = initializeMap();
         currentMap?.invalidateSize?.({ pan: false, animate: false });
         loadVisibleTrees();
-      }, 0);
+      }, mobileView() ? MOBILE_MAP_START_DELAY_MS : 0);
     });
     if (!mobileView()) {
       window.setTimeout(() => {

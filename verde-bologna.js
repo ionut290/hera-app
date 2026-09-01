@@ -20,6 +20,7 @@
   const MAP_CREATED_EVENT = "hera:verde-bologna-map-created";
   const CATEGORY_OPENED_EVENT = "hera:verde-bologna-category-opened";
   const CATEGORY_CLOSED_EVENT = "hera:verde-bologna-category-closed";
+  const DELEGATED_MAP_CLEANUP_DELAY_MS = 700;
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
@@ -665,8 +666,8 @@
   function openDataset(datasetId) {
     const dataset = DATASETS.find((item) => item.id === datasetId); if (!dataset) return;
     if (dataset.delegate) {
-      state.activationSerial += 1;
-      destroyCategoryMap();
+      const activation = ++state.activationSerial;
+      stopCategoryWork();
       state.categoryOpen = false;
       const page = $(PAGE_ID), target = $(dataset.delegate);
       try { sessionStorage.setItem(TREE_RETURN_KEY, "1"); } catch (_) {}
@@ -675,6 +676,10 @@
       if (typeof openTreeSearch === "function") requestAnimationFrame(() => openTreeSearch());
       else if (target) requestAnimationFrame(() => target.click());
       else { try { sessionStorage.removeItem(TREE_RETURN_KEY); } catch (_) {} openPage(); window.alert("Catasto alberi non disponibile in questo momento."); }
+      window.setTimeout(() => {
+        if (activation !== state.activationSerial || !page?.classList.contains("hidden")) return;
+        destroyCategoryMap();
+      }, DELEGATED_MAP_CLEANUP_DELAY_MS);
       return;
     }
     const activation = ++state.activationSerial;

@@ -170,10 +170,14 @@ test.describe('Verde Bologna su mobile', () => {
       });
       const makeGroup = () => ({ addTo() { return this; }, clearLayers() {}, eachLayer() {}, removeLayer() {} });
       window.L = {
-        map() {
-          window.__verdeBolognaMapCreates += 1;
+        map(node) {
+          const isVerdeBolognaMap = node?.id === 'verde-bologna-map';
+          if (isVerdeBolognaMap) window.__verdeBolognaMapCreates += 1;
           const map = {
-            setView() { return map; }, on() { return map; }, off() { return map; }, remove() {},
+            setView() { return map; }, on() { return map; }, off() { return map; },
+            remove() {
+              if (isVerdeBolognaMap) window.__treePageVisibleWhenVerdeMapRemoved = !document.getElementById('tree-search-page').classList.contains('hidden');
+            },
             getZoom() { return 15; }, getCenter() { return { lat: 44.4949, lng: 11.3426 }; },
             getBounds() { return makeBounds(true); }, fitBounds() { return map; }, invalidateSize() { return map; },
             eachLayer() {}, dragging: { enable() {} }, touchZoom: { enable() {} }, doubleClickZoom: { enable() {} }
@@ -239,6 +243,11 @@ test.describe('Verde Bologna su mobile', () => {
     await expect.poll(() => page.evaluate(() => window.__verdeBolognaMapCreates)).toBe(1);
     await page.locator('[data-vb-open="un_gest"]').click();
     await expect(page.locator('#verde-bologna-map')).toHaveCSS('touch-action', 'none');
+    await page.locator('#verde-bologna-back-btn').click();
+    await page.locator('[data-vb-open="alberi-manutenzioni"]').click();
+    await expect(page.locator('#tree-search-page')).toBeVisible();
+    await expect(page.locator('#verde-bologna-page')).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.__treePageVisibleWhenVerdeMapRemoved)).toBe(true);
   });
 });
 

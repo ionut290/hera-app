@@ -30,5 +30,8 @@ const checks=[
  ['batch sotto limite Firestore',js.includes('i+=400')&&js.includes('commitOperations')],
  ['contatori commessa',js.includes('impiantiFattiCount')&&js.includes('workItemsDaFareCount')],
  ['coordinate validate',js.includes('coordinate=(value,min,max)')&&js.includes('coordinateTools.diagnose')&&js.includes('gpsY:gps.valid?gps.latitude:null')],
+ ['posizione GPS automatica nel form mobile',js.includes('id="commessa-mobile-current-location"')&&js.includes('navigator.geolocation.getCurrentPosition')&&js.includes('acquireMobileCurrentPosition')],
+ ['GPS singolo senza aggiornamento continuo',js.includes('{enableHighAccuracy:true,timeout:15000,maximumAge:0}')&&!js.includes('mobileLocationWatchId')],
+ ['GPS compila coordinate e indirizzo',js.includes('latitudeInput.value=Number(gps.latitude).toFixed(6)')&&js.includes('longitudeInput.value=Number(gps.longitude).toFixed(6)')&&js.includes('void autofillMobileAddress(form)')],
  ['pulsante riparazione',html.includes('repair-imported-plants-btn')&&html.includes('Ripara collegamento impianti')]
 ];let failed=false;for(const [name,ok] of checks){console.log(`${ok?'✅':'❌'} ${name}`);failed||=!ok;}if(failed)process.exit(1);

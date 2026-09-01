@@ -42,38 +42,32 @@
       .verde-bologna-code-marker.is-fallback{background:#58697b}
       @media ${MOBILE_QUERY}{
         .verde-bologna-page{background:#f1f6fb!important;color:#10264a!important}
-        .verde-bologna-shell{padding:0 10px 18px!important}
-        .verde-bologna-header{position:sticky!important;top:0!important;z-index:1010!important;display:flex!important;grid-template-columns:none!important;gap:10px!important;align-items:center!important;margin:0 -10px 10px!important;padding:max(10px,env(safe-area-inset-top)) 10px 10px!important;background:#fff!important;border-bottom:1px solid #d9e3ef!important}
-        .verde-bologna-header .btn{min-width:auto!important;padding:8px 10px!important}
-        .verde-bologna-header h1{margin:0!important;font-size:1.18rem!important;color:#10264a!important}
-        .verde-bologna-header p{margin:2px 0 0!important;font-size:.72rem!important;color:#55708f!important}
+        .verde-bologna-shell{width:100%!important;padding:0 0 12px!important}
+        .verde-bologna-header{position:sticky!important;top:0!important;z-index:1010!important;display:flex!important;grid-template-columns:none!important;gap:8px!important;align-items:center!important;margin:0!important;padding:max(7px,env(safe-area-inset-top)) 8px 7px!important;background:#fff!important;border-bottom:1px solid #d9e3ef!important}
+        .verde-bologna-header .btn{min-width:auto!important;min-height:38px!important;padding:6px 9px!important}
+        .verde-bologna-header h1{margin:0!important;font-size:1.05rem!important;color:#10264a!important}
+        .verde-bologna-header p{display:none!important}
         .verde-bologna-badge{display:none!important}
         .verde-bologna-hero,.verde-bologna-section-title,.verde-bologna-datasets{display:none!important}
-        .verde-bologna-operativo-card{display:grid;gap:9px;margin:10px 0;padding:14px;border-radius:18px;background:#fff;box-shadow:0 8px 25px rgba(26,55,91,.1)}
-        .verde-bologna-operativo-card label{font-size:.82rem;font-weight:900;color:#10264a}
-        .verde-bologna-operativo-card select{width:100%;min-height:48px;padding:10px 12px;border:1px solid #b9c9da;border-radius:10px;background:#fff;font:inherit;color:#10264a}
-        .verde-bologna-operativo-hint{margin:0;color:#55708f;font-size:.78rem;line-height:1.4}
-        .verde-bologna-browser{display:block!important;margin:10px 0 0!important;padding:14px!important;border:0!important;border-radius:18px!important;background:#fff!important;box-shadow:0 8px 25px rgba(26,55,91,.1)!important}
+        .verde-bologna-operativo-card{display:block;margin:0;padding:6px 8px;background:#fff;box-shadow:none}
+        .verde-bologna-operativo-card label,.verde-bologna-operativo-hint{display:none!important}
+        .verde-bologna-operativo-card select{width:100%;min-height:42px;padding:7px 10px;border:1px solid #b9c9da;border-radius:9px;background:#fff;font:inherit;color:#10264a;font-size:.9rem;font-weight:800}
+        .verde-bologna-browser{position:relative;display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
         .verde-bologna-browser.hidden{display:block!important}
-        .verde-bologna-browser-head{display:flex!important;align-items:center!important;gap:8px!important}
-        .verde-bologna-browser-head>div{min-width:0;flex:1}
-        .verde-bologna-browser-head h2{font-size:1rem!important;color:#10264a!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .verde-bologna-browser-head p{display:none!important}
-        .verde-bologna-source-link{width:auto!important;min-height:36px!important;padding:7px 9px!important;border-radius:9px!important;font-size:.69rem!important;white-space:nowrap!important}
-        .verde-bologna-search{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin:10px 0!important}
-        .verde-bologna-search input{grid-column:1/-1!important;width:100%!important;min-height:48px!important;padding:10px 12px!important;border:1px solid #b9c9da!important;border-radius:10px!important;font-size:1rem!important}
-        .verde-bologna-search .btn{min-height:44px!important;margin:0!important}
-        .verde-bologna-status{margin:0 0 10px!important;padding:7px 10px!important;border-radius:9px!important;background:#edf4fb!important;color:#355777!important;font-size:.78rem!important}
-        .verde-bologna-map-card{margin:0!important;padding:10px!important;border:0!important;border-radius:16px!important;background:#fff!important;box-shadow:none!important}
-        .verde-bologna-map-toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
-        .verde-bologna-map-toolbar strong{grid-column:1/-1!important;margin:0!important;font-size:.92rem!important}
-        .verde-bologna-map-toolbar .btn{min-height:40px!important;padding:7px 8px!important;font-size:.72rem!important;font-weight:900!important;white-space:nowrap!important}
-        .verde-bologna-map-toolbar label{align-self:center!important;font-size:.72rem!important;font-weight:900!important;color:#355777!important}
-        .verde-bologna-map-toolbar select{width:100%!important;min-height:40px!important;padding:7px 8px!important;border:1px solid #b9c9da!important;border-radius:9px!important;background:#fff!important;font-size:.78rem!important}
-        .verde-bologna-map-status{margin:0!important;padding:6px 8px!important;border-radius:8px!important;background:#edf4fb!important;color:#355777!important;font-size:.72rem!important}
-        .verde-bologna-map{height:52vh!important;min-height:360px!important;border-radius:12px!important;background:#e9eef4!important}
+        .verde-bologna-browser-head{display:none!important}
+        .verde-bologna-search{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto!important;gap:6px!important;margin:0!important;padding:0 8px 6px!important}
+        .verde-bologna-search input{grid-column:auto!important;min-width:0!important;width:100%!important;min-height:42px!important;padding:7px 9px!important;border:1px solid #b9c9da!important;border-radius:9px!important;font-size:.88rem!important}
+        .verde-bologna-search .btn{min-width:58px!important;min-height:42px!important;margin:0!important;padding:6px 8px!important;font-size:.69rem!important}
+        .verde-bologna-status{height:24px!important;margin:0!important;padding:3px 8px!important;border-radius:0!important;background:#edf4fb!important;color:#355777!important;font-size:.7rem!important;line-height:18px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+        .verde-bologna-map-card{position:relative!important;display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+        .verde-bologna-map-toolbar{position:absolute!important;z-index:700!important;top:8px!important;right:8px!important;display:flex!important;grid-template-columns:none!important;gap:6px!important;align-items:center!important;width:auto!important;padding:0!important}
+        .verde-bologna-map-toolbar .btn{display:grid!important;place-items:center!important;width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;padding:0!important;border:1px solid rgba(16,38,74,.18)!important;border-radius:50%!important;background:rgba(255,255,255,.96)!important;box-shadow:0 3px 12px rgba(16,38,74,.2)!important;color:#10264a!important;font-size:1.12rem!important;font-weight:900!important}
+        .verde-bologna-map-toolbar label{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
+        .verde-bologna-map-toolbar select{width:92px!important;min-height:42px!important;padding:6px 7px!important;border:1px solid rgba(16,38,74,.18)!important;border-radius:21px!important;background:rgba(255,255,255,.96)!important;box-shadow:0 3px 12px rgba(16,38,74,.2)!important;font-size:.72rem!important;font-weight:800!important}
+        .verde-bologna-map-status{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
+        .verde-bologna-map{width:100%!important;height:calc(100dvh - 181px)!important;min-height:420px!important;border-radius:0!important;background:#e9eef4!important;touch-action:none!important}
         .verde-bologna-code-marker{min-width:40px;height:29px;padding:0 7px;font-size:.72rem}
-        .verde-bologna-results{gap:8px!important;margin-top:10px!important}
+        .verde-bologna-results{gap:8px!important;margin:10px 8px 0!important}
         .verde-bologna-result{grid-template-columns:1fr!important;gap:8px!important;padding:11px!important;border-radius:12px!important;background:#f8fbfd!important}
         .verde-bologna-result h3{font-size:.95rem!important;color:#10264a!important}
         .verde-bologna-result p{font-size:.78rem!important}
@@ -83,8 +77,9 @@
         .verde-bologna-details div{padding:7px!important}
         .verde-bologna-details span{font-size:.66rem!important}
         .verde-bologna-details strong{font-size:.75rem!important}
-        .verde-bologna-load-more{min-height:44px!important;margin-top:9px!important}
-        .verde-bologna-map-card.is-fullscreen{z-index:12060!important;padding:max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom))!important;border-radius:0!important;background:#f1f6fb!important}
+        .verde-bologna-load-more{width:calc(100% - 16px)!important;min-height:44px!important;margin:9px 8px 0!important}
+        .verde-bologna-map-card.is-fullscreen{z-index:12060!important;padding:0!important;border-radius:0!important;background:#f1f6fb!important}
+        .verde-bologna-map-card.is-fullscreen .verde-bologna-map-toolbar{top:max(8px,env(safe-area-inset-top))!important;right:max(8px,env(safe-area-inset-right))!important}
         .verde-bologna-map-card.is-fullscreen .verde-bologna-map{height:100%!important;min-height:0!important}
       }
     `;

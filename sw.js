@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v209";
-const CACHE_RESET_VERSION = "20260901-verde-routing1";
+const CACHE_NAME = "varga-cantieri-shell-v210";
+const CACHE_RESET_VERSION = "20260901-verde-totalfix1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,7 +10,10 @@ const APP_SHELL = [
   "./accounting-v2.css?v=20260901-current-gps1",
   "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
-  "./app-pure-utils.js?v=20260901-verde-routing1",
+  "./app-pure-utils.js?v=20260901-verde-totalfix1",
+  "./verde-bologna.js?v=20260901-verde-totalfix1",
+  "./verde-bologna-operativo.js?v=20260901-verde-totalfix1",
+  "./verde-bologna-parchi-mobile.js?v=20260901-verde-totalfix1",
   "./data-license-view.js?v=20260831-license1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",
@@ -106,6 +109,9 @@ const NETWORK_DOCUMENT_TIMEOUT_MS = 7000;
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/app.js",
   "/app-pure-utils.js",
+  "/verde-bologna.js",
+  "/verde-bologna-operativo.js",
+  "/verde-bologna-parchi-mobile.js",
   "/data-license-view.js",
   "/potature-followup.js",
   "/green-assistant.js",

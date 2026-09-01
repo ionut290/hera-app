@@ -36,6 +36,7 @@
     filtered: [],
     loading: false,
     loaded: false,
+    complete: false,
     activeQuartiere: "",
     userPosition: null,
     locationRequested: false,
@@ -47,7 +48,8 @@
     filterTimer: 0,
     renderSignature: "",
     generation: 0,
-    abortControllers: new Set()
+    abortControllers: new Set(),
+    active: false
   };
 
   const $ = (id) => document.getElementById(id);
@@ -294,9 +296,10 @@
     }
   }
 
-  function publishParkRecords(records) {
+  function publishParkRecords(records, { complete = false } = {}) {
     state.parks = records.map(prepareRecord);
     state.loaded = true;
+    state.complete = complete;
     state.loading = false;
     state.renderSignature = "";
     renderQuartiereFilters();
@@ -616,7 +619,7 @@
       const cached = readSessionCache(cacheKey);
       if (Array.isArray(cached) && cached.length) {
         if (generation !== state.generation || !parksActive()) return;
-        publishParkRecords(cached);
+        publishParkRecords(cached, { complete: true });
         return;
       }
 
@@ -627,6 +630,7 @@
       const remainingOffsets = [];
       for (let offset = firstPage.records.length; offset < firstPage.total; offset += PAGE_SIZE) remainingOffsets.push(offset);
       if (!remainingOffsets.length) {
+        state.complete = true;
         writeSessionCache(cacheKey, firstPage.records);
         return;
       }
@@ -640,7 +644,7 @@
         ...firstPage.records,
         ...settledPages.flatMap((result) => result.status === "fulfilled" ? result.value.records : [])
       ];
-      publishParkRecords(records);
+      publishParkRecords(records, { complete });
       if (complete) {
         writeSessionCache(cacheKey, records);
       } else if (status && parksActive()) {
@@ -675,6 +679,8 @@
   function activateParksMode() {
     const page = $(PAGE_ID);
     if (!page || !parksActive()) return;
+    if (state.active && page.classList.contains("vb-parks-advanced")) return;
+    state.active = true;
     ensureUi();
     page.classList.add("vb-parks-advanced");
     const input = $("verde-bologna-query");
@@ -689,7 +695,15 @@
 
   function deactivateParksMode() {
     $(PAGE_ID)?.classList.remove("vb-parks-advanced");
+    if (!state.active) return;
+    state.active = false;
+    state.generation += 1;
+    state.abortControllers.forEach((controller) => controller.abort());
+    state.abortControllers.clear();
+    state.loading = false;
+    if (!state.complete) state.loaded = false;
     window.clearTimeout(state.filterTimer);
+    window.clearTimeout(state.markerRefreshTimer);
     state.layer?.clearLayers?.();
     closeDetailSheet();
   }
@@ -711,10 +725,13 @@
     state.filtered = [];
     state.loading = false;
     state.loaded = false;
+    state.complete = false;
     state.activeQuartiere = "";
     state.userPosition = null;
     state.locationRequested = false;
     state.renderSignature = "";
+    closeDetailSheet();
+    state.active = false;
     deactivateParksMode();
   }
 
@@ -811,6 +828,7 @@
   window.addEventListener("hera:verde-bologna-map-destroyed", resetCategoryState);
   window.addEventListener("hera:verde-bologna-map-created", captureCreatedMap);
   window.addEventListener("hera:verde-bologna-category-opened", handleCategoryOpened);
+  window.addEventListener("hera:verde-bologna-category-closed", deactivateParksMode);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

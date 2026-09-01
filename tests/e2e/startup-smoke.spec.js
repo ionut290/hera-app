@@ -121,6 +121,98 @@ test.describe('Arredo urbano', () => {
   });
 });
 
+test.describe('Verde Bologna su mobile', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('apre tutte le categorie senza ricreare la mappa o bloccare il thread', async ({ page }) => {
+    await page.route('https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/**/records?**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        total_count: 2,
+        results: [
+          { id: 'vb-1', nome: 'Elemento verde 1', geo_point_2d: { lat: 44.4949, lon: 11.3426 } },
+          { id: 'vb-2', nome: 'Elemento verde 2', geo_point_2d: { lat: 44.496, lon: 11.344 } }
+        ]
+      })
+    }));
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => Boolean(window.HeraVerdeBologna));
+    await page.evaluate(() => {
+      window.__verdeBolognaMapCreates = 0;
+      const makeBounds = (initial = false) => {
+        let valid = initial;
+        return {
+          extend() { valid = true; return this; },
+          isValid() { return valid; },
+          pad() { return this; },
+          getNorthEast() { return { lat: 44.501, lng: 11.351 }; },
+          contains() { return true; }
+        };
+      };
+      const makeLayer = () => ({
+        addTo() { return this; }, remove() { return this; }, bindPopup() { return this; },
+        on() { return this; }, openPopup() { return this; }, setLatLng() { return this; },
+        setRadius() { return this; }, getLayers() { return []; }, getBounds() { return makeBounds(true); },
+        eachLayer() {}
+      });
+      const makeGroup = () => ({ addTo() { return this; }, clearLayers() {}, eachLayer() {}, removeLayer() {} });
+      window.L = {
+        map() {
+          window.__verdeBolognaMapCreates += 1;
+          const map = {
+            setView() { return map; }, on() { return map; }, off() { return map; }, remove() {},
+            getZoom() { return 15; }, getCenter() { return { lat: 44.4949, lng: 11.3426 }; },
+            getBounds() { return makeBounds(true); }, fitBounds() { return map; }, invalidateSize() { return map; },
+            eachLayer() {}, dragging: { enable() {} }, touchZoom: { enable() {} }, doubleClickZoom: { enable() {} }
+          };
+          return map;
+        },
+        tileLayer: makeLayer,
+        layerGroup: makeGroup,
+        latLngBounds: () => makeBounds(false),
+        geoJSON: makeLayer,
+        marker: makeLayer,
+        circleMarker: makeLayer,
+        circle: makeLayer,
+        canvas: () => ({}),
+        divIcon: (options) => options,
+        latLng: (lat, lng) => ({ lat, lng }),
+        popup: () => ({ setLatLng() { return this; }, setContent() { return this; }, openOn() { return this; } }),
+        CircleMarker: function CircleMarker() {}
+      };
+    });
+    await page.evaluate(() => window.HeraVerdeBologna.open());
+
+    const categories = [
+      ['un_gest', 'Aree verdi in manutenzione'],
+      ['popolazione-arborea', 'Popolazioni arboree'],
+      ['siepi', 'Siepi in manutenzione'],
+      ['attrezzature_ludiche_ginniche_sportive', 'Giochi e attrezzature sportive'],
+      ['arredo', 'Arredo urbano comunale'],
+      ['sgambatura_cani', 'Aree cani'],
+      ['carta-tecnica-comunale-toponimi-parchi-e-giardini', 'Parchi e giardini'],
+      ['aree-verdi_entrate_centroidi', 'Ingressi aree verdi'],
+      ['aree-ortive', 'Aree ortive'],
+      ['verde_privato_urbanizzato', 'Verde privato']
+    ];
+
+    for (const [datasetId, title] of categories) {
+      await page.locator(`[data-vb-open="${datasetId}"]`).click();
+      await expect(page.locator('#verde-bologna-page')).toHaveClass(/is-category-open/);
+      await expect(page.locator('#verde-bologna-page-title')).toContainText(title);
+      await expect(page.locator('#verde-bologna-browser')).toBeVisible();
+      await expect(page.locator('#verde-bologna-map')).toBeVisible();
+      await page.locator('#verde-bologna-back-btn').click();
+      await expect(page.locator('#verde-bologna-page')).not.toHaveClass(/is-category-open/);
+    }
+
+    await expect.poll(() => page.evaluate(() => window.__verdeBolognaMapCreates)).toBe(1);
+    await page.locator('[data-vb-open="un_gest"]').click();
+    await expect(page.locator('#verde-bologna-map')).toHaveCSS('touch-action', 'none');
+  });
+});
+
 test.describe('Catasto arboreo', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

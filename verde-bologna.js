@@ -19,6 +19,7 @@
   const TREE_RETURN_KEY = "varga-verde-bologna:return-from-tree";
   const MAP_CREATED_EVENT = "hera:verde-bologna-map-created";
   const CATEGORY_OPENED_EVENT = "hera:verde-bologna-category-opened";
+  const CATEGORY_CLOSED_EVENT = "hera:verde-bologna-category-closed";
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
@@ -39,7 +40,7 @@
     baseLayer: null, hybridLabels: null, featureLayer: null, featureByIndex: new Map(), userMarker: null,
     userAccuracy: null, requestSerial: 0, fullscreen: false, requestAbort: null,
     viewportTimer: 0, viewportSerial: 0, viewportAbort: null, lastViewportKey: "", loadingViewport: false,
-    mobileRenderer: null, categoryOpen: false
+    mobileRenderer: null, categoryOpen: false, activationSerial: 0
   };
 
   const TILE_LAYERS = Object.freeze({
@@ -286,13 +287,37 @@
   }
 
   function initializeMap() {
-    if (state.map || !window.L || !$("verde-bologna-map")) return;
-    state.map = L.map($("verde-bologna-map"), { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 14);
-    applyMapStyle($("verde-bologna-map-style")?.value || "classic");
-    state.featureLayer = L.layerGroup().addTo(state.map);
-    state.map.on("moveend zoomend", scheduleViewportLoad);
-    syncMapInteractionMode();
-    window.dispatchEvent(new CustomEvent(MAP_CREATED_EVENT, { detail: { map: state.map, datasetId: state.datasetId } }));
+    if (state.map) { syncMapInteractionMode(); return state.map; }
+    if (!window.L || !$("verde-bologna-map")) {
+      setStatus("Mappa non disponibile in questo momento. Torna alle categorie e riprova.", "error");
+      return null;
+    }
+    const createMap = () => {
+      state.map = L.map($("verde-bologna-map"), { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 15);
+      applyMapStyle($("verde-bologna-map-style")?.value || "classic");
+      state.featureLayer = L.layerGroup().addTo(state.map);
+      state.map.on("moveend zoomend", scheduleViewportLoad);
+      syncMapInteractionMode();
+      window.dispatchEvent(new CustomEvent(MAP_CREATED_EVENT, { detail: { map: state.map, datasetId: state.datasetId } }));
+      return state.map;
+    };
+    try { return createMap(); }
+    catch (error) {
+      try { state.map?.remove?.(); } catch (_) {}
+      state.map = null;
+      state.baseLayer = null;
+      state.hybridLabels = null;
+      state.featureLayer = null;
+      renewMapContainer();
+      try { return createMap(); }
+      catch (retryError) {
+        try { state.map?.remove?.(); } catch (_) {}
+        state.map = null;
+        state.featureLayer = null;
+        setStatus(`Impossibile inizializzare la mappa: ${retryError?.message || error?.message || "errore sconosciuto"}. Torna alle categorie e riprova.`, "error");
+        return null;
+      }
+    }
   }
 
   function resizeMap() { requestAnimationFrame(() => state.map?.invalidateSize({ pan: false, animate: false })); setTimeout(() => state.map?.invalidateSize({ pan: false, animate: false }), 180); }
@@ -521,7 +546,14 @@
       const total = Number(first.total_count) || 0;
       const viewportLimit = mobileView() ? MOBILE_VIEWPORT_MAX_RECORDS : VIEWPORT_MAX_RECORDS;
       if (total > viewportLimit) {
-        if (mapStatus) mapStatus.textContent = `${total} elementi in questa zona: aumenta ancora lo zoom per mantenere la mappa fluida e visualizzarli tutti.`;
+        const records = [...(first.results || [])].slice(0, PAGE_SIZE);
+        state.records = records;
+        state.total = total;
+        state.offset = records.length;
+        state.lastViewportKey = viewportKey;
+        renderResults({ fitMap: false });
+        setStatus(`${records.length} elementi mostrati su ${total} nella zona. Aumenta lo zoom per restringere e visualizzare tutti i risultati.`, "warning");
+        if (mapStatus) mapStatus.textContent = `${records.length} elementi mostrati su ${total}. La mappa resta leggera; aumenta lo zoom per restringere la zona.`;
         return;
       }
       const records = [...(first.results || [])];
@@ -561,6 +593,22 @@
     state.loadingViewport = false;
   }
 
+  function resetCategoryData() {
+    stopCategoryWork();
+    closeDetailSheet();
+    if (state.fullscreen) setFullscreen(false);
+    state.featureLayer?.clearLayers?.();
+    state.featureByIndex.clear();
+    state.records = [];
+    state.offset = 0;
+    state.total = 0;
+    state.query = "";
+    state.lastViewportKey = "";
+    const results = $("verde-bologna-results");
+    if (results) results.innerHTML = "";
+    $("verde-bologna-load-more")?.classList.add("hidden");
+  }
+
   function renewMapContainer() {
     const mapNode = $("verde-bologna-map");
     if (!mapNode?.parentNode) return mapNode;
@@ -574,9 +622,7 @@
   }
 
   function destroyCategoryMap() {
-    stopCategoryWork();
-    closeDetailSheet();
-    if (state.fullscreen) setFullscreen(false);
+    resetCategoryData();
     const oldMap = state.map;
     try { oldMap?.remove?.(); } catch (_) { try { oldMap?.off?.(); } catch (_) {} }
     if (oldMap) window.dispatchEvent(new CustomEvent("hera:verde-bologna-map-destroyed", { detail: { map: oldMap } }));
@@ -587,32 +633,26 @@
     state.userMarker = null;
     state.userAccuracy = null;
     state.mobileRenderer = null;
-    state.featureByIndex.clear();
-    state.records = [];
-    state.offset = 0;
-    state.total = 0;
-    state.query = "";
-    state.lastViewportKey = "";
     renewMapContainer();
-    const results = $("verde-bologna-results");
-    if (results) results.innerHTML = "";
-    $("verde-bologna-load-more")?.classList.add("hidden");
   }
 
   function showCategoryHub({ scroll = true } = {}) {
-    destroyCategoryMap();
+    state.activationSerial += 1;
+    resetCategoryData();
     state.categoryOpen = false;
     const page = $(PAGE_ID);
     page?.classList.remove("is-category-open");
     $("verde-bologna-browser")?.classList.add("hidden");
     updatePageHeader();
     renderDatasetCards();
+    window.dispatchEvent(new CustomEvent(CATEGORY_CLOSED_EVENT, { detail: { map: state.map } }));
     if (scroll) page?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
 
   function openDataset(datasetId) {
     const dataset = DATASETS.find((item) => item.id === datasetId); if (!dataset) return;
     if (dataset.delegate) {
+      state.activationSerial += 1;
       destroyCategoryMap();
       state.categoryOpen = false;
       const page = $(PAGE_ID), target = $(dataset.delegate);
@@ -622,7 +662,8 @@
       else { try { sessionStorage.removeItem(TREE_RETURN_KEY); } catch (_) {} openPage(); window.alert("Catasto alberi non disponibile in questo momento."); }
       return;
     }
-    destroyCategoryMap();
+    const activation = ++state.activationSerial;
+    resetCategoryData();
     state.categoryOpen = true;
     state.datasetId = dataset.id;
     const page = $(PAGE_ID); page?.classList.add("is-category-open");
@@ -633,17 +674,25 @@
     if (title) title.textContent = `${dataset.icon} ${dataset.title}`; if (description) description.textContent = dataset.short; if (source) source.href = sourcePageUrl(dataset.id); if (query) { query.value = ""; query.placeholder = `Cerca per ${dataset.searchHint || "nome, codice o via"}…`; }
     const results = $("verde-bologna-results"); if (results) results.innerHTML = `<p class="verde-bologna-empty">Sposta o ingrandisci la mappa per vedere gli elementi nella zona, oppure usa la ricerca.</p>`;
     setStatus(`Categoria “${dataset.title}” selezionata. Cerca per ${dataset.searchHint || "nome, codice o via"} oppure aumenta lo zoom sulla mappa.`);
-    initializeMap(); resizeMap();
-    window.dispatchEvent(new CustomEvent(CATEGORY_OPENED_EVENT, { detail: { datasetId: dataset.id, map: state.map } }));
     page?.scrollTo?.({ top: 0, behavior: "auto" });
-    if (dataset.id === "carta-tecnica-comunale-toponimi-parchi-e-giardini") loadRecords(); else loadViewportRecords({ force: true });
+    requestAnimationFrame(() => {
+      if (activation !== state.activationSerial || !state.categoryOpen || state.datasetId !== dataset.id || page?.classList.contains("hidden")) return;
+      const map = initializeMap();
+      if (!map) return;
+      resizeMap();
+      window.dispatchEvent(new CustomEvent(CATEGORY_OPENED_EVENT, { detail: { datasetId: dataset.id, map } }));
+      window.setTimeout(() => {
+        if (activation !== state.activationSerial || !state.categoryOpen || state.datasetId !== dataset.id) return;
+        if (dataset.id === "carta-tecnica-comunale-toponimi-parchi-e-giardini") loadRecords(); else loadViewportRecords({ force: true });
+      }, 0);
+    });
   }
 
   function openPage() {
     $("menu-close-btn")?.click(); $("home-page")?.classList.add("hidden"); const page = buildPage(); page.classList.remove("hidden"); page.setAttribute("aria-hidden", "false"); showCategoryHub({ scroll: false });
   }
 
-  function closePage() { destroyCategoryMap(); state.categoryOpen = false; const page = $(PAGE_ID); page?.classList.add("hidden"); page?.classList.remove("is-category-open"); page?.setAttribute("aria-hidden", "true"); $("home-page")?.classList.remove("hidden"); }
+  function closePage() { state.activationSerial += 1; destroyCategoryMap(); state.categoryOpen = false; const page = $(PAGE_ID); page?.classList.add("hidden"); page?.classList.remove("is-category-open"); page?.setAttribute("aria-hidden", "true"); $("home-page")?.classList.remove("hidden"); }
 
   function setFullscreen(active) {
     state.fullscreen = Boolean(active); $("verde-bologna-map-card")?.classList.toggle("is-fullscreen", state.fullscreen); document.body.classList.toggle("verde-bologna-fullscreen-open", state.fullscreen);

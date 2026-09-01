@@ -359,6 +359,15 @@
     parkBoundaryLayer = null;
   }
 
+  function resetCategoryOverlays() {
+    window.clearTimeout(refreshTimer);
+    boundaryAbortController?.abort();
+    boundaryAbortController = null;
+    codeLayer?.clearLayers?.();
+    parkBoundaryLayer?.clearLayers?.();
+    scheduleCodeMarkers();
+  }
+
   function install() {
     injectStyle();
 
@@ -380,6 +389,8 @@
 
   window.addEventListener("hera:verde-bologna-map-destroyed", resetCapturedMap);
   window.addEventListener("hera:verde-bologna-map-created", captureCreatedMap);
+  window.addEventListener("hera:verde-bologna-category-opened", resetCategoryOverlays);
+  window.addEventListener("hera:verde-bologna-category-closed", resetCategoryOverlays);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

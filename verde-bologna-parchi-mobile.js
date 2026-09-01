@@ -40,7 +40,6 @@
     userPosition: null,
     locationRequested: false,
     listOpenRecord: null,
-    mapFactoryWrapped: false,
     installDone: false,
     markerRenderer: null,
     mapEventsBound: false,
@@ -719,28 +718,18 @@
     deactivateParksMode();
   }
 
-  function captureMapFactory() {
-    if (state.mapFactoryWrapped || !window.L?.map) return Boolean(state.mapFactoryWrapped);
-    const previousMapFactory = window.L.map;
-    if (previousMapFactory.__vbParksCapture) {
-      state.mapFactoryWrapped = true;
-      return true;
-    }
-    const wrapped = function(element, options) {
-      const map = previousMapFactory(element, options);
-      const node = typeof element === "string" ? document.getElementById(element) : element;
-      if (node?.id === "verde-bologna-map") {
-        state.map = map;
-        ensureLayer();
-        if (parksActive()) window.setTimeout(() => renderMapMarkers(), 80);
-      }
-      return map;
-    };
-    wrapped.__vbParksCapture = true;
-    wrapped.__previousMapFactory = previousMapFactory;
-    window.L.map = wrapped;
-    state.mapFactoryWrapped = true;
-    return true;
+  function captureCreatedMap(event) {
+    const map = event?.detail?.map;
+    if (!map) return;
+    state.map = map;
+    ensureLayer();
+    if (parksActive()) window.setTimeout(() => renderMapMarkers(), 80);
+  }
+
+  function handleCategoryOpened() {
+    window.setTimeout(() => {
+      if (parksActive()) activateParksMode(); else deactivateParksMode();
+    }, 0);
   }
 
   function installSearchBehavior() {
@@ -787,13 +776,6 @@
     select.addEventListener("change", () => window.setTimeout(() => {
       if (parksActive()) activateParksMode(); else deactivateParksMode();
     }, 80));
-    page.addEventListener("click", (event) => {
-      const button = event.target?.closest?.("[data-vb-open]");
-      if (!button) return;
-      window.setTimeout(() => {
-        if (parksActive()) activateParksMode(); else deactivateParksMode();
-      }, 100);
-    }, true);
     const observer = new MutationObserver(() => {
       if (parksActive()) activateParksMode(); else if (page.classList.contains("hidden")) deactivateParksMode();
     });
@@ -807,7 +789,6 @@
     let attempts = 0;
     const timer = window.setInterval(() => {
       attempts += 1;
-      captureMapFactory();
       if (ensureUi() && $(CATEGORY_ID)) {
         installSearchBehavior();
         installCategoryBehavior();
@@ -828,6 +809,8 @@
   }, true);
 
   window.addEventListener("hera:verde-bologna-map-destroyed", resetCategoryState);
+  window.addEventListener("hera:verde-bologna-map-created", captureCreatedMap);
+  window.addEventListener("hera:verde-bologna-category-opened", handleCategoryOpened);
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();

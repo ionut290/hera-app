@@ -82,7 +82,7 @@
 (function loadVerdeBologna() {
   if (document.querySelector("script[data-hera-verde-bologna]")) return;
   const script = document.createElement("script");
-  script.src = "./verde-bologna.js?v=20260901-verde-totalfix1";
+  script.src = "./verde-bologna.js?v=20260901-catasto-confini1";
   script.async = false;
   script.setAttribute("data-hera-verde-bologna", "1");
   document.head.appendChild(script);
@@ -92,7 +92,7 @@
 (function loadVerdeBolognaOperativo() {
   if (document.querySelector("script[data-hera-verde-bologna-operativo]")) return;
   const script = document.createElement("script");
-  script.src = "./verde-bologna-operativo.js?v=20260901-verde-totalfix1";
+  script.src = "./verde-bologna-operativo.js?v=20260901-catasto-confini1";
   script.async = false;
   script.setAttribute("data-hera-verde-bologna-operativo", "1");
   document.head.appendChild(script);
@@ -102,7 +102,7 @@
 (function loadVerdeBolognaParchiMobile() {
   if (document.querySelector("script[data-hera-verde-bologna-parchi-mobile]")) return;
   const script = document.createElement("script");
-  script.src = "./verde-bologna-parchi-mobile.js?v=20260901-verde-totalfix1";
+  script.src = "./verde-bologna-parchi-mobile.js?v=20260901-catasto-confini1";
   script.async = false;
   script.setAttribute("data-hera-verde-bologna-parchi-mobile", "1");
   document.head.appendChild(script);

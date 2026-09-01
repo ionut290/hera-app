@@ -31,6 +31,7 @@
   const state = {
     map: null,
     layer: null,
+    boundaryLayer: null,
     parks: [],
     quartieri: [],
     filtered: [],
@@ -115,13 +116,22 @@
     return null;
   }
 
+  function geometryPriority(geometry) {
+    if (geometry?.type === "Polygon" || geometry?.type === "MultiPolygon") return 3;
+    if (geometry?.type === "LineString" || geometry?.type === "MultiLineString") return 2;
+    if (geometry?.type === "Point" || geometry?.type === "MultiPoint") return 1;
+    return 0;
+  }
+
   function geometryOf(record) {
+    let selected = null;
     for (const [key, value] of Object.entries(record || {})) {
       const normalized = normalizeText(key).replace(/[^a-z0-9]/g, "");
       if (!normalized.includes("geoshape") && normalized !== "geometry" && normalized !== "geom" && !normalized.includes("geopoint")) continue;
       const geometry = parseGeometryValue(value);
-      if (geometry) return geometry;
+      if (geometryPriority(geometry) > geometryPriority(selected)) selected = geometry;
     }
+    if (selected) return selected;
     const point = fieldValue(record, ["geo_point_2d", "geopoint", "geo point"]);
     const parsed = parseGeometryValue(point);
     if (parsed) return parsed;
@@ -413,6 +423,16 @@
     return String(value);
   }
 
+  function isTechnicalGeometryField(key) {
+    const normalized = normalizeText(key).replace(/[^a-z0-9]/g, "");
+    return normalized.includes("geoshape") || normalized === "geometry" || normalized === "geom" || normalized.includes("geopoint");
+  }
+
+  function hasAreaBoundary(record) {
+    const type = geometryOf(record)?.type;
+    return type === "Polygon" || type === "MultiPolygon";
+  }
+
   function openDetailSheet(record) {
     const sheet = $(SHEET_ID);
     if (!sheet) return;
@@ -422,7 +442,8 @@
     const center = centerOf(record);
     const distance = recordDistance(record);
     const quarter = record.__vbQuartiere || "Non determinato";
-    const fields = Object.entries(record).filter(([key]) => !String(key).startsWith("__vb"));
+    const boundaryAvailable = hasAreaBoundary(record);
+    const fields = Object.entries(record).filter(([key]) => !String(key).startsWith("__vb") && !isTechnicalGeometryField(key));
     const navHref = center ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${center.lat},${center.lon}`)}` : "";
     sheet.innerHTML = `
       <header class="verde-bologna-parks-sheet-head">
@@ -433,10 +454,11 @@
         <strong>CODVIA</strong><span>${esc(codvia)}</span>
         <strong>NOMEVIA</strong><span>${esc(name)}</span>
         <strong>QUARTIERE</strong><span>${esc(quarter)}</span>
+        <strong>CONFINI</strong><span>${boundaryAvailable ? "Disponibili sulla mappa" : "Non disponibili nel dataset"}</span>
         ${Number.isFinite(distance) ? `<strong>DISTANZA</strong><span>${distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(1)} km`}</span>` : ""}
       </section>
       <div class="verde-bologna-parks-sheet-actions">
-        <button class="btn" type="button" data-vb-sheet-map ${center ? "" : "disabled"}>MOSTRA MAPPA</button>
+        <button class="btn" type="button" data-vb-sheet-map ${center ? "" : "disabled"}>${boundaryAvailable ? "MOSTRA CONFINI" : "MOSTRA MAPPA"}</button>
         ${center ? `<a class="btn btn-primary" href="${esc(navHref)}" target="_blank" rel="noopener">NAVIGA</a>` : `<button class="btn btn-primary" type="button" disabled>NAVIGA</button>`}
       </div>
       <section class="verde-bologna-parks-fields">
@@ -493,6 +515,7 @@
 
   function ensureLayer() {
     if (!state.map || !window.L) return;
+    if (!state.boundaryLayer) state.boundaryLayer = window.L.layerGroup().addTo(state.map);
     if (!state.layer) state.layer = window.L.layerGroup().addTo(state.map);
     if (!state.markerRenderer && window.L.canvas) state.markerRenderer = window.L.canvas({ padding: 0.5 });
     if (!state.mapEventsBound) {
@@ -562,9 +585,21 @@
   function focusRecord(record, openPopup) {
     const center = centerOf(record);
     if (!center || !state.map) return;
-    state.map.setView([center.lat, center.lon], Math.max(state.map.getZoom(), 17), { animate: false });
+    ensureLayer();
+    state.boundaryLayer?.clearLayers?.();
+    const geometry = geometryOf(record);
+    let boundaryBounds = null;
+    if (hasAreaBoundary(record) && state.boundaryLayer && window.L) {
+      const boundary = window.L.geoJSON({ type: "Feature", geometry, properties: {} }, {
+        style: { color: "#0b6b3a", weight: 4, fillColor: "#45a96a", fillOpacity: 0.2 }
+      }).addTo(state.boundaryLayer);
+      boundaryBounds = boundary.getBounds?.();
+    }
+    if (boundaryBounds?.isValid?.()) state.map.fitBounds(boundaryBounds.pad(0.08), { animate: false, maxZoom: 18 });
+    else state.map.setView([center.lat, center.lon], Math.max(state.map.getZoom(), 17), { animate: false });
     if (openPopup) {
-      const popup = window.L.popup().setLatLng([center.lat, center.lon]).setContent(`<strong>CODVIA ${esc(parkCodvia(record) || "—")}</strong><br>${esc(parkName(record))}`).openOn(state.map);
+      const boundaryText = boundaryBounds?.isValid?.() ? "<br>Confine ufficiale evidenziato" : "";
+      const popup = window.L.popup().setLatLng([center.lat, center.lon]).setContent(`<strong>CODVIA ${esc(parkCodvia(record) || "—")}</strong><br>${esc(parkName(record))}${boundaryText}`).openOn(state.map);
       void popup;
     }
     $("verde-bologna-map-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -598,6 +633,7 @@
     });
     state.filtered = rows;
     state.renderSignature = signature;
+    state.boundaryLayer?.clearLayers?.();
     renderList();
     renderMapMarkers();
     const status = $("verde-bologna-status");
@@ -705,6 +741,7 @@
     window.clearTimeout(state.filterTimer);
     window.clearTimeout(state.markerRefreshTimer);
     state.layer?.clearLayers?.();
+    state.boundaryLayer?.clearLayers?.();
     closeDetailSheet();
   }
 
@@ -716,8 +753,10 @@
     window.clearTimeout(state.markerRefreshTimer);
     window.clearTimeout(state.filterTimer);
     state.layer?.clearLayers?.();
+    state.boundaryLayer?.clearLayers?.();
     state.map = null;
     state.layer = null;
+    state.boundaryLayer = null;
     state.markerRenderer = null;
     state.mapEventsBound = false;
     state.parks = [];

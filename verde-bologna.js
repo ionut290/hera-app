@@ -23,7 +23,7 @@
 
   const DATASETS = Object.freeze([
     { id: "un_gest", icon: "🌳", title: "Aree verdi in manutenzione", short: "Aiuole, parchi, giardini, verde scolastico, sportivo e stradale.", priority: true, titleFields: ["nome_ug", "nome", "ubicazione"], searchHint: "nome, via, quartiere o tipo di area" },
-    { id: "alberi-manutenzioni", icon: "🌲", title: "Alberi singoli", short: "Catasto degli alberi con numero punto, specie, caratteristiche e coordinate.", delegate: "open-tree-search-btn" },
+    { id: "alberi-manutenzioni", icon: "🌲", title: "Catasto alberi", short: "Catasto degli alberi con numero punto, specie, caratteristiche e coordinate.", delegate: "open-tree-search-btn" },
     { id: "popolazione-arborea", icon: "🌴", title: "Popolazioni arboree", short: "Gruppi e superfici con popolazioni arboree e arbustive.", titleFields: ["classe", "classe_popolamento", "in_patrim"], codeFields: ["in_patrim"], searchHint: "patrimonio, classe o tipologia" },
     { id: "siepi", icon: "🌿", title: "Siepi in manutenzione", short: "Specie, tipologia, lunghezza, altezza, larghezza e superficie di potatura.", titleFields: ["classe", "classe_tipo_siepe", "in_patrim"], codeFields: ["in_patrim"], searchHint: "patrimonio, specie o tipo di siepe" },
     { id: "attrezzature_ludiche_ginniche_sportive", icon: "🛝", title: "Giochi e attrezzature sportive", short: "Attrezzature ludiche, ginniche e sportive presenti sul territorio.", titleFields: ["classe", "categoria", "presenza"], searchHint: "categoria o tipo di attrezzatura" },
@@ -255,8 +255,21 @@
   }
 
   function plausiblePoint(lon, lat) { return Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180; }
+  function geometryPriority(geometry) {
+    if (geometry?.type === "Polygon" || geometry?.type === "MultiPolygon") return 3;
+    if (geometry?.type === "LineString" || geometry?.type === "MultiLineString") return 2;
+    if (geometry?.type === "Point" || geometry?.type === "MultiPoint") return 1;
+    return 0;
+  }
+
   function geometryOf(record) {
-    for (const [key, value] of Object.entries(record || {})) { if (!isGeometryValue(key, value)) continue; const geometry = parseGeoValue(value); if (geometry) return geometry; }
+    let selected = null;
+    for (const [key, value] of Object.entries(record || {})) {
+      if (!isGeometryValue(key, value)) continue;
+      const geometry = parseGeoValue(value);
+      if (geometryPriority(geometry) > geometryPriority(selected)) selected = geometry;
+    }
+    if (selected) return selected;
     const lat = Number(findField(record, ["lat", "latitude", "y"]));
     const lon = Number(findField(record, ["lon", "lng", "longitude", "x"]));
     return plausiblePoint(lon, lat) ? { type: "Point", coordinates: [lon, lat] } : null;

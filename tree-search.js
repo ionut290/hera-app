@@ -8,7 +8,7 @@
   const status = $("tree-search-status");
   const result = $("tree-result");
   const mapCard = $("tree-map-card");
-  const mapNode = $("tree-map");
+  let mapNode = $("tree-map");
   const mapStatus = $("tree-map-status");
   const mapStyle = $("tree-map-style");
   const mapPlantingFilter = $("tree-map-planting-filter");
@@ -18,6 +18,9 @@
   const video = $("tree-qr-video");
   const qrStatus = $("tree-qr-status");
   const VERDE_BOLOGNA_RETURN_KEY = "varga-verde-bologna:return-from-tree";
+  const MOBILE_QUERY = "(max-width: 760px)";
+  const MOBILE_VISIBLE_TREE_LIMIT = 80;
+  const DESKTOP_VISIBLE_TREE_LIMIT = 300;
   let map = null;
   let marker = null;
   let treesLayer = null;
@@ -32,11 +35,14 @@
   let stream = null;
   let scanFrame = 0;
   let mapFullscreen = false;
+  let pageActivation = 0;
+  let mapStartTimer = 0;
 
   const esc = (value) => String(value ?? "—").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
   const setStatus = (message, type = "") => { status.textContent = message; status.className = `tree-search-status ${type}`.trim(); };
   const hideHome = (hidden) => $("home-page")?.classList.toggle("hidden", hidden);
   const normalizeTreeIdentifier = (value) => String(value ?? "").trim().replace(/\s+/g, "").toUpperCase();
+  const mobileView = () => window.matchMedia?.(MOBILE_QUERY)?.matches === true;
 
   const TREE_FIELD_LABELS = {
     num_pt: "Numero punto",
@@ -356,16 +362,35 @@
   }
 
   function openPage() {
+    const activation = ++pageActivation;
+    window.clearTimeout(mapStartTimer);
+    mapStartTimer = 0;
     document.getElementById("menu-close-btn")?.click();
     hideHome(true);
     page.classList.remove("hidden");
     page.setAttribute("aria-hidden", "false");
-    initializeMap();
-    setTimeout(() => { map?.invalidateSize(); loadVisibleTrees(); }, 80);
-    number.focus();
+    page.scrollTo?.({ top: 0, behavior: "auto" });
+    mapStatus.textContent = "Mappa pronta. Aumenta lo zoom per visualizzare i numeri degli alberi.";
+    requestAnimationFrame(() => {
+      mapStartTimer = window.setTimeout(() => {
+        mapStartTimer = 0;
+        if (activation !== pageActivation || page.classList.contains("hidden")) return;
+        const currentMap = initializeMap();
+        currentMap?.invalidateSize?.({ pan: false, animate: false });
+        loadVisibleTrees();
+      }, 0);
+    });
+    if (!mobileView()) {
+      window.setTimeout(() => {
+        if (activation === pageActivation && !page.classList.contains("hidden")) number?.focus?.({ preventScroll: true });
+      }, 0);
+    }
   }
 
   function destroyTreeMap() {
+    pageActivation += 1;
+    window.clearTimeout(mapStartTimer);
+    mapStartTimer = 0;
     window.clearTimeout(viewportTimer);
     viewportTimer = 0;
     viewportRequest += 1;
@@ -505,12 +530,49 @@
     if (style === "hybrid") hybridLabels = L.tileLayer(TILE_LAYERS.labels.url, TILE_LAYERS.labels.options).addTo(map);
   }
 
+  function renewTreeMapContainer() {
+    if (!mapNode?.parentNode) return mapNode;
+    const freshMapNode = mapNode.cloneNode(false);
+    freshMapNode.className = "tree-map";
+    freshMapNode.removeAttribute("style");
+    freshMapNode.removeAttribute("tabindex");
+    mapNode.replaceWith(freshMapNode);
+    mapNode = freshMapNode;
+    return mapNode;
+  }
+
   function initializeMap() {
-    if (map || !window.L) return;
-    map = L.map(mapNode, { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 13);
-    treesLayer = L.layerGroup().addTo(map);
-    applyMapStyle(mapStyle?.value || "classic");
-    map.on("moveend zoomend", scheduleVisibleTrees);
+    if (map) return map;
+    if (!window.L || !mapNode) {
+      mapStatus.textContent = "Mappa non disponibile in questo momento. La ricerca per numero resta utilizzabile.";
+      return null;
+    }
+    const createMap = () => {
+      map = L.map(mapNode, { zoomControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([44.4949, 11.3426], 13);
+      treesLayer = L.layerGroup().addTo(map);
+      applyMapStyle(mapStyle?.value || "classic");
+      map.on("moveend zoomend", scheduleVisibleTrees);
+      return map;
+    };
+    try {
+      return createMap();
+    } catch (error) {
+      try { map?.remove?.(); } catch (_) {}
+      map = null;
+      treesLayer = null;
+      baseLayer = null;
+      hybridLabels = null;
+      renewTreeMapContainer();
+      try {
+        return createMap();
+      } catch (retryError) {
+        try { map?.remove?.(); } catch (_) {}
+        map = null;
+        treesLayer = null;
+        mapStatus.textContent = `Impossibile inizializzare la mappa: ${retryError?.message || error?.message || "errore sconosciuto"}. La ricerca per numero resta utilizzabile.`;
+        return null;
+      }
+    }
   }
 
   function geolocationErrorMessage(error) {
@@ -685,17 +747,15 @@
       if (!firstResponse.ok) throw new Error(`Servizio comunale non disponibile (${firstResponse.status}).`);
       const first = await firstResponse.json();
       if (requestId !== viewportRequest) return;
-      if (first.total_count > 500) {
-        mapStatus.textContent = `${first.total_count} ${filterDescription} in questa zona: aumenta ancora lo zoom per visualizzare tutti i numeri.`;
-        return;
-      }
-      const records = [...(first.results || [])];
-      for (let offset = 100; offset < first.total_count; offset += 100) {
+      const total = Number(first.total_count) || 0;
+      const visibleLimit = mobileView() ? MOBILE_VISIBLE_TREE_LIMIT : DESKTOP_VISIBLE_TREE_LIMIT;
+      const records = [...(first.results || [])].slice(0, visibleLimit);
+      for (let offset = 100; offset < total && records.length < visibleLimit; offset += 100) {
         const response = await fetch(`${firstUrl}&offset=${offset}`, { headers: { Accept: "application/json" }, signal: controller.signal });
         if (!response.ok) throw new Error(`Servizio comunale non disponibile (${response.status}).`);
         const payload = await response.json();
         if (requestId !== viewportRequest) return;
-        records.push(...(payload.results || []));
+        records.push(...(payload.results || []).slice(0, visibleLimit - records.length));
       }
       const bounds = map.getBounds().pad(0.05);
       const nextLayer = L.layerGroup();
@@ -704,7 +764,9 @@
       treesLayer?.remove();
       treesLayer = nextLayer.addTo(map);
       lastViewportKey = viewportKey;
-      mapStatus.textContent = `${treesLayer.getLayers().length} ${filterDescription} visualizzati. Tocca un numero per aprire la scheda.`;
+      const visibleCount = treesLayer.getLayers().length;
+      const limitedNote = total > records.length ? ` su ${total} presenti nella zona; aumenta lo zoom per restringere` : "";
+      mapStatus.textContent = `${visibleCount} ${filterDescription} visualizzati${limitedNote}. Tocca un numero per aprire la scheda.`;
     } catch (error) {
       if (error?.name === "AbortError") return;
       if (requestId === viewportRequest) mapStatus.textContent = `${error.message || "Impossibile aggiornare la zona."} Gli alberi precedenti restano disponibili.`;
@@ -758,11 +820,12 @@
       });
     });
     result.classList.remove("hidden");
-    initializeMap();
+    const currentMap = initializeMap();
+    if (!currentMap) return;
     if (marker) marker.remove();
-    marker = L.marker([point.lat, point.lon]).addTo(map).bindPopup(`<strong>${esc(tree.classe || "Albero")}</strong><br>Numero ${esc(tree.num_pt || tree.cod_alb)}`).openPopup();
-    map.setView([point.lat, point.lon], 19);
-    setTimeout(() => { map.invalidateSize(); loadVisibleTrees(); }, 50);
+    marker = L.marker([point.lat, point.lon]).addTo(currentMap).bindPopup(`<strong>${esc(tree.classe || "Albero")}</strong><br>Numero ${esc(tree.num_pt || tree.cod_alb)}`).openPopup();
+    currentMap.setView([point.lat, point.lon], 19);
+    setTimeout(() => { currentMap.invalidateSize(); loadVisibleTrees(); }, 50);
   }
 
   function showTreeMatches(trees, identifier) {
@@ -827,4 +890,5 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && mapFullscreen && !dialog?.open) setMapFullscreen(false);
   });
+  window.HeraTreeSearch = Object.freeze({ open: openPage, close: closePage });
 })();

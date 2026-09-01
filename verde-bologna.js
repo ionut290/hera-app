@@ -658,7 +658,9 @@
       const page = $(PAGE_ID), target = $(dataset.delegate);
       try { sessionStorage.setItem(TREE_RETURN_KEY, "1"); } catch (_) {}
       page?.classList.add("hidden"); page?.classList.remove("is-category-open"); page?.setAttribute("aria-hidden", "true");
-      if (target) target.click();
+      const openTreeSearch = window.HeraTreeSearch?.open;
+      if (typeof openTreeSearch === "function") requestAnimationFrame(() => openTreeSearch());
+      else if (target) requestAnimationFrame(() => target.click());
       else { try { sessionStorage.removeItem(TREE_RETURN_KEY); } catch (_) {} openPage(); window.alert("Catasto alberi non disponibile in questo momento."); }
       return;
     }

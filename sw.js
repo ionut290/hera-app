@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v210";
-const CACHE_RESET_VERSION = "20260901-verde-totalfix1";
+const CACHE_NAME = "varga-cantieri-shell-v211";
+const CACHE_RESET_VERSION = "20260901-tree-mobile1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -82,7 +82,7 @@ const APP_SHELL = [
   "./tree-search.css?v=20260831-potature1",
   "./tree-work-orders.js?v=20260831-potature1",
   "./potature-followup.js?v=20260831-potature-followup1",
-  "./tree-search.js?v=20260901-verde-hub1",
+  "./tree-search.js?v=20260901-tree-mobile1",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",
   "./green-areas.js?v=20260829e",
@@ -145,6 +145,7 @@ const NETWORK_FIRST_ASSET_PATHS = new Set([
   "/equipment-recommendations.js",
   "/recommended-traffic-weather.js",
   "/street-view-cards.js",
+  "/tree-search.js",
   "/urban-furniture.js",
   "/urban-furniture.css",
   "/wastewater-plants.js",

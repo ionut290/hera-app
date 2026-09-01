@@ -38,7 +38,7 @@ const checks = [
   ["filtro collegato alla mappa", source.includes('mapPlantingFilter?.addEventListener("change"') && source.includes("loadVisibleTrees()")],
   ["asset Street View aggiornato", serviceWorker.includes("street-view-cards.js?v=20260830-map-gps-fix1")],
   ["asset CSS aggiornato", html.includes("tree-search.css?v=20260831-potature1") && serviceWorker.includes("tree-search.css?v=20260831-potature1")],
-  ["asset JS aggiornato", html.includes("tree-search.js?v=20260901-verde-hub1") && serviceWorker.includes("tree-search.js?v=20260901-verde-hub1")],
+  ["asset JS aggiornato", html.includes("tree-search.js?v=20260901-tree-mobile1") && serviceWorker.includes("tree-search.js?v=20260901-tree-mobile1")],
   ["ritorno al menu Verde Bologna", source.includes("VERDE_BOLOGNA_RETURN_KEY") && source.includes("window.HeraVerdeBologna.open()")],
   ["mappa alberi rimossa in uscita", source.includes("function destroyTreeMap()") && source.includes("map?.remove?.()")],
   ["nessuna operazione Firestore", !/firestore|\.collection\(|\.doc\(/i.test(source)]

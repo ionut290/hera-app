@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-ui-parity1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-ui-parity1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-complete-logic1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-complete-logic1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
@@ -88,13 +88,34 @@ assert.match(runtimeSource, /typeof distanceFromUser === "function"/,
   "la vista Finiti mantiene l'ordinamento per distanza");
 assert.match(runtimeSource, /showFinishedList\(\)/,
   "TERMINATO sposta immediatamente il cantiere nella vista Finiti");
+assert.match(runtimeSource, /heraSpecialTerminatoPendingV2/,
+  "TERMINATO mantiene una coda offline separata e persistente");
+assert.match(runtimeSource, /persistActionWithRetry/,
+  "TERMINATO riprova il salvataggio senza coinvolgere FATTO");
+assert.match(runtimeSource, /specialTerminatoByEmail/,
+  "TERMINATO conserva anche l’email dell’operatore");
+assert.match(runtimeSource, /specialDataEsecuzione/,
+  "TERMINATO conserva la data di esecuzione separata");
+assert.match(runtimeSource, /specialOraEsecuzione/,
+  "TERMINATO conserva l’ora di esecuzione separata");
+assert.match(runtimeSource, /window\.addEventListener\("online"/,
+  "la coda TERMINATO riparte automaticamente al ritorno della rete");
+assert.match(runtimeSource, /publishGlobalNotificationEvent\("impianto-done"/,
+  "TERMINATO pubblica la notifica operativa già prevista dall’app");
+assert.match(runtimeSource, /logActivity\("pressione_terminato"/,
+  "TERMINATO viene registrato nello storico attività");
+assert.match(app, /data-map-popup-action='special-terminate'/,
+  "le mappe collegano le commesse speciali al nuovo pulsante TERMINATO");
+assert.match(app, /window\.HeraSpecialTerminato\?\.terminateFromMap/,
+  "il pulsante mappa usa esclusivamente il sistema speciale");
 assert.doesNotMatch(runtimeSource, /view-special-terminated-btn/,
   "il pulsante Terminati separato è stato eliminato");
 assert.match(runtimeSource, /special-core-action-hidden/,
   "le azioni storiche vengono soltanto nascoste nelle commesse speciali");
 assert.doesNotMatch(runtimeSource, /\[TERMINATED_FIELD\]:\s*true[\s\S]{0,300}\bdone\s*:/,
   "TERMINATO non deve scrivere lo stato FATTO");
-assert.doesNotMatch(runtimeSource, /await\s+[^;\n]*\.get\s*\(/, "il nuovo flusso non aggiunge letture Firestore");
+assert.match(runtimeSource, /reference\.doc\(id\)\.get\(\)/,
+  "una sola verifica mirata controlla tutti i documenti appena salvati");
 assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "il nuovo flusso non aggiunge listener o polling");
 assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|openWhatsApp/, "il nuovo flusso non richiama né aggira FATTO/WHAZZUP");
 

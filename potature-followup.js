@@ -331,9 +331,13 @@
   const EXPORT_BUTTON_ID = "export-current-commessa-btn";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
+  const PENDING_STORAGE_KEY = "heraSpecialTerminatoPendingV2";
+  const RETRY_DELAYS_MS = Object.freeze([0, 1000, 2000]);
   const text = (value) => String(value ?? "").trim();
   let specialViewMode = "program";
   let scheduled = false;
+  let pendingSyncRunning = false;
+  const processingPlants = new Set();
 
   function selectedId() {
     try {
@@ -403,6 +407,55 @@
     return new Date();
   }
 
+  function firestoreTimestamp(date) {
+    try {
+      if (typeof firebase !== "undefined" && firebase.firestore?.Timestamp?.fromDate) {
+        return firebase.firestore.Timestamp.fromDate(date);
+      }
+    } catch (_) {}
+    return date;
+  }
+
+  function isOffline() {
+    try {
+      return typeof navigator !== "undefined" && navigator.onLine === false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function wait(milliseconds) {
+    return milliseconds > 0
+      ? new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  }
+
+  function localExecutionParts(date) {
+    try {
+      const parts = new Intl.DateTimeFormat("it-IT", {
+        timeZone: "Europe/Rome",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }).formatToParts(date).reduce((result, part) => {
+        if (part.type !== "literal") result[part.type] = part.value;
+        return result;
+      }, {});
+      return {
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+        time: `${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}`
+      };
+    } catch (_) {
+      return {
+        date: date.toISOString().slice(0, 10),
+        time: date.toTimeString().slice(0, 5)
+      };
+    }
+  }
+
   function operatorIdentity() {
     let user = null;
     try {
@@ -414,11 +467,26 @@
     try {
       if (typeof getOperatorDisplayName === "function") name = text(getOperatorDisplayName()) || name;
     } catch (_) {}
-    return { uid: text(user?.uid), name };
+    return { uid: text(user?.uid), name, email: text(user?.email) };
   }
 
   function isTerminated(plant) {
     return plant?.[TERMINATED_FIELD] === true;
+  }
+
+  function getDisplayState(plant) {
+    const active = isSpecialCommessa();
+    const terminated = active && isTerminated(plant);
+    const pending = terminated && (plant?.specialTerminatoPending === true || Boolean(pendingActionForPlant(plant)));
+    return {
+      active,
+      terminated,
+      pending,
+      state: terminated ? "Finito" : "In programma",
+      completedAt: terminated ? formatTimestamp(plant?.specialTerminatoAt) : "-",
+      operator: terminated ? text(plant?.specialTerminatoBy || plant?.specialOperatore || "Operatore") : "-",
+      action: terminated ? "FINITO" : "TERMINATO"
+    };
   }
 
   function formatTimestamp(value) {
@@ -468,6 +536,291 @@
       if (typeof auth !== "undefined" && auth?.currentUser) return auth.currentUser;
     } catch (_) {}
     return null;
+  }
+
+  function validateCoordinates(plant) {
+    const rawLatitude = plant?.gpsY;
+    const rawLongitude = plant?.gpsX;
+    const latitude = Number(rawLatitude);
+    const longitude = Number(rawLongitude);
+    const valid = rawLatitude !== null
+      && rawLatitude !== undefined
+      && text(rawLatitude) !== ""
+      && rawLongitude !== null
+      && rawLongitude !== undefined
+      && text(rawLongitude) !== ""
+      && Number.isFinite(latitude)
+      && Number.isFinite(longitude)
+      && latitude >= -90
+      && latitude <= 90
+      && longitude >= -180
+      && longitude <= 180;
+    return { valid, latitude, longitude };
+  }
+
+  function storage() {
+    try {
+      return window.localStorage || globalThis.localStorage || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function loadPendingActions() {
+    try {
+      const parsed = JSON.parse(storage()?.getItem(PENDING_STORAGE_KEY) || "[]");
+      return Array.isArray(parsed)
+        ? parsed.filter((action) => action?.id && action?.commessaId && Array.isArray(action.documentIds) && action.documentIds.length)
+        : [];
+    } catch (error) {
+      console.warn("Coda TERMINATO speciale non leggibile:", error);
+      return [];
+    }
+  }
+
+  function savePendingActions(actions) {
+    try {
+      storage()?.setItem(PENDING_STORAGE_KEY, JSON.stringify(Array.isArray(actions) ? actions : []));
+    } catch (error) {
+      console.warn("Coda TERMINATO speciale non salvata:", error);
+    }
+  }
+
+  function actionId(commessaId, plant) {
+    const operator = operatorIdentity();
+    return `${operator.uid || "user"}:${commessaId}:${plantKey(plant) || plantDocumentIds(plant)[0] || "cantiere"}`;
+  }
+
+  function buildPendingAction(plant, commessaId, completedAt, operator) {
+    const execution = localExecutionParts(completedAt);
+    return {
+      id: actionId(commessaId, plant),
+      version: 2,
+      commessaId,
+      commessaName: selectedName(),
+      documentIds: plantDocumentIds(plant),
+      plantKey: plantKey(plant),
+      plantName: text(plant?.denominazione || plant?.nome || "Cantiere"),
+      plantIdSap: text(plant?.idSap),
+      completedAt: completedAt.toISOString(),
+      completionDate: execution.date,
+      completionTime: execution.time,
+      operatorUid: operator.uid,
+      operatorName: operator.name,
+      operatorEmail: operator.email,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: ""
+    };
+  }
+
+  function upsertPendingAction(action) {
+    const actions = loadPendingActions();
+    const index = actions.findIndex((item) => item.id === action.id);
+    if (index >= 0) actions.splice(index, 1, { ...actions[index], ...action, updatedAt: new Date().toISOString() });
+    else actions.push(action);
+    savePendingActions(actions);
+    return action;
+  }
+
+  function updatePendingAction(actionIdValue, patch) {
+    const actions = loadPendingActions();
+    const index = actions.findIndex((item) => item.id === actionIdValue);
+    if (index < 0) return null;
+    actions[index] = { ...actions[index], ...patch, updatedAt: new Date().toISOString() };
+    savePendingActions(actions);
+    return actions[index];
+  }
+
+  function removePendingAction(actionIdValue) {
+    const actions = loadPendingActions();
+    const next = actions.filter((item) => item.id !== actionIdValue);
+    if (next.length !== actions.length) savePendingActions(next);
+  }
+
+  function pendingActionForPlant(plant, commessaId = selectedId()) {
+    const ids = new Set(plantDocumentIds(plant));
+    const key = plantKey(plant);
+    return loadPendingActions().find((action) => action.commessaId === commessaId && (
+      (key && action.plantKey === key)
+      || action.documentIds.some((id) => ids.has(id))
+    )) || null;
+  }
+
+  function localPatchFromAction(action, pending = true) {
+    return {
+      [TERMINATED_FIELD]: true,
+      specialStato: "FINITO",
+      specialTerminatoAt: new Date(action.completedAt),
+      specialTerminatoBy: action.operatorName,
+      specialTerminatoByUid: action.operatorUid,
+      specialTerminatoByEmail: action.operatorEmail,
+      specialDataEsecuzione: action.completionDate,
+      specialOraEsecuzione: action.completionTime,
+      specialOperatore: action.operatorName,
+      specialTerminatoVersione: 2,
+      specialTerminatoPending: pending,
+      specialTerminatoLastError: pending ? text(action.lastError) : ""
+    };
+  }
+
+  function firestorePatchFromAction(action) {
+    const completedAt = new Date(action.completedAt);
+    return {
+      [TERMINATED_FIELD]: true,
+      specialStato: "FINITO",
+      specialTerminatoAt: firestoreTimestamp(completedAt),
+      specialTerminatoBy: action.operatorName,
+      specialTerminatoByUid: action.operatorUid,
+      specialTerminatoByEmail: action.operatorEmail,
+      specialDataEsecuzione: action.completionDate,
+      specialOraEsecuzione: action.completionTime,
+      specialOperatore: action.operatorName,
+      specialTerminatoVersione: 2,
+      specialTerminatoPending: false,
+      specialTerminatoLastError: "",
+      updatedAt: serverTimestamp()
+    };
+  }
+
+  function applyPendingStateForSelectedCommessa() {
+    const commessaId = selectedId();
+    if (!commessaId || !isSpecialCommessa()) return;
+    loadPendingActions().filter((action) => action.commessaId === commessaId).forEach((action) => {
+      const actionIds = new Set(action.documentIds);
+      currentPlants().forEach((plant) => {
+        if ((action.plantKey && plantKey(plant) === action.plantKey)
+          || plantDocumentIds(plant).some((id) => actionIds.has(id))) {
+          Object.assign(plant, localPatchFromAction(action, true));
+        }
+      });
+    });
+  }
+
+  async function persistActionOnce(action) {
+    const store = database();
+    if (!store?.collection) throw new Error("Database non disponibile. Controlla la connessione e riprova.");
+    const documentIds = [...new Set(action.documentIds.map(text).filter(Boolean))];
+    if (!documentIds.length) throw new Error("Nessun cantiere disponibile per il salvataggio.");
+    if (documentIds.length > 500) throw new Error("Troppi documenti collegati per un singolo salvataggio.");
+    const reference = store.collection(collectionName()).doc(action.commessaId).collection("impianti");
+    const patch = firestorePatchFromAction(action);
+    const batch = store.batch?.();
+    if (batch) {
+      documentIds.forEach((id) => batch.set(reference.doc(id), patch, { merge: true }));
+      await batch.commit();
+    } else {
+      await Promise.all(documentIds.map((id) => reference.doc(id).set(patch, { merge: true })));
+    }
+
+    const snapshots = await Promise.all(documentIds.map((id) => reference.doc(id).get()));
+    const persisted = snapshots.every((snapshot) => snapshot?.exists && snapshot.data()?.[TERMINATED_FIELD] === true);
+    if (!persisted) throw new Error("Verifica del salvataggio TERMINATO non riuscita su tutti i documenti collegati.");
+  }
+
+  async function persistActionWithRetry(action) {
+    let lastError = null;
+    for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
+      await wait(RETRY_DELAYS_MS[attempt]);
+      try {
+        await persistActionOnce(action);
+        return true;
+      } catch (error) {
+        lastError = error;
+        updatePendingAction(action.id, {
+          attempts: Number(action.attempts || 0) + attempt + 1,
+          lastError: text(error?.message || error).slice(0, 500)
+        });
+      }
+    }
+    throw lastError || new Error("Salvataggio TERMINATO non riuscito.");
+  }
+
+  function refreshSpecialViews() {
+    try { if (typeof renderMap === "function") renderMap(); } catch (_) {}
+    if (specialViewMode === "finished") renderFinishedList();
+    else scheduleApply();
+  }
+
+  function publishCompletionEffects(action) {
+    try {
+      if (typeof logActivity === "function") {
+        void Promise.resolve(logActivity("pressione_terminato", "Pressione TERMINATO", {
+          buttonLabel: "TERMINATO",
+          commessaId: action.commessaId,
+          commessaName: action.commessaName,
+          impiantoId: action.plantKey || action.documentIds[0] || "",
+          impiantoName: action.plantName,
+          detail: `Cantiere spostato nei FINITI il ${action.completionDate} alle ${action.completionTime}`
+        })).catch((error) => console.warn("Registro attività TERMINATO non salvato:", error));
+      }
+    } catch (error) {
+      console.warn("Registro attività TERMINATO non disponibile:", error);
+    }
+    try {
+      if (typeof publishGlobalNotificationEvent === "function") {
+        void Promise.resolve(publishGlobalNotificationEvent("impianto-done", {
+          title: "Cantiere finito",
+          body: `${action.operatorName || "Operatore"} ha premuto TERMINATO su ${action.plantName || "Cantiere"} (${action.commessaName || "Commessa"}).`,
+          commessaId: action.commessaId,
+          commessaName: action.commessaName,
+          impiantoName: action.plantName,
+          impiantoKey: action.plantKey
+        })).catch((error) => console.warn("Notifica TERMINATO non salvata:", error));
+      }
+    } catch (error) {
+      console.warn("Notifica TERMINATO non disponibile:", error);
+    }
+  }
+
+  function markActionSyncedLocally(action) {
+    if (selectedId() !== action.commessaId) return;
+    const actionIds = new Set(action.documentIds);
+    currentPlants().forEach((plant) => {
+      if ((action.plantKey && plantKey(plant) === action.plantKey)
+        || plantDocumentIds(plant).some((id) => actionIds.has(id))) {
+        Object.assign(plant, localPatchFromAction(action, false));
+      }
+    });
+    refreshSpecialViews();
+  }
+
+  async function syncPendingActions() {
+    if (pendingSyncRunning || isOffline()) return;
+    const store = database();
+    const user = authenticatedUser();
+    if (!store?.collection || !user) return;
+    pendingSyncRunning = true;
+    try {
+      const userUid = text(user.uid);
+      const actions = loadPendingActions().filter((action) => !action.operatorUid || action.operatorUid === userUid);
+      for (const action of actions) {
+        if (processingPlants.has(action.id)) continue;
+        processingPlants.add(action.id);
+        try {
+          await persistActionWithRetry(action);
+          removePendingAction(action.id);
+          markActionSyncedLocally(action);
+          publishCompletionEffects(action);
+        } catch (error) {
+          const message = text(error?.message || error).slice(0, 500);
+          updatePendingAction(action.id, { lastError: message });
+          if (selectedId() === action.commessaId) {
+            const actionIds = new Set(action.documentIds);
+            currentPlants().forEach((plant) => {
+              if (plantDocumentIds(plant).some((id) => actionIds.has(id))) {
+                Object.assign(plant, localPatchFromAction({ ...action, lastError: message }, true));
+              }
+            });
+            refreshSpecialViews();
+          }
+        } finally {
+          processingPlants.delete(action.id);
+        }
+      }
+    } finally {
+      pendingSyncRunning = false;
+    }
   }
 
   function buildFinishedRowsForExport(commessaName) {
@@ -560,44 +913,60 @@
   async function terminatePlant(plant, button) {
     if (!plant || isTerminated(plant)) return;
     if (!isSpecialCommessa()) throw new Error("TERMINATO è disponibile solo nelle due commesse speciali.");
-    const store = database();
+    const user = authenticatedUser();
+    if (!user) throw new Error("Sessione scaduta: esegui nuovamente il login.");
     const commessaId = text(selectedId());
     const documentIds = plantDocumentIds(plant);
-    if (!store?.collection || !commessaId || !documentIds.length) {
+    if (!database()?.collection || !commessaId || !documentIds.length) {
       throw new Error("Cantiere non disponibile per il salvataggio.");
+    }
+    if (!validateCoordinates(plant).valid) {
+      throw new Error("La posizione nella scheda del cantiere è mancante o non valida. Correggila prima di premere TERMINATO.");
     }
 
     const operator = operatorIdentity();
-    const timestamp = serverTimestamp();
-    const localTimestamp = new Date();
-    const patch = {
-      [TERMINATED_FIELD]: true,
-      specialTerminatoAt: timestamp,
-      specialTerminatoBy: operator.name,
-      specialTerminatoByUid: operator.uid,
-      specialTerminatoVersione: 1,
-      updatedAt: timestamp
-    };
+    const processingKey = actionId(commessaId, plant);
+    if (processingPlants.has(processingKey)) return;
+    processingPlants.add(processingKey);
+    const completedAt = new Date();
+    const action = buildPendingAction(plant, commessaId, completedAt, operator);
 
     button.disabled = true;
     button.textContent = "SALVATAGGIO…";
-    const reference = store.collection(collectionName()).doc(commessaId).collection("impianti");
-    const batch = store.batch?.();
-    if (batch) {
-      documentIds.forEach((id) => batch.set(reference.doc(id), patch, { merge: true }));
-      await batch.commit();
-    } else {
-      await Promise.all(documentIds.map((id) => reference.doc(id).set(patch, { merge: true })));
+    upsertPendingAction(action);
+    updateLocalPlant(plant, localPatchFromAction(action, true));
+    showFinishedList();
+    try { if (typeof renderMap === "function") renderMap(); } catch (_) {}
+
+    if (isOffline()) {
+      processingPlants.delete(processingKey);
+      window.alert("Sei offline: il cantiere è già nei FINITI. Il salvataggio si sincronizzerà automaticamente quando torna Internet.");
+      return true;
     }
 
-    updateLocalPlant(plant, {
-      [TERMINATED_FIELD]: true,
-      specialTerminatoAt: localTimestamp,
-      specialTerminatoBy: operator.name,
-      specialTerminatoByUid: operator.uid,
-      specialTerminatoVersione: 1
-    });
-    showFinishedList();
+    try {
+      await persistActionWithRetry(action);
+      removePendingAction(action.id);
+      updateLocalPlant(plant, localPatchFromAction(action, false));
+      publishCompletionEffects(action);
+      refreshSpecialViews();
+      return true;
+    } catch (error) {
+      const message = text(error?.message || error).slice(0, 500);
+      const queuedAction = updatePendingAction(action.id, { lastError: message }) || { ...action, lastError: message };
+      updateLocalPlant(plant, localPatchFromAction(queuedAction, true));
+      refreshSpecialViews();
+      window.alert("Il cantiere è nei FINITI, ma il salvataggio online non è stato confermato. Riproverò automaticamente quando torna la connessione.");
+      return true;
+    } finally {
+      processingPlants.delete(processingKey);
+    }
+  }
+
+  async function terminateFromMap(plant, button) {
+    if (!plant || isTerminated(plant)) return false;
+    const targetButton = button || { disabled: false, textContent: "TERMINATO" };
+    return terminatePlant(plant, targetButton);
   }
 
   function createTerminateButton(card, plant) {
@@ -626,8 +995,15 @@
     card.querySelectorAll([
       '.impianto-primary-actions [data-action-key="whatsapp"]',
       '.impianto-primary-actions [data-action-key="whatsapp-attachment"]',
-      ".impianto-force-done-btn"
+      ".impianto-force-done-btn",
+      '[data-action-key="reset"]'
     ].join(",")).forEach((element) => element.classList.add("special-core-action-hidden"));
+    card.querySelectorAll("button").forEach((button) => {
+      const label = text(button.textContent || button.getAttribute("aria-label")).toUpperCase();
+      if (label.includes("FORZA IN FATTI") || label.includes("FORZA CHIUSURA IMPIANTO COME FATTO")) {
+        button.classList.add("special-core-action-hidden");
+      }
+    });
   }
 
   function restoreLegacyActions() {
@@ -733,7 +1109,7 @@
         } catch (_) {}
         return text(first?.denominazione).localeCompare(text(second?.denominazione), "it");
       });
-    const signature = plants.map((plant) => `${plantKey(plant)}:${formatTimestamp(plant.specialTerminatoAt)}:${text(plant.specialTerminatoBy)}`).join("|");
+    const signature = plants.map((plant) => `${plantKey(plant)}:${formatTimestamp(plant.specialTerminatoAt)}:${text(plant.specialTerminatoBy)}:${plant.specialTerminatoPending === true}:${text(plant.specialTerminatoLastError)}`).join("|");
     if (list.dataset.specialTerminatoSignature === signature && list.querySelector("[data-special-terminated-render]")) return;
     list.dataset.specialTerminatoSignature = signature;
     list.innerHTML = "";
@@ -747,6 +1123,7 @@
         const card = document.createElement("article");
         card.className = "impianto-item card-impianto done special-terminated-card";
         card.dataset.impiantoKey = plantKey(plant);
+        const displayState = getDisplayState(plant);
 
         const mainColumn = document.createElement("div");
         mainColumn.className = "impianto-main-column impianto-left";
@@ -760,6 +1137,7 @@
           </span>
           <small class="impianto-summary-meta">
             <span class="special-terminated-badge">✅ Nei FINITI</span>
+            ${displayState.pending ? '<span class="badge badge-whatsapp-pending">⏳ Sincronizzazione in attesa</span>' : ""}
             <span>${esc(specialTypeLabel(plant))}</span>
           </small>`;
 
@@ -774,7 +1152,8 @@
           <p><b>Lavorazioni richieste:</b> ${esc(plant.lavorazioniRichieste || plant.tipologiaIntervento || "-")}</p>
           <p><b>Stato:</b> Finito</p>
           <p><b>Data e ora terminato:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>
-          <p><b>Eseguito da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>`;
+          <p><b>Eseguito da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>
+          ${displayState.pending ? `<p><b>Sincronizzazione:</b> In attesa${plant.specialTerminatoLastError ? ` · ${esc(plant.specialTerminatoLastError)}` : ""}</p>` : ""}`;
         summary.addEventListener("click", () => {
           const expanded = summary.getAttribute("aria-expanded") === "true";
           summary.setAttribute("aria-expanded", expanded ? "false" : "true");
@@ -803,7 +1182,7 @@
         const statusButton = document.createElement("button");
         statusButton.type = "button";
         statusButton.className = "btn special-finished-status-btn";
-        statusButton.textContent = finishedStatusLabel(plant.specialTerminatoAt);
+        statusButton.textContent = displayState.pending ? "⏳ SALVATAGGIO IN ATTESA" : finishedStatusLabel(plant.specialTerminatoAt);
         statusButton.disabled = true;
         statusButton.setAttribute("aria-label", `${statusButton.textContent}. Nessun messaggio Whazzup viene aperto.`);
         primary.appendChild(navigateButton);
@@ -827,6 +1206,11 @@
       const plant = plantForCard(card);
       if (!plant) return;
       hideLegacySpecialActions(card);
+      card.querySelectorAll(".impianto-details p").forEach((row) => {
+        const label = text(row.querySelector("b")?.textContent).toLowerCase();
+        if (label === "stato:") row.innerHTML = "<b>Stato:</b> In programma";
+        if (label === "eseguito da:") row.innerHTML = "<b>Eseguito da:</b> -";
+      });
       if (isTerminated(plant)) {
         card.hidden = true;
         return;
@@ -844,6 +1228,7 @@
       restoreLegacyActions();
       return;
     }
+    applyPendingStateForSelectedCommessa();
     configureSpecialTabs();
     if (specialViewMode === "finished") renderFinishedList();
     else applyStandardList();
@@ -867,6 +1252,7 @@
       list.dataset.specialTerminatoObserver = "1";
     }
     apply();
+    void syncPendingActions();
   }
 
   window.addEventListener("hashchange", () => {
@@ -874,6 +1260,7 @@
     scheduleApply();
   });
   window.addEventListener("hera:data-ready", install);
+  window.addEventListener("online", () => { void syncPendingActions(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();
 
@@ -882,7 +1269,11 @@
     field: TERMINATED_FIELD,
     isSpecialCommessa,
     isTerminated,
+    getDisplayState,
     terminatePlant,
+    terminateFromMap,
+    syncPendingActions,
+    loadPendingActions,
     exportFinishedSummary,
     apply,
     renderFinishedList

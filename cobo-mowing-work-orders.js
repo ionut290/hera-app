@@ -420,7 +420,7 @@
           : saved.updated
             ? "✅ Cantiere Sfalcio COBO aggiornato."
             : "✅ Il cantiere era già aggiornato.";
-        feedback.innerHTML = `${resultText}<br><span>${saved.alreadyDone ? "Il cantiere è già presente nei FATTI." : "Usa REGISTRA SFALCIO e poi il FATTO originale nella commessa."}</span>`;
+        feedback.innerHTML = `${resultText}<br><span>${saved.alreadyDone ? "Il cantiere è già presente nei FATTI storici." : "Usa REGISTRA SFALCIO e poi TERMINATO nella commessa speciale."}</span>`;
         const openButton = document.createElement("button");
         openButton.type = "button";
         openButton.className = "btn cobo-mowing-open-created";
@@ -503,14 +503,14 @@
     if (!isWorkOrder(plant, options.commessaId)) return;
     returnFocusTarget = options.triggerButton || document.activeElement;
     const summary = registrationSummary(plant);
-    const modal = createModal("Registra lo sfalcio", `${COMMESSA_NAME} · preparazione prima di FATTO`);
+    const modal = createModal("Registra lo sfalcio", `${COMMESSA_NAME} · preparazione prima di TERMINATO`);
     const content = modal.querySelector(".cobo-mowing-content");
     content.innerHTML = `
       <section class="cobo-mowing-park-summary">
         <strong>${esc(plant.denominazione || plant.nome || "Parco / giardino")}</strong>
         <span>${esc(plant.parcoQuartiere || plant.area || "Bologna")}</span>
       </section>
-      <p class="cobo-mowing-hint">Registra i dati della lavorazione. Lo spostamento nei FATTI e Whazzup rimangono affidati al pulsante FATTO originale.</p>
+      <p class="cobo-mowing-hint">Registra i dati della lavorazione e poi usa il pulsante speciale TERMINATO. Non verrà aperto Whazzup.</p>
       <form class="cobo-mowing-form">
         <label><span>Lavorazione eseguita *</span><select name="workType" required>
           <option value="SFALCIO COMPLETO"${summary.workType === "SFALCIO COMPLETO" ? " selected" : ""}>Sfalcio completo</option>
@@ -545,8 +545,8 @@
         Object.assign(plant, result.updates);
         feedback.classList.add("success");
         feedback.textContent = result.changed
-          ? "✅ Sfalcio registrato. Ora puoi usare il FATTO originale."
-          : "✅ I dati erano già aggiornati. Ora puoi usare il FATTO originale.";
+          ? "✅ Sfalcio registrato. Ora puoi usare TERMINATO."
+          : "✅ I dati erano già aggiornati. Ora puoi usare TERMINATO.";
         options.onComplete?.(result.updates);
       } catch (error) {
         feedback.classList.add("error");

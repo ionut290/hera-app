@@ -210,7 +210,7 @@
           <p class="potature-followup-feedback" role="status" aria-live="polite"></p>
         </div>
         <footer class="potature-followup-actions">
-          <p>Dopo il ritorno alla scheda, premi il pulsante verde <strong>FATTO</strong>.</p>
+          <p>Dopo il ritorno alla scheda, premi il pulsante speciale <strong>TERMINATO</strong>.</p>
           <button class="btn btn-primary potature-followup-save" type="submit">SALVA E TORNA</button>
         </footer>
       </form>`;
@@ -276,8 +276,8 @@
         await saveTasks(options, tasks);
         feedback.classList.add("success");
         feedback.textContent = tasks.length
-          ? `Salvate: ${tasks.map((task) => PHASES[task.phase].label).join(" e ")}. Ora puoi premere FATTO.`
-          : "Nessuna attività creata. Ora puoi premere FATTO.";
+          ? `Salvate: ${tasks.map((task) => PHASES[task.phase].label).join(" e ")}. Ora puoi premere TERMINATO.`
+          : "Nessuna attività creata. Ora puoi premere TERMINATO.";
         window.setTimeout(() => done({ tasks, skipped: false }), 650);
       } catch (error) {
         feedback.classList.add("error");
@@ -322,13 +322,16 @@
   "use strict";
 
   if (typeof window === "undefined" || typeof document === "undefined") return;
-  if (window.HeraTerminatoLabel?.installed) return;
+  if (window.HeraSpecialTerminato?.installed) return;
 
-  const STYLE_ID = "hera-special-terminato-label-style";
-  const LABEL_CLASS = "special-terminato-label";
+  const STYLE_ID = "hera-special-terminato-style";
+  const TERMINATED_TAB_ID = "view-special-terminated-btn";
+  const TERMINATED_FIELD = "specialTerminato";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
   const text = (value) => String(value ?? "").trim();
+  let specialViewMode = "standard";
+  let scheduled = false;
 
   function selectedId() {
     try {
@@ -346,69 +349,337 @@
     return id === potatureId || id === coboId;
   }
 
+  function currentPlants() {
+    try {
+      return Array.isArray(currentImpianti) ? currentImpianti : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function plantKey(plant) {
+    try {
+      if (typeof buildImpiantoKey === "function") return text(buildImpiantoKey(plant));
+    } catch (_) {}
+    const idSap = text(plant?.idSap).toLowerCase();
+    return idSap ? `sap:${idSap}` : text(plant?.id);
+  }
+
+  function plantForCard(card) {
+    const key = text(card?.dataset?.impiantoKey);
+    return currentPlants().find((plant) => plantKey(plant) === key) || null;
+  }
+
+  function plantDocumentIds(plant) {
+    if (Array.isArray(plant?.sourceIds) && plant.sourceIds.length) {
+      return [...new Set(plant.sourceIds.map(text).filter(Boolean))];
+    }
+    return text(plant?.id) ? [text(plant.id)] : [];
+  }
+
+  function database() {
+    try {
+      if (typeof db !== "undefined" && db?.collection) return db;
+    } catch (_) {}
+    return window.db?.collection ? window.db : null;
+  }
+
+  function collectionName() {
+    try {
+      return typeof getCommesseCollectionName === "function" ? getCommesseCollectionName() : "commesse";
+    } catch (_) {
+      return "commesse";
+    }
+  }
+
+  function serverTimestamp() {
+    try {
+      if (typeof firebase !== "undefined" && firebase.firestore?.FieldValue?.serverTimestamp) {
+        return firebase.firestore.FieldValue.serverTimestamp();
+      }
+    } catch (_) {}
+    return new Date();
+  }
+
+  function operatorIdentity() {
+    let user = null;
+    try {
+      if (typeof auth !== "undefined" && auth?.currentUser) user = auth.currentUser;
+      else if (typeof currentUser !== "undefined" && currentUser) user = currentUser;
+    } catch (_) {}
+    user ||= window.currentUser || null;
+    let name = text(user?.displayName || user?.email || "Operatore");
+    try {
+      if (typeof getOperatorDisplayName === "function") name = text(getOperatorDisplayName()) || name;
+    } catch (_) {}
+    return { uid: text(user?.uid), name };
+  }
+
+  function isTerminated(plant) {
+    return plant?.[TERMINATED_FIELD] === true;
+  }
+
+  function formatTimestamp(value) {
+    let date = value;
+    if (value?.toDate) date = value.toDate();
+    else if (value?.seconds) date = new Date(Number(value.seconds) * 1000);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "Data non disponibile";
+    return date.toLocaleString("it-IT", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
+    });
+  }
+
+  function esc(value) {
+    return text(value).replace(/[&<>'"]/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+    }[character]));
+  }
+
+  function specialTypeLabel(plant) {
+    const phase = text(plant?.potatureFase).toLowerCase();
+    if (phase === "raccolta") return `Raccolta · ${text(plant.potatureMetodoLabel) || "Metodo non indicato"}`;
+    if (phase === "ceppi") return `Ceppo · ${text(plant.potatureMetodoLabel) || "Metodo non indicato"}`;
+    if (selectedId().toLowerCase() === COBO_ID) return "Verde COBO";
+    return text(plant?.tipologiaIntervento || "Potatura / Abbattimento");
+  }
+
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      .impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"].${LABEL_CLASS}:not(.is-completed-done)::after {
-        content: "TERMINATO" !important;
-      }
+      .special-core-action-hidden { display: none !important; }
+      .special-terminato-btn { min-width: 126px; min-height: 46px; border: 0; border-radius: 13px; color: #fff; background: #08783f; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
+      .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
+      .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
+      .special-terminated-card header { display: grid; gap: 5px; }
+      .special-terminated-card header strong { color: #075f34; font-size: 1.02rem; }
+      .special-terminated-card p { margin: 4px 0; }
+      .special-terminated-badge { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: 999px; color: #075f34; background: #d7f4e4; font-size: .78rem; font-weight: 900; }
     `;
     document.head.appendChild(style);
   }
 
-  function restoreButton(button) {
-    button.classList.remove(LABEL_CLASS);
-    if (button.dataset.terminatoOriginalAria !== undefined) {
-      const value = button.dataset.terminatoOriginalAria;
-      if (value) button.setAttribute("aria-label", value);
-      else button.removeAttribute("aria-label");
-      delete button.dataset.terminatoOriginalAria;
+  function updateLocalPlant(plant, patch) {
+    Object.assign(plant, patch);
+    const ids = new Set(plantDocumentIds(plant));
+    currentPlants().forEach((item) => {
+      if (item === plant || plantDocumentIds(item).some((id) => ids.has(id))) Object.assign(item, patch);
+    });
+  }
+
+  async function terminatePlant(plant, button) {
+    if (!plant || isTerminated(plant)) return;
+    if (!isSpecialCommessa()) throw new Error("TERMINATO è disponibile solo nelle due commesse speciali.");
+    const store = database();
+    const commessaId = text(selectedId());
+    const documentIds = plantDocumentIds(plant);
+    if (!store?.collection || !commessaId || !documentIds.length) {
+      throw new Error("Cantiere non disponibile per il salvataggio.");
     }
-    if (button.dataset.terminatoOriginalTitle !== undefined) {
-      const value = button.dataset.terminatoOriginalTitle;
-      if (value) button.title = value;
-      else button.removeAttribute("title");
-      delete button.dataset.terminatoOriginalTitle;
+
+    const operator = operatorIdentity();
+    const timestamp = serverTimestamp();
+    const localTimestamp = new Date();
+    const patch = {
+      [TERMINATED_FIELD]: true,
+      specialTerminatoAt: timestamp,
+      specialTerminatoBy: operator.name,
+      specialTerminatoByUid: operator.uid,
+      specialTerminatoVersione: 1,
+      updatedAt: timestamp
+    };
+
+    button.disabled = true;
+    button.textContent = "SALVATAGGIO…";
+    const reference = store.collection(collectionName()).doc(commessaId).collection("impianti");
+    const batch = store.batch?.();
+    if (batch) {
+      documentIds.forEach((id) => batch.set(reference.doc(id), patch, { merge: true }));
+      await batch.commit();
+    } else {
+      await Promise.all(documentIds.map((id) => reference.doc(id).set(patch, { merge: true })));
     }
+
+    updateLocalPlant(plant, {
+      [TERMINATED_FIELD]: true,
+      specialTerminatoAt: localTimestamp,
+      specialTerminatoBy: operator.name,
+      specialTerminatoByUid: operator.uid,
+      specialTerminatoVersione: 1
+    });
+    specialViewMode = "standard";
+    apply();
+  }
+
+  function createTerminateButton(card, plant) {
+    const primary = card.querySelector(".impianto-primary-actions");
+    if (!primary || primary.querySelector(".special-terminato-btn")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn special-terminato-btn";
+    button.textContent = "TERMINATO";
+    button.setAttribute("aria-label", "Sposta il cantiere nei Terminati della commessa speciale");
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        await terminatePlant(plant, button);
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "TERMINATO";
+        window.alert(error?.message || "Impossibile terminare il cantiere.");
+      }
+    });
+    primary.appendChild(button);
+  }
+
+  function hideLegacySpecialActions(card) {
+    card.querySelectorAll([
+      '.impianto-primary-actions [data-action-key="whatsapp"]',
+      '.impianto-primary-actions [data-action-key="whatsapp-attachment"]',
+      ".impianto-force-done-btn"
+    ].join(",")).forEach((element) => element.classList.add("special-core-action-hidden"));
+  }
+
+  function restoreLegacyActions() {
+    document.querySelectorAll(".special-core-action-hidden").forEach((element) => element.classList.remove("special-core-action-hidden"));
+    document.querySelectorAll(".special-terminato-btn").forEach((button) => button.remove());
+  }
+
+  function ensureTerminatedTab() {
+    const toolbar = document.querySelector("#impianti-card .view-tabs") || document.querySelector(".view-tabs");
+    if (!toolbar) return null;
+    let tab = document.getElementById(TERMINATED_TAB_ID);
+    if (!tab) {
+      tab = document.createElement("button");
+      tab.id = TERMINATED_TAB_ID;
+      tab.type = "button";
+      tab.className = "btn";
+      tab.textContent = "✅ Terminati";
+      tab.addEventListener("click", () => {
+        specialViewMode = "terminated";
+        toolbar.querySelectorAll(".btn-primary").forEach((button) => button.classList.remove("btn-primary"));
+        tab.classList.add("btn-primary");
+        renderTerminatedList();
+      });
+      toolbar.appendChild(tab);
+    }
+    if (!toolbar.dataset.specialTerminatoTabs) {
+      toolbar.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button || button.id === TERMINATED_TAB_ID) return;
+        specialViewMode = "standard";
+        document.getElementById(TERMINATED_TAB_ID)?.classList.remove("btn-primary");
+        window.setTimeout(apply, 0);
+      });
+      toolbar.dataset.specialTerminatoTabs = "1";
+    }
+    return tab;
+  }
+
+  function removeTerminatedTab() {
+    document.getElementById(TERMINATED_TAB_ID)?.remove();
+  }
+
+  function renderTerminatedList() {
+    if (!isSpecialCommessa() || specialViewMode !== "terminated") return;
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (!list) return;
+    const plants = currentPlants().filter(isTerminated);
+    const signature = plants.map((plant) => `${plantKey(plant)}:${formatTimestamp(plant.specialTerminatoAt)}:${text(plant.specialTerminatoBy)}`).join("|");
+    if (list.dataset.specialTerminatoSignature === signature && list.querySelector("[data-special-terminated-render]")) return;
+    list.dataset.specialTerminatoSignature = signature;
+    list.innerHTML = "";
+    const wrapper = document.createElement("section");
+    wrapper.dataset.specialTerminatedRender = "1";
+    wrapper.className = "impianti-lista";
+    if (!plants.length) {
+      wrapper.innerHTML = '<p class="muted">Nessun cantiere terminato in questa commessa speciale.</p>';
+    } else {
+      plants.forEach((plant) => {
+        const card = document.createElement("article");
+        card.className = "impianto-item card-impianto special-terminated-card";
+        card.innerHTML = `
+          <header>
+            <span class="special-terminated-badge">✅ TERMINATO</span>
+            <strong>${esc(plant.denominazione || plant.nome || "Cantiere")}</strong>
+          </header>
+          <p><b>Tipo:</b> ${esc(specialTypeLabel(plant))}</p>
+          <p><b>Comune:</b> ${esc(plant.comune || "-")}</p>
+          <p><b>Indirizzo:</b> ${esc(plant.indirizzo || "-")}</p>
+          <p><b>Terminato da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>
+          <p><b>Data e ora:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>`;
+        wrapper.appendChild(card);
+      });
+    }
+    list.appendChild(wrapper);
+  }
+
+  function applyStandardList() {
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (!list) return;
+    list.querySelectorAll(".impianto-item[data-impianto-key]").forEach((card) => {
+      const plant = plantForCard(card);
+      if (!plant) return;
+      hideLegacySpecialActions(card);
+      if (isTerminated(plant)) {
+        card.hidden = true;
+        return;
+      }
+      card.hidden = false;
+      createTerminateButton(card, plant);
+    });
   }
 
   function apply() {
     ensureStyle();
-    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
-    if (!list) return;
-    const special = isSpecialCommessa();
-    list.querySelectorAll('.impianto-primary-actions .action-icon-btn[data-action-key="whatsapp"]').forEach((button) => {
-      if (!special || button.classList.contains("is-completed-done")) {
-        restoreButton(button);
-        return;
-      }
-      if (!button.classList.contains(LABEL_CLASS)) {
-        button.dataset.terminatoOriginalAria = button.getAttribute("aria-label") || "";
-        button.dataset.terminatoOriginalTitle = button.getAttribute("title") || "";
-      }
-      button.classList.add(LABEL_CLASS);
-      button.setAttribute("aria-label", "TERMINATO");
-      button.title = "TERMINATO";
+    if (!isSpecialCommessa()) {
+      specialViewMode = "standard";
+      removeTerminatedTab();
+      restoreLegacyActions();
+      return;
+    }
+    ensureTerminatedTab();
+    if (specialViewMode === "terminated") renderTerminatedList();
+    else applyStandardList();
+  }
+
+  function scheduleApply() {
+    if (scheduled) return;
+    scheduled = true;
+    window.requestAnimationFrame(() => {
+      scheduled = false;
+      apply();
     });
   }
 
   function install() {
     ensureStyle();
     const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
-    if (list && !list.dataset.terminatoLabelObserver) {
-      const observer = new MutationObserver(apply);
+    if (list && !list.dataset.specialTerminatoObserver) {
+      const observer = new MutationObserver(scheduleApply);
       observer.observe(list, { childList: true, subtree: true });
-      list.dataset.terminatoLabelObserver = "1";
+      list.dataset.specialTerminatoObserver = "1";
     }
     apply();
   }
 
-  window.addEventListener("hashchange", apply);
+  window.addEventListener("hashchange", () => {
+    specialViewMode = "standard";
+    scheduleApply();
+  });
   window.addEventListener("hera:data-ready", install);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();
 
-  window.HeraTerminatoLabel = Object.freeze({ installed: true, apply, isSpecialCommessa });
+  window.HeraSpecialTerminato = Object.freeze({
+    installed: true,
+    field: TERMINATED_FIELD,
+    isSpecialCommessa,
+    isTerminated,
+    terminatePlant,
+    apply,
+    renderTerminatedList
+  });
 })();

@@ -2,11 +2,13 @@ package it.vargacantieri.hera.camera;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -15,10 +17,12 @@ import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
+import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.Preview;
+import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
@@ -45,7 +49,10 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
 
     private final ArrayList<String> photoPaths = new ArrayList<>();
     private ImageCapture imageCapture;
+    private Camera camera;
+    private PreviewView previewView;
     private TextView counterView;
+    private TextView zoomView;
     private Button shutterButton;
     private Button doneButton;
     private File sessionFolder;
@@ -64,7 +71,7 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
             return;
         }
 
-        PreviewView previewView = new PreviewView(this);
+        previewView = new PreviewView(this);
         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
 
         FrameLayout root = new FrameLayout(this);
@@ -98,21 +105,32 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
         shutterParams.setMargins(0, 0, 0, dp(34));
         root.addView(shutterButton, shutterParams);
 
+        zoomView = makeZoomView();
+        FrameLayout.LayoutParams zoomParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            dp(40)
+        );
+        zoomParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        zoomParams.setMargins(0, 0, 0, dp(218));
+        root.addView(zoomView, zoomParams);
+
         TextView hint = makeHintView();
         FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         );
         hintParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        hintParams.setMargins(dp(16), 0, dp(16), dp(126));
+        hintParams.setMargins(dp(16), 0, dp(16), dp(154));
         root.addView(hint, hintParams);
 
         setContentView(root);
-        applySystemBarInsets(root, counterParams, doneParams, shutterParams, hintParams, hint);
+        applySystemBarInsets(root, counterParams, doneParams, shutterParams, zoomParams, hintParams, hint);
         updateCounter();
         doneButton.setOnClickListener(view -> finishWithPhotos());
         shutterButton.setOnClickListener(view -> takePhoto());
-        startCamera(previewView);
+        zoomView.setOnClickListener(view -> cycleZoom());
+        installPinchZoom();
+        startCamera();
     }
 
     private void applySystemBarInsets(
@@ -120,6 +138,7 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
         FrameLayout.LayoutParams counterParams,
         FrameLayout.LayoutParams doneParams,
         FrameLayout.LayoutParams shutterParams,
+        FrameLayout.LayoutParams zoomParams,
         FrameLayout.LayoutParams hintParams,
         TextView hint
     ) {
@@ -134,15 +153,17 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
             counterParams.setMargins(dp(18) + insets.left, dp(22) + insets.top, 0, 0);
             doneParams.setMargins(0, dp(22) + insets.top, dp(18) + insets.right, 0);
             shutterParams.setMargins(0, 0, 0, dp(34) + insets.bottom);
+            zoomParams.setMargins(0, 0, 0, dp(218) + insets.bottom);
             hintParams.setMargins(
                 dp(16) + insets.left,
                 0,
                 dp(16) + insets.right,
-                dp(126) + insets.bottom
+                dp(154) + insets.bottom
             );
             counterView.setLayoutParams(counterParams);
             doneButton.setLayoutParams(doneParams);
             shutterButton.setLayoutParams(shutterParams);
+            zoomView.setLayoutParams(zoomParams);
             hint.setLayoutParams(hintParams);
             return windowInsets;
         });
@@ -156,7 +177,13 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
         super.onBackPressed();
     }
 
-    private void startCamera(PreviewView previewView) {
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        previewView.post(this::updateCaptureRotation);
+    }
+
+    private void startCamera() {
         ListenableFuture<ProcessCameraProvider> future = ProcessCameraProvider.getInstance(this);
         future.addListener(() -> {
             try {
@@ -170,21 +197,71 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
                     .build();
 
                 provider.unbindAll();
-                provider.bindToLifecycle(
+                camera = provider.bindToLifecycle(
                     this,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
                     imageCapture
                 );
+                updateCaptureRotation();
+                updateZoomLabel();
             } catch (Exception error) {
                 finishWithError();
             }
         }, ContextCompat.getMainExecutor(this));
     }
 
+    private void updateCaptureRotation() {
+        if (imageCapture == null || previewView == null || previewView.getDisplay() == null) return;
+        imageCapture.setTargetRotation(previewView.getDisplay().getRotation());
+    }
+
+    private void installPinchZoom() {
+        ScaleGestureDetector detector = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(ScaleGestureDetector scaleGestureDetector) {
+                if (camera == null) return false;
+                ZoomState zoomState = camera.getCameraInfo().getZoomState().getValue();
+                if (zoomState == null) return false;
+                float target = zoomState.getZoomRatio() * scaleGestureDetector.getScaleFactor();
+                target = Math.max(zoomState.getMinZoomRatio(), Math.min(zoomState.getMaxZoomRatio(), target));
+                camera.getCameraControl().setZoomRatio(target);
+                zoomView.setText(formatZoom(target));
+                return true;
+            }
+        });
+        previewView.setOnTouchListener((view, event) -> {
+            detector.onTouchEvent(event);
+            return true;
+        });
+    }
+
+    private void cycleZoom() {
+        if (camera == null) return;
+        ZoomState zoomState = camera.getCameraInfo().getZoomState().getValue();
+        if (zoomState == null) return;
+        float current = zoomState.getZoomRatio();
+        float requested = current < 1.5f ? 2f : current < 2.5f ? 3f : 1f;
+        float target = Math.max(zoomState.getMinZoomRatio(), Math.min(zoomState.getMaxZoomRatio(), requested));
+        camera.getCameraControl().setZoomRatio(target);
+        zoomView.setText(formatZoom(target));
+    }
+
+    private void updateZoomLabel() {
+        if (camera == null) return;
+        camera.getCameraInfo().getZoomState().observe(this, state -> {
+            if (state != null && zoomView != null) zoomView.setText(formatZoom(state.getZoomRatio()));
+        });
+    }
+
+    private String formatZoom(float zoom) {
+        return new DecimalFormat("0.0").format(zoom) + "×";
+    }
+
     private void takePhoto() {
         if (imageCapture == null || captureInProgress || photoPaths.size() >= maxPhotos) return;
 
+        updateCaptureRotation();
         captureInProgress = true;
         shutterButton.setEnabled(false);
         int photoNumber = photoPaths.size() + 1;
@@ -290,9 +367,21 @@ public class HeraContinuousCameraActivity extends FragmentActivity {
         return button;
     }
 
+    private TextView makeZoomView() {
+        TextView view = new TextView(this);
+        view.setText("1.0×");
+        view.setTextColor(Color.WHITE);
+        view.setTextSize(15);
+        view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(16), 0, dp(16), 0);
+        view.setBackground(roundedBackground(0xA6000000, 20));
+        return view;
+    }
+
     private TextView makeHintView() {
         TextView view = new TextView(this);
-        view.setText("Scatta tutte le foto · poi premi Fine");
+        view.setText("Pizzica per zoom · ruota il telefono per foto orizzontale");
         view.setTextColor(Color.WHITE);
         view.setTextSize(14);
         view.setGravity(Gravity.CENTER);

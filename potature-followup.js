@@ -325,12 +325,13 @@
   if (window.HeraSpecialTerminato?.installed) return;
 
   const STYLE_ID = "hera-special-terminato-style";
-  const TERMINATED_TAB_ID = "view-special-terminated-btn";
   const TERMINATED_FIELD = "specialTerminato";
+  const FINISHED_BUTTON_ID = "view-done-btn";
+  const PROGRAM_BUTTON_ID = "view-todo-btn";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
   const text = (value) => String(value ?? "").trim();
-  let specialViewMode = "standard";
+  let specialViewMode = "program";
   let scheduled = false;
 
   function selectedId() {
@@ -508,8 +509,7 @@
       specialTerminatoByUid: operator.uid,
       specialTerminatoVersione: 1
     });
-    specialViewMode = "standard";
-    apply();
+    showFinishedList();
   }
 
   function createTerminateButton(card, plant) {
@@ -519,7 +519,7 @@
     button.type = "button";
     button.className = "btn special-terminato-btn";
     button.textContent = "TERMINATO";
-    button.setAttribute("aria-label", "Sposta il cantiere nei Terminati della commessa speciale");
+    button.setAttribute("aria-label", "Sposta il cantiere nei Finiti della commessa speciale");
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -547,43 +547,77 @@
     document.querySelectorAll(".special-terminato-btn").forEach((button) => button.remove());
   }
 
-  function ensureTerminatedTab() {
+  function saveOriginalLabel(button) {
+    if (!button || button.dataset.specialOriginalLabel !== undefined) return;
+    button.dataset.specialOriginalLabel = button.textContent || "";
+  }
+
+  function restoreSpecialTabs() {
+    [FINISHED_BUTTON_ID, PROGRAM_BUTTON_ID].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button || button.dataset.specialOriginalLabel === undefined) return;
+      button.textContent = button.dataset.specialOriginalLabel;
+      delete button.dataset.specialOriginalLabel;
+    });
+    document.getElementById("export-current-commessa-btn")?.classList.remove("special-core-action-hidden");
+  }
+
+  function selectSpecialTab(mode) {
+    const finishedButton = document.getElementById(FINISHED_BUTTON_ID);
+    const programButton = document.getElementById(PROGRAM_BUTTON_ID);
+    finishedButton?.classList.toggle("btn-primary", mode === "finished");
+    programButton?.classList.toggle("btn-primary", mode === "program");
+  }
+
+  function showFinishedList() {
+    specialViewMode = "finished";
+    selectSpecialTab("finished");
+    renderFinishedList();
+  }
+
+  function configureSpecialTabs() {
     const toolbar = document.querySelector("#impianti-card .view-tabs") || document.querySelector(".view-tabs");
     if (!toolbar) return null;
-    let tab = document.getElementById(TERMINATED_TAB_ID);
-    if (!tab) {
-      tab = document.createElement("button");
-      tab.id = TERMINATED_TAB_ID;
-      tab.type = "button";
-      tab.className = "btn";
-      tab.textContent = "✅ Terminati";
-      tab.addEventListener("click", () => {
-        specialViewMode = "terminated";
-        toolbar.querySelectorAll(".btn-primary").forEach((button) => button.classList.remove("btn-primary"));
-        tab.classList.add("btn-primary");
-        renderTerminatedList();
-      });
-      toolbar.appendChild(tab);
+    const finishedButton = document.getElementById(FINISHED_BUTTON_ID);
+    const programButton = document.getElementById(PROGRAM_BUTTON_ID);
+    saveOriginalLabel(finishedButton);
+    saveOriginalLabel(programButton);
+    if (finishedButton) finishedButton.textContent = "✅ Finiti";
+    if (programButton) programButton.textContent = "🛠️ In programma";
+    document.getElementById("export-current-commessa-btn")?.classList.add("special-core-action-hidden");
+
+    if (finishedButton && !finishedButton.dataset.specialFinishedHandler) {
+      finishedButton.addEventListener("click", (event) => {
+        if (!isSpecialCommessa()) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        showFinishedList();
+      }, true);
+      finishedButton.dataset.specialFinishedHandler = "1";
+    }
+    if (programButton && !programButton.dataset.specialProgramHandler) {
+      programButton.addEventListener("click", () => {
+        if (!isSpecialCommessa()) return;
+        specialViewMode = "program";
+        selectSpecialTab("program");
+        window.setTimeout(apply, 0);
+      }, true);
+      programButton.dataset.specialProgramHandler = "1";
     }
     if (!toolbar.dataset.specialTerminatoTabs) {
       toolbar.addEventListener("click", (event) => {
         const button = event.target.closest("button");
-        if (!button || button.id === TERMINATED_TAB_ID) return;
-        specialViewMode = "standard";
-        document.getElementById(TERMINATED_TAB_ID)?.classList.remove("btn-primary");
+        if (!button || !isSpecialCommessa() || button.id === FINISHED_BUTTON_ID || button.id === PROGRAM_BUTTON_ID) return;
+        specialViewMode = "program";
         window.setTimeout(apply, 0);
       });
       toolbar.dataset.specialTerminatoTabs = "1";
     }
-    return tab;
+    return { finishedButton, programButton };
   }
 
-  function removeTerminatedTab() {
-    document.getElementById(TERMINATED_TAB_ID)?.remove();
-  }
-
-  function renderTerminatedList() {
-    if (!isSpecialCommessa() || specialViewMode !== "terminated") return;
+  function renderFinishedList() {
+    if (!isSpecialCommessa() || specialViewMode !== "finished") return;
     const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
     if (!list) return;
     const plants = currentPlants().filter(isTerminated);
@@ -595,7 +629,7 @@
     wrapper.dataset.specialTerminatedRender = "1";
     wrapper.className = "impianti-lista";
     if (!plants.length) {
-      wrapper.innerHTML = '<p class="muted">Nessun cantiere terminato in questa commessa speciale.</p>';
+      wrapper.innerHTML = '<p class="muted">Nessun cantiere finito in questa commessa speciale.</p>';
     } else {
       plants.forEach((plant) => {
         const card = document.createElement("article");
@@ -635,13 +669,13 @@
   function apply() {
     ensureStyle();
     if (!isSpecialCommessa()) {
-      specialViewMode = "standard";
-      removeTerminatedTab();
+      specialViewMode = "program";
+      restoreSpecialTabs();
       restoreLegacyActions();
       return;
     }
-    ensureTerminatedTab();
-    if (specialViewMode === "terminated") renderTerminatedList();
+    configureSpecialTabs();
+    if (specialViewMode === "finished") renderFinishedList();
     else applyStandardList();
   }
 
@@ -666,7 +700,7 @@
   }
 
   window.addEventListener("hashchange", () => {
-    specialViewMode = "standard";
+    specialViewMode = "program";
     scheduleApply();
   });
   window.addEventListener("hera:data-ready", install);
@@ -680,6 +714,6 @@
     isTerminated,
     terminatePlant,
     apply,
-    renderTerminatedList
+    renderFinishedList
   });
 })();

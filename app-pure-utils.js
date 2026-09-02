@@ -107,3 +107,13 @@
   script.setAttribute("data-hera-verde-bologna-parchi-mobile", "1");
   document.head.appendChild(script);
 })();
+
+// Verde Levato: censimenti manuali e amministratore limitato alla sola sezione.
+(function loadVerdeLevato() {
+  if (document.querySelector("script[data-hera-verde-levato]")) return;
+  const script = document.createElement("script");
+  script.src = "./verde-levato.js?v=20260902-verde-levato1";
+  script.async = false;
+  script.setAttribute("data-hera-verde-levato", "1");
+  document.head.appendChild(script);
+})();

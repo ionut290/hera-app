@@ -41,6 +41,16 @@ service cloud.firestore {
       return authPresent() && request.auth.uid == userId;
     }
 
+    // Amministratore limitato esclusivamente alla sezione Verde Levato.
+    // Non concede alcun privilegio amministrativo nelle altre collezioni.
+    function isVerdeLevatoAdmin() {
+      return isAdmin() || (
+        signedIn()
+        && exists(/databases/$(database)/documents/verdeLevatoConfig/access)
+        && request.auth.token.email in get(/databases/$(database)/documents/verdeLevatoConfig/access).data.adminEmails
+      );
+    }
+
     function canReadNotification() {
       return signedIn() && (isAdmin() || resource.data.scopeType == "GLOBALE" || request.auth.uid in resource.data.recipientUserIds);
     }
@@ -119,6 +129,18 @@ service cloud.firestore {
       match /{subcollection}/{document=**} {
         allow read, write: if signedIn();
       }
+    }
+
+    match /verdeLevatoConfig/{documentId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /verdeLevatoRecords/{recordId} {
+      allow read: if signedIn();
+      allow create, update: if isVerdeLevatoAdmin();
+      allow delete: if false;
     }
 
     // Il report contiene dati storici degli operatori ed è solo amministrativo.

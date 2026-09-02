@@ -5,6 +5,7 @@
   const MENU_BUTTON_ID = "open-verde-levato-btn";
   const STYLE_ID = "verde-levato-style";
   const RECORDS_COLLECTION = "verdeLevatoRecords";
+  const COMMESSE_COLLECTION = "verdeLevatoCommesse";
   const CONFIG_COLLECTION = "verdeLevatoConfig";
   const CONFIG_DOCUMENT = "access";
   const DEFAULT_CENTER = [44.4949, 11.3426];
@@ -16,6 +17,9 @@
 
   const state = {
     records: [],
+    commesse: [],
+    commesseLoaded: false,
+    commessePromise: null,
     adminEmails: [],
     category: "",
     query: "",
@@ -82,8 +86,9 @@
       .verde-levato-results{display:grid;gap:9px}.verde-levato-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px;border:1px solid #d6e3d9;border-radius:13px;background:#fbfdfb}.verde-levato-result h3{margin:0;color:#174d30}.verde-levato-result p{margin:4px 0 0;color:#617667;font-size:.8rem}.verde-levato-result-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.verde-levato-result-details{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:6px}.verde-levato-result-details div{padding:7px;border-radius:8px;background:#eff6f1}.verde-levato-result-details span{display:block;color:#6c7f70;font-size:.66rem}.verde-levato-result-details strong{display:block;margin-top:2px;color:#294d35;font-size:.76rem;overflow-wrap:anywhere}.verde-levato-empty{padding:17px;text-align:center;color:#65796a}
       .verde-levato-modal{position:fixed;inset:0;z-index:14000;overflow:auto;padding:max(10px,env(safe-area-inset-top)) 10px max(18px,env(safe-area-inset-bottom));background:#eef4f0}.verde-levato-modal.hidden{display:none!important}.verde-levato-modal-card{width:min(820px,100%);margin:auto;padding:14px;border-radius:18px;background:#fff;box-shadow:0 14px 38px rgba(15,50,28,.2)}.verde-levato-modal-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}.verde-levato-modal-head h2{min-width:0;flex:1;margin:0;color:#174d30}.verde-levato-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.verde-levato-form label,.verde-levato-form fieldset{display:grid;gap:5px;margin:0;padding:0;border:0;color:#294d35;font-size:.78rem;font-weight:800}.verde-levato-form input,.verde-levato-form select,.verde-levato-form textarea{width:100%;min-height:43px;padding:9px 10px;border:1px solid #afc2b4;border-radius:9px;background:#fff;font:inherit;color:#173426}.verde-levato-form textarea{min-height:80px;resize:vertical}.verde-levato-form-wide{grid-column:1/-1}.verde-levato-location-box{grid-column:1/-1;display:grid;gap:8px;padding:11px;border:1px solid #b9d3c0;border-radius:12px;background:#f3faf5}.verde-levato-location-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.verde-levato-location-status{margin:0;color:#4d6c56;font-size:.76rem}.verde-levato-specific{display:contents}.verde-levato-form-footer{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;margin-top:5px}.verde-levato-form-feedback{grid-column:1/-1;margin:0;color:#315b3e;font-size:.8rem}.verde-levato-form-feedback.error{color:#9b281f}
       .verde-levato-admin-form{display:grid;gap:10px}.verde-levato-admin-form input{min-height:44px;padding:9px 11px;border:1px solid #afc2b4;border-radius:9px;font:inherit}.verde-levato-admin-note{padding:9px;border-radius:9px;background:#fff7df;color:#72500b;font-size:.78rem}
+      .verde-levato-commessa-box{grid-column:1/-1;display:grid;gap:8px;padding:11px;border:1px solid #b9d3c0;border-radius:12px;background:#f3faf5}.verde-levato-commessa-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.verde-levato-new-commessa{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.55fr) auto;gap:8px;padding-top:8px;border-top:1px solid #c8dbcd}.verde-levato-commessa-help{margin:0;color:#526d5b;font-size:.74rem;font-weight:500}
       body.verde-levato-modal-open{overflow:hidden}
-      @media(max-width:760px){.verde-levato-badge{display:none}.verde-levato-hero{grid-template-columns:1fr}.verde-levato-categories{grid-template-columns:1fr}.verde-levato-result{grid-template-columns:1fr}.verde-levato-map{height:46vh;min-height:310px}.verde-levato-form{grid-template-columns:1fr}.verde-levato-form-wide,.verde-levato-location-box,.verde-levato-form-footer,.verde-levato-form-feedback{grid-column:1}.verde-levato-header p{display:none}.verde-levato-header .btn{padding:7px 9px}.verde-levato-result-actions .btn,.verde-levato-result-actions a{flex:1;justify-content:center;text-align:center;text-decoration:none}}
+      @media(max-width:760px){.verde-levato-badge{display:none}.verde-levato-hero{grid-template-columns:1fr}.verde-levato-categories{grid-template-columns:1fr}.verde-levato-result{grid-template-columns:1fr}.verde-levato-map{height:46vh;min-height:310px}.verde-levato-form{grid-template-columns:1fr}.verde-levato-form-wide,.verde-levato-location-box,.verde-levato-commessa-box,.verde-levato-form-footer,.verde-levato-form-feedback{grid-column:1}.verde-levato-commessa-row,.verde-levato-new-commessa{grid-template-columns:1fr}.verde-levato-header p{display:none}.verde-levato-header .btn{padding:7px 9px}.verde-levato-result-actions .btn,.verde-levato-result-actions a{flex:1;justify-content:center;text-align:center;text-decoration:none}}
     `;
     document.head.appendChild(style);
   }
@@ -104,7 +109,7 @@
         </header>
         <section id="verde-levato-hub">
           <div class="verde-levato-hero">
-            <article class="verde-levato-card"><h2>Verde Levato</h2><p>La stessa impostazione operativa di Verde Bologna, senza importare cantieri da applicazioni esterne. I dati vengono censiti sul posto e salvati nella sezione dedicata.</p><div class="verde-levato-hero-actions"><button id="verde-levato-new-btn" class="btn btn-primary verde-levato-hidden" type="button">＋ NUOVO ELEMENTO</button><button id="verde-levato-refresh-btn" class="btn" type="button">↻ AGGIORNA</button></div></article>
+            <article class="verde-levato-card"><h2>Verde Levato</h2><p>La stessa impostazione operativa di Verde Bologna, senza importare cantieri da applicazioni esterne. I dati vengono censiti sul posto e salvati nella sezione dedicata.</p><div class="verde-levato-hero-actions"><button id="verde-levato-new-btn" class="btn btn-primary verde-levato-hidden" type="button">＋ INSERIMENTO DATI</button><button id="verde-levato-export-btn" class="btn verde-levato-hidden" type="button">📊 ESPORTA TUTTI I DATI</button><button id="verde-levato-refresh-btn" class="btn" type="button">↻ AGGIORNA</button></div></article>
             <article class="verde-levato-card verde-levato-access"><h3>Accesso alla gestione</h3><p id="verde-levato-access-summary">Verifica autorizzazioni…</p><div id="verde-levato-admin-list" class="verde-levato-admin-list"></div><button id="verde-levato-admin-btn" class="btn verde-levato-hidden" type="button">👤 AGGIUNGI AMMINISTRATORE</button></article>
           </div>
           <section id="verde-levato-categories" class="verde-levato-categories" aria-label="Categorie Verde Levato"></section>
@@ -123,6 +128,7 @@
             <input name="recordId" type="hidden">
             <label>Tipo *<select name="tipoRecord" required><option value="cantiere">🛠️ Cantiere</option><option value="albero">🌳 Albero censito</option><option value="siepe">🌿 Siepe</option></select></label>
             <label>Codice / numero<input name="codice" maxlength="80" placeholder="Es. LEV-001"></label>
+            <section class="verde-levato-commessa-box" data-verde-levato-type="cantiere"><div class="verde-levato-commessa-row"><label>Commessa Verde Levato *<select name="commessaId" required disabled><option value="">Caricamento commesse…</option></select></label><button id="verde-levato-show-new-commessa" class="btn" type="button">＋ NUOVA COMMESSA</button></div><p class="verde-levato-commessa-help">Ogni nuovo cantiere deve essere associato a una commessa. Per adesso le commesse sono gestite soltanto in questo modulo di inserimento dati.</p><div id="verde-levato-new-commessa-panel" class="verde-levato-new-commessa verde-levato-hidden"><label>Nome nuova commessa *<input id="verde-levato-new-commessa-name" maxlength="160" placeholder="Es. Manutenzione Bologna Nord"></label><label>Codice commessa<input id="verde-levato-new-commessa-code" maxlength="80" placeholder="Es. VL-2026-01"></label><button id="verde-levato-save-commessa" class="btn btn-primary" type="button">SALVA COMMESSA</button></div><p id="verde-levato-commessa-feedback" class="verde-levato-form-feedback" role="status"></p></section>
             <label class="verde-levato-form-wide">Denominazione *<input name="denominazione" maxlength="180" required placeholder="Nome del cantiere, albero o siepe"></label>
             <section class="verde-levato-location-box"><div class="verde-levato-location-actions"><button id="verde-levato-use-location" class="btn btn-primary" type="button">📍 LA MIA POSIZIONE</button><strong>Compilazione automatica da GPS</strong></div><p id="verde-levato-location-status" class="verde-levato-location-status">Premi il pulsante sul posto: coordinate e indirizzo verranno compilati automaticamente. Tutti i campi resteranno modificabili.</p></section>
             <label>Latitudine GPS *<input name="gpsY" inputmode="decimal" required placeholder="44.000000"></label><label>Longitudine GPS *<input name="gpsX" inputmode="decimal" required placeholder="11.000000"></label>
@@ -175,7 +181,7 @@
     if (list) list.innerHTML = state.adminEmails.length
       ? state.adminEmails.map((item) => `<span class="verde-levato-admin-chip">${esc(item)}</span>`).join("")
       : '<span class="verde-levato-admin-chip">Nessuna email dedicata configurata</span>';
-    [$("verde-levato-new-btn"), $("verde-levato-category-new-btn")].forEach((button) => button?.classList.toggle("verde-levato-hidden", !state.canManage));
+    [$("verde-levato-new-btn"), $("verde-levato-category-new-btn"), $("verde-levato-export-btn")].forEach((button) => button?.classList.toggle("verde-levato-hidden", !state.canManage));
     $("verde-levato-admin-btn")?.classList.toggle("verde-levato-hidden", !state.globalAdmin);
   }
 
@@ -195,6 +201,111 @@
       state.adminEmails = [];
     }
     renderAccess();
+  }
+
+  function renderCommessaOptions(selectedId = "") {
+    const select = $("verde-levato-form")?.elements.commessaId;
+    if (!select) return;
+    const wanted = text(selectedId || select.value);
+    select.innerHTML = `<option value="">${state.commesse.length ? "Seleziona una commessa Verde Levato" : "Nessuna commessa: creane una qui sotto"}</option>${state.commesse.map((commessa) => `<option value="${esc(commessa.id)}">${esc([commessa.codice, commessa.nome].filter(Boolean).join(" · "))}</option>`).join("")}`;
+    select.disabled = false;
+    if (wanted && state.commesse.some((commessa) => commessa.id === wanted)) select.value = wanted;
+  }
+
+  async function loadCommesse(force = false) {
+    if (state.commesseLoaded && !force) {
+      renderCommessaOptions();
+      return state.commesse;
+    }
+    if (state.commessePromise && !force) return state.commessePromise;
+    const firestore = store();
+    if (!firestore || !currentUser() || !state.canManage) {
+      state.commesse = [];
+      state.commesseLoaded = false;
+      renderCommessaOptions();
+      return state.commesse;
+    }
+    const select = $("verde-levato-form")?.elements.commessaId;
+    if (select) {
+      select.disabled = true;
+      select.innerHTML = '<option value="">Caricamento commesse…</option>';
+    }
+    state.commessePromise = (async () => {
+      try {
+        const snapshot = await firestore.collection(COMMESSE_COLLECTION).get();
+        state.commesse = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => text(a.nome).localeCompare(text(b.nome), "it"));
+        state.commesseLoaded = true;
+        renderCommessaOptions();
+        return state.commesse;
+      } catch (error) {
+        console.error("Verde Levato: caricamento commesse non riuscito", error);
+        state.commesseLoaded = false;
+        if (select) {
+          select.disabled = true;
+          select.innerHTML = '<option value="">Impossibile caricare le commesse</option>';
+        }
+        const feedback = $("verde-levato-commessa-feedback");
+        if (feedback) { feedback.textContent = error?.message || "Impossibile caricare le commesse Verde Levato."; feedback.classList.add("error"); }
+        throw error;
+      } finally {
+        state.commessePromise = null;
+      }
+    })();
+    return state.commessePromise;
+  }
+
+  function toggleNewCommessaPanel() {
+    const panel = $("verde-levato-new-commessa-panel");
+    if (!panel) return;
+    const willOpen = panel.classList.contains("verde-levato-hidden");
+    panel.classList.toggle("verde-levato-hidden", !willOpen);
+    if (willOpen) $("verde-levato-new-commessa-name")?.focus();
+  }
+
+  async function saveCommessa() {
+    const feedback = $("verde-levato-commessa-feedback");
+    const nome = text($("verde-levato-new-commessa-name")?.value);
+    const codice = text($("verde-levato-new-commessa-code")?.value);
+    if (!state.canManage || !currentUser() || !store()) {
+      if (feedback) { feedback.textContent = "Autorizzazione Verde Levato non disponibile."; feedback.classList.add("error"); }
+      return;
+    }
+    if (!nome) {
+      if (feedback) { feedback.textContent = "Inserisci il nome della nuova commessa."; feedback.classList.add("error"); }
+      return;
+    }
+    const duplicate = state.commesse.find((commessa) => text(commessa.nome).toLocaleLowerCase("it-IT") === nome.toLocaleLowerCase("it-IT") || (codice && text(commessa.codice).toLocaleLowerCase("it-IT") === codice.toLocaleLowerCase("it-IT")));
+    if (duplicate) {
+      renderCommessaOptions(duplicate.id);
+      if (feedback) { feedback.textContent = "La commessa esiste già ed è stata selezionata."; feedback.classList.remove("error"); }
+      return;
+    }
+    const button = $("verde-levato-save-commessa");
+    if (button) button.disabled = true;
+    if (feedback) { feedback.textContent = "Salvataggio nuova commessa…"; feedback.classList.remove("error"); }
+    try {
+      const reference = store().collection(COMMESSE_COLLECTION).doc();
+      const user = currentUser();
+      const payload = {
+        nome, codice, source: "MANUALE_VERDE_LEVATO", createdAt: firestoreTimestamp(), updatedAt: firestoreTimestamp(),
+        createdByUid: user?.uid || "", createdByEmail: normalizeEmail(user?.email), updatedByUid: user?.uid || "", updatedByEmail: normalizeEmail(user?.email)
+      };
+      await reference.set(payload, { merge: true });
+      state.commesse.push({ id: reference.id, ...payload });
+      state.commesse.sort((a, b) => text(a.nome).localeCompare(text(b.nome), "it"));
+      state.commesseLoaded = true;
+      renderCommessaOptions(reference.id);
+      if ($("verde-levato-new-commessa-name")) $("verde-levato-new-commessa-name").value = "";
+      if ($("verde-levato-new-commessa-code")) $("verde-levato-new-commessa-code").value = "";
+      $("verde-levato-new-commessa-panel")?.classList.add("verde-levato-hidden");
+      if (feedback) feedback.textContent = `Commessa “${nome}” creata e associata al nuovo cantiere.`;
+    } catch (error) {
+      console.error("Verde Levato: salvataggio commessa non riuscito", error);
+      if (feedback) { feedback.textContent = error?.message || "Impossibile salvare la nuova commessa."; feedback.classList.add("error"); }
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   async function loadRecords() {
@@ -434,24 +545,35 @@
     const form = $("verde-levato-form");
     const type = form?.elements.tipoRecord?.value || "cantiere";
     form?.querySelectorAll("[data-verde-levato-type]").forEach((section) => section.classList.toggle("verde-levato-hidden", section.dataset.verdeLevatoType !== type));
+    if (form?.elements.commessaId) form.elements.commessaId.required = type === "cantiere";
+    if (type === "cantiere" && state.canManage && !state.commesseLoaded) loadCommesse().catch(() => {});
   }
 
-  function openRecordForm(record = null) {
+  async function openRecordForm(record = null) {
     if (!state.canManage) { window.alert("Solo l’amministratore Verde Levato può aggiungere o modificare elementi."); return; }
     const form = $("verde-levato-form");
     if (!form) return;
     form.reset();
     form.dataset.coordinateSource = record?.coordinateSource || "MANUAL";
-    const fields = ["recordId", "tipoRecord", "codice", "denominazione", "gpsY", "gpsX", "gpsAccuracyM", "gpsDetectedAt", "comune", "localita", "via", "civico", "cap", "provincia", "regione", "paese", "indirizzo", "superficieMq", "tipologiaIntervento", "lavorazioniRichieste", "numeroAlbero", "specieAlbero", "diametroCm", "altezzaAlberoM", "statoVegetativo", "specieSiepe", "lunghezzaM", "altezzaSiepeM", "larghezzaM", "note"];
-    fields.forEach((name) => { if (form.elements[name]) form.elements[name].value = name === "recordId" ? (record?.id || "") : (record?.[name] ?? ""); });
-    if (!record && state.category) form.elements.tipoRecord.value = state.category;
+    const fields = ["recordId", "tipoRecord", "codice", "commessaId", "denominazione", "gpsY", "gpsX", "gpsAccuracyM", "gpsDetectedAt", "comune", "localita", "via", "civico", "cap", "provincia", "regione", "paese", "indirizzo", "superficieMq", "tipologiaIntervento", "lavorazioniRichieste", "numeroAlbero", "specieAlbero", "diametroCm", "altezzaAlberoM", "statoVegetativo", "specieSiepe", "lunghezzaM", "altezzaSiepeM", "larghezzaM", "note"];
+    fields.forEach((name) => {
+      if (!form.elements[name] || (!record && name !== "recordId")) return;
+      form.elements[name].value = name === "recordId" ? (record?.id || "") : (record?.[name] ?? "");
+    });
+    if (!record) form.elements.tipoRecord.value = state.category || "cantiere";
     if ($("verde-levato-form-title")) $("verde-levato-form-title").textContent = record ? "Modifica elemento Verde Levato" : "Nuovo elemento Verde Levato";
     if ($("verde-levato-form-feedback")) $("verde-levato-form-feedback").textContent = "";
+    if ($("verde-levato-commessa-feedback")) { $("verde-levato-commessa-feedback").textContent = ""; $("verde-levato-commessa-feedback").classList.remove("error"); }
+    $("verde-levato-new-commessa-panel")?.classList.add("verde-levato-hidden");
     setLocationStatus("Premi LA MIA POSIZIONE sul posto per compilare automaticamente coordinate e indirizzo.");
     syncTypeFields();
     $("verde-levato-record-modal")?.classList.remove("hidden");
     $("verde-levato-record-modal")?.setAttribute("aria-hidden", "false");
     document.body.classList.add("verde-levato-modal-open");
+    if (form.elements.tipoRecord.value === "cantiere") {
+      await loadCommesse().catch(() => []);
+      renderCommessaOptions(record?.commessaId || "");
+    }
   }
 
   function closeRecordForm() {
@@ -467,9 +589,16 @@
 
   function buildRecordPayload(form) {
     const user = currentUser();
+    const tipoRecord = text(form.elements.tipoRecord.value);
+    const selectedCommessa = tipoRecord === "cantiere"
+      ? state.commesse.find((commessa) => commessa.id === text(form.elements.commessaId.value))
+      : null;
     const payload = {
-      tipoRecord: text(form.elements.tipoRecord.value),
+      tipoRecord,
       codice: text(form.elements.codice.value),
+      commessaId: selectedCommessa?.id || "",
+      commessaNome: text(selectedCommessa?.nome),
+      commessaCodice: text(selectedCommessa?.codice),
       denominazione: text(form.elements.denominazione.value),
       gpsY: numberValue(form.elements.gpsY.value),
       gpsX: numberValue(form.elements.gpsX.value),
@@ -492,6 +621,7 @@
     if (!state.canManage || !currentUser() || !store()) { if (feedback) { feedback.textContent = "Autorizzazione Verde Levato non disponibile."; feedback.classList.add("error"); } return; }
     const payload = buildRecordPayload(form);
     if (!payload.denominazione || !CATEGORIES.some((category) => category.id === payload.tipoRecord)) { if (feedback) { feedback.textContent = "Inserisci tipo e denominazione."; feedback.classList.add("error"); } return; }
+    if (payload.tipoRecord === "cantiere" && !payload.commessaId) { if (feedback) { feedback.textContent = "Seleziona o crea la commessa Verde Levato da associare al cantiere."; feedback.classList.add("error"); } return; }
     if (!Number.isFinite(payload.gpsY) || !Number.isFinite(payload.gpsX) || Math.abs(payload.gpsY) > 90 || Math.abs(payload.gpsX) > 180) { if (feedback) { feedback.textContent = "Rileva o inserisci coordinate GPS valide."; feedback.classList.add("error"); } return; }
     const submit = form.querySelector('button[type="submit"]');
     if (submit) submit.disabled = true;
@@ -509,6 +639,103 @@
       console.error("Verde Levato: salvataggio non riuscito", error);
       if (feedback) { feedback.textContent = error?.message || "Salvataggio non riuscito."; feedback.classList.add("error"); }
     } finally { if (submit) submit.disabled = false; }
+  }
+
+  function exportDate(value) {
+    const date = value?.toDate?.() || (value instanceof Date ? value : null);
+    return date && Number.isFinite(date.getTime()) ? date.toLocaleString("it-IT") : text(value);
+  }
+
+  function exportRecordRow(record) {
+    return {
+      "ID record": record.id || "",
+      "Commessa": record.commessaNome || "",
+      "Codice commessa": record.commessaCodice || "",
+      "ID commessa": record.commessaId || "",
+      "Tipo elemento": categoryInfo(recordCategory(record)).title,
+      "Codice / numero": record.codice || "",
+      "Denominazione": record.denominazione || "",
+      "Latitudine GPS": record.gpsY ?? "",
+      "Longitudine GPS": record.gpsX ?? "",
+      "Precisione GPS (m)": record.gpsAccuracyM ?? "",
+      "Data/ora rilevazione GPS": record.gpsDetectedAt || "",
+      "Origine coordinate": record.coordinateSource || "",
+      "Comune": record.comune || "",
+      "Località / quartiere": record.localita || "",
+      "Via": record.via || "",
+      "Civico": record.civico || "",
+      "CAP": record.cap || "",
+      "Provincia": record.provincia || "",
+      "Regione": record.regione || "",
+      "Paese": record.paese || "",
+      "Indirizzo completo": record.indirizzo || "",
+      "Superficie (m²)": record.superficieMq ?? "",
+      "Tipologia intervento": record.tipologiaIntervento || "",
+      "Lavorazioni richieste": record.lavorazioniRichieste || "",
+      "Numero albero": record.numeroAlbero || "",
+      "Specie albero": record.specieAlbero || "",
+      "Diametro tronco (cm)": record.diametroCm ?? "",
+      "Altezza albero (m)": record.altezzaAlberoM ?? "",
+      "Stato vegetativo / osservazioni": record.statoVegetativo || "",
+      "Specie siepe": record.specieSiepe || "",
+      "Lunghezza siepe (m)": record.lunghezzaM ?? "",
+      "Altezza siepe (m)": record.altezzaSiepeM ?? "",
+      "Larghezza siepe (m)": record.larghezzaM ?? "",
+      "Note operative": record.note || "",
+      "Origine dato": record.source || "",
+      "Creato il": exportDate(record.createdAt),
+      "Creato da": record.createdByEmail || record.createdByUid || "",
+      "Aggiornato il": exportDate(record.updatedAt),
+      "Aggiornato da": record.updatedByName || record.updatedByEmail || record.updatedByUid || ""
+    };
+  }
+
+  async function exportAllData() {
+    if (!state.canManage || !currentUser()) {
+      window.alert("L’esportazione è riservata all’amministratore Verde Levato.");
+      return;
+    }
+    const button = $("verde-levato-export-btn");
+    if (button) button.disabled = true;
+    setStatus("Preparazione del foglio Excel con tutti i dati Verde Levato…");
+    try {
+      await loadCommesse();
+      if (!window.XLSX) await window.HeraHeavyLibs?.ensure?.("xlsx");
+      if (!window.XLSX?.utils?.json_to_sheet || typeof window.XLSX.writeFile !== "function") throw new Error("Libreria Excel non disponibile");
+      const dataRows = state.records.map(exportRecordRow);
+      const emptyDataRow = exportRecordRow({});
+      const dataSheet = window.XLSX.utils.json_to_sheet(dataRows.length ? dataRows : [], { header: Object.keys(emptyDataRow) });
+      dataSheet["!cols"] = Object.keys(emptyDataRow).map((header) => ({ wch: Math.min(42, Math.max(14, header.length + 2)) }));
+      if (dataSheet["!ref"]) dataSheet["!autofilter"] = { ref: dataSheet["!ref"] };
+
+      const commesseRows = state.commesse.map((commessa) => ({
+        "ID commessa": commessa.id,
+        "Codice commessa": commessa.codice || "",
+        "Nome commessa": commessa.nome || "",
+        "Cantieri associati": state.records.filter((record) => recordCategory(record) === "cantiere" && record.commessaId === commessa.id).length,
+        "Creata il": exportDate(commessa.createdAt),
+        "Creata da": commessa.createdByEmail || commessa.createdByUid || "",
+        "Aggiornata il": exportDate(commessa.updatedAt),
+        "Aggiornata da": commessa.updatedByEmail || commessa.updatedByUid || ""
+      }));
+      const commesseHeaders = ["ID commessa", "Codice commessa", "Nome commessa", "Cantieri associati", "Creata il", "Creata da", "Aggiornata il", "Aggiornata da"];
+      const commesseSheet = window.XLSX.utils.json_to_sheet(commesseRows, { header: commesseHeaders });
+      commesseSheet["!cols"] = commesseHeaders.map((header) => ({ wch: Math.min(36, Math.max(16, header.length + 2)) }));
+      if (commesseSheet["!ref"]) commesseSheet["!autofilter"] = { ref: commesseSheet["!ref"] };
+
+      const workbook = window.XLSX.utils.book_new();
+      window.XLSX.utils.book_append_sheet(workbook, dataSheet, "Dati completi");
+      window.XLSX.utils.book_append_sheet(workbook, commesseSheet, "Commesse");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      window.XLSX.writeFile(workbook, `verde_levato_dati_completi_${timestamp}.xlsx`);
+      setStatus(`${state.records.length} elementi e ${state.commesse.length} commesse esportati in Excel.`);
+    } catch (error) {
+      console.error("Verde Levato: esportazione Excel non riuscita", error);
+      setStatus(error?.message || "Esportazione Excel non riuscita.", "error");
+      window.alert("Impossibile esportare i dati Verde Levato. Controlla la connessione e riprova.");
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   function openAdminModal() {
@@ -582,6 +809,7 @@
     $("verde-levato-back-btn")?.addEventListener("click", closePage);
     $("verde-levato-refresh-btn")?.addEventListener("click", () => Promise.all([loadAccess(), loadRecords()]));
     $("verde-levato-new-btn")?.addEventListener("click", () => openRecordForm());
+    $("verde-levato-export-btn")?.addEventListener("click", exportAllData);
     $("verde-levato-category-new-btn")?.addEventListener("click", () => openRecordForm());
     $("verde-levato-categories-btn")?.addEventListener("click", showCategories);
     $("verde-levato-search-form")?.addEventListener("submit", (event) => { event.preventDefault(); state.query = text($("verde-levato-search")?.value); renderResults(); });
@@ -590,6 +818,8 @@
     $("verde-levato-map-style")?.addEventListener("change", (event) => applyMapStyle(event.currentTarget.value));
     $("verde-levato-use-location")?.addEventListener("click", useCurrentLocation);
     $("verde-levato-form")?.elements.tipoRecord?.addEventListener("change", syncTypeFields);
+    $("verde-levato-show-new-commessa")?.addEventListener("click", toggleNewCommessaPanel);
+    $("verde-levato-save-commessa")?.addEventListener("click", saveCommessa);
     $("verde-levato-form")?.addEventListener("submit", saveRecord);
     $("verde-levato-form-close")?.addEventListener("click", closeRecordForm);
     $("verde-levato-form-cancel")?.addEventListener("click", closeRecordForm);
@@ -605,7 +835,7 @@
     buildPage();
     renderCategories();
     addMenuButton();
-    window.HeraVerdeLevato = Object.freeze({ open: openPage, close: closePage, useCurrentLocation, categories: CATEGORIES.map(({ id, title }) => ({ id, title })), collections: Object.freeze({ records: RECORDS_COLLECTION, config: CONFIG_COLLECTION }) });
+    window.HeraVerdeLevato = Object.freeze({ open: openPage, close: closePage, useCurrentLocation, exportAllData, categories: CATEGORIES.map(({ id, title }) => ({ id, title })), collections: Object.freeze({ records: RECORDS_COLLECTION, commesse: COMMESSE_COLLECTION, config: CONFIG_COLLECTION }) });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true }); else install();

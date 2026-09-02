@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v219";
-const CACHE_RESET_VERSION = "20260902-verde-levato1";
+const CACHE_NAME = "varga-cantieri-shell-v220";
+const CACHE_RESET_VERSION = "20260902-verde-levato2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,11 +10,11 @@ const APP_SHELL = [
   "./accounting-v2.css?v=20260901-current-gps1",
   "./calendar-feature.css?v=20260826-admin1",
   "./squadre-restyle.css?v=20260731-mezzi1",
-  "./app-pure-utils.js?v=20260902-verde-levato1",
+  "./app-pure-utils.js?v=20260902-verde-levato2",
   "./verde-bologna.js?v=20260901-cobo-sfalcio1",
   "./verde-bologna-operativo.js?v=20260901-catasto-open2",
   "./verde-bologna-parchi-mobile.js?v=20260901-cobo-sfalcio1",
-  "./verde-levato.js?v=20260902-verde-levato1",
+  "./verde-levato.js?v=20260902-verde-levato2",
   "./data-license-view.js?v=20260831-license1",
   "./app-worklimate.js?v=20260815-mod1",
   "./app-atex.js?v=20260815-mod1",

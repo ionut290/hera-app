@@ -24,7 +24,7 @@
     "check:tree-work-orders": "node scripts/check-tree-work-orders.js",
     "check:cobo-mowing": "node scripts/check-cobo-mowing-work-orders.js",
     "check:verde-bologna-mobile": "node scripts/check-verde-bologna-mobile-performance.js",
-    "check:potature-followup": "node scripts/check-potature-followup.js",
+    "check:potature-followup": "node scripts/check-potature-followup.js && node scripts/check-special-terminato.js",
     "check:global-map": "node scripts/check-global-map-coordinates.js",
     "check:data-safety": "node scripts/check-data-safety-layer.js",
     "check:safe-listeners": "node scripts/check-firestore-safe-optimizer.js",

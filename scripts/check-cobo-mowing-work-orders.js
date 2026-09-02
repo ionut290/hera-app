@@ -29,8 +29,8 @@ const checks = [
   [app.includes("function isCoboMowingWorkOrder(impianto)") && app.includes("openCoboMowingRegistrationForm"), "integrazione limitata alla commessa COBO"],
   [app.includes("🧾 REGISTRA SFALCIO") && app.includes("cobo-register-sfalcio-btn"), "pulsante preparatorio nella normale scheda commessa"],
   [app.includes("buildCoboMowingCardDetailsMarkup") && app.includes("badge-cobo-sfalcio"), "riepilogo registrazione nel cantiere"],
-  [html.includes("cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1") && html.includes("cobo-mowing-work-orders.js?v=20260901-cobo-sfalcio1"), "modulo e stile caricati nell’app"],
-  [serviceWorker.includes("cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1") && serviceWorker.includes("cobo-mowing-work-orders.js?v=20260901-cobo-sfalcio1"), "modulo disponibile nella PWA"],
+  [html.includes("cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1") && html.includes("cobo-mowing-work-orders.js?v=20260902-special-terminato1"), "modulo e stile caricati nell’app"],
+  [serviceWorker.includes("cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1") && serviceWorker.includes("cobo-mowing-work-orders.js?v=20260902-special-terminato1"), "modulo disponibile nella PWA"],
   [css.includes(".cobo-mowing-modal") && css.includes(".cobo-register-sfalcio-btn"), "interfaccia responsive dedicata"],
   [!source.includes(".onSnapshot(") && !source.includes("setInterval(") && !source.includes("watchPosition("), "nessun listener o polling aggiunto"],
   [!/(?:function\s+markImpiantoDone|function\s+handleImpiantoWhatsAppClick|window\.openWhatsApp\s*=|safeOpenWhatsAppMessage\s*=)/.test(source), "nessuna ridefinizione FATTO o Whazzup"]

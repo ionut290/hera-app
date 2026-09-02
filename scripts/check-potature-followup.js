@@ -57,13 +57,25 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260831-potature-followup1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260831-potature-followup1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-terminato1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-terminato1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
+assert.match(runtimeSource, /window\.HeraSpecialTerminato/,
+  "il flusso TERMINATO speciale deve essere installato separatamente");
+assert.match(runtimeSource, /specialTerminatoAt/,
+  "TERMINATO registra una data separata");
+assert.match(runtimeSource, /specialTerminatoBy/,
+  "TERMINATO registra un operatore separato");
+assert.match(runtimeSource, /TERMINATED_TAB_ID = "view-special-terminated-btn"/,
+  "la commessa speciale dispone della vista Terminati");
+assert.match(runtimeSource, /special-core-action-hidden/,
+  "le azioni storiche vengono soltanto nascoste nelle commesse speciali");
+assert.doesNotMatch(runtimeSource, /\[TERMINATED_FIELD\]:\s*true[\s\S]{0,300}\bdone\s*:/,
+  "TERMINATO non deve scrivere lo stato FATTO");
 assert.doesNotMatch(runtimeSource, /await\s+[^;\n]*\.get\s*\(/, "il nuovo flusso non aggiunge letture Firestore");
 assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "il nuovo flusso non aggiunge listener o polling");
 assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|openWhatsApp/, "il nuovo flusso non richiama né aggira FATTO/WHAZZUP");
 
-console.log("✅ Potature Abbattimenti: form facoltativo, viste Raccolta/Ceppi, salvataggio idempotente e isolamento FATTO verificati.");
+console.log("✅ Potature Abbattimenti e COBO: TERMINATO separato, vista dedicata, nessuna apertura Whazzup e isolamento FATTO verificati.");

@@ -431,6 +431,16 @@
     });
   }
 
+  function finishedStatusLabel(value) {
+    let date = value;
+    if (value?.toDate) date = value.toDate();
+    else if (value?.seconds) date = new Date(Number(value.seconds) * 1000);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "✅ TERMINATO";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = new Intl.DateTimeFormat("it-IT", { month: "long" }).format(date).toUpperCase();
+    return `✅ TERMINATO DAL ${day} ${month}`;
+  }
+
   function esc(value) {
     return text(value).replace(/[&<>'"]/g, (character) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
@@ -528,13 +538,13 @@
     style.id = STYLE_ID;
     style.textContent = `
       .special-core-action-hidden { display: none !important; }
-      .special-terminato-btn { min-width: 126px; min-height: 46px; border: 0; border-radius: 13px; color: #fff; background: #08783f; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
+      .impianto-primary-actions .special-terminato-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
       .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
       .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
-      .special-terminated-card header { display: grid; gap: 5px; }
-      .special-terminated-card header strong { color: #075f34; font-size: 1.02rem; }
-      .special-terminated-card p { margin: 4px 0; }
+      .special-terminated-card .impianto-summary-title-wrap strong { color: #075f34; }
+      .special-terminated-card .impianto-details p { margin: 4px 0; }
       .special-terminated-badge { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: 999px; color: #075f34; background: #d7f4e4; font-size: .78rem; font-weight: 900; }
+      .impianto-primary-actions .special-finished-status-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; padding: 0 8px; overflow: hidden; border: 1px solid #f59e0b; border-radius: 12px; color: #78350f; background: #fbbf24; font-size: .68rem; font-weight: 900; white-space: nowrap; text-overflow: clip; opacity: 1; }
     `;
     document.head.appendChild(style);
   }
@@ -712,7 +722,17 @@
     if (!isSpecialCommessa() || specialViewMode !== "finished") return;
     const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
     if (!list) return;
-    const plants = currentPlants().filter(isTerminated);
+    const plants = currentPlants()
+      .filter(isTerminated)
+      .filter((plant) => {
+        try { return typeof matchesImpiantoSearch === "function" ? matchesImpiantoSearch(plant) : true; } catch (_) { return true; }
+      })
+      .sort((first, second) => {
+        try {
+          if (typeof distanceFromUser === "function") return distanceFromUser(first) - distanceFromUser(second);
+        } catch (_) {}
+        return text(first?.denominazione).localeCompare(text(second?.denominazione), "it");
+      });
     const signature = plants.map((plant) => `${plantKey(plant)}:${formatTimestamp(plant.specialTerminatoAt)}:${text(plant.specialTerminatoBy)}`).join("|");
     if (list.dataset.specialTerminatoSignature === signature && list.querySelector("[data-special-terminated-render]")) return;
     list.dataset.specialTerminatoSignature = signature;
@@ -725,17 +745,75 @@
     } else {
       plants.forEach((plant) => {
         const card = document.createElement("article");
-        card.className = "impianto-item card-impianto special-terminated-card";
-        card.innerHTML = `
-          <header>
-            <span class="special-terminated-badge">✅ TERMINATO</span>
-            <strong>${esc(plant.denominazione || plant.nome || "Cantiere")}</strong>
-          </header>
+        card.className = "impianto-item card-impianto done special-terminated-card";
+        card.dataset.impiantoKey = plantKey(plant);
+
+        const mainColumn = document.createElement("div");
+        mainColumn.className = "impianto-main-column impianto-left";
+        const summary = document.createElement("button");
+        summary.type = "button";
+        summary.className = "impianto-summary-btn";
+        summary.setAttribute("aria-expanded", "false");
+        summary.innerHTML = `
+          <span class="impianto-summary-topline">
+            <span class="impianto-summary-title-wrap"><strong>${esc(plant.denominazione || plant.nome || "Cantiere")}</strong></span>
+          </span>
+          <small class="impianto-summary-meta">
+            <span class="special-terminated-badge">✅ Nei FINITI</span>
+            <span>${esc(specialTypeLabel(plant))}</span>
+          </small>`;
+
+        const details = document.createElement("div");
+        details.className = "impianto-details";
+        details.hidden = true;
+        details.innerHTML = `
           <p><b>Tipo:</b> ${esc(specialTypeLabel(plant))}</p>
           <p><b>Comune:</b> ${esc(plant.comune || "-")}</p>
           <p><b>Indirizzo:</b> ${esc(plant.indirizzo || "-")}</p>
-          <p><b>Terminato da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>
-          <p><b>Data e ora:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>`;
+          <p><b>Codice prezzo:</b> ${esc(plant.codicePrezzo || plant.voceRiferimento || "-")}</p>
+          <p><b>Lavorazioni richieste:</b> ${esc(plant.lavorazioniRichieste || plant.tipologiaIntervento || "-")}</p>
+          <p><b>Stato:</b> Finito</p>
+          <p><b>Data e ora terminato:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>
+          <p><b>Eseguito da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>`;
+        summary.addEventListener("click", () => {
+          const expanded = summary.getAttribute("aria-expanded") === "true";
+          summary.setAttribute("aria-expanded", expanded ? "false" : "true");
+          details.hidden = expanded;
+          card.classList.toggle("is-expanded", !expanded);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions impianto-actions";
+        const primary = document.createElement("div");
+        primary.className = "impianto-primary-actions";
+        const navigateButton = document.createElement("button");
+        navigateButton.type = "button";
+        navigateButton.className = "btn action-icon-btn";
+        navigateButton.dataset.actionKey = "navigate";
+        navigateButton.textContent = "🗺️";
+        navigateButton.title = "Naviga";
+        navigateButton.setAttribute("aria-label", "Naviga");
+        navigateButton.addEventListener("click", () => {
+          try {
+            if (typeof navigateToImpianto === "function") navigateToImpianto(plant);
+          } catch (_) {
+            window.alert("Navigazione non disponibile per questo cantiere.");
+          }
+        });
+        const statusButton = document.createElement("button");
+        statusButton.type = "button";
+        statusButton.className = "btn special-finished-status-btn";
+        statusButton.textContent = finishedStatusLabel(plant.specialTerminatoAt);
+        statusButton.disabled = true;
+        statusButton.setAttribute("aria-label", `${statusButton.textContent}. Nessun messaggio Whazzup viene aperto.`);
+        primary.appendChild(navigateButton);
+        primary.appendChild(statusButton);
+        actions.appendChild(primary);
+
+        mainColumn.appendChild(summary);
+        mainColumn.appendChild(details);
+        mainColumn.appendChild(actions);
+        card.appendChild(mainColumn);
         wrapper.appendChild(card);
       });
     }

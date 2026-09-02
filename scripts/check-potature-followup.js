@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-export-finiti1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-export-finiti1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-ui-parity1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-ui-parity1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
@@ -78,6 +78,14 @@ assert.match(runtimeSource, /currentPlants\(\)\.filter\(isTerminated\)/,
   "l'esportazione usa gli impianti Finiti già caricati");
 assert.match(runtimeSource, /XLSX\.writeFile\(workbook, `riepilogo_impianti_/,
   "l'esportazione mantiene il download Excel del vecchio sistema");
+assert.match(runtimeSource, /navigateButton\.dataset\.actionKey = "navigate"/,
+  "NAVIGA mantiene posizione e stile del flusso standard nella vista Finiti");
+assert.match(runtimeSource, /statusButton\.className = "btn special-finished-status-btn"/,
+  "lo stato TERMINATO occupa la posizione del pulsante operativo nella vista Finiti");
+assert.match(runtimeSource, /typeof matchesImpiantoSearch === "function"/,
+  "la ricerca continua a filtrare anche la vista Finiti");
+assert.match(runtimeSource, /typeof distanceFromUser === "function"/,
+  "la vista Finiti mantiene l'ordinamento per distanza");
 assert.match(runtimeSource, /showFinishedList\(\)/,
   "TERMINATO sposta immediatamente il cantiere nella vista Finiti");
 assert.doesNotMatch(runtimeSource, /view-special-terminated-btn/,

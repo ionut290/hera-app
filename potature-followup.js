@@ -509,6 +509,19 @@
     return `✅ TERMINATO DAL ${day} ${month}`;
   }
 
+  function finishedStatusDateLabel(value) {
+    let date = value;
+    if (value?.toDate) date = value.toDate();
+    else if (value?.seconds) date = new Date(Number(value.seconds) * 1000);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "DATA NON DISPONIBILE";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = new Intl.DateTimeFormat("it-IT", { month: "short" })
+      .format(date)
+      .replace(".", "")
+      .toUpperCase();
+    return `${day} ${month} ${date.getFullYear()}`;
+  }
+
   function esc(value) {
     return text(value).replace(/[&<>'"]/g, (character) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
@@ -891,13 +904,15 @@
     style.id = STYLE_ID;
     style.textContent = `
       .special-core-action-hidden { display: none !important; }
-      .impianto-primary-actions .special-terminato-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
+      .impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .special-terminato-btn { order: 2; grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: none; min-width: 0; min-height: 38px !important; margin: 0; padding: 6px 8px; overflow: hidden; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-size: clamp(.7rem, 3.1vw, .9rem); font-weight: 900; line-height: 1; letter-spacing: .015em; white-space: nowrap; text-overflow: clip; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
       .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
       .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
       .special-terminated-card .impianto-summary-title-wrap strong { color: #075f34; }
       .special-terminated-card .impianto-details p { margin: 4px 0; }
       .special-terminated-badge { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: 999px; color: #075f34; background: #d7f4e4; font-size: .78rem; font-weight: 900; }
-      .impianto-primary-actions .special-finished-status-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; padding: 0 8px; overflow: hidden; border: 1px solid #f59e0b; border-radius: 12px; color: #78350f; background: #fbbf24; font-size: .68rem; font-weight: 900; white-space: nowrap; text-overflow: clip; opacity: 1; }
+      .impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .special-finished-status-btn { order: 2; grid-column: 2; grid-row: 1; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: none; min-width: 0; min-height: 38px !important; margin: 0; padding: 4px 6px; overflow: hidden; border: 1px solid #f59e0b; border-radius: 12px; color: #78350f; background: #fbbf24; font-size: .68rem; font-weight: 900; line-height: 1.05; white-space: normal; opacity: 1; }
+      .special-finished-status-btn span, .special-finished-status-btn small { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+      .special-finished-status-btn small { margin-top: 2px; font-size: .55rem; letter-spacing: .02em; }
     `;
     document.head.appendChild(style);
   }
@@ -907,6 +922,17 @@
     const ids = new Set(plantDocumentIds(plant));
     currentPlants().forEach((item) => {
       if (item === plant || plantDocumentIds(item).some((id) => ids.has(id))) Object.assign(item, patch);
+    });
+  }
+
+  function removeProgramCardImmediately(plant) {
+    const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
+    if (!list) return;
+    const key = plantKey(plant);
+    list.querySelectorAll(".impianto-item[data-impianto-key]").forEach((card) => {
+      if (text(card.dataset.impiantoKey) !== key) return;
+      card.hidden = true;
+      card.remove();
     });
   }
 
@@ -935,6 +961,7 @@
     button.textContent = "SALVATAGGIO…";
     upsertPendingAction(action);
     updateLocalPlant(plant, localPatchFromAction(action, true));
+    removeProgramCardImmediately(plant);
     showFinishedList();
     try { if (typeof renderMap === "function") renderMap(); } catch (_) {}
 
@@ -1182,9 +1209,11 @@
         const statusButton = document.createElement("button");
         statusButton.type = "button";
         statusButton.className = "btn special-finished-status-btn";
-        statusButton.textContent = displayState.pending ? "⏳ SALVATAGGIO IN ATTESA" : finishedStatusLabel(plant.specialTerminatoAt);
+        statusButton.innerHTML = displayState.pending
+          ? "<span>⏳ TERMINATO</span><small>DA SINCRONIZZARE</small>"
+          : `<span>✅ TERMINATO</span><small>${esc(finishedStatusDateLabel(plant.specialTerminatoAt))}</small>`;
         statusButton.disabled = true;
-        statusButton.setAttribute("aria-label", `${statusButton.textContent}. Nessun messaggio Whazzup viene aperto.`);
+        statusButton.setAttribute("aria-label", `${displayState.pending ? "Salvataggio TERMINATO in attesa" : finishedStatusLabel(plant.specialTerminatoAt)}. Nessun messaggio Whazzup viene aperto.`);
         primary.appendChild(navigateButton);
         primary.appendChild(statusButton);
         actions.appendChild(primary);

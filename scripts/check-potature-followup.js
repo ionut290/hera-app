@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-complete-logic1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-complete-logic1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-immediate-move1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-immediate-move1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");

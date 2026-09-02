@@ -112,7 +112,14 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
 
 (async () => {
   const button = { disabled: false, textContent: "TERMINATO" };
-  await api.terminatePlant(plant, button);
+  const completionPromise = api.terminatePlant(plant, button);
+
+  assert.equal(plant.specialTerminato, true, "passaggio locale nei FINITI immediato, prima della risposta Firestore");
+  assert.equal(plant.specialTerminatoPending, true, "salvataggio marcato in attesa durante la transizione immediata");
+  assert.equal(api.getDisplayState(plant).state, "Finito", "la vista considera subito il cantiere come finito");
+  assert.equal(api.getDisplayState(plant).action, "FINITO", "TERMINATO non resta disponibile dopo il primo tocco");
+
+  await completionPromise;
 
   assert.equal(writes.length, 1, "una sola scrittura per il documento del cantiere");
   assert.equal(writes[0].reference.id, "albero-bologna-100");

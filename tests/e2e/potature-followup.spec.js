@@ -160,4 +160,65 @@ test.describe("Commesse speciali - TERMINATO separato", () => {
     expect(result.finishedState.operatoreSquadra).toContain("Operatore Test");
     expect(result.coreDone).toBe(false);
   });
+
+  test("sposta subito il singolo cantiere da In programma a Finiti", async ({ page }) => {
+    await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => Boolean(window.HeraSpecialTerminato));
+
+    await page.evaluate(() => {
+      selectedCommessaId = "sfalcio-cobo";
+      selectedCommessaName = "Sfalcio COBO";
+      auth = { currentUser: { uid: "user-immediate", email: "immediate@example.test", displayName: "Operatore Immediato" } };
+      db = { collection() { return {}; } };
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+      window.alert = () => {};
+
+      const plant = {
+        id: "cobo-immediate-1",
+        sourceIds: ["cobo-immediate-1"],
+        idSap: "COBO-IMMEDIATE-1",
+        denominazione: "Giardino passaggio immediato",
+        comune: "Bologna",
+        indirizzo: "Via Test",
+        gpsY: 44.4949,
+        gpsX: 11.3426,
+        done: false
+      };
+      currentImpianti = [plant];
+      const list = document.getElementById("impianti-lista");
+      const key = buildImpiantoKey(plant);
+      list.innerHTML = `
+        <article class="impianto-item card-impianto todo" data-impianto-key="${key}">
+          <div class="impianto-main-column impianto-left">
+            <div class="item-actions impianto-actions">
+              <div class="impianto-primary-actions">
+                <button type="button" class="btn action-icon-btn" data-action-key="navigate">🗺️</button>
+                <button type="button" class="btn action-icon-btn" data-action-key="whatsapp">✉️</button>
+                <button type="button" class="btn action-icon-btn" data-action-key="whatsapp-attachment">📎</button>
+              </div>
+            </div>
+          </div>
+        </article>`;
+      window.HeraSpecialTerminato.apply();
+    });
+
+    const terminateButton = page.locator(".special-terminato-btn");
+    await expect(terminateButton).toHaveCount(1);
+    await terminateButton.evaluate((button) => button.click());
+
+    await expect(page.locator('.impianto-item[data-impianto-key="sap:cobo-immediate-1"]:not(.special-terminated-card)')).toHaveCount(0);
+    await expect(page.locator(".special-terminated-card")).toHaveCount(1);
+    await expect(page.locator(".special-terminated-card")).toContainText("Giardino passaggio immediato");
+    await expect(page.locator(".special-finished-status-btn")).toContainText("TERMINATO");
+    await expect(page.locator(".special-terminato-btn")).toHaveCount(0);
+
+    const state = await page.evaluate(() => ({
+      specialTerminato: currentImpianti[0].specialTerminato,
+      specialTerminatoPending: currentImpianti[0].specialTerminatoPending,
+      done: currentImpianti[0].done
+    }));
+    expect(state.specialTerminato).toBe(true);
+    expect(state.specialTerminatoPending).toBe(true);
+    expect(state.done).toBe(false);
+  });
 });

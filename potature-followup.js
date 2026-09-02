@@ -325,12 +325,14 @@
   if (window.HeraSpecialTerminato?.installed) return;
 
   const STYLE_ID = "hera-special-terminato-style";
-  const TERMINATED_TAB_ID = "view-special-terminated-btn";
   const TERMINATED_FIELD = "specialTerminato";
+  const FINISHED_BUTTON_ID = "view-done-btn";
+  const PROGRAM_BUTTON_ID = "view-todo-btn";
+  const EXPORT_BUTTON_ID = "export-current-commessa-btn";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
   const text = (value) => String(value ?? "").trim();
-  let specialViewMode = "standard";
+  let specialViewMode = "program";
   let scheduled = false;
 
   function selectedId() {
@@ -429,6 +431,16 @@
     });
   }
 
+  function finishedStatusLabel(value) {
+    let date = value;
+    if (value?.toDate) date = value.toDate();
+    else if (value?.seconds) date = new Date(Number(value.seconds) * 1000);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "✅ TERMINATO";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = new Intl.DateTimeFormat("it-IT", { month: "long" }).format(date).toUpperCase();
+    return `✅ TERMINATO DAL ${day} ${month}`;
+  }
+
   function esc(value) {
     return text(value).replace(/[&<>'"]/g, (character) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
@@ -443,19 +455,96 @@
     return text(plant?.tipologiaIntervento || "Potatura / Abbattimento");
   }
 
+  function selectedName() {
+    try {
+      if (typeof selectedCommessaName !== "undefined" && text(selectedCommessaName)) return text(selectedCommessaName);
+      if (typeof commesseById !== "undefined") return text(commesseById.get(selectedId())?.nome) || "Commessa";
+    } catch (_) {}
+    return "Commessa";
+  }
+
+  function authenticatedUser() {
+    try {
+      if (typeof auth !== "undefined" && auth?.currentUser) return auth.currentUser;
+    } catch (_) {}
+    return null;
+  }
+
+  function buildFinishedRowsForExport(commessaName) {
+    const email = text(authenticatedUser()?.email);
+    return currentPlants().filter(isTerminated)
+      .flatMap((plant) => buildRowsForEachCodicePrezzo(plant))
+      .map((plant) => {
+        const finishedInfo = formatDoneDateTime(plant.specialTerminatoAt);
+        return {
+          "Commessa padre": "",
+          Commessa: commessaName,
+          Cantiere: plant.cantiereRiga || "",
+          Distretto: plant.distretto || "",
+          "ID SAP": plant.idSap || "",
+          Denominazione: plant.denominazione || "",
+          Comune: plant.comune || "",
+          Indirizzo: plant.indirizzo || "",
+          "Voce riferimento": plant.voceRiferimento || "",
+          "Codice prezzo": plant.codicePrezzoSingolo || plant.codicePrezzo || "",
+          Sfalci: plant.sfalci || "",
+          "Frequenza annua": plant.frequenzaAnnua || "",
+          "Tipologia intervento": plant.tipologiaIntervento || specialTypeLabel(plant),
+          "Lavorazioni richieste": plant.lavorazioniRichieste || "",
+          "GPS Y": plant.gpsY ?? "",
+          "GPS X": plant.gpsX ?? "",
+          "Tipo manutenzione": plant.tipoManutenzione || classifyTipoManutenzione(plant.codicePrezzo),
+          Stato: "Finito",
+          "Data esecuzione": finishedInfo.date,
+          "Ora esecuzione": finishedInfo.time,
+          "Eseguito da": plant.specialTerminatoBy || "-",
+          "Email operatore": email
+        };
+      });
+  }
+
+  function exportFinishedSummary() {
+    if (!authenticatedUser()) {
+      window.alert("Devi fare login per esportare il riepilogo.");
+      return;
+    }
+
+    try {
+      const commessaName = selectedName();
+      const rows = buildFinishedRowsForExport(commessaName);
+      if (!rows.length) {
+        window.alert(`Nessun impianto FINITO da esportare per la commessa "${commessaName}".`);
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Riepilogo impianti");
+      const safeName = String(commessaName || "commessa")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, "_");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      XLSX.writeFile(workbook, `riepilogo_impianti_${safeName}_${timestamp}.xlsx`);
+    } catch (error) {
+      console.error(error);
+      window.alert("Errore durante l'esportazione del riepilogo in Excel.");
+    }
+  }
+
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
       .special-core-action-hidden { display: none !important; }
-      .special-terminato-btn { min-width: 126px; min-height: 46px; border: 0; border-radius: 13px; color: #fff; background: #08783f; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
+      .impianto-primary-actions .special-terminato-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-weight: 900; letter-spacing: .035em; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
       .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
       .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
-      .special-terminated-card header { display: grid; gap: 5px; }
-      .special-terminated-card header strong { color: #075f34; font-size: 1.02rem; }
-      .special-terminated-card p { margin: 4px 0; }
+      .special-terminated-card .impianto-summary-title-wrap strong { color: #075f34; }
+      .special-terminated-card .impianto-details p { margin: 4px 0; }
       .special-terminated-badge { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: 999px; color: #075f34; background: #d7f4e4; font-size: .78rem; font-weight: 900; }
+      .impianto-primary-actions .special-finished-status-btn { order: 3; width: 100%; min-width: 0; min-height: 38px !important; margin: 0; padding: 0 8px; overflow: hidden; border: 1px solid #f59e0b; border-radius: 12px; color: #78350f; background: #fbbf24; font-size: .68rem; font-weight: 900; white-space: nowrap; text-overflow: clip; opacity: 1; }
     `;
     document.head.appendChild(style);
   }
@@ -508,8 +597,7 @@
       specialTerminatoByUid: operator.uid,
       specialTerminatoVersione: 1
     });
-    specialViewMode = "standard";
-    apply();
+    showFinishedList();
   }
 
   function createTerminateButton(card, plant) {
@@ -519,7 +607,7 @@
     button.type = "button";
     button.className = "btn special-terminato-btn";
     button.textContent = "TERMINATO";
-    button.setAttribute("aria-label", "Sposta il cantiere nei Terminati della commessa speciale");
+    button.setAttribute("aria-label", "Sposta il cantiere nei Finiti della commessa speciale");
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -547,46 +635,104 @@
     document.querySelectorAll(".special-terminato-btn").forEach((button) => button.remove());
   }
 
-  function ensureTerminatedTab() {
+  function saveOriginalLabel(button) {
+    if (!button || button.dataset.specialOriginalLabel !== undefined) return;
+    button.dataset.specialOriginalLabel = button.textContent || "";
+  }
+
+  function restoreSpecialTabs() {
+    [FINISHED_BUTTON_ID, PROGRAM_BUTTON_ID, EXPORT_BUTTON_ID].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button || button.dataset.specialOriginalLabel === undefined) return;
+      button.textContent = button.dataset.specialOriginalLabel;
+      delete button.dataset.specialOriginalLabel;
+    });
+    document.getElementById(EXPORT_BUTTON_ID)?.classList.remove("special-core-action-hidden");
+  }
+
+  function selectSpecialTab(mode) {
+    const finishedButton = document.getElementById(FINISHED_BUTTON_ID);
+    const programButton = document.getElementById(PROGRAM_BUTTON_ID);
+    finishedButton?.classList.toggle("btn-primary", mode === "finished");
+    programButton?.classList.toggle("btn-primary", mode === "program");
+  }
+
+  function showFinishedList() {
+    specialViewMode = "finished";
+    selectSpecialTab("finished");
+    renderFinishedList();
+  }
+
+  function configureSpecialTabs() {
     const toolbar = document.querySelector("#impianti-card .view-tabs") || document.querySelector(".view-tabs");
     if (!toolbar) return null;
-    let tab = document.getElementById(TERMINATED_TAB_ID);
-    if (!tab) {
-      tab = document.createElement("button");
-      tab.id = TERMINATED_TAB_ID;
-      tab.type = "button";
-      tab.className = "btn";
-      tab.textContent = "✅ Terminati";
-      tab.addEventListener("click", () => {
-        specialViewMode = "terminated";
-        toolbar.querySelectorAll(".btn-primary").forEach((button) => button.classList.remove("btn-primary"));
-        tab.classList.add("btn-primary");
-        renderTerminatedList();
-      });
-      toolbar.appendChild(tab);
+    const finishedButton = document.getElementById(FINISHED_BUTTON_ID);
+    const programButton = document.getElementById(PROGRAM_BUTTON_ID);
+    const exportButton = document.getElementById(EXPORT_BUTTON_ID);
+    saveOriginalLabel(finishedButton);
+    saveOriginalLabel(programButton);
+    saveOriginalLabel(exportButton);
+    if (finishedButton) finishedButton.textContent = "✅ Finiti";
+    if (programButton) programButton.textContent = "🛠️ In programma";
+    if (exportButton) {
+      exportButton.textContent = "📤 Esporta finiti";
+      exportButton.classList.remove("special-core-action-hidden");
+    }
+
+    if (finishedButton && !finishedButton.dataset.specialFinishedHandler) {
+      finishedButton.addEventListener("click", (event) => {
+        if (!isSpecialCommessa()) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        showFinishedList();
+      }, true);
+      finishedButton.dataset.specialFinishedHandler = "1";
+    }
+    if (programButton && !programButton.dataset.specialProgramHandler) {
+      programButton.addEventListener("click", () => {
+        if (!isSpecialCommessa()) return;
+        specialViewMode = "program";
+        selectSpecialTab("program");
+        window.setTimeout(apply, 0);
+      }, true);
+      programButton.dataset.specialProgramHandler = "1";
+    }
+    if (exportButton && !exportButton.dataset.specialFinishedExportHandler) {
+      exportButton.addEventListener("click", (event) => {
+        if (!isSpecialCommessa()) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        exportFinishedSummary();
+      }, true);
+      exportButton.dataset.specialFinishedExportHandler = "1";
     }
     if (!toolbar.dataset.specialTerminatoTabs) {
       toolbar.addEventListener("click", (event) => {
         const button = event.target.closest("button");
-        if (!button || button.id === TERMINATED_TAB_ID) return;
-        specialViewMode = "standard";
-        document.getElementById(TERMINATED_TAB_ID)?.classList.remove("btn-primary");
+        if (!button || !isSpecialCommessa() || button.id === FINISHED_BUTTON_ID || button.id === PROGRAM_BUTTON_ID) return;
+        specialViewMode = "program";
         window.setTimeout(apply, 0);
       });
       toolbar.dataset.specialTerminatoTabs = "1";
     }
-    return tab;
+    return { finishedButton, programButton };
   }
 
-  function removeTerminatedTab() {
-    document.getElementById(TERMINATED_TAB_ID)?.remove();
-  }
-
-  function renderTerminatedList() {
-    if (!isSpecialCommessa() || specialViewMode !== "terminated") return;
+  function renderFinishedList() {
+    if (!isSpecialCommessa() || specialViewMode !== "finished") return;
     const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
     if (!list) return;
-    const plants = currentPlants().filter(isTerminated);
+    const plants = currentPlants()
+      .filter(isTerminated)
+      .filter((plant) => {
+        try { return typeof matchesImpiantoSearch === "function" ? matchesImpiantoSearch(plant) : true; } catch (_) { return true; }
+      })
+      .sort((first, second) => {
+        try {
+          if (typeof distanceFromUser === "function") return distanceFromUser(first) - distanceFromUser(second);
+        } catch (_) {}
+        return text(first?.denominazione).localeCompare(text(second?.denominazione), "it");
+      });
     const signature = plants.map((plant) => `${plantKey(plant)}:${formatTimestamp(plant.specialTerminatoAt)}:${text(plant.specialTerminatoBy)}`).join("|");
     if (list.dataset.specialTerminatoSignature === signature && list.querySelector("[data-special-terminated-render]")) return;
     list.dataset.specialTerminatoSignature = signature;
@@ -595,21 +741,79 @@
     wrapper.dataset.specialTerminatedRender = "1";
     wrapper.className = "impianti-lista";
     if (!plants.length) {
-      wrapper.innerHTML = '<p class="muted">Nessun cantiere terminato in questa commessa speciale.</p>';
+      wrapper.innerHTML = '<p class="muted">Nessun cantiere finito in questa commessa speciale.</p>';
     } else {
       plants.forEach((plant) => {
         const card = document.createElement("article");
-        card.className = "impianto-item card-impianto special-terminated-card";
-        card.innerHTML = `
-          <header>
-            <span class="special-terminated-badge">✅ TERMINATO</span>
-            <strong>${esc(plant.denominazione || plant.nome || "Cantiere")}</strong>
-          </header>
+        card.className = "impianto-item card-impianto done special-terminated-card";
+        card.dataset.impiantoKey = plantKey(plant);
+
+        const mainColumn = document.createElement("div");
+        mainColumn.className = "impianto-main-column impianto-left";
+        const summary = document.createElement("button");
+        summary.type = "button";
+        summary.className = "impianto-summary-btn";
+        summary.setAttribute("aria-expanded", "false");
+        summary.innerHTML = `
+          <span class="impianto-summary-topline">
+            <span class="impianto-summary-title-wrap"><strong>${esc(plant.denominazione || plant.nome || "Cantiere")}</strong></span>
+          </span>
+          <small class="impianto-summary-meta">
+            <span class="special-terminated-badge">✅ Nei FINITI</span>
+            <span>${esc(specialTypeLabel(plant))}</span>
+          </small>`;
+
+        const details = document.createElement("div");
+        details.className = "impianto-details";
+        details.hidden = true;
+        details.innerHTML = `
           <p><b>Tipo:</b> ${esc(specialTypeLabel(plant))}</p>
           <p><b>Comune:</b> ${esc(plant.comune || "-")}</p>
           <p><b>Indirizzo:</b> ${esc(plant.indirizzo || "-")}</p>
-          <p><b>Terminato da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>
-          <p><b>Data e ora:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>`;
+          <p><b>Codice prezzo:</b> ${esc(plant.codicePrezzo || plant.voceRiferimento || "-")}</p>
+          <p><b>Lavorazioni richieste:</b> ${esc(plant.lavorazioniRichieste || plant.tipologiaIntervento || "-")}</p>
+          <p><b>Stato:</b> Finito</p>
+          <p><b>Data e ora terminato:</b> ${esc(formatTimestamp(plant.specialTerminatoAt))}</p>
+          <p><b>Eseguito da:</b> ${esc(plant.specialTerminatoBy || "Operatore")}</p>`;
+        summary.addEventListener("click", () => {
+          const expanded = summary.getAttribute("aria-expanded") === "true";
+          summary.setAttribute("aria-expanded", expanded ? "false" : "true");
+          details.hidden = expanded;
+          card.classList.toggle("is-expanded", !expanded);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions impianto-actions";
+        const primary = document.createElement("div");
+        primary.className = "impianto-primary-actions";
+        const navigateButton = document.createElement("button");
+        navigateButton.type = "button";
+        navigateButton.className = "btn action-icon-btn";
+        navigateButton.dataset.actionKey = "navigate";
+        navigateButton.textContent = "🗺️";
+        navigateButton.title = "Naviga";
+        navigateButton.setAttribute("aria-label", "Naviga");
+        navigateButton.addEventListener("click", () => {
+          try {
+            if (typeof navigateToImpianto === "function") navigateToImpianto(plant);
+          } catch (_) {
+            window.alert("Navigazione non disponibile per questo cantiere.");
+          }
+        });
+        const statusButton = document.createElement("button");
+        statusButton.type = "button";
+        statusButton.className = "btn special-finished-status-btn";
+        statusButton.textContent = finishedStatusLabel(plant.specialTerminatoAt);
+        statusButton.disabled = true;
+        statusButton.setAttribute("aria-label", `${statusButton.textContent}. Nessun messaggio Whazzup viene aperto.`);
+        primary.appendChild(navigateButton);
+        primary.appendChild(statusButton);
+        actions.appendChild(primary);
+
+        mainColumn.appendChild(summary);
+        mainColumn.appendChild(details);
+        mainColumn.appendChild(actions);
+        card.appendChild(mainColumn);
         wrapper.appendChild(card);
       });
     }
@@ -635,13 +839,13 @@
   function apply() {
     ensureStyle();
     if (!isSpecialCommessa()) {
-      specialViewMode = "standard";
-      removeTerminatedTab();
+      specialViewMode = "program";
+      restoreSpecialTabs();
       restoreLegacyActions();
       return;
     }
-    ensureTerminatedTab();
-    if (specialViewMode === "terminated") renderTerminatedList();
+    configureSpecialTabs();
+    if (specialViewMode === "finished") renderFinishedList();
     else applyStandardList();
   }
 
@@ -666,7 +870,7 @@
   }
 
   window.addEventListener("hashchange", () => {
-    specialViewMode = "standard";
+    specialViewMode = "program";
     scheduleApply();
   });
   window.addEventListener("hera:data-ready", install);
@@ -679,7 +883,8 @@
     isSpecialCommessa,
     isTerminated,
     terminatePlant,
+    exportFinishedSummary,
     apply,
-    renderTerminatedList
+    renderFinishedList
   });
 })();

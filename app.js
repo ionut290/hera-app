@@ -14656,6 +14656,7 @@ function renderTombiniSpecialCard() {
 }
 
 function renderImpianti() {
+  if (window.HeraSpecialTerminato?.renderCurrentListIfOwned?.()) return;
   ui.impiantiLista.innerHTML = "";
 
   const hasBiogasSpecialCard = renderBiogasSpecialCard();

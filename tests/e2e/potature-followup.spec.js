@@ -170,6 +170,10 @@ test.describe("Commesse speciali - TERMINATO separato", () => {
       selectedCommessaName = "Sfalcio COBO";
       auth = { currentUser: { uid: "user-immediate", email: "immediate@example.test", displayName: "Operatore Immediato" } };
       db = { collection() { return {}; } };
+      setAuthenticationGateState = () => {};
+      document.body.classList.remove("auth-pending", "auth-required", "auth-banned");
+      document.getElementById("auth-gate")?.classList.add("hidden");
+      document.getElementById("impianti-page")?.classList.remove("hidden");
       Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
       window.alert = () => {};
 
@@ -211,6 +215,34 @@ test.describe("Commesse speciali - TERMINATO separato", () => {
     await expect(page.locator(".special-terminated-card")).toContainText("Giardino passaggio immediato");
     await expect(page.locator(".special-finished-status-btn")).toContainText("TERMINATO");
     await expect(page.locator(".special-terminato-btn")).toHaveCount(0);
+
+    const stableRendering = await page.evaluate(() => {
+      const before = document.querySelector(".special-terminated-card");
+      renderImpianti();
+      renderImpianti();
+      renderImpianti();
+      return before === document.querySelector(".special-terminated-card");
+    });
+    expect(stableRendering).toBe(true);
+
+    const managementVisibility = await page.evaluate(() => {
+      document.body.classList.remove("auth-pending", "auth-required", "auth-banned");
+      document.getElementById("auth-gate")?.classList.add("hidden");
+      const button = document.querySelector(".special-terminated-card .gestione-toggle-btn");
+      const actions = document.querySelector(".special-terminated-card .special-finished-management-actions");
+      const buttonRect = button?.getBoundingClientRect();
+      button?.click();
+      const actionsRect = actions?.getBoundingClientRect();
+      return {
+        buttonVisible: Boolean(buttonRect?.width && buttonRect?.height),
+        actionsVisible: Boolean(actionsRect?.width && actionsRect?.height),
+        expanded: button?.getAttribute("aria-expanded")
+      };
+    });
+    expect(managementVisibility).toEqual({ buttonVisible: true, actionsVisible: true, expanded: "true" });
+    const managementActions = page.locator(".special-terminated-card .special-finished-management-actions");
+    await expect(managementActions).toContainText("Segnala problema");
+    await expect(managementActions).toContainText("Aggiorna GPS");
 
     await page.evaluate(() => {
       const plant = currentImpianti[0];

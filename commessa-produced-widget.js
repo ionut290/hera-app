@@ -7,6 +7,8 @@
   const popover = document.getElementById("commessa-produced-popover");
   let refreshTimer = 0;
   let pageVisibilityObserver = null;
+  const completedSubtotalCache = new Map();
+  const completedSubtotalLoads = new Map();
 
   function hideWidget() {
     if (widget) widget.hidden = true;
@@ -46,6 +48,62 @@
     return Number.isFinite(numeric) ? numeric : NaN;
   }
 
+  function selectedId() {
+    try {
+      return typeof selectedCommessaId === "undefined" ? "" : String(selectedCommessaId || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function activeCollectionName() {
+    try {
+      if (typeof getCommesseCollectionName === "function") {
+        return String(getCommesseCollectionName() || "commesse").trim() || "commesse";
+      }
+    } catch (_) {}
+    return "commesse";
+  }
+
+  function calculateCompletedSubtotalFromRows(rows) {
+    const calculator = window.AccountingV2?.calculations?.calculateCompletedSubtotal
+      || window.InreteWorkItemsV2?.calculateCompletedSubtotal;
+    if (typeof calculator !== "function") return NaN;
+    try {
+      const value = Number(calculator(Array.isArray(rows) ? rows : []));
+      return Number.isFinite(value) ? value : NaN;
+    } catch (_) {
+      return NaN;
+    }
+  }
+
+  async function refreshCompletedSubtotalFromFirestore(force = false) {
+    const commessaId = selectedId();
+    if (!commessaId || typeof db === "undefined" || !db) return NaN;
+    if (!force && completedSubtotalCache.has(commessaId)) return completedSubtotalCache.get(commessaId);
+    if (completedSubtotalLoads.has(commessaId)) return completedSubtotalLoads.get(commessaId);
+
+    const task = (async () => {
+      try {
+        const snapshot = await db.collection(activeCollectionName()).doc(commessaId).collection("lavorazioni").get();
+        const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const subtotal = calculateCompletedSubtotalFromRows(rows);
+        if (!Number.isFinite(subtotal)) return NaN;
+        completedSubtotalCache.set(commessaId, subtotal);
+        if (selectedId() === commessaId) updateCompletedAmountStat(subtotal, false);
+        return subtotal;
+      } catch (error) {
+        console.warn("Aggiornamento € guadagnati non disponibile:", error);
+        return NaN;
+      } finally {
+        completedSubtotalLoads.delete(commessaId);
+      }
+    })();
+
+    completedSubtotalLoads.set(commessaId, task);
+    return task;
+  }
+
   function readRenderedCompletedSubtotal() {
     try {
       const root = document.getElementById("impianti-page");
@@ -69,9 +127,15 @@
   }
 
   function getSelectedCompletedSubtotal() {
+    const commessaId = selectedId();
+    if (commessaId && completedSubtotalCache.has(commessaId)) {
+      const cached = Number(completedSubtotalCache.get(commessaId));
+      if (Number.isFinite(cached)) return cached;
+    }
+
     try {
-      if (typeof selectedCommessaId !== "undefined" && selectedCommessaId && typeof commesseById !== "undefined") {
-        const commessa = commesseById?.get?.(selectedCommessaId) || {};
+      if (commessaId && typeof commesseById !== "undefined") {
+        const commessa = commesseById?.get?.(commessaId) || {};
         const candidates = [
           commessa.completedSubtotal,
           commessa.subtotalCompleted,
@@ -86,6 +150,7 @@
         }
       }
     } catch (_) {}
+
     const rendered = readRenderedCompletedSubtotal();
     return Number.isFinite(rendered) ? rendered : 0;
   }
@@ -128,7 +193,7 @@
     return items.length >= 3 ? items[1] : null;
   }
 
-  function updateCompletedAmountStat() {
+  function updateCompletedAmountStat(subtotalOverride, requestRemote = true) {
     const item = findCompletedAmountStatItem();
     if (!item) return false;
 
@@ -139,7 +204,8 @@
       || Array.from(item.children).find((el) => el !== label && !el.classList?.contains("commessa-stat-icon"));
     if (!label || !value) return false;
 
-    const subtotal = getSelectedCompletedSubtotal();
+    const override = Number(subtotalOverride);
+    const subtotal = Number.isFinite(override) ? override : getSelectedCompletedSubtotal();
     const formatted = formatEuro(subtotal);
     value.textContent = formatted;
     label.textContent = "€ guadagnati";
@@ -147,6 +213,8 @@
     item.setAttribute("aria-label", `Euro guadagnati: ${formatted}`);
     item.title = `Subtotale lavorazioni fatte: ${formatted}`;
     setStatIcon(item, "euro");
+
+    if (requestRemote) void refreshCompletedSubtotalFromFirestore(false);
     return true;
   }
 
@@ -178,6 +246,12 @@
     refreshTimer = window.setTimeout(updateDashboardReplacementStats, delay);
   }
 
+  function scheduleRemoteRefresh(delay = 100) {
+    window.setTimeout(() => {
+      void refreshCompletedSubtotalFromFirestore(true);
+    }, delay);
+  }
+
   if (typeof updateCommessaDashboard === "function") {
     const originalUpdateCommessaDashboard = updateCommessaDashboard;
     updateCommessaDashboard = function updateCommessaDashboardWithReplacementStats(...args) {
@@ -197,7 +271,9 @@
     const page = document.getElementById("impianti-page");
     if (!page || pageVisibilityObserver) return;
     const refreshWhenVisible = () => {
-      if (isImpiantiPageVisible(page)) scheduleRefresh(0);
+      if (!isImpiantiPageVisible(page)) return;
+      scheduleRefresh(0);
+      scheduleRemoteRefresh(0);
     };
     pageVisibilityObserver = new MutationObserver(refreshWhenVisible);
     pageVisibilityObserver.observe(page, {
@@ -209,9 +285,15 @@
 
   document.addEventListener("click", (event) => {
     if (event.target?.closest?.("#impianti-page, #back-to-home-btn, .commessa-stat-item")) scheduleRefresh(80);
+    const button = event.target?.closest?.("button");
+    if (button && /\bfatto\b/i.test(button.textContent || "")) scheduleRemoteRefresh(900);
   }, true);
-  window.addEventListener("hashchange", () => scheduleRefresh(0));
-  window.addEventListener("popstate", () => scheduleRefresh(0));
+  window.addEventListener("hashchange", () => { scheduleRefresh(0); scheduleRemoteRefresh(0); });
+  window.addEventListener("popstate", () => { scheduleRefresh(0); scheduleRemoteRefresh(0); });
+  window.addEventListener("hera:fatto-sync-status", (event) => {
+    if (Number(event?.detail?.pending || 0) === 0) scheduleRemoteRefresh(150);
+  });
+  window.addEventListener("hera:data-ready", () => scheduleRemoteRefresh(0));
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", installPageVisibilityObserver, { once: true });
@@ -221,13 +303,15 @@
 
   hideWidget();
   scheduleRefresh(0);
+  scheduleRemoteRefresh(0);
   window.setTimeout(updateDashboardReplacementStats, 250);
 
   window.CommessaProducedWidget = {
     select,
     stop,
     removed: true,
-    refresh: updateDashboardReplacementStats
+    refresh: updateDashboardReplacementStats,
+    refreshEarnedTotal: () => refreshCompletedSubtotalFromFirestore(true)
   };
 })();
 

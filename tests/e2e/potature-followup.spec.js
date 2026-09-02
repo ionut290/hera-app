@@ -115,3 +115,49 @@ test.describe("Potature Abbattimenti - preparazione Raccolta e Ceppi", () => {
     expect(result.result.tasks).toEqual([]);
   });
 });
+
+test.describe("Commesse speciali - TERMINATO separato", () => {
+  test("espone TERMINATO e mostra lo stato FINITO senza cambiare FATTO", async ({ page }) => {
+    await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => Boolean(window.HeraSpecialTerminato && window.getImpiantoPopupData));
+
+    const result = await page.evaluate(() => {
+      selectedCommessaId = "potature-abbattimenti";
+      selectedCommessaName = "Potature Abbattimenti";
+      const plant = {
+        id: "tree-map-special",
+        sourceIds: ["tree-map-special"],
+        idSap: "ALB-SPECIAL-1",
+        denominazione: "Albero speciale",
+        comune: "Bologna",
+        indirizzo: "Via Test",
+        gpsY: 44.4949,
+        gpsX: 11.3426,
+        done: false
+      };
+      const programState = window.HeraSpecialTerminato.getDisplayState(plant);
+      const finishedPlant = {
+        ...plant,
+        specialTerminato: true,
+        specialTerminatoAt: new Date("2026-09-02T08:30:00+02:00"),
+        specialTerminatoBy: "Operatore Test",
+        specialTerminatoPending: false
+      };
+      const finishedDisplay = window.HeraSpecialTerminato.getDisplayState(finishedPlant);
+      return {
+        programState,
+        finishedDisplay,
+        finishedState: getImpiantoPopupData(finishedPlant, "Potatura"),
+        coreDone: finishedPlant.done
+      };
+    });
+
+    expect(result.programState.action).toBe("TERMINATO");
+    expect(result.programState.state).toBe("In programma");
+    expect(result.finishedDisplay.action).toBe("FINITO");
+    expect(result.finishedDisplay.terminated).toBe(true);
+    expect(result.finishedState.stato).toBe("Finito");
+    expect(result.finishedState.operatoreSquadra).toContain("Operatore Test");
+    expect(result.coreDone).toBe(false);
+  });
+});

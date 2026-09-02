@@ -23472,17 +23472,22 @@ async function requestLocationEnableFlow(options = {}) {
 
 function getImpiantoPopupData(impianto, tipo = "") {
   const doneInfo = formatDoneDateTime(impianto.doneAt);
+  const specialCompletion = window.HeraSpecialTerminato?.getDisplayState?.(impianto) || null;
   const idSap = impianto.idSap || impianto.codiceSap || "-";
   const via = impianto.indirizzo || impianto.descrizioneVia || impianto.via || "-";
   const tipologia = impianto.tipologiaImpianto || impianto.tipoImpianto || impianto.tipologiaIntervento || impianto.lavorazioniRichieste || tipo || "-";
-  const operatore = impianto.doneBy || impianto.operatore || impianto.operator || impianto.navigatedBy || "-";
+  const operatore = specialCompletion?.active
+    ? specialCompletion.operator
+    : (impianto.doneBy || impianto.operatore || impianto.operator || impianto.navigatedBy || "-");
   const squadra = impianto.squadra || impianto.squadraAssegnata || impianto.team || "";
   return {
     idSap,
     via,
     tipologia,
-    stato: impianto.done ? "Fatto" : "Da fare",
-    dataFatto: doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`,
+    stato: specialCompletion?.active ? specialCompletion.state : (impianto.done ? "Fatto" : "Da fare"),
+    dataFatto: specialCompletion?.active
+      ? specialCompletion.completedAt
+      : (doneInfo.date === "-" ? "-" : `${doneInfo.date} ${doneInfo.time}`),
     operatoreSquadra: [operatore, squadra].filter((value) => value && value !== "-").join(" • ") || "-",
     coordinates: impianto.gpsY != null && impianto.gpsX != null
       ? `${Number(impianto.gpsY).toFixed(6)}, ${Number(impianto.gpsX).toFixed(6)}`
@@ -23548,6 +23553,10 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
   const noteImpianto = getImpiantoPopupNotes(impianto);
   const showSapInHeader = Boolean(options?.showSapInHeader);
   const whatsappAction = options?.fullscreenWhatsApp ? "fullscreen-whatsapp" : "whatsapp";
+  const specialCompletion = window.HeraSpecialTerminato?.getDisplayState?.(impianto) || null;
+  const completionAction = specialCompletion?.active ? "special-terminate" : whatsappAction;
+  const completionLabel = specialCompletion?.active ? specialCompletion.action : "WHATSAPP";
+  const completionDisabled = specialCompletion?.active && specialCompletion.terminated ? " disabled" : "";
   const linkedNotesMarkup = linkedNotes.length
     ? linkedNotes.map((note) => `
         <button type="button" class="map-popup-note-btn" data-map-popup-action="note" data-note-id="${escapeHTML(note.id || "")}">
@@ -23579,7 +23588,7 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
           <div><dt>Indirizzo / via</dt><dd>${escapeHTML(popupData.via)}</dd></div>
           <div><dt>Tipologia impianto</dt><dd>${escapeHTML(popupData.tipologia)}</dd></div>
           <div><dt>Stato lavoro</dt><dd>${escapeHTML(popupData.stato)}</dd></div>
-          <div><dt>Data fatto</dt><dd>${escapeHTML(popupData.dataFatto)}</dd></div>
+          <div><dt>${specialCompletion?.active ? "Data terminato" : "Data fatto"}</dt><dd>${escapeHTML(popupData.dataFatto)}</dd></div>
           <div><dt>Operatore / squadra</dt><dd>${escapeHTML(popupData.operatoreSquadra)}</dd></div>
           <div><dt>Segnalazione collegata</dt><dd class="map-popup-notes-list">${linkedNotesMarkup}</dd></div>
           <div><dt>Note impianto</dt><dd>${escapeHTML(noteImpianto || "-")}</dd></div>
@@ -23588,7 +23597,7 @@ function buildImpiantoMapPopup(impianto, tipo, options = {}) {
       </div>
       <div class="map-popup-actions">
         <button type="button" class="btn btn-small btn-primary" data-map-popup-action="navigate" data-impianto-key="${escapeHTML(impiantoKey)}">NAVIGA</button>
-        <button type="button" class="btn btn-small btn-whatsapp" data-map-popup-action="${escapeHTML(whatsappAction)}" data-impianto-key="${escapeHTML(impiantoKey)}">WHATSAPP</button>
+        <button type="button" class="btn btn-small ${specialCompletion?.active ? "btn-primary" : "btn-whatsapp"}" data-map-popup-action="${escapeHTML(completionAction)}" data-impianto-key="${escapeHTML(impiantoKey)}"${completionDisabled}>${escapeHTML(completionLabel)}</button>
         <button type="button" class="btn btn-small" data-map-popup-action="detail" data-impianto-key="${escapeHTML(impiantoKey)}">DETTAGLIO IMPIANTO</button>
       </div>
     </div>
@@ -23666,6 +23675,14 @@ function bindPersistentImpiantoDetailActions() {
         openFullscreenImpiantoWhatsApp(impianto);
       });
     });
+    panel.querySelectorAll("[data-map-popup-action='special-terminate']").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
+        const impianto = findCurrentImpiantoByKey(key) || selectedImpiantoData;
+        if (!impianto) return;
+        await window.HeraSpecialTerminato?.terminateFromMap?.(impianto, button);
+      });
+    });
     panel.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {
       button.addEventListener("click", () => {
         const key = button.getAttribute("data-impianto-key") || selectedImpiantoId;
@@ -23740,6 +23757,14 @@ function bindImpiantoMapPopupActions(event, popupMap) {
       openFullscreenImpiantoWhatsApp(impianto);
     });
   });
+  popupElement.querySelectorAll("[data-map-popup-action='special-terminate']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const key = button.getAttribute("data-impianto-key") || popupKey;
+      const impianto = findCurrentImpiantoByKey(key);
+      if (!impianto) return;
+      await window.HeraSpecialTerminato?.terminateFromMap?.(impianto, button);
+    });
+  });
   popupElement.querySelectorAll("[data-map-popup-action='detail']").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-impianto-key") || popupKey;
@@ -23794,7 +23819,8 @@ function cssEscapeValue(value) {
 }
 
 function getMarkerClass(impianto) {
-  const done = Boolean(impianto.done);
+  const specialCompletion = window.HeraSpecialTerminato?.getDisplayState?.(impianto) || null;
+  const done = specialCompletion?.active ? specialCompletion.terminated : Boolean(impianto.done);
   const straordinario = impianto.hasStraordinario ?? hasStraordinario(impianto.codicePrezzo);
   if (done) return "done";
   if (straordinario) return "straordinario";

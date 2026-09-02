@@ -377,10 +377,10 @@
   }
 
   function plantDocumentIds(plant) {
-    if (Array.isArray(plant?.sourceIds) && plant.sourceIds.length) {
-      return [...new Set(plant.sourceIds.map(text).filter(Boolean))];
-    }
-    return text(plant?.id) ? [text(plant.id)] : [];
+    return [...new Set([
+      text(plant?.id),
+      ...(Array.isArray(plant?.sourceIds) ? plant.sourceIds.map(text) : [])
+    ].filter(Boolean))];
   }
 
   function database() {
@@ -725,10 +725,6 @@
     } else {
       await Promise.all(documentIds.map((id) => reference.doc(id).set(patch, { merge: true })));
     }
-
-    const snapshots = await Promise.all(documentIds.map((id) => reference.doc(id).get()));
-    const persisted = snapshots.every((snapshot) => snapshot?.exists && snapshot.data()?.[TERMINATED_FIELD] === true);
-    if (!persisted) throw new Error("Verifica del salvataggio TERMINATO non riuscita su tutti i documenti collegati.");
   }
 
   async function persistActionWithRetry(action) {
@@ -904,6 +900,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       .special-core-action-hidden { display: none !important; }
+      .special-terminato-program-hidden { display: none !important; }
       .impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .special-terminato-btn { order: 2; grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: none; min-width: 0; min-height: 38px !important; margin: 0; padding: 6px 8px; overflow: hidden; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-size: clamp(.7rem, 3.1vw, .9rem); font-weight: 900; line-height: 1; letter-spacing: .015em; white-space: nowrap; text-overflow: clip; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
       .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
       .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
@@ -1241,9 +1238,12 @@
         if (label === "eseguito da:") row.innerHTML = "<b>Eseguito da:</b> -";
       });
       if (isTerminated(plant)) {
+        card.classList.add("special-terminato-program-hidden");
         card.hidden = true;
+        card.remove();
         return;
       }
+      card.classList.remove("special-terminato-program-hidden");
       card.hidden = false;
       createTerminateButton(card, plant);
     });

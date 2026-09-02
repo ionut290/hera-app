@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-immediate-move1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-immediate-move1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-sync-repair1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-sync-repair1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
@@ -94,6 +94,12 @@ assert.match(runtimeSource, /persistActionWithRetry/,
   "TERMINATO riprova il salvataggio senza coinvolgere FATTO");
 assert.match(runtimeSource, /specialTerminatoByEmail/,
   "TERMINATO conserva anche l’email dell’operatore");
+assert.match(runtimeSource, /card\.classList\.add\("special-terminato-program-hidden"\)/,
+  "un cantiere TERMINATO non può restare visibile in In programma");
+assert.match(runtimeSource, /card\.remove\(\)/,
+  "la scheda TERMINATO viene rimossa realmente da In programma");
+assert.doesNotMatch(runtimeSource, /reference\.doc\(id\)\.get\(\)/,
+  "il batch TERMINATO non esegue letture Firestore di verifica superflue");
 assert.match(runtimeSource, /specialDataEsecuzione/,
   "TERMINATO conserva la data di esecuzione separata");
 assert.match(runtimeSource, /specialOraEsecuzione/,
@@ -114,8 +120,6 @@ assert.match(runtimeSource, /special-core-action-hidden/,
   "le azioni storiche vengono soltanto nascoste nelle commesse speciali");
 assert.doesNotMatch(runtimeSource, /\[TERMINATED_FIELD\]:\s*true[\s\S]{0,300}\bdone\s*:/,
   "TERMINATO non deve scrivere lo stato FATTO");
-assert.match(runtimeSource, /reference\.doc\(id\)\.get\(\)/,
-  "una sola verifica mirata controlla tutti i documenti appena salvati");
 assert.doesNotMatch(runtimeSource, /onSnapshot|setInterval|watchPosition/, "il nuovo flusso non aggiunge listener o polling");
 assert.doesNotMatch(runtimeSource, /markImpiantoDone|handleImpiantoWhatsAppClick|openWhatsApp/, "il nuovo flusso non richiama né aggira FATTO/WHAZZUP");
 

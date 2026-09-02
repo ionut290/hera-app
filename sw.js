@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v216";
-const CACHE_RESET_VERSION = "20260902-special-immediate-move1";
+const CACHE_NAME = "varga-cantieri-shell-v217";
+const CACHE_RESET_VERSION = "20260902-special-sync-repair1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -83,7 +83,7 @@ const APP_SHELL = [
   "./cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1",
   "./cobo-mowing-work-orders.js?v=20260902-special-terminato1",
   "./tree-work-orders.js?v=20260831-potature1",
-  "./potature-followup.js?v=20260902-special-immediate-move1",
+  "./potature-followup.js?v=20260902-special-sync-repair1",
   "./tree-search.js?v=20260901-catasto-open2",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",

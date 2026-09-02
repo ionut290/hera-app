@@ -11,7 +11,7 @@ const timestamp = { kind: "SERVER_TIMESTAMP" };
 const storageData = new Map();
 const plant = {
   id: "albero-bologna-100",
-  sourceIds: ["albero-bologna-100"],
+  sourceIds: ["albero-bologna-100-prezzo"],
   idSap: "ALB-BOLOGNA-100",
   denominazione: "Albero 100",
   gpsY: 44.4949,
@@ -73,7 +73,7 @@ global.db = {
     assert.equal(collectionName, "commesse");
     return {
       doc(commessaId) {
-        assert.equal(commessaId, "potature-abbattimenti");
+        assert.ok(["potature-abbattimenti", "sfalcio-cobo"].includes(commessaId));
         return {
           collection(subcollectionName) {
             assert.equal(subcollectionName, "impianti");
@@ -121,8 +121,8 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
 
   await completionPromise;
 
-  assert.equal(writes.length, 1, "una sola scrittura per il documento del cantiere");
-  assert.equal(writes[0].reference.id, "albero-bologna-100");
+  assert.equal(writes.length, 2, "tutti i documenti collegati al cantiere vengono aggiornati nello stesso batch");
+  assert.deepEqual(writes.map((entry) => entry.reference.id).sort(), ["albero-bologna-100", "albero-bologna-100-prezzo"]);
   assert.deepEqual(writes[0].options, { merge: true }, "scrittura non distruttiva");
   assert.equal(writes[0].patch.specialTerminato, true);
   assert.equal(writes[0].patch.specialTerminatoAt.kind, "CLIENT_TIMESTAMP");
@@ -139,7 +139,7 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
   assert.equal(plant.specialTerminato, true, "stato locale speciale aggiornato");
   assert.equal(plant.done, false, "stato FATTO locale invariato");
   assert.equal(plant.specialTerminatoPending, false, "verifica online completata");
-  assert.deepEqual(reads, ["albero-bologna-100"], "una verifica mirata dopo il batch");
+  assert.deepEqual(reads, [], "il batch confermato non aggiunge letture Firestore di verifica");
   assert.equal(api.loadPendingActions().length, 0, "coda locale rimossa dopo la verifica");
   assert.equal(activityEvents.length, 1, "un solo evento attività TERMINATO");
   assert.equal(activityEvents[0][0], "pressione_terminato");
@@ -167,6 +167,8 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
     done: false
   };
   global.currentImpianti.push(offlinePlant);
+  global.selectedCommessaId = "sfalcio-cobo";
+  global.selectedCommessaName = "Sfalcio COBO";
   global.navigator.onLine = false;
   const writesBeforeOffline = writes.length;
   await api.terminatePlant(offlinePlant, { disabled: false, textContent: "TERMINATO" });
@@ -181,7 +183,7 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
   assert.equal(api.loadPendingActions().length, 0, "azione offline rimossa dopo la sincronizzazione");
   assert.equal(offlinePlant.specialTerminatoPending, false, "stato locale confermato dopo il ritorno online");
   assert.equal(writes.length, writesBeforeOffline + 1, "una sola scrittura al ritorno online");
-  assert.deepEqual(reads, ["albero-bologna-100", "parco-cobo-200"], "una verifica mirata per ogni completamento");
+  assert.deepEqual(reads, [], "la sincronizzazione COBO non aggiunge letture Firestore di verifica");
   assert.equal(activityEvents.length, 2, "nessun evento attività duplicato durante la sincronizzazione");
   assert.equal(notificationEvents.length, 2, "nessuna notifica duplicata durante la sincronizzazione");
 

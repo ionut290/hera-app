@@ -212,6 +212,23 @@ test.describe("Commesse speciali - TERMINATO separato", () => {
     await expect(page.locator(".special-finished-status-btn")).toContainText("TERMINATO");
     await expect(page.locator(".special-terminato-btn")).toHaveCount(0);
 
+    await page.evaluate(() => {
+      const plant = currentImpianti[0];
+      const key = buildImpiantoKey(plant);
+      const list = document.getElementById("impianti-lista");
+      list.innerHTML = `
+        <article class="impianto-item card-impianto todo" data-impianto-key="${key}">
+          <div class="impianto-main-column impianto-left">
+            <div class="impianto-details"><p><b>Stato:</b> Da fare</p><p><b>Eseguito da:</b> -</p></div>
+            <div class="item-actions impianto-actions"><div class="impianto-primary-actions"></div></div>
+          </div>
+        </article>`;
+      document.getElementById("view-todo-btn")?.click();
+      window.HeraSpecialTerminato.apply();
+    });
+
+    await expect(page.locator('.impianto-item[data-impianto-key="sap:cobo-immediate-1"]')).toHaveCount(0);
+
     const state = await page.evaluate(() => ({
       specialTerminato: currentImpianti[0].specialTerminato,
       specialTerminatoPending: currentImpianti[0].specialTerminatoPending,

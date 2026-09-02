@@ -5,7 +5,7 @@ const APP_URL = process.env.E2E_APP_URL || "http://127.0.0.1:4173";
 test.describe("Verde Levato manuale", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("aggiunge un albero dalla posizione e configura l’amministratore dedicato", async ({ page }) => {
+  test("gestisce commesse, associa cantieri, esporta Excel e configura l’amministratore", async ({ page }) => {
     await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => Boolean(window.HeraVerdeLevato));
     await expect(page.locator("#open-verde-levato-btn")).toContainText("Verde Levato");
@@ -13,7 +13,10 @@ test.describe("Verde Levato manuale", () => {
     await page.evaluate(() => {
       window.__verdeLevatoRecords = [];
       window.__verdeLevatoWrites = [];
+      window.__verdeLevatoCommesse = [];
+      window.__verdeLevatoCommessaWrites = [];
       window.__verdeLevatoConfigWrites = [];
+      window.__verdeLevatoExcel = null;
       auth = { currentUser: { uid: "global-admin", email: "admin@example.test", displayName: "Admin Test" } };
       canManageData = () => true;
       setAuthenticationGateState = () => {};
@@ -52,8 +55,35 @@ test.describe("Verde Levato manuale", () => {
               }
             };
           }
+          if (name === "verdeLevatoCommesse") {
+            return {
+              async get() {
+                return {
+                  docs: window.__verdeLevatoCommesse.map((commessa) => ({ id: commessa.id, data: () => ({ ...commessa.payload }) }))
+                };
+              },
+              doc(id = `commessa-${window.__verdeLevatoCommesse.length + 1}`) {
+                return {
+                  id,
+                  async set(payload, options) {
+                    window.__verdeLevatoCommessaWrites.push({ id, payload, options });
+                    window.__verdeLevatoCommesse.push({ id, payload: { ...payload } });
+                  }
+                };
+              }
+            };
+          }
           throw new Error(`Collection inattesa: ${name}`);
         }
+      };
+
+      window.XLSX = {
+        utils: {
+          json_to_sheet(rows, options) { return { rows, headers: options.header, "!ref": "A1:B2" }; },
+          book_new() { return { sheets: [] }; },
+          book_append_sheet(workbook, sheet, name) { workbook.sheets.push({ name, sheet }); }
+        },
+        writeFile(workbook, filename) { window.__verdeLevatoExcel = { workbook, filename }; }
       };
 
       Object.defineProperty(navigator, "geolocation", {
@@ -95,6 +125,24 @@ test.describe("Verde Levato manuale", () => {
     await expect(page.locator("[data-verde-levato-category]")).toHaveCount(3);
     await expect(page.locator("#verde-levato-new-btn")).toBeVisible();
     await page.locator("#verde-levato-new-btn").click();
+    await expect(page.locator('select[name="commessaId"]')).toBeVisible();
+    await page.locator("#verde-levato-show-new-commessa").click();
+    await page.locator("#verde-levato-new-commessa-name").fill("Manutenzione Bologna Nord");
+    await page.locator("#verde-levato-new-commessa-code").fill("VL-2026-01");
+    await page.locator("#verde-levato-save-commessa").click();
+    await expect(page.locator('select[name="commessaId"]')).toHaveValue("commessa-1");
+    await page.locator('input[name="denominazione"]').fill("Parco Levato Nord");
+    await page.locator("#verde-levato-use-location").click();
+    await page.locator("#verde-levato-form").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#verde-levato-record-modal")).toBeHidden();
+
+    const cantiere = await page.evaluate(() => window.__verdeLevatoWrites[0]);
+    expect(cantiere.payload.tipoRecord).toBe("cantiere");
+    expect(cantiere.payload.commessaId).toBe("commessa-1");
+    expect(cantiere.payload.commessaNome).toBe("Manutenzione Bologna Nord");
+    expect(cantiere.payload.commessaCodice).toBe("VL-2026-01");
+
+    await page.locator("#verde-levato-category-new-btn").click();
     await page.locator('select[name="tipoRecord"]').selectOption("albero");
     await page.locator("#verde-levato-use-location").click();
 
@@ -111,7 +159,7 @@ test.describe("Verde Levato manuale", () => {
     await page.locator("#verde-levato-form").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#verde-levato-record-modal")).toBeHidden();
 
-    const saved = await page.evaluate(() => window.__verdeLevatoWrites[0]);
+    const saved = await page.evaluate(() => window.__verdeLevatoWrites[1]);
     expect(saved.options).toEqual({ merge: true });
     expect(saved.payload.tipoRecord).toBe("albero");
     expect(saved.payload.denominazione).toBe("Tiglio ingresso nord");
@@ -122,6 +170,15 @@ test.describe("Verde Levato manuale", () => {
     expect(saved.payload.source).toBe("MANUALE_VERDE_LEVATO");
 
     await page.locator("#verde-levato-categories-btn").click();
+    await page.locator("#verde-levato-export-btn").click();
+    const excel = await page.evaluate(() => window.__verdeLevatoExcel);
+    expect(excel.filename).toMatch(/^verde_levato_dati_completi_.*\.xlsx$/);
+    expect(excel.workbook.sheets.map((sheet) => sheet.name)).toEqual(["Dati completi", "Commesse"]);
+    expect(excel.workbook.sheets[0].sheet.rows).toHaveLength(2);
+    const exportedCantiere = excel.workbook.sheets[0].sheet.rows.find((row) => row["Tipo elemento"] === "Cantieri");
+    expect(exportedCantiere["Commessa"]).toBe("Manutenzione Bologna Nord");
+    expect(excel.workbook.sheets[1].sheet.rows[0]["Cantieri associati"]).toBe(1);
+
     await page.locator("#verde-levato-admin-btn").click();
     await page.locator('#verde-levato-admin-form input[name="email"]').fill("Levato.Admin@Example.Test");
     await page.locator("#verde-levato-admin-form").evaluate((form) => form.requestSubmit());

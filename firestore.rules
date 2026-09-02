@@ -143,6 +143,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /verdeLevatoCommesse/{commessaId} {
+      allow read: if signedIn();
+      allow create, update: if isVerdeLevatoAdmin();
+      allow delete: if false;
+    }
+
     // Il report contiene dati storici degli operatori ed è solo amministrativo.
     match /inreteMigrationAudit/{migrationId} {
       allow read, write: if isAdmin();

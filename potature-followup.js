@@ -328,6 +328,7 @@
   const TERMINATED_FIELD = "specialTerminato";
   const FINISHED_BUTTON_ID = "view-done-btn";
   const PROGRAM_BUTTON_ID = "view-todo-btn";
+  const EXPORT_BUTTON_ID = "export-current-commessa-btn";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
   const text = (value) => String(value ?? "").trim();
@@ -444,6 +445,83 @@
     return text(plant?.tipologiaIntervento || "Potatura / Abbattimento");
   }
 
+  function selectedName() {
+    try {
+      if (typeof selectedCommessaName !== "undefined" && text(selectedCommessaName)) return text(selectedCommessaName);
+      if (typeof commesseById !== "undefined") return text(commesseById.get(selectedId())?.nome) || "Commessa";
+    } catch (_) {}
+    return "Commessa";
+  }
+
+  function authenticatedUser() {
+    try {
+      if (typeof auth !== "undefined" && auth?.currentUser) return auth.currentUser;
+    } catch (_) {}
+    return null;
+  }
+
+  function buildFinishedRowsForExport(commessaName) {
+    const email = text(authenticatedUser()?.email);
+    return currentPlants().filter(isTerminated)
+      .flatMap((plant) => buildRowsForEachCodicePrezzo(plant))
+      .map((plant) => {
+        const finishedInfo = formatDoneDateTime(plant.specialTerminatoAt);
+        return {
+          "Commessa padre": "",
+          Commessa: commessaName,
+          Cantiere: plant.cantiereRiga || "",
+          Distretto: plant.distretto || "",
+          "ID SAP": plant.idSap || "",
+          Denominazione: plant.denominazione || "",
+          Comune: plant.comune || "",
+          Indirizzo: plant.indirizzo || "",
+          "Voce riferimento": plant.voceRiferimento || "",
+          "Codice prezzo": plant.codicePrezzoSingolo || plant.codicePrezzo || "",
+          Sfalci: plant.sfalci || "",
+          "Frequenza annua": plant.frequenzaAnnua || "",
+          "Tipologia intervento": plant.tipologiaIntervento || specialTypeLabel(plant),
+          "Lavorazioni richieste": plant.lavorazioniRichieste || "",
+          "GPS Y": plant.gpsY ?? "",
+          "GPS X": plant.gpsX ?? "",
+          "Tipo manutenzione": plant.tipoManutenzione || classifyTipoManutenzione(plant.codicePrezzo),
+          Stato: "Finito",
+          "Data esecuzione": finishedInfo.date,
+          "Ora esecuzione": finishedInfo.time,
+          "Eseguito da": plant.specialTerminatoBy || "-",
+          "Email operatore": email
+        };
+      });
+  }
+
+  function exportFinishedSummary() {
+    if (!authenticatedUser()) {
+      window.alert("Devi fare login per esportare il riepilogo.");
+      return;
+    }
+
+    try {
+      const commessaName = selectedName();
+      const rows = buildFinishedRowsForExport(commessaName);
+      if (!rows.length) {
+        window.alert(`Nessun impianto FINITO da esportare per la commessa "${commessaName}".`);
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Riepilogo impianti");
+      const safeName = String(commessaName || "commessa")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, "_");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      XLSX.writeFile(workbook, `riepilogo_impianti_${safeName}_${timestamp}.xlsx`);
+    } catch (error) {
+      console.error(error);
+      window.alert("Errore durante l'esportazione del riepilogo in Excel.");
+    }
+  }
+
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
@@ -553,13 +631,13 @@
   }
 
   function restoreSpecialTabs() {
-    [FINISHED_BUTTON_ID, PROGRAM_BUTTON_ID].forEach((id) => {
+    [FINISHED_BUTTON_ID, PROGRAM_BUTTON_ID, EXPORT_BUTTON_ID].forEach((id) => {
       const button = document.getElementById(id);
       if (!button || button.dataset.specialOriginalLabel === undefined) return;
       button.textContent = button.dataset.specialOriginalLabel;
       delete button.dataset.specialOriginalLabel;
     });
-    document.getElementById("export-current-commessa-btn")?.classList.remove("special-core-action-hidden");
+    document.getElementById(EXPORT_BUTTON_ID)?.classList.remove("special-core-action-hidden");
   }
 
   function selectSpecialTab(mode) {
@@ -580,11 +658,16 @@
     if (!toolbar) return null;
     const finishedButton = document.getElementById(FINISHED_BUTTON_ID);
     const programButton = document.getElementById(PROGRAM_BUTTON_ID);
+    const exportButton = document.getElementById(EXPORT_BUTTON_ID);
     saveOriginalLabel(finishedButton);
     saveOriginalLabel(programButton);
+    saveOriginalLabel(exportButton);
     if (finishedButton) finishedButton.textContent = "✅ Finiti";
     if (programButton) programButton.textContent = "🛠️ In programma";
-    document.getElementById("export-current-commessa-btn")?.classList.add("special-core-action-hidden");
+    if (exportButton) {
+      exportButton.textContent = "📤 Esporta finiti";
+      exportButton.classList.remove("special-core-action-hidden");
+    }
 
     if (finishedButton && !finishedButton.dataset.specialFinishedHandler) {
       finishedButton.addEventListener("click", (event) => {
@@ -603,6 +686,15 @@
         window.setTimeout(apply, 0);
       }, true);
       programButton.dataset.specialProgramHandler = "1";
+    }
+    if (exportButton && !exportButton.dataset.specialFinishedExportHandler) {
+      exportButton.addEventListener("click", (event) => {
+        if (!isSpecialCommessa()) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        exportFinishedSummary();
+      }, true);
+      exportButton.dataset.specialFinishedExportHandler = "1";
     }
     if (!toolbar.dataset.specialTerminatoTabs) {
       toolbar.addEventListener("click", (event) => {
@@ -713,6 +805,7 @@
     isSpecialCommessa,
     isTerminated,
     terminatePlant,
+    exportFinishedSummary,
     apply,
     renderFinishedList
   });

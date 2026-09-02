@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-finiti1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-finiti1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-export-finiti1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-export-finiti1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
@@ -72,6 +72,12 @@ assert.match(runtimeSource, /finishedButton\.textContent = "✅ Finiti"/,
   "Fatti diventa Finiti nelle commesse speciali");
 assert.match(runtimeSource, /programButton\.textContent = "🛠️ In programma"/,
   "Da fare diventa In programma nelle commesse speciali");
+assert.match(runtimeSource, /exportButton\.textContent = "📤 Esporta finiti"/,
+  "Esporta fatti diventa Esporta finiti nelle commesse speciali");
+assert.match(runtimeSource, /currentPlants\(\)\.filter\(isTerminated\)/,
+  "l'esportazione usa gli impianti Finiti già caricati");
+assert.match(runtimeSource, /XLSX\.writeFile\(workbook, `riepilogo_impianti_/,
+  "l'esportazione mantiene il download Excel del vecchio sistema");
 assert.match(runtimeSource, /showFinishedList\(\)/,
   "TERMINATO sposta immediatamente il cantiere nella vista Finiti");
 assert.doesNotMatch(runtimeSource, /view-special-terminated-btn/,

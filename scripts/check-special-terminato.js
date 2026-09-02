@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const writes = [];
+const exportedFiles = [];
 const timestamp = { kind: "SERVER_TIMESTAMP" };
 const plant = {
   id: "albero-bologna-100",
@@ -17,6 +18,7 @@ const plant = {
 
 global.window = {
   addEventListener() {},
+  alert() {},
   currentUser: { uid: "user-1", displayName: "Operatore Test" }
 };
 global.document = {
@@ -29,9 +31,24 @@ global.document = {
   createElement() { return { id: "", textContent: "" }; }
 };
 global.selectedCommessaId = "potature-abbattimenti";
+global.selectedCommessaName = "Potature Abbattimenti";
 global.currentImpianti = [plant];
+global.auth = { currentUser: { uid: "user-1", email: "operatore@example.test" } };
 global.getCommesseCollectionName = () => "commesse";
 global.getOperatorDisplayName = () => "Operatore Test";
+global.buildRowsForEachCodicePrezzo = (item) => [{ ...item, cantiereRiga: item.denominazione }];
+global.formatDoneDateTime = () => ({ date: "02/09/2026", time: "04:52" });
+global.classifyTipoManutenzione = () => "Straordinaria";
+global.XLSX = {
+  utils: {
+    json_to_sheet: (rows) => ({ rows }),
+    book_new: () => ({ sheets: [] }),
+    book_append_sheet: (workbook, worksheet, name) => workbook.sheets.push({ worksheet, name })
+  },
+  writeFile(workbook, filename) {
+    exportedFiles.push({ workbook, filename });
+  }
+};
 global.firebase = {
   firestore: { FieldValue: { serverTimestamp: () => timestamp } }
 };
@@ -85,7 +102,18 @@ assert.equal(api.isSpecialCommessa(), true, "commessa Potature riconosciuta come
   assert.equal(plant.specialTerminato, true, "stato locale speciale aggiornato");
   assert.equal(plant.done, false, "stato FATTO locale invariato");
 
-  console.log("✅ TERMINATO speciale: scrittura separata, non distruttiva e senza FATTO/WHAZZUP verificata.");
+  api.exportFinishedSummary();
+  assert.equal(exportedFiles.length, 1, "un solo file Excel esportato");
+  assert.match(exportedFiles[0].filename, /^riepilogo_impianti_Potature_Abbattimenti_/);
+  assert.equal(exportedFiles[0].workbook.sheets[0].name, "Riepilogo impianti");
+  const exportedRow = exportedFiles[0].workbook.sheets[0].worksheet.rows[0];
+  assert.equal(exportedRow.Stato, "Finito");
+  assert.equal(exportedRow["Data esecuzione"], "02/09/2026");
+  assert.equal(exportedRow["Ora esecuzione"], "04:52");
+  assert.equal(exportedRow["Eseguito da"], "Operatore Test");
+  assert.equal(exportedRow["Email operatore"], "operatore@example.test");
+
+  console.log("✅ TERMINATO speciale: scrittura separata, esportazione Finiti e isolamento FATTO/WHAZZUP verificati.");
 })().catch((error) => {
   console.error(error);
   process.exit(1);

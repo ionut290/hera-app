@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#111214">
   <script>
     (() => {
-      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260902-special-sync-repair1";
+      const PWA_EMERGENCY_CACHE_RESET_VERSION = "20260902-special-finiti-stable1";
       const ANDROID_EMERGENCY_CACHE_RESET_VERSION = "20260812-android1";
       const PWA_EMERGENCY_CACHE_RESET_KEY = "heraPwaCacheResetVersion";
       const url = new URL(window.location.href);
@@ -735,7 +735,7 @@
   <script src="fuel-stations-core.js?v=20260723b"></script>
   <script src="fuel-stations-national-cache.js?v=20260723b"></script>
   <script src="fuel-stations-search.js?v=20260723a"></script>
-  <script src="app.js?v=20260901-cobo-sfalcio1"></script>
+  <script src="app.js?v=20260902-special-finiti-stable1"></script>
   <script src="green-assistant.js?v=20260830-brave-manuals3"></script>
   <script src="android-play-store-install.js?v=20260828a"></script>
   <script src="maintenance-price-code-display-guard.js?v=20260824-a1ordinary3"></script>
@@ -768,7 +768,7 @@
   <script src="header-menu-runtime.js?v=20260830-map-gps-fix1"></script>
   <script src="cobo-mowing-work-orders.js?v=20260902-special-terminato1"></script>
   <script src="tree-work-orders.js?v=20260831-potature1"></script>
-  <script src="potature-followup.js?v=20260902-special-sync-repair1"></script>
+  <script src="potature-followup.js?v=20260902-special-finiti-stable1"></script>
   <script src="tree-search.js?v=20260901-catasto-open2"></script>
   <script src="green-areas.js?v=20260829e"></script>
   <script src="urban-furniture.js?v=20260830-completesheet1"></script>
@@ -777,7 +777,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=20260902-special-sync-repair1", { updateViaCache: "none" }).catch((error) => {
+        navigator.serviceWorker.register("./sw.js?v=20260902-special-finiti-stable1", { updateViaCache: "none" }).catch((error) => {
           console.warn("Service Worker non registrato:", error);
         });
       });

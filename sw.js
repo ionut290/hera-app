@@ -1,5 +1,5 @@
-const CACHE_NAME = "varga-cantieri-shell-v217";
-const CACHE_RESET_VERSION = "20260902-special-sync-repair1";
+const CACHE_NAME = "varga-cantieri-shell-v218";
+const CACHE_RESET_VERSION = "20260902-special-finiti-stable1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -22,7 +22,7 @@ const APP_SHELL = [
   "./administrative-calendar.js?v=20260829-admin-hours1",
   "./app-snow.js?v=20260815-mod1",
   "./app-availability.js?v=20260815-mod1",
-  "./app.js?v=20260901-cobo-sfalcio1",
+  "./app.js?v=20260902-special-finiti-stable1",
   "./green-assistant.css?v=20260830-brave-manuals3",
   "./green-assistant.js?v=20260830-brave-manuals3",
   "./android-play-store-install.js?v=20260828a",
@@ -83,7 +83,7 @@ const APP_SHELL = [
   "./cobo-mowing-work-orders.css?v=20260901-cobo-sfalcio1",
   "./cobo-mowing-work-orders.js?v=20260902-special-terminato1",
   "./tree-work-orders.js?v=20260831-potature1",
-  "./potature-followup.js?v=20260902-special-sync-repair1",
+  "./potature-followup.js?v=20260902-special-finiti-stable1",
   "./tree-search.js?v=20260901-catasto-open2",
   "./green-areas.css?v=20260829a",
   "./green-area-sheet.css?v=20260829a",

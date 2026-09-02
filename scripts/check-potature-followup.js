@@ -57,8 +57,8 @@ assert.match(app, /PREPARA FINE/);
 assert.match(app, /mappedImpianti = currentImpianti\.filter/);
 assert.match(html, /id="view-raccolta-btn"/);
 assert.match(html, /id="view-ceppi-btn"/);
-assert.match(html, /potature-followup\.js\?v=20260902-special-sync-repair1/);
-assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-sync-repair1/);
+assert.match(html, /potature-followup\.js\?v=20260902-special-finiti-stable1/);
+assert.match(serviceWorker, /potature-followup\.js\?v=20260902-special-finiti-stable1/);
 assert.match(css, /\.potature-followup-modal/);
 
 const runtimeSource = fs.readFileSync(path.join(root, "potature-followup.js"), "utf8");
@@ -98,6 +98,14 @@ assert.match(runtimeSource, /card\.classList\.add\("special-terminato-program-hi
   "un cantiere TERMINATO non può restare visibile in In programma");
 assert.match(runtimeSource, /card\.remove\(\)/,
   "la scheda TERMINATO viene rimossa realmente da In programma");
+assert.match(app, /HeraSpecialTerminato\?\.renderCurrentListIfOwned\?\.\(\)/,
+  "la vista Finiti speciale mantiene il controllo del rendering senza refresh alternati");
+assert.match(runtimeSource, /function renderCurrentListIfOwned\(\)/,
+  "TERMINATO espone il rendering stabile della vista Finiti");
+assert.match(runtimeSource, /className = "btn gestione-toggle-btn"/,
+  "le card Finiti mostrano il pulsante ingranaggio Gestione");
+assert.match(runtimeSource, /special-finished-management-actions hidden/,
+  "le azioni di gestione restano raccolte sotto l’ingranaggio");
 assert.doesNotMatch(runtimeSource, /reference\.doc\(id\)\.get\(\)/,
   "il batch TERMINATO non esegue letture Firestore di verifica superflue");
 assert.match(runtimeSource, /specialDataEsecuzione/,

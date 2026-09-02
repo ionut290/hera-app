@@ -1118,6 +1118,102 @@
     return { finishedButton, programButton };
   }
 
+  function canShowFinishedManagementAction(actionKey) {
+    try {
+      if (typeof isImpiantoActionDenied === "function" && isImpiantoActionDenied(actionKey)) return false;
+      if (["edit", "delete"].includes(actionKey) && typeof canUseImpiantoAction === "function") {
+        return canUseImpiantoAction(actionKey);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function appendFinishedManagementAction(container, label, actionKey, handler) {
+    if (!container || typeof handler !== "function" || !canShowFinishedManagementAction(actionKey)) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn";
+    button.dataset.actionKey = actionKey;
+    button.textContent = label;
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        await handler();
+      } catch (error) {
+        window.alert(error?.message || "Azione non disponibile per questo cantiere.");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    container.appendChild(button);
+  }
+
+  function createFinishedManagementMenu(plant) {
+    const managementStack = document.createElement("div");
+    managementStack.className = "impianto-management-stack";
+    const managementActions = document.createElement("div");
+    managementActions.className = "item-actions item-actions-gestione special-finished-management-actions hidden";
+
+    appendFinishedManagementAction(
+      managementActions,
+      "Segnala problema",
+      "problem-report",
+      typeof openImpiantoReportModal === "function" ? () => openImpiantoReportModal(plant) : null
+    );
+    appendFinishedManagementAction(
+      managementActions,
+      "Aggiorna GPS",
+      "gps-update",
+      typeof requestGpsUpdate === "function" ? () => requestGpsUpdate(plant) : null
+    );
+    appendFinishedManagementAction(
+      managementActions,
+      "Modifica",
+      "edit",
+      typeof openImpiantoEditor === "function" ? () => openImpiantoEditor(plant) : null
+    );
+    appendFinishedManagementAction(
+      managementActions,
+      "Elimina",
+      "delete",
+      typeof deleteImpianto === "function" ? () => deleteImpianto(plant) : null
+    );
+
+    let adminCanUpload = false;
+    try { adminCanUpload = typeof canManageData === "function" && canManageData(); } catch (_) {}
+    if (adminCanUpload) {
+      appendFinishedManagementAction(
+        managementActions,
+        "Inserisci PDF richiesta",
+        "request-pdf",
+        typeof setImpiantoRequestDriveLink === "function" ? () => setImpiantoRequestDriveLink(plant) : null
+      );
+    }
+
+    if (!managementActions.childElementCount) return null;
+    const manageButton = document.createElement("button");
+    manageButton.type = "button";
+    manageButton.className = "btn gestione-toggle-btn";
+    manageButton.textContent = "⚙️";
+    manageButton.title = "Gestione";
+    manageButton.setAttribute("aria-label", "Gestione cantiere finito");
+    manageButton.setAttribute("aria-expanded", "false");
+    manageButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const expanded = manageButton.getAttribute("aria-expanded") === "true";
+      manageButton.setAttribute("aria-expanded", expanded ? "false" : "true");
+      managementActions.classList.toggle("hidden", expanded);
+    });
+    managementStack.appendChild(manageButton);
+    return { managementStack, managementActions };
+  }
+
   function renderFinishedList() {
     if (!isSpecialCommessa() || specialViewMode !== "finished") return;
     const list = document.getElementById("impianti-lista") || document.querySelector(".impianti-lista");
@@ -1215,14 +1311,29 @@
         primary.appendChild(statusButton);
         actions.appendChild(primary);
 
+        const managementMenu = createFinishedManagementMenu(plant);
+        if (managementMenu) {
+          const secondary = document.createElement("div");
+          secondary.className = "impianto-secondary-actions";
+          secondary.appendChild(managementMenu.managementStack);
+          actions.appendChild(secondary);
+        }
+
         mainColumn.appendChild(summary);
         mainColumn.appendChild(details);
         mainColumn.appendChild(actions);
+        if (managementMenu) mainColumn.appendChild(managementMenu.managementActions);
         card.appendChild(mainColumn);
         wrapper.appendChild(card);
       });
     }
     list.appendChild(wrapper);
+  }
+
+  function renderCurrentListIfOwned() {
+    if (!isSpecialCommessa() || specialViewMode !== "finished") return false;
+    renderFinishedList();
+    return true;
   }
 
   function applyStandardList() {
@@ -1305,6 +1416,7 @@
     loadPendingActions,
     exportFinishedSummary,
     apply,
-    renderFinishedList
+    renderFinishedList,
+    renderCurrentListIfOwned
   });
 })();

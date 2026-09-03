@@ -2,6 +2,17 @@
 (() => {
   "use strict";
 
+  function ensureAccountingRoundsModule() {
+    if (window.VargaAccountingRounds || document.querySelector('script[data-varga-accounting-rounds]')) return;
+    const script = document.createElement("script");
+    script.src = `accounting-rounds.js?v=20260903-1`;
+    script.async = true;
+    script.dataset.vargaAccountingRounds = "1";
+    document.head.appendChild(script);
+  }
+
+  ensureAccountingRoundsModule();
+
   const wrap = document.getElementById("commessa-plants-menu-wrap");
   const toggle = document.getElementById("commessa-plants-menu-btn");
   const title = document.getElementById("commessa-focus-label");

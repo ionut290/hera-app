@@ -18,9 +18,13 @@
   const CACHE_PREFIX = "heraCommessaStatsCacheV1:";
   const IMPIANTI_CACHE_PREFIX = "heraImpiantiPersistentCacheV1:";
   const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const TAP_RELEASE_GRACE_MS = 180;
   const originalSubscribeStatsForCommesse = subscribeStatsForCommesse;
   let statsUiRefreshScheduled = false;
   let statsUiRefreshPendingWhileHidden = false;
+  let interactionGuardUntil = 0;
+  let interactionPointerDown = false;
+  let deferredInteractionRefreshTimer = null;
   const state = {
     cacheHits: 0,
     cacheMisses: 0,
@@ -29,6 +33,7 @@
     incrementalDeliveries: 0,
     changedDocumentsRead: 0,
     deferredUiRefreshes: 0,
+    deferredInteractionRefreshes: 0,
     errors: []
   };
 
@@ -130,10 +135,54 @@
     return typeof document !== "undefined" && document.visibilityState === "hidden";
   }
 
+  function isProtectedTapTarget(target) {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest(
+      "#commesse-lista, #today-squads-section, #today-summary-card, #commesse-manage-list"
+    ));
+  }
+
+  function interactionGuardActive() {
+    return interactionPointerDown || Date.now() < interactionGuardUntil;
+  }
+
+  function scheduleRefreshAfterInteraction() {
+    if (deferredInteractionRefreshTimer) return;
+    state.deferredInteractionRefreshes += 1;
+    const delay = interactionPointerDown
+      ? TAP_RELEASE_GRACE_MS
+      : Math.max(16, interactionGuardUntil - Date.now() + 16);
+    deferredInteractionRefreshTimer = window.setTimeout(() => {
+      deferredInteractionRefreshTimer = null;
+      if (interactionGuardActive()) {
+        scheduleRefreshAfterInteraction();
+        return;
+      }
+      refreshStatsUI();
+    }, delay);
+  }
+
+  function onProtectedPointerDown(event) {
+    if (!isProtectedTapTarget(event?.target)) return;
+    if (typeof event.button === "number" && event.button !== 0) return;
+    interactionPointerDown = true;
+    interactionGuardUntil = Number.POSITIVE_INFINITY;
+  }
+
+  function onProtectedPointerRelease(event) {
+    if (!interactionPointerDown && !isProtectedTapTarget(event?.target)) return;
+    interactionPointerDown = false;
+    interactionGuardUntil = Date.now() + TAP_RELEASE_GRACE_MS;
+  }
+
   function refreshStatsUI() {
     if (pageIsHidden()) {
       if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
       statsUiRefreshPendingWhileHidden = true;
+      return;
+    }
+    if (interactionGuardActive()) {
+      scheduleRefreshAfterInteraction();
       return;
     }
     if (statsUiRefreshScheduled) return;
@@ -143,6 +192,10 @@
       if (pageIsHidden()) {
         if (!statsUiRefreshPendingWhileHidden) state.deferredUiRefreshes += 1;
         statsUiRefreshPendingWhileHidden = true;
+        return;
+      }
+      if (interactionGuardActive()) {
+        scheduleRefreshAfterInteraction();
         return;
       }
       statsUiRefreshPendingWhileHidden = false;
@@ -160,6 +213,9 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && statsUiRefreshPendingWhileHidden) refreshStatsUI();
     });
+    document.addEventListener("pointerdown", onProtectedPointerDown, { capture: true, passive: true });
+    document.addEventListener("pointerup", onProtectedPointerRelease, { capture: true, passive: true });
+    document.addEventListener("pointercancel", onProtectedPointerRelease, { capture: true, passive: true });
   }
 
   function applyItems(commessaId, items, markerMs = 0) {
@@ -275,9 +331,6 @@
     }
 
     if (statsCache?.stats) {
-      // La sola cache statistiche permette il rendering immediato, ma per applicare
-      // modifiche incrementali serve la lista impianti. Non viene mai trattata come
-      // fonte sufficiente per evitare il fallback completo.
       commessaStatsById.set(commessaId, statsCache.stats);
       refreshStatsUI();
     }
@@ -295,8 +348,6 @@
       applyItems(commessaId, rawItems, markerBefore);
       if (markerBefore > 0) startIncrementalListener(commessaId, markerBefore);
       else {
-        // Indice non ancora disponibile: manteniamo il comportamento storico come
-        // fallback di sicurezza, senza trasformare una cache non verificabile in fonte primaria.
         const fallbackUnsubscribe = commessaRef(commessaId).collection("impianti").onSnapshot((live) => {
           const liveItems = live.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
           applyItems(commessaId, liveItems, 0);
@@ -322,14 +373,15 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.2.0",
+    version: "1.3.0",
     mode: "persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({
       ...state,
       errors: state.errors.slice(),
       active: unsubscribeCommessaStats.size,
-      uiRefreshPendingWhileHidden: statsUiRefreshPendingWhileHidden
+      uiRefreshPendingWhileHidden: statsUiRefreshPendingWhileHidden,
+      interactionGuardActive: interactionGuardActive()
     })
   };
 })();

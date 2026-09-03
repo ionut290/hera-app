@@ -229,9 +229,10 @@
 
   function targetCommessaIds() {
     const selected = String(selectedCommessaId || "").trim();
-    if (!selected || typeof getSubcommesse !== "function") return [];
-    const children = getSubcommesse(selected) || [];
-    return children.map((item) => String(item?.id || "").trim()).filter(Boolean);
+    if (!selected) return [];
+    const children = typeof getSubcommesse === "function" ? (getSubcommesse(selected) || []) : [];
+    const ids = [selected, ...children.map((item) => String(item?.id || "").trim())].filter(Boolean);
+    return Array.from(new Set(ids));
   }
 
   function stopUnused(targetIds) {
@@ -373,8 +374,8 @@
 
   window.HeraCommessaStatsCacheOptimizer = {
     installed: true,
-    version: "1.3.0",
-    mode: "persistent-cache-plus-change-index",
+    version: "1.4.0",
+    mode: "selected-first-persistent-cache-plus-change-index",
     originalSubscribeStatsForCommesse,
     getState: () => ({
       ...state,

@@ -331,6 +331,7 @@
   const EXPORT_BUTTON_ID = "export-current-commessa-btn";
   const POTATURE_ID = "potature-abbattimenti";
   const COBO_ID = "sfalcio-cobo";
+  const OCCASIONAL_ID = "lavori-occasionali";
   const PENDING_STORAGE_KEY = "heraSpecialTerminatoPendingV2";
   const RETRY_DELAYS_MS = Object.freeze([0, 1000, 2000]);
   const text = (value) => String(value ?? "").trim();
@@ -352,7 +353,7 @@
     const id = text(selectedId()).toLowerCase();
     const potatureId = text(window.HeraPotatureFollowup?.commessaId || POTATURE_ID).toLowerCase();
     const coboId = text(window.HeraCoboMowing?.commessaId || COBO_ID).toLowerCase();
-    return id === potatureId || id === coboId;
+    return id === potatureId || id === coboId || id === OCCASIONAL_ID;
   }
 
   function currentPlants() {
@@ -901,7 +902,7 @@
     style.textContent = `
       .special-core-action-hidden { display: none !important; }
       .special-terminato-program-hidden { display: none !important; }
-      .impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .special-terminato-btn { order: 2; grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: none; min-width: 0; min-height: 38px !important; margin: 0; padding: 6px 8px; overflow: hidden; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-size: clamp(.7rem, 3.1vw, .9rem); font-weight: 900; line-height: 1; letter-spacing: .015em; white-space: nowrap; text-overflow: clip; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
+      .impianto-main-column > .item-actions.impianto-actions .impianto-primary-actions .special-terminato-btn { order: 2; grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: none; min-width: 0; min-height: 38px !important; margin: 0; padding: 6px 8px; overflow: hidden; border: 1px solid #16a34a; border-radius: 12px; color: #fff; background: #16a34a; font-size: clamp(.7rem, 3.1vw,.9rem); font-weight: 900; line-height: 1; letter-spacing: .015em; white-space: nowrap; text-overflow: clip; box-shadow: 0 4px 12px rgba(8,120,63,.24); }
       .special-terminato-btn:disabled { opacity: .66; cursor: wait; }
       .special-terminated-card { border: 2px solid #8bd3ae; background: #f2fbf6; }
       .special-terminated-card .impianto-summary-title-wrap strong { color: #075f34; }

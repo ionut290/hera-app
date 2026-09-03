@@ -86,6 +86,26 @@ async function assertGestionaleReader(request) {
   throw new HttpsError("permission-denied", "Utente non autorizzato a Varga Gestionale.");
 }
 
+function isGeoPointValue(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    typeof value.latitude === "number" &&
+    typeof value.longitude === "number" &&
+    value.constructor?.name === "GeoPoint"
+  );
+}
+
+function isDocumentReferenceValue(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    typeof value.path === "string" &&
+    value.firestore &&
+    value.constructor?.name === "DocumentReference"
+  );
+}
+
 function serializeValue(value) {
   if (value == null) return value;
   if (typeof value?.toDate === "function") {
@@ -93,8 +113,8 @@ function serializeValue(value) {
     return Number.isNaN(date?.getTime?.()) ? null : date.toISOString();
   }
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
-  if (value instanceof admin.firestore.GeoPoint) return { latitude: value.latitude, longitude: value.longitude };
-  if (value instanceof admin.firestore.DocumentReference) return { path: value.path };
+  if (isGeoPointValue(value)) return { latitude: value.latitude, longitude: value.longitude };
+  if (isDocumentReferenceValue(value)) return { path: value.path };
   if (Array.isArray(value)) return value.map(serializeValue);
   if (typeof value === "object") {
     const output = {};
@@ -186,8 +206,18 @@ async function buildSnapshot() {
   const db = admin.firestore();
   const records = [];
   for (const source of ROOT_SOURCES) {
-    const sourceRecords = await readCollection(db.collection(source.name), source.name, source);
-    records.push(...sourceRecords);
+    try {
+      console.log("Varga Gestionale snapshot: leggo", source.name);
+      const sourceRecords = await readCollection(db.collection(source.name), source.name, source);
+      records.push(...sourceRecords);
+      console.log("Varga Gestionale snapshot: completata", source.name, sourceRecords.length);
+    } catch (error) {
+      console.error("Varga Gestionale snapshot: errore raccolta", source.name, error);
+      throw new HttpsError(
+        "internal",
+        `Errore durante la lettura della raccolta ${source.name}: ${String(error?.message || error)}`
+      );
+    }
   }
 
   records.sort((a, b) => String(a.sourcePath).localeCompare(String(b.sourcePath)));
@@ -237,6 +267,7 @@ exports.rebuildVargaGestionaleSnapshot = onCall({
   memory: "1GiB",
   invoker: "public",
   cors: [
+    "https://ionut290.github.io",
     "https://creative-syrniki-dddbae.netlify.app",
     "http://localhost:3000",
     "http://localhost:5173",

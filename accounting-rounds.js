@@ -24,9 +24,23 @@
     return rows.filter(row => upper(row.stato) === "FATTO").reduce((sum, row) => sum + (Number(row.totale) || 0), 0);
   }
 
-  async function nextRoundNumber(ref) {
+  async function suggestedRoundNumber(ref) {
     const snap = await ref.collection("giriContabili").get();
     return snap.docs.reduce((max, doc) => Math.max(max, Number(doc.data()?.numeroGiro) || 0), 0) + 1;
+  }
+
+  async function askRealRoundNumber(ref, commessa) {
+    const suggested = await suggestedRoundNumber(ref);
+    while (true) {
+      const value = prompt(
+        `NUMERO REALE DEL GIRO\n\nCommessa: ${commessa.nome || commessa.name || ""}\n\nInserisci il numero reale del giro che stai chiudendo.\nPuò ripartire da 1 a inizio anno oppure continuare la numerazione reale.`,
+        String(suggested)
+      );
+      if (value === null) return null;
+      const numero = Number(String(value).trim());
+      if (Number.isInteger(numero) && numero > 0 && numero <= 9999) return numero;
+      alert("Inserisci un numero di giro valido, maggiore di 0.");
+    }
   }
 
   async function copyRows(sourceRows, targetCollection) {
@@ -60,7 +74,8 @@
       throw new Error("Non ci sono lavorazioni FATTO. Il giro non può essere chiuso come contabilità.");
     }
 
-    const numeroGiro = await nextRoundNumber(ref);
+    const numeroGiro = Number(options.numeroGiro) || await askRealRoundNumber(ref, commessa);
+    if (!numeroGiro) return { cancelled: true };
     const giroId = `giro_${String(numeroGiro).padStart(3, "0")}_${Date.now()}`;
     const giroRef = ref.collection("giriContabili").doc(giroId);
     const nowIso = new Date().toISOString();
@@ -69,6 +84,7 @@
     await giroRef.set({
       giroId,
       numeroGiro,
+      numeroGiroManuale: true,
       commessaId: commessa.id,
       commessaNome: commessa.nome || commessa.name || commessa.title || "Commessa",
       codiceCommessa: commessa.codice || commessa.code || commessa.codiceCommessa || "",
@@ -111,20 +127,21 @@
     if (!commessa) return alert("Seleziona prima una commessa.");
     if (typeof canManageData === "function" && !canManageData()) return alert("Operazione riservata agli amministratori.");
 
-    const ok = confirm(`CHIUDI GIRO CONTABILE\n\nCommessa: ${commessa.nome || commessa.name || ""}\n\nVerrà creata una copia immutabile di lavorazioni FATTO, impianti e prove. Solo dopo potrai svuotare la commessa e iniziare il giro successivo. Continuare?`);
+    const ok = confirm(`CHIUDI GIRO CONTABILE\n\nCommessa: ${commessa.nome || commessa.name || ""}\n\nNel passaggio successivo scegli TU il numero reale del giro. Verrà poi creata una copia immutabile di lavorazioni FATTO, impianti e prove. Continuare?`);
     if (!ok) return;
 
     const button = document.querySelector('[data-commessa-round-action="close"]');
-    if (button) { button.disabled = true; button.textContent = "Archiviazione giro…"; }
+    if (button) { button.disabled = true; button.textContent = "Preparazione giro…"; }
     try {
       const result = await archiveCurrentRound(commessa);
+      if (result?.cancelled) return;
       alert(`Giro ${result.numeroGiro} archiviato correttamente.\n${result.doneRows} lavorazioni FATTO su ${result.totalRows}.\n\nOra puoi svuotare la commessa. La contabilità resta conservata per Varga Gestionale.`);
       if (window.AccountingV2?.openClear) await window.AccountingV2.openClear(commessa);
     } catch (error) {
       console.error("Chiusura giro non riuscita", error);
       alert(`Il giro NON è stato chiuso e la commessa non verrà svuotata.\n\n${error.message || error}`);
     } finally {
-      if (button) { button.disabled = false; button.innerHTML = '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Salva la contabilità prima di svuotare</small>'; }
+      if (button) { button.disabled = false; button.innerHTML = '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Scegli il numero reale e salva la contabilità</small>'; }
     }
   }
 
@@ -134,7 +151,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.commessaRoundAction = "close";
-    button.innerHTML = '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Salva la contabilità prima di svuotare</small>';
+    button.innerHTML = '<span aria-hidden="true">✓</span><strong>Chiudi giro e archivia</strong><small>Scegli il numero reale e salva la contabilità</small>';
     button.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); void closeRoundAndOpenClear(); });
     grid.appendChild(button);
   }

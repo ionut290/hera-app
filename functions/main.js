@@ -14,6 +14,7 @@ const errorEmailUsageFunctions = require("./error-email-usage");
 const cleanupWhazzupPdfFunctions = require("./cleanup-whazzup-pdfs");
 const whazzupPdfDriveFunctions = require("./whazzup-pdf-drive");
 const userAccessApprovalFunctions = require("./user-access-approval");
+const vargaGestionaleSyncFunctions = require("./varga-gestionale-sync");
 
 Object.assign(
   exports,
@@ -30,5 +31,6 @@ Object.assign(
   errorEmailUsageFunctions,
   cleanupWhazzupPdfFunctions,
   whazzupPdfDriveFunctions,
-  userAccessApprovalFunctions
+  userAccessApprovalFunctions,
+  vargaGestionaleSyncFunctions
 );

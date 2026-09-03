@@ -9,8 +9,16 @@
   const collectionName = () => typeof getCommesseCollectionName === "function" ? getCommesseCollectionName() : "commesse";
 
   function currentCommessa() {
-    const id = typeof selectedCommessaId !== "undefined" ? clean(selectedCommessaId) : "";
-    return id && typeof commesseById !== "undefined" ? commesseById.get(id) : null;
+    const selectedId = typeof selectedCommessaId !== "undefined" ? clean(selectedCommessaId) : "";
+    const managementId = typeof managementCommessaId !== "undefined" ? clean(managementCommessaId) : "";
+    const ids = [selectedId, managementId].filter(Boolean);
+    if (typeof commesseById !== "undefined" && commesseById?.get) {
+      for (const id of ids) {
+        const commessa = commesseById.get(id);
+        if (commessa) return commessa;
+      }
+    }
+    return null;
   }
 
   function plusDaysIso(days) {

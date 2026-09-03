@@ -44,7 +44,7 @@
 
   async function archiveCurrentRound(commessa, options = {}) {
     if (!commessa?.id) throw new Error("Commessa non valida.");
-    if (!window.db) throw new Error("Firestore non disponibile.");
+    if (typeof db === "undefined" || !db) throw new Error("Firestore non disponibile.");
 
     const ref = db.collection(collectionName()).doc(commessa.id);
     const [works, plants, evidence] = await Promise.all([
